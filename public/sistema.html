@@ -141,7 +141,9 @@
       <a data-s="agenda" onclick="go('agenda')"><span class="ic">◧</span> Agenda (Kanban)</a>
       <a data-s="processos" onclick="go('processos')"><span class="ic">⚖</span> Processos</a>
       <a data-s="diligencias" onclick="go('diligencias')"><span class="ic">◔</span> Diligências</a>
-      <a data-s="crm" onclick="go('crm')"><span class="ic">▣</span> CRM</a>
+      <a data-s="relatorio" onclick="go('relatorio')"><span class="ic">◫</span> Relatório mensal</a>
+      <a data-s="crm" onclick="go('crm')"><span class="ic">▣</span> Comercial</a>
+      <a data-s="contatos" onclick="go('contatos')"><span class="ic">☎</span> Contatos</a>
       <a data-s="etiquetas" onclick="go('etiquetas')"><span class="ic">⬤</span> Etiquetas</a>
       <a data-s="procedimentos" onclick="go('procedimentos')"><span class="ic">☰</span> Procedimentos</a>
     </nav>
@@ -183,7 +185,7 @@
     </section>
 
     <section id="s-processos" class="hidden">
-      <div class="searchbar"><input id="busca" placeholder="Buscar por cliente, número, oponente ou assunto..." oninput="renderProc()"><select id="ordena" onchange="renderProc()" class="btn sm" style="margin-left:8px"><option value="">Ordenar: padrão</option><option value="az">Cliente (A→Z)</option><option value="data_desc">Movimentação mais recente</option><option value="parados">Parados (mov. mais antiga)</option><option value="valor">Valor da causa (maior→menor)</option></select><select id="filtroEtq" onchange="renderProc()" class="btn sm" style="margin-left:8px"><option value="">Todas as etiquetas</option></select><select id="porPagina" onchange="renderProc()" class="btn sm" style="margin-left:8px"><option value="20">20 por página</option><option value="40">40</option><option value="60">60</option><option value="80">80</option><option value="100">100</option></select><span class="note" id="proc-count" style="align-self:center"></span><button class="btn sm" style="margin-left:auto" onclick="abrirNovaTarefa()">+ Nova tarefa</button><button class="btn sm" style="margin-left:8px" onclick="abrirBusca()">+ Cadastrar por número</button></div>
+      <div class="searchbar"><input id="busca" placeholder="Buscar por cliente, número, oponente ou assunto..." oninput="renderProc()"><select id="ordena" onchange="renderProc()" class="btn sm" style="margin-left:8px"><option value="">Novos Protocolos</option><option value="az">Cliente (A→Z)</option><option value="data_desc">Movimentação mais recente</option><option value="parados">Parados (mov. mais antiga)</option><option value="valor">Valor da causa (maior→menor)</option></select><select id="filtroEtq" onchange="renderProc()" class="btn sm" style="margin-left:8px"><option value="">Todas as etiquetas</option></select><select id="porPagina" onchange="renderProc()" class="btn sm" style="margin-left:8px"><option value="20">20 por página</option><option value="40">40</option><option value="60">60</option><option value="80">80</option><option value="100">100</option></select><span class="note" id="proc-count" style="align-self:center"></span><button class="btn sm" style="margin-left:auto" onclick="abrirNovaTarefa()">+ Nova tarefa</button><button class="btn sm" style="margin-left:8px" onclick="abrirBusca()">+ Cadastrar por número</button></div>
       <div class="card"><table><thead><tr><th style="width:40px">#</th><th>Cliente</th><th>Processo</th><th>Assunto</th><th>Status</th></tr></thead><tbody id="proc-body"></tbody></table></div><div id="proc-pager" style="display:flex;gap:6px;align-items:center;justify-content:center;padding:14px;flex-wrap:wrap"></div>
     </section>
 
@@ -205,7 +207,7 @@
       <div id="crm-captacao" class="hidden">
         <div id="cap-filtro" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px"></div>
         <div class="kpis" id="cap-kpis"></div>
-        <div class="card"><p class="sectlabel">Panorama por canal — clique numa fatia/canal ou nos indicadores para ver quem</p><div id="cap-canais"></div><p class="note">O tráfego pago não converte no CMP; foque em indicação, Google Meu Negócio e conteúdo orgânico.</p></div>
+        <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:stretch"><div class="card" style="flex:1;min-width:300px"><p class="sectlabel">Panorama por canal — clique numa fatia/canal ou nos indicadores para ver quem</p><div id="cap-canais"></div><p class="note">O tráfego pago não converte no CMP; foque em indicação, Google Meu Negócio e conteúdo orgânico.</p></div><div class="card" style="flex:1;min-width:300px"><p class="sectlabel">Funil comercial — leads por etapa</p><div id="funil-dash" style="display:flex;gap:8px;flex-wrap:wrap"></div></div></div>
         <div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><p class="sectlabel" style="margin:0">Funil de captação (arraste os leads; clique para editar)</p><div><button class="btn sm" onclick="novoLead()">+ Novo lead</button> <button class="btn sm ghost" onclick="addEtapa()">+ Etapa</button></div></div><div class="kanwrap"><div class="kanban" id="funil"></div></div></div>
       </div>
     </section>
@@ -265,6 +267,12 @@
   <div class="card" style="margin-top:16px">
     <h3 style="margin-top:0">Diligências em andamento</h3>
     <div id="dilig-andamento"></div>
+  </div>
+</section>
+<section id="s-relatorio" class="hidden">
+  <div class="card">
+    <h3 style="margin-top:0">Relatório mensal para clientes</h3>
+    <p class="note" style="max-width:680px">Em construção. A ideia: para cada cliente, uma linha do tempo com <b>todas as movimentações e atividades do mês</b> dos processos dele, gerada e enviada automaticamente <b>1x por mês</b>. Vamos detalhar juntos o formato (PDF/e-mail/WhatsApp), o que entra e o que fica de fora.</p>
   </div>
 </section>
 </main>
@@ -380,7 +388,7 @@ function renderProc(){
   lista.slice(0,200).forEach(function(p){
     var i=DADOS.processos.indexOf(p);
     var tr=document.createElement("tr");tr.className="click";tr.onclick=function(){abrir(i)};
-    tr.innerHTML='<td><span style="font-weight:700;color:var(--navy)">'+esc(p.cliente)+'</span> <span style="color:var(--muted)">×</span> <span>'+esc(p.oponente||'—')+'</span> <span class="tag-cli">nosso cliente</span>'+
+    tr.innerHTML='<td><span style="font-weight:700;color:var(--navy)">'+esc(p.cliente)+'</span> <span style="color:var(--muted)">×</span> <span>'+esc(p.oponente||'—')+'</span>'+
       '</td><td class="proc">'+p.numero+'</td><td>'+esc(p.tipo)+'<div style="margin-top:4px">'+etiquetasDoProc(p.numero)+'</div></td><td><span class="b '+stCls(p.status)+'">'+esc(p.status||'—')+'</span></td>';
     b.appendChild(tr);
   });
@@ -393,7 +401,7 @@ function abrir(i){
   var html='';
   // cabeçalho: partes no mesmo tamanho, cliente em negrito e marcado
   html+='<div class="card"><div class="parties"><span class="cli">'+esc(p.cliente)+'</span>'+
-    '<span class="vs">×</span><span class="op">'+esc(p.oponente||'—')+'</span><span class="tag-cli">nosso cliente</span></div>'+
+    '<span class="vs">×</span><span class="op">'+esc(p.oponente||'—')+'</span></div>'+
     '<div class="subhead">Processo nº '+p.numero+' &nbsp;·&nbsp; <span class="b '+stCls(p.status)+'">'+esc(p.status||'—')+'</span>'+
     ' &nbsp;·&nbsp; Responsável: '+resp+'</div><div style="margin-top:10px"><button class="btn sm" onclick="novaTarefaDoProcesso()">+ Nova tarefa neste processo</button></div></div>';
   // dados do processo
@@ -442,15 +450,15 @@ function traduzir(){
 }
 var LEADS=[
   {id:1,nome:"Lead Exemplo A",canal:"Indicação",estagio:"novo",tel:"(83) 90000-0001",email:"a@ex.com"},
-  {id:2,nome:"Lead Exemplo B",canal:"Google Meu Negócio",estagio:"contato",tel:"(83) 90000-0002",email:"b@ex.com"},
+  {id:2,nome:"Lead Exemplo B",canal:"Google Meu Negócio",estagio:"conversa",tel:"(83) 90000-0002",email:"b@ex.com"},
   {id:3,nome:"Lead Exemplo C",canal:"Instagram",estagio:"proposta",tel:"(83) 90000-0003",email:"c@ex.com"},
   {id:4,nome:"Lead Exemplo D",canal:"Indicação",estagio:"ganho",tel:"(83) 90000-0004",email:"d@ex.com"},
   {id:5,nome:"Lead Exemplo E",canal:"Site",estagio:"perdido",tel:"(83) 90000-0005",email:"e@ex.com"},
-  {id:6,nome:"Lead Exemplo F",canal:"Indicação",estagio:"contato",tel:"(83) 90000-0006",email:"f@ex.com"},
+  {id:6,nome:"Lead Exemplo F",canal:"Indicação",estagio:"conversa",tel:"(83) 90000-0006",email:"f@ex.com"},
   {id:7,nome:"Lead Exemplo G",canal:"Google Meu Negócio",estagio:"ganho",tel:"(83) 90000-0007",email:"g@ex.com"},
   {id:8,nome:"Lead Exemplo H",canal:"Instagram",estagio:"novo",tel:"(83) 90000-0008",email:"h@ex.com"}
 ];
-var FUNIL=[{id:"novo",nome:"Novo lead"},{id:"contato",nome:"Contato feito"},{id:"proposta",nome:"Proposta"},{id:"ganho",nome:"Ganho"},{id:"perdido",nome:"Perdido"}];
+var FUNIL=[{id:"novo",nome:"Novo lead"},{id:"conversa",nome:"Conversa inicial"},{id:"proposta",nome:"Proposta apresentada"},{id:"assinado",nome:"Procuração/contrato assinados"},{id:"checklist",nome:"Checklist de documentos"},{id:"ganho",nome:"Fechado — enviado ao operacional"},{id:"perdido",nome:"Perdido"}];
 var CONTATOS=null, cseq=1, lseq=100;
 var CANAIS_LIST=["Indicação","Google Meu Negócio","Google Ads","Meta Ads (Instagram/Facebook)","Instagram orgânico","TikTok","YouTube","Site / Blog (SEO)","LinkedIn","Eventos / Palestras","Parceiro / Correspondente","WhatsApp","Jusbrasil"];
 function kpi(l,n){return '<div class="kpi"><div class="n">'+n+'</div><div class="l">'+l+'</div></div>';}
@@ -955,7 +963,7 @@ function renderProc(){
   lista.slice(0,200).forEach(function(p){
     var i=DADOS.processos.indexOf(p);
     var tr=document.createElement("tr");tr.className="click";tr.onclick=function(){abrir(i)};
-    tr.innerHTML='<td><span style="font-weight:700;color:var(--navy)">'+esc(p.cliente)+'</span> <span style="color:var(--muted)">×</span> <span>'+esc(p.oponente||'—')+'</span> <span class="tag-cli">nosso cliente</span></td><td class="proc">'+p.numero+'</td><td>'+esc(p.tipo)+'<div style="margin-top:4px">'+etiquetasDoProc(p.numero)+'</div></td><td><span class="b '+stCls(p.status)+'">'+esc(p.status||'—')+'</span></td>';
+    tr.innerHTML='<td><span style="font-weight:700;color:var(--navy)">'+esc(p.cliente)+'</span> <span style="color:var(--muted)">×</span> <span>'+esc(p.oponente||'—')+'</span></td><td class="proc">'+p.numero+'</td><td>'+esc(p.tipo)+'<div style="margin-top:4px">'+etiquetasDoProc(p.numero)+'</div></td><td><span class="b '+stCls(p.status)+'">'+esc(p.status||'—')+'</span></td>';
     b.appendChild(tr);
   });
   var sel=document.getElementById("filtroEtq");
@@ -995,7 +1003,7 @@ function renderProc(){
   rows.forEach(function(p){
     var i=DADOS.processos.indexOf(p);
     var tr=document.createElement("tr");tr.className="click";tr.onclick=function(){abrir(i)};
-    tr.innerHTML='<td><span style="font-weight:700;color:var(--navy)">'+esc(p.cliente)+'</span> <span style="color:var(--muted)">×</span> <span>'+esc(p.oponente||'—')+'</span> <span class="tag-cli">nosso cliente</span></td><td class="proc">'+p.numero+'</td><td>'+esc(p.tipo)+'<div style="margin-top:4px">'+etiquetasDoProc(p.numero)+'</div></td><td><span class="b '+stCls(p.status)+'">'+esc(p.status||'—')+'</span></td>';
+    tr.innerHTML='<td><span style="font-weight:700;color:var(--navy)">'+esc(p.cliente)+'</span> <span style="color:var(--muted)">×</span> <span>'+esc(p.oponente||'—')+'</span></td><td class="proc">'+p.numero+'</td><td>'+esc(p.tipo)+'<div style="margin-top:4px">'+etiquetasDoProc(p.numero)+'</div></td><td><span class="b '+stCls(p.status)+'">'+esc(p.status||'—')+'</span></td>';
     b.appendChild(tr);
   });
   var pager=document.getElementById("proc-pager");
@@ -1102,7 +1110,7 @@ function renderProc(){
   rows.forEach(function(p,ri){
     var i=DADOS.processos.indexOf(p);
     var tr=document.createElement("tr");tr.className="click";tr.onclick=function(){abrir(i)};
-    tr.innerHTML='<td style="color:var(--muted);text-align:right">'+(start+ri+1)+'</td><td><span style="font-weight:700;color:var(--navy)">'+esc(p.cliente)+'</span> <span style="color:var(--muted)">×</span> <span>'+esc(p.oponente||'—')+'</span> <span class="tag-cli">nosso cliente</span></td><td class="proc">'+p.numero+'</td><td>'+esc(p.tipo)+'<div style="margin-top:4px">'+etiquetasDoProc(p.numero)+'</div></td><td><span class="b '+stCls(p.status)+'">'+esc(p.status||'—')+'</span></td>';
+    tr.innerHTML='<td style="color:var(--muted);text-align:right">'+(start+ri+1)+'</td><td><span style="font-weight:700;color:var(--navy)">'+esc(p.cliente)+'</span> <span style="color:var(--muted)">×</span> <span>'+esc(p.oponente||'—')+'</span></td><td class="proc">'+p.numero+'</td><td>'+esc(p.tipo)+'<div style="margin-top:4px">'+etiquetasDoProc(p.numero)+'</div></td><td><span class="b '+stCls(p.status)+'">'+esc(p.status||'—')+'</span></td>';
     b.appendChild(tr);
   });
   var pager=document.getElementById("proc-pager");
@@ -1192,6 +1200,130 @@ async function salvarDiligencia(){
 }
 async function dilRetorno(id){ var t=prompt('Retorno recebido:'); if(t==null) return; var sb=window.__sb; await sb.from('diligencias').update({status:'retorno',retorno:t}).eq('id',id); renderDiligencias(); }
 async function dilResolver(id){ var sb=window.__sb; await sb.from('diligencias').update({status:'resolvida'}).eq('id',id); renderDiligencias(); }
+</script>
+<script>
+function go(s){
+  ["painel","triagem","agenda","processos","proc-det","crm","etiquetas","procedimentos","diligencias","relatorio"].forEach(function(id){var e=document.getElementById("s-"+id);if(e)e.classList.add("hidden")});
+  var sec=document.getElementById("s-"+s); if(sec) sec.classList.remove("hidden");
+  document.querySelectorAll("#nav a").forEach(function(a){a.classList.remove("active")});
+  var link=document.querySelector('#nav a[data-s="'+s+'"]');if(link)link.classList.add("active");
+  var t={painel:"Painel",triagem:"Triagem diária",agenda:"Agenda — Kanban (etapas CMP)",processos:"Processos",crm:"Comercial",procedimentos:"Procedimentos CMP",etiquetas:"Etiquetas","proc-det":"Processo",diligencias:"Diligências",relatorio:"Relatório mensal para clientes"};
+  var st=document.getElementById("scr-title"); if(st) st.textContent=t[s]||"Painel";
+  if(s==="painel")renderPainel(); if(s==="triagem")renderTriagem(); if(s==="processos")renderProc(); if(s==="crm")renderCrm(); if(s==="etiquetas")renderEtiquetas(); if(s==="agenda")renderAgendaView(); if(s==="diligencias")renderDiligencias();
+  window.scrollTo(0,0);
+}
+</script>
+<script>
+function go(s){
+  var showId=(s==='contatos')?'crm':s;
+  ["painel","triagem","agenda","processos","proc-det","crm","etiquetas","procedimentos","diligencias","relatorio"].forEach(function(id){var e=document.getElementById("s-"+id);if(e)e.classList.add("hidden")});
+  var sec=document.getElementById("s-"+showId); if(sec) sec.classList.remove("hidden");
+  document.querySelectorAll("#nav a").forEach(function(a){a.classList.remove("active")});
+  var link=document.querySelector('#nav a[data-s="'+s+'"]');if(link)link.classList.add("active");
+  var t={painel:"Painel",triagem:"Triagem diária",agenda:"Agenda — Kanban (etapas CMP)",processos:"Processos",crm:"Comercial",contatos:"Contatos",procedimentos:"Procedimentos CMP",etiquetas:"Etiquetas","proc-det":"Processo",diligencias:"Diligências",relatorio:"Relatório mensal para clientes"};
+  var st=document.getElementById("scr-title"); if(st) st.textContent=t[s]||"Painel";
+  var sw=document.querySelector('#s-crm .switch'); if(sw) sw.style.display='none';
+  if(s==="painel")renderPainel(); if(s==="triagem")renderTriagem(); if(s==="processos")renderProc();
+  if(s==="crm"){ if(typeof setCrmView==='function') setCrmView('captacao'); else renderCrm(); }
+  if(s==="contatos"){ if(typeof setCrmView==='function') setCrmView('contatos'); else renderCrm(); }
+  if(s==="etiquetas")renderEtiquetas(); if(s==="agenda")renderAgendaView(); if(s==="diligencias")renderDiligencias();
+  window.scrollTo(0,0);
+}
+async function renderDiligencias(){
+  var min=parseInt((document.getElementById('dilig-min')||{}).value||'30',10)||30;
+  var parados=(DADOS.processos||[]).map(function(p){return {p:p,dias:pdias(p.data)};}).filter(function(x){return x.dias>min;}).sort(function(a,b){return b.dias-a.dias;});
+  var cnt=document.getElementById('dilig-count'); if(cnt) cnt.textContent=parados.length+' processo(s) parado(s)';
+  var b=document.getElementById('dilig-body');
+  if(b){ b.innerHTML=''; parados.slice(0,300).forEach(function(x,ix){
+    var p=x.p; var i=DADOS.processos.indexOf(p);
+    var tr=document.createElement('tr'); tr.className='click'; tr.onclick=function(){ abrir(i); };
+    tr.innerHTML='<td style="color:var(--muted);text-align:right">'+(ix+1)+'</td>'+
+      '<td><b style="color:var(--navy)">'+esc(p.cliente||'—')+'</b> <span style="color:var(--muted)">×</span> '+esc(p.oponente||'—')+'</td>'+
+      '<td class="proc">'+p.numero+'</td><td>'+x.dias+' dias</td>'+
+      '<td style="text-align:right"><button class="btn sm" onclick="event.stopPropagation(); gerarDiligencia(\''+(p._id||'')+'\',\''+encodeURIComponent(p.numero)+'\')">Gerar diligência</button></td>';
+    b.appendChild(tr);
+  }); }
+  var el=document.getElementById('dilig-andamento'); if(!el) return;
+  var sb=window.__sb; if(!sb){ el.innerHTML=''; return; }
+  el.innerHTML='<div class="note">Carregando…</div>';
+  var r=await sb.from('diligencias').select('id,status,canal,mensagem,retorno,criado_em,processos(numero,cliente_nome)').neq('status','resolvida').order('criado_em',{ascending:false});
+  if(r.error){ el.innerHTML='<div class="note">Nenhuma diligência em andamento.</div>'; return; }
+  var ds=r.data||[];
+  if(!ds.length){ el.innerHTML='<div class="note">Nenhuma diligência em andamento.</div>'; return; }
+  el.innerHTML=ds.map(function(d){ var pr=d.processos||{};
+    return '<div style="border:1px solid #e5e7eb;border-radius:8px;padding:10px;margin-bottom:8px">'+
+      '<div><b>'+esc(pr.cliente_nome||'—')+'</b> <span class="proc">'+esc(pr.numero||'')+'</span> · <span class="note">'+esc(d.canal||'')+' · '+esc(d.status||'')+'</span></div>'+
+      '<div style="font-size:13px;color:#475569;margin:6px 0;white-space:pre-wrap">'+esc(d.mensagem||'')+'</div>'+
+      (d.retorno?'<div style="font-size:13px;color:#0f6e56">Retorno: '+esc(d.retorno)+'</div>':'')+
+      '<div style="margin-top:6px;display:flex;gap:6px"><button class="btn sm ghost" onclick="dilRetorno(\''+d.id+'\')">Marcar retorno</button><button class="btn sm ghost" onclick="dilResolver(\''+d.id+'\')">Resolver</button></div></div>';
+  }).join('');
+}
+</script>
+<script>
+function renderFunilDash(){
+  var el=document.getElementById('funil-dash'); if(!el) return;
+  if(typeof LEADS==='undefined'||typeof FUNIL==='undefined') return;
+  var counts={}; LEADS.forEach(function(l){counts[l.estagio]=(counts[l.estagio]||0)+1;});
+  var cores=['#2E3A4B','#185FA5','#1D9E75','#BA7517','#7F77DD','#0F6E56','#A32D2D'];
+  el.innerHTML=FUNIL.map(function(f,i){
+    var n=counts[f.id]||0; var c=cores[i%cores.length];
+    return '<div style="flex:1 1 120px;min-width:110px;background:#fff;border:1px solid #e5e7eb;border-top:4px solid '+c+';border-radius:10px;padding:12px">'+
+      '<div style="font-size:26px;font-weight:800;color:'+c+';line-height:1">'+n+'</div>'+
+      '<div style="font-size:12px;color:#5f5e5a;margin-top:4px">'+esc(f.nome)+'</div></div>';
+  }).join('');
+}
+(function(){
+  if(typeof setCrmView==='function'){
+    var _o=setCrmView;
+    window.setCrmView=function(v){ _o(v); if(v==='captacao'){ try{ renderFunilDash(); }catch(e){} } };
+  }
+})();
+</script>
+<script>
+function renderFunilDash(){
+  var el=document.getElementById('funil-dash'); if(!el) return;
+  if(typeof LEADS==='undefined'||typeof FUNIL==='undefined') return;
+  var counts={}; LEADS.forEach(function(l){counts[l.estagio]=(counts[l.estagio]||0)+1;});
+  var ids=['novo','conversa','proposta','assinado'];
+  var stages=FUNIL.filter(function(f){return ids.indexOf(f.id)>-1;}).sort(function(a,b){return ids.indexOf(a.id)-ids.indexOf(b.id);});
+  var cores=['#2E3A4B','#185FA5','#1D9E75','#BA7517'];
+  var n=stages.length||1, maxW=180, minW=50, H=200, bandH=H/n;
+  function wAt(i){ return maxW-(maxW-minW)*(i/n); }
+  var polys='';
+  stages.forEach(function(f,i){
+    var y0=i*bandH+4, y1=(i+1)*bandH-3, tw=wAt(i), bw=wAt(i+1), c=cores[i%cores.length];
+    polys+='<polygon points="'+(100-tw/2)+','+y0+' '+(100+tw/2)+','+y0+' '+(100+bw/2)+','+y1+' '+(100-bw/2)+','+y1+'" fill="'+c+'"/>';
+    var cnt=counts[f.id]||0;
+    polys+='<text x="100" y="'+((y0+y1)/2+5)+'" text-anchor="middle" fill="#fff" font-size="15" font-weight="700">'+cnt+'</text>';
+  });
+  var legend=stages.map(function(f,i){ var c=cores[i%cores.length], cnt=counts[f.id]||0;
+    return '<div style="display:flex;align-items:center;gap:6px;font-size:12px;margin:5px 0"><span style="width:10px;height:10px;border-radius:2px;background:'+c+';display:inline-block"></span><span style="color:#5f5e5a">'+esc(f.nome)+'</span> <b style="margin-left:auto;color:'+c+'">'+cnt+'</b></div>';
+  }).join('');
+  el.innerHTML='<div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap"><svg width="200" height="200" viewBox="0 0 200 200" style="flex:0 0 auto">'+polys+'</svg><div style="flex:1;min-width:150px">'+legend+'</div></div>';
+}
+</script>
+<script>
+function renderFunilDash(){
+  var el=document.getElementById('funil-dash'); if(!el) return;
+  if(typeof LEADS==='undefined') return;
+  var counts={}; LEADS.forEach(function(l){counts[l.estagio]=(counts[l.estagio]||0)+1;});
+  var stages=[{id:'novo',nome:'Novo lead'},{id:'conversa',nome:'Conversa inicial'},{id:'proposta',nome:'Proposta apresentada'},{id:'assinado',nome:'Contrato/procuração assinados'}];
+  var fc={ novo:(counts['novo']||0), conversa:(counts['conversa']||0), proposta:(counts['proposta']||0), assinado:((counts['assinado']||0)+(counts['checklist']||0)+(counts['ganho']||0)) };
+  var cores=['#2E3A4B','#185FA5','#1D9E75','#BA7517'];
+  var n=stages.length, maxW=180, minW=50, H=200, bandH=H/n;
+  function wAt(i){ return maxW-(maxW-minW)*(i/n); }
+  var polys='';
+  stages.forEach(function(f,i){
+    var y0=i*bandH+4, y1=(i+1)*bandH-3, tw=wAt(i), bw=wAt(i+1), c=cores[i%cores.length];
+    polys+='<polygon points="'+(100-tw/2)+','+y0+' '+(100+tw/2)+','+y0+' '+(100+bw/2)+','+y1+' '+(100-bw/2)+','+y1+'" fill="'+c+'"/>';
+    polys+='<text x="100" y="'+((y0+y1)/2+5)+'" text-anchor="middle" fill="#fff" font-size="15" font-weight="700">'+(fc[f.id]||0)+'</text>';
+  });
+  var legend=stages.map(function(f,i){ var c=cores[i%cores.length];
+    return '<div style="display:flex;align-items:center;gap:6px;font-size:12px;margin:5px 0"><span style="width:10px;height:10px;border-radius:2px;background:'+c+';display:inline-block"></span><span style="color:#5f5e5a">'+esc(f.nome)+'</span> <b style="margin-left:auto;color:'+c+'">'+(fc[f.id]||0)+'</b></div>';
+  }).join('');
+  el.innerHTML='<div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap"><svg width="200" height="200" viewBox="0 0 200 200" style="flex:0 0 auto">'+polys+'</svg><div style="flex:1;min-width:150px">'+legend+'</div></div>';
+}
+(function(){ if(typeof renderCaptacao==='function' && !window.__rcWrapped){ window.__rcWrapped=true; var _rc=renderCaptacao; window.renderCaptacao=function(){ _rc(); try{ renderFunilDash(); }catch(e){} }; } })();
 </script>
 </body>
 </html>
