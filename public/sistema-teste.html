@@ -1375,5 +1375,72 @@ function gerarDiligencia(pid,numEnc){
 <script>
 function bvLine(numero){ if(typeof balcaoLink!=='function') return ''; var bl=balcaoLink(numero); return '<b>Balcão virtual</b> ('+(bl.trib?bl.trib.toUpperCase():'tribunal')+'): <a href="'+bl.url+'" target="_blank" rel="noopener" style="color:#185FA5">abrir atendimento</a>'+(bl.verificado?'':' <span style="color:#888">(via busca oficial)</span>'); }
 </script>
+<div id="modal-contato" class="overlay hidden"><div class="modal" style="max-width:520px">
+  <h2>Contato da vara / órgão</h2>
+  <label>Órgão / vara</label><input id="co-orgao" style="width:100%;box-sizing:border-box;margin-bottom:8px" />
+  <label>E-mail</label><input id="co-email" placeholder="secretaria@tjxx.jus.br" style="width:100%;box-sizing:border-box;margin-bottom:8px" />
+  <label>WhatsApp / telefone</label><input id="co-whats" placeholder="(83) 90000-0000" style="width:100%;box-sizing:border-box;margin-bottom:8px" />
+  <label>Link do balcão virtual desta vara (opcional)</label><input id="co-link" style="width:100%;box-sizing:border-box;margin-bottom:8px" />
+  <div style="margin-top:8px;display:flex;gap:8px"><button class="btn" onclick="salvarContatoOrgao()">Salvar</button><button class="btn ghost" onclick="fecharContatoOrgao()">Cancelar</button></div>
+</div></div>
+<script>
+window.__CO=null;
+async function loadCO(force){ if(window.__CO && !force) return window.__CO; var sb=window.__sb; if(!sb){ window.__CO=[]; return window.__CO; } var r=await sb.from('contatos_orgao').select('*'); window.__CO=(r&&r.data)||[]; return window.__CO; }
+(function tryCO(){ if(window.__sb){ loadCO(); } else { setTimeout(tryCO,800); } })();
+function normOrg(x){ return String(x||'').toLowerCase().replace(/\s+/g,' ').trim(); }
+function contatoDoProcesso(p){ if(!window.__CO) return null; var trib=tribunalAlias(p.numero); var fo=normOrg(p.foro); if(!fo) return null; return window.__CO.filter(function(c){ return (c.tribunal===trib||!c.tribunal) && normOrg(c.orgao)===fo; })[0]||null; }
+function contatoBlocoHTML(p){
+  var bl=balcaoLink(p.numero); var trib=bl.trib?bl.trib.toUpperCase():'tribunal';
+  var h='<b>Balcão virtual</b> ('+trib+'): <a href="'+bl.url+'" target="_blank" rel="noopener" style="color:#185FA5">abrir</a>'+(bl.verificado?'':' <span style="color:#888">(via busca)</span>');
+  var c=contatoDoProcesso(p);
+  h+='<div style="margin-top:6px">';
+  if(c){
+    h+='<b>Contatos da vara</b>'+(c.orgao?(' — '+esc(c.orgao)):'')+':<div style="margin-top:2px;line-height:1.7">';
+    if(c.email) h+='E-mail: <a href="mailto:'+esc(c.email)+'">'+esc(c.email)+'</a><br>';
+    if(c.whatsapp) h+='WhatsApp: <a href="https://wa.me/55'+String(c.whatsapp).replace(/\D/g,'')+'" target="_blank">'+esc(c.whatsapp)+'</a><br>';
+    if(c.balcao_link) h+='Balcão da vara: <a href="'+esc(c.balcao_link)+'" target="_blank">abrir</a><br>';
+    h+='<a href="#" onclick="abrirContatoOrgao(\''+encodeURIComponent(p.numero)+'\');return false;" style="color:#888;font-size:11px">editar contato</a></div>';
+  } else {
+    h+='<a href="#" onclick="abrirContatoOrgao(\''+encodeURIComponent(p.numero)+'\');return false;" style="color:#185FA5">+ Salvar e-mail/WhatsApp desta vara</a> <span style="color:#888;font-size:11px">('+esc(p.foro||'órgão')+')</span>';
+  }
+  h+='</div>'; return h;
+}
+function bvLine(numero){ var p=(DADOS.processos||[]).filter(function(x){return x.numero===numero;})[0]||{numero:numero}; return contatoBlocoHTML(p); }
+window.__coCtx=null;
+function abrirContatoOrgao(numEnc){
+  var num=decodeURIComponent(numEnc); var p=(DADOS.processos||[]).filter(function(x){return x.numero===num;})[0]||{};
+  var ex=contatoDoProcesso(p)||{};
+  window.__coCtx={numero:num, tribunal:tribunalAlias(num), id:ex.id||null};
+  document.getElementById('co-orgao').value=ex.orgao||p.foro||'';
+  document.getElementById('co-email').value=ex.email||'';
+  document.getElementById('co-whats').value=ex.whatsapp||'';
+  document.getElementById('co-link').value=ex.balcao_link||'';
+  document.getElementById('modal-contato').classList.remove('hidden');
+}
+function fecharContatoOrgao(){ document.getElementById('modal-contato').classList.add('hidden'); }
+async function salvarContatoOrgao(){
+  var ctx=window.__coCtx, sb=window.__sb; if(!sb||!ctx) return;
+  var ug=await sb.auth.getUser(); var pf=await sb.from('usuarios').select('escritorio_id').eq('id',ug.data.user.id).single();
+  var esc2=pf.data&&pf.data.escritorio_id; if(!esc2){ alert('Escritório não encontrado.'); return; }
+  var row={escritorio_id:esc2, tribunal:ctx.tribunal, orgao:document.getElementById('co-orgao').value||null, email:document.getElementById('co-email').value||null, whatsapp:document.getElementById('co-whats').value||null, balcao_link:document.getElementById('co-link').value||null};
+  var res = ctx.id ? await sb.from('contatos_orgao').update(row).eq('id',ctx.id) : await sb.from('contatos_orgao').insert(row);
+  if(res.error){ alert('Erro ao salvar: '+res.error.message); return; }
+  await loadCO(true); fecharContatoOrgao(); refreshContato(); alert('Contato da vara salvo — vai aparecer em todos os processos desta vara.');
+}
+function refreshContato(){
+  var md=document.getElementById('modal-dilig');
+  if(md && !md.classList.contains('hidden') && window.__dilCtx){ var p=(DADOS.processos||[]).filter(function(x){return x.numero===window.__dilCtx.numero;})[0]||{}; var db=document.getElementById('dil-balcao'); if(db) db.innerHTML=contatoBlocoHTML(p); return; }
+  if(typeof atual!=='undefined' && atual){ var i=DADOS.processos.indexOf(atual); var sec=document.getElementById('s-proc-det'); if(i>=0 && sec && !sec.classList.contains('hidden')) abrir(i); }
+}
+function gerarDiligencia(pid,numEnc){
+  var num=decodeURIComponent(numEnc); var p=(DADOS.processos||[]).filter(function(x){return x.numero===num;})[0]||{};
+  window.__dilCtx={pid:pid,numero:num};
+  var adv=(document.getElementById('who-name')||{}).textContent||'';
+  document.getElementById('dil-canal').value='email';
+  document.getElementById('dil-msg').value='Prezados,\n\nSolicito informações sobre o andamento do processo nº '+num+' ('+(p.cliente||'')+'), que se encontra sem movimentação desde '+(p.data||'')+'. Peço, por gentileza, atualização quanto ao próximo ato processual.\n\nAtenciosamente,\n'+adv+'\nCrispim Mendonça e Pinheiro Advogados';
+  var db=document.getElementById('dil-balcao'); if(db) db.innerHTML=contatoBlocoHTML(p);
+  document.getElementById('modal-dilig').classList.remove('hidden');
+}
+</script>
 </body>
 </html>
