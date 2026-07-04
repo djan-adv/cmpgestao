@@ -1132,6 +1132,7 @@ function renderProc(){
   <h2>Gerar diligência</h2>
   <label>Canal</label>
   <select id="dil-canal" class="btn sm" style="display:block;margin:4px 0 12px"><option value="email">E-mail</option><option value="whatsapp">WhatsApp</option><option value="sala_virtual">Sala virtual (balcão virtual)</option></select>
+  <div id="dil-balcao" style="font-size:12px;margin:0 0 10px"></div>
   <label>Mensagem padrão (edite se quiser)</label>
   <textarea id="dil-msg" rows="9" style="width:100%;box-sizing:border-box"></textarea>
   <div style="margin-top:12px;display:flex;gap:8px"><button class="btn" onclick="salvarDiligencia()">Salvar diligência</button><button class="btn ghost" onclick="fecharDilig()">Cancelar</button></div>
@@ -1324,6 +1325,52 @@ function renderFunilDash(){
   el.innerHTML='<div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap"><svg width="200" height="200" viewBox="0 0 200 200" style="flex:0 0 auto">'+polys+'</svg><div style="flex:1;min-width:150px">'+legend+'</div></div>';
 }
 (function(){ if(typeof renderCaptacao==='function' && !window.__rcWrapped){ window.__rcWrapped=true; var _rc=renderCaptacao; window.renderCaptacao=function(){ _rc(); try{ renderFunilDash(); }catch(e){} }; } })();
+</script>
+<script>
+var BALCAO={
+ tjsp:'https://www.tjsp.jus.br/balcaovirtual',
+ tjrs:'https://www.tjrs.jus.br/novo/processos-e-servicos/servicos-processuais/balcao-virtual/',
+ tjmg:'https://www.tjmg.jus.br/portal-tjmg/processos/balcao-virtual/',
+ tjes:'https://www.tjes.jus.br/balcao-virtual/',
+ tjpb:'https://www.tjpb.jus.br/balcaovirtual',
+ tjpe:'https://www.tjpe.jus.br/balcao-virtual',
+ tjba:'http://balcaovirtual.tjba.jus.br/',
+ tjce:'https://www.tjce.jus.br/balcao-virtual/',
+ tjrn:'https://www.tjrn.jus.br/balcao-virtual/',
+ tjma:'https://www.tjma.jus.br/balcao-virtual/tj',
+ tjpi:'https://www.tjpi.jus.br/portaltjpi/balcaovirtual/',
+ trf1:'https://portal.trf1.jus.br/portaltrf1/servicos/balcao-virtual/balcao-virtual.htm',
+ trf2:'https://www.trf2.jus.br/trf2/atendimento/balcao-virtual',
+ trf4:'https://www.trf4.jus.br/trf4/controlador.php?acao=pagina_visualizar&id_pagina=2819',
+ trf6:'https://portal.trf6.jus.br/central-de-atendimento/balcao-virtual-da-central/'
+};
+function tribunalAlias(numero){
+  var d=String(numero||'').replace(/\D/g,''); if(d.length<16) return null;
+  var J=d[13], TR=d.slice(14,16);
+  var TJ={'01':'tjac','02':'tjal','03':'tjap','04':'tjam','05':'tjba','06':'tjce','07':'tjdft','08':'tjes','09':'tjgo','10':'tjma','11':'tjmt','12':'tjms','13':'tjmg','14':'tjpa','15':'tjpb','16':'tjpr','17':'tjpe','18':'tjpi','19':'tjrj','20':'tjrn','21':'tjrs','22':'tjro','23':'tjrr','24':'tjsc','25':'tjse','26':'tjsp','27':'tjto'};
+  var TRF={'01':'trf1','02':'trf2','03':'trf3','04':'trf4','05':'trf5','06':'trf6'};
+  if(J==='8') return TJ[TR]||null;
+  if(J==='4') return TRF[TR]||null;
+  if(J==='5') return 'trt'+parseInt(TR,10);
+  return null;
+}
+function balcaoLink(numero){
+  var a=tribunalAlias(numero);
+  if(a && BALCAO[a]) return {url:BALCAO[a], verificado:true, trib:a};
+  var nome=a?a.toUpperCase():'tribunal';
+  return {url:'https://www.google.com/search?q='+encodeURIComponent('balcão virtual '+nome), verificado:false, trib:a};
+}
+function gerarDiligencia(pid,numEnc){
+  var num=decodeURIComponent(numEnc);
+  var p=(DADOS.processos||[]).filter(function(x){return x.numero===num;})[0]||{};
+  window.__dilCtx={pid:pid,numero:num};
+  var adv=(document.getElementById('who-name')||{}).textContent||'';
+  document.getElementById('dil-canal').value='email';
+  document.getElementById('dil-msg').value='Prezados,\n\nSolicito informações sobre o andamento do processo nº '+num+' ('+(p.cliente||'')+'), que se encontra sem movimentação desde '+(p.data||'')+'. Peço, por gentileza, atualização quanto ao próximo ato processual.\n\nAtenciosamente,\n'+adv+'\nCrispim Mendonça e Pinheiro Advogados';
+  var bl=balcaoLink(num); var db=document.getElementById('dil-balcao');
+  if(db){ db.innerHTML='<b>Balcão virtual</b> ('+(bl.trib?bl.trib.toUpperCase():'tribunal')+'): <a href="'+bl.url+'" target="_blank" rel="noopener" style="color:#185FA5">abrir</a>'+(bl.verificado?'':' <span style="color:#888">(via busca — link não catalogado ainda)</span>'); }
+  document.getElementById('modal-dilig').classList.remove('hidden');
+}
 </script>
 </body>
 </html>
