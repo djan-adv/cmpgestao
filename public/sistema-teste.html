@@ -141,7 +141,8 @@
       <a data-s="agenda" onclick="go('agenda')"><span class="ic">◧</span> Agenda (Kanban)</a>
       <a data-s="processos" onclick="go('processos')"><span class="ic">⚖</span> Processos</a>
       <a data-s="diligencias" onclick="go('diligencias')"><span class="ic">◔</span> Diligências</a>
-      <a data-s="crm" onclick="go('crm')"><span class="ic">▣</span> CRM</a>
+      <a data-s="relatorio" onclick="go('relatorio')"><span class="ic">◫</span> Relatório mensal</a>
+      <a data-s="crm" onclick="go('crm')"><span class="ic">▣</span> Comercial</a>
       <a data-s="etiquetas" onclick="go('etiquetas')"><span class="ic">⬤</span> Etiquetas</a>
       <a data-s="procedimentos" onclick="go('procedimentos')"><span class="ic">☰</span> Procedimentos</a>
     </nav>
@@ -265,6 +266,12 @@
   <div class="card" style="margin-top:16px">
     <h3 style="margin-top:0">Diligências em andamento</h3>
     <div id="dilig-andamento"></div>
+  </div>
+</section>
+<section id="s-relatorio" class="hidden">
+  <div class="card">
+    <h3 style="margin-top:0">Relatório mensal para clientes</h3>
+    <p class="note" style="max-width:680px">Em construção. A ideia: para cada cliente, uma linha do tempo com <b>todas as movimentações e atividades do mês</b> dos processos dele, gerada e enviada automaticamente <b>1x por mês</b>. Vamos detalhar juntos o formato (PDF/e-mail/WhatsApp), o que entra e o que fica de fora.</p>
   </div>
 </section>
 </main>
@@ -1192,6 +1199,18 @@ async function salvarDiligencia(){
 }
 async function dilRetorno(id){ var t=prompt('Retorno recebido:'); if(t==null) return; var sb=window.__sb; await sb.from('diligencias').update({status:'retorno',retorno:t}).eq('id',id); renderDiligencias(); }
 async function dilResolver(id){ var sb=window.__sb; await sb.from('diligencias').update({status:'resolvida'}).eq('id',id); renderDiligencias(); }
+</script>
+<script>
+function go(s){
+  ["painel","triagem","agenda","processos","proc-det","crm","etiquetas","procedimentos","diligencias","relatorio"].forEach(function(id){var e=document.getElementById("s-"+id);if(e)e.classList.add("hidden")});
+  var sec=document.getElementById("s-"+s); if(sec) sec.classList.remove("hidden");
+  document.querySelectorAll("#nav a").forEach(function(a){a.classList.remove("active")});
+  var link=document.querySelector('#nav a[data-s="'+s+'"]');if(link)link.classList.add("active");
+  var t={painel:"Painel",triagem:"Triagem diária",agenda:"Agenda — Kanban (etapas CMP)",processos:"Processos",crm:"Comercial",procedimentos:"Procedimentos CMP",etiquetas:"Etiquetas","proc-det":"Processo",diligencias:"Diligências",relatorio:"Relatório mensal para clientes"};
+  var st=document.getElementById("scr-title"); if(st) st.textContent=t[s]||"Painel";
+  if(s==="painel")renderPainel(); if(s==="triagem")renderTriagem(); if(s==="processos")renderProc(); if(s==="crm")renderCrm(); if(s==="etiquetas")renderEtiquetas(); if(s==="agenda")renderAgendaView(); if(s==="diligencias")renderDiligencias();
+  window.scrollTo(0,0);
+}
 </script>
 </body>
 </html>
