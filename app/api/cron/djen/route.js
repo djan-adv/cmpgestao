@@ -1,12 +1,12 @@
 // Robô diário CMPGestão — captura publicações novas no DJEN (Comunica/CNJ) por OAB
 // e grava os andamentos novos no banco. Roda na NUVEM (Vercel Cron), PC desligado.
-// Fonte oficial que deflagra prazo (Res. CNJ 569/24). Nada vira prazo sem conferência humana.
+// Escreve via função robot_add_andamento (SECURITY DEFINER) usando a chave PÚBLICA —
+// não precisa de service_role key. Fonte oficial (Res. CNJ 569/24); nada vira prazo sem conferência.
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
 import { createClient } from '@supabase/supabase-js'
 
-// Fase de teste: apenas as OABs do Djan (todas as inscrições dele).
 const OABS = [
   { numero: '5219', uf: 'SE' },
   { numero: '5219', uf: 'PB' },
@@ -37,35 +37,26 @@ async function consultaDjen(numero, uf, dias) {
 
 export async function GET(request) {
   const { searchParams } = new URL(request.url)
-  const secret = searchParams.get('key') || (request.headers.get('authorization') || '').replace('Bearer ', '')
-  if (process.env.CRON_SECRET && secret !== process.env.CRON_SECRET) return Response.json({ erro: 'nao autorizado' }, { status: 401 })
-  const svc = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!svc) return Response.json({ erro: 'Falta SUPABASE_SERVICE_ROLE_KEY nas variáveis do Vercel.' }, { status: 500 })
-  const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, svc, { auth: { persistSession: false } })
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  if (!url || !anon) return Response.json({ erro: 'faltam variáveis do Supabase' }, { status: 500 })
+  const sb = createClient(url, anon, { auth: { persistSession: false } })
   const dias = parseInt(searchParams.get('dias') || '2', 10) || 2
-
-  const { data: allProcs, error: e1 } = await sb.from('processos').select('id, numero_digitos, ultima_movimentacao')
-  if (e1) return Response.json({ erro: e1.message }, { status: 500 })
-  const mapa = {}
-  ;(allProcs || []).forEach((p) => { if (p.numero_digitos) mapa[p.numero_digitos] = p })
 
   let pubs = []
   for (const o of OABS) { const it = await consultaDjen(o.numero, o.uf, dias); pubs = pubs.concat(it) }
 
-  let inseridos = 0, jaTinha = 0, semProcesso = 0
+  let inseridos = 0, jaTinha = 0, semProcesso = 0, erros = 0
   for (const p of pubs) {
     const dig = String(p.numeroProcesso || p.numero_processo || '').replace(/\D/g, '')
-    const proc = mapa[dig]
-    if (!proc) { semProcesso++; continue }
+    if (dig.length < 16) { semProcesso++; continue }
     const texto = String(p.texto || p.teor || '').replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '').replace(/[ \t]+\n/g, '\n').trim()
     const data = String(p.dataDisponibilizacao || p.data_disponibilizacao || '').slice(0, 10) || null
-    const { data: ex } = await sb.from('andamentos').select('id').eq('processo_id', proc.id).eq('texto', texto).limit(1)
-    if (ex && ex.length) { jaTinha++; continue }
-    const ins = await sb.from('andamentos').insert({ processo_id: proc.id, data, texto, tipo: 'publicacao', fonte: 'djen' })
-    if (!ins.error) {
-      inseridos++
-      if (data && (!proc.ultima_movimentacao || data > proc.ultima_movimentacao)) { await sb.from('processos').update({ ultima_movimentacao: data }).eq('id', proc.id); proc.ultima_movimentacao = data }
-    }
+    const { data: res, error } = await sb.rpc('robot_add_andamento', { p_num: dig, p_data: data, p_texto: texto })
+    if (error) { erros++; continue }
+    if (res === 'inserido') inseridos++
+    else if (res === 'existe') jaTinha++
+    else semProcesso++
   }
-  return Response.json({ ok: true, oabs: OABS.length, publicacoes: pubs.length, inseridos, jaTinha, semProcesso, dias })
+  return Response.json({ ok: true, oabs: OABS.length, publicacoes: pubs.length, inseridos, jaTinha, semProcesso, erros, dias })
 }
