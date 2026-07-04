@@ -408,7 +408,7 @@ function abrir(i){
   html+='<div class="card"><p class="sectlabel">Dados do processo</p><div class="kvgrid">'+
     kv('Ação / assunto',esc(p.tipo))+kv('Número',p.numero)+kv('Juízo / foro',esc(p.foro))+
     kv('Valor da causa',p.causa?('R$ '+p.causa):'—')+kv('Valor de condenação','—')+kv('Tribunal',esc(trib))+
-    '</div></div>';
+    '</div><div style="margin-top:8px;font-size:13px;border-top:1px solid #eef2f7;padding-top:8px">'+bvLine(p.numero)+'</div></div>';
   // partes com papéis + cliente marcado
   html+='<div class="card"><p class="sectlabel">Partes</p>'+
     '<div class="parte"><span class="pnome"><b>'+esc(p.cliente)+'</b></span><span class="tag-cli">cliente principal</span></div>'+
@@ -1371,6 +1371,9 @@ function gerarDiligencia(pid,numEnc){
   if(db){ db.innerHTML='<b>Balcão virtual</b> ('+(bl.trib?bl.trib.toUpperCase():'tribunal')+'): <a href="'+bl.url+'" target="_blank" rel="noopener" style="color:#185FA5">abrir</a>'+(bl.verificado?'':' <span style="color:#888">(via busca — link não catalogado ainda)</span>'); }
   document.getElementById('modal-dilig').classList.remove('hidden');
 }
+</script>
+<script>
+function bvLine(numero){ if(typeof balcaoLink!=='function') return ''; var bl=balcaoLink(numero); return '<b>Balcão virtual</b> ('+(bl.trib?bl.trib.toUpperCase():'tribunal')+'): <a href="'+bl.url+'" target="_blank" rel="noopener" style="color:#185FA5">abrir atendimento</a>'+(bl.verificado?'':' <span style="color:#888">(via busca oficial)</span>'); }
 </script>
 </body>
 </html>
