@@ -182,8 +182,8 @@
     </section>
 
     <section id="s-processos" class="hidden">
-      <div class="searchbar"><input id="busca" placeholder="Buscar por cliente, número, oponente ou assunto..." oninput="renderProc()"><select id="ordena" onchange="renderProc()" class="btn sm" style="margin-left:8px"><option value="">Ordenar: padrão</option><option value="az">Cliente (A→Z)</option><option value="data_desc">Movimentação mais recente</option><option value="parados">Parados (mov. mais antiga)</option><option value="valor">Valor da causa (maior→menor)</option></select><select id="filtroEtq" onchange="renderProc()" class="btn sm" style="margin-left:8px"><option value="">Todas as etiquetas</option></select><select id="porPagina" onchange="renderProc()" class="btn sm" style="margin-left:8px"><option value="20">20 por página</option><option value="40">40</option><option value="60">60</option><option value="80">80</option><option value="100">100</option></select><span class="note" id="proc-count" style="align-self:center"></span><button class="btn sm" style="margin-left:auto" onclick="abrirNovaTarefa()">+ Nova tarefa</button><button class="btn sm" style="margin-left:8px" onclick="cadastrarPorNumero()">+ Cadastrar por número</button></div>
-      <div class="card"><table><thead><tr><th>Cliente</th><th>Processo</th><th>Assunto</th><th>Status</th></tr></thead><tbody id="proc-body"></tbody></table></div><div id="proc-pager" style="display:flex;gap:6px;align-items:center;justify-content:center;padding:14px;flex-wrap:wrap"></div>
+      <div class="searchbar"><input id="busca" placeholder="Buscar por cliente, número, oponente ou assunto..." oninput="renderProc()"><select id="ordena" onchange="renderProc()" class="btn sm" style="margin-left:8px"><option value="">Ordenar: padrão</option><option value="az">Cliente (A→Z)</option><option value="data_desc">Movimentação mais recente</option><option value="parados">Parados (mov. mais antiga)</option><option value="valor">Valor da causa (maior→menor)</option></select><select id="filtroEtq" onchange="renderProc()" class="btn sm" style="margin-left:8px"><option value="">Todas as etiquetas</option></select><select id="porPagina" onchange="renderProc()" class="btn sm" style="margin-left:8px"><option value="20">20 por página</option><option value="40">40</option><option value="60">60</option><option value="80">80</option><option value="100">100</option></select><span class="note" id="proc-count" style="align-self:center"></span><button class="btn sm" style="margin-left:auto" onclick="abrirNovaTarefa()">+ Nova tarefa</button><button class="btn sm" style="margin-left:8px" onclick="abrirBusca()">+ Cadastrar por número</button></div>
+      <div class="card"><table><thead><tr><th style="width:40px">#</th><th>Cliente</th><th>Processo</th><th>Assunto</th><th>Status</th></tr></thead><tbody id="proc-body"></tbody></table></div><div id="proc-pager" style="display:flex;gap:6px;align-items:center;justify-content:center;padding:14px;flex-wrap:wrap"></div>
     </section>
 
     <section id="s-proc-det" class="hidden">
@@ -997,6 +997,111 @@ function renderProc(){
   if(sel && typeof LABELS!=='undefined'){
     if(sel.getAttribute('data-n')!==String(LABELS.length)){ var cur=sel.value; sel.innerHTML='<option value="">Todas as etiquetas</option>'+LABELS.map(function(l){return '<option value="'+l.id+'">'+esc(l.nome)+'</option>';}).join(""); sel.value=cur; sel.setAttribute('data-n',String(LABELS.length)); }
   }
+}
+</script>
+<div id="modal-busca" class="overlay hidden"><div class="modal" style="max-width:760px">
+  <h2>Buscar processo (automática)</h2>
+  <label>Número(s) do processo (CNJ) — cole um ou vários, separados por vírgula</label>
+  <textarea id="busca-nums" rows="3" placeholder="0000000-00.0000.0.00.0000, 0000000-00.0000.0.00.0000" style="width:100%;box-sizing:border-box"></textarea>
+  <div class="note" style="margin:4px 0 10px">Fonte: DataJud (CNJ). Melhor para 1º grau; segredo de justiça pode não retornar.</div>
+  <div style="display:flex;gap:8px"><button class="btn" onclick="buscarProcessos()">Buscar processos</button><button class="btn ghost" onclick="fecharBusca()">Cancelar</button></div>
+  <div id="busca-result" style="margin-top:14px;max-height:360px;overflow:auto"></div>
+</div></div>
+<script>
+function abrirBusca(){ var m=document.getElementById('modal-busca'); document.getElementById('busca-nums').value=''; document.getElementById('busca-result').innerHTML=''; m.classList.remove('hidden'); }
+function fecharBusca(){ document.getElementById('modal-busca').classList.add('hidden'); }
+async function buscarProcessos(){
+  var raw=document.getElementById('busca-nums').value||'';
+  var nums=raw.split(/[,\n;]+/).map(function(x){return x.trim();}).filter(Boolean);
+  if(!nums.length) return;
+  if(nums.length>40){ alert('Máximo de 40 números por vez.'); return; }
+  var res=document.getElementById('busca-result'); window.__buscaFound=[];
+  var head='<table style="width:100%"><thead><tr><th></th><th>Número</th><th>Classe / Assunto</th><th>Órgão</th><th>Andament.</th></tr></thead><tbody>';
+  var rows='';
+  for(var i=0;i<nums.length;i++){
+    var n=nums[i]; var dig=n.replace(/\D/g,'');
+    var jaTem=DADOS.processos.some(function(p){return (p.numero||'').replace(/\D/g,'')===dig;});
+    res.innerHTML='<div class="note">Buscando '+(i+1)+'/'+nums.length+'…</div>'+head+rows+'</tbody></table>';
+    var dj={};
+    try{ var r=await fetch('/api/processo?numero='+encodeURIComponent(n)); dj=await r.json(); }catch(e){ dj={erro:'falha na consulta'}; }
+    var ok=!dj.erro; var idx=window.__buscaFound.length;
+    window.__buscaFound.push({numero:n,dj:dj,jaTem:jaTem});
+    rows+='<tr><td>'+(jaTem?'<span class="note">já existe</span>':(ok?'<input type="checkbox" checked data-i="'+idx+'">':'<span class="note">—</span>'))+'</td>'+
+      '<td class="proc">'+n+'</td>'+
+      '<td>'+(ok?esc(((dj.classe||'')+' '+(dj.assunto||'')).trim()||'—'):'<span style="color:#b91c1c">'+esc(dj.erro||'não encontrado')+'</span>')+'</td>'+
+      '<td>'+esc(dj.orgao||'—')+'</td>'+
+      '<td style="text-align:center">'+(ok?(dj.totalAndamentos||0):'—')+'</td></tr>';
+  }
+  res.innerHTML=head+rows+'</tbody></table><div style="margin-top:12px;display:flex;gap:8px"><button class="btn" onclick="cadastrarSelecionados()">Cadastrar selecionados</button><button class="btn ghost" onclick="fecharBusca()">Fechar</button></div>';
+}
+async function cadastrarSelecionados(){
+  var checks=Array.prototype.slice.call(document.querySelectorAll('#busca-result input[type=checkbox]:checked'));
+  if(!checks.length){ alert('Marque ao menos um processo.'); return; }
+  var sb=window.__sb; if(!sb){ alert('Sessão não encontrada.'); return; }
+  var ug=await sb.auth.getUser();
+  var pf=await sb.from('usuarios').select('escritorio_id').eq('id',ug.data.user.id).single();
+  var esc2=pf.data&&pf.data.escritorio_id; if(!esc2){ alert('Escritório não encontrado.'); return; }
+  function fd(iso){ if(!iso) return ''; var p=String(iso).slice(0,10).split('-'); return p.length===3?(p[2]+'/'+p[1]+'/'+p[0]):''; }
+  var done=0;
+  for(var c=0;c<checks.length;c++){
+    var item=window.__buscaFound[+checks[c].getAttribute('data-i')]; var dj=item.dj, n=item.numero;
+    var ands=dj.andamentos||[]; var ultmov=(ands[0]&&ands[0].data)?String(ands[0].data).slice(0,10):null;
+    var ins=await sb.from('processos').insert({escritorio_id:esc2,numero:n,classe:dj.classe||null,assunto:dj.assunto||null,orgao:dj.orgao||null,ultima_movimentacao:ultmov,fonte:'datajud'}).select('id').single();
+    if(ins.error) continue; var pid=ins.data.id;
+    var arows=ands.filter(function(a){return a.texto;}).map(function(a){return {processo_id:pid,data:(a.data?String(a.data).slice(0,10):null),texto:a.texto,fonte:'datajud'};});
+    if(arows.length) await sb.from('andamentos').insert(arows);
+    var hf=ands.map(function(a){return {data:(a.data?String(a.data).slice(0,10)+'T00:00:00.000Z':null),texto:a.texto};});
+    hf.sort(function(x,y){return (y.data||'').localeCompare(x.data||'');});
+    DADOS.processos.unshift({cliente:'',numero:n,oponente:'',tipo:dj.assunto||'',foro:dj.orgao||'',status:'Ativo 1º Grau',data:fd(ultmov),hist:'',causa:'0,00',hist_full:hf});
+    done++;
+  }
+  if(DADOS.kpis) DADOS.kpis.total=DADOS.processos.length;
+  fecharBusca(); go('processos'); alert(done+' processo(s) cadastrado(s).');
+}
+window.__procSig=''; window.__procPage=1;
+function procPag(p){ window.__procPage=p; renderProc(); window.scrollTo(0,0); }
+function renderProc(){
+  var q=(document.getElementById("busca").value||"").toLowerCase();
+  var sm=(document.getElementById("ordena")||{}).value||"";
+  var eq=(document.getElementById("filtroEtq")||{}).value||"";
+  var pp=parseInt((document.getElementById("porPagina")||{}).value||"20",10)||20;
+  var sig=q+'|'+sm+'|'+eq+'|'+pp;
+  if(sig!==window.__procSig){ window.__procPage=1; window.__procSig=sig; }
+  function pd(x){ if(!x) return 0; var m=String(x).split('/'); return m.length===3? parseInt(m[2]+m[1]+m[0],10):0; }
+  function pv(x){ if(!x) return 0; return parseFloat(String(x).replace(/\./g,'').replace(',','.'))||0; }
+  var lista=DADOS.processos.filter(function(p){
+    var okq=!q||(p.cliente+" "+p.numero+" "+p.oponente+" "+p.tipo).toLowerCase().indexOf(q)>-1;
+    var oke=true; if(eq){ var ids=(typeof ASSIGN!=='undefined'&&ASSIGN[p.numero])||[]; oke=ids.indexOf(eq)>-1; }
+    return okq&&oke;
+  });
+  if(sm==='az') lista.sort(function(a,b){var A=(a.cliente||'').trim(),B=(b.cliente||'').trim(); if(!A&&!B)return 0; if(!A)return 1; if(!B)return -1; return A.localeCompare(B,'pt');});
+  else if(sm==='data_desc') lista.sort(function(a,b){return pd(b.data)-pd(a.data);});
+  else if(sm==='parados') lista.sort(function(a,b){return pd(a.data)-pd(b.data);});
+  else if(sm==='valor') lista.sort(function(a,b){return pv(b.causa)-pv(a.causa);});
+  var total=lista.length, pages=Math.max(1,Math.ceil(total/pp));
+  if(window.__procPage>pages) window.__procPage=pages;
+  var pg=window.__procPage, start=(pg-1)*pp, rows=lista.slice(start,start+pp);
+  var pc=document.getElementById("proc-count"); if(pc) pc.textContent=total+" processos · página "+pg+" de "+pages;
+  var b=document.getElementById("proc-body"); if(!b) return; b.innerHTML="";
+  rows.forEach(function(p,ri){
+    var i=DADOS.processos.indexOf(p);
+    var tr=document.createElement("tr");tr.className="click";tr.onclick=function(){abrir(i)};
+    tr.innerHTML='<td style="color:var(--muted);text-align:right">'+(start+ri+1)+'</td><td><span style="font-weight:700;color:var(--navy)">'+esc(p.cliente)+'</span> <span style="color:var(--muted)">×</span> <span>'+esc(p.oponente||'—')+'</span> <span class="tag-cli">nosso cliente</span></td><td class="proc">'+p.numero+'</td><td>'+esc(p.tipo)+'<div style="margin-top:4px">'+etiquetasDoProc(p.numero)+'</div></td><td><span class="b '+stCls(p.status)+'">'+esc(p.status||'—')+'</span></td>';
+    b.appendChild(tr);
+  });
+  var pager=document.getElementById("proc-pager");
+  if(pager){
+    var h='';
+    h+='<button class="btn sm ghost" '+(pg<=1?'disabled':'')+' onclick="procPag('+(pg-1)+')">‹ Anterior</button>';
+    var from=Math.max(1,pg-2), to=Math.min(pages,pg+2);
+    if(from>1){ h+='<button class="btn sm ghost" onclick="procPag(1)">1</button>'; if(from>2) h+='<span style="color:var(--muted)">…</span>'; }
+    for(var k=from;k<=to;k++){ h+='<button class="btn sm'+(k===pg?'':' ghost')+'" onclick="procPag('+k+')">'+k+'</button>'; }
+    if(to<pages){ if(to<pages-1) h+='<span style="color:var(--muted)">…</span>'; h+='<button class="btn sm ghost" onclick="procPag('+pages+')">'+pages+'</button>'; }
+    h+='<button class="btn sm ghost" '+(pg>=pages?'disabled':'')+' onclick="procPag('+(pg+1)+')">Próxima ›</button>';
+    pager.innerHTML=h;
+  }
+  var sel=document.getElementById("filtroEtq");
+  if(sel && typeof LABELS!=='undefined'){ if(sel.getAttribute('data-n')!==String(LABELS.length)){ var cur=sel.value; sel.innerHTML='<option value="">Todas as etiquetas</option>'+LABELS.map(function(l){return '<option value="'+l.id+'">'+esc(l.nome)+'</option>';}).join(""); sel.value=cur; sel.setAttribute('data-n',String(LABELS.length)); } }
 }
 </script>
 </body>
