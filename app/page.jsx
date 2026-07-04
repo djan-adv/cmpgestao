@@ -1,18 +1,16 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
 import { supabase } from '../lib/supabase'
 
 export default function Login() {
-  const router = useRouter()
   const [email, setEmail] = useState('')
   const [senha, setSenha] = useState('')
   const [erro, setErro] = useState('')
   const [carregando, setCarregando] = useState(false)
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => { if (data.session) router.push('/painel') })
-  }, [router])
+    supabase.auth.getSession().then(({ data }) => { if (data.session) window.location.href = '/sistema.html' })
+  }, [])
 
   async function entrar(e) {
     e.preventDefault()
@@ -20,7 +18,7 @@ export default function Login() {
     const { error } = await supabase.auth.signInWithPassword({ email, password: senha })
     setCarregando(false)
     if (error) setErro('E-mail ou senha inválidos.')
-    else router.push('/painel')
+    else window.location.href = '/sistema.html'
   }
 
   return (
