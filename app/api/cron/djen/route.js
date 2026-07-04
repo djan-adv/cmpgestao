@@ -1,7 +1,6 @@
 // Robô diário CMPGestão — captura publicações novas no DJEN (Comunica/CNJ) por OAB
 // e grava os andamentos novos no banco. Roda na NUVEM (Vercel Cron), PC desligado.
-// Escreve via função robot_add_andamento (SECURITY DEFINER) usando a chave PÚBLICA —
-// não precisa de service_role key. Fonte oficial (Res. CNJ 569/24); nada vira prazo sem conferência.
+// Escreve via função robot_add_andamento (SECURITY DEFINER) usando a chave PÚBLICA.
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
@@ -16,6 +15,7 @@ const OABS = [
 ]
 const DJEN = 'https://comunicaapi.pje.jus.br/api/v1/comunicacao'
 const iso = (d) => d.toISOString().slice(0, 10)
+const UA = 'Mozilla/5.0 (compatible; CMPGestao/1.0)'
 
 async function consultaDjen(numero, uf, dias) {
   const fim = new Date(), ini = new Date(Date.now() - dias * 86400000)
@@ -23,10 +23,10 @@ async function consultaDjen(numero, uf, dias) {
   while (pagina <= 10) {
     const url = `${DJEN}?numeroOab=${numero.replace(/\D/g, '')}&ufOab=${uf}&dataDisponibilizacaoInicio=${iso(ini)}&dataDisponibilizacaoFim=${iso(fim)}&meio=D&pagina=${pagina}&itensPorPagina=100`
     let r
-    try { r = await fetch(url, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(25000) }) } catch (e) { break }
+    try { r = await fetch(url, { headers: { Accept: 'application/json', 'User-Agent': UA }, signal: AbortSignal.timeout(25000) }) } catch (e) { break }
     if (!r.ok) break
     const d = await r.json()
-    const lote = d.items || d.content || []
+    const lote = d.items || d.content || d.comunicacoes || []
     if (!lote.length) break
     itens = itens.concat(lote)
     if (lote.length < 100) break
@@ -37,11 +37,21 @@ async function consultaDjen(numero, uf, dias) {
 
 export async function GET(request) {
   const { searchParams } = new URL(request.url)
+  const dias = parseInt(searchParams.get('dias') || '2', 10) || 2
+
+  if (searchParams.get('debug')) {
+    const o = OABS[1]
+    const fim = new Date(), ini = new Date(Date.now() - dias * 86400000)
+    const u = `${DJEN}?numeroOab=${o.numero}&ufOab=${o.uf}&dataDisponibilizacaoInicio=${iso(ini)}&dataDisponibilizacaoFim=${iso(fim)}&meio=D&pagina=1&itensPorPagina=5`
+    let status = null, body = '', err = null
+    try { const r = await fetch(u, { headers: { Accept: 'application/json', 'User-Agent': UA }, signal: AbortSignal.timeout(25000) }); status = r.status; body = (await r.text()).slice(0, 800) } catch (e) { err = String(e && e.message || e) }
+    return Response.json({ debug: true, url: u, status, err, body })
+  }
+
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   if (!url || !anon) return Response.json({ erro: 'faltam variáveis do Supabase' }, { status: 500 })
   const sb = createClient(url, anon, { auth: { persistSession: false } })
-  const dias = parseInt(searchParams.get('dias') || '2', 10) || 2
 
   let pubs = []
   for (const o of OABS) { const it = await consultaDjen(o.numero, o.uf, dias); pubs = pubs.concat(it) }
