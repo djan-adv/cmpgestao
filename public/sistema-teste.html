@@ -140,6 +140,7 @@
       <a data-s="triagem" onclick="go('triagem')"><span class="ic">⚑</span> Triagem</a>
       <a data-s="agenda" onclick="go('agenda')"><span class="ic">◧</span> Agenda (Kanban)</a>
       <a data-s="processos" onclick="go('processos')"><span class="ic">⚖</span> Processos</a>
+      <a data-s="diligencias" onclick="go('diligencias')"><span class="ic">◔</span> Diligências</a>
       <a data-s="crm" onclick="go('crm')"><span class="ic">▣</span> CRM</a>
       <a data-s="etiquetas" onclick="go('etiquetas')"><span class="ic">⬤</span> Etiquetas</a>
       <a data-s="procedimentos" onclick="go('procedimentos')"><span class="ic">☰</span> Procedimentos</a>
@@ -251,7 +252,22 @@
       <div class="card"><p class="sectlabel">Equipe e papéis</p>
         Djan (sócio-diretor) · Jader (comercial/captação) · Maria Eduarda (coordenação operacional) · Maria Rita (produção) · Adriana (subscritora BA). Revisão semanal de prazos: <b>segunda-feira</b>, com Eduarda, Djan e Rita.</div>
     </section>
-  </main>
+  <section id="s-diligencias" class="hidden">
+  <div class="card">
+    <h3 style="margin-top:0">Processos parados</h3>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">
+      <span class="note">Sem movimentação há mais de</span>
+      <select id="dilig-min" onchange="renderDiligencias()" class="btn sm"><option value="30">30 dias</option><option value="45">45 dias</option><option value="60">60 dias</option><option value="90">90 dias</option></select>
+      <span class="note" id="dilig-count"></span>
+    </div>
+    <div style="overflow:auto"><table style="width:100%"><thead><tr><th style="width:40px">#</th><th>Cliente</th><th>Processo</th><th>Parado há</th><th></th></tr></thead><tbody id="dilig-body"></tbody></table></div>
+  </div>
+  <div class="card" style="margin-top:16px">
+    <h3 style="margin-top:0">Diligências em andamento</h3>
+    <div id="dilig-andamento"></div>
+  </div>
+</section>
+</main>
 </div>
 
 <div id="modal-tarefa" class="overlay hidden">
@@ -868,13 +884,13 @@ function renderKanban(){
   function fmtData(iso){ if(!iso) return ''; var p=String(iso).slice(0,10).split('-'); return p.length===3?(p[2]+'/'+p[1]+'/'+p[0]):''; }
   function fmtCausa(v){ if(v==null||v==='') return '0,00'; var n=Number(v); if(isNaN(n)) return '0,00'; return n.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
   try{
-    var res=await sb.from('processos').select('numero,cliente_nome,oponente,assunto,foro,status,valor_causa,ultima_movimentacao,andamentos(data,texto)').order('ultima_movimentacao',{ascending:false,nullsFirst:false}).limit(3000);
+    var res=await sb.from('processos').select('id,numero,cliente_nome,oponente,assunto,foro,status,valor_causa,ultima_movimentacao,andamentos(data,texto)').order('ultima_movimentacao',{ascending:false,nullsFirst:false}).limit(3000);
     if(res.error) throw res.error;
     var rows=res.data||[];
     DADOS.processos=rows.map(function(p){
       var hf=(p.andamentos||[]).map(function(a){return {data:(a.data? a.data+'T00:00:00.000Z':null), texto:a.texto};});
       hf.sort(function(x,y){return (y.data||'').localeCompare(x.data||'');});
-      return {cliente:p.cliente_nome||'', numero:p.numero, oponente:p.oponente||'', tipo:p.assunto||'', foro:p.foro||'', status:p.status||'', data:fmtData(p.ultima_movimentacao), hist:'', causa:fmtCausa(p.valor_causa), hist_full:hf};
+      return {_id:p.id, cliente:p.cliente_nome||'', numero:p.numero, oponente:p.oponente||'', tipo:p.assunto||'', foro:p.foro||'', status:p.status||'', data:fmtData(p.ultima_movimentacao), hist:'', causa:fmtCausa(p.valor_causa), hist_full:hf};
     });
     if(DADOS.kpis){ DADOS.kpis.total=DADOS.processos.length; }
     var appEl=document.getElementById('app');
@@ -1103,6 +1119,79 @@ function renderProc(){
   var sel=document.getElementById("filtroEtq");
   if(sel && typeof LABELS!=='undefined'){ if(sel.getAttribute('data-n')!==String(LABELS.length)){ var cur=sel.value; sel.innerHTML='<option value="">Todas as etiquetas</option>'+LABELS.map(function(l){return '<option value="'+l.id+'">'+esc(l.nome)+'</option>';}).join(""); sel.value=cur; sel.setAttribute('data-n',String(LABELS.length)); } }
 }
+</script>
+<div id="modal-dilig" class="overlay hidden"><div class="modal" style="max-width:640px">
+  <h2>Gerar diligência</h2>
+  <label>Canal</label>
+  <select id="dil-canal" class="btn sm" style="display:block;margin:4px 0 12px"><option value="email">E-mail</option><option value="whatsapp">WhatsApp</option><option value="sala_virtual">Sala virtual (balcão virtual)</option></select>
+  <label>Mensagem padrão (edite se quiser)</label>
+  <textarea id="dil-msg" rows="9" style="width:100%;box-sizing:border-box"></textarea>
+  <div style="margin-top:12px;display:flex;gap:8px"><button class="btn" onclick="salvarDiligencia()">Salvar diligência</button><button class="btn ghost" onclick="fecharDilig()">Cancelar</button></div>
+</div></div>
+<script>
+function go(s){
+  ["painel","triagem","agenda","processos","proc-det","crm","etiquetas","procedimentos","diligencias"].forEach(function(id){var e=document.getElementById("s-"+id);if(e)e.classList.add("hidden")});
+  var sec=document.getElementById("s-"+s); if(sec) sec.classList.remove("hidden");
+  document.querySelectorAll("#nav a").forEach(function(a){a.classList.remove("active")});
+  var link=document.querySelector('#nav a[data-s="'+s+'"]');if(link)link.classList.add("active");
+  var t={painel:"Painel",triagem:"Triagem diária",agenda:"Agenda — Kanban (etapas CMP)",processos:"Processos",crm:"CRM",procedimentos:"Procedimentos CMP",etiquetas:"Etiquetas","proc-det":"Processo",diligencias:"Diligências"};
+  var st=document.getElementById("scr-title"); if(st) st.textContent=t[s]||"Painel";
+  if(s==="painel")renderPainel(); if(s==="triagem")renderTriagem(); if(s==="processos")renderProc(); if(s==="crm")renderCrm(); if(s==="etiquetas")renderEtiquetas(); if(s==="agenda")renderAgendaView(); if(s==="diligencias")renderDiligencias();
+  window.scrollTo(0,0);
+}
+function pdias(d){ if(!d) return -1; var m=String(d).split('/'); if(m.length!==3) return -1; var dt=new Date(+m[2],+m[1]-1,+m[0]); if(isNaN(dt.getTime())) return -1; return Math.floor((Date.now()-dt.getTime())/86400000); }
+async function renderDiligencias(){
+  var min=parseInt((document.getElementById('dilig-min')||{}).value||'30',10)||30;
+  var parados=(DADOS.processos||[]).map(function(p){return {p:p,dias:pdias(p.data)};}).filter(function(x){return x.dias>min;}).sort(function(a,b){return b.dias-a.dias;});
+  var cnt=document.getElementById('dilig-count'); if(cnt) cnt.textContent=parados.length+' processo(s) parado(s)';
+  var b=document.getElementById('dilig-body');
+  if(b){ b.innerHTML=''; parados.slice(0,300).forEach(function(x,ix){
+    var p=x.p; var tr=document.createElement('tr');
+    tr.innerHTML='<td style="color:var(--muted);text-align:right">'+(ix+1)+'</td><td><b>'+esc(p.cliente||'—')+'</b></td><td class="proc">'+p.numero+'</td><td>'+x.dias+' dias</td><td style="text-align:right"><button class="btn sm" onclick="gerarDiligencia(\''+(p._id||'')+'\',\''+encodeURIComponent(p.numero)+'\')">Gerar diligência</button></td>';
+    b.appendChild(tr);
+  }); }
+  var el=document.getElementById('dilig-andamento'); if(!el) return;
+  var sb=window.__sb; if(!sb){ el.innerHTML=''; return; }
+  el.innerHTML='<div class="note">Carregando…</div>';
+  var r=await sb.from('diligencias').select('id,status,canal,mensagem,retorno,criado_em,processos(numero,cliente_nome)').neq('status','resolvida').order('criado_em',{ascending:false});
+  if(r.error){ el.innerHTML='<div class="note">Nenhuma diligência em andamento.</div>'; return; }
+  var ds=r.data||[];
+  if(!ds.length){ el.innerHTML='<div class="note">Nenhuma diligência em andamento.</div>'; return; }
+  el.innerHTML=ds.map(function(d){ var pr=d.processos||{};
+    return '<div style="border:1px solid #e5e7eb;border-radius:8px;padding:10px;margin-bottom:8px">'+
+      '<div><b>'+esc(pr.cliente_nome||'—')+'</b> <span class="proc">'+esc(pr.numero||'')+'</span> · <span class="note">'+esc(d.canal||'')+' · '+esc(d.status||'')+'</span></div>'+
+      '<div style="font-size:13px;color:#475569;margin:6px 0;white-space:pre-wrap">'+esc(d.mensagem||'')+'</div>'+
+      (d.retorno?'<div style="font-size:13px;color:#0f6e56">Retorno: '+esc(d.retorno)+'</div>':'')+
+      '<div style="margin-top:6px;display:flex;gap:6px"><button class="btn sm ghost" onclick="dilRetorno(\''+d.id+'\')">Marcar retorno</button><button class="btn sm ghost" onclick="dilResolver(\''+d.id+'\')">Resolver</button></div></div>';
+  }).join('');
+}
+window.__dilCtx=null;
+function gerarDiligencia(pid,numEnc){
+  var num=decodeURIComponent(numEnc);
+  var p=(DADOS.processos||[]).filter(function(x){return x.numero===num;})[0]||{};
+  window.__dilCtx={pid:pid,numero:num};
+  var adv=(document.getElementById('who-name')||{}).textContent||'';
+  document.getElementById('dil-canal').value='email';
+  document.getElementById('dil-msg').value='Prezados,\n\nSolicito informações sobre o andamento do processo nº '+num+' ('+(p.cliente||'')+'), que se encontra sem movimentação desde '+(p.data||'')+'. Peço, por gentileza, atualização quanto ao próximo ato processual.\n\nAtenciosamente,\n'+adv+'\nCrispim Mendonça e Pinheiro Advogados';
+  if(!pid){ /* sem id: ainda deixa gerar a mensagem, mas avisa ao salvar */ }
+  document.getElementById('modal-dilig').classList.remove('hidden');
+}
+function fecharDilig(){ document.getElementById('modal-dilig').classList.add('hidden'); }
+async function salvarDiligencia(){
+  var ctx=window.__dilCtx; if(!ctx){ return; }
+  if(!ctx.pid){ alert('Este processo foi carregado sem identificador — recarregue a página e tente de novo.'); return; }
+  var sb=window.__sb; var ug=await sb.auth.getUser();
+  var pf=await sb.from('usuarios').select('escritorio_id').eq('id',ug.data.user.id).single();
+  var esc2=pf.data&&pf.data.escritorio_id; if(!esc2){ alert('Escritório não encontrado.'); return; }
+  var canal=document.getElementById('dil-canal').value;
+  var msg=document.getElementById('dil-msg').value;
+  var ins=await sb.from('diligencias').insert({escritorio_id:esc2,processo_id:ctx.pid,status:'a_fazer',canal:canal,mensagem:msg});
+  if(ins.error){ alert('Erro ao salvar: '+ins.error.message); return; }
+  try{ await navigator.clipboard.writeText(msg); }catch(e){}
+  fecharDilig(); renderDiligencias(); alert('Diligência criada. Mensagem copiada para a área de transferência.');
+}
+async function dilRetorno(id){ var t=prompt('Retorno recebido:'); if(t==null) return; var sb=window.__sb; await sb.from('diligencias').update({status:'retorno',retorno:t}).eq('id',id); renderDiligencias(); }
+async function dilResolver(id){ var sb=window.__sb; await sb.from('diligencias').update({status:'resolvida'}).eq('id',id); renderDiligencias(); }
 </script>
 </body>
 </html>
