@@ -1301,8 +1301,12 @@ function classHist(p){
   return cand.length?cand[0][1]:'';
 }
 function origemProc(p){
-  var m=String(p.data||'').split('/'); var n=(m.length===3)?parseInt(m[2]+m[1]+m[0],10):0;
-  if(n>20260705) return 'atualizado';
+  /* movimentação no histórico nos últimos 5 dias => atualizado */
+  var m=String(p.data||'').split('/');
+  if(m.length===3){
+    var d=new Date(+m[2], +m[1]-1, +m[0]);
+    if(!isNaN(d) && (Date.now()-d.getTime())<=5*86400000) return 'atualizado';
+  }
   var dig=String(p.numero||'').replace(/\D/g,'');
   return (typeof ASTREA_SET!=='undefined'&&ASTREA_SET[dig])?'astrea':'djen';
 }
