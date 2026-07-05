@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<title>MOCKUP · CMPGestão v2 — proposta de layout</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--navy:#2E3A4B;--navy2:#3d4c60;--navy3:#26303f;--gold:#C9A227;--bg:#f3f5f8;--panel:#fff;--line:#e4e8ef;--ink:#1e2733;--muted:#697180;--accentbg:#eef1f5;--ok:#127a53;--okbg:#e5f4ed;--warn:#9a6a12;--warnbg:#fbf1dc;--danger:#b5342b;--dangerbg:#fdf0ef}
+*{box-sizing:border-box;margin:0}
+body{font-family:"Barlow",system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:14.5px;line-height:1.5}
+.demo{position:fixed;bottom:14px;right:14px;background:var(--gold);color:#fff;font-weight:700;font-size:12px;padding:6px 12px;border-radius:20px;z-index:99;box-shadow:0 4px 12px rgba(0,0,0,.2)}
+.app{display:flex;min-height:100vh}
+
+/* SIDEBAR */
+.side{width:220px;background:var(--navy);color:#cdd6e2;display:flex;flex-direction:column;position:fixed;top:0;bottom:0;left:0}
+.side .logo{padding:18px 16px 14px;border-bottom:1px solid rgba(255,255,255,.08)}
+.side .logo img{width:74px;display:block}
+.side .logo .prod{font-size:12.5px;color:#8fa0b5;margin-top:6px}.side .logo .prod b{color:#fff}.side .logo .prod span{color:var(--gold)}
+.nav{flex:1;padding:10px 8px;overflow:auto}
+.nav a{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;color:#cdd6e2;text-decoration:none;font-weight:500;font-size:14px;margin-bottom:2px}
+.nav a .ic{width:18px;text-align:center;opacity:.85}
+.nav a:hover{background:rgba(255,255,255,.07);color:#fff}
+.nav a.on{background:rgba(201,162,39,.16);color:#fff;border-left:3px solid var(--gold);padding-left:9px}
+.nav .sec{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:#7688a0;padding:12px 12px 4px}
+.side .user{padding:12px 16px;border-top:1px solid rgba(255,255,255,.08);display:flex;gap:10px;align-items:center}
+.side .user .av{width:32px;height:32px;border-radius:50%;background:var(--gold);color:#fff;display:grid;place-items:center;font-weight:700;font-size:13px}
+.side .user .nm{font-size:13px;color:#fff;font-weight:600}.side .user .pp{font-size:11px;color:#8fa0b5}
+
+/* MAIN */
+.main{flex:1;margin-left:220px;display:flex;flex-direction:column}
+.top{background:var(--panel);border-bottom:1px solid var(--line);padding:10px 22px;display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:10}
+.busca{flex:1;max-width:460px;position:relative}
+.busca input{width:100%;padding:9px 12px 9px 34px;border:1px solid var(--line);border-radius:9px;font-family:inherit;font-size:13.5px;background:var(--bg)}
+.busca .lupa{position:absolute;left:11px;top:8px;color:var(--muted)}
+.top .sino{margin-left:auto;position:relative;font-size:18px;cursor:pointer;color:var(--muted)}
+.top .sino .dot{position:absolute;top:-4px;right:-7px;background:var(--danger);color:#fff;font-size:10px;font-weight:700;border-radius:10px;padding:1px 5px}
+.top .data{font-size:12.5px;color:var(--muted)}
+.content{padding:22px;max-width:1200px}
+
+h1{font-size:20px;font-weight:800;color:var(--navy)}
+.sub{color:var(--muted);font-size:13px;margin:2px 0 18px}
+
+/* KPI CARDS */
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;cursor:pointer;transition:transform .1s, box-shadow .1s;border-top:3px solid var(--navy)}
+.kpi:hover{transform:translateY(-2px);box-shadow:0 6px 18px rgba(46,58,75,.10)}
+.kpi .n{font-size:26px;font-weight:800;color:var(--navy)}
+.kpi .l{font-size:12.5px;color:var(--muted);font-weight:600}
+.kpi.gold{border-top-color:var(--gold)}.kpi.warn{border-top-color:#d9a441}.kpi.bad{border-top-color:var(--danger)}
+.kpi .d{font-size:11.5px;margin-top:4px}.kpi .d.up{color:var(--ok)}.kpi .d.at{color:var(--danger);font-weight:600}
+
+.grid2{display:grid;grid-template-columns:1.4fr 1fr;gap:14px;align-items:start}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin-bottom:14px}
+.card h3{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:12px;font-weight:700;display:flex;justify-content:space-between;align-items:center}
+.card h3 .ver{font-size:12px;color:var(--navy);text-transform:none;letter-spacing:0;font-weight:600;cursor:pointer}
+
+/* MEU DIA */
+.item{display:flex;gap:10px;padding:9px 0;border-bottom:1px solid var(--accentbg);align-items:flex-start}
+.item:last-child{border-bottom:0}
+.hora{font-weight:700;color:var(--navy);font-size:13px;min-width:44px}
+.tag{font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:12px}
+.tag.aud{background:var(--dangerbg);color:var(--danger)}.tag.prz{background:var(--warnbg);color:var(--warn)}.tag.tar{background:var(--accentbg);color:var(--navy)}
+.item .tt{font-weight:600;font-size:13.5px}.item .ss{font-size:12px;color:var(--muted)}
+.resp{margin-left:auto;font-size:11px;background:var(--accentbg);color:var(--navy);border-radius:12px;padding:2px 8px;font-weight:600;white-space:nowrap}
+.atras{color:var(--danger);font-weight:700;font-size:12px}
+
+/* TRIAGEM */
+.pub{border:1px solid var(--line);border-radius:10px;padding:11px 13px;margin-bottom:9px}
+.pub .meta{font-size:11.5px;color:var(--muted);font-family:ui-monospace,Menlo,monospace}
+.pub .tx{font-size:13px;margin:4px 0 8px}
+.pub .ia{font-size:12px;background:#fdf8ec;border-left:3px solid var(--gold);padding:6px 9px;border-radius:0 6px 6px 0;color:#6b5a1e;margin-bottom:8px}
+.bt{border:0;border-radius:7px;padding:6px 13px;font-weight:700;font-size:12.5px;cursor:pointer;font-family:inherit}
+.bt.ciencia{background:var(--accentbg);color:var(--navy)}
+.bt.acao{background:var(--navy);color:#fff}
+.bt.acao:hover{background:var(--navy2)}
+
+/* PRODUTIVIDADE */
+.prod-row{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.prod-row .who{width:92px;font-weight:600;font-size:13px}
+.bar{flex:1;height:9px;background:var(--accentbg);border-radius:6px;overflow:hidden}
+.bar i{display:block;height:100%;background:linear-gradient(90deg,var(--navy),var(--navy2));border-radius:6px}
+.prod-row .pts{font-size:12px;color:var(--muted);min-width:56px;text-align:right}
+.prod-row:first-of-type .bar i{background:linear-gradient(90deg,var(--gold),#d9b64f)}
+
+/* TABELA PROCESSOS */
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}
+td{padding:10px;border-bottom:1px solid var(--accentbg)}
+tr:hover td{background:#f8fafc;cursor:pointer}
+.num{font-family:ui-monospace,Menlo,monospace;font-size:12px;color:var(--muted)}
+.chip{display:inline-block;font-size:11px;padding:2px 9px;border-radius:20px;background:var(--accentbg);color:var(--navy);font-weight:700}
+.chip.exec{background:var(--okbg);color:var(--ok)}.chip.parado{background:var(--dangerbg);color:var(--danger)}
+
+/* DRAWER */
+.drawer{position:fixed;top:0;right:0;bottom:0;width:520px;background:var(--panel);border-left:1px solid var(--line);box-shadow:-12px 0 30px rgba(30,39,51,.12);padding:22px;overflow:auto;z-index:50}
+.drawer .fechar{float:right;cursor:pointer;color:var(--muted);font-size:18px}
+.drawer .num2{font-family:ui-monospace,Menlo,monospace;font-size:12px;color:var(--muted)}
+.drawer h2{color:var(--navy);font-size:17px;margin:4px 0 2px}
+.drawer .partes{font-size:13px;color:var(--muted);margin-bottom:10px}
+.timeline{list-style:none;padding:0;margin:12px 0 0}
+.timeline li{padding:8px 0 8px 18px;border-left:2px solid var(--line);position:relative}
+.timeline li::before{content:"";position:absolute;left:-6px;top:12px;width:10px;height:10px;border-radius:50%;background:var(--navy)}
+.timeline li:first-child::before{background:var(--gold)}
+.timeline .dt{font-size:11.5px;color:var(--muted)}
+.timeline .ato{font-weight:500;font-size:13px}
+.acts{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+
+@media(max-width:1080px){.kpis{grid-template-columns:repeat(2,1fr)}.grid2{grid-template-columns:1fr}.drawer{width:100%}}
+@media(max-width:760px){.side{display:none}.main{margin-left:0}}
+</style>
+</head>
+<body>
+<div class="demo">MOCKUP — proposta de layout v2</div>
+<div class="app">
+
+  <aside class="side">
+    <div class="logo">
+      <img src="/logo_cmp_white.png" alt="CMP">
+      <div class="prod"><b>CMP<span>Gestão</span></b> · Crispim Mendonça e Pinheiro</div>
+    </div>
+    <nav class="nav">
+      <a class="on" href="#"><span class="ic">▤</span> Painel — Meu dia</a>
+      <a href="#"><span class="ic">⚑</span> Triagem <span class="resp" style="background:var(--gold);color:#fff">7</span></a>
+      <a href="#"><span class="ic">◧</span> Agenda &amp; Kanban</a>
+      <a href="#"><span class="ic">⚖</span> Processos</a>
+      <a href="#"><span class="ic">◔</span> Diligências</a>
+      <div class="sec">Relacionamento</div>
+      <a href="#"><span class="ic">▣</span> Comercial</a>
+      <a href="#"><span class="ic">☎</span> Contatos</a>
+      <a href="#"><span class="ic">◫</span> Relatório mensal</a>
+      <div class="sec">Configuração</div>
+      <a href="#"><span class="ic">⬤</span> Etiquetas</a>
+      <a href="#"><span class="ic">☰</span> Procedimentos</a>
+    </nav>
+    <div class="user">
+      <div class="av">DJ</div>
+      <div><div class="nm">Djan H. M.</div><div class="pp">sócio</div></div>
+    </div>
+  </aside>
+
+  <div class="main">
+    <div class="top">
+      <div class="busca"><span class="lupa">🔍</span><input placeholder="Buscar processo, cliente ou CPF…  (Ctrl+K)"></div>
+      <span class="data">sábado, 5 de julho de 2026</span>
+      <span class="sino">🔔<span class="dot">7</span></span>
+    </div>
+
+    <div class="content">
+      <h1>Bom dia, Djan</h1>
+      <div class="sub">7 publicações novas capturadas pelo robô às 5h · 3 compromissos hoje · 2 prazos vencem esta semana</div>
+
+      <div class="kpis">
+        <div class="kpi gold"><div class="n">7</div><div class="l">Publicações a triar</div><div class="d up">robô DJEN · hoje 5h</div></div>
+        <div class="kpi"><div class="n">5</div><div class="l">Prazos na semana</div><div class="d">2 fatais</div></div>
+        <div class="kpi warn"><div class="n">38</div><div class="l">Processos parados 30+</div><div class="d">gerar diligências</div></div>
+        <div class="kpi bad"><div class="n">3</div><div class="l">Tarefas atrasadas</div><div class="d at">exige ação</div></div>
+      </div>
+
+      <div class="grid2">
+        <div>
+          <div class="card">
+            <h3>Meu dia — sábado 05/07 <span class="ver">abrir agenda →</span></h3>
+            <div class="item"><span class="hora atras">ontem</span><span class="tag prz">PRAZO</span><div><div class="tt">Manifestação sobre laudo — 0813316-59.2026</div><div class="ss">Maria Lúcia dos Santos × Banco XP · <b class="atras">atrasada 1 dia</b></div></div><span class="resp">Rita</span></div>
+            <div class="item"><span class="hora">09:00</span><span class="tag aud">AUDIÊNCIA</span><div><div class="tt">Instrução — 0821386-65.2026.8.15.2001</div><div class="ss">9º Juizado JP · sala virtual (link no balcão)</div></div><span class="resp">Djan</span></div>
+            <div class="item"><span class="hora">14:00</span><span class="tag prz">PRAZO</span><div><div class="tt">Contrarrazões — 0845650-83.2025</div><div class="ss">fatal em 08/07 · folga 3 dias</div></div><span class="resp">Eduarda</span></div>
+            <div class="item"><span class="hora">—</span><span class="tag tar">TAREFA</span><div><div class="tt">Conferir bloqueio SISBAJUD — exec. Valtex</div><div class="ss">retorno esperado desde 02/07</div></div><span class="resp">Djan</span></div>
+          </div>
+
+          <div class="card">
+            <h3>Processos recentes <span class="ver">ver todos (584) →</span></h3>
+            <table>
+              <tr><th>Cliente × parte contrária</th><th>Última mov.</th><th>Fase</th></tr>
+              <tr onclick="document.getElementById('drawer').style.display='block'">
+                <td><b>Valtex Confecções</b> × Banco Santander<div class="num">0001331-83.2012.8.15.0331</div></td>
+                <td>04/07 · Penhora SISBAJUD</td><td><span class="chip exec">Execução</span></td></tr>
+              <tr><td><b>Djan H. M. Nascimento</b> × Estado de SE<div class="num">202150000356</div></td>
+                <td>28/06 · Conclusos</td><td><span class="chip">Decisória</span></td></tr>
+              <tr><td><b>Sérgio Assabbi</b> × Latam<div class="num">0826159-56.2026.8.15.2001</div></td>
+                <td>12/05 · Citação expedida</td><td><span class="chip parado">Parado 54d</span></td></tr>
+            </table>
+          </div>
+        </div>
+
+        <div>
+          <div class="card">
+            <h3>Triagem do dia — regra CMP: tudo triado no mesmo dia <span class="ver">ver as 7 →</span></h3>
+            <div class="pub">
+              <div class="meta">TJPB · 0821386-65.2026.8.15.2001 · disp. 04/07</div>
+              <div class="tx">Intimação — audiência de instrução designada para 22/07/2026 às 09h…</div>
+              <div class="ia">✦ IA sugere: <b>AÇÃO</b> — criar evento "Audiência 22/07 09h" + tarefa preparação (prazo 18/07)</div>
+              <button class="bt acao">✓ Ação → Kanban</button>
+              <button class="bt ciencia">Ciência (arquivar)</button>
+            </div>
+            <div class="pub">
+              <div class="meta">TJSE · 0014335-14.2024.8.25.0001 · disp. 04/07</div>
+              <div class="tx">Publicado despacho de mero expediente…</div>
+              <div class="ia">✦ IA sugere: <b>CIÊNCIA</b> — sem prazo identificado</div>
+              <button class="bt acao">Ação → Kanban</button>
+              <button class="bt ciencia">✓ Ciência</button>
+            </div>
+          </div>
+
+          <div class="card">
+            <h3>Produtividade da semana <span class="ver">estilo Taskscore</span></h3>
+            <div class="prod-row"><span class="who">Maria Rita</span><div class="bar"><i style="width:86%"></i></div><span class="pts">43 tarefas</span></div>
+            <div class="prod-row"><span class="who">M. Eduarda</span><div class="bar"><i style="width:64%"></i></div><span class="pts">32 tarefas</span></div>
+            <div class="prod-row"><span class="who">Djan</span><div class="bar"><i style="width:52%"></i></div><span class="pts">26 tarefas</span></div>
+            <div class="prod-row"><span class="who">Jader</span><div class="bar"><i style="width:38%"></i></div><span class="pts">19 tarefas</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DRAWER: ficha do processo -->
+  <div class="drawer" id="drawer" style="display:none">
+    <span class="fechar" onclick="this.parentElement.style.display='none'">✕</span>
+    <div class="num2">Processo nº 0001331-83.2012.8.15.0331 · TJPB · 4ª Vara de Guarabira</div>
+    <h2>Valtex Ind e Com de Confecções × Banco Santander (Brasil) S.A.</h2>
+    <div class="partes"><span class="chip exec">Execução / cumprimento</span> &nbsp;<span class="chip">R$ 214.500,00</span> &nbsp;<span class="chip" style="background:var(--warnbg);color:var(--warn)">⬤ bancário</span></div>
+    <div class="acts">
+      <button class="bt acao">+ Tarefa</button>
+      <button class="bt ciencia">Gerar diligência</button>
+      <button class="bt ciencia">Balcão virtual</button>
+      <button class="bt ciencia">Portal do cliente</button>
+    </div>
+    <h3 style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:18px 0 6px">Linha do tempo</h3>
+    <ul class="timeline">
+      <li><div class="dt">04/07/2026</div><div class="ato">Penhora on-line SISBAJUD — bloqueio parcial R$ 38.212,44</div></li>
+      <li><div class="dt">28/06/2026</div><div class="ato">Petição — requerimento de penhora</div></li>
+      <li><div class="dt">15/06/2026</div><div class="ato">Decorrido prazo — sem pagamento voluntário</div></li>
+      <li><div class="dt">02/06/2026</div><div class="ato">Intimação — cumprimento de sentença</div></li>
+    </ul>
+  </div>
+
+</div>
+</body>
+</html>
