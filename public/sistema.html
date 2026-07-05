@@ -577,7 +577,8 @@ function abrir(i){
   // cabeçalho: partes no mesmo tamanho, cliente em negrito e marcado
   var __enc=/encerr/i.test(p.status||'');
   html+='<div class="card" style="position:relative"><div class="parties" style="padding-right:130px"><span class="cli">'+esc(p.cliente)+'</span>'+
-    '<span class="vs">×</span><span class="op">'+esc(p.oponente||'—')+'</span></div>'+
+    '<span class="vs">×</span><span class="op">'+esc(p.oponente||'—')+'</span>'+
+    '<button class="btn sm ghost" style="margin-left:12px;font-size:11px;padding:4px 9px;vertical-align:middle" onclick="inverterPolos()" title="Trocar cliente ↔ oponente (o cliente fica sempre à esquerda)">⇄ inverter polos</button></div>'+
     (typeof JALINE!=='undefined'&&JALINE[String(p.numero||'').replace(/\D/g,'')]?'<button class="btn sm gold" style="position:absolute;top:14px;right:112px;cursor:default" title="Pasta de Jaline — honorários exclusivos Djan e Jaline">Jaline</button>':'')+
     '<button class="btn sm '+(__enc?'gold':'ghost')+'" style="position:absolute;top:14px;right:14px" onclick="encerrarProcesso()">'+(__enc?'Reativar':'Encerrar')+'</button>'+
     '<div class="subhead">Processo nº '+p.numero+' &nbsp;·&nbsp; <span class="b '+stCls(p.status)+'">'+esc(p.status||'—')+'</span>'+
@@ -1440,6 +1441,15 @@ function renderEncerrados(){
     tr.innerHTML='<td style="color:var(--muted);text-align:right">'+(ri+1)+'</td><td><span style="font-weight:700;color:var(--navy)">'+esc(p.cliente)+'</span> <span style="color:var(--muted)">×</span> <span>'+esc(p.oponente||'—')+'</span></td><td class="proc">'+p.numero+'</td><td>'+esc(p.tipo)+'</td><td><span class="b '+stCls(p.status)+'">'+esc(p.status||'—')+'</span></td>';
     b.appendChild(tr);
   });
+}
+async function inverterPolos(){
+  if(!atual) return;
+  if(!confirm('Inverter os polos? Quem está à direita passa a ser o CLIENTE (esquerda) e vice-versa.')) return;
+  var novoCli=atual.oponente||'', novoOp=atual.cliente||'';
+  var sb=window.__sb;
+  if(sb&&atual._id){ var r=await sb.from('processos').update({cliente_nome:novoCli||null,oponente:novoOp||null}).eq('id',atual._id); if(r.error){ alert('Erro ao salvar: '+r.error.message); return; } }
+  atual.cliente=novoCli; atual.oponente=novoOp;
+  var i=DADOS.processos.indexOf(atual); if(i>=0) abrir(i);
 }
 async function encerrarProcesso(){
   if(!atual) return;
