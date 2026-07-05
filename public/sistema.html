@@ -1283,14 +1283,21 @@ async function cadastrarSelecionados(){
 }
 window.__procSig=''; window.__procPage=1;
 function procPag(p){ window.__procPage=p; renderProc(); window.scrollTo(0,0); }
-function classMov(t){
-  t=String(t||'').toLowerCase();
-  if(!t) return '';
-  if(/conclus/.test(t)) return 'Concluso';
-  if(/contraminuta|manifesta|contesta|impugna|embargos|petic|petiç/.test(t)) return 'Petição';
-  if(/despacho|decis|senten|julgad|julgament|mero expediente|defer|indefer|proced|improced|homolog|extin/.test(t)) return 'Despacho/Sentença';
-  if(/intima|publica|disponibiliza|cita[cç]|notifica|vista|expedi/.test(t)) return 'Intimação';
-  return '';
+function classHist(p){
+  var h=(p&&p.hist_full)||[];
+  var iC=-1,iP=-1,iD=-1,iI=-1;
+  for(var k=0;k<h.length&&k<100;k++){
+    var t=String(h[k].texto||'').toLowerCase();
+    if(iC<0&&/conclus/.test(t))iC=k;
+    if(iP<0&&/contraminuta|manifesta|contesta|impugna|embargos|petic|petiç/.test(t))iP=k;
+    if(iD<0&&/despacho|decis[aã]o|senten|julgad|julgament|mero expediente|defer|indefer|proced[eê]n|improced|homolog|extin|n[aã]o conhecimento/.test(t))iD=k;
+    if(iI<0&&/intima|publica[cç]|disponibiliza|cita[cç]|notifica|vista/.test(t))iI=k;
+    if(iC>=0&&iP>=0&&iD>=0&&iI>=0)break;
+  }
+  /* concluso + petição protocolada depois da conclusão, sem despacho/decisão desde a conclusão */
+  if(iC>=0&&iP>=0&&iP<iC&&(iD<0||iD>iC)) return 'Concluso c/petição posterior s/despacho';
+  var cand=[[iC,'Concluso'],[iP,'Petição'],[iD,'Despacho/Sentença'],[iI,'Intimação']].filter(function(x){return x[0]>=0;}).sort(function(a,b){return a[0]-b[0];});
+  return cand.length?cand[0][1]:'';
 }
   s=String(s||'').trim(); if(!s) return s;
   var parts=s.split(';').map(function(x){return x.trim();}).filter(Boolean);
@@ -1326,7 +1333,7 @@ function renderProc(){
     var i=DADOS.processos.indexOf(p);
     var tr=document.createElement("tr");tr.className="click";tr.onclick=function(){abrir(i)};
     var um=(p.hist_full&&p.hist_full[0]&&p.hist_full[0].texto)||'';
-    var cm=classMov(um);
+    var cm=classHist(p);
     tr.innerHTML='<td style="color:var(--muted);text-align:right">'+(start+ri+1)+'</td><td style="max-width:260px">'+'<span style="font-weight:700;color:var(--navy)">'+esc(resumo3(p.cliente))+'</span> <span style="color:var(--muted)">×</span> <span>'+(esc(resumo3(p.oponente))||'—')+'</span></td><td class="proc">'+p.numero+'</td><td>'+esc(p.tipo)+'<div style="margin-top:4px">'+etiquetasDoProc(p.numero)+'</div></td><td style="max-width:170px;white-space:normal" title="'+esc(um.slice(0,300))+'">'+(cm?'<span style="font-weight:600;color:var(--navy)">'+cm+'</span>':'<span style="font-size:12.5px">'+esc(um.slice(0,60))+'</span>')+'<div style="font-size:12px;color:var(--muted)">'+esc(p.data||'')+'</div></td><td><span class="b '+stCls(p.status)+'">'+esc(p.status||'—')+'</span></td>';
     b.appendChild(tr);
   });
@@ -1456,7 +1463,7 @@ function renderEncerrados(){
     var i=DADOS.processos.indexOf(p);
     var tr=document.createElement('tr'); tr.className='click'; tr.onclick=function(){abrir(i)};
     var um=(p.hist_full&&p.hist_full[0]&&p.hist_full[0].texto)||'';
-    var cm=classMov(um);
+    var cm=classHist(p);
     tr.innerHTML='<td style="color:var(--muted);text-align:right">'+(ri+1)+'</td><td style="max-width:260px"><span style="font-weight:700;color:var(--navy)">'+esc(resumo3(p.cliente))+'</span> <span style="color:var(--muted)">×</span> <span>'+(esc(resumo3(p.oponente))||'—')+'</span></td><td class="proc">'+p.numero+'</td><td>'+esc(p.tipo)+'</td><td style="max-width:170px;white-space:normal" title="'+esc(um.slice(0,300))+'">'+(cm?'<span style="font-weight:600;color:var(--navy)">'+cm+'</span>':'<span style="font-size:12.5px">'+esc(um.slice(0,60))+'</span>')+'<div style="font-size:12px;color:var(--muted)">'+esc(p.data||'')+'</div></td><td><span class="b '+stCls(p.status)+'">'+esc(p.status||'—')+'</span></td>';
     b.appendChild(tr);
   });
