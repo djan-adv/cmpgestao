@@ -153,13 +153,19 @@
 
     <section id="s-painel">
       <div id="painel-hello"></div>
-      <div class="kpis" id="kpis"></div>
-      <div class="grid2 painel-topo">
-        <div class="card" id="painel-meudia"></div>
-        <div class="card" id="painel-aud"></div>
+      <div class="kpis kpis5" id="kpis"></div>
+      <div class="pv2-cols">
+        <div>
+          <div class="card" id="painel-meudia"></div>
+          <div class="card" id="painel-recentes"></div>
+        </div>
+        <div>
+          <div class="card" id="painel-triagem"></div>
+          <div class="card" id="painel-prod"></div>
+        </div>
       </div>
-      <div class="card" id="painel-triagem"></div>
       <div class="card" id="painel-fases"></div>
+      <div id="painel-aud" style="display:none"></div>
     </section>
 
     <section id="s-triagem" class="hidden">
@@ -401,22 +407,89 @@ function renderPainel(){
     hello.innerHTML='<div style="font-size:21px;font-weight:800;color:var(--navy)">'+sauda+(nome?", "+nome:"")+'</div>'
       +'<div style="color:var(--muted);font-size:13px;margin:2px 0 14px">'+pend+' publicações a triar · '+prazos7+' prazos nos próximos 7 dias · '+par30+' processos parados há 30+ dias</div>';
   }
+  var fatais7=(AGENDA||[]).filter(function(a){return a.tipo==="vm" && dOf(a)>=hoje && dOf(a)<em7;}).length;
+  var aud7=(AGENDA||[]).filter(function(a){return a.tipo==="az" && dOf(a)>=hoje && dOf(a)<em7;}).length;
   var cards=[
-    ["Publicações a triar",pend,"gold","go('triagem')",""],
-    ["Prazos na semana",prazos7,"","go('agenda')",""],
-    ["Parados 30+ dias",par30,"warn","go('diligencias')",""],
-    ["Diligências em andamento","…","","go('diligencias')",' id="kpi-dilig"']
+    ["Publicações a triar",pend,"gold","go('triagem')","","robô DJEN · diário 5h"],
+    ["Prazos na semana",prazos7,"","go('agenda')","",(fatais7?fatais7+" fatais":"nenhum fatal")],
+    ["Audiências da semana",aud7,"","go('agenda')","","próximos 7 dias"],
+    ["Parados 30+ dias",par30,"warn","go('diligencias')","","gerar diligências"],
+    ["Diligências em andamento","…","","go('diligencias')",' id="kpi-dilig"',"aguardando retorno"]
   ];
-  el.innerHTML=cards.map(function(c){return '<div class="kpi v2 '+c[2]+'" onclick="'+c[3]+'"><div class="n"'+c[4]+'>'+c[1]+'</div><div class="l">'+c[0]+'</div></div>'}).join("");
+  el.innerHTML=cards.map(function(c){return '<div class="kpi v2 '+c[2]+'" onclick="'+c[3]+'"><div class="n"'+c[4]+'>'+c[1]+'</div><div class="l">'+c[0]+'</div><div class="d">'+c[5]+'</div></div>'}).join("");
   try{ var sbk=window.__sb; if(sbk){ sbk.from('diligencias').select('id',{count:'exact',head:true}).neq('status','resolvida').then(function(r){ var e=document.getElementById('kpi-dilig'); if(e&&r&&typeof r.count==='number') e.textContent=r.count; }); } }catch(e){}
   var bd=document.getElementById("tb-badge");
   if(bd){ bd.textContent=pend||""; bd.style.display=pend?"grid":"none"; }
+  var nb=document.getElementById("nav-badge-triagem");
+  if(nb){ nb.textContent=pend||""; nb.style.display=pend?"inline-grid":"none"; }
   renderMeuDia();
-  document.getElementById("painel-triagem").innerHTML='<p class="sectlabel">Triagem do dia</p>'+
-    '<p style="margin:0 0 10px">Há <b>'+pend+'</b> movimentações aguardando triagem.</p>'+
-    '<button class="btn sm" onclick="go(\'triagem\')">Ir para a triagem &rarr;</button> '+'<button class="btn sm ghost" onclick="abrirNovaTarefa()">+ Nova tarefa</button>';
-  renderAudSemana();
+  renderTriagemCard(pend);
+  renderRecentes();
+  renderProd();
   renderFasesPainel();
+}
+function renderTriagemCard(pend){
+  var el=document.getElementById("painel-triagem"); if(!el) return;
+  var fila=(TRIAGEM||[]).filter(function(t){return !t.done});
+  var html='<p class="sectlabel">Triagem do dia — regra CMP: tudo triado no mesmo dia <a style="float:right;cursor:pointer;color:var(--navy);text-transform:none;letter-spacing:0" onclick="go(\'triagem\')">ver as '+fila.length+' &rarr;</a></p>';
+  if(!fila.length){ html+='<p class="note" style="margin:0">Fila vazia — tudo triado. ✔</p>'; }
+  else{
+    html+=fila.slice(0,2).map(function(t){
+      var sug=sugestaoTeor(t.texto||t.titulo); var pz=sug.prazo?(sug.prazo+" dias"):"agendar";
+      return '<div class="pubv2">'
+        +'<div class="meta">'+esc(t.tribunal||"")+' · <a style="cursor:pointer;text-decoration:underline" onclick="irParaProcesso(\''+String(t.numero).replace(/'/g,"")+'\')">'+esc(t.numero)+'</a> · disp. '+esc(t.data||"")+'</div>'
+        +'<div class="tx">'+esc((t.texto||t.titulo||"").slice(0,140))+'…</div>'
+        +'<div class="iav2">✦ IA sugere: <b>'+esc(sug.ativ)+'</b> · prazo sugerido: '+pz+'</div>'
+        +'<button class="btn sm gold" onclick="acaoTriagem('+t.id+')">Ação &rarr; criar atividade</button> '
+        +'<button class="btn sm ghost" onclick="cienciaTriagem('+t.id+');renderPainel()">Ciência (arquivar)</button>'
+        +'</div>';
+    }).join("");
+  }
+  el.innerHTML=html;
+}
+function renderRecentes(){
+  var el=document.getElementById("painel-recentes"); if(!el) return;
+  var hoje=new Date(); hoje.setHours(0,0,0,0);
+  var lim=new Date(hoje); lim.setDate(lim.getDate()-30);
+  var NOMES={post:"Conhecimento",sane:"Saneamento",instr:"Instrução",decis:"Decisória",recur:"Recursal",exec:"Execução"};
+  var html='<p class="sectlabel">Processos recentes <a style="float:right;cursor:pointer;color:var(--navy);text-transform:none;letter-spacing:0" onclick="go(\'processos\')">ver todos ('+(DADOS.processos||[]).length+') &rarr;</a></p><table><thead><tr><th>Cliente × parte contrária</th><th>Última mov.</th><th>Fase</th></tr></thead><tbody>';
+  (DADOS.processos||[]).slice(0,5).forEach(function(p,i){
+    var md=null; (p.hist_full||[]).forEach(function(a){ if(a.data && (!md||a.data>md)) md=a.data; });
+    var parado=md && (new Date(md)<lim);
+    var dias=md?Math.round((hoje-new Date(md))/86400000):null;
+    var fase="—"; try{ fase=NOMES[guessFase(p)]||"—"; }catch(e){}
+    var chip=parado?('<span class="b" style="background:var(--dangerbg);color:var(--danger);border:0">Parado '+dias+'d</span>')
+      :(fase==="Execução"?'<span class="b ok" style="border:0">Execução</span>':'<span class="b" style="background:var(--accentbg);color:var(--navy);border:0">'+fase+'</span>');
+    html+='<tr class="click" onclick="abrir('+i+')"><td><b>'+esc(p.cliente||"—")+'</b> <span style="color:var(--muted)">×</span> '+esc(p.oponente||"—")
+      +'<div class="proc" style="color:var(--muted)">'+esc(p.numero)+'</div></td>'
+      +'<td style="font-size:12.5px">'+esc(p.data||"—")+'</td><td>'+chip+'</td></tr>';
+  });
+  html+='</tbody></table>';
+  el.innerHTML=html;
+}
+function renderProd(){
+  var el=document.getElementById("painel-prod"); if(!el) return;
+  initAgenda();
+  var hoje=new Date(); hoje.setHours(0,0,0,0);
+  var ini=new Date(hoje); ini.setDate(ini.getDate()-7);
+  var fim=new Date(hoje); fim.setDate(fim.getDate()+14);
+  var por={};
+  (AGENDA||[]).forEach(function(a){ var d=new Date(a.data+"T00:00:00"); if(d>=ini&&d<=fim){ var r=a.resp||"—"; por[r]=(por[r]||0)+1; } });
+  var lst=Object.keys(por).map(function(k){return [k,por[k]];}).sort(function(a,b){return b[1]-a[1];});
+  var max=lst.length?lst[0][1]:1;
+  var html='<p class="sectlabel">Carga da equipe — tarefas na agenda (−7 a +14 dias)</p>';
+  if(!lst.length){ html+='<p class="note" style="margin:0">Sem tarefas no período.</p>'; }
+  else{
+    html+=lst.slice(0,6).map(function(x,i){
+      var w=Math.max(8,Math.round(x[1]/max*100));
+      var grad=i===0?"linear-gradient(90deg,var(--gold),#d9b64f)":"linear-gradient(90deg,var(--navy),var(--navy2))";
+      return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:9px">'
+        +'<span style="width:96px;font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(x[0])+'</span>'
+        +'<div style="flex:1;height:9px;background:var(--accentbg);border-radius:6px;overflow:hidden"><i style="display:block;height:100%;width:'+w+'%;background:'+grad+';border-radius:6px"></i></div>'
+        +'<span style="font-size:12px;color:var(--muted);min-width:64px;text-align:right">'+x[1]+' tarefa'+(x[1]>1?'s':'')+'</span></div>';
+    }).join("");
+  }
+  el.innerHTML=html;
 }
 function renderMeuDia(){
   var el=document.getElementById("painel-meudia"); if(!el) return;
@@ -1616,11 +1689,34 @@ function contatoDoProcesso(p){
   body.mini .side .brand img{width:40px;margin:4px auto 10px;display:block}
   body.mini .nav a{font-size:0;justify-content:center;padding:11px 0}
   body.mini .nav a .ic{font-size:16px;width:auto}
+  .kpis.kpis5{grid-template-columns:repeat(5,1fr)}
+  .pv2-cols{display:grid;grid-template-columns:1.35fr 1fr;gap:14px;align-items:start;margin-bottom:14px}
+  .pv2-cols .card{margin-bottom:14px}
+  .kpi .d{font-size:11px;margin-top:4px;color:var(--muted)}
+  .kpi.v2.gold .d{color:var(--warn)} .kpi.v2.warn .d{color:#9a6a12}
+  .pubv2{border:1px solid var(--line);border-radius:10px;padding:11px 13px;margin-bottom:9px}
+  .pubv2 .meta{font-size:11.5px;color:var(--muted);font-family:ui-monospace,Menlo,monospace}
+  .pubv2 .tx{font-size:13px;margin:4px 0 8px}
+  .iav2{font-size:12px;background:#fdf8ec;border-left:3px solid var(--gold);padding:6px 9px;border-radius:0 6px 6px 0;color:#6b5a1e;margin-bottom:8px}
+  .nav .sec{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:#7688a0;padding:12px 12px 4px}
+  #nav-badge-triagem{display:none;place-items:center;margin-left:auto;background:var(--gold);color:#fff;font-size:11px;font-weight:700;border-radius:10px;min-width:18px;height:18px;padding:0 5px}
+  .side .userft{position:absolute;left:0;right:0;bottom:0;padding:12px 16px;border-top:1px solid rgba(255,255,255,.08);display:flex;gap:10px;align-items:center;background:var(--navy)}
+  .side .userft .av{width:32px;height:32px;border-radius:50%;background:var(--gold);color:#fff;display:grid;place-items:center;font-weight:700;font-size:13px;flex-shrink:0}
+  .side .userft .nm{font-size:13px;color:#fff;font-weight:600;line-height:1.2}
+  .side .userft .pp{font-size:11px;color:#8fa0b5}
+  .side{padding-bottom:70px}
+  body.mini .side .userft .nm,body.mini .side .userft .pp{display:none}
+  body.mini .side .userft{justify-content:center;padding:12px 4px}
+  body.mini .nav .sec{display:none}
+  body.mini #nav-badge-triagem{display:none!important}
+  @media (max-width:1150px){.kpis.kpis5{grid-template-columns:repeat(3,1fr)}}
+  @media (max-width:860px){.kpis.kpis5{grid-template-columns:repeat(2,1fr)!important}.pv2-cols{grid-template-columns:1fr!important}}
   .kpi.v2{cursor:pointer;border-top:3px solid var(--navy);transition:transform .1s,box-shadow .1s}
   .kpi.v2:hover{transform:translateY(-2px);box-shadow:0 6px 16px rgba(46,58,75,.10)}
   .kpi.v2.gold{border-top-color:var(--gold)} .kpi.v2.warn{border-top-color:#d9a441}
   #tb-tools{display:flex;align-items:center;gap:14px;flex:1;justify-content:flex-end;margin-right:14px}
-  #gbusca{max-width:300px;background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:8px 12px;font-size:13px}
+  #gbusca{max-width:440px;flex:1;background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:8px 12px;font-size:13px}
+  #tb-tools{justify-content:flex-start}
   #tb-data{font-size:12px;color:var(--muted);white-space:nowrap}
   #tb-sino{position:relative;cursor:pointer;font-size:17px}
   #tb-badge{position:absolute;top:-6px;right:-9px;background:var(--danger);color:#fff;font-size:10px;font-weight:700;border-radius:10px;min-width:16px;height:16px;display:none;place-items:center;padding:0 4px;font-style:normal}
@@ -1686,11 +1782,41 @@ function contatoDoProcesso(p){
     var who=tb.querySelector('.who');
     tb.insertBefore(w, who||null);
     document.getElementById('tb-sino').onclick=function(){ if(typeof go==='function') go('triagem'); };
+    document.getElementById('gbusca').placeholder='Buscar processo, cliente ou CPF…  (Ctrl+K)';
     document.getElementById('gbusca').addEventListener('keydown',function(e){
       if(e.key!=='Enter') return;
       var q=this.value;
       if(typeof go==='function'){ go('processos'); var b=document.getElementById('busca'); if(b){ b.value=q; if(typeof renderProc==='function') renderProc(); } }
     });
+    document.addEventListener('keydown',function(e){
+      if((e.ctrlKey||e.metaKey)&&(e.key==='k'||e.key==='K')){ e.preventDefault(); var g=document.getElementById('gbusca'); if(g) g.focus(); }
+    });
+  }
+  /* sidebar: seções, badge da triagem e usuário no rodapé */
+  var nav=document.querySelector('.nav');
+  if(nav && !nav.querySelector('.sec')){
+    var aTri=nav.querySelector('a[data-s="triagem"]');
+    if(aTri && !document.getElementById('nav-badge-triagem')){
+      var bg=document.createElement('span'); bg.id='nav-badge-triagem'; aTri.appendChild(bg);
+    }
+    var aRel=nav.querySelector('a[data-s="relatorio"]'), aCon=nav.querySelector('a[data-s="contatos"]'), aCrm=nav.querySelector('a[data-s="crm"]'), aEtq=nav.querySelector('a[data-s="etiquetas"]');
+    if(aCrm){ var s1=document.createElement('div'); s1.className='sec'; s1.textContent='Relacionamento'; nav.insertBefore(s1,aCrm); }
+    if(aRel && aCon){ nav.insertBefore(aRel, aCon.nextSibling); }
+    if(aEtq){ var s2=document.createElement('div'); s2.className='sec'; s2.textContent='Configuração'; nav.insertBefore(s2,aEtq); }
+  }
+  var sideEl=document.querySelector('.side');
+  if(sideEl && !sideEl.querySelector('.userft')){
+    var uf=document.createElement('div'); uf.className='userft';
+    uf.innerHTML='<div class="av" id="uf-av">—</div><div><div class="nm" id="uf-nm"></div><div class="pp" id="uf-pp"></div></div>';
+    sideEl.appendChild(uf);
+    var syncUser=function(){
+      var n=(document.getElementById('who-name')||{}).textContent||'';
+      var p=(document.getElementById('who-pill')||{}).textContent||'';
+      var ini=n.trim().split(/\s+/).slice(0,2).map(function(x){return x[0]||'';}).join('').toUpperCase()||'—';
+      var av=document.getElementById('uf-av'), nm=document.getElementById('uf-nm'), pp=document.getElementById('uf-pp');
+      if(av)av.textContent=ini; if(nm)nm.textContent=n.split(' ').slice(0,2).join(' '); if(pp)pp.textContent=p;
+    };
+    syncUser(); setTimeout(syncUser,1500); setInterval(syncUser,10000);
   }
 })();
 </script>
