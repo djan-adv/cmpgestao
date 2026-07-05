@@ -114,6 +114,8 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
+<script>try{if(localStorage.getItem('sb-ndeqlyrydcijbgjiviuw-auth-token')){document.documentElement.setAttribute('data-boot','1');}}catch(e){}</script>
+<style>html[data-boot="1"] #login{display:none!important}html[data-boot="1"] body::before{content:"Carregando o CMPGestão…";display:block;text-align:center;color:#697180;font-size:14px;padding:48px}</style>
 
 <section id="login">
   <div class="loginbox">
@@ -145,6 +147,7 @@
       <a data-s="contatos" onclick="go('contatos')"><span class="ic">☎</span> Contatos</a>
       <a data-s="etiquetas" onclick="go('etiquetas')"><span class="ic">⬤</span> Etiquetas</a>
       <a data-s="procedimentos" onclick="go('procedimentos')"><span class="ic">☰</span> Procedimentos</a>
+      <a data-s="encerrados" onclick="go('encerrados')" style="margin-top:26px;opacity:.75"><span class="ic">▤</span> Encerrados</a>
     </nav>
   </aside>
   <main class="main">
@@ -194,6 +197,11 @@
       <div id="view-kanban" class="hidden"><p class="note" style="margin-bottom:10px">Etapas reais do CMP. Arraste os cards entre as colunas.</p><div class="kanwrap"><div class="kanban" id="kanban"></div></div></div>
     </section>
 
+    <section id="s-encerrados" class="hidden">
+      <div class="card"><p class="sectlabel">Processos encerrados</p><span class="note" id="enc-count"></span>
+      <table style="margin-top:10px"><thead><tr><th style="width:40px">#</th><th>Cliente</th><th>Processo</th><th>Assunto</th><th>Status</th></tr></thead><tbody id="enc-body"></tbody></table>
+      <p class="note" style="margin-top:8px">Processos encerrados nunca são apagados — para reativar, abra o processo e use o botão "Reativar".</p></div>
+    </section>
     <section id="s-processos" class="hidden">
       <div class="searchbar"><input id="busca" placeholder="Buscar por cliente, número, oponente ou assunto..." oninput="renderProc()"><select id="ordena" onchange="renderProc()" class="btn sm" style="margin-left:8px"><option value="">Novos Protocolos</option><option value="az">Cliente (A→Z)</option><option value="za">Cliente (Z→A)</option><option value="data_desc">Movimentação mais recente</option><option value="parados">Parados (mov. mais antiga)</option><option value="valor">Valor da causa (maior→menor)</option></select><select id="filtroEtq" onchange="renderProc()" class="btn sm" style="margin-left:8px"><option value="">Todas as etiquetas</option></select><select id="porPagina" onchange="renderProc()" class="btn sm" style="margin-left:8px"><option value="20">20 por página</option><option value="40">40</option><option value="60">60</option><option value="80">80</option><option value="100">100</option><option value="todos">Todos</option></select><span class="note" id="proc-count" style="align-self:center"></span><button class="btn sm" style="margin-left:auto" onclick="abrirNovaTarefa()">+ Nova tarefa</button><button class="btn sm" style="margin-left:8px" onclick="abrirBusca()">+ Cadastrar por número</button></div>
       <div class="card"><table><thead><tr><th style="width:40px">#</th><th>Cliente</th><th>Processo</th><th>Assunto</th><th>Status</th></tr></thead><tbody id="proc-body"></tbody></table></div><div id="proc-pager" style="display:flex;gap:6px;align-items:center;justify-content:center;padding:14px;flex-wrap:wrap"></div>
@@ -351,6 +359,7 @@ function entrar(){
   document.getElementById("who-name").textContent=p.nome;
   var pill=document.getElementById("who-pill");pill.className="pill "+p.pill;pill.textContent=p.label;
   document.getElementById("login").classList.add("hidden");document.getElementById("app").classList.remove("hidden");
+  document.documentElement.removeAttribute('data-boot');
   initKanban();initTriagem();initEtiquetas();go("painel");
 }
 function go(s){
@@ -566,8 +575,10 @@ function abrir(i){
   var trib=(p.foro||'').split(' ')[0];
   var html='';
   // cabeçalho: partes no mesmo tamanho, cliente em negrito e marcado
-  html+='<div class="card"><div class="parties"><span class="cli">'+esc(p.cliente)+'</span>'+
+  var __enc=/encerr/i.test(p.status||'');
+  html+='<div class="card" style="position:relative"><div class="parties" style="padding-right:130px"><span class="cli">'+esc(p.cliente)+'</span>'+
     '<span class="vs">×</span><span class="op">'+esc(p.oponente||'—')+'</span></div>'+
+    '<button class="btn sm '+(__enc?'gold':'ghost')+'" style="position:absolute;top:14px;right:14px" onclick="encerrarProcesso()">'+(__enc?'Reativar':'Encerrar')+'</button>'+
     '<div class="subhead">Processo nº '+p.numero+' &nbsp;·&nbsp; <span class="b '+stCls(p.status)+'">'+esc(p.status||'—')+'</span>'+
     ' &nbsp;·&nbsp; Responsável: '+resp+'</div><div style="margin-top:10px"><button class="btn sm" onclick="novaTarefaDoProcesso()">+ Nova tarefa neste processo</button></div></div>';
   // dados do processo
@@ -1054,7 +1065,8 @@ function renderKanban(){
   var sb=window.supabase.createClient(SB_URL,SB_KEY);
   window.__sb=sb;
   var g=await sb.auth.getSession();
-  if(!g.data||!g.data.session){ location.replace('/'); return; }
+  if(!g.data||!g.data.session){ document.documentElement.removeAttribute('data-boot'); location.replace('/'); return; }
+  try{ if(document.getElementById('app').classList.contains('hidden') && typeof entrar==='function'){ entrar(); } }catch(e){}
   function fmtData(iso){ if(!iso) return ''; var p=String(iso).slice(0,10).split('-'); return p.length===3?(p[2]+'/'+p[1]+'/'+p[0]):''; }
   function fmtCausa(v){ if(v==null||v==='') return '0,00'; var n=Number(v); if(isNaN(n)) return '0,00'; return n.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
   try{
@@ -1136,7 +1148,7 @@ function renderProc(){
     var okq=!q||(p.cliente+" "+p.numero+" "+p.oponente+" "+p.tipo).toLowerCase().indexOf(q)>-1;
     var oke=true;
     if(eq){ var ids=(typeof ASSIGN!=='undefined'&&ASSIGN[p.numero])||[]; oke=ids.indexOf(eq)>-1; }
-    return okq&&oke;
+    return okq&&oke&&!/encerr/i.test(p.status||'');
   });
   if(sm==='az') lista.sort(function(a,b){return (a.cliente||'').localeCompare(b.cliente||'','pt');});
   else if(sm==='data_desc') lista.sort(function(a,b){return pd(b.data)-pd(a.data);});
@@ -1173,7 +1185,7 @@ function renderProc(){
   var lista=DADOS.processos.filter(function(p){
     var okq=!q||(p.cliente+" "+p.numero+" "+p.oponente+" "+p.tipo).toLowerCase().indexOf(q)>-1;
     var oke=true; if(eq){ var ids=(typeof ASSIGN!=='undefined'&&ASSIGN[p.numero])||[]; oke=ids.indexOf(eq)>-1; }
-    return okq&&oke;
+    return okq&&oke&&!/encerr/i.test(p.status||'');
   });
   if(sm==='az') lista.sort(function(a,b){var A=(a.cliente||'').trim(),B=(b.cliente||'').trim(); if(!A&&!B)return 0; if(!A)return 1; if(!B)return -1; return A.localeCompare(B,'pt');});
   else if(sm==='za') lista.sort(function(a,b){var A=(a.cliente||'').trim(),B=(b.cliente||'').trim(); if(!A&&!B)return 0; if(!A)return 1; if(!B)return -1; return B.localeCompare(A,'pt');});
@@ -1281,7 +1293,7 @@ function renderProc(){
   var lista=DADOS.processos.filter(function(p){
     var okq=!q||(p.cliente+" "+p.numero+" "+p.oponente+" "+p.tipo).toLowerCase().indexOf(q)>-1;
     var oke=true; if(eq){ var ids=(typeof ASSIGN!=='undefined'&&ASSIGN[p.numero])||[]; oke=ids.indexOf(eq)>-1; }
-    return okq&&oke;
+    return okq&&oke&&!/encerr/i.test(p.status||'');
   });
   if(sm==='az') lista.sort(function(a,b){var A=(a.cliente||'').trim(),B=(b.cliente||'').trim(); if(!A&&!B)return 0; if(!A)return 1; if(!B)return -1; return A.localeCompare(B,'pt');});
   else if(sm==='za') lista.sort(function(a,b){var A=(a.cliente||'').trim(),B=(b.cliente||'').trim(); if(!A&&!B)return 0; if(!A)return 1; if(!B)return -1; return B.localeCompare(A,'pt');});
@@ -1403,18 +1415,41 @@ function go(s){
 <script>
 function go(s){
   var showId=(s==='contatos')?'crm':s;
-  ["painel","triagem","agenda","processos","proc-det","crm","etiquetas","procedimentos","diligencias","relatorio"].forEach(function(id){var e=document.getElementById("s-"+id);if(e)e.classList.add("hidden")});
+  ["painel","triagem","agenda","processos","proc-det","crm","etiquetas","procedimentos","diligencias","relatorio","encerrados"].forEach(function(id){var e=document.getElementById("s-"+id);if(e)e.classList.add("hidden")});
   var sec=document.getElementById("s-"+showId); if(sec) sec.classList.remove("hidden");
   document.querySelectorAll("#nav a").forEach(function(a){a.classList.remove("active")});
   var link=document.querySelector('#nav a[data-s="'+s+'"]');if(link)link.classList.add("active");
-  var t={painel:"Painel",triagem:"Triagem diária",agenda:"Agenda — Kanban (etapas CMP)",processos:"Processos",crm:"Comercial",contatos:"Contatos",procedimentos:"Procedimentos CMP",etiquetas:"Etiquetas","proc-det":"Processo",diligencias:"Diligências",relatorio:"Relatório mensal para clientes"};
+  var t={painel:"Painel",triagem:"Triagem diária",agenda:"Agenda — Kanban (etapas CMP)",processos:"Processos",crm:"Comercial",contatos:"Contatos",procedimentos:"Procedimentos CMP",etiquetas:"Etiquetas","proc-det":"Processo",diligencias:"Diligências",relatorio:"Relatório mensal para clientes",encerrados:"Processos encerrados"};
   var st=document.getElementById("scr-title"); if(st) st.textContent=t[s]||"Painel";
   var sw=document.querySelector('#s-crm .switch'); if(sw) sw.style.display='none';
   if(s==="painel")renderPainel(); if(s==="triagem")renderTriagem(); if(s==="processos")renderProc();
   if(s==="crm"){ if(typeof setCrmView==='function') setCrmView('captacao'); else renderCrm(); }
   if(s==="contatos"){ if(typeof setCrmView==='function') setCrmView('contatos'); else renderCrm(); }
   if(s==="etiquetas")renderEtiquetas(); if(s==="agenda")renderAgendaView(); if(s==="diligencias")renderDiligencias();
+  if(s==="encerrados")renderEncerrados();
   window.scrollTo(0,0);
+}
+function renderEncerrados(){
+  var lista=DADOS.processos.filter(function(p){return /encerr/i.test(p.status||'');});
+  var pc=document.getElementById('enc-count'); if(pc) pc.textContent=lista.length+' processos encerrados (nenhum é apagado; reative pelo botão dentro do processo)';
+  var b=document.getElementById('enc-body'); if(!b) return; b.innerHTML='';
+  lista.forEach(function(p,ri){
+    var i=DADOS.processos.indexOf(p);
+    var tr=document.createElement('tr'); tr.className='click'; tr.onclick=function(){abrir(i)};
+    tr.innerHTML='<td style="color:var(--muted);text-align:right">'+(ri+1)+'</td><td><span style="font-weight:700;color:var(--navy)">'+esc(p.cliente)+'</span> <span style="color:var(--muted)">×</span> <span>'+esc(p.oponente||'—')+'</span></td><td class="proc">'+p.numero+'</td><td>'+esc(p.tipo)+'</td><td><span class="b '+stCls(p.status)+'">'+esc(p.status||'—')+'</span></td>';
+    b.appendChild(tr);
+  });
+}
+async function encerrarProcesso(){
+  if(!atual) return;
+  var enc=/encerr/i.test(atual.status||'');
+  if(!confirm(enc?'Reativar este processo? Ele volta para a lista principal.':'Encerrar este processo? Ele sai da lista principal e vai para a aba "Encerrados" (nada é apagado).')) return;
+  var novo=enc?'Ativo':'Encerrado';
+  var sb=window.__sb;
+  if(sb && atual._id){ var r=await sb.from('processos').update({status:novo}).eq('id',atual._id); if(r.error){ alert('Erro ao salvar: '+r.error.message); return; } }
+  atual.status=novo;
+  var i=DADOS.processos.indexOf(atual);
+  if(i>=0) abrir(i);
 }
 async function renderDiligencias(){
   var min=parseInt((document.getElementById('dilig-min')||{}).value||'30',10)||30;
