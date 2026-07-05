@@ -203,7 +203,7 @@
       <p class="note" style="margin-top:8px">Processos encerrados nunca são apagados — para reativar, abra o processo e use o botão "Reativar".</p></div>
     </section>
     <section id="s-processos" class="hidden">
-      <div class="searchbar"><input id="busca" placeholder="Buscar por cliente, número, oponente ou assunto..." oninput="renderProc()"><select id="ordena" onchange="renderProc()" class="btn sm" style="margin-left:8px"><option value="">Novos Protocolos</option><option value="az">Cliente (A→Z)</option><option value="za">Cliente (Z→A)</option><option value="data_desc">Movimentação mais recente</option><option value="parados">Parados (mov. mais antiga)</option><option value="valor">Valor da causa (maior→menor)</option></select><select id="filtroEtq" onchange="renderProc()" class="btn sm" style="margin-left:8px"><option value="">Todas as etiquetas</option></select><select id="porPagina" onchange="renderProc()" class="btn sm" style="margin-left:8px"><option value="20">20 por página</option><option value="40">40</option><option value="60">60</option><option value="80">80</option><option value="100">100</option><option value="todos">Todos</option></select><span class="note" id="proc-count" style="align-self:center"></span><button class="btn sm" style="margin-left:auto" onclick="abrirNovaTarefa()">+ Nova tarefa</button><button class="btn sm" style="margin-left:8px" onclick="abrirBusca()">+ Cadastrar por número</button></div>
+      <div class="searchbar"><input id="busca" placeholder="Buscar por cliente, número, oponente ou assunto..." oninput="renderProc()"><select id="ordena" onchange="renderProc()" class="btn sm" style="margin-left:8px"><option value="">Novos Protocolos</option><option value="az">Cliente (A→Z)</option><option value="za">Cliente (Z→A)</option><option value="data_desc">Movimentação mais recente</option><option value="parados">Parados (mov. mais antiga)</option><option value="valor">Valor da causa (maior→menor)</option></select><select id="filtroEtq" onchange="renderProc()" class="btn sm" style="margin-left:8px"><option value="">Todas as etiquetas</option></select><select id="porPagina" onchange="renderProc()" class="btn sm" style="margin-left:8px"><option value="20">20 por página</option><option value="40">40</option><option value="60">60</option><option value="80">80</option><option value="100">100</option><option value="todos" selected>Todos</option></select><span class="note" id="proc-count" style="align-self:center"></span><button class="btn sm" style="margin-left:auto" onclick="abrirNovaTarefa()">+ Nova tarefa</button><button class="btn sm" style="margin-left:8px" onclick="abrirBusca()">+ Cadastrar por número</button></div>
       <div class="card"><table><thead><tr><th style="width:26%">Cliente</th><th>Processo</th><th>Assunto</th><th style="width:170px">Última movimentação</th><th>Status</th></tr></thead><tbody id="proc-body"></tbody></table></div><div id="proc-pager" style="display:flex;gap:6px;align-items:center;justify-content:center;padding:14px;flex-wrap:wrap"></div>
     </section>
 
@@ -1180,7 +1180,7 @@ function renderProc(){
   var q=(document.getElementById("busca").value||"").toLowerCase();
   var sm=(document.getElementById("ordena")||{}).value||"";
   var eq=(document.getElementById("filtroEtq")||{}).value||"";
-  var ppv=(document.getElementById("porPagina")||{}).value||"20"; var pp=(ppv==="todos")?1000000:(parseInt(ppv,10)||20);
+  var ppv=(document.getElementById("porPagina")||{}).value||"todos"; var pp=(ppv==="todos")?1000000:(parseInt(ppv,10)||20);
   var sig=q+'|'+sm+'|'+eq+'|'+pp;
   if(sig!==window.__procSig){ window.__procPage=1; window.__procSig=sig; }
   function pd(x){ if(!x) return 0; var m=String(x).split('/'); return m.length===3? parseInt(m[2]+m[1]+m[0],10):0; }
@@ -1311,7 +1311,7 @@ function renderProc(){
   var q=(document.getElementById("busca").value||"").toLowerCase();
   var sm=(document.getElementById("ordena")||{}).value||"";
   var eq=(document.getElementById("filtroEtq")||{}).value||"";
-  var ppv=(document.getElementById("porPagina")||{}).value||"20"; var pp=(ppv==="todos")?1000000:(parseInt(ppv,10)||20);
+  var ppv=(document.getElementById("porPagina")||{}).value||"todos"; var pp=(ppv==="todos")?1000000:(parseInt(ppv,10)||20);
   var sig=q+'|'+sm+'|'+eq+'|'+pp;
   if(sig!==window.__procSig){ window.__procPage=1; window.__procSig=sig; }
   function pd(x){ if(!x) return 0; var m=String(x).split('/'); return m.length===3? parseInt(m[2]+m[1]+m[0],10):0; }
