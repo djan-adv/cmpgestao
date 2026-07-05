@@ -71,8 +71,8 @@
   <div class="loginbox">
     <img src="/logo_cmp_full.png" alt="Crispim Mendonça e Pinheiro Advogados">
     <div class="sub">Portal do cliente — acompanhe seus processos</div>
-    <label for="doc">CPF ou CNPJ do titular</label>
-    <input id="doc" inputmode="numeric" autocomplete="off" placeholder="000.000.000-00" maxlength="18" onkeydown="if(event.key==='Enter')entrar()">
+    <label for="doc">CPF, CNPJ ou nome completo do titular</label>
+    <input id="doc" autocomplete="off" placeholder="000.000.000-00 ou Nome Completo" maxlength="80" onkeydown="if(event.key==='Enter')entrar()">
     <button class="btn" id="btn-entrar" style="width:100%;margin-top:14px" onclick="entrar()">Entrar</button>
     <div class="errbox" id="erro"></div>
     <div class="seg">Você verá apenas os processos vinculados ao seu CPF/CNPJ, em tempo real, com dados dos sistemas oficiais dos tribunais. Seus dados são tratados exclusivamente para esta consulta (LGPD). Dúvidas? Fale com o escritório.</div>
@@ -119,12 +119,13 @@ var SB_URL='https://ndeqlyrydcijbgjiviuw.supabase.co';
 var SB_KEY='sb_publishable_X5Jo69qYCQOMEg0fu2yc1w_gIYwWuQD';
 var PROCESSOS=[]; var atual=null; var CLIENTE='';
 
-/* máscara CPF/CNPJ */
+/* máscara CPF/CNPJ (só quando for número) */
 document.getElementById('doc').addEventListener('input',function(){
+  if(/[A-Za-zÀ-ÿ]/.test(this.value)) return; /* nome: sem máscara */
   var d=this.value.replace(/\D/g,'').slice(0,14),v=d;
   if(d.length<=11){v=d.replace(/(\d{3})(\d)/,'$1.$2').replace(/(\d{3})\.(\d{3})(\d)/,'$1.$2.$3').replace(/\.(\d{3})(\d{1,2})$/,'.$1-$2');}
   else{v=d.replace(/^(\d{2})(\d)/,'$1.$2').replace(/^(\d{2})\.(\d{3})(\d)/,'$1.$2.$3').replace(/\.(\d{3})(\d)/,'.$1/$2').replace(/(\d{4})(\d{1,2})$/,'$1-$2');}
-  this.value=v;
+  if(d.length) this.value=v;
 });
 
 function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
@@ -178,15 +179,26 @@ function traduzMov(texto){
 
 /* login por CPF/CNPJ — consulta segura no banco (só dados do titular) */
 function entrar(){
-  var doc=document.getElementById('doc').value.replace(/\D/g,'');
+  var bruto=document.getElementById('doc').value.trim();
+  var temLetra=/[A-Za-zÀ-ÿ]/.test(bruto);
+  var doc=bruto.replace(/\D/g,'');
   var err=document.getElementById('erro');err.style.display='none';
-  if(doc.length!==11&&doc.length!==14){err.textContent='Digite um CPF (11 dígitos) ou CNPJ (14 dígitos) completo.';err.style.display='block';return;}
+  var fn, corpo;
+  if(temLetra){
+    var nome=bruto.replace(/\s+/g,' ');
+    if(nome.length<8 || nome.indexOf(' ')<0){err.textContent='Digite o nome COMPLETO (nome e sobrenome), exatamente como no cadastro.';err.style.display='block';return;}
+    fn='portal_processos_nome'; corpo={p_nome:nome};
+  }else{
+    if(doc.length!==11&&doc.length!==14){err.textContent='Digite um CPF (11 dígitos), CNPJ (14 dígitos) ou o seu nome completo.';err.style.display='block';return;}
+    fn='portal_processos'; corpo={p_cpf:doc};
+  }
   var btn=document.getElementById('btn-entrar');btn.disabled=true;btn.textContent='Consultando…';
-  fetch(SB_URL+'/rest/v1/rpc/portal_processos',{method:'POST',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json'},body:JSON.stringify({p_cpf:doc})})
+  fetch(SB_URL+'/rest/v1/rpc/'+fn,{method:'POST',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json'},body:JSON.stringify(corpo)})
   .then(function(r){return r.json();})
   .then(function(d){
     btn.disabled=false;btn.textContent='Entrar';
-    if(!d||d.ok!==true){err.textContent=(d&&d.erro==='Documento não encontrado')?'CPF/CNPJ não encontrado no nosso cadastro. Confira o número ou fale com o escritório.':'Não foi possível consultar agora. Tente novamente em instantes.';err.style.display='block';return;}
+    if(d && d.code==='PGRST202'){err.textContent='A busca por nome estará disponível em breve — por enquanto, entre com o seu CPF ou CNPJ.';err.style.display='block';return;}
+    if(!d||d.ok!==true){err.textContent=(d&&d.erro)?( d.erro==='Documento não encontrado'?'CPF/CNPJ não encontrado no nosso cadastro. Confira o número ou fale com o escritório.':d.erro ):'Não foi possível consultar agora. Tente novamente em instantes.';err.style.display='block';return;}
     CLIENTE=d.nome||'';
     PROCESSOS=(d.processos||[]).map(function(p,i){
       var hist=(p.andamentos||[]).map(function(a){return {dt:brData(a.data)||'—',ato:esc(a.texto)};});
