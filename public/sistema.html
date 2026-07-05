@@ -581,7 +581,7 @@ function abrir(i){
     '<button class="btn sm ghost" style="margin-left:12px;font-size:11px;padding:4px 9px;vertical-align:middle" onclick="inverterPolos()" title="Trocar cliente ↔ oponente (o cliente fica sempre à esquerda)">⇄ inverter polos</button></div>'+
     (typeof JALINE!=='undefined'&&JALINE[String(p.numero||'').replace(/\D/g,'')]?'<button class="btn sm gold" style="position:absolute;top:14px;right:112px;cursor:default" title="Pasta de Jaline — honorários exclusivos Djan e Jaline">Jaline</button>':'')+
     '<button class="btn sm '+(__enc?'gold':'ghost')+'" style="position:absolute;top:14px;right:14px" onclick="encerrarProcesso()">'+(__enc?'Reativar':'Encerrar')+'</button>'+
-    '<div class="subhead">Processo nº '+p.numero+' &nbsp;·&nbsp; <span class="b '+stCls(p.status)+'">'+esc(p.status||'—')+'</span>'+
+    '<div class="subhead">Processo nº <span onclick="copiarNumero(this,\''+p.numero+'\')" style="cursor:pointer;border-bottom:1px dotted var(--muted)" title="Clique para copiar o número">'+p.numero+'</span> &nbsp;·&nbsp; <span class="b '+stCls(p.status)+'">'+esc(p.status||'—')+'</span>'+
     ' &nbsp;·&nbsp; Responsável: '+resp+'</div><div style="margin-top:10px"><button class="btn sm" onclick="novaTarefaDoProcesso()">+ Nova tarefa neste processo</button></div></div>';
   // dados do processo
   html+='<div class="card"><p class="sectlabel">Dados do processo</p><div class="kvgrid">'+
@@ -1467,6 +1467,11 @@ function renderEncerrados(){
     tr.innerHTML='<td style="max-width:260px"><span style="font-weight:700;color:var(--navy)">'+esc(resumo3(p.cliente))+'</span> <span style="color:var(--muted)">×</span> <span>'+(esc(resumo3(p.oponente))||'—')+'</span></td><td class="proc">'+p.numero+'</td><td>'+esc(p.tipo)+'</td><td style="max-width:170px;white-space:normal" title="'+esc(um.slice(0,300))+'">'+(cm?'<span style="font-weight:600;color:var(--navy)">'+cm+'</span>':'<span style="font-size:12.5px">'+esc(um.slice(0,60))+'</span>')+'<div style="font-size:12px;color:var(--muted)">'+esc(p.data||'')+'</div></td><td><span class="b '+stCls(p.status)+'">'+esc(p.status||'—')+'</span></td>';
     b.appendChild(tr);
   });
+}
+function copiarNumero(el,num){
+  var fim=function(){ var o=el.getAttribute('data-o')||el.textContent; el.setAttribute('data-o',o); el.textContent='✓ copiado!'; setTimeout(function(){ el.textContent=o; },900); };
+  if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(num).then(fim).catch(function(){ window.prompt('Copie o número:',num); }); }
+  else { window.prompt('Copie o número:',num); }
 }
 async function inverterPolos(){
   if(!atual) return;
