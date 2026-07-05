@@ -1581,15 +1581,41 @@ function contatoBlocoHTML(p){
   var c=contatoDoProcesso(p);
   h+='<div style="margin-top:6px">';
   if(c){
-    h+='<b>Contatos da vara</b>'+(c.orgao?(' — '+esc(c.orgao)):'')+':<div style="margin-top:2px;line-height:1.7">';
-    if(c.email) h+='E-mail: <a href="mailto:'+esc(c.email)+'">'+esc(c.email)+'</a><br>';
-    if(c.whatsapp) h+='WhatsApp: <a href="https://wa.me/55'+String(c.whatsapp).replace(/\D/g,'')+'" target="_blank">'+esc(c.whatsapp)+'</a><br>';
-    if(c.balcao_link) h+='Balcão da vara: <a href="'+esc(c.balcao_link)+'" target="_blank">abrir</a><br>';
-    h+='<a href="#" onclick="abrirContatoOrgao(\''+encodeURIComponent(p.numero)+'\');return false;" style="color:#888;font-size:11px">editar contato</a></div>';
+    var ne=encodeURIComponent(p.numero);
+    h+='<b>Balcão da vara</b>'+(c.orgao?(' — '+esc(c.orgao)):'')+':';
+    h+='<div style="margin-top:6px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">';
+    h+='<select class="btn sm bv-mod" style="max-width:280px"><option value="concluso">Concluso — pedir andamento ao gabinete</option><option value="peticao">Petição pendente — pedir conclusão</option><option value="despacho">Despacho — pedir cumprimento</option><option value="geral">Andamento geral</option></select>';
+    if(c.whatsapp) h+='<button class="btn sm" style="background:#128C7E;color:#fff" onclick="bvSend(\'wa\',\''+ne+'\',this)">WhatsApp</button>';
+    if(c.email) h+='<button class="btn sm" onclick="bvSend(\'em\',\''+ne+'\',this)">E-mail</button>';
+    if(c.balcao_link) h+='<button class="btn sm gold" onclick="bvSend(\'vid\',\''+ne+'\',this)">Vídeo</button>';
+    h+='<a href="#" onclick="abrirContatoOrgao(\''+ne+'\');return false;" style="color:#888;font-size:11px">editar contato</a></div>';
   } else {
     h+='<a href="#" onclick="abrirContatoOrgao(\''+encodeURIComponent(p.numero)+'\');return false;" style="color:#185FA5">+ Salvar e-mail/WhatsApp desta vara</a> <span style="color:#888;font-size:11px">('+esc(p.foro||'órgão')+')</span>';
   }
   h+='</div>'; return h;
+}
+function bvMsg(num,tipo){
+  var p=(DADOS.processos||[]).filter(function(x){return x.numero===num;})[0]||{};
+  var c=contatoDoProcesso(p)||{};
+  var vara=c.orgao||p.foro||'vara';
+  var corpo;
+  if(tipo==='concluso') corpo='Os autos encontram-se CONCLUSOS. Solicito, por gentileza, ao(à) Chefe de Cartório/Secretaria que encaminhe mensagem ao gabinete/assessoria do(a) magistrado(a), solicitando o prosseguimento do feito, com a prolação do ato pendente.';
+  else if(tipo==='peticao') corpo='Há PETIÇÃO desta parte pendente de apreciação nos autos. Solicito, por gentileza, ao(à) Chefe de Cartório/Secretaria que promova a CONCLUSÃO dos autos ao(à) magistrado(a), para apreciação e prosseguimento.';
+  else if(tipo==='despacho') corpo='Há DESPACHO/DECISÃO pendente de cumprimento nos autos. Solicito, por gentileza, ao(à) Chefe de Cartório/Secretaria que providencie o CUMPRIMENTO do despacho pela serventia, dando prosseguimento ao feito.';
+  else corpo='Solicito, por gentileza, informações sobre o andamento processual e a adoção das providências cabíveis para o regular prosseguimento do feito.';
+  var partes=(p.cliente?p.cliente:'')+(p.oponente?(' × '+p.oponente):'');
+  return 'Prezado(a) Chefe de Cartório/Secretaria — '+vara+',\n\nProcesso nº '+num+(partes?(' ('+partes+')'):'')+'.\n\n'+corpo+'\n\nAtenciosamente,\nDjan Henrique Mendonça do Nascimento\nCrispim Mendonça e Pinheiro Advogados\nE-mail: djan.adv@gmail.com';
+}
+function bvSend(canal,numEnc,el){
+  var num=decodeURIComponent(numEnc);
+  var p=(DADOS.processos||[]).filter(function(x){return x.numero===num;})[0]||{};
+  var c=contatoDoProcesso(p); if(!c) return;
+  var sel=el&&el.parentElement?el.parentElement.querySelector('select.bv-mod'):null;
+  var tipo=sel?sel.value:'geral';
+  var msg=bvMsg(num,tipo);
+  if(canal==='wa'&&c.whatsapp){ var d=String(c.whatsapp).replace(/\D/g,''); if(d.length<=11)d='55'+d; window.open('https://wa.me/'+d+'?text='+encodeURIComponent(msg),'_blank'); }
+  else if(canal==='em'&&c.email){ window.open('https://mail.google.com/mail/?view=cm&fs=1&to='+encodeURIComponent(c.email)+'&su='+encodeURIComponent('Processo nº '+num+' — solicitação de andamento — CMP Advogados')+'&body='+encodeURIComponent(msg),'_blank'); }
+  else if(canal==='vid'&&c.balcao_link){ window.open(c.balcao_link,'_blank'); }
 }
 function bvLine(numero){ var p=(DADOS.processos||[]).filter(function(x){return x.numero===numero;})[0]||{numero:numero}; return contatoBlocoHTML(p); }
 window.__coCtx=null;
