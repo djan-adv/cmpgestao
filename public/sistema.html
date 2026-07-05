@@ -1283,6 +1283,13 @@ async function cadastrarSelecionados(){
 }
 window.__procSig=''; window.__procPage=1;
 function procPag(p){ window.__procPage=p; renderProc(); window.scrollTo(0,0); }
+function resumo3(s){
+  s=String(s||'').trim(); if(!s) return s;
+  var parts=s.split(';').map(function(x){return x.trim();}).filter(Boolean);
+  if(parts.length<2){ parts=s.split(/,(?=\s*[A-ZÀ-Ú0-9])/).map(function(x){return x.trim();}).filter(Boolean); }
+  if(parts.length<=3) return s;
+  return parts.slice(0,3).join('; ')+' (... e outros)';
+}
 function renderProc(){
   var q=(document.getElementById("busca").value||"").toLowerCase();
   var sm=(document.getElementById("ordena")||{}).value||"";
@@ -1310,7 +1317,7 @@ function renderProc(){
   rows.forEach(function(p,ri){
     var i=DADOS.processos.indexOf(p);
     var tr=document.createElement("tr");tr.className="click";tr.onclick=function(){abrir(i)};
-    tr.innerHTML='<td style="color:var(--muted);text-align:right">'+(start+ri+1)+'</td><td><span style="font-weight:700;color:var(--navy)">'+esc(p.cliente)+'</span> <span style="color:var(--muted)">×</span> <span>'+esc(p.oponente||'—')+'</span></td><td class="proc">'+p.numero+'</td><td>'+esc(p.tipo)+'<div style="margin-top:4px">'+etiquetasDoProc(p.numero)+'</div></td><td><span class="b '+stCls(p.status)+'">'+esc(p.status||'—')+'</span></td>';
+    tr.innerHTML='<td style="color:var(--muted);text-align:right">'+(start+ri+1)+'</td><td><span style="font-weight:700;color:var(--navy)">'+esc(resumo3(p.cliente))+'</span> <span style="color:var(--muted)">×</span> <span>'+(esc(resumo3(p.oponente))||'—')+'</span></td><td class="proc">'+p.numero+'</td><td>'+esc(p.tipo)+'<div style="margin-top:4px">'+etiquetasDoProc(p.numero)+'</div></td><td><span class="b '+stCls(p.status)+'">'+esc(p.status||'—')+'</span></td>';
     b.appendChild(tr);
   });
   var pager=document.getElementById("proc-pager");
@@ -1438,7 +1445,7 @@ function renderEncerrados(){
   lista.forEach(function(p,ri){
     var i=DADOS.processos.indexOf(p);
     var tr=document.createElement('tr'); tr.className='click'; tr.onclick=function(){abrir(i)};
-    tr.innerHTML='<td style="color:var(--muted);text-align:right">'+(ri+1)+'</td><td><span style="font-weight:700;color:var(--navy)">'+esc(p.cliente)+'</span> <span style="color:var(--muted)">×</span> <span>'+esc(p.oponente||'—')+'</span></td><td class="proc">'+p.numero+'</td><td>'+esc(p.tipo)+'</td><td><span class="b '+stCls(p.status)+'">'+esc(p.status||'—')+'</span></td>';
+    tr.innerHTML='<td style="color:var(--muted);text-align:right">'+(ri+1)+'</td><td><span style="font-weight:700;color:var(--navy)">'+esc(resumo3(p.cliente))+'</span> <span style="color:var(--muted)">×</span> <span>'+(esc(resumo3(p.oponente))||'—')+'</span></td><td class="proc">'+p.numero+'</td><td>'+esc(p.tipo)+'</td><td><span class="b '+stCls(p.status)+'">'+esc(p.status||'—')+'</span></td>';
     b.appendChild(tr);
   });
 }
