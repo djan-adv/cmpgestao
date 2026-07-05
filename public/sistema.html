@@ -161,10 +161,10 @@
         </div>
         <div>
           <div class="card" id="painel-triagem"></div>
+          <div class="card" id="painel-fases"></div>
           <div class="card" id="painel-prod"></div>
         </div>
       </div>
-      <div class="card" id="painel-fases"></div>
       <div id="painel-aud" style="display:none"></div>
     </section>
 
@@ -363,17 +363,17 @@ function go(s){
   if(s==="painel")renderPainel(); if(s==="triagem")renderTriagem(); if(s==="processos")renderProc(); if(s==="crm")renderCrm(); if(s==="etiquetas")renderEtiquetas(); if(s==="agenda")renderAgendaView();
   window.scrollTo(0,0);
 }
-var FASES_META=[["post","Fase Postulatória / Conhecimento","#185FA5"],["sane","Fase Saneadora","#0F6E56"],["instr","Fase Instrutória","#8a5a00"],["decis","Fase Decisória","#6d28a8"],["recur","Fase Recursal","#b5342b"],["exec","Fase de Execução / Cumprimento","#0e7490"]];
+var FASES_META=[["prot","Correção e Protocolo","#C9A227"],["post","Fase de Conhecimento","#185FA5"],["sane","Fase Saneadora","#0F6E56"],["instr","Fase Instrutória","#8a5a00"],["decis","Fase Decisória","#6d28a8"],["recur","Fase Recursal","#b5342b"],["exec","Fase de Cumprimento","#0e7490"]];
 function renderFasesPainel(){
   var cont=document.getElementById("painel-fases");if(!cont)return;
   var cnt={};DADOS.processos.forEach(function(p){var f=guessFase(p);cnt[f]=(cnt[f]||0)+1;});
   var total=DADOS.processos.length;
-  var html='<p class="sectlabel">Processos por fase ('+total+' no total) — clique numa fase para ver quais</p>';
+  var html='<p class="sectlabel">Processos por fase ('+total+') — clique para ver</p>';
   FASES_META.forEach(function(f){var n=cnt[f[0]]||0;var pct=total?Math.round(n/total*100):0;
-    html+='<div style="display:flex;align-items:center;gap:10px;margin:7px 0;cursor:pointer" onclick="drillFase(\''+f[0]+'\')">'+
-      '<span class="chip2" style="background:'+f[2]+';color:#fff;min-width:210px">'+f[1]+'</span>'+
-      '<div style="flex:1;background:#eef1f6;border-radius:6px;height:14px;overflow:hidden"><div style="width:'+pct+'%;height:100%;background:'+f[2]+'"></div></div>'+
-      '<span class="note" style="margin:0;min-width:90px">'+n+' ('+pct+'%)</span></div>';});
+    html+='<div style="display:flex;align-items:center;gap:8px;margin:5px 0;cursor:pointer" onclick="drillFase(\''+f[0]+'\')">'+
+      '<span class="chip2" style="background:'+f[2]+';color:#fff;min-width:148px;font-size:11px">'+f[1]+'</span>'+
+      '<div style="flex:1;background:#eef1f6;border-radius:6px;height:10px;overflow:hidden"><div style="width:'+pct+'%;height:100%;background:'+f[2]+'"></div></div>'+
+      '<span class="note" style="margin:0;min-width:64px;font-size:11px">'+n+' ('+pct+'%)</span></div>';});
   cont.innerHTML=html;
 }
 function drillFase(fid){
@@ -451,7 +451,7 @@ function renderRecentes(){
   var el=document.getElementById("painel-recentes"); if(!el) return;
   var hoje=new Date(); hoje.setHours(0,0,0,0);
   var lim=new Date(hoje); lim.setDate(lim.getDate()-30);
-  var NOMES={post:"Conhecimento",sane:"Saneamento",instr:"Instrução",decis:"Decisória",recur:"Recursal",exec:"Execução"};
+  var NOMES={prot:"Protocolo",post:"Conhecimento",sane:"Saneamento",instr:"Instrução",decis:"Decisória",recur:"Recursal",exec:"Cumprimento"};
   var html='<p class="sectlabel">Processos recentes <a style="float:right;cursor:pointer;color:var(--navy);text-transform:none;letter-spacing:0" onclick="go(\'processos\')">ver todos ('+(DADOS.processos||[]).length+') &rarr;</a></p><table><thead><tr><th>Cliente × parte contrária</th><th>Última mov.</th><th>Fase</th></tr></thead><tbody>';
   (DADOS.processos||[]).slice(0,5).forEach(function(p,i){
     var md=null; (p.hist_full||[]).forEach(function(a){ if(a.data && (!md||a.data>md)) md=a.data; });
@@ -1067,6 +1067,24 @@ function renderKanban(){
       return {_id:p.id, cliente:p.cliente_nome||'', numero:p.numero, oponente:p.oponente||'', tipo:p.assunto||'', foro:p.foro||'', status:p.status||'', data:fmtData(p.ultima_movimentacao), hist:'', causa:fmtCausa(p.valor_causa), hist_full:hf};
     });
     if(DADOS.kpis){ DADOS.kpis.total=DADOS.processos.length; }
+    /* publicações novas (robô DJEN) → fila de triagem */
+    try{
+      var limIns=new Date(Date.now()-24*3600*1000).toISOString();
+      var dmin=new Date(Date.now()-16*86400000).toISOString().slice(0,10);
+      var pr=await sb.from('andamentos').select('data,texto,criado_em,processos(numero,cliente_nome,foro)').gte('criado_em',limIns).gte('data',dmin).order('criado_em',{ascending:false}).limit(250);
+      if(!pr.error && pr.data && pr.data.length){
+        var UFJ={'15':'PB','25':'SE','05':'BA','17':'PE','06':'CE','13':'MG','19':'RJ','26':'SP','16':'PR','20':'RN','02':'AL','10':'MA','24':'SC','09':'GO','04':'AM','08':'ES','12':'AC','23':'RR'};
+        function tribDe(num){ var m=String(num||'').replace(/\D/g,''); if(m.length<16) return '';
+          var j=m.slice(13,14), tr=m.slice(14,16);
+          if(j==='8') return 'TJ'+(UFJ[tr]||''); if(j==='5') return 'TRT'+parseInt(tr,10); if(j==='4') return 'TRF'+parseInt(tr,10); return ''; }
+        PUBLICACOES=pr.data.filter(function(a){return a.processos && a.texto;}).map(function(a){
+          var tx=String(a.texto||'');
+          return {numero:a.processos.numero, cliente:a.processos.cliente_nome||'', ato:(tx.split(/\n/)[0]||'Publicação').slice(0,90), texto:tx, tribunal:tribDe(a.processos.numero), data:String(a.data||'').slice(0,10), prazo:null};
+        });
+        TRIAGEM=null; PUBIDX=null; if(typeof initTriagem==='function') initTriagem();
+        console.log('CMPGestao: '+PUBLICACOES.length+' publicações recentes na triagem.');
+      }
+    }catch(e2){ console.log('pubs: '+(e2&&e2.message||e2)); }
     var appEl=document.getElementById('app');
     if(appEl && !appEl.classList.contains('hidden')){
       var cur='painel';
