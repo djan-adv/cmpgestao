@@ -578,6 +578,7 @@ function abrir(i){
   var __enc=/encerr/i.test(p.status||'');
   html+='<div class="card" style="position:relative"><div class="parties" style="padding-right:130px"><span class="cli">'+esc(p.cliente)+'</span>'+
     '<span class="vs">×</span><span class="op">'+esc(p.oponente||'—')+'</span></div>'+
+    (typeof JALINE!=='undefined'&&JALINE[String(p.numero||'').replace(/\D/g,'')]?'<button class="btn sm gold" style="position:absolute;top:14px;right:112px;cursor:default" title="Pasta de Jaline — honorários exclusivos Djan e Jaline">Jaline</button>':'')+
     '<button class="btn sm '+(__enc?'gold':'ghost')+'" style="position:absolute;top:14px;right:14px" onclick="encerrarProcesso()">'+(__enc?'Reativar':'Encerrar')+'</button>'+
     '<div class="subhead">Processo nº '+p.numero+' &nbsp;·&nbsp; <span class="b '+stCls(p.status)+'">'+esc(p.status||'—')+'</span>'+
     ' &nbsp;·&nbsp; Responsável: '+resp+'</div><div style="margin-top:10px"><button class="btn sm" onclick="novaTarefaDoProcesso()">+ Nova tarefa neste processo</button></div></div>';
@@ -1548,6 +1549,9 @@ function renderFunilDash(){
 (function(){ if(typeof renderCaptacao==='function' && !window.__rcWrapped){ window.__rcWrapped=true; var _rc=renderCaptacao; window.renderCaptacao=function(){ _rc(); try{ renderFunilDash(); }catch(e){} }; } })();
 </script>
 <script>
+/* Pasta de Jaline — honorários exclusivos Djan & Jaline (46 processos) */
+var JALINE={};
+["08025874120218152003","02418610520218060001","08175385620158152001","08580556920168152001","08175299420158152001","00510360320218060164","02615339620218060001","00013478220218250027","08112982720218150001","00004316320218172810","00030341020238250000","00510881720118152001","08098654620184058200","02006793920238060140","02001323320228060140","00103513920235150016","01316940720155130026","08024483020188150731","08048554320178150731","80345612720228050001","08164206920208152001","08422316020228152001","08047603320248152003","08026280820218152003","08026498120218152003","02609568420228060001","00005997220235090125","00702456720218172001","08300549820218152001","08004410920158150331","00196596620108152001","00006343720175130026","08152840520218205124","00003350720225050641","08003667520258150021","08012244820218150021","08483134420218152001","08054386420188152001","80036253520218050201","08025390220218205121","08009083620218150441","00105981120158152001","00207404820225040332","202150000356","202150000914","202300110976"].forEach(function(n){JALINE[n]=1;});
 var BALCAO={
  tjsp:'https://www.tjsp.jus.br/balcaovirtual',
  tjrs:'https://www.tjrs.jus.br/novo/processos-e-servicos/servicos-processuais/balcao-virtual/',
