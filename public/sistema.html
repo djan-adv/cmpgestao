@@ -360,7 +360,8 @@ function entrar(){
   var pill=document.getElementById("who-pill");pill.className="pill "+p.pill;pill.textContent=p.label;
   document.getElementById("login").classList.add("hidden");document.getElementById("app").classList.remove("hidden");
   document.documentElement.removeAttribute('data-boot');
-  initKanban();initTriagem();initEtiquetas();go("painel");
+  var __sec="painel"; try{ __sec=localStorage.getItem('cmp_secao')||"painel"; }catch(e){}
+  initKanban();initTriagem();initEtiquetas();go(__sec);
 }
 function go(s){
   ["painel","triagem","agenda","processos","proc-det","crm","etiquetas","procedimentos"].forEach(function(id){var e=document.getElementById("s-"+id);if(e)e.classList.add("hidden")});
@@ -1299,6 +1300,7 @@ function classHist(p){
   var cand=[[iC,'Concluso'],[iP,'Petição'],[iD,'Despacho/Sentença'],[iI,'Intimação']].filter(function(x){return x[0]>=0;}).sort(function(a,b){return a[0]-b[0];});
   return cand.length?cand[0][1]:'';
 }
+function resumo3(s){
   s=String(s||'').trim(); if(!s) return s;
   var parts=s.split(';').map(function(x){return x.trim();}).filter(Boolean);
   if(parts.length<2){ parts=s.split(/,(?=\s*[A-ZÀ-Ú0-9])/).map(function(x){return x.trim();}).filter(Boolean); }
@@ -1440,6 +1442,7 @@ function go(s){
 </script>
 <script>
 function go(s){
+  try{ localStorage.setItem('cmp_secao', s==='proc-det'?'processos':s); }catch(e){}
   var showId=(s==='contatos')?'crm':s;
   ["painel","triagem","agenda","processos","proc-det","crm","etiquetas","procedimentos","diligencias","relatorio","encerrados"].forEach(function(id){var e=document.getElementById("s-"+id);if(e)e.classList.add("hidden")});
   var sec=document.getElementById("s-"+showId); if(sec) sec.classList.remove("hidden");
