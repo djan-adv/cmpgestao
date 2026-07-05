@@ -154,8 +154,11 @@
 
     <section id="s-painel">
       <div class="kpis" id="kpis"></div>
+      <div class="grid2 painel-topo">
+        <div class="card" id="painel-aud"></div>
+        <div class="card" id="painel-triagem"></div>
+      </div>
       <div class="card" id="painel-fases"></div>
-      <div class="card" id="painel-triagem"></div>
     </section>
 
     <section id="s-triagem" class="hidden">
@@ -382,7 +385,34 @@ function renderPainel(){
   document.getElementById("painel-triagem").innerHTML='<p class="sectlabel">Triagem do dia</p>'+
     '<p style="margin:0 0 10px">Há <b>'+pend+'</b> movimentações aguardando triagem.</p>'+
     '<button class="btn sm" onclick="go(\'triagem\')">Ir para a triagem &rarr;</button> '+'<button class="btn sm ghost" onclick="abrirNovaTarefa()">+ Nova tarefa</button>';
+  renderAudSemana();
   renderFasesPainel();
+}
+function renderAudSemana(){
+  var el=document.getElementById("painel-aud"); if(!el) return;
+  initAgenda();
+  var hoje=new Date(); hoje.setHours(0,0,0,0);
+  var fim=new Date(hoje); fim.setDate(fim.getDate()+7);
+  var auds=(AGENDA||[]).filter(function(a){
+    if(a.tipo!=="az") return false;
+    var d=new Date(a.data+"T00:00:00");
+    return d>=hoje && d<fim;
+  }).sort(function(a,b){return (a.data+a.hora)<(b.data+b.hora)?-1:1;});
+  var html='<p class="sectlabel">Audiências da semana ('+auds.length+')</p>';
+  if(!auds.length){ html+='<p class="note" style="margin:0">Nenhuma audiência nos próximos 7 dias.</p>'; }
+  else{
+    html+=auds.slice(0,6).map(function(a){
+      var d=new Date(a.data+"T00:00:00");
+      var dia=["dom","seg","ter","qua","qui","sex","sáb"][d.getDay()]+" "+String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0");
+      return '<div style="display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--accentbg)">'
+        +'<span style="min-width:86px;font-weight:700;color:var(--navy);font-size:13px">'+dia+' '+(a.hora||"")+'</span>'
+        +'<div style="flex:1"><div style="font-weight:600;font-size:13.5px">'+esc(a.tt)+'</div>'
+        +'<div style="font-size:12px;color:var(--muted)">'+esc((a.p&&a.p.cliente)||"")+' · <span class="proc">'+esc((a.p&&a.p.numero)||"")+'</span></div></div>'
+        +'<span style="font-size:11px;background:var(--accentbg);color:var(--navy);border-radius:12px;padding:2px 8px;font-weight:600;white-space:nowrap">'+esc(a.resp||"")+'</span></div>';
+    }).join("");
+  }
+  html+='<div style="margin-top:10px"><button class="btn sm ghost" onclick="go(\'agenda\')">abrir agenda &rarr;</button></div>';
+  el.innerHTML=html;
 }
 function esc(s){return (s||"").replace(/</g,"&lt;")}
 function renderProc(){
@@ -1516,6 +1546,67 @@ function contatoDoProcesso(p){
   });
   return best;
 }
+</script>
+<!-- ===== CMP v2: identidade + sidebar colapsável + mobile (07/2026) ===== -->
+<style id="cmp-v2">
+  .side{transition:width .18s ease}
+  .side .brand img{width:74px}
+  #side-toggle{position:absolute;top:14px;right:-13px;width:26px;height:26px;border-radius:50%;background:var(--gold);color:#fff;font-weight:800;font-size:13px;line-height:26px;text-align:center;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.25);z-index:5;user-select:none}
+  .side{position:relative}
+  body.mini .side{width:64px;padding:16px 8px}
+  body.mini .side .brand .sys{display:none}
+  body.mini .side .brand img{width:40px;margin:4px auto 10px;display:block}
+  body.mini .nav a{font-size:0;justify-content:center;padding:11px 0}
+  body.mini .nav a .ic{font-size:16px;width:auto}
+  #hamb,#scrim{display:none}
+  @media (max-width:860px){
+    body{font-size:14px}
+    #hamb{display:grid;place-items:center;position:fixed;top:10px;left:10px;z-index:70;width:42px;height:42px;border-radius:10px;background:var(--navy);color:#fff;font-size:19px;box-shadow:0 3px 10px rgba(0,0,0,.25);cursor:pointer}
+    .side{position:fixed;left:-240px;top:0;bottom:0;width:230px!important;z-index:80;overflow-y:auto;transition:left .2s ease;padding:16px 12px!important}
+    body.side-open .side{left:0}
+    body.side-open #scrim{display:block;position:fixed;inset:0;background:rgba(20,27,36,.45);z-index:75}
+    #side-toggle{display:none}
+    body.mini .side .brand .sys{display:block}
+    body.mini .nav a{font-size:14px;justify-content:flex-start;padding:9px 12px}
+    body.mini .nav a .ic{font-size:inherit;width:18px}
+    .main{padding:60px 12px 24px!important}
+    .topbar{margin-top:2px} .topbar h1{font-size:18px}
+    .kpis{grid-template-columns:repeat(2,1fr)!important}
+    .grid2{grid-template-columns:1fr!important}
+    .card{padding:13px 14px;overflow-x:auto}
+    table{font-size:12.5px;min-width:520px} .card table{display:table}
+    .searchbar{flex-wrap:wrap} .searchbar input{max-width:none}
+    .agtools{flex-wrap:wrap}
+    .parties{font-size:15.5px}
+    .modal .box,.modalbox{width:94vw!important;max-width:94vw!important}
+    input,select{font-size:16px} /* evita zoom automático do iOS */
+  }
+</style>
+<script id="cmp-v2-js">
+(function(){
+  /* logos oficiais no lugar dos base64 */
+  try{
+    var b=document.querySelector('.side .brand img'); if(b) b.src='/logo_cmp_white.png';
+    document.querySelectorAll('.loginbox img').forEach(function(i){ i.src='/logo_cmp_full.png'; });
+  }catch(e){}
+  /* colapso desktop (ícones) */
+  var side=document.querySelector('.side');
+  if(side){
+    var tg=document.createElement('div'); tg.id='side-toggle'; tg.textContent='«'; tg.title='Recolher menu';
+    tg.onclick=function(){ document.body.classList.toggle('mini'); tg.textContent=document.body.classList.contains('mini')?'»':'«'; try{localStorage.setItem('cmp_mini',document.body.classList.contains('mini')?'1':'0');}catch(e){} };
+    side.appendChild(tg);
+    try{ if(localStorage.getItem('cmp_mini')==='1'){ document.body.classList.add('mini'); tg.textContent='»'; } }catch(e){}
+  }
+  /* menu mobile (hambúrguer + véu) */
+  var h=document.createElement('div'); h.id='hamb'; h.innerHTML='☰';
+  h.onclick=function(){ document.body.classList.toggle('side-open'); };
+  document.body.appendChild(h);
+  var sc=document.createElement('div'); sc.id='scrim';
+  sc.onclick=function(){ document.body.classList.remove('side-open'); };
+  document.body.appendChild(sc);
+  /* fechar o menu ao navegar (mobile) */
+  document.querySelectorAll('.nav a').forEach(function(a){ a.addEventListener('click',function(){ document.body.classList.remove('side-open'); }); });
+})();
 </script>
 </body>
 </html>
