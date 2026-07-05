@@ -114,7 +114,6 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
-<div class="demo">⚠ PROTÓTIPO com DADOS REAIS do CMP (480 processos importados do Astrea). Identidade real. Respostas da IA são exemplos.</div>
 
 <section id="login">
   <div class="loginbox">
@@ -153,11 +152,13 @@
       <div class="who">Logado: <b id="who-name">Djan H. M. do Nascimento</b> <span id="who-pill" class="pill socio">sócio</span></div></div>
 
     <section id="s-painel">
+      <div id="painel-hello"></div>
       <div class="kpis" id="kpis"></div>
       <div class="grid2 painel-topo">
+        <div class="card" id="painel-meudia"></div>
         <div class="card" id="painel-aud"></div>
-        <div class="card" id="painel-triagem"></div>
       </div>
+      <div class="card" id="painel-triagem"></div>
       <div class="card" id="painel-fases"></div>
     </section>
 
@@ -378,15 +379,72 @@ function drillFase(fid){
   document.getElementById("modal-drill").classList.remove("hidden");
 }
 function renderPainel(){
-  var k=DADOS.kpis, el=document.getElementById("kpis");
+  var k=DADOS.kpis||{}, el=document.getElementById("kpis");
   var pend=TRIAGEM?TRIAGEM.filter(function(t){return !t.done}).length:0;
-  var cards=[["total processos",k.total],["clientes",k.clientes],["aguardando triagem",pend],["1º grau ativo",(k.status[0]||['',0])[1]]];
-  el.innerHTML=cards.map(function(c){return '<div class="kpi"><div class="n">'+c[1]+'</div><div class="l">'+c[0]+'</div></div>'}).join("");
+  initAgenda();
+  var hoje=new Date(); hoje.setHours(0,0,0,0);
+  var em7=new Date(hoje); em7.setDate(em7.getDate()+7);
+  function dOf(a){return new Date(a.data+"T00:00:00");}
+  var prazos7=(AGENDA||[]).filter(function(a){return (a.tipo==="vm"||a.tipo==="am") && dOf(a)>=hoje && dOf(a)<em7;}).length;
+  var par30=0;
+  try{
+    var lim=new Date(hoje); lim.setDate(lim.getDate()-30);
+    (DADOS.processos||[]).forEach(function(p){
+      var md=null; (p.hist_full||[]).forEach(function(a){ if(a.data && (!md||a.data>md)) md=a.data; });
+      if(md && new Date(md)<lim) par30++;
+    });
+  }catch(e){}
+  var hello=document.getElementById("painel-hello");
+  if(hello){
+    var h=new Date().getHours(), sauda=h<12?"Bom dia":(h<18?"Boa tarde":"Boa noite");
+    var nome=((document.getElementById("who-name")||{}).textContent||"").split(" ")[0]||"";
+    hello.innerHTML='<div style="font-size:21px;font-weight:800;color:var(--navy)">'+sauda+(nome?", "+nome:"")+'</div>'
+      +'<div style="color:var(--muted);font-size:13px;margin:2px 0 14px">'+pend+' publicações a triar · '+prazos7+' prazos nos próximos 7 dias · '+par30+' processos parados há 30+ dias</div>';
+  }
+  var cards=[
+    ["Publicações a triar",pend,"gold","go('triagem')",""],
+    ["Prazos na semana",prazos7,"","go('agenda')",""],
+    ["Parados 30+ dias",par30,"warn","go('diligencias')",""],
+    ["Diligências em andamento","…","","go('diligencias')",' id="kpi-dilig"']
+  ];
+  el.innerHTML=cards.map(function(c){return '<div class="kpi v2 '+c[2]+'" onclick="'+c[3]+'"><div class="n"'+c[4]+'>'+c[1]+'</div><div class="l">'+c[0]+'</div></div>'}).join("");
+  try{ var sbk=window.__sb; if(sbk){ sbk.from('diligencias').select('id',{count:'exact',head:true}).neq('status','resolvida').then(function(r){ var e=document.getElementById('kpi-dilig'); if(e&&r&&typeof r.count==='number') e.textContent=r.count; }); } }catch(e){}
+  var bd=document.getElementById("tb-badge");
+  if(bd){ bd.textContent=pend||""; bd.style.display=pend?"grid":"none"; }
+  renderMeuDia();
   document.getElementById("painel-triagem").innerHTML='<p class="sectlabel">Triagem do dia</p>'+
     '<p style="margin:0 0 10px">Há <b>'+pend+'</b> movimentações aguardando triagem.</p>'+
     '<button class="btn sm" onclick="go(\'triagem\')">Ir para a triagem &rarr;</button> '+'<button class="btn sm ghost" onclick="abrirNovaTarefa()">+ Nova tarefa</button>';
   renderAudSemana();
   renderFasesPainel();
+}
+function renderMeuDia(){
+  var el=document.getElementById("painel-meudia"); if(!el) return;
+  initAgenda();
+  var hoje=new Date(); hoje.setHours(0,0,0,0);
+  var tras=new Date(hoje); tras.setDate(tras.getDate()-7);
+  var fut=new Date(hoje); fut.setDate(fut.getDate()+3);
+  var TAGS={az:["AUDIÊNCIA","background:var(--dangerbg);color:var(--danger)"],vm:["PRAZO","background:var(--warnbg);color:var(--warn)"],am:["MANIFESTAÇÃO","background:var(--warnbg);color:var(--warn)"]};
+  var itens=(AGENDA||[]).filter(function(a){var d=new Date(a.data+"T00:00:00");return d>=tras&&d<=fut;})
+    .sort(function(a,b){return (a.data+(a.hora||""))<(b.data+(b.hora||""))?-1:1;});
+  var html='<p class="sectlabel">Meu dia — hoje, atrasados e próximos 3 dias</p>';
+  if(!itens.length){ html+='<p class="note" style="margin:0">Nada pendente por aqui.</p>'; }
+  else{
+    html+=itens.slice(0,7).map(function(a){
+      var d=new Date(a.data+"T00:00:00");
+      var atras=d<hoje;
+      var dia=String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0");
+      var tg=TAGS[a.tipo]||["TAREFA","background:var(--accentbg);color:var(--navy)"];
+      return '<div style="display:flex;gap:9px;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--accentbg)">'
+        +'<span style="min-width:56px;font-weight:700;font-size:12.5px;color:'+(atras?"var(--danger)":"var(--navy)")+'">'+(atras?"atrasado":dia)+'</span>'
+        +'<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:12px;white-space:nowrap;'+tg[1]+'">'+tg[0]+'</span>'
+        +'<div style="flex:1;min-width:0"><div style="font-weight:600;font-size:13px">'+esc(a.tt)+(a.hora?(" · "+a.hora):"")+'</div>'
+        +'<div style="font-size:11.5px;color:var(--muted)">'+esc((a.p&&a.p.cliente)||"")+' <span class="proc">'+esc((a.p&&a.p.numero)||"")+'</span></div></div>'
+        +'<span style="font-size:11px;background:var(--accentbg);color:var(--navy);border-radius:12px;padding:2px 8px;font-weight:600;white-space:nowrap">'+esc(a.resp||"")+'</span></div>';
+    }).join("");
+  }
+  html+='<div style="margin-top:10px"><button class="btn sm ghost" onclick="go(\'agenda\')">abrir agenda &rarr;</button> <button class="btn sm ghost" onclick="abrirNovaTarefa()">+ Nova tarefa</button></div>';
+  el.innerHTML=html;
 }
 function renderAudSemana(){
   var el=document.getElementById("painel-aud"); if(!el) return;
@@ -1558,6 +1616,15 @@ function contatoDoProcesso(p){
   body.mini .side .brand img{width:40px;margin:4px auto 10px;display:block}
   body.mini .nav a{font-size:0;justify-content:center;padding:11px 0}
   body.mini .nav a .ic{font-size:16px;width:auto}
+  .kpi.v2{cursor:pointer;border-top:3px solid var(--navy);transition:transform .1s,box-shadow .1s}
+  .kpi.v2:hover{transform:translateY(-2px);box-shadow:0 6px 16px rgba(46,58,75,.10)}
+  .kpi.v2.gold{border-top-color:var(--gold)} .kpi.v2.warn{border-top-color:#d9a441}
+  #tb-tools{display:flex;align-items:center;gap:14px;flex:1;justify-content:flex-end;margin-right:14px}
+  #gbusca{max-width:300px;background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:8px 12px;font-size:13px}
+  #tb-data{font-size:12px;color:var(--muted);white-space:nowrap}
+  #tb-sino{position:relative;cursor:pointer;font-size:17px}
+  #tb-badge{position:absolute;top:-6px;right:-9px;background:var(--danger);color:#fff;font-size:10px;font-weight:700;border-radius:10px;min-width:16px;height:16px;display:none;place-items:center;padding:0 4px;font-style:normal}
+  @media (max-width:860px){ #tb-data{display:none} #gbusca{max-width:150px} }
   #hamb,#scrim{display:none}
   @media (max-width:860px){
     body{font-size:14px}
@@ -1606,6 +1673,25 @@ function contatoDoProcesso(p){
   document.body.appendChild(sc);
   /* fechar o menu ao navegar (mobile) */
   document.querySelectorAll('.nav a').forEach(function(a){ a.addEventListener('click',function(){ document.body.classList.remove('side-open'); }); });
+  /* topbar: busca global + data + sino */
+  var tb=document.querySelector('.topbar');
+  if(tb && !document.getElementById('tb-tools')){
+    var w=document.createElement('div'); w.id='tb-tools';
+    var dias=['domingo','segunda-feira','terça-feira','quarta-feira','quinta-feira','sexta-feira','sábado'];
+    var ms=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+    var n=new Date();
+    w.innerHTML='<input id="gbusca" placeholder="Buscar processo ou cliente…">'
+      +'<span id="tb-data">'+dias[n.getDay()]+', '+n.getDate()+' de '+ms[n.getMonth()]+'</span>'
+      +'<span id="tb-sino" title="Publicações a triar">🔔<i id="tb-badge"></i></span>';
+    var who=tb.querySelector('.who');
+    tb.insertBefore(w, who||null);
+    document.getElementById('tb-sino').onclick=function(){ if(typeof go==='function') go('triagem'); };
+    document.getElementById('gbusca').addEventListener('keydown',function(e){
+      if(e.key!=='Enter') return;
+      var q=this.value;
+      if(typeof go==='function'){ go('processos'); var b=document.getElementById('busca'); if(b){ b.value=q; if(typeof renderProc==='function') renderProc(); } }
+    });
+  }
 })();
 </script>
 </body>
