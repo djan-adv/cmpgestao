@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<title>Portal do Cliente · Crispim Mendonça e Pinheiro Advogados</title>
+<style>
+  :root{--azul:#185FA5;--azul-esc:#0f3c6b;--ouro:#c8a24a;--fundo:#f2f5f9;--card:#fff;--texto:#1e293b;--muted:#64748b;--borda:#e2e8f0;--ok:#16a34a}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--fundo);color:var(--texto);min-height:100vh}
+  .topo{background:linear-gradient(135deg,var(--azul-esc),var(--azul));color:#fff;padding:22px 16px;text-align:center}
+  .topo .marca{font-size:22px;font-weight:800;letter-spacing:.3px}
+  .topo .marca span{color:var(--ouro)}
+  .topo .sub{font-size:13px;opacity:.85;margin-top:4px}
+  .wrap{max-width:860px;margin:0 auto;padding:20px 14px 60px}
+  .card{background:var(--card);border:1px solid var(--borda);border-radius:14px;padding:20px;box-shadow:0 1px 3px rgba(15,60,107,.06);margin-bottom:14px}
+  label{display:block;font-size:13px;font-weight:600;color:var(--muted);margin-bottom:6px}
+  input{width:100%;padding:13px 14px;border:1px solid var(--borda);border-radius:10px;font-size:17px;letter-spacing:.5px}
+  input:focus{outline:2px solid var(--azul);border-color:var(--azul)}
+  .btn{display:block;width:100%;margin-top:12px;padding:13px;border:0;border-radius:10px;background:var(--azul);color:#fff;font-size:16px;font-weight:700;cursor:pointer}
+  .btn:hover{background:var(--azul-esc)}
+  .btn:disabled{opacity:.6;cursor:wait}
+  .aviso{font-size:12.5px;color:var(--muted);margin-top:12px;line-height:1.5}
+  .erro{background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;border-radius:10px;padding:11px 13px;font-size:14px;margin-top:12px;display:none}
+  .ola{font-size:20px;font-weight:800;color:var(--azul-esc)}
+  .ola-sub{font-size:13.5px;color:var(--muted);margin-top:3px}
+  .sair{background:none;border:0;color:var(--azul);font-size:13px;cursor:pointer;text-decoration:underline;padding:0;margin-top:8px}
+  .proc-tit{font-size:16px;font-weight:700;color:var(--azul-esc)}
+  .proc-num{font-size:12.5px;color:var(--muted);font-family:ui-monospace,monospace;margin-top:2px;word-break:break-all}
+  .linha{font-size:13.5px;color:var(--texto);margin-top:8px;line-height:1.55}
+  .linha b{color:var(--azul-esc)}
+  .chip{display:inline-block;font-size:11.5px;font-weight:700;padding:3px 10px;border-radius:99px;margin-top:8px;margin-right:6px}
+  .chip.fase{background:#eaf1f9;color:var(--azul-esc)}
+  .chip.ativo{background:#ecfdf5;color:var(--ok)}
+  .chip.encerrado{background:#f1f5f9;color:var(--muted)}
+  .explica{background:#f8fafc;border-left:3px solid var(--ouro);padding:10px 12px;border-radius:0 8px 8px 0;font-size:13px;color:#475569;margin-top:10px;line-height:1.55}
+  .ver-mov{background:none;border:1px solid var(--borda);border-radius:8px;color:var(--azul);font-size:13px;font-weight:600;cursor:pointer;padding:8px 14px;margin-top:12px}
+  .timeline{list-style:none;margin-top:12px;display:none}
+  .timeline li{position:relative;padding:0 0 14px 20px;border-left:2px solid var(--borda);margin-left:6px}
+  .timeline li::before{content:'';position:absolute;left:-6px;top:2px;width:10px;height:10px;border-radius:50%;background:var(--azul);border:2px solid #fff}
+  .timeline li:first-child::before{background:var(--ouro)}
+  .tl-data{font-size:12px;font-weight:700;color:var(--azul-esc)}
+  .tl-texto{font-size:13px;color:#475569;margin-top:2px;line-height:1.5;white-space:pre-line}
+  .rodape{text-align:center;font-size:12px;color:var(--muted);margin-top:26px;line-height:1.6}
+  .spinner{display:none;text-align:center;padding:26px;color:var(--muted);font-size:14px}
+  @media(min-width:640px){.login-card{max-width:440px;margin:34px auto}}
+</style>
+</head>
+<body>
+<div class="topo">
+  <div class="marca">CMP<span>Gestão</span> · Portal do Cliente</div>
+  <div class="sub">Crispim Mendonça e Pinheiro Advogados</div>
+</div>
+<div class="wrap">
+
+  <section id="tela-login">
+    <div class="card login-card">
+      <label for="cpf">CPF ou CNPJ do titular</label>
+      <input id="cpf" inputmode="numeric" autocomplete="off" placeholder="000.000.000-00" maxlength="18">
+      <button class="btn" id="btn-entrar" onclick="consultar()">Consultar meus processos</button>
+      <div class="erro" id="msg-erro"></div>
+      <p class="aviso">Você verá apenas os processos vinculados ao seu CPF/CNPJ, com dados dos sistemas oficiais dos tribunais. Em caso de dúvida, fale com o escritório. Ao consultar, você concorda com o tratamento dos seus dados exclusivamente para este fim (LGPD).</p>
+    </div>
+  </section>
+
+  <section id="tela-resultado" style="display:none">
+    <div class="card">
+      <div class="ola" id="cli-nome"></div>
+      <div class="ola-sub" id="cli-resumo"></div>
+      <button class="sair" onclick="sair()">← sair / consultar outro documento</button>
+    </div>
+    <div class="spinner" id="spin">Carregando…</div>
+    <div id="lista"></div>
+    <p class="rodape">Atualizado automaticamente a partir dos diários e sistemas oficiais.<br>Crispim Mendonça e Pinheiro Advogados · contato pelo WhatsApp do escritório.</p>
+  </section>
+
+</div>
+<script>
+var SB_URL='https://ndeqlyrydcijbgjiviuw.supabase.co';
+var SB_KEY='sb_publishable_X5Jo69qYCQOMEg0fu2yc1w_gIYwWuQD';
+
+var el=function(id){return document.getElementById(id)};
+el('cpf').addEventListener('input',function(){
+  var d=this.value.replace(/\D/g,'').slice(0,14),v=d;
+  if(d.length<=11){v=d.replace(/(\d{3})(\d)/,'$1.$2').replace(/(\d{3})\.(\d{3})(\d)/,'$1.$2.$3').replace(/\.(\d{3})(\d{1,2})$/,'.$1-$2');}
+  else{v=d.replace(/^(\d{2})(\d)/,'$1.$2').replace(/^(\d{2})\.(\d{3})(\d)/,'$1.$2.$3').replace(/\.(\d{3})(\d)/,'.$1/$2').replace(/(\d{4})(\d{1,2})$/,'$1-$2');}
+  this.value=v;
+});
+el('cpf').addEventListener('keydown',function(e){if(e.key==='Enter')consultar();});
+
+function fmtData(iso){if(!iso)return '';var m=String(iso).match(/(\d{4})-(\d{2})-(\d{2})/);return m?(m[3]+'/'+m[2]+'/'+m[1]):String(iso).slice(0,10);}
+function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+var FASES={post:'Fase inicial',sane:'Saneamento',instr:'Provas (instrução)',decis:'Decisão',recur:'Recurso',exec:'Execução / cumprimento'};
+function guessFase(txt){
+  var t=(txt||'').toLowerCase();
+  if(/2º grau|inst[âa]ncia superior|apela[çc]|agravo|\brecurso\b|embargos de declara|contrarraz|turma recursal/.test(t))return 'recur';
+  if(/cumprimento de senten|execu[çc]|penhora|sisbajud|bacenjud|precat[óo]|liquida[çc]|adjudica|leil[ãa]o|bloqueio/.test(t))return 'exec';
+  if(/senten[çc]a|julgad|proced[êe]ncia|improced|ac[óo]rd[ãa]o|homolog|resolvo o m[ée]rito/.test(t))return 'decis';
+  if(/audi[êe]ncia de instru|per[íi]cia|oitiva|testemunh|especificar provas|produ[çc][ãa]o de provas/.test(t))return 'instr';
+  if(/sanea|pontos controvertid|organiza[çc][ãa]o do processo/.test(t))return 'sane';
+  return 'post';
+}
+function traduzMov(texto){
+  var t=(texto||'').toLowerCase();
+  var regras=[[/senten[çc]a/,'o juiz proferiu a sentença — a decisão que resolve aquela etapa do processo'],
+   [/ac[óo]rd[ãa]o/,'o tribunal proferiu uma decisão colegiada'],
+   [/penhora|bacenjud|sisbajud|bloqueio/,'houve um ato para localizar ou bloquear bens do devedor'],
+   [/audi[êe]ncia/,'houve uma movimentação relacionada a audiência'],
+   [/cita[çc]|intima|notifica/,'uma das partes foi comunicada oficialmente de um ato'],
+   [/recurso|apela[çc]|agravo|contrarraz/,'houve movimentação de um recurso'],
+   [/decorrido prazo|decurso/,'um prazo do processo se encerrou'],
+   [/junta|petic|peti[çc][ãa]o|protocol/,'um documento ou petição foi juntado ao processo'],
+   [/conclus/,'o processo foi encaminhado ao juiz para análise'],
+   [/expedi/,'o cartório expediu um documento (ofício, mandado etc.)'],
+   [/disponibiliza|publica/,'uma decisão ou despacho foi publicado no diário oficial'],
+   [/arquiv/,'o processo foi arquivado (encerrado naquela etapa)'],
+   [/distribu|encaminhad/,'o processo foi distribuído/encaminhado'],
+   [/decis[ãa]o/,'o juiz tomou uma decisão sobre um ponto do processo'],
+   [/despacho/,'o juiz deu um despacho, uma ordem de andamento do processo']];
+  for(var i=0;i<regras.length;i++){if(regras[i][0].test(t))return regras[i][1];}
+  return 'houve uma movimentação de andamento no processo';
+}
+
+function consultar(){
+  var doc=el('cpf').value.replace(/\D/g,'');
+  var err=el('msg-erro');err.style.display='none';
+  if(doc.length!==11&&doc.length!==14){err.textContent='Digite um CPF (11 dígitos) ou CNPJ (14 dígitos) completo.';err.style.display='block';return;}
+  var btn=el('btn-entrar');btn.disabled=true;btn.textContent='Consultando…';
+  fetch(SB_URL+'/rest/v1/rpc/portal_processos',{method:'POST',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json'},body:JSON.stringify({p_cpf:doc})})
+  .then(function(r){return r.json();})
+  .then(function(d){
+    btn.disabled=false;btn.textContent='Consultar meus processos';
+    if(!d||d.ok!==true){err.textContent=(d&&d.erro==='Documento não encontrado')?'Documento não encontrado no nosso cadastro. Confira os números ou fale com o escritório.':'Não foi possível consultar agora. Tente novamente em instantes.';err.style.display='block';return;}
+    mostrar(d);
+  })
+  .catch(function(){btn.disabled=false;btn.textContent='Consultar meus processos';err.textContent='Falha de conexão. Verifique sua internet e tente de novo.';err.style.display='block';});
+}
+
+function mostrar(d){
+  el('tela-login').style.display='none';
+  el('tela-resultado').style.display='block';
+  var nome=(d.nome||'').split(' ')[0];
+  el('cli-nome').textContent='Olá, '+(nome||'cliente')+'!';
+  var procs=d.processos||[];
+  el('cli-resumo').textContent=procs.length+' processo(s) vinculados ao seu documento. Você é avisado por aqui a cada movimentação nova.';
+  var html='';
+  procs.forEach(function(p,idx){
+    var ands=p.andamentos||[];
+    var ult=ands[0]||null;
+    var fase=guessFase(((ult&&ult.texto)||'')+' '+(p.assunto||''));
+    var st=(p.status||'ativo').toLowerCase();
+    html+='<div class="card">'
+      +'<div class="proc-tit">'+esc(p.assunto)+'</div>'
+      +'<div class="proc-num">Processo nº '+esc(p.numero)+'</div>'
+      +'<div class="linha">Em face de <b>'+esc(p.oponente||'a parte contrária')+'</b> · '+esc(p.foro)+'</div>'
+      +'<span class="chip fase">'+FASES[fase]+'</span>'
+      +'<span class="chip '+(st==='encerrado'?'encerrado':'ativo')+'">'+(st==='encerrado'?'Encerrado':'Em andamento')+'</span>'
+      +(ult?'<div class="explica"><b>Última movimentação'+(ult.data?(' em '+fmtData(ult.data)):'')+':</b> em linguagem simples, '+traduzMov(ult.texto)+'. Assim que houver algo novo, aparece aqui.</div>':'')
+      +(ands.length?('<button class="ver-mov" onclick="toggleTl(this,\'tl'+idx+'\')">ver movimentações ('+ands.length+')</button>'
+        +'<ul class="timeline" id="tl'+idx+'">'
+        +ands.map(function(a){return '<li><div class="tl-data">'+(fmtData(a.data)||'—')+'</div><div class="tl-texto">'+esc((a.texto||'').slice(0,600))+'</div></li>';}).join('')
+        +'</ul>'):'')
+      +'</div>';
+  });
+  if(!procs.length)html='<div class="card">Nenhum processo localizado para este documento. Fale com o escritório.</div>';
+  el('lista').innerHTML=html;
+  window.scrollTo(0,0);
+}
+function toggleTl(btn,id){var t=el(id);var aberto=t.style.display==='block';t.style.display=aberto?'none':'block';btn.textContent=aberto?btn.textContent.replace('ocultar','ver'):btn.textContent.replace('ver','ocultar');}
+function sair(){el('tela-resultado').style.display='none';el('tela-login').style.display='block';el('cpf').value='';el('lista').innerHTML='';}
+</script>
+</body>
+</html>
