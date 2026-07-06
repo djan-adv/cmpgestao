@@ -1664,7 +1664,18 @@ async function waCliente(){
     if(nome){ var r=await sb.from('contatos').select('telefone,nome').ilike('nome','%'+nome.split(' ')[0]+'%').limit(10);
       if(r.data){ var hit=r.data.find(function(c){return c.telefone && String(c.nome||'').toLowerCase().indexOf(nome.toLowerCase().split(' ')[0])>-1;}); if(hit) tel=hit.telefone; } }
   }catch(e){}
-  if(!tel){ tel=window.prompt('WhatsApp do cliente (com DDD):',''); if(!tel) return; }
+  if(!tel){
+    tel=window.prompt('WhatsApp do cliente (com DDD):',''); if(!tel) return;
+    /* grava o número inserido nos contatos do processo (chips) */
+    try{
+      var jaTem=String(atual.ctl||'').replace(/\D/g,'').indexOf(String(tel).replace(/\D/g,''))>-1;
+      if(!jaTem){
+        var novoCtl=(atual.ctl?atual.ctl+', ':'')+tel.trim();
+        var w=await sb.from('processos').update({contatos_livres:novoCtl}).eq('id',atual._id);
+        if(!w.error){ atual.ctl=novoCtl; if(typeof renderCtlChips==='function') renderCtlChips(); }
+      }
+    }catch(eSave){}
+  }
   var d=String(tel).replace(/\D/g,''); if(d.length<=11) d='55'+d;
   window.open('https://wa.me/'+d,'_blank');
 }
