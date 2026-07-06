@@ -621,7 +621,7 @@ function abrir(i){
     '<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><select id="det-etq-sel" style="width:auto;max-width:280px"></select><button class="btn sm" onclick="addEtqProc()">adicionar etiqueta</button></div></div>';
   // blocos estilo Astrea (onde entram os dados nas próximas fases)
   html+='<div class="grid2">'+
-    '<div class="card" id="doc-card"><p class="sectlabel">Documentos do processo <a style="float:right;cursor:pointer;color:#185FA5;text-transform:none;letter-spacing:0;font-weight:600" onclick="document.getElementById(\'doc-file\').click()" title="Enviar arquivos do seu computador para a pasta aberta">+ incluir</a></p><input type="file" id="doc-file" multiple style="display:none" onchange="enviarDocs(this.files);this.value=\'\'"><div id="doc-panel"><div class="note">Carregando documentos…</div></div></div>'+
+    '<div class="card" id="doc-card"><p class="sectlabel">Documentos do processo <a style="float:right;cursor:pointer;color:#185FA5;text-transform:none;letter-spacing:0;font-weight:600" onclick="document.getElementById(\'doc-file\').click()" title="Enviar arquivos do seu computador para a pasta aberta">+ incluir</a></p><input type="file" id="doc-file" multiple style="display:none" onchange="enviarDocs(this)"><div id="doc-panel"><div class="note">Carregando documentos…</div></div></div>'+
     '</div>';
   document.getElementById("det-body").innerHTML=html;
   histShown=10; renderHistorico();
@@ -1627,30 +1627,33 @@ async function baixarDoc(dig, rel){
   setTimeout(function(){URL.revokeObjectURL(a.href);},5000);
 }
 /* enviar arquivos do computador para a pasta aberta no painel */
-async function enviarDocs(files){
-  files=Array.prototype.slice.call(files||[]); /* copia antes do reset do input */
+async function enviarDocs(inp){
+  var files=Array.prototype.slice.call((inp&&inp.files)?inp.files:(inp||[])); /* copia imediata — o input pode ser limpo depois */
   if(!files.length||!atual) return;
-  var dig=String(atual.numero||'').replace(/\D/g,''); if(!dig){ alert('Processo sem número.'); return; }
   var sub=window.__docSub||'';
-  if(/(^|\/)Lixeira$/.test(sub)){ alert('Não é possível enviar arquivos para a Lixeira.'); return; }
-  var tok=await docToken();
-  var el=document.getElementById('doc-panel');
-  for(var i=0;i<files.length;i++){
-    var f=files[i];
-    if(el) el.innerHTML='<div class="note">Enviando '+esc(f.name)+' ('+(i+1)+' de '+files.length+')…</div>';
-    var relPath=dig+(sub?'/'+sub:'')+'/'+f.name;
-    var bytes=new Uint8Array(await f.arrayBuffer());
-    var CH=512*1024, off=0;
-    do{
-      var slice=bytes.subarray(off,Math.min(off+CH,bytes.length));
-      var s=''; for(var k=0;k<slice.length;k+=0x8000){ s+=String.fromCharCode.apply(null, slice.subarray(k,Math.min(k+0x8000,slice.length))); }
-      var r=await fetch('/api/docs',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},
-        body:JSON.stringify({path:relPath,b64:btoa(s),append:off>0,mtime:new Date(f.lastModified).toISOString()})});
-      if(!r.ok){ alert('Falha ao enviar '+f.name+'.'); carregarDocs(atual.numero, sub); return; }
-      off+=CH;
-    }while(off<bytes.length);
-  }
-  carregarDocs(atual.numero, sub);
+  try{
+    var dig=String(atual.numero||'').replace(/\D/g,''); if(!dig){ alert('Processo sem número.'); return; }
+    if(/(^|\/)Lixeira$/.test(sub)){ alert('Não é possível enviar arquivos para a Lixeira.'); return; }
+    var tok=await docToken();
+    if(!tok){ alert('Sessão expirada — recarregue a página (F5) e tente de novo.'); return; }
+    var el=document.getElementById('doc-panel');
+    for(var i=0;i<files.length;i++){
+      var f=files[i];
+      if(el) el.innerHTML='<div class="note">Enviando '+esc(f.name)+' ('+(i+1)+' de '+files.length+')…</div>';
+      var relPath=dig+(sub?'/'+sub:'')+'/'+f.name;
+      var bytes=new Uint8Array(await f.arrayBuffer());
+      var CH=512*1024, off=0;
+      do{
+        var slice=bytes.subarray(off,Math.min(off+CH,bytes.length));
+        var s=''; for(var k=0;k<slice.length;k+=0x8000){ s+=String.fromCharCode.apply(null, slice.subarray(k,Math.min(k+0x8000,slice.length))); }
+        var r=await fetch('/api/docs',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},
+          body:JSON.stringify({path:relPath,b64:btoa(s),append:off>0,mtime:new Date(f.lastModified).toISOString()})});
+        if(!r.ok){ var ej=await r.json().catch(function(){return {};}); alert('Falha ao enviar '+f.name+' (HTTP '+r.status+(ej.erro?': '+ej.erro:'')+').'); carregarDocs(atual.numero, sub); return; }
+        off+=CH;
+      }while(off<bytes.length);
+    }
+  }catch(e){ alert('Erro no envio: '+(e&&e.message||e)); }
+  finally{ try{ if(inp&&inp.value!==undefined) inp.value=''; }catch(e2){} carregarDocs(atual.numero, sub); }
 }
 /* excluir com segurança: move para a Lixeira do processo (30 dias) */
 async function lixeiraDoc(dig, rel, numero, sub){
