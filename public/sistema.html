@@ -116,7 +116,8 @@
 <body>
 <script>try{if(localStorage.getItem('sb-ndeqlyrydcijbgjiviuw-auth-token')){document.documentElement.setAttribute('data-boot','1');}}catch(e){}</script>
 <style>html[data-boot="1"] #login{display:none!important}html[data-boot="1"] body::before{content:"Carregando o CMPGestão…";display:block;text-align:center;color:#697180;font-size:14px;padding:48px}</style>
-<style>@media(min-width:1100px){#s-proc-det{padding-right:26%;position:relative}#doc-card{position:fixed;right:14px;top:205px;width:21%;max-height:66vh;overflow:auto;z-index:20;box-shadow:0 6px 22px rgba(30,39,51,.10)}#doc-card table td{font-size:12px!important;word-break:break-word}}</style>
+<style>.side{position:sticky;top:0;height:100vh;overflow-y:auto}
+@media(min-width:1100px){#s-proc-det{padding-right:26%;position:relative}#doc-card{position:fixed;right:14px;top:205px;width:21%;max-height:66vh;overflow:auto;z-index:20;box-shadow:0 6px 22px rgba(30,39,51,.10)}#doc-card table td{font-size:12px!important;word-break:break-word}}</style>
 
 <section id="login">
   <div class="loginbox">
@@ -368,6 +369,7 @@ function entrar(){
   document.getElementById("login").classList.add("hidden");document.getElementById("app").classList.remove("hidden");
   document.documentElement.removeAttribute('data-boot');
   var __sec="painel"; try{ __sec=localStorage.getItem('cmp_secao')||"painel"; }catch(e){}
+  if(__sec==='proc-det') __sec='processos'; /* a ficha é reaberta após carregar os dados */
   initKanban();initTriagem();initEtiquetas();go(__sec);
 }
 function go(s){
@@ -1116,6 +1118,12 @@ function renderKanban(){
         console.log('CMPGestao: '+window.__AGDB.length+' eventos de agenda carregados (sincronizados com Google).');
       }
     }catch(eAg){ console.log('agenda: '+(eAg&&eAg.message||eAg)); }
+    try{
+      if(localStorage.getItem('cmp_secao')==='proc-det'){
+        var __pn=localStorage.getItem('cmp_proc');
+        if(__pn){ var __ix=DADOS.processos.findIndex(function(p){return p.numero===__pn;}); if(__ix>=0){ abrir(__ix); } }
+      }
+    }catch(eRe){}
     console.log('CMPGestao: '+DADOS.processos.length+' processos carregados do banco.');
   }catch(err){
     alert('Erro ao carregar dados do banco: '+(err.message||err));
@@ -1479,7 +1487,7 @@ function go(s){
 </script>
 <script>
 function go(s){
-  try{ localStorage.setItem('cmp_secao', s==='proc-det'?'processos':s); }catch(e){}
+  try{ localStorage.setItem('cmp_secao', s); if(s!=='proc-det') localStorage.removeItem('cmp_proc'); }catch(e){}
   var showId=(s==='contatos')?'crm':s;
   ["painel","triagem","agenda","processos","proc-det","crm","etiquetas","procedimentos","diligencias","relatorio","encerrados","inove"].forEach(function(id){var e=document.getElementById("s-"+id);if(e)e.classList.add("hidden")});
   var sec=document.getElementById("s-"+showId); if(sec) sec.classList.remove("hidden");
@@ -1928,7 +1936,7 @@ function gerarDiligencia(pid,numEnc){
   document.getElementById('modal-dilig').classList.remove('hidden');
 }
 /* carrega documentos quando a ficha abre */
-(function(){ if(!window.__abrirWrapped && typeof abrir==='function'){ window.__abrirWrapped=true; var _ab=abrir; window.abrir=function(i){ _ab(i); try{ if(atual&&atual.numero) carregarDocs(atual.numero,''); }catch(e){} try{ renderCtlChips(); }catch(e2){} }; } })();
+(function(){ if(!window.__abrirWrapped && typeof abrir==='function'){ window.__abrirWrapped=true; var _ab=abrir; window.abrir=function(i){ _ab(i); try{ if(atual&&atual.numero) carregarDocs(atual.numero,''); }catch(e){} try{ renderCtlChips(); }catch(e2){} try{ if(atual&&atual.numero){ localStorage.setItem('cmp_proc', atual.numero); localStorage.setItem('cmp_secao','proc-det'); } }catch(e3){} }; } })();
 </script>
 <script>
 window.__diligSig=''; window.__diligPage=1;
