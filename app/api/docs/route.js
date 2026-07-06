@@ -67,5 +67,6 @@ export async function POST(request) {
   const buf = Buffer.from(b.b64 || '', 'base64')
   if (b.append) fs.appendFileSync(full, buf)
   else fs.writeFileSync(full, buf)
+  if (b.mtime) { try { const t = new Date(b.mtime); if (!isNaN(t)) fs.utimesSync(full, t, t) } catch (e) {} }
   return Response.json({ ok: true, bytes: buf.length, path: rel })
 }
