@@ -117,7 +117,7 @@
 <script>try{if(localStorage.getItem('sb-ndeqlyrydcijbgjiviuw-auth-token')){document.documentElement.setAttribute('data-boot','1');}}catch(e){}</script>
 <style>html[data-boot="1"] #login{display:none!important}html[data-boot="1"] body::before{content:"Carregando o CMPGestão…";display:block;text-align:center;color:#697180;font-size:14px;padding:48px}</style>
 <style>@media(min-width:900px){.side{position:fixed!important;top:0;left:0;bottom:0;width:212px;overflow-y:auto;z-index:30;height:auto}.main{margin-left:212px}#nav{padding-bottom:110px}}
-@media(min-width:1100px){#s-proc-det{padding-right:calc(21vw + 30px);position:relative}#doc-card{position:fixed;right:14px;top:150px;width:21vw;max-height:calc(100vh - 170px);overflow:auto;z-index:20;box-shadow:0 6px 22px rgba(30,39,51,.10)}#doc-card table td{font-size:12px!important;word-break:break-word}}</style>
+@media(min-width:1100px){#s-proc-det{padding-right:calc(21vw + 4px);position:relative}#doc-card{position:fixed;right:14px;top:150px;width:21vw;max-height:calc(100vh - 170px);overflow:auto;z-index:20;box-shadow:0 6px 22px rgba(30,39,51,.10)}#doc-card table td{font-size:12px!important;word-break:break-word}}</style>
 
 <section id="login">
   <div class="loginbox">
@@ -621,7 +621,7 @@ function abrir(i){
     '<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><select id="det-etq-sel" style="width:auto;max-width:280px"></select><button class="btn sm" onclick="addEtqProc()">adicionar etiqueta</button></div></div>';
   // blocos estilo Astrea (onde entram os dados nas próximas fases)
   html+='<div class="grid2">'+
-    '<div class="card" id="doc-card"><p class="sectlabel">Documentos do processo</p><div id="doc-panel"><div class="note">Carregando documentos…</div></div></div>'+
+    '<div class="card" id="doc-card"><p class="sectlabel">Documentos do processo <a style="float:right;cursor:pointer;color:#185FA5;text-transform:none;letter-spacing:0;font-weight:600" onclick="document.getElementById(\'doc-file\').click()" title="Enviar arquivos do seu computador para a pasta aberta">+ incluir</a></p><input type="file" id="doc-file" multiple style="display:none" onchange="enviarDocs(this.files);this.value=\'\'"><div id="doc-panel"><div class="note">Carregando documentos…</div></div></div>'+
     '</div>';
   document.getElementById("det-body").innerHTML=html;
   histShown=10; renderHistorico();
@@ -1545,6 +1545,7 @@ async function docToken(){ var s=await window.__sb.auth.getSession(); return s&&
 async function carregarDocs(numero, sub){
   var el=document.getElementById('doc-panel'); if(!el) return;
   var dig=String(numero||'').replace(/\D/g,'');
+  window.__docSub=sub||'';
   if(!dig){ el.innerHTML='<div class="note">Processo sem número.</div>'; return; }
   try{
     var tok=await docToken();
@@ -1562,17 +1563,32 @@ async function carregarDocs(numero, sub){
       el.appendChild(volta);
     }
     if(!itens.length){ var n=document.createElement('div'); n.className='note'; n.textContent='Nenhum documento nesta pasta ainda.'; el.appendChild(n); return; }
+    var naLix=/(^|\/)Lixeira$/.test(sub||'');
     var tb=document.createElement('table'); tb.style.cssText='width:100%;font-size:13px';
     itens.forEach(function(x){
       var tr=document.createElement('tr'); tr.className='click'; tr.style.cursor='pointer';
       var td1=document.createElement('td'); td1.style.padding='5px 4px';
-      var ic=x.tipo==='pasta'?'📁 ':(/\.pdf$/i.test(x.nome)?'📄 ':(/\.docx?$/i.test(x.nome)?'📝 ':(/\.(png|jpe?g|gif)$/i.test(x.nome)?'🖼️ ':(/\.(zip|rar)$/i.test(x.nome)?'🗜️ ':'📎 '))));
+      var ic=x.tipo==='pasta'?(x.nome==='Lixeira'?'🗑️ ':'📁 '):(/\.pdf$/i.test(x.nome)?'📄 ':(/\.docx?$/i.test(x.nome)?'📝 ':(/\.(png|jpe?g|gif)$/i.test(x.nome)?'🖼️ ':(/\.(zip|rar)$/i.test(x.nome)?'🗜️ ':'📎 '))));
       td1.textContent=ic+x.nome; if(x.tipo==='pasta') td1.style.fontWeight='600';
+      if(x.tipo==='pasta'&&x.nome==='Lixeira'){ td1.style.color='#8a8f98'; td1.title='Itens excluídos ficam aqui por 30 dias e depois são apagados'; }
       var td2=document.createElement('td'); td2.className='note'; td2.style.cssText='text-align:right;white-space:nowrap';
       var dtm=x.mod?String(x.mod).slice(0,10).split('-').reverse().join('/'):'';
-      td2.textContent=(x.tam?(Math.max(1,Math.round(x.tam/1024))+' KB · '):'')+dtm;
-      tr.appendChild(td1); tr.appendChild(td2);
+      td2.textContent=(x.tam?(Math.max(1,Math.round(x.tam/1024))+' KB · '):'')+dtm+(naLix&&x.resta!=null?(' · '+x.resta+'d'):'');
       var rel=(sub?sub+'/':'')+x.nome;
+      if(x.tipo!=='pasta'&&!naLix){
+        var del=document.createElement('span'); del.textContent=' 🗑'; del.title='Enviar para a Lixeira (fica guardado 30 dias)';
+        del.style.cssText='cursor:pointer;opacity:.5;margin-left:5px';
+        del.onmouseover=function(){del.style.opacity='1';}; del.onmouseout=function(){del.style.opacity='.5';};
+        del.onclick=function(ev){ ev.stopPropagation(); lixeiraDoc(dig, rel, numero, sub); };
+        td2.appendChild(del);
+      }
+      if(x.tipo!=='pasta'&&naLix){
+        var rst=document.createElement('span'); rst.textContent=' ↩'; rst.title='Restaurar para o local original';
+        rst.style.cssText='cursor:pointer;color:#127a53;font-weight:700;margin-left:5px';
+        rst.onclick=function(ev){ ev.stopPropagation(); restaurarDoc(dig, rel, numero, sub); };
+        td2.appendChild(rst);
+      }
+      tr.appendChild(td1); tr.appendChild(td2);
       if(x.tipo==='pasta') tr.onclick=function(){ carregarDocs(numero, rel); };
       else tr.onclick=function(){ baixarDoc(dig, rel); };
       tb.appendChild(tr);
@@ -1587,6 +1603,47 @@ async function baixarDoc(dig, rel){
   var b=await r.blob(); var a=document.createElement('a');
   a.href=URL.createObjectURL(b); a.download=rel.split('/').pop(); a.click();
   setTimeout(function(){URL.revokeObjectURL(a.href);},5000);
+}
+/* enviar arquivos do computador para a pasta aberta no painel */
+async function enviarDocs(files){
+  if(!files||!files.length||!atual) return;
+  var dig=String(atual.numero||'').replace(/\D/g,''); if(!dig){ alert('Processo sem número.'); return; }
+  var sub=window.__docSub||'';
+  if(/(^|\/)Lixeira$/.test(sub)){ alert('Não é possível enviar arquivos para a Lixeira.'); return; }
+  var tok=await docToken();
+  var el=document.getElementById('doc-panel');
+  for(var i=0;i<files.length;i++){
+    var f=files[i];
+    if(el) el.innerHTML='<div class="note">Enviando '+esc(f.name)+' ('+(i+1)+' de '+files.length+')…</div>';
+    var relPath=dig+(sub?'/'+sub:'')+'/'+f.name;
+    var bytes=new Uint8Array(await f.arrayBuffer());
+    var CH=512*1024, off=0;
+    do{
+      var slice=bytes.subarray(off,Math.min(off+CH,bytes.length));
+      var s=''; for(var k=0;k<slice.length;k+=0x8000){ s+=String.fromCharCode.apply(null, slice.subarray(k,Math.min(k+0x8000,slice.length))); }
+      var r=await fetch('/api/docs',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},
+        body:JSON.stringify({path:relPath,b64:btoa(s),append:off>0,mtime:new Date(f.lastModified).toISOString()})});
+      if(!r.ok){ alert('Falha ao enviar '+f.name+'.'); carregarDocs(atual.numero, sub); return; }
+      off+=CH;
+    }while(off<bytes.length);
+  }
+  carregarDocs(atual.numero, sub);
+}
+/* excluir com segurança: move para a Lixeira do processo (30 dias) */
+async function lixeiraDoc(dig, rel, numero, sub){
+  if(!confirm('Enviar "'+rel.split('/').pop()+'" para a Lixeira?\n\nO arquivo fica guardado por 30 dias e pode ser restaurado nesse período.')) return;
+  var tok=await docToken();
+  var r=await fetch('/api/docs',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},
+    body:JSON.stringify({op:'trash',path:dig+'/'+rel})});
+  if(!r.ok){ alert('Não foi possível mover para a Lixeira.'); return; }
+  carregarDocs(numero, sub||'');
+}
+async function restaurarDoc(dig, rel, numero, sub){
+  var tok=await docToken();
+  var r=await fetch('/api/docs',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},
+    body:JSON.stringify({op:'restore',path:dig+'/'+rel})});
+  if(!r.ok){ alert('Não foi possível restaurar.'); return; }
+  carregarDocs(numero, sub||'');
 }
 function copiarNumero(el,num){
   var fim=function(){ var o=el.getAttribute('data-o')||el.textContent; el.setAttribute('data-o',o); el.textContent='✓ copiado!'; setTimeout(function(){ el.textContent=o; },900); };
@@ -1611,6 +1668,33 @@ function renderCtlChips(){
   ed.textContent=toks.length?'+ inserir contatos':'+ telefones/e-mails do cliente';
   ed.onclick=editarCtl;
   el.appendChild(ed);
+  var ed2=document.createElement('button');
+  ed2.style.cssText='background:#fff;color:#697180;border:1px dashed #cdd4de;border-radius:16px;padding:4px 10px;font-size:12px;cursor:pointer';
+  ed2.textContent='✎ editar contatos';
+  ed2.title='Corrigir nomes das partes, telefones e e-mails';
+  ed2.onclick=editarPartesContatos;
+  el.appendChild(ed2);
+}
+/* edição completa: nomes das partes + lista de contatos (substitui a lista) */
+async function editarPartesContatos(){
+  if(!atual) return;
+  var sb=window.__sb; if(!sb||!atual._id){ alert('Sessão não encontrada — recarregue a página.'); return; }
+  var cli=window.prompt('Nome do CLIENTE (parte principal):', atual.cliente||'');
+  if(cli===null) return;
+  var op=window.prompt('Nome da PARTE CONTRÁRIA:', atual.oponente||'');
+  if(op===null) return;
+  var ct=window.prompt('Telefones e e-mails, separados por vírgula (máx. 4). Edite livremente — esta lista SUBSTITUI a atual:', atual.ctl||'');
+  if(ct===null) return;
+  cli=cli.trim(); op=op.trim();
+  var toks=ct.split(/[,;\n]+/).map(function(s){return s.trim();}).filter(Boolean);
+  var seen={}, unicos=[];
+  toks.forEach(function(t){ var k=/@/.test(t)?t.toLowerCase():t.replace(/\D/g,''); if(!k)return; if(!seen[k]){seen[k]=1;unicos.push(t);} });
+  if(unicos.length>4){ alert('Limite de 4 contatos — mantive os 4 primeiros.'); unicos=unicos.slice(0,4); }
+  var novoCtl=unicos.join(', ');
+  var w=await sb.from('processos').update({cliente_nome:cli||null,oponente:op||null,contatos_livres:novoCtl||null}).eq('id',atual._id);
+  if(w.error){ alert('Erro ao salvar: '+w.error.message); return; }
+  atual.cliente=cli; atual.oponente=op; atual.ctl=novoCtl;
+  var ix=DADOS.processos.indexOf(atual); if(ix>=0) abrir(ix);
 }
 async function editarCtl(){
   if(!atual) return;
