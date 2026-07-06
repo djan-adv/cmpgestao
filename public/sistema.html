@@ -1628,7 +1628,8 @@ async function baixarDoc(dig, rel){
 }
 /* enviar arquivos do computador para a pasta aberta no painel */
 async function enviarDocs(files){
-  if(!files||!files.length||!atual) return;
+  files=Array.prototype.slice.call(files||[]); /* copia antes do reset do input */
+  if(!files.length||!atual) return;
   var dig=String(atual.numero||'').replace(/\D/g,''); if(!dig){ alert('Processo sem número.'); return; }
   var sub=window.__docSub||'';
   if(/(^|\/)Lixeira$/.test(sub)){ alert('Não é possível enviar arquivos para a Lixeira.'); return; }
