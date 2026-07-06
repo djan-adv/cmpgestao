@@ -587,9 +587,9 @@ function abrir(i){
   var html='';
   // cabeçalho: partes no mesmo tamanho, cliente em negrito e marcado
   var __enc=/encerr/i.test(p.status||'');
-  html+='<div class="card" style="position:relative"><div class="parties" style="padding-right:130px"><span class="cli">'+esc(p.cliente)+'</span><span class="tag-cli" style="margin:0 8px;vertical-align:middle">cliente principal</span>'+
-    '<span class="vs">×</span><span class="op">'+esc(p.oponente||'—')+'</span><span style="font-size:11px;color:var(--muted);margin-left:6px;vertical-align:middle">parte contrária</span>'+
-    '<button class="btn sm ghost" style="margin-left:12px;font-size:11px;padding:4px 9px;vertical-align:middle" onclick="inverterPolos()" title="Trocar cliente ↔ oponente (o cliente fica sempre à esquerda)">⇄ inverter polos</button></div>'+
+  html+='<div class="card" style="position:relative"><div class="parties" style="padding-right:130px"><span style="display:inline-block;vertical-align:top;line-height:1.15"><span class="cli">'+esc(p.cliente)+'</span><br><span class="tag-cli" style="margin:3px 0 0;font-size:9px;padding:1px 7px;display:inline-block">cliente principal</span></span>'+
+    '<span class="vs" style="vertical-align:top">×</span><span style="display:inline-block;vertical-align:top;line-height:1.15"><span class="op">'+esc(p.oponente||'—')+'</span><br><span style="font-size:9.5px;color:var(--muted);display:inline-block;margin-top:3px">parte contrária</span></span>'+
+    '<button class="btn sm ghost" style="margin-left:12px;font-size:11px;padding:4px 9px;vertical-align:top" onclick="inverterPolos()" title="Trocar cliente ↔ oponente (o cliente fica sempre à esquerda)">⇄ inverter polos</button></div>'+
     (typeof JALINE!=='undefined'&&JALINE[String(p.numero||'').replace(/\D/g,'')]?'<button class="btn sm gold" style="position:absolute;top:14px;right:112px;cursor:default" title="Pasta de Jaline — honorários exclusivos Djan e Jaline">Jaline</button>':'')+
     '<button class="btn sm '+(__enc?'gold':'ghost')+'" style="position:absolute;top:14px;right:14px" onclick="encerrarProcesso()">'+(__enc?'Reativar':'Encerrar')+'</button>'+
     '<div style="position:absolute;top:52px;right:14px;text-align:right;font-size:12.5px;color:var(--muted);line-height:1.5">Honorários: faturado <b style="color:var(--navy)">R$ 0,00</b> · a faturar <b style="color:var(--navy)">R$ 0,00</b><br>Valor da causa: <b style="color:var(--navy)">'+(p.causa&&p.causa!=='0,00'?('R$ '+p.causa):'—')+'</b></div>'+
@@ -1608,18 +1608,28 @@ function renderCtlChips(){
   });
   var ed=document.createElement('button');
   ed.style.cssText='background:#f0f2f5;color:#697180;border:1px solid #e4e8ef;border-radius:16px;padding:4px 10px;font-size:12px;cursor:pointer';
-  ed.textContent=toks.length?'✎ editar contatos':'+ telefones/e-mails do cliente';
+  ed.textContent=toks.length?'+ inserir contatos':'+ telefones/e-mails do cliente';
   ed.onclick=editarCtl;
   el.appendChild(ed);
 }
 async function editarCtl(){
   if(!atual) return;
-  var v=window.prompt('Telefones e e-mails do cliente (separados por vírgula):', atual.ctl||'');
+  var v=window.prompt('Adicionar telefone(s) e/ou e-mail(s) do cliente, separados por vírgula (limite: 4 contatos no total).\nOs já salvos são mantidos. Deixe vazio e clique OK para LIMPAR todos.', '');
   if(v===null) return;
-  var toks=v.split(/[,;\n]+/).map(function(s){return s.trim();}).filter(Boolean);
+  var novos=v.split(/[,;\n]+/).map(function(s){return s.trim();}).filter(Boolean);
+  if(!novos.length){
+    if(window.confirm('Limpar TODOS os contatos deste processo?')){
+      var w0=await window.__sb.from('processos').update({contatos_livres:null}).eq('id',atual._id);
+      if(w0.error){ alert('Erro: '+w0.error.message); return; }
+      atual.ctl=''; renderCtlChips();
+    }
+    return;
+  }
+  var atuais=String(atual.ctl||'').split(/[,;\n]+/).map(function(s){return s.trim();}).filter(Boolean);
   var seen={}, unicos=[], dups=[];
-  toks.forEach(function(t){ var k=/@/.test(t)?t.toLowerCase():t.replace(/\D/g,''); if(!k)return; if(seen[k]){dups.push(t);}else{seen[k]=1;unicos.push(t);} });
-  if(dups.length) alert('Em duplicidade (mantive só um de cada): '+dups.join(', '));
+  atuais.concat(novos).forEach(function(t){ var k=/@/.test(t)?t.toLowerCase():t.replace(/\D/g,''); if(!k)return; if(seen[k]){dups.push(t);}else{seen[k]=1;unicos.push(t);} });
+  if(dups.length) alert('Já anotado (em duplicidade, mantive só um): '+dups.join(', '));
+  if(unicos.length>4){ alert('Limite de 4 contatos por processo — mantive os 4 primeiros.'); unicos=unicos.slice(0,4); }
   var novo=unicos.join(', ');
   var sb=window.__sb;
   var w=await sb.from('processos').update({contatos_livres:novo||null}).eq('id',atual._id);
