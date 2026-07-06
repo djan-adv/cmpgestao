@@ -820,23 +820,13 @@ function setViewAg(v){VIEWAG=v;
 }
 function renderAgendaView(){ if(VIEWAG==="kanban")renderKanban(); else renderAgViewInner(); }
 function initAgenda(){
-  if(AGENDA)return; var seed=DADOS.kanbanSeed;
-  function pick(n){return seed[n%seed.length]||{numero:"",cliente:"—"};}
-  AGENDA=[
-    {data:"2026-07-02",hora:"09:00",tipo:"az",tt:"Audiência de instrução",resp:"Djan",p:pick(0)},
-    {data:"2026-07-02",hora:"13:30",tipo:"vm",tt:"PRAZO FATAL — embargos",resp:"Maria Rita",p:pick(2)},
-    {data:"2026-07-07",hora:"10:00",tipo:"am",tt:"Manifestação",resp:"Maria Rita",p:pick(1)},
-    {data:"2026-07-10",hora:"15:00",tipo:"vm",tt:"PRAZO — cumprimento",resp:"Djan",p:pick(3)},
-    {data:"2026-07-15",hora:"11:00",tipo:"am",tt:"Réplica",resp:"Maria Eduarda",p:pick(4)},
-    {data:"2026-07-18",hora:"14:00",tipo:"az",tt:"Audiência de conciliação",resp:"Jader Pinheiro",p:pick(5)},
-    {data:"2026-07-24",hora:"16:00",tipo:"am",tt:"Manifestação s/ laudo",resp:"Estagiário(a)",p:pick(6)},
-    {data:"2026-06-27",hora:"09:30",tipo:"az",tt:"Audiência",resp:"Djan",p:pick(7)},
-    {data:"2026-08-05",hora:"10:00",tipo:"vm",tt:"PRAZO — recurso",resp:"Maria Rita",p:pick(8)}
-  ];
+  if(AGENDA)return;
+  /* agenda real: carregada do banco (agenda_eventos) — sincronizada com o Google Calendar */
+  AGENDA=(window.__AGDB||[]).slice();
 }
 var MESES=["janeiro","fevereiro","março","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"];
 function mudaMes(d){curM+=d;if(curM<0){curM=11;curY--;}if(curM>11){curM=0;curY++;}renderMes();}
-var todayISO="2026-07-02";
+var todayISO=(function(){var d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");})();
 function isoOf(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
 function addD(d,n){var x=new Date(d);x.setDate(x.getDate()+n);return x;}
 function firstName(r){return r?String(r).split(" ")[0]:"";}
@@ -913,8 +903,11 @@ function salvarTarefa(){
   KAN.push({id:5000+KAN.length,titulo:tit,cliente:(resp||proc||"—"),numero:(proc||"—"),col:"distribuir"});
   if(document.getElementById("t-agenda").checked && data){
     initAgenda();
-    AGENDA.push({data:data,hora:(document.getElementById("t-dia").checked?"Dia todo":(hora||"09:00")),tipo:(TIPOCOR[tipo]||"nt"),tt:tit,resp:resp,p:{numero:(proc||"—"),cliente:(resp||"—")}});
+    var __hAg=(document.getElementById("t-dia").checked?"Dia todo":(hora||"09:00")), __tAg=(TIPOCOR[tipo]||"nt");
+    AGENDA.push({data:data,hora:__hAg,tipo:__tAg,tt:tit,resp:resp,p:{numero:(proc||"—"),cliente:(resp||"—")}});
     var pr=data.split("-"); if(pr.length===3){curY=+pr[0];curM=+pr[1]-1;}
+    /* persiste no banco (agenda_eventos) — depois sincronizada com o Google */
+    try{ var sbA=window.__sb; if(sbA){ sbA.auth.getUser().then(function(ug){ return sbA.from('usuarios').select('escritorio_id').eq('id',ug.data.user.id).single(); }).then(function(pf){ var escA=pf&&pf.data&&pf.data.escritorio_id; if(escA){ sbA.from('agenda_eventos').insert({escritorio_id:escA,data:data,hora:__hAg,tipo:__tAg,titulo:tit,resp:(resp||null),processo_numero:(proc||null),origem:'sistema'}).then(function(){}); } }); } }catch(ePer){}
   }
   if(fromTri!=null){var ti=TRIAGEM.find(function(x){return x.id===fromTri;});if(ti)ti.done=true;}
   fecharTarefa();
@@ -1106,6 +1099,14 @@ function renderKanban(){
       ['painel','triagem','agenda','processos','proc-det','crm','etiquetas','procedimentos'].forEach(function(id){var e=document.getElementById('s-'+id); if(e && !e.classList.contains('hidden')) cur=id;});
       if(typeof go==='function') go(cur);
     }
+    try{
+      var ag=await sb.from('agenda_eventos').select('data,hora,tipo,titulo,resp,processo_numero').order('data',{ascending:true}).limit(2000);
+      if(!ag.error&&ag.data){
+        window.__AGDB=ag.data.map(function(e){return {data:String(e.data).slice(0,10),hora:e.hora||'09:00',tipo:e.tipo||'nt',tt:e.titulo,resp:e.resp||'',p:{numero:e.processo_numero||'—',cliente:''}};});
+        AGENDA=null; initAgenda();
+        console.log('CMPGestao: '+window.__AGDB.length+' eventos de agenda carregados (sincronizados com Google).');
+      }
+    }catch(eAg){ console.log('agenda: '+(eAg&&eAg.message||eAg)); }
     console.log('CMPGestao: '+DADOS.processos.length+' processos carregados do banco.');
   }catch(err){
     alert('Erro ao carregar dados do banco: '+(err.message||err));
