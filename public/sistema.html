@@ -116,7 +116,7 @@
 <body>
 <script>try{if(localStorage.getItem('sb-ndeqlyrydcijbgjiviuw-auth-token')){document.documentElement.setAttribute('data-boot','1');}}catch(e){}</script>
 <style>html[data-boot="1"] #login{display:none!important}html[data-boot="1"] body::before{content:"Carregando o CMPGestão…";display:block;text-align:center;color:#697180;font-size:14px;padding:48px}</style>
-<style>@media(min-width:1100px){#s-proc-det{padding-right:24.5%;position:relative}#doc-card{position:fixed;right:18px;top:160px;width:22.5%;max-height:75vh;overflow:auto;z-index:20;box-shadow:0 6px 22px rgba(30,39,51,.10)}}</style>
+<style>@media(min-width:1100px){#s-proc-det{padding-right:26%;position:relative}#doc-card{position:fixed;right:14px;top:205px;width:21%;max-height:66vh;overflow:auto;z-index:20;box-shadow:0 6px 22px rgba(30,39,51,.10)}#doc-card table td{font-size:12px!important;word-break:break-word}}</style>
 
 <section id="login">
   <div class="loginbox">
@@ -359,7 +359,7 @@ var DADOS = {"processos": [], "kpis": {"total": 480, "clientes": 302, "acionavei
 var PUBLICACOES = [];
 var COLS=[["distribuir","A distribuir"],["producao","Produção"],["revisao","Em revisão"],["executar","A executar"],["acompanhamento","Acompanhamento"],["cliente","Aguardando cliente"]];
 var perfis={socio:{nome:"Djan H. M. do Nascimento",pill:"socio",label:"sócio"},adv:{nome:"Maria Rita Caldas",pill:"adv",label:"advogado"},est:{nome:"Estagiário(a)",pill:"est",label:"estagiário"}};
-var KAN=null, atual=null, TRIAGEM=null, AGENDA=null, VIEWAG="agenda", curY=2026, curM=6, curD=2, agView="mes", triagemAtual=null, crmView="contatos", agResp="Todos", canalSel="Geral", histShown=7, PUBIDX=null;
+var KAN=null, atual=null, TRIAGEM=null, AGENDA=null, VIEWAG="agenda", curY=2026, curM=6, curD=2, agView="mes", triagemAtual=null, crmView="contatos", agResp="Todos", canalSel="Geral", histShown=10, PUBIDX=null;
 
 function entrar(){
   var r=document.getElementById("roleSel").value, p=perfis[r];
@@ -586,7 +586,8 @@ function abrir(i){
   var __enc=/encerr/i.test(p.status||'');
   html+='<div class="card" style="position:relative"><div class="parties" style="padding-right:130px"><span class="cli">'+esc(p.cliente)+'</span><span class="tag-cli" style="margin:0 8px;vertical-align:middle">cliente principal</span>'+
     '<span class="vs">×</span><span class="op">'+esc(p.oponente||'—')+'</span><span style="font-size:11px;color:var(--muted);margin-left:6px;vertical-align:middle">parte contrária</span>'+
-    '<button class="btn sm ghost" style="margin-left:12px;font-size:11px;padding:4px 9px;vertical-align:middle" onclick="inverterPolos()" title="Trocar cliente ↔ oponente (o cliente fica sempre à esquerda)">⇄ inverter polos</button></div>'+
+    '<button class="btn sm ghost" style="margin-left:12px;font-size:11px;padding:4px 9px;vertical-align:middle" onclick="inverterPolos()" title="Trocar cliente ↔ oponente (o cliente fica sempre à esquerda)">⇄ inverter polos</button>'+
+    '<button class="btn sm" style="margin-left:8px;font-size:11px;padding:4px 10px;vertical-align:middle;background:#128C7E;color:#fff" onclick="waCliente()" title="Abrir conversa de WhatsApp com o cliente">WhatsApp do cliente</button></div>'+
     (typeof JALINE!=='undefined'&&JALINE[String(p.numero||'').replace(/\D/g,'')]?'<button class="btn sm gold" style="position:absolute;top:14px;right:112px;cursor:default" title="Pasta de Jaline — honorários exclusivos Djan e Jaline">Jaline</button>':'')+
     '<button class="btn sm '+(__enc?'gold':'ghost')+'" style="position:absolute;top:14px;right:14px" onclick="encerrarProcesso()">'+(__enc?'Reativar':'Encerrar')+'</button>'+
     '<div style="position:absolute;top:52px;right:14px;text-align:right;font-size:12.5px;color:var(--muted);line-height:1.5">Honorários: faturado <b style="color:var(--navy)">R$ 0,00</b> · a faturar <b style="color:var(--navy)">R$ 0,00</b><br>Valor da causa: <b style="color:var(--navy)">'+(p.causa&&p.causa!=='0,00'?('R$ '+p.causa):'—')+'</b></div>'+
@@ -602,7 +603,7 @@ function abrir(i){
   var _pubs=pubsDoProcesso(p.numero);
   if(_pubs.length){var _ph="";_pubs.forEach(function(pb,pi){_ph+='<li style="cursor:pointer" onclick="togglePub('+pi+')"><div class="dt">'+esc((pb.data||"").slice(0,10).split("-").reverse().join("/"))+' · '+esc(pb.ato||"")+' <span style="color:var(--gold);font-size:11px">(ver teor)</span></div><div id="pub-'+pi+'" style="display:none;white-space:pre-wrap;font-size:13px;color:var(--muted);margin-top:4px;max-height:320px;overflow:auto">'+esc(pb.texto||"")+'</div></li>';});
     html+='<div class="card"><p class="sectlabel">Publicações com inteiro teor (DJEN) — '+_pubs.length+'</p><ul class="timeline">'+_ph+'</ul><p class="note">Clique numa publicação para ler a decisão/despacho completo.</p></div>';}
-  html+='<div class="card"><p class="sectlabel">Histórico completo (termos oficiais)'+(p.hist_full&&p.hist_full.length?(' — '+p.hist_full.length+' andamentos'):'')+'</p><ul class="timeline" id="det-hist"></ul><div id="det-hist-more" style="margin-top:8px"></div></div>';
+  html+='<div class="card"><p class="sectlabel" style="display:flex;justify-content:space-between;align-items:center">Histórico completo (termos oficiais)'+(p.hist_full&&p.hist_full.length?(' — '+p.hist_full.length+' andamentos'):'')+'<button class="btn sm ghost" style="font-size:12px" onclick="addHistManual()">+ histórico manual</button></p><ul class="timeline" id="det-hist"></ul><div id="det-hist-more" style="margin-top:8px"></div></div>';
   // IA
   if(!KAN)initKanban(); initAgenda();
   var _ativs=(KAN||[]).filter(function(k){return k.numero===p.numero;});
@@ -618,7 +619,7 @@ function abrir(i){
     '<div class="card" id="doc-card"><p class="sectlabel">Documentos do processo</p><div id="doc-panel"><div class="note">Carregando documentos…</div></div></div>'+
     '</div>';
   document.getElementById("det-body").innerHTML=html;
-  histShown=7; renderHistorico();
+  histShown=10; renderHistorico();
   renderDetEtq();
   go("proc-det");
 }
@@ -999,7 +1000,7 @@ function classMov(t){
   if(/decurso|publica|disponibiliza|intima|comunica|ci[êe]ncia|di[áa]rio da justi/.test(t)) return ["Publicação / prazo","#8a5a00","pub"];
   return ["Andamento do juízo","#185FA5","and"];
 }
-function setFiltroHist(f){window.histFiltro=f;histShown=7;renderHistorico();}
+function setFiltroHist(f){window.histFiltro=f;histShown=10;renderHistorico();}
 function renderHistorico(){
   var ul=document.getElementById("det-hist");if(!ul)return;
   if(window.histFiltro===undefined)window.histFiltro="all";
@@ -1023,12 +1024,13 @@ function renderHistorico(){
     var cl=classMov(mv.texto);
     var li=document.createElement("li");li.style.cssText="cursor:pointer;list-style:none;border-left:3px solid "+cl[1]+";padding:2px 0 2px 10px;margin-bottom:9px";
     var nome=String(mv.texto||"").split(" — ")[0];
+    var isMan=(mv.f==='manual')||/^\[Anotação/.test(String(mv.texto||''));
     var dt=mv.data?String(mv.data).slice(0,10).split("-").reverse().join("/"):"";
     var teor=null,best=99;for(var pi=0;pi<pubs.length;pi++){if(!pubs[pi].texto)continue;var df=Math.abs(dDiff((pubs[pi].data||"").slice(0,10),dt));if(df<=7&&df<best){best=df;teor=pubs[pi].texto;}}
     var content=teor||("Registro do movimento: "+(mv.texto||nome)+"\n\n(O conteúdo detalhado deste andamento não está na captura pública. As publicações com o inteiro teor estão no bloco de publicações e marcadas em dourado.)");
     var label=teor?"ver teor":"ver registro";var cor=teor?"var(--gold)":"var(--muted)";
-    li.innerHTML='<div class="dt" style="font-size:11px;color:var(--muted)">'+dt+' · <span style="color:'+cl[1]+';font-weight:600">'+cl[0]+'</span></div>'
-      +'<div>'+esc(nome)+' <span style="color:'+cor+';font-size:11px">('+label+')</span></div>'
+    li.innerHTML='<div class="dt" style="font-size:11px;color:var(--muted)">'+dt+' · <span style="color:'+(isMan?'#7b1e3a':cl[1])+';font-weight:600">'+(isMan?'Histórico manual (interno — não enviar ao cliente)':cl[0])+'</span></div>'
+      +'<div'+(isMan?' style="color:#7b1e3a;font-weight:600"':'')+'>'+esc(nome)+' <span style="color:'+cor+';font-size:11px">('+label+')</span></div>'
       +'<div class="hist-det" style="display:none;font-size:13px;color:var(--muted);margin-top:4px;white-space:pre-wrap;max-height:260px;overflow:auto"></div>';
     (function(cont){li.onclick=function(){var d=li.querySelector(".hist-det");if(d.style.display==="none"){d.textContent=cont;d.style.display="block";}else{d.style.display="none";}};})(content);
     ul.appendChild(li);
@@ -1038,7 +1040,7 @@ function renderHistorico(){
   else{more.innerHTML="";}
 }
 function verMaisHist(){histShown=99999;renderHistorico();}
-function verMenosHist(){histShown=7;renderHistorico();window.scrollTo(0,0);}
+function verMenosHist(){histShown=10;renderHistorico();window.scrollTo(0,0);}
 
 function renderKanban(){
   var k=document.getElementById("kanban");k.innerHTML="";
@@ -1070,11 +1072,11 @@ function renderKanban(){
   function fmtData(iso){ if(!iso) return ''; var p=String(iso).slice(0,10).split('-'); return p.length===3?(p[2]+'/'+p[1]+'/'+p[0]):''; }
   function fmtCausa(v){ if(v==null||v==='') return '0,00'; var n=Number(v); if(isNaN(n)) return '0,00'; return n.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
   try{
-    var res=await sb.from('processos').select('id,numero,cliente_nome,oponente,assunto,foro,status,valor_causa,ultima_movimentacao,andamentos(data,texto)').order('ultima_movimentacao',{ascending:false,nullsFirst:false}).limit(3000);
+    var res=await sb.from('processos').select('id,numero,cliente_nome,oponente,assunto,foro,status,valor_causa,ultima_movimentacao,andamentos(data,texto,fonte)').order('ultima_movimentacao',{ascending:false,nullsFirst:false}).limit(3000);
     if(res.error) throw res.error;
     var rows=res.data||[];
     DADOS.processos=rows.map(function(p){
-      var hf=(p.andamentos||[]).map(function(a){return {data:(a.data? a.data+'T00:00:00.000Z':null), texto:a.texto};});
+      var hf=(p.andamentos||[]).map(function(a){return {data:(a.data? a.data+'T00:00:00.000Z':null), texto:a.texto, f:a.fonte||''};});
       hf.sort(function(x,y){return (y.data||'').localeCompare(x.data||'');});
       return {_id:p.id, cliente:p.cliente_nome||'', numero:p.numero, oponente:p.oponente||'', tipo:p.assunto||'', foro:p.foro||'', status:p.status||'', data:fmtData(p.ultima_movimentacao), hist:'', causa:fmtCausa(p.valor_causa), hist_full:hf};
     });
@@ -1580,6 +1582,32 @@ function copiarNumero(el,num){
   var fim=function(){ var o=el.getAttribute('data-o')||el.textContent; el.setAttribute('data-o',o); el.textContent='✓ copiado!'; setTimeout(function(){ el.textContent=o; },900); };
   if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(num).then(fim).catch(function(){ window.prompt('Copie o número:',num); }); }
   else { window.prompt('Copie o número:',num); }
+}
+async function addHistManual(){
+  if(!atual) return;
+  var t=window.prompt('Histórico manual (interno — NUNCA é enviado ao cliente):');
+  if(!t||!t.trim()) return;
+  t=t.trim();
+  var hoje=new Date(); var iso=hoje.getFullYear()+'-'+String(hoje.getMonth()+1).padStart(2,'0')+'-'+String(hoje.getDate()).padStart(2,'0');
+  try{
+    var sb=window.__sb;
+    var w=await sb.from('andamentos').insert({processo_id:atual._id,data:iso,texto:t,fonte:'manual'});
+    if(w.error){ alert('Erro ao salvar: '+w.error.message); return; }
+    atual.hist_full=atual.hist_full||[]; atual.hist_full.unshift({data:iso+'T00:00:00.000Z',texto:t,f:'manual'});
+    histShown=10; renderHistorico();
+  }catch(e){ alert('Erro: '+(e&&e.message||e)); }
+}
+async function waCliente(){
+  if(!atual) return;
+  var sb=window.__sb; var tel=null;
+  try{
+    var nome=String(atual.cliente||'').split(';')[0].trim();
+    if(nome){ var r=await sb.from('contatos').select('telefone,nome').ilike('nome','%'+nome.split(' ')[0]+'%').limit(10);
+      if(r.data){ var hit=r.data.find(function(c){return c.telefone && String(c.nome||'').toLowerCase().indexOf(nome.toLowerCase().split(' ')[0])>-1;}); if(hit) tel=hit.telefone; } }
+  }catch(e){}
+  if(!tel){ tel=window.prompt('WhatsApp do cliente (com DDD):',''); if(!tel) return; }
+  var d=String(tel).replace(/\D/g,''); if(d.length<=11) d='55'+d;
+  window.open('https://wa.me/'+d,'_blank');
 }
 async function inverterPolos(){
   if(!atual) return;
