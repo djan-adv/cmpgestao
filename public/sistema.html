@@ -315,7 +315,7 @@
     <label>Processo ou caso</label><input id="t-proc" placeholder="Nome do cliente ou número do processo">
     <div class="row2">
       <div><label>Responsável</label><select id="t-resp"><option>Djan</option><option>Maria Rita</option><option>Jader Pinheiro</option><option>Maria Eduarda</option><option>Estagiário(a)</option></select></div>
-      <div><label>Tipo</label><select id="t-tipo"><option value="audiencia">Audiência</option><option value="manifestacao">Manifestação</option><option value="prazo">Prazo</option><option value="tarefa">Tarefa</option><option value="diligencia">Diligência</option><option value="evento">Evento</option><option value="comercial">Comercial / Captação</option></select></div>
+      <div><label>Tipo</label><select id="t-tipo"><option value="audiencia">Audiência</option><option value="reuniao">Reunião</option><option value="manifestacao">Manifestação</option><option value="prazo">Prazo</option><option value="tarefa">Tarefa</option><option value="diligencia">Diligência</option><option value="evento">Evento</option><option value="comercial">Comercial / Captação</option></select></div>
     </div>
     <label>Tarefa (o que fazer)</label><input id="t-titulo" placeholder="Ex.: Protocolar cumprimento de sentença">
     <div class="row3">
@@ -597,7 +597,7 @@ function abrir(i){
     ' &nbsp;·&nbsp; Responsável: '+resp+
     (function(){ var vinc=(p.hist_full&&p.hist_full.length>0)&&p.foro; return ' &nbsp;·&nbsp; <span style="display:inline-block;border-radius:20px;padding:2px 10px;font-size:11px;font-weight:600;'+(vinc?'background:#e5f4ed;color:#127a53">vinculado jus.br':'background:#fbeceb;color:#b5342b">não vinculado')+'</span>'; })()+'</div>'+
     '<div id="ctl-chips" style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center"></div>'+
-    '<div style="margin-top:10px"><button class="btn sm" onclick="novaTarefaDoProcesso()">+ Nova tarefa neste processo</button></div></div>';
+    '<div style="margin-top:10px"><button class="btn sm" onclick="novaTarefaDoProcesso()">+ Nova tarefa neste processo</button> <button class="btn sm" style="background:#faf3ee;color:#D97757;border:1px solid #edd7c9;font-weight:700" onclick="agendarClaude()" title="Deixar mensagem para o cliente a qualquer hora — o Claude envia somente em horário comercial"><span style="font-size:13px">✳</span> Agendar com Claude</button></div></div>';
   // dados do processo
   html+='<div class="card"><p class="sectlabel">Dados do processo</p><div class="kvgrid">'+
     kv('Ação / assunto',esc(p.tipo))+kv('Número',p.numero)+kv('Juízo / foro',esc(p.foro))+
@@ -900,7 +900,7 @@ function renderMes(){
   }
 }
 function irParaCaso(numero){var i=DADOS.processos.findIndex(function(p){return p.numero===numero});if(i>=0)abrir(i);else go("processos");}
-var TIPOCOR={audiencia:"az",manifestacao:"am",prazo:"vm",tarefa:"nt",diligencia:"nt",evento:"nt",comercial:"nt"};
+var TIPOCOR={audiencia:"az",reuniao:"az",manifestacao:"am",prazo:"vm",tarefa:"nt",diligencia:"nt",evento:"nt",comercial:"nt"};
 function _v(id){var e=document.getElementById(id);return e?(e.value||"").trim():"";}
 function abrirNovaTarefa(proc){document.getElementById("modal-tarefa").classList.remove("hidden");if(proc){document.getElementById("t-proc").value=proc;}}
 function novaTarefaDoProcesso(){abrirNovaTarefa(atual?atual.numero:"");}
@@ -1774,6 +1774,21 @@ async function peticionarClaude(){
     atual.hist_full=atual.hist_full||[]; atual.hist_full.unshift({id:w.data&&w.data.id,data:iso+'T00:00:00.000Z',texto:txt,f:'manual'});
     histShown=10; renderHistorico();
     alert('Pedido registrado! Diga ao Claude no Cowork: "faça as petições pendentes" — ele localiza este pedido, redige a minuta no padrão CMP e salva na pasta de documentos deste processo para sua revisão.');
+  }catch(e){ alert('Erro: '+(e&&e.message||e)); }
+}
+async function agendarClaude(){
+  if(!atual) return;
+  var msg=window.prompt('Agendar com Claude — escreva a mensagem para o cliente.\nVocê pode registrar a qualquer hora; o Claude envia SOMENTE em horário comercial (8h–18h, seg–sex), pelos contatos do processo, e registra o envio no histórico:');
+  if(!msg||!msg.trim()) return;
+  var hoje=new Date(); var iso=hoje.getFullYear()+'-'+String(hoje.getMonth()+1).padStart(2,'0')+'-'+String(hoje.getDate()).padStart(2,'0');
+  var txt='[MENSAGEM AGENDADA VIA CLAUDE] '+msg.trim()+' (registrada em '+iso.split('-').reverse().join('/')+' — pendente de envio em horário comercial)';
+  try{
+    var sb=window.__sb;
+    var w=await sb.from('andamentos').insert({processo_id:atual._id,data:iso,texto:txt,fonte:'manual'}).select('id').single();
+    if(w.error){ alert('Erro ao registrar: '+w.error.message); return; }
+    atual.hist_full=atual.hist_full||[]; atual.hist_full.unshift({id:w.data&&w.data.id,data:iso+'T00:00:00.000Z',texto:txt,f:'manual'});
+    histShown=10; renderHistorico();
+    alert('Mensagem agendada! O Claude verifica os pedidos pendentes nos dias úteis pela manhã, envia ao cliente pelos contatos do processo e marca como enviada no histórico.');
   }catch(e){ alert('Erro: '+(e&&e.message||e)); }
 }
 async function addHistManual(){
