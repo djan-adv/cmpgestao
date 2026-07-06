@@ -1037,13 +1037,35 @@ function renderHistorico(){
     var label=teor?"ver teor":"ver registro";var cor=teor?"var(--gold)":"var(--muted)";
     li.innerHTML='<div class="dt" style="font-size:11px;color:var(--muted)">'+dt+' · <span style="color:'+(isMan?'#7b1e3a':cl[1])+';font-weight:600">'+(isMan?'Histórico manual (interno — não enviar ao cliente)':cl[0])+'</span></div>'
       +'<div'+(isMan?' style="color:#7b1e3a;font-weight:600"':'')+'>'+esc(nome)+' <span style="color:'+cor+';font-size:11px">('+label+')</span></div>'
-      +'<div class="hist-det" style="display:none;font-size:13px;color:var(--muted);margin-top:4px;white-space:pre-wrap;max-height:260px;overflow:auto"></div>';
-    (function(cont){li.onclick=function(){var d=li.querySelector(".hist-det");if(d.style.display==="none"){d.textContent=cont;d.style.display="block";}else{d.style.display="none";}};})(content);
+      +'<div class="hist-det" style="display:none;font-size:13px;color:var(--muted);margin-top:4px;white-space:pre-wrap;max-height:260px;overflow:auto"></div>'
+      +(isMan?'<div class="hist-act" style="display:none;margin-top:6px"><button class="btn sm ghost" style="font-size:11px" onclick="editarHistManual(event,'+atual.hist_full.indexOf(mv)+')">✎ editar</button> <button class="btn sm ghost" style="font-size:11px;color:#b5342b" onclick="excluirHistManual(event,'+atual.hist_full.indexOf(mv)+')">🗑 excluir</button></div>':'');
+    (function(cont){li.onclick=function(){var d=li.querySelector(".hist-det");var a=li.querySelector(".hist-act");if(d.style.display==="none"){d.textContent=cont;d.style.display="block";if(a)a.style.display="block";}else{d.style.display="none";if(a)a.style.display="none";}};})(content);
     ul.appendChild(li);
   })(arr[k]);}
   if(arr.length>histShown){more.innerHTML='<button class="btn sm ghost" onclick="verMaisHist()">ver mais ('+(arr.length-histShown)+' andamentos)</button>';}
   else if(arr.length>7){more.innerHTML='<button class="btn sm ghost" onclick="verMenosHist()">ver menos</button>';}
   else{more.innerHTML="";}
+}
+/* editar/excluir histórico manual (só fonte manual — os oficiais são intocáveis) */
+async function editarHistManual(ev,hix){
+  if(ev)ev.stopPropagation();
+  var mv=atual&&atual.hist_full&&atual.hist_full[hix]; if(!mv) return;
+  var t=window.prompt('Editar histórico manual:', mv.texto||''); if(t===null) return; t=t.trim(); if(!t) return;
+  if(!mv.id){ alert('Registro recém-criado — dê F5 e tente novamente.'); return; }
+  var w=await window.__sb.from('andamentos').update({texto:t}).eq('id',mv.id).select('id');
+  if(w.error){ alert('Erro ao editar: '+w.error.message); return; }
+  if(!w.data||!w.data.length){ alert('O banco não permitiu a edição (permissão RLS). Avise o Claude para ajustar.'); return; }
+  mv.texto=t; renderHistorico();
+}
+async function excluirHistManual(ev,hix){
+  if(ev)ev.stopPropagation();
+  var mv=atual&&atual.hist_full&&atual.hist_full[hix]; if(!mv) return;
+  if(!confirm('Excluir este histórico manual?\n\n"'+String(mv.texto||'').slice(0,140)+'"')) return;
+  if(!mv.id){ alert('Registro recém-criado — dê F5 e tente novamente.'); return; }
+  var w=await window.__sb.from('andamentos').delete().eq('id',mv.id).select('id');
+  if(w.error){ alert('Erro ao excluir: '+w.error.message); return; }
+  if(!w.data||!w.data.length){ alert('O banco não permitiu a exclusão (permissão RLS). Avise o Claude para ajustar.'); return; }
+  atual.hist_full.splice(hix,1); renderHistorico();
 }
 function verMaisHist(){histShown=99999;renderHistorico();}
 function verMenosHist(){histShown=10;renderHistorico();window.scrollTo(0,0);}
@@ -1078,11 +1100,11 @@ function renderKanban(){
   function fmtData(iso){ if(!iso) return ''; var p=String(iso).slice(0,10).split('-'); return p.length===3?(p[2]+'/'+p[1]+'/'+p[0]):''; }
   function fmtCausa(v){ if(v==null||v==='') return '0,00'; var n=Number(v); if(isNaN(n)) return '0,00'; return n.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
   try{
-    var res=await sb.from('processos').select('id,numero,cliente_nome,oponente,assunto,foro,status,valor_causa,ultima_movimentacao,contatos_livres,andamentos(data,texto,fonte)').order('ultima_movimentacao',{ascending:false,nullsFirst:false}).limit(3000);
+    var res=await sb.from('processos').select('id,numero,cliente_nome,oponente,assunto,foro,status,valor_causa,ultima_movimentacao,contatos_livres,andamentos(id,data,texto,fonte)').order('ultima_movimentacao',{ascending:false,nullsFirst:false}).limit(3000);
     if(res.error) throw res.error;
     var rows=res.data||[];
     DADOS.processos=rows.map(function(p){
-      var hf=(p.andamentos||[]).map(function(a){return {data:(a.data? a.data+'T00:00:00.000Z':null), texto:a.texto, f:a.fonte||''};});
+      var hf=(p.andamentos||[]).map(function(a){return {id:a.id, data:(a.data? a.data+'T00:00:00.000Z':null), texto:a.texto, f:a.fonte||''};});
       hf.sort(function(x,y){return (y.data||'').localeCompare(x.data||'');});
       return {_id:p.id, cliente:p.cliente_nome||'', numero:p.numero, oponente:p.oponente||'', tipo:p.assunto||'', foro:p.foro||'', status:p.status||'', data:fmtData(p.ultima_movimentacao), hist:'', causa:fmtCausa(p.valor_causa), hist_full:hf, ctl:p.contatos_livres||''};
     });
@@ -1675,25 +1697,43 @@ function renderCtlChips(){
   ed2.onclick=editarPartesContatos;
   el.appendChild(ed2);
 }
-/* edição completa: nomes das partes + lista de contatos (substitui a lista) */
-async function editarPartesContatos(){
+/* edição completa em janela: todos os campos visíveis, edita-se o que quiser */
+function editarPartesContatos(){
+  if(!atual) return;
+  var old=document.getElementById('edt-modal'); if(old) old.remove();
+  var toks=String(atual.ctl||'').split(/[,;\n]+/).map(function(s){return s.trim();}).filter(Boolean);
+  var ov=document.createElement('div'); ov.id='edt-modal';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(20,28,40,.45);z-index:99;display:flex;align-items:center;justify-content:center';
+  var bx=document.createElement('div');
+  bx.style.cssText='background:#fff;border-radius:14px;padding:22px 24px;width:min(480px,92vw);max-height:88vh;overflow:auto;box-shadow:0 12px 40px rgba(0,0,0,.25);font-size:13px';
+  function campo(lbl,val,id,ph){ return '<label style="display:block;margin-bottom:10px;font-weight:600;color:#3a4353">'+lbl+'<input id="'+id+'" value="'+String(val||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;')+'" placeholder="'+(ph||'')+'" style="display:block;width:100%;margin-top:4px;padding:8px 10px;border:1px solid #d6dce6;border-radius:8px;font-size:13px;font-weight:400;box-sizing:border-box"></label>'; }
+  bx.innerHTML='<p class="sectlabel" style="margin-top:0">Editar partes e contatos</p>'
+    +campo('Cliente (parte principal)',atual.cliente,'edt-cli')
+    +campo('Parte contrária',atual.oponente,'edt-op')
+    +'<div style="font-weight:600;color:#3a4353;margin:14px 0 6px">Contatos (telefone ou e-mail — deixe vazio para remover)</div>'
+    +campo('Contato 1',toks[0]||'','edt-c1','telefone ou e-mail')
+    +campo('Contato 2',toks[1]||'','edt-c2','telefone ou e-mail')
+    +campo('Contato 3',toks[2]||'','edt-c3','telefone ou e-mail')
+    +campo('Contato 4',toks[3]||'','edt-c4','telefone ou e-mail')
+    +'<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px"><button class="btn sm ghost" onclick="document.getElementById(\'edt-modal\').remove()">Cancelar</button><button class="btn sm" onclick="salvarPartesContatos()">Salvar</button></div>';
+  ov.appendChild(bx);
+  ov.onclick=function(e){ if(e.target===ov) ov.remove(); };
+  document.body.appendChild(ov);
+  var pc=document.getElementById('edt-cli'); if(pc) pc.focus();
+}
+async function salvarPartesContatos(){
   if(!atual) return;
   var sb=window.__sb; if(!sb||!atual._id){ alert('Sessão não encontrada — recarregue a página.'); return; }
-  var cli=window.prompt('Nome do CLIENTE (parte principal):', atual.cliente||'');
-  if(cli===null) return;
-  var op=window.prompt('Nome da PARTE CONTRÁRIA:', atual.oponente||'');
-  if(op===null) return;
-  var ct=window.prompt('Telefones e e-mails, separados por vírgula (máx. 4). Edite livremente — esta lista SUBSTITUI a atual:', atual.ctl||'');
-  if(ct===null) return;
-  cli=cli.trim(); op=op.trim();
-  var toks=ct.split(/[,;\n]+/).map(function(s){return s.trim();}).filter(Boolean);
+  var g=function(id){ var e=document.getElementById(id); return e?e.value.trim():''; };
+  var cli=g('edt-cli'), op=g('edt-op');
+  var toks=[g('edt-c1'),g('edt-c2'),g('edt-c3'),g('edt-c4')].filter(Boolean);
   var seen={}, unicos=[];
   toks.forEach(function(t){ var k=/@/.test(t)?t.toLowerCase():t.replace(/\D/g,''); if(!k)return; if(!seen[k]){seen[k]=1;unicos.push(t);} });
-  if(unicos.length>4){ alert('Limite de 4 contatos — mantive os 4 primeiros.'); unicos=unicos.slice(0,4); }
   var novoCtl=unicos.join(', ');
   var w=await sb.from('processos').update({cliente_nome:cli||null,oponente:op||null,contatos_livres:novoCtl||null}).eq('id',atual._id);
   if(w.error){ alert('Erro ao salvar: '+w.error.message); return; }
   atual.cliente=cli; atual.oponente=op; atual.ctl=novoCtl;
+  var m=document.getElementById('edt-modal'); if(m) m.remove();
   var ix=DADOS.processos.indexOf(atual); if(ix>=0) abrir(ix);
 }
 async function editarCtl(){
@@ -1728,9 +1768,9 @@ async function peticionarClaude(){
   var txt='[PETIÇÃO SOLICITADA AO CLAUDE] '+inst.trim()+' (solicitada em '+iso.split('-').reverse().join('/')+', pendente de elaboração)';
   try{
     var sb=window.__sb;
-    var w=await sb.from('andamentos').insert({processo_id:atual._id,data:iso,texto:txt,fonte:'manual'});
+    var w=await sb.from('andamentos').insert({processo_id:atual._id,data:iso,texto:txt,fonte:'manual'}).select('id').single();
     if(w.error){ alert('Erro ao registrar: '+w.error.message); return; }
-    atual.hist_full=atual.hist_full||[]; atual.hist_full.unshift({data:iso+'T00:00:00.000Z',texto:txt,f:'manual'});
+    atual.hist_full=atual.hist_full||[]; atual.hist_full.unshift({id:w.data&&w.data.id,data:iso+'T00:00:00.000Z',texto:txt,f:'manual'});
     histShown=10; renderHistorico();
     alert('Pedido registrado! Diga ao Claude no Cowork: "faça as petições pendentes" — ele localiza este pedido, redige a minuta no padrão CMP e salva na pasta de documentos deste processo para sua revisão.');
   }catch(e){ alert('Erro: '+(e&&e.message||e)); }
@@ -1743,9 +1783,9 @@ async function addHistManual(){
   var hoje=new Date(); var iso=hoje.getFullYear()+'-'+String(hoje.getMonth()+1).padStart(2,'0')+'-'+String(hoje.getDate()).padStart(2,'0');
   try{
     var sb=window.__sb;
-    var w=await sb.from('andamentos').insert({processo_id:atual._id,data:iso,texto:t,fonte:'manual'});
+    var w=await sb.from('andamentos').insert({processo_id:atual._id,data:iso,texto:t,fonte:'manual'}).select('id').single();
     if(w.error){ alert('Erro ao salvar: '+w.error.message); return; }
-    atual.hist_full=atual.hist_full||[]; atual.hist_full.unshift({data:iso+'T00:00:00.000Z',texto:t,f:'manual'});
+    atual.hist_full=atual.hist_full||[]; atual.hist_full.unshift({id:w.data&&w.data.id,data:iso+'T00:00:00.000Z',texto:t,f:'manual'});
     histShown=10; renderHistorico();
   }catch(e){ alert('Erro: '+(e&&e.message||e)); }
 }
