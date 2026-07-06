@@ -592,7 +592,9 @@ function abrir(i){
     '<button class="btn sm '+(__enc?'gold':'ghost')+'" style="position:absolute;top:14px;right:14px" onclick="encerrarProcesso()">'+(__enc?'Reativar':'Encerrar')+'</button>'+
     '<div style="position:absolute;top:52px;right:14px;text-align:right;font-size:12.5px;color:var(--muted);line-height:1.5">Honorários: faturado <b style="color:var(--navy)">R$ 0,00</b> · a faturar <b style="color:var(--navy)">R$ 0,00</b><br>Valor da causa: <b style="color:var(--navy)">'+(p.causa&&p.causa!=='0,00'?('R$ '+p.causa):'—')+'</b></div>'+
     '<div class="subhead">Processo nº <span onclick="copiarNumero(this,\''+p.numero+'\')" style="cursor:pointer;border-bottom:1px dotted var(--muted)" title="Clique para copiar o número">'+p.numero+'</span> &nbsp;·&nbsp; <span class="b '+stCls(p.status)+'">'+esc(p.status||'—')+'</span>'+
-    ' &nbsp;·&nbsp; Responsável: '+resp+'</div><div style="margin-top:10px"><button class="btn sm" onclick="novaTarefaDoProcesso()">+ Nova tarefa neste processo</button></div></div>';
+    ' &nbsp;·&nbsp; Responsável: '+resp+'</div>'+
+    '<div id="ctl-chips" style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center"></div>'+
+    '<div style="margin-top:10px"><button class="btn sm" onclick="novaTarefaDoProcesso()">+ Nova tarefa neste processo</button></div></div>';
   // dados do processo
   html+='<div class="card"><p class="sectlabel">Dados do processo</p><div class="kvgrid">'+
     kv('Ação / assunto',esc(p.tipo))+kv('Número',p.numero)+kv('Juízo / foro',esc(p.foro))+
@@ -1014,6 +1016,7 @@ function renderHistorico(){
   bar.innerHTML='<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:12px">'
     +'<button class="btn sm '+(window.histFiltro==="all"?"":"ghost")+'" onclick="setFiltroHist(\'all\')">Tudo ('+full.length+')</button>'
     +'<button class="btn sm '+(window.histFiltro==="peca"?"":"ghost")+'" onclick="setFiltroHist(\'peca\')">Só nossas peças ('+nped+')</button>'
+    +'<button class="btn sm" style="background:#faf3ee;color:#D97757;border:1px solid #edd7c9;font-weight:700" onclick="peticionarClaude()" title="Pedir ao Claude a minuta de uma petição para este processo"><span style="font-size:13px">✳</span> Peticionar com Claude</button>'
     +'<span style="margin-left:auto;color:var(--muted);font-size:11px">'
       +'<span style="color:#0F6E56">●</span> peça &nbsp;<span style="color:#6d28a8">●</span> decisão &nbsp;<span style="color:#185FA5">●</span> andamento &nbsp;<span style="color:#8a5a00">●</span> publicação'
     +'</span></div>';
@@ -1072,13 +1075,13 @@ function renderKanban(){
   function fmtData(iso){ if(!iso) return ''; var p=String(iso).slice(0,10).split('-'); return p.length===3?(p[2]+'/'+p[1]+'/'+p[0]):''; }
   function fmtCausa(v){ if(v==null||v==='') return '0,00'; var n=Number(v); if(isNaN(n)) return '0,00'; return n.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
   try{
-    var res=await sb.from('processos').select('id,numero,cliente_nome,oponente,assunto,foro,status,valor_causa,ultima_movimentacao,andamentos(data,texto,fonte)').order('ultima_movimentacao',{ascending:false,nullsFirst:false}).limit(3000);
+    var res=await sb.from('processos').select('id,numero,cliente_nome,oponente,assunto,foro,status,valor_causa,ultima_movimentacao,contatos_livres,andamentos(data,texto,fonte)').order('ultima_movimentacao',{ascending:false,nullsFirst:false}).limit(3000);
     if(res.error) throw res.error;
     var rows=res.data||[];
     DADOS.processos=rows.map(function(p){
       var hf=(p.andamentos||[]).map(function(a){return {data:(a.data? a.data+'T00:00:00.000Z':null), texto:a.texto, f:a.fonte||''};});
       hf.sort(function(x,y){return (y.data||'').localeCompare(x.data||'');});
-      return {_id:p.id, cliente:p.cliente_nome||'', numero:p.numero, oponente:p.oponente||'', tipo:p.assunto||'', foro:p.foro||'', status:p.status||'', data:fmtData(p.ultima_movimentacao), hist:'', causa:fmtCausa(p.valor_causa), hist_full:hf};
+      return {_id:p.id, cliente:p.cliente_nome||'', numero:p.numero, oponente:p.oponente||'', tipo:p.assunto||'', foro:p.foro||'', status:p.status||'', data:fmtData(p.ultima_movimentacao), hist:'', causa:fmtCausa(p.valor_causa), hist_full:hf, ctl:p.contatos_livres||''};
     });
     if(DADOS.kpis){ DADOS.kpis.total=DADOS.processos.length; }
     /* publicações novas (robô DJEN) → fila de triagem */
@@ -1583,6 +1586,54 @@ function copiarNumero(el,num){
   if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(num).then(fim).catch(function(){ window.prompt('Copie o número:',num); }); }
   else { window.prompt('Copie o número:',num); }
 }
+/* contatos livres do processo: telefones e e-mails viram botões */
+function renderCtlChips(){
+  var el=document.getElementById('ctl-chips'); if(!el||!atual) return; el.innerHTML='';
+  var toks=String(atual.ctl||'').split(/[,;\n]+/).map(function(s){return s.trim();}).filter(Boolean);
+  toks.forEach(function(t){
+    var b=document.createElement('button');
+    b.style.cssText='border:none;border-radius:16px;padding:4px 11px;font-size:12px;cursor:pointer';
+    if(/@/.test(t)){ b.style.background='#e3edf7'; b.style.color='#185FA5'; b.textContent='✉ '+t;
+      b.onclick=function(){ window.open('https://mail.google.com/mail/?view=cm&fs=1&to='+encodeURIComponent(t),'_blank'); }; }
+    else { b.style.background='#e5f4ed'; b.style.color='#127a53'; b.textContent='📱 '+t;
+      b.onclick=function(){ var d=t.replace(/\D/g,''); if(d.length<=11)d='55'+d; window.open('https://wa.me/'+d,'_blank'); }; }
+    el.appendChild(b);
+  });
+  var ed=document.createElement('button');
+  ed.style.cssText='background:#f0f2f5;color:#697180;border:1px solid #e4e8ef;border-radius:16px;padding:4px 10px;font-size:12px;cursor:pointer';
+  ed.textContent=toks.length?'✎ editar contatos':'+ telefones/e-mails do cliente';
+  ed.onclick=editarCtl;
+  el.appendChild(ed);
+}
+async function editarCtl(){
+  if(!atual) return;
+  var v=window.prompt('Telefones e e-mails do cliente (separados por vírgula):', atual.ctl||'');
+  if(v===null) return;
+  var toks=v.split(/[,;\n]+/).map(function(s){return s.trim();}).filter(Boolean);
+  var seen={}, unicos=[], dups=[];
+  toks.forEach(function(t){ var k=/@/.test(t)?t.toLowerCase():t.replace(/\D/g,''); if(!k)return; if(seen[k]){dups.push(t);}else{seen[k]=1;unicos.push(t);} });
+  if(dups.length) alert('Em duplicidade (mantive só um de cada): '+dups.join(', '));
+  var novo=unicos.join(', ');
+  var sb=window.__sb;
+  var w=await sb.from('processos').update({contatos_livres:novo||null}).eq('id',atual._id);
+  if(w.error){ alert('Erro ao salvar: '+w.error.message); return; }
+  atual.ctl=novo; renderCtlChips();
+}
+async function peticionarClaude(){
+  if(!atual) return;
+  var inst=window.prompt('Peticionar com Claude — descreva em uma frase o que a petição deve fazer (ex.: "cumprir o despacho de 15/10, juntando comprovante"):');
+  if(!inst||!inst.trim()) return;
+  var hoje=new Date(); var iso=hoje.getFullYear()+'-'+String(hoje.getMonth()+1).padStart(2,'0')+'-'+String(hoje.getDate()).padStart(2,'0');
+  var txt='[PETIÇÃO SOLICITADA AO CLAUDE] '+inst.trim()+' (solicitada em '+iso.split('-').reverse().join('/')+', pendente de elaboração)';
+  try{
+    var sb=window.__sb;
+    var w=await sb.from('andamentos').insert({processo_id:atual._id,data:iso,texto:txt,fonte:'manual'});
+    if(w.error){ alert('Erro ao registrar: '+w.error.message); return; }
+    atual.hist_full=atual.hist_full||[]; atual.hist_full.unshift({data:iso+'T00:00:00.000Z',texto:txt,f:'manual'});
+    histShown=10; renderHistorico();
+    alert('Pedido registrado! Diga ao Claude no Cowork: "faça as petições pendentes" — ele localiza este pedido, redige a minuta no padrão CMP e salva na pasta de documentos deste processo para sua revisão.');
+  }catch(e){ alert('Erro: '+(e&&e.message||e)); }
+}
 async function addHistManual(){
   if(!atual) return;
   var t=window.prompt('Histórico manual (interno — NUNCA é enviado ao cliente):');
@@ -1877,7 +1928,7 @@ function gerarDiligencia(pid,numEnc){
   document.getElementById('modal-dilig').classList.remove('hidden');
 }
 /* carrega documentos quando a ficha abre */
-(function(){ if(!window.__abrirWrapped && typeof abrir==='function'){ window.__abrirWrapped=true; var _ab=abrir; window.abrir=function(i){ _ab(i); try{ if(atual&&atual.numero) carregarDocs(atual.numero,''); }catch(e){} }; } })();
+(function(){ if(!window.__abrirWrapped && typeof abrir==='function'){ window.__abrirWrapped=true; var _ab=abrir; window.abrir=function(i){ _ab(i); try{ if(atual&&atual.numero) carregarDocs(atual.numero,''); }catch(e){} try{ renderCtlChips(); }catch(e2){} }; } })();
 </script>
 <script>
 window.__diligSig=''; window.__diligPage=1;
