@@ -378,6 +378,14 @@
     </div>
   </div>
 </div>
+<div id="modal-acessos" class="overlay hidden">
+  <div class="modal" style="max-width:820px">
+    <h2>Acessos ao sistema</h2>
+    <p class="note" id="acessos-intro" style="margin-top:0">Cada pessoa usa o mesmo link e entra no próprio acesso. Cada um cadastra/altera apenas o seu e-mail e senha. O coordenador (Djan) gerencia todos.</p>
+    <div style="overflow:auto"><table style="width:100%"><thead><tr><th style="text-align:left">Nome / E-mail</th><th style="text-align:left;width:120px">Perfil</th><th style="text-align:left;width:110px">Status</th><th style="width:150px"></th></tr></thead><tbody id="acessos-body"></tbody></table></div>
+    <div class="foot"><button class="btn" onclick="fecharAcessos()">Fechar</button></div>
+  </div>
+</div>
 <div id="modal-evento" class="overlay hidden">
   <div class="modal">
     <h2>Editar evento da agenda</h2>
@@ -390,7 +398,7 @@
     </div>
     <div class="foot">
       <button class="btn ghost" onclick="fecharEventoAgenda()">Cancelar</button>
-      <button class="btn ghost" onclick="abrirProcessoDoEvento()">Abrir processo</button>
+      <button class="btn ghost" id="ev-btn-abrir-proc" onclick="abrirProcessoDoEvento()">Abrir processo</button>
       <button class="btn" onclick="salvarEventoAgenda()">Salvar</button>
     </div>
   </div>
@@ -430,7 +438,7 @@ var USUARIOS_VISUAIS=[
   {id:'djan',nome:'Djan H. M. do Nascimento',perfil:'socio',email:'',senha:'',ativo:true},
   {id:'jader',nome:'Jader Gabriel Pinheiro',perfil:'adv',email:'',senha:'',ativo:true},
   {id:'eduarda',nome:'Maria Eduarda',perfil:'adv',email:'',senha:'',ativo:true},
-  {id:'rita',nome:'Maria Rita',perfil:'adv',email:'',senha:'',ativo:true},
+  {id:'rita',nome:'Maria Rita Caldas',perfil:'adv',email:'ritinhahenriques02@gmail.com',senha:'definida',ativo:true},
   {id:'est1',nome:'Estagiário 1',perfil:'est',email:'',senha:'',ativo:true},
   {id:'est2',nome:'Estagiário 2',perfil:'est',email:'',senha:'',ativo:true}
 ];
@@ -457,39 +465,72 @@ function setUsuarioVisual(id){
   var pill=document.getElementById('who-pill'); if(pill){ pill.className='pill '+p.pill; pill.textContent=p.label; }
   renderSeletorUsuariosVisual();
 }
+/* pode gerenciar o acesso de 'u'? Djan (coordenador) gerencia todos; cada um gerencia só o próprio */
+function _podeGerenciarAcesso(u){
+  if(USUARIO_ATUAL_VISUAL==='djan') return true;      /* coordenador gerencia todos */
+  return u.id===USUARIO_ATUAL_VISUAL;                  /* demais: só o próprio cadastro */
+}
 function cadastroVisualUsuario(id){
   var u=(USUARIOS_VISUAIS||[]).find(function(x){return x.id===id;}); if(!u) return;
+  if(!_podeGerenciarAcesso(u)){ alert('Você só pode alterar o seu próprio acesso.'); return; }
   var em=prompt('E-mail de acesso para '+u.nome+':',u.email||''); if(em===null) return;
-  var se=prompt('Senha visual para '+u.nome+':',u.senha||''); if(se===null) return;
+  var se=prompt('Senha para '+u.nome+':',u.senha||''); if(se===null) return;
   u.email=(em||'').trim(); u.senha=(se||'').trim();
-  alert('Acesso visual atualizado para '+u.nome+'.\n\nE-mail: '+(u.email||'—')+'\nSenha: '+(u.senha? 'definida':'—'));
-  renderSeletorUsuariosVisual();
+  alert('Acesso atualizado para '+u.nome+'.\n\nE-mail: '+(u.email||'—')+'\nSenha: '+(u.senha? 'definida':'—'));
+  renderAcessos(); renderSeletorUsuariosVisual();
 }
 function removerCadastroVisual(id){
   var u=(USUARIOS_VISUAIS||[]).find(function(x){return x.id===id;}); if(!u) return;
-  if(!confirm('Limpar e-mail e senha visuais de '+u.nome+'?')) return;
-  u.email=''; u.senha=''; renderSeletorUsuariosVisual();
+  if(!_podeGerenciarAcesso(u)){ alert('Você só pode alterar o seu próprio acesso.'); return; }
+  if(!confirm('Limpar e-mail e senha de '+u.nome+'?')) return;
+  u.email=''; u.senha=''; renderAcessos(); renderSeletorUsuariosVisual();
 }
 function trocarNomeVisual(id){
   var u=(USUARIOS_VISUAIS||[]).find(function(x){return x.id===id;}); if(!u) return;
+  if(!_podeGerenciarAcesso(u)){ alert('Você só pode alterar o seu próprio acesso.'); return; }
   var n=prompt('Nome exibido para este acesso:',u.nome||''); if(n===null||!n.trim()) return;
-  u.nome=n.trim(); renderSeletorUsuariosVisual();
+  u.nome=n.trim(); renderAcessos(); renderSeletorUsuariosVisual();
 }
-function renderSeletorUsuariosVisual(){
-  var box=document.getElementById('user-switcher'); if(!box) return;
-  var atual=usuarioVisualAtual();
-  box.innerHTML='<div style="font-size:11px;color:#8fa0b5;margin-bottom:6px">Acessos visuais</div>'+
-    '<div class="note" style="margin:0 0 8px;color:#c7cfdb">Cada pessoa pode usar o mesmo link do sistema. No seu acesso, você cadastra ou altera os e-mails e senhas visuais abaixo.</div>'+
-    (USUARIOS_VISUAIS||[]).filter(function(u){return u.ativo!==false;}).map(function(u){
-      var on=u.id===atual.id;
-      var isSocio=u.id==='djan';
-      return '<div style="display:flex;align-items:center;gap:6px;margin:4px 0;flex-wrap:wrap">'
-        +'<span class="quick-link" style="background:'+(on?'#fff':'rgba(255,255,255,.08)')+';color:'+(on?'var(--navy)':'#fff')+'" onclick="setUsuarioVisual(\''+u.id+'\')">'+esc(u.nome)+'</span>'
-        +'<span class="note" style="margin:0;color:#c7cfdb">'+esc(u.email||'sem cadastro')+'</span>'
-        +(USUARIO_ATUAL_VISUAL==='djan'?('<a href="#" style="font-size:11px;color:#fff" onclick="cadastroVisualUsuario(\''+u.id+'\');return false;">'+(u.email?'editar acesso':'cadastrar')+'</a>'+(isSocio?'':' <a href="#" style="font-size:11px;color:#fff" onclick="trocarNomeVisual(\''+u.id+'\');return false;">renomear</a> <a href="#" style="font-size:11px;color:#ffdddd" onclick="removerCadastroVisual(\''+u.id+'\');return false;">limpar</a>')):'')
-        +'</div>';
-    }).join('');
+/* apenas o coordenador (Djan) ativa/desativa acessos */
+function toggleAtivoAcesso(id){
+  if(USUARIO_ATUAL_VISUAL!=='djan'){ alert('Apenas o coordenador pode ativar/desativar acessos.'); return; }
+  var u=(USUARIOS_VISUAIS||[]).find(function(x){return x.id===id;}); if(!u) return;
+  if(u.id==='djan'){ alert('O acesso do coordenador não pode ser desativado.'); return; }
+  u.ativo=(u.ativo===false)?true:false;
+  renderAcessos(); renderSeletorUsuariosVisual();
 }
+/* ===== Tela de Acessos (estilo Astrea), aberta pelo botão do nome ===== */
+function abrirAcessos(){ renderAcessos(); document.getElementById('modal-acessos').classList.remove('hidden'); }
+function fecharAcessos(){ document.getElementById('modal-acessos').classList.add('hidden'); }
+function renderAcessos(){
+  var body=document.getElementById('acessos-body'); if(!body) return;
+  var ehCoord=(USUARIO_ATUAL_VISUAL==='djan');
+  var intro=document.getElementById('acessos-intro');
+  if(intro) intro.textContent=ehCoord
+    ? 'Você é o coordenador: pode cadastrar, editar, renomear, ativar/desativar qualquer acesso.'
+    : 'Você pode cadastrar e alterar apenas o seu próprio acesso (e-mail e senha).';
+  body.innerHTML=(USUARIOS_VISUAIS||[]).map(function(u){
+    var p=perfis[u.perfil]||perfis.adv;
+    var pode=_podeGerenciarAcesso(u);
+    var ativo=u.ativo!==false;
+    var acoes='';
+    if(pode){
+      acoes+='<button class="btn sm ghost" onclick="cadastroVisualUsuario(\''+u.id+'\')">'+(u.email?'Editar':'Cadastrar')+'</button> ';
+      if(u.id!=='djan') acoes+='<button class="btn sm ghost" onclick="trocarNomeVisual(\''+u.id+'\')">Renomear</button> ';
+    }
+    if(ehCoord && u.id!=='djan'){
+      acoes+='<button class="btn sm ghost" onclick="toggleAtivoAcesso(\''+u.id+'\')">'+(ativo?'Desativar':'Ativar')+'</button>';
+    }
+    if(!acoes) acoes='<span class="note" style="margin:0">—</span>';
+    return '<tr'+(ativo?'':' style="opacity:.5"')+'>'
+      +'<td><b style="color:var(--navy)">'+esc(u.nome)+'</b><div class="note" style="margin:0">'+esc(u.email||'sem cadastro')+(u.senha?' · senha definida':'')+'</div></td>'
+      +'<td><span class="pill '+p.pill+'">'+p.label+'</span></td>'
+      +'<td>'+(ativo?'<span style="color:#0F6E56;font-weight:600">Ativo</span>':'<span style="color:#8a8f98">Inativo</span>')+'</td>'
+      +'<td style="text-align:right">'+acoes+'</td></tr>';
+  }).join('');
+}
+/* mantém compatibilidade: o rodapé agora só chama a tela de acessos */
+function renderSeletorUsuariosVisual(){ if(document.getElementById('modal-acessos') && !document.getElementById('modal-acessos').classList.contains('hidden')) renderAcessos(); }
 function go(s){
   ["painel","triagem","agenda","processos","proc-det","crm","etiquetas","procedimentos"].forEach(function(id){var e=document.getElementById("s-"+id);if(e)e.classList.add("hidden")});
   document.getElementById("s-"+s).classList.remove("hidden");
@@ -1109,14 +1150,27 @@ var _evEdit=null;
 function abrirEventoAgenda(e){
   _evEdit=e;
   var proc=(e.p&&e.p.numero&&e.p.numero!=='—')?e.p.numero:'';
-  var linkProc=proc?('<a onclick="abrirProcessoDaTarefa(\''+String(proc).replace(/'/g,'')+'\')" style="cursor:pointer;color:var(--navy);text-decoration:underline">'+esc(proc)+'</a>'):'<span class="note">—</span>';
+  /* se não há número no evento, tenta descobrir pelo nome do cliente/partes */
+  if(!proc){ proc=_processoPorCliente((e.p&&e.p.cliente)||''); }
+  _evEdit._procResolvido=proc||'';
+  var linkProc=proc?('<a onclick="abrirProcessoDaTarefa(\''+String(proc).replace(/'/g,'')+'\')" style="cursor:pointer;color:var(--navy);text-decoration:underline">'+esc(proc)+'</a>'):'<span class="note">sem processo vinculado</span>';
   var m=document.getElementById('modal-evento');
   document.getElementById('ev-titulo').value=e.tt||'';
   document.getElementById('ev-data').value=e.data||'';
   document.getElementById('ev-hora').value=(e.hora&&e.hora!=='Dia todo')?e.hora:'';
   document.getElementById('ev-resp').value=e.resp||'';
   document.getElementById('ev-proc-link').innerHTML='Processo: '+linkProc;
+  /* mostra/esconde o botão "Abrir processo" conforme houver processo resolvido */
+  var btnAP=document.getElementById('ev-btn-abrir-proc');
+  if(btnAP) btnAP.style.display=proc?'':'none';
   m.classList.remove('hidden');
+}
+/* acha o número de processo pelo nome do cliente (1º processo que bate) */
+function _processoPorCliente(nome){
+  nome=String(nome||'').split(';')[0].split(' x ')[0].split(' X ')[0].trim().toLowerCase();
+  if(!nome) return '';
+  var hit=(DADOS.processos||[]).find(function(p){ return String(p.cliente||'').trim().toLowerCase().indexOf(nome.split(' ')[0])>-1 && nome.split(' ')[0].length>2; });
+  return hit?hit.numero:'';
 }
 function fecharEventoAgenda(){document.getElementById('modal-evento').classList.add('hidden');_evEdit=null;}
 function salvarEventoAgenda(){
@@ -1131,7 +1185,9 @@ function salvarEventoAgenda(){
   renderAgViewInner();
 }
 function abrirProcessoDoEvento(){
-  if(_evEdit&&_evEdit.p&&_evEdit.p.numero&&_evEdit.p.numero!=='—'){var n=_evEdit.p.numero;fecharEventoAgenda();irParaCaso(String(n));}
+  var n=(_evEdit&&_evEdit._procResolvido)||(_evEdit&&_evEdit.p&&_evEdit.p.numero&&_evEdit.p.numero!=='—'?_evEdit.p.numero:'');
+  if(n){ fecharEventoAgenda(); irParaCaso(String(n)); }
+  else { alert('Este evento não tem processo vinculado. Abra a atividade/tarefa correspondente pelo painel do processo.'); }
 }
 function setAgView(v){agView=v;
   document.getElementById("ag-mes").classList.toggle("on",v==="mes");
@@ -3048,28 +3104,13 @@ function contatoDoProcesso(p){
   var sideEl=document.querySelector('.side');
   if(sideEl && !sideEl.querySelector('.userft')){
     var uf=document.createElement('div'); uf.className='userft';
-    /* o rodapé vira um BOTÃO: clicar no nome abre/fecha o painel de acessos visuais (que abre pra cima) */
+    /* o rodapé é um BOTÃO: clicar no nome abre a TELA de acessos (editar/incluir), estilo Astrea */
     uf.innerHTML='<div class="av" id="uf-av">—</div>'+
       '<div style="flex:1;min-width:0"><div class="nm" id="uf-nm"></div><div class="pp" id="uf-pp"></div></div>'+
-      '<div id="uf-caret" style="color:#8fa0b5;font-size:12px;flex-shrink:0">▴</div>'+
-      '<div id="user-switcher-pop" style="display:none;position:absolute;left:8px;right:8px;bottom:60px;background:#243447;border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:12px;max-height:60vh;overflow:auto;box-shadow:0 -8px 30px rgba(0,0,0,.35);z-index:60"><div id="user-switcher"></div></div>';
+      '<div style="color:#8fa0b5;font-size:11px;flex-shrink:0" title="Editar / incluir acessos">acessos ›</div>';
     sideEl.appendChild(uf);
-    /* clicar no rodapé abre/fecha o painel */
     uf.style.cursor='pointer';
-    uf.addEventListener('click',function(ev){
-      if(ev.target.closest('#user-switcher-pop')) return; /* cliques dentro do painel não fecham */
-      var pop=document.getElementById('user-switcher-pop');
-      var caret=document.getElementById('uf-caret');
-      var open=pop.style.display!=='none';
-      pop.style.display=open?'none':'block';
-      if(caret) caret.textContent=open?'▴':'▾';
-    });
-    /* clicar fora fecha o painel */
-    document.addEventListener('click',function(ev){
-      var pop=document.getElementById('user-switcher-pop'); if(!pop) return;
-      if(pop.style.display==='none') return;
-      if(!ev.target.closest('.userft')){ pop.style.display='none'; var c=document.getElementById('uf-caret'); if(c)c.textContent='▴'; }
-    });
+    uf.addEventListener('click',function(){ if(typeof abrirAcessos==='function') abrirAcessos(); });
     var syncUser=function(){
       var n=(document.getElementById('who-name')||{}).textContent||'';
       var p=(document.getElementById('who-pill')||{}).textContent||'';
