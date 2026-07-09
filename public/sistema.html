@@ -3449,6 +3449,26 @@ function explicaParaCliente(texto){
   if(/arquiv/.test(t)) return 'O processo teve movimentação de arquivamento.';
   return 'Houve uma nova movimentação processual.';
 }
+/* explica, para o cliente, o QUE VEM A SEGUIR (próximos passos) a partir da última movimentação */
+function proximosPassosCliente(texto){
+  var t=(texto||'').toLowerCase();
+  if(/tr[âa]nsito em julgado/.test(t)) return 'Como a decisão já é definitiva, vamos iniciar a próxima fase (execução/cumprimento) para efetivar o resultado. O escritório conduzirá esse passo.';
+  if(/conclus[oa]/.test(t)) return 'Os autos estão com o juiz aguardando decisão. Assim que houver a decisão, informaremos e indicaremos o passo seguinte.';
+  if(/cumprimento de senten[çc]a|pagamento volunt|art\.?\s*523/.test(t)) return 'Estamos na fase de recebimento do valor. Seguimos com as medidas necessárias (cálculo, intimação para pagamento e, se preciso, penhora) e acompanharemos o resultado.';
+  if(/ac[óo]rd[ãa]o|deram provimento|negaram provimento|nega-se provimento|d[áa]-se provimento/.test(t)) return 'Vamos analisar a decisão do tribunal e avaliar os próximos passos — eventual recurso ou início da execução, conforme o resultado.';
+  if(/embargos de declara/.test(t)) return 'Aguardamos a análise dos embargos pelo juízo. Conforme a resposta, avaliaremos o próximo passo e o prazo de recurso.';
+  if(/senten[çc]a\s+(proferida|publicada|prolatada)|profiro\s+senten|julgo\s+(procedente|improcedente|parcialmente|extinto)|resolvo o m[ée]rito|\bcondeno\b|decreto\s+a/.test(t)) return 'Vamos analisar a decisão com atenção e avaliar o cabimento de recurso dentro do prazo legal. O escritório cuidará disso e informará a melhor estratégia.';
+  if(/contrarraz|contra-?raz/.test(t)) return 'Vamos apresentar a resposta ao recurso da parte contrária dentro do prazo. Depois, o processo segue para nova análise do tribunal.';
+  if(/apela[çc][ãa]o|agravo|\brecurso\b/.test(t)) return 'Vamos analisar o recurso e nos manifestar no prazo. O processo seguirá para reanálise e avisaremos a decisão.';
+  if(/audi[êe]ncia|designa/.test(t)) return 'Vamos nos preparar para a audiência. Se for necessária a sua presença ou de testemunhas, entraremos em contato com antecedência para confirmar.';
+  if(/cita[çc][ãa]o|citad[oa]/.test(t)) return 'A parte contrária foi chamada ao processo. Aguardamos a defesa/resposta e o próximo andamento, que acompanharemos.';
+  if(/penhora|sisbajud|bacenjud|bloqueio de valores/.test(t)) return 'Seguimos com as medidas de cobrança e acompanharemos o resultado das diligências de bloqueio/penhora.';
+  if(/intim/.test(t)) return 'Há um prazo/providência a cumprir e o escritório tomará as medidas necessárias dentro do prazo.';
+  if(/junta|peti[çc]|manifesta/.test(t)) return 'A providência foi protocolada nos autos. Aguardamos a análise pelo juízo e o próximo andamento.';
+  if(/despacho|vistos|mero expediente/.test(t)) return 'Vamos cumprir o que foi determinado pelo juízo dentro do prazo e acompanhar o andamento seguinte.';
+  if(/arquiv/.test(t)) return 'Vamos verificar o motivo do arquivamento e, se cabível, adotar as medidas para prosseguir.';
+  return 'Vamos analisar a movimentação e adotar as providências cabíveis. Qualquer novidade relevante, avisaremos.';
+}
 function _atzModoAtual(){ var r=document.querySelector('input[name="atz-modo"]:checked'); return (r&&r.value)||'informar'; }
 function _atzModo(){
   var m=_atzModoAtual();
@@ -3482,9 +3502,11 @@ function _gerarRascunhoAtualizacao(){
     var n=parseInt((document.getElementById('atz-qtd')||{}).value,10)||5;
     var movs=_movsOficiais(p,n);
     var linhas=movs.map(function(m){ var d=_atzDataBR(m.data); return '• '+(d?(d+' — '):'')+explicaParaCliente(m.texto); });
+    var passos=movs.length?proximosPassosCliente(movs[0].texto):'';
     corpo='Prezado(a)'+(nome?(' '+nome):' cliente')+',\n\n'
       +'Segue a atualização do seu processo nº '+p.numero+':\n\n'
       +(linhas.length?linhas.join('\n'):'• Sem movimentações oficiais recentes registradas.')+'\n\n'
+      +(passos?('Resumo e próximos passos:\n'+passos+'\n\nNo momento, você não precisa tomar nenhuma providência — o escritório está cuidando de tudo e avisará caso seja necessário algo de sua parte.\n\n'):'')
       +'Seguimos acompanhando o processo e comunicaremos as próximas movimentações.\n\n'
       +assinatura;
     assunto='Atualização do seu processo — [Ref: '+p.numero+']';
