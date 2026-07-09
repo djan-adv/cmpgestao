@@ -336,7 +336,16 @@
     <label>Processo ou caso</label><input id="t-proc" placeholder="Nome do cliente ou número do processo">
     <div class="row2">
       <div><label>Responsável</label><select id="t-resp"><option>Djan</option><option>Maria Rita</option><option>Jader Pinheiro</option><option>Maria Eduarda</option><option>Estagiário(a)</option></select></div>
-      <div><label>Tipo</label><select id="t-tipo"><option value="audiencia">Audiência</option><option value="reuniao">Reunião</option><option value="manifestacao">Manifestação</option><option value="prazo">Prazo</option><option value="tarefa">Tarefa</option><option value="diligencia">Diligência</option><option value="evento">Evento</option><option value="comercial">Comercial / Captação</option></select></div>
+      <div><label>Tipo</label><select id="t-tipo" onchange="onTipoTarefa()"><option value="audiencia">Audiência</option><option value="reuniao">Reunião</option><option value="manifestacao">Manifestação</option><option value="prazo">Prazo</option><option value="tarefa">Tarefa</option><option value="diligencia">Diligência</option><option value="evento">Evento</option><option value="comercial">Comercial / Captação</option></select></div>
+    </div>
+    <div id="t-prazo-box" style="display:none;background:#faf7ec;border:1px solid #ecdfb8;border-radius:10px;padding:10px 12px;margin-bottom:6px">
+      <div style="font-size:12px;font-weight:700;color:#8a5a00;margin-bottom:6px">Cálculo do prazo (dias úteis · CPC art. 224)</div>
+      <div class="row3">
+        <div><label style="font-size:12px">Publicação / intimação</label><input id="t-pub" type="date" onchange="calcPrazoFatal()"></div>
+        <div><label style="font-size:12px">Prazo</label><select id="t-prazo-dias" onchange="calcPrazoFatal()"><option value="">—</option><option value="5">5 dias úteis</option><option value="8">8 dias úteis</option><option value="10">10 dias úteis</option><option value="15">15 dias úteis</option></select></div>
+        <div><label style="font-size:12px">Prazo fatal (calculado)</label><input id="t-prazo-calc" type="text" readonly style="background:#fff;font-weight:700;color:#b3261e"></div>
+      </div>
+      <div id="t-prazo-nota" class="note" style="margin:6px 0 0;font-size:11px">Conta em dias úteis a partir do 1º dia útil após a publicação, pulando fins de semana, feriados nacionais fixos e recesso forense (20/12–20/1). <b>Confira sempre</b> — não cobre Carnaval, Corpus Christi nem feriados estaduais/locais.</div>
     </div>
     <label>Tarefa (o que fazer)</label><input id="t-titulo" placeholder="Ex.: Protocolar cumprimento de sentença">
     <div class="row3">
@@ -957,7 +966,17 @@ function acaoTriagem(id){
   document.getElementById("t-titulo").value=sug.ativ;
   document.getElementById("t-tipo").value=sug.tipo;
   var _dd=document.getElementById("t-desc"); if(_dd)_dd.value=(t.texto||"").slice(0,600);
-  if(sug.prazo){var d=new Date(2026,6,2);d.setDate(d.getDate()+sug.prazo);var iso=d.toISOString().slice(0,10);document.getElementById("t-data").value=iso;document.getElementById("t-prazo").value=iso;}
+  if(typeof onTipoTarefa==='function') onTipoTarefa();
+  /* se for prazo, pré-preenche a data da publicação e os dias sugeridos e calcula o fatal em dias úteis */
+  if(sug.tipo==='prazo'){
+    var pubISO=String(t.data||'').slice(0,10);
+    var pubEl=document.getElementById('t-pub'); if(pubEl && /^\d{4}-\d{2}-\d{2}/.test(pubISO)) pubEl.value=pubISO;
+    var diasEl=document.getElementById('t-prazo-dias');
+    if(diasEl && sug.prazo && [5,8,10,15].indexOf(sug.prazo)>-1) diasEl.value=String(sug.prazo);
+    if(typeof calcPrazoFatal==='function') calcPrazoFatal();
+  } else if(sug.prazo){
+    var d=new Date(2026,6,2);d.setDate(d.getDate()+sug.prazo);var iso=d.toISOString().slice(0,10);document.getElementById("t-data").value=iso;document.getElementById("t-prazo").value=iso;
+  }
 }
 function cienciaTriagem(id){var t=TRIAGEM.find(function(x){return x.id===id});if(t)t.done=true;renderTriagem();}
 var LABELS=[];
@@ -1171,9 +1190,53 @@ function renderMes(){
 function irParaCaso(numero){var i=DADOS.processos.findIndex(function(p){return p.numero===numero});if(i>=0)abrir(i);else go("processos");}
 var TIPOCOR={audiencia:"az",reuniao:"az",manifestacao:"am",prazo:"vm",tarefa:"nt",diligencia:"nt",evento:"nt",comercial:"nt"};
 function _v(id){var e=document.getElementById(id);return e?(e.value||"").trim():"";}
-function abrirNovaTarefa(proc){document.getElementById("modal-tarefa").classList.remove("hidden");if(proc){document.getElementById("t-proc").value=proc;}}
+function abrirNovaTarefa(proc){document.getElementById("modal-tarefa").classList.remove("hidden");if(proc){document.getElementById("t-proc").value=proc;} if(typeof onTipoTarefa==='function')onTipoTarefa();}
 function novaTarefaDoProcesso(){abrirNovaTarefa(atual?atual.numero:"");}
 function fecharTarefa(){document.getElementById("modal-tarefa").classList.add("hidden");triagemAtual=null;}
+/* ===== Cálculo de prazo em dias úteis (CPC art. 224) ===== */
+/* mostra/esconde o box de cálculo conforme o tipo */
+function onTipoTarefa(){
+  var tipo=(document.getElementById('t-tipo')||{}).value;
+  var box=document.getElementById('t-prazo-box'); if(!box) return;
+  box.style.display=(tipo==='prazo')?'block':'none';
+}
+/* é dia útil? (exclui sáb/dom, feriados nacionais fixos e recesso forense 20/12–20/1) */
+function _ehDiaUtil(d){
+  var dow=d.getDay(); if(dow===0||dow===6) return false;
+  var mes=d.getMonth()+1, dia=d.getDate();
+  /* recesso forense: 20/12 a 31/12 e 1/1 a 20/1 */
+  if((mes===12&&dia>=20)||(mes===1&&dia<=20)) return false;
+  /* feriados nacionais fixos */
+  var fix=['1-1','4-21','5-1','9-7','10-12','11-2','11-15','12-25'];
+  if(fix.indexOf(mes+'-'+dia)>-1) return false;
+  return true;
+}
+/* soma N dias úteis a partir do dia útil SEGUINTE à data base (exclui o dia da publicação) */
+function _somaDiasUteis(baseISO, n){
+  if(!baseISO||!n) return '';
+  var parts=String(baseISO).slice(0,10).split('-'); if(parts.length!==3) return '';
+  var d=new Date(+parts[0], +parts[1]-1, +parts[2]);
+  var contados=0, guard=0;
+  while(contados<n && guard<400){
+    d.setDate(d.getDate()+1); guard++;
+    if(_ehDiaUtil(d)) contados++;
+  }
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+/* calcula e preenche o prazo fatal a partir da publicação + dias escolhidos */
+function calcPrazoFatal(){
+  var pub=(document.getElementById('t-pub')||{}).value;
+  var dias=parseInt((document.getElementById('t-prazo-dias')||{}).value||'0',10);
+  var out=document.getElementById('t-prazo-calc');
+  var campoPrazo=document.getElementById('t-prazo');
+  var campoData=document.getElementById('t-data');
+  if(!pub||!dias){ if(out)out.value=''; return; }
+  var fatalISO=_somaDiasUteis(pub, dias);
+  if(out) out.value=fatalISO?fatalISO.split('-').reverse().join('/'):'';
+  /* preenche automaticamente o campo Prazo fatal (e a data prevista, se vazia) */
+  if(campoPrazo) campoPrazo.value=fatalISO;
+  if(campoData && !campoData.value) campoData.value=fatalISO;
+}
 function salvarTarefa(){
   var tit=_v("t-titulo"); if(!tit){alert("Descreva a tarefa.");return;}
   var proc=_v("t-proc"), resp=_v("t-resp"), tipo=_v("t-tipo"), data=_v("t-data"), hora=_v("t-hora"), prazo=_v("t-prazo");
@@ -1315,11 +1378,12 @@ function renderHistorico(){
     li.innerHTML='<div style="font-size:11px;color:#8a5a00;font-weight:700;text-transform:uppercase;letter-spacing:.03em">Tarefa a executar'+(pend.length>1?(' (+'+(pend.length-1)+' pendente'+(pend.length-1>1?'s':'')+')'):'')+'</div>'
       +'<div style="font-weight:600;color:var(--navy);margin:2px 0 3px">'+esc(a.titulo||'—')+'</div>'
       +'<div style="font-size:12px">'
-        +(fatalBR?('<span style="color:#b3261e;font-weight:700">prazo fatal: '+esc(fatalBR)+'</span>'):'')
+        +(fatalBR?('<span style="color:#7b1e3a;font-weight:700">prazo fatal: '+esc(fatalBR)+'</span>'):'')
         +((fatalBR&&prevBR)?' · ':'')
         +(prevBR?('<span style="color:var(--muted)">prevista: '+esc(prevBR)+'</span>'):'')
         +(a.resp?(' · <span style="color:var(--muted)">'+esc(a.resp)+'</span>'):'')
       +'</div>'
+      +(a.prazo?_prazoAvisoHTML(String(a.prazo).slice(0,10).match(/^\d{4}-/)?String(a.prazo).slice(0,10):(String(a.prazo).split('/').reverse().join('-'))):'')
       +'<div style="margin-top:6px"><button class="btn sm ghost" onclick="abrirTarefaKanban('+a.id+')">Abrir tarefa</button></div>';
     ul.appendChild(li);
   })();
@@ -1788,6 +1852,25 @@ function _prazoFatalDoProc(p){
     .filter(Boolean).sort();
   return fatais.length?fatais[0]:'';
 }
+/* dias corridos entre hoje e o prazo (ISO). Negativo = já venceu. */
+function _diasAtePrazo(prazoISO){
+  var p=String(prazoISO).slice(0,10).split('-'); if(p.length!==3) return null;
+  var alvo=new Date(+p[0], +p[1]-1, +p[2]); alvo.setHours(0,0,0,0);
+  var hj=new Date(); hj.setHours(0,0,0,0);
+  return Math.round((alvo-hj)/86400000);
+}
+/* aviso 30% menor abaixo da data: "faltam N dias" quando faltar 2 dias ou menos */
+function _prazoAvisoHTML(prazoISO){
+  var d=_diasAtePrazo(prazoISO); if(d===null) return '';
+  var txt='';
+  if(d<0) txt='vencido';
+  else if(d===0) txt='vence hoje';
+  else if(d===1) txt='falta 1 dia';
+  else if(d<=2) txt='faltam '+d+' dias';
+  if(!txt) return '';
+  /* 30% menor que a data (13px) ≈ 9px */
+  return '<div style="font-size:9px;color:#7b1e3a;font-weight:600;line-height:1.1">'+txt+'</div>';
+}
 function setOrdenaPrazo(v){ window.__ordenaPrazo=v; renderProc(); }
 function renderProc(){
   var q=(document.getElementById("busca").value||"").toLowerCase();
@@ -1830,14 +1913,11 @@ function renderProc(){
     var tr=document.createElement("tr");tr.className="click";tr.onclick=function(){abrir(i)};
     var um=(p.hist_full&&p.hist_full[0]&&p.hist_full[0].texto)||'';
     var cm=classHist(p);
-    /* coluna Prazo fatal: data do prazo fatal mais próximo (das tarefas do processo) */
+    /* coluna Prazo fatal: data em VINHO, com "faltam X dias" 30% menor abaixo (alerta a 2 dias) */
     var pf=_prazoFatalDoProc(p);
     var pfHTML;
     if(pf){
-      var hojeISO=todayISO;
-      var venc=pf<hojeISO;
-      var cor=venc?'#b3261e':'#0F6E56';
-      pfHTML='<span style="color:'+cor+';font-weight:700;font-size:13px">'+pf.split('-').reverse().join('/')+'</span>'+(venc?'<div style="font-size:10.5px;color:#b3261e">vencido</div>':'');
+      pfHTML='<span style="color:#7b1e3a;font-weight:700;font-size:13px">'+pf.split('-').reverse().join('/')+'</span>'+_prazoAvisoHTML(pf);
     }else{
       pfHTML='<span class="note" style="margin:0">—</span>';
     }
