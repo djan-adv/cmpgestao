@@ -1026,6 +1026,14 @@ function initTriagem(){
     var dataKey=String(p.data||"").slice(0,10);
     var k=numKey+"|"+dataKey;
     if(!numKey&&!dataKey){ k="sem|"+(p.texto||"").slice(0,90); } /* sem número/data: cai no antigo p/ não sumir */
+    /* regra CMP: processo ENCERRADO ou da INOVE sai do fluxo de intimações.
+       Cruza o número da publicação com DADOS.processos; se o processo existir e estiver
+       encerrado ou for Inove, a publicação não entra na triagem. Se o processo não estiver
+       na base, mantém na fila (não sumir por engano). Os vínculos continuam intactos. */
+    if(numKey){
+      var _proc=(DADOS.processos||[]).find(function(x){ return String(x.numero||'').replace(/\D/g,'')===numKey; });
+      if(_proc && (/encerr/i.test(_proc.status||'') || isInove(_proc))) return;
+    }
     if(seen[k])return; seen[k]=1; id++;
     TRIAGEM.push({id:id,numero:p.numero,cliente:p.cliente,titulo:p.ato,texto:p.texto,tribunal:p.tribunal,data:p.data,prazo:p.prazo,done:(p.triada===true)});
   });
@@ -1120,6 +1128,8 @@ function _autoVincularSeCaso(num){
   try{
     var dig=String(num||'').replace(/\D/g,'');
     var p=(DADOS.processos||[]).find(function(x){ return String(x.numero||'').replace(/\D/g,'')===dig && dig; });
+    /* um processo ENCERRADO nunca é convertido em monitorado/DJEn ao tratar uma publicação */
+    if(p && /encerr/i.test(p.status||'')) return;
     if(p && _ehCasoProc(p)){
       p.ehCaso=false; p.fonte='manual'; desmarcaCasoLocal(p.numero);
       var sb=window.__sb; if(sb&&p._id){ sb.from('processos').update({fonte:'manual'}).eq('id',p._id).then(function(){}); }
