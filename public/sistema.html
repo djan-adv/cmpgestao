@@ -801,7 +801,7 @@ function abrir(i){
     (function(){ var vinc=(p.hist_full&&p.hist_full.length>0)&&p.foro; return ' &nbsp;·&nbsp; <span style="display:inline-block;border-radius:20px;padding:2px 10px;font-size:11px;font-weight:600;'+(vinc?'background:#e5f4ed;color:#127a53">vinculado jus.br':'background:#fbeceb;color:#b5342b">não vinculado')+'</span>'; })()+_casoCtrlHTML(p)+'</div>'+
     '<div id="ctl-chips" style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center"></div>'+
     '<div id="proc-vinculados" style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center"></div>'+
-    '<div style="margin-top:10px"><button class="btn sm" onclick="novaTarefaDoProcesso()">+ Nova tarefa neste processo</button> <button class="btn sm" style="background:#faf3ee;color:#D97757;border:1px solid #edd7c9;font-weight:700" onclick="agendarClaude()" title="Deixar mensagem para o cliente a qualquer hora — o Claude envia somente em horário comercial"><span style="font-size:13px">✳</span> Agendar com Claude</button></div>'+
+    '<div style="margin-top:10px"><button class="btn sm" onclick="novaTarefaDoProcesso()">+ Nova tarefa neste processo</button> <button class="btn sm" style="background:#faf3ee;color:#D97757;border:1px solid #edd7c9;font-weight:700" onclick="agendarClaude()" title="Deixar mensagem para o cliente a qualquer hora — o Claude envia somente em horário comercial"><span style="font-size:13px">✳</span> Agendar com Claude</button> <button class="btn sm" style="background:#eef4fb;color:#185FA5;border:1px solid #cfe0f2;font-weight:700" onclick="abrirTribunal(\''+p.numero+'\')" title="Abrir o sistema do tribunal (PJe/e-SAJ/Projudi) no grau deste processo — o número é copiado para você colar na busca">&#9878; Abrir no tribunal</button></div>'+
     /* ponto 12: bloco de processos vinculados no canto inferior direito da aba (perto do botão Encerrar) */
     '<div id="proc-vinculados-rodape" style="position:absolute;bottom:12px;right:14px;max-width:60%;display:flex;gap:6px;flex-wrap:wrap;align-items:center;justify-content:flex-end;font-size:12px"></div>'+
     '</div>';
@@ -3077,6 +3077,60 @@ function gerarDiligencia(pid,numEnc){
 </script>
 <script>
 function bvLine(numero){ if(typeof balcaoLink!=='function') return ''; var bl=balcaoLink(numero); return '<b>Balcão virtual</b> ('+(bl.trib?bl.trib.toUpperCase():'tribunal')+'): <a href="'+bl.url+'" target="_blank" rel="noopener" style="color:#185FA5">abrir atendimento</a>'+(bl.verificado?'':' <span style="color:#888">(via busca oficial)</span>'); }
+</script>
+<script>
+/* Acesso direto ao sistema do tribunal a partir do processo.
+   Sistema e URLs verificados em fontes oficiais (.jus.br) em 09/07/2026.
+   Regra de segurança: onde há múltiplos sistemas coexistentes ou migração
+   (TJPE, TJMG, TJCE, TJRN, TJRJ), abrimos o PORTAL oficial de consulta em vez
+   de cravar uma URL de tramitação que pode mudar — evita cair no sistema errado.
+   grau é lido do status do processo ("Ativo 1º/2º Grau"). */
+var TRIBSIS={
+  tjpb:{s:'PJe',g1:'https://pje.tjpb.jus.br/pje/',g2:'https://pje.tjpb.jus.br/pje2g/'},
+  tjba:{s:'PJe',g1:'https://pje.tjba.jus.br/pje/',g2:'https://pje2g.tjba.jus.br/pje/',p:'https://www.tjba.jus.br/portal/pje-do-tjba/'},
+  tjpe:{s:'PJe',p:'https://portal.tjpe.jus.br/web/processo-judicial-eletronico'},
+  tjmg:{s:'PJe/eproc',p:'https://www.tjmg.jus.br/portal-tjmg/processos/andamento-processual/'},
+  tjmt:{s:'PJe',g1:'https://pje.tjmt.jus.br/pje/',g2:'https://pje2.tjmt.jus.br/pje2/'},
+  tjes:{s:'PJe',g1:'https://pje.tjes.jus.br/pje/',g2:'https://pje.tjes.jus.br/pje2g/'},
+  tjsp:{s:'e-SAJ',g1:'https://esaj.tjsp.jus.br/cpopg/open.do',g2:'https://esaj.tjsp.jus.br/cposg/open.do'},
+  tjma:{s:'PJe',g1:'https://pje.tjma.jus.br/pje/',g2:'https://pje2.tjma.jus.br/pje2g/'},
+  tjce:{s:'PJe',p:'https://www.tjce.jus.br/institucional/consulta-processual/'},
+  tjrn:{s:'PJe',p:'https://www.tjrn.jus.br/processo-judicial-eletronico/'},
+  tjpr:{s:'Projudi/PJe',g1:'https://projudi.tjpr.jus.br/projudi/',g2:'https://www.tjpr.jus.br/servicos-pje-2-grau',p:'https://www.tjpr.jus.br/consulta-processual'},
+  tjgo:{s:'Projudi/PJD',g1:'https://projudi.tjgo.jus.br/',g2:'https://projudi.tjgo.jus.br/',p:'https://www.tjgo.jus.br/index.php/processos/consulta-processual'},
+  tjrr:{s:'Projudi',g1:'https://projudi.tjrr.jus.br/projudi/',g2:'https://projudi.tjrr.jus.br/projudi/',p:'https://www.tjrr.jus.br/'},
+  tjrj:{s:'PJe',p:'https://www3.tjrj.jus.br/consultaprocessual/'},
+  trt13:{s:'PJe',g1:'https://pje.trt13.jus.br/primeirograu/login.seam',g2:'https://pje.trt13.jus.br/segundograu/login.seam',c:'https://pje.trt13.jus.br/consultaprocessual/'},
+  trt5:{s:'PJe',g1:'https://pje.trt5.jus.br/primeirograu/',g2:'https://pje.trt5.jus.br/segundograu/',c:'https://pje.trt5.jus.br/consultaprocessual/'},
+  trt16:{s:'PJe',g1:'https://pje.trt16.jus.br/primeirograu/login.seam',g2:'https://pje.trt16.jus.br/segundograu/login.seam',c:'https://pje.trt16.jus.br/consultaprocessual'},
+  trt9:{s:'PJe',g1:'https://pje.trt9.jus.br/primeirograu/login.seam',g2:'https://pje.trt9.jus.br/segundograu/login.seam',c:'https://pje.trt9.jus.br/consultaprocessual'},
+  trt15:{s:'PJe',g1:'https://pje.trt15.jus.br/primeirograu/login.seam',g2:'https://pje.trt15.jus.br/segundograu/login.seam',c:'https://pje.trt15.jus.br/consultaprocessual/'},
+  trf5:{s:'PJe',g1:'https://pje1g.trf5.jus.br/pje/',p:'https://www.trf5.jus.br/index.php/pje'}
+};
+function abrirTribunal(numero){
+  var digs=String(numero||'').replace(/\D/g,'');
+  var p=((typeof DADOS!=='undefined'&&DADOS.processos)||[]).filter(function(x){return String(x.numero||'').replace(/\D/g,'')===digs;})[0]||{};
+  var status=p.status||'';
+  var alias=(typeof tribunalAlias==='function')?tribunalAlias(numero):null;
+  var g = /2\s*[ºo°]?\s*grau|ativo\s*2/i.test(status) ? 2 : (/superior/i.test(status) ? 0 : 1);
+  var e = alias ? TRIBSIS[alias] : null;
+  /* fallback genérico para qualquer TRT não catalogado — padrão PJe-JT (primeirograu/segundograu) */
+  if(!e && alias && /^trt\d+$/.test(alias)){
+    e={s:'PJe',g1:'https://pje.'+alias+'.jus.br/primeirograu/',g2:'https://pje.'+alias+'.jus.br/segundograu/'};
+  }
+  var url=null;
+  if(e){
+    if(g===2) url=e.g2||e.p||e.g1||e.c;
+    else if(g===1) url=e.g1||e.p||e.c;
+    else url=e.p||e.c||e.g1||e.g2; /* superior/indefinido → portal/consulta */
+  }
+  if(!url){
+    var nome=alias?alias.toUpperCase():'tribunal';
+    url='https://www.google.com/search?q='+encodeURIComponent('consulta processual '+nome+' '+(g===2?'2º grau':'1º grau'));
+  }
+  try{ if(navigator.clipboard&&numero) navigator.clipboard.writeText(numero); }catch(_){}
+  window.open(url,'_blank','noopener');
+}
 </script>
 <div id="modal-contato" class="overlay hidden"><div class="modal" style="max-width:520px">
   <h2>Contato da vara / órgão</h2>
