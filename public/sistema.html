@@ -931,6 +931,27 @@ function excluirContato(id){
   CONTATOS=CONTATOS.filter(function(x){return x.id!==id;});
   renderContatos();
 }
+/* Deixa nomes em Caixa de Título (1ª letra maiúscula, resto minúsculo),
+   mantendo partículas ("de", "da", "dos"…) em minúsculo e siglas de empresa
+   (LTDA, ME, S.A.…) em maiúsculo. Uso só na EXIBIÇÃO — não altera o dado. */
+function nomeBonito(nome){
+  var s=String(nome||'').replace(/\s+/g,' ').trim();
+  if(!s) return '';
+  var CONECT={de:1,da:1,do:1,das:1,dos:1,e:1,di:1,'e/ou':1};
+  var SIGLA={ltda:'LTDA',me:'ME',epp:'EPP',eireli:'EIRELI',mei:'MEI',sa:'S.A.',ss:'SS',cnpj:'CNPJ',cpf:'CPF',cia:'Cia.'};
+  function capPalavra(w){
+    var low=w.toLowerCase();
+    var sig=low.replace(/[.\/]/g,'');
+    if(SIGLA[sig]) return SIGLA[sig];
+    if(!low) return low;
+    return low.charAt(0).toUpperCase()+low.slice(1);
+  }
+  return s.split(' ').map(function(p,i){
+    var low=p.toLowerCase();
+    if(CONECT[low] && i>0) return low;               /* partícula no meio → minúscula */
+    return p.split('-').map(capPalavra).join('-');   /* trata nomes com hífen */
+  }).join(' ');
+}
 function renderContatos(){
   seedContatos();
   var q=(document.getElementById("buscaCli").value||"").toLowerCase();
@@ -940,7 +961,7 @@ function renderContatos(){
   document.getElementById("crm-kpis").innerHTML=kpi("contatos",CONTATOS.length)+kpi("clientes",CONTATOS.filter(function(c){return c.tipo==="cliente";}).length)+kpi("leads ativos",ativos)+kpi("origem que + converte","Indicação");
   var b=document.getElementById("crm-body");b.innerHTML="";
   f.slice(0,300).forEach(function(c){var tr=document.createElement("tr");
-    tr.innerHTML='<td>'+esc(c.nome)+' '+chipsFor(c.labels)+'</td><td><span class="b '+(c.tipo==="lead"?"warn":"ok")+'">'+esc(c.tipo)+'</span></td><td>'+esc(c.tel)+'</td><td>'+esc(c.email)+'</td><td>'+esc(c.origem)+'</td><td>'+(c.proc||"")+'</td><td><button class="btn sm ghost" onclick="editarContato('+c.id+')">Editar</button></td><td><button class="btn sm ghost" style="color:var(--danger)" onclick="excluirContato('+c.id+')">Excluir</button></td>';
+    tr.innerHTML='<td><b>'+esc(nomeBonito(c.nome))+'</b> '+chipsFor(c.labels)+'</td><td><span class="b '+(c.tipo==="lead"?"warn":"ok")+'">'+esc(c.tipo)+'</span></td><td>'+esc(c.tel)+'</td><td>'+esc(c.email)+'</td><td>'+esc(c.origem)+'</td><td>'+(c.proc||"")+'</td><td><button class="btn sm ghost" onclick="editarContato('+c.id+')">Editar</button></td><td><button class="btn sm ghost" style="color:var(--danger)" onclick="excluirContato('+c.id+')">Excluir</button></td>';
     b.appendChild(tr);});
 }
 function renderCaptacao(){
