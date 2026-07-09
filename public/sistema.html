@@ -333,7 +333,11 @@
 <div id="modal-tarefa" class="overlay hidden">
   <div class="modal">
     <h2>Nova tarefa</h2>
-    <label>Processo ou caso</label><input id="t-proc" placeholder="Nome do cliente ou número do processo">
+    <label>Processo ou caso</label>
+    <div style="display:flex;gap:8px;align-items:center">
+      <input id="t-proc" placeholder="Nome do cliente ou número do processo" style="flex:1">
+      <button type="button" class="btn sm ghost" id="t-btn-abrir-proc" style="display:none;white-space:nowrap" onclick="abrirProcessoDaTarefaModal()">Abrir processo</button>
+    </div>
     <div class="row2">
       <div><label>Responsável</label><select id="t-resp"><option>Djan</option><option>Maria Rita</option><option>Jader Pinheiro</option><option>Maria Eduarda</option><option>Estagiário(a)</option></select></div>
       <div><label>Tipo</label><select id="t-tipo" onchange="onTipoTarefa()"><option value="audiencia">Audiência</option><option value="reuniao">Reunião</option><option value="manifestacao">Manifestação</option><option value="prazo">Prazo</option><option value="tarefa">Tarefa</option><option value="diligencia">Diligência</option><option value="evento">Evento</option><option value="comercial">Comercial / Captação</option></select></div>
@@ -924,7 +928,26 @@ function primeiroUltimo(n){var p=String(n||"").trim().split(/\s+/);if(p.length<=
 function moverLead(dragId,targetId){var di=LEADS.findIndex(function(x){return x.id===dragId;});var t=LEADS.find(function(x){return x.id===targetId;});if(di<0||!t||dragId===targetId)return;var d=LEADS[di];d.estagio=t.estagio;LEADS.splice(di,1);var ti=LEADS.findIndex(function(x){return x.id===targetId;});LEADS.splice(ti,0,d);renderCaptacao();}
 function initKanban(){
   if(KAN)return; KAN=[];
-  DADOS.kanbanSeed.forEach(function(p,i){KAN.push({id:i+1,titulo:p.titulo,cliente:p.cliente,numero:p.numero,col:"distribuir"});});
+  /* se já vieram tarefas do banco (kanban_tarefas), usa elas; senão, cai no seed */
+  if(window.__KANDB && window.__KANDB.length){
+    window.__KANDB.forEach(function(t){ KAN.push(t); });
+  } else {
+    DADOS.kanbanSeed.forEach(function(p,i){KAN.push({id:i+1,titulo:p.titulo,cliente:p.cliente,numero:p.numero,col:"distribuir"});});
+  }
+}
+/* grava a coluna (e demais campos) de uma tarefa no banco. Silencioso se a tabela não existir. */
+function persisteKanban(a){
+  try{
+    var sb=window.__sb; if(!sb||!a) return;
+    if(a.dbid){ /* já existe no banco: atualiza */
+      sb.from('kanban_tarefas').update({coluna:a.col,titulo:a.titulo,resp:(a.resp||null),data:(a.data||null),prazo:(a.prazo||null)}).eq('id',a.dbid).then(function(r){ if(r&&r.error) console.warn('kanban update:',r.error.message); });
+    } else { /* novo: insere e guarda o dbid */
+      sb.auth.getUser().then(function(ug){ return sb.from('usuarios').select('escritorio_id').eq('id',ug.data.user.id).single(); }).then(function(pf){
+        var esc=pf&&pf.data&&pf.data.escritorio_id; if(!esc) return;
+        return sb.from('kanban_tarefas').insert({escritorio_id:esc,titulo:a.titulo,cliente:a.cliente,numero:a.numero,coluna:a.col,resp:(a.resp||null),data:(a.data||null),prazo:(a.prazo||null),tipo:(a.tipoForm||null),origem:'sistema'}).select('id').single();
+      }).then(function(r){ if(r&&r.data&&r.data.id) a.dbid=r.data.id; }).catch(function(e){ console.warn('kanban insert:',e&&e.message||e); });
+    }
+  }catch(e){ console.warn('persisteKanban:',e); }
 }
 function initTriagem(){
   if(TRIAGEM)return; var seen={},id=0; TRIAGEM=[];
@@ -1068,6 +1091,21 @@ function abrirTarefaKanban(id){
   if(a.hora && a.hora!=='Dia todo') document.getElementById('t-hora').value=a.hora;
   if(a.prazo) document.getElementById('t-prazo').value=a.prazo;
   if(a.tipoForm) document.getElementById('t-tipo').value=a.tipoForm;
+  if(typeof onTipoTarefa==='function') onTipoTarefa();
+  _atualizaBotaoAbrirProcModal();
+}
+/* mostra/esconde o botão "Abrir processo" no modal de tarefa conforme houver processo resolvível */
+function _atualizaBotaoAbrirProcModal(){
+  var btn=document.getElementById('t-btn-abrir-proc'); if(!btn) return;
+  var v=(document.getElementById('t-proc')||{}).value||'';
+  var num=/\d{7}-?\d{2}\.?\d{4}/.test(v)?v:_processoPorCliente(v);
+  btn.style.display=num?'':'none';
+  btn.setAttribute('data-num',num||'');
+}
+function abrirProcessoDaTarefaModal(){
+  var btn=document.getElementById('t-btn-abrir-proc'); var num=btn?btn.getAttribute('data-num'):'';
+  if(num){ fecharTarefa(); irParaCaso(String(num)); }
+  else { alert('Esta atividade não tem processo vinculado.'); }
 }
 function concluirTarefaKanban(id){
   if(!KAN)initKanban();
@@ -1076,6 +1114,7 @@ function concluirTarefaKanban(id){
   a.col='finalizado';
   renderKanban();
   renderPainelTarefasEtiquetas();
+  persisteKanban(a);
 }
 function abrirProcessoDaTarefa(numero){
   if(!numero||numero==='—') return;
@@ -1298,7 +1337,8 @@ function salvarTarefa(){
   var proc=_v("t-proc"), resp=_v("t-resp"), tipo=_v("t-tipo"), data=_v("t-data"), hora=_v("t-hora"), prazo=_v("t-prazo");
   var fromTri=triagemAtual;
   if(!KAN)initKanban();
-  KAN.push({id:5000+KAN.length,titulo:tit,cliente:(resp||proc||"—"),numero:(proc||"—"),col:"distribuir",resp:resp,data:data,prazo:prazo,hora:(document.getElementById("t-dia").checked?"Dia todo":hora),tipoForm:tipo});
+  var _nova={id:5000+KAN.length,titulo:tit,cliente:(resp||proc||"—"),numero:(proc||"—"),col:"distribuir",resp:resp,data:data,prazo:prazo,hora:(document.getElementById("t-dia").checked?"Dia todo":hora),tipoForm:tipo};
+  KAN.push(_nova); persisteKanban(_nova);
   if(document.getElementById("t-agenda").checked && data){
     initAgenda();
     var __hAg=(document.getElementById("t-dia").checked?"Dia todo":(hora||"09:00")), __tAg=(TIPOCOR[tipo]||"nt");
@@ -1311,7 +1351,12 @@ function salvarTarefa(){
   fecharTarefa();
   ["t-proc","t-titulo","t-data","t-hora","t-prazo","t-local","t-desc"].forEach(function(id){var e=document.getElementById(id);if(e)e.value="";});
   renderPainelTarefasEtiquetas();
-  if(fromTri!=null){go("triagem");}else{go("agenda");setViewAg("agenda");}
+  /* leva para a agenda CERTA: prazo/tarefa/diligência -> "Agenda (prazos e tarefas)"; audiência/reunião -> "Agenda (reuniões)".
+     Assim a atividade recém-criada aparece na hora e não "some". */
+  var _ehPrazoTarefa=(tipo==='prazo'||tipo==='tarefa'||tipo==='diligencia'||tipo==='manifestacao');
+  go("agenda");
+  if(_ehPrazoTarefa){ setViewAg("tarefas"); if(typeof setTarView==='function') setTarView('lista'); }
+  else { setViewAg("agenda"); }
 }
 function chipsFor(ids){return (ids||[]).map(function(id){var lb=lblById(id);return lb?('<span class="chip2" style="background:'+lb.cor+';color:'+textColor(lb.cor)+'">'+esc(lb.nome)+'</span>'):"";}).join("");}
 function renderEtqPicker(cid,sel){var box=document.getElementById(cid);if(!box)return;
@@ -1495,7 +1540,7 @@ function renderKanban(){
     var itens=KAN.filter(function(a){return a.col===c[0]});
     var col=document.createElement("div");col.className="col";
     col.ondragover=function(e){e.preventDefault()};
-    col.ondrop=function(e){e.preventDefault();var id=+e.dataTransfer.getData("id");var a=KAN.find(function(x){return x.id===id});if(a){a.col=c[0];renderKanban();renderPainelTarefasEtiquetas();}};
+    col.ondrop=function(e){e.preventDefault();var id=+e.dataTransfer.getData("id");var a=KAN.find(function(x){return x.id===id});if(a){a.col=c[0];renderKanban();renderPainelTarefasEtiquetas();persisteKanban(a);}};
     col.innerHTML='<h3>'+c[1]+' <span>'+itens.length+'</span></h3>';
     itens.forEach(function(a){var el=document.createElement("div");el.className="task";el.draggable=true;
       el.ondragstart=function(e){e.dataTransfer.setData("id",a.id)};
@@ -1609,8 +1654,7 @@ function toggleConcluirTarefa(id){
   a.col=(a.col==='finalizado')?'distribuir':'finalizado';
   renderTarefasView();
   if(typeof renderPainelTarefasEtiquetas==='function') renderPainelTarefasEtiquetas();
-  /* persiste o status da tarefa quando houver vínculo no banco (kanban_tarefas). Silencioso se não existir. */
-  try{ var sb=window.__sb; if(sb && a.dbid){ sb.from('kanban_tarefas').update({coluna:a.col}).eq('id',a.dbid).then(function(){}); } }catch(e){}
+  persisteKanban(a);
 }
 </script>
 
@@ -1676,6 +1720,17 @@ function toggleConcluirTarefa(id){
         console.log('CMPGestao: '+window.__AGDB.length+' eventos de agenda carregados (sincronizados com Google).');
       }
     }catch(eAg){ console.log('agenda: '+(eAg&&eAg.message||eAg)); }
+    /* carrega as tarefas do Kanban do banco (kanban_tarefas). Se a tabela não existir, ignora e usa o seed. */
+    try{
+      var kt=await sb.from('kanban_tarefas').select('id,titulo,cliente,numero,coluna,resp,data,prazo,tipo').limit(3000);
+      if(!kt.error && kt.data){
+        window.__KANDB=kt.data.map(function(t,i){ return {id:9000+i,dbid:t.id,titulo:t.titulo||'',cliente:t.cliente||'',numero:t.numero||'—',col:t.coluna||'distribuir',resp:t.resp||'',data:t.data||'',prazo:t.prazo||'',tipoForm:t.tipo||''}; });
+        KAN=null; initKanban();
+        var __ag=document.getElementById('s-agenda'); if(__ag && !__ag.classList.contains('hidden') && typeof renderAgendaView==='function') renderAgendaView();
+        if(typeof renderPainelTarefasEtiquetas==='function') renderPainelTarefasEtiquetas();
+        console.log('CMPGestao: '+window.__KANDB.length+' tarefas do Kanban carregadas do banco.');
+      }
+    }catch(eKt){ console.log('kanban: '+(eKt&&eKt.message||eKt)); }
     try{
       var __pn=window.__restoreProc;
       if(__pn){ var __ix=DADOS.processos.findIndex(function(p){return p.numero===__pn;}); if(__ix>=0){ abrir(__ix); } window.__restoreProc=null; }
