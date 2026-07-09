@@ -59,6 +59,11 @@
   .col h3 span{color:var(--muted)}
   .task{background:#fff;border:1px solid var(--line);border-left:4px solid var(--navy);border-radius:9px;padding:9px;margin-bottom:8px;cursor:grab;font-size:12.5px}
   .task .t{font-weight:500;margin-bottom:3px} .task .meta{font-size:11px;color:var(--muted)}
+  .task.done{opacity:.62;border-left-color:#0F6E56} .task.done .t{text-decoration:line-through} .task.done .meta{text-decoration:line-through}
+  .task .kdatas{margin-top:4px;display:flex;flex-wrap:wrap;gap:4px}
+  .task .kd{font-size:10.5px;font-weight:700;border-radius:5px;padding:1px 6px;line-height:1.5}
+  .task .kd-fatal{background:#fbeceb;color:#7b1e3a} .task .kd-prev{background:#eef2f7;color:#3d4c60}
+  .task.done .kd{text-decoration:line-through;opacity:.8}
   .step{display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--line)}
   .step .n{flex:0 0 30px;height:30px;border-radius:50%;background:var(--navy);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px}
   .step .txt b{color:var(--navy)} .step .sla{font-size:12px;color:var(--muted)}
@@ -1605,6 +1610,13 @@ async function excluirHistManual(ev,hix){
 function verMaisHist(){histShown=99999;renderHistorico();}
 function verMenosHist(){histShown=10;renderHistorico();window.scrollTo(0,0);}
 
+/* formata data do cartão: ISO (2026-07-09) ou dd/mm/aaaa -> dd/mm */
+function _kDataBR(s){
+  s=String(s||'').trim(); if(!s) return '';
+  if(/^\d{4}-\d{2}-\d{2}/.test(s)){ var p=s.slice(0,10).split('-'); return p[2]+'/'+p[1]; }
+  var m=s.split('/'); if(m.length>=2) return m[0].padStart(2,'0')+'/'+m[1].padStart(2,'0');
+  return s;
+}
 function renderKanban(){
   var k=document.getElementById("kanban");k.innerHTML="";
   COLS.forEach(function(c){
@@ -1613,13 +1625,16 @@ function renderKanban(){
     col.ondragover=function(e){e.preventDefault()};
     col.ondrop=function(e){e.preventDefault();var id=+e.dataTransfer.getData("id");var a=KAN.find(function(x){return x.id===id});if(a){a.col=c[0];renderKanban();renderPainelTarefasEtiquetas();persisteKanban(a);}};
     col.innerHTML='<h3>'+c[1]+' <span>'+itens.length+'</span></h3>';
-    itens.forEach(function(a){var el=document.createElement("div");el.className="task";el.draggable=true;
+    itens.forEach(function(a){var el=document.createElement("div");el.className="task"+(a.col==='finalizado'?' done':'');el.draggable=true;
       el.ondragstart=function(e){e.dataTransfer.setData("id",a.id)};
       /* ponto 2: clicar na tarefa abre a TAREFA (edição). Abrir o processo fica no painel de pendências. */
       el.onclick=function(ev){ev.stopPropagation();abrirTarefaKanban(a.id);};
       el.ondblclick=function(ev){ev.stopPropagation();abrirTarefaKanban(a.id);};
-      var _pf=(a.prazo?('fatal '+esc(a.prazo)):'')+(a.data?((a.prazo?' · ':'')+'prev. '+esc(a.data)):'');
-      el.innerHTML='<div class="t">'+esc(a.titulo)+'</div><div class="meta">'+esc(a.cliente)+' · '+a.numero+(_pf?(' · '+_pf):'')+'</div>';
+      /* datas nos cartões: prazo fatal (vinho) e data prevista/lembrete (cinza) */
+      var datas='';
+      if(a.prazo){ datas+='<span class="kd kd-fatal">prazo fatal '+esc(_kDataBR(a.prazo))+'</span>'; }
+      if(a.data){ datas+='<span class="kd kd-prev">prev. '+esc(_kDataBR(a.data))+'</span>'; }
+      el.innerHTML='<div class="t">'+esc(a.titulo)+'</div><div class="meta">'+esc(a.cliente)+(a.numero&&a.numero!=='—'?(' · '+a.numero):'')+'</div>'+(datas?('<div class="kdatas">'+datas+'</div>'):'');
       col.appendChild(el);});
     k.appendChild(col);
   });
@@ -3307,6 +3322,11 @@ function contatoDoProcesso(p){
     .tbl-triagem td.proc{font-size:14px}
     .tbl-triagem td[data-label="Classificar"]{display:flex;gap:8px;flex-wrap:wrap;padding-top:8px}
     .tbl-triagem td[data-label="Classificar"]:before{width:100%}
+    /* cabeçalho e abas da fila de Publicações sempre dentro da tela */
+    #s-triagem .card{overflow-x:visible}
+    #s-triagem .sectlabel{white-space:normal;word-break:break-word}
+    #s-triagem #triagem-abas{flex-wrap:wrap}
+    .tbl-triagem td[data-label="Classificar"] .btn{flex:1 1 auto;text-align:center;min-height:38px}
     .searchbar{flex-wrap:wrap} .searchbar input{max-width:none}
     .agtools{flex-wrap:wrap}
     .parties{font-size:15.5px}
