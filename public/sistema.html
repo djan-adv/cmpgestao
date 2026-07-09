@@ -3467,7 +3467,7 @@ var _ATZ_PEDIDOS={
 function _gerarRascunhoAtualizacao(){
   var ctx=window.__atzCtx; if(!ctx) return; var p=ctx.p;
   var nome=(nomeBonito(p.cliente||'')||'').trim();
-  var assinatura='Atenciosamente,\n'+(((document.getElementById('who-name')||{}).textContent)||'')+'\nCrispim Mendonça e Pinheiro Advogados\n\nNossas redes sociais (Instagram):\n@cmpadvs — https://instagram.com/cmpadvs\n@djan.adv — https://instagram.com/djan.adv';
+  var assinatura='Atenciosamente,\n'+(((document.getElementById('who-name')||{}).textContent)||'')+'\nCrispim Mendonça e Pinheiro Advogados';
   var corpo, assunto;
   if(_atzModoAtual()==='pedido'){
     var tipo=(document.getElementById('atz-pedido-tipo')||{}).value||'grat';
