@@ -3499,13 +3499,17 @@ async function abrirAtualizarCliente(numero){
   document.getElementById('atz-proc').innerHTML='Processo nº <b>'+esc(numero)+'</b>'+(p.cliente?(' — '+esc(nomeBonito(p.cliente))):'');
   var q=document.getElementById('atz-qtd'); if(q) q.value='5';
   var mi=document.querySelector('input[name="atz-modo"][value="informar"]'); if(mi) mi.checked=true;
-  document.getElementById('atz-email').value='';
+  /* e-mail: primeiro o da FICHA (contatos_livres, ex.: puxado da procuração); cadastro é reserva */
+  var emailFicha=(String(p.ctl||'').split(/[,;\n]+/).map(function(s){return s.trim();}).filter(function(t){return /@/.test(t);})[0])||'';
+  document.getElementById('atz-email').value=emailFicha;
   document.getElementById('modal-atualizar').classList.remove('hidden');
   _atzModo();
   try{
     var sb=window.__sb; if(!sb) return;
-    var r=await sb.from('assinaturas').select('destino').eq('processo_numero',numero).eq('canal','email').eq('ativo',true).order('criado_em',{ascending:false}).limit(1);
-    if(r&&r.data&&r.data.length){ document.getElementById('atz-email').value=r.data[0].destino||''; }
+    if(!(document.getElementById('atz-email').value||'').trim()){
+      var r=await sb.from('assinaturas').select('destino').eq('processo_numero',numero).eq('canal','email').eq('ativo',true).order('criado_em',{ascending:false}).limit(1);
+      if(r&&r.data&&r.data.length){ document.getElementById('atz-email').value=r.data[0].destino||''; }
+    }
   }catch(e){ console.warn('atz email:',e); }
 }
 function fecharAtualizar(){ document.getElementById('modal-atualizar').classList.add('hidden'); }
