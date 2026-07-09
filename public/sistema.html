@@ -2965,8 +2965,28 @@ function contatoDoProcesso(p){
   var sideEl=document.querySelector('.side');
   if(sideEl && !sideEl.querySelector('.userft')){
     var uf=document.createElement('div'); uf.className='userft';
-    uf.innerHTML='<div class="av" id="uf-av">—</div><div style="flex:1;min-width:0"><div class="nm" id="uf-nm"></div><div class="pp" id="uf-pp"></div><div id="user-switcher" style="margin-top:8px"></div></div>';
+    /* o rodapé vira um BOTÃO: clicar no nome abre/fecha o painel de acessos visuais (que abre pra cima) */
+    uf.innerHTML='<div class="av" id="uf-av">—</div>'+
+      '<div style="flex:1;min-width:0"><div class="nm" id="uf-nm"></div><div class="pp" id="uf-pp"></div></div>'+
+      '<div id="uf-caret" style="color:#8fa0b5;font-size:12px;flex-shrink:0">▴</div>'+
+      '<div id="user-switcher-pop" style="display:none;position:absolute;left:8px;right:8px;bottom:60px;background:#243447;border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:12px;max-height:60vh;overflow:auto;box-shadow:0 -8px 30px rgba(0,0,0,.35);z-index:60"><div id="user-switcher"></div></div>';
     sideEl.appendChild(uf);
+    /* clicar no rodapé abre/fecha o painel */
+    uf.style.cursor='pointer';
+    uf.addEventListener('click',function(ev){
+      if(ev.target.closest('#user-switcher-pop')) return; /* cliques dentro do painel não fecham */
+      var pop=document.getElementById('user-switcher-pop');
+      var caret=document.getElementById('uf-caret');
+      var open=pop.style.display!=='none';
+      pop.style.display=open?'none':'block';
+      if(caret) caret.textContent=open?'▴':'▾';
+    });
+    /* clicar fora fecha o painel */
+    document.addEventListener('click',function(ev){
+      var pop=document.getElementById('user-switcher-pop'); if(!pop) return;
+      if(pop.style.display==='none') return;
+      if(!ev.target.closest('.userft')){ pop.style.display='none'; var c=document.getElementById('uf-caret'); if(c)c.textContent='▴'; }
+    });
     var syncUser=function(){
       var n=(document.getElementById('who-name')||{}).textContent||'';
       var p=(document.getElementById('who-pill')||{}).textContent||'';
