@@ -763,7 +763,7 @@ function abrir(i){
     '<div style="position:absolute;top:52px;right:14px;text-align:right;font-size:12.5px;color:var(--muted);line-height:1.5">Honorários: faturado <b style="color:var(--navy);cursor:pointer;border-bottom:1px dotted var(--muted)" title="Clique para editar" onclick="editarHonorario(\'faturado\')">R$ '+esc(hFmt(p.hon_faturado))+'</b> · a faturar <b style="color:var(--navy);cursor:pointer;border-bottom:1px dotted var(--muted)" title="Clique para editar" onclick="editarHonorario(\'afaturar\')">R$ '+esc(hFmt(p.hon_afaturar))+'</b><br>Valor da causa: <b style="color:var(--navy)">'+(p.causa&&p.causa!=='0,00'?('R$ '+p.causa):'—')+'</b></div>'+
     '<div class="subhead">Processo nº <span onclick="copiarNumero(this,\''+p.numero+'\')" style="cursor:pointer;border-bottom:1px dotted var(--muted)" title="Clique para copiar o número">'+p.numero+'</span> &nbsp;·&nbsp; <span class="b '+stCls(p.status)+'">'+esc(p.status||'—')+'</span>'+
     ' &nbsp;·&nbsp; Responsável: '+resp+
-    (function(){ var vinc=(p.hist_full&&p.hist_full.length>0)&&p.foro; return ' &nbsp;·&nbsp; <span style="display:inline-block;border-radius:20px;padding:2px 10px;font-size:11px;font-weight:600;'+(vinc?'background:#e5f4ed;color:#127a53">vinculado jus.br':'background:#fbeceb;color:#b5342b">não vinculado')+'</span>'; })()+'</div>'+
+    (function(){ var vinc=(p.hist_full&&p.hist_full.length>0)&&p.foro; return ' &nbsp;·&nbsp; <span style="display:inline-block;border-radius:20px;padding:2px 10px;font-size:11px;font-weight:600;'+(vinc?'background:#e5f4ed;color:#127a53">vinculado jus.br':'background:#fbeceb;color:#b5342b">não vinculado')+'</span>'; })()+_casoCtrlHTML(p)+'</div>'+
     '<div id="ctl-chips" style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center"></div>'+
     '<div id="proc-vinculados" style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center"></div>'+
     '<div style="margin-top:10px"><button class="btn sm" onclick="novaTarefaDoProcesso()">+ Nova tarefa neste processo</button> <button class="btn sm" style="background:#faf3ee;color:#D97757;border:1px solid #edd7c9;font-weight:700" onclick="agendarClaude()" title="Deixar mensagem para o cliente a qualquer hora — o Claude envia somente em horário comercial"><span style="font-size:13px">✳</span> Agendar com Claude</button></div>'+
@@ -1079,8 +1079,21 @@ function renderTriagem(){
 function reabrirTriagem(id){ var t=TRIAGEM.find(function(x){return x.id===id;}); if(t){ t.done=false; try{ var sb=window.__sb; if(sb){ sb.from('processos').select('id').eq('numero',t.numero).single().then(function(r){ if(r&&r.data&&r.data.id){ sb.from('andamentos').update({triada:false}).eq('processo_id',r.data.id).eq('data',String(t.data||'').slice(0,10)).then(function(){}); } }); } }catch(e){} renderTriagem(); } }
 function toggleTeor(id){var d=document.getElementById("teor-"+id);if(!d)return;d.style.display=(d.style.display==="none")?"block":"none";}
 function irParaProcesso(num){var dd=String(num).replace(/\D/g,"");var i=DADOS.processos.findIndex(function(p){return String(p.numero).replace(/\D/g,"")===dd;});if(i>=0){abrir(i);}else{alert("Este processo (nº "+num+") tem publicação capturada, mas não está na base de 480 processos importada do Astrea. No sistema real, todos os processos entram e o link abre a página completa.");}}
+/* se chegou uma publicação (DJEn) para o número de um CASO, ele deixa de ser "não
+   vinculado": vira processo monitorado. Silencioso — só atualiza a marca. */
+function _autoVincularSeCaso(num){
+  try{
+    var dig=String(num||'').replace(/\D/g,'');
+    var p=(DADOS.processos||[]).find(function(x){ return String(x.numero||'').replace(/\D/g,'')===dig && dig; });
+    if(p && _ehCasoProc(p)){
+      p.ehCaso=false; p.fonte='manual'; desmarcaCasoLocal(p.numero);
+      var sb=window.__sb; if(sb&&p._id){ sb.from('processos').update({fonte:'manual'}).eq('id',p._id).then(function(){}); }
+    }
+  }catch(e){}
+}
 function acaoTriagem(id){
   var t=TRIAGEM.find(function(x){return x.id===id});if(!t)return;
+  _autoVincularSeCaso(t.numero);
   var sug=sugestaoTeor(t.texto||t.titulo); triagemAtual=id;
   abrirNovaTarefa(t.numero);
   document.getElementById("t-titulo").value=sug.ativ;
@@ -1098,7 +1111,7 @@ function acaoTriagem(id){
     var d=new Date(2026,6,2);d.setDate(d.getDate()+sug.prazo);var iso=d.toISOString().slice(0,10);document.getElementById("t-data").value=iso;document.getElementById("t-prazo").value=iso;
   }
 }
-function cienciaTriagem(id){var t=TRIAGEM.find(function(x){return x.id===id});if(t){t.done=true;persisteTriada(t);}renderTriagem();}
+function cienciaTriagem(id){var t=TRIAGEM.find(function(x){return x.id===id});if(t){_autoVincularSeCaso(t.numero);t.done=true;persisteTriada(t);}renderTriagem();}
 var LABELS=[];
 var ASSIGN={};
 function textColor(hex){var c=(hex||"#000").replace("#","");if(c.length===3)c=c.split("").map(function(x){return x+x}).join("");var r=parseInt(c.substr(0,2),16),g=parseInt(c.substr(2,2),16),b=parseInt(c.substr(4,2),16);return (0.299*r+0.587*g+0.114*b)>150?"#1e2733":"#fff";}
@@ -1726,7 +1739,7 @@ function toggleConcluirTarefa(id){
   try{
     /* select estendido (honorários + vinculados). Se essas colunas ainda não existirem no banco,
        o select falha e caímos automaticamente no select básico — sem quebrar o carregamento. */
-    var selExt='id,numero,cliente_nome,oponente,assunto,foro,status,valor_causa,ultima_movimentacao,contatos_livres,hon_faturado,hon_afaturar,vinculados,fora_inove,andamentos(id,data,texto,fonte)';
+    var selExt='id,numero,cliente_nome,oponente,assunto,foro,status,valor_causa,ultima_movimentacao,contatos_livres,hon_faturado,hon_afaturar,vinculados,fora_inove,fonte,andamentos(id,data,texto,fonte)';
     var selBas='id,numero,cliente_nome,oponente,assunto,foro,status,valor_causa,ultima_movimentacao,contatos_livres,andamentos(id,data,texto,fonte)';
     var res=await sb.from('processos').select(selExt).order('ultima_movimentacao',{ascending:false,nullsFirst:false}).limit(3000);
     if(res.error){ res=await sb.from('processos').select(selBas).order('ultima_movimentacao',{ascending:false,nullsFirst:false}).limit(3000); }
@@ -1736,7 +1749,7 @@ function toggleConcluirTarefa(id){
       var hf=(p.andamentos||[]).map(function(a){return {id:a.id, data:(a.data? a.data+'T00:00:00.000Z':null), texto:a.texto, f:a.fonte||''};});
       hf.sort(function(x,y){return (y.data||'').localeCompare(x.data||'');});
       var vinc=Array.isArray(p.vinculados)?p.vinculados:(p.vinculados?[].concat(p.vinculados):[]);
-      return {_id:p.id, cliente:p.cliente_nome||'', numero:p.numero, oponente:p.oponente||'', tipo:p.assunto||'', foro:p.foro||'', status:p.status||'', data:fmtData(p.ultima_movimentacao), hist:'', causa:fmtCausa(p.valor_causa), hist_full:hf, ctl:p.contatos_livres||'', hon_faturado:(p.hon_faturado!=null?p.hon_faturado:0), hon_afaturar:(p.hon_afaturar!=null?p.hon_afaturar:0), vinculados:vinc, fora_inove:!!p.fora_inove};
+      return {_id:p.id, cliente:p.cliente_nome||'', numero:p.numero, oponente:p.oponente||'', tipo:p.assunto||'', foro:p.foro||'', status:p.status||'', data:fmtData(p.ultima_movimentacao), hist:'', causa:fmtCausa(p.valor_causa), hist_full:hf, ctl:p.contatos_livres||'', hon_faturado:(p.hon_faturado!=null?p.hon_faturado:0), hon_afaturar:(p.hon_afaturar!=null?p.hon_afaturar:0), vinculados:vinc, fora_inove:!!p.fora_inove, fonte:p.fonte||'', ehCaso:(p.fonte==='caso')};
     });
     if(DADOS.kpis){ DADOS.kpis.total=DADOS.processos.length; }
     /* publicações novas (robô DJEN) → fila de triagem */
@@ -1995,10 +2008,11 @@ async function salvarCadManual(){
   var causa=(document.getElementById('cm-causa').value||'').trim()||'0,00';
   var status=document.getElementById('cm-status').value;
   var obs=(document.getElementById('cm-obs').value||'').trim();
-  var novo={_id:null,cliente:cli,numero:num,oponente:op,tipo:assunto,foro:foro,status:status,data:'',hist:'',causa:causa,hist_full:(obs?[{data:new Date().toISOString(),texto:'[Cadastro manual] '+obs,f:'manual'}]:[]),hon_faturado:0,hon_afaturar:0,vinculados:[],ehCaso:ehCaso};
+  var novo={_id:null,cliente:cli,numero:num,oponente:op,tipo:assunto,foro:foro,status:status,data:'',hist:'',causa:causa,hist_full:(obs?[{data:new Date().toISOString(),texto:'[Cadastro manual] '+obs,f:'manual'}]:[]),hon_faturado:0,hon_afaturar:0,vinculados:[],ehCaso:ehCaso,fonte:(ehCaso?'caso':'manual')};
+  if(ehCaso) marcaCasoLocal(num);
   /* grava no banco (tolerante: se faltar coluna, mantém na tela) */
   try{ var sb=window.__sb; if(sb){ var ug=await sb.auth.getUser(); var pf=await sb.from('usuarios').select('escritorio_id').eq('id',ug.data.user.id).single(); var esc=pf&&pf.data&&pf.data.escritorio_id;
-    if(esc){ var ins=await sb.from('processos').insert({escritorio_id:esc,numero:num,cliente_nome:cli||null,oponente:op||null,assunto:assunto||null,foro:foro||null,status:status,fonte:'manual'}).select('id').single(); if(ins&&ins.data){ novo._id=ins.data.id;
+    if(esc){ var ins=await sb.from('processos').insert({escritorio_id:esc,numero:num,cliente_nome:cli||null,oponente:op||null,assunto:assunto||null,foro:foro||null,status:status,fonte:(ehCaso?'caso':'manual')}).select('id').single(); if(ins&&ins.data){ novo._id=ins.data.id;
       if(obs){ await sb.from('andamentos').insert({processo_id:ins.data.id,data:new Date().toISOString().slice(0,10),texto:'[Cadastro manual] '+obs,fonte:'manual'}); } } }
   } }catch(e){ console.warn('cadastro manual (banco):',e&&e.message||e); }
   DADOS.processos.unshift(novo);
@@ -2075,7 +2089,19 @@ function classHist(p){
   var cand=[[iC,'Concluso'],[iP,'Petição'],[iD,'Despacho/Sentença'],[iI,'Intimação']].filter(function(x){return x[0]>=0;}).sort(function(a,b){return a[0]-b[0];});
   return cand.length?cand[0][1]:'';
 }
+/* ===== CASOS (cadastro manual, NÃO vinculados ao DJEn) =====
+   Um "caso" é um processo/procedimento cadastrado manualmente que o DJEn não monitora.
+   Marcamos em processos.fonte='caso' no banco e, como reserva, num cookie local.
+   Assim a etiqueta mostra "caso" (e não "djen"), e dá para vincular depois. */
+function _casoKey(n){ var d=String(n||'').replace(/\D/g,''); return d.length>=6 ? d : String(n||'').trim().toLowerCase(); }
+function _casoSet(){ try{ var m=document.cookie.match(/(?:^|;\s*)cmpCasos=([^;]+)/); return m?JSON.parse(decodeURIComponent(m[1])):{}; }catch(e){ return {}; } }
+function _casoSetSave(o){ try{ document.cookie='cmpCasos='+encodeURIComponent(JSON.stringify(o))+';path=/;max-age=31536000;samesite=lax'; }catch(e){} }
+function _casoSetHas(n){ var s=_casoSet(); return !!s[_casoKey(n)]; }
+function marcaCasoLocal(n){ var s=_casoSet(); s[_casoKey(n)]=1; _casoSetSave(s); }
+function desmarcaCasoLocal(n){ var s=_casoSet(); delete s[_casoKey(n)]; _casoSetSave(s); }
+function _ehCasoProc(p){ if(!p) return false; if(p.ehCaso===true) return true; if(p.fonte==='caso') return true; return _casoSetHas(p.numero); }
 function origemProc(p){
+  if(_ehCasoProc(p)) return 'caso';
   /* movimentação no histórico nos últimos 5 dias => atualizado */
   var m=String(p.data||'').split('/');
   if(m.length===3){
@@ -2087,8 +2113,31 @@ function origemProc(p){
 }
 function origemBtnHTML(p){
   var o=origemProc(p);
-  var cor=o==='astrea'?'background:#e3edf7;color:#185FA5':(o==='djen'?'background:#fdecd7;color:#b45f06':'background:#e5f4ed;color:#127a53');
+  var cor=o==='caso'?'background:#ece9f5;color:#5b4a8a'
+        :o==='astrea'?'background:#e3edf7;color:#185FA5'
+        :(o==='djen'?'background:#fdecd7;color:#b45f06':'background:#e5f4ed;color:#127a53');
   return '<span style="'+cor+';border-radius:20px;padding:3px 10px;font-size:11px;font-weight:600;cursor:default;white-space:nowrap">'+o+'</span>';
+}
+/* marca/vincula um caso a partir da ficha do processo */
+function marcarComoCaso(num){
+  var p=DADOS.processos.find(function(x){return String(x.numero)===String(num);}); if(!p) return;
+  p.ehCaso=true; p.fonte='caso'; marcaCasoLocal(num);
+  try{ var sb=window.__sb; if(sb&&p._id){ sb.from('processos').update({fonte:'caso'}).eq('id',p._id).then(function(r){ if(r&&r.error) console.warn('marcar caso:',r.error.message); }); } }catch(e){}
+  var i=DADOS.processos.indexOf(p); if(i>=0) abrir(i);
+}
+function vincularCasoDjen(num){
+  var p=DADOS.processos.find(function(x){return String(x.numero)===String(num);}); if(!p) return;
+  p.ehCaso=false; p.fonte='manual'; desmarcaCasoLocal(num);
+  try{ var sb=window.__sb; if(sb&&p._id){ sb.from('processos').update({fonte:'manual'}).eq('id',p._id).then(function(r){ if(r&&r.error) console.warn('vincular caso:',r.error.message); }); } }catch(e){}
+  var i=DADOS.processos.indexOf(p); if(i>=0) abrir(i);
+}
+/* controle mostrado na ficha: caso -> vincular; senão -> marcar como caso */
+function _casoCtrlHTML(p){
+  var n=String(p.numero||'').replace(/'/g,"");
+  if(_ehCasoProc(p)){
+    return ' <button class="btn sm ghost" style="font-size:11px;padding:3px 9px;border-color:#c9bfe0;color:#5b4a8a" onclick="vincularCasoDjen(\''+n+'\')" title="Este caso não é monitorado pelo DJEn. Ao vincular, ele passa a receber publicações e os dados são atualizados.">caso · vincular ao DJEn</button>';
+  }
+  return ' <button class="btn sm ghost" style="font-size:11px;padding:3px 9px" onclick="marcarComoCaso(\''+n+'\')" title="Marcar como caso administrativo (não vinculado ao DJEn)">marcar como caso</button>';
 }
 function origemFiltroOk(p){
   var f=(document.getElementById('filtroOrigem')||{}).value||'';
