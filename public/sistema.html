@@ -3531,15 +3531,16 @@ function copiarAtualizacao(){
 async function registrarEnvioAtualizacao(){
   var ctx=window.__atzCtx; if(!ctx) return; var p=ctx.p;
   var email=(document.getElementById('atz-email').value||'').trim();
-  var hoje=new Date().toISOString().slice(0,10);
-  var texto;
-  if(_atzModoAtual()==='pedido'){
-    var tp=(document.getElementById('atz-pedido-tipo')||{}).value||'';
-    texto='[E-mail ao cliente] Pedido de providência enviado'+(email?(' a '+email):'')+(tp?(' ('+tp+')'):'')+'.';
-  } else {
-    var n=parseInt((document.getElementById('atz-qtd')||{}).value,10)||5;
-    texto='[E-mail ao cliente] Atualização enviada'+(email?(' a '+email):'')+' — '+_movsOficiais(p,n).length+' movimentação(ões).';
-  }
+  var assunto=(document.getElementById('atz-assunto').value||'').trim();
+  var corpo=(document.getElementById('atz-corpo').value||'').trim();
+  var nomeCli=(nomeBonito(p.cliente||'')||'').trim();
+  var hoje=new Date().toISOString().slice(0,10), dbr=hoje.split('-').reverse().join('/');
+  var cab=(_atzModoAtual()==='pedido')?'Pedido de providência':'Atualização';
+  /* registra a MENSAGEM enviada, com nome do cliente titularizado e marca de envio manual pelo painel */
+  var texto='[E-mail ao cliente — '+cab+', enviado via painel (manual) em '+dbr+']\n'
+    +'Para: '+(nomeCli?(nomeCli+' '):'')+(email?('<'+email+'>'):'')+'\n'
+    +(assunto?('Assunto: '+assunto+'\n'):'')
+    +'\n'+corpo;
   var sb=window.__sb;
   try{
     if(sb && p._id){ var ins=await sb.from('andamentos').insert({processo_id:p._id,data:hoje,texto:texto,fonte:'manual'}).select('id').single(); if(ins&&ins.error) throw ins.error; }
