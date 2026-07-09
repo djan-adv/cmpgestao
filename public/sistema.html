@@ -3624,7 +3624,7 @@ function refreshContato(){
   if(md && !md.classList.contains('hidden') && window.__dilCtx){ var p=(DADOS.processos||[]).filter(function(x){return x.numero===window.__dilCtx.numero;})[0]||{}; var db=document.getElementById('dil-balcao'); if(db) db.innerHTML=contatoBlocoHTML(p); return; }
   if(typeof atual!=='undefined' && atual){ var i=DADOS.processos.indexOf(atual); var sec=document.getElementById('s-proc-det'); if(i>=0 && sec && !sec.classList.contains('hidden')) abrir(i); }
 }
-function procVincList(p){ if(!p) return []; if(!p.vinculados) p.vinculados=[]; return p.vinculados.slice(0,4); }
+function procVincList(p){ if(!p) return []; if(!p.vinculados) p.vinculados=[]; return p.vinculados.slice(0,3); }
 function renderProcVinculados(){
   if(!atual) return;
   var arr=procVincList(atual);
@@ -3633,10 +3633,10 @@ function renderProcVinculados(){
     html+='<span class="quick-link" onclick="irParaCaso(\''+String(n).replace(/'/g,'')+'\')" title="Abrir processo vinculado">↗ '+esc(n)+'</span>';
     html+='<span class="quick-link del" onclick="removerProcVinculado(\''+String(n).replace(/'/g,'')+'\')" title="Desvincular">×</span>';
   });
-  if(arr.length<4) html+='<span class="quick-link" onclick="adicionarProcVinculado()">+ inserir processo vinculado</span>';
-  if(!arr.length) html='<span class="note">Sem processos vinculados. </span><span class="quick-link" onclick="adicionarProcVinculado()">+ inserir processo vinculado</span>';
-  /* preenche tanto o bloco do cabeçalho quanto o do rodapé (canto inferior direito) */
-  ['proc-vinculados','proc-vinculados-rodape'].forEach(function(cid){var el=document.getElementById(cid); if(el) el.innerHTML=html;});
+  if(arr.length<3) html+='<span class="quick-link" onclick="adicionarProcVinculado()">+ inserir processo vinculado</span>';
+  /* apenas o bloco do cabeçalho; o do rodapé (abaixo de "Encerrar") foi removido */
+  var elv=document.getElementById('proc-vinculados'); if(elv) elv.innerHTML=html;
+  var elr=document.getElementById('proc-vinculados-rodape'); if(elr) elr.innerHTML='';
 }
 function _sanitizeProcNum(s){ return String(s||'').trim(); }
 function adicionarProcVinculado(){
@@ -3647,7 +3647,7 @@ function adicionarProcVinculado(){
   var soDigitos=dig.replace(/\D/g,'');
   if(soDigitos.length<15){ alert('Número de processo parece incompleto. Cole o número completo (padrão CNJ).'); return; }
   if(atual.vinculados.indexOf(dig)>-1){ alert('Este processo já está vinculado.'); return; }
-  if(atual.vinculados.length>=4){ alert('Limite de 4 processos vinculados por ficha.'); return; }
+  if(atual.vinculados.length>=3){ alert('Limite de 3 processos vinculados por ficha.'); return; }
   atual.vinculados.push(dig); renderProcVinculados(); persisteVinculados();
 }
 function removerProcVinculado(n){
