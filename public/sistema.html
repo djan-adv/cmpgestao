@@ -1067,12 +1067,12 @@ function renderTriagem(){
     var sug=sugestaoTeor(t.texto||t.titulo); var pz=sug.prazo?(sug.prazo+" dias"):"agendar";
     var teorHtml=t.texto?('<div style="background:var(--accentbg);border-left:3px solid var(--gold);padding:8px 10px;border-radius:0 6px 6px 0;margin:6px 0;color:var(--ink);white-space:normal"><b>Sugestão de tratamento (IA):</b> '+esc(sug.ativ)+' — <b>prazo sugerido: '+pz+'</b></div><div style="font-weight:600">Teor do despacho:</div><div style="white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;max-height:240px;overflow:auto">'+esc(t.texto)+'</div>'):'<div class="note">Sem teor disponível.</div>';
     var tr=document.createElement("tr");
-    tr.innerHTML='<td class="proc"><a onclick="irParaProcesso(\''+String(t.numero).replace(/'/g,"")+'\')" style="cursor:pointer;color:var(--navy);text-decoration:underline">'+esc(t.numero)+'</a>'+(t.tribunal?('<div class="note" style="margin:0">'+esc(t.tribunal)+' · '+esc(t.data||"")+'</div>'):'')+'</td><td>'+esc(t.cliente||"—")+'</td>'+
-      '<td>'+esc(t.titulo)+' <a onclick="toggleTeor('+t.id+')" style="cursor:pointer;color:var(--muted);font-size:11px">(ver teor)</a><div class="teor" id="teor-'+t.id+'" style="display:none;font-size:12px;color:var(--muted);margin-top:6px">'+teorHtml+'</div></td>'+
-      '<td><b>'+esc(sug.ativ)+'</b><div class="note" style="margin:0">prazo sugerido: '+pz+'</div></td>'+
+    tr.innerHTML='<td class="proc" data-label="Processo"><a onclick="irParaProcesso(\''+String(t.numero).replace(/'/g,"")+'\')" style="cursor:pointer;color:var(--navy);text-decoration:underline">'+esc(t.numero)+'</a>'+(t.tribunal?('<div class="note" style="margin:0">'+esc(t.tribunal)+' · '+esc(t.data||"")+'</div>'):'')+'</td><td data-label="Cliente">'+esc(t.cliente||"—")+'</td>'+
+      '<td data-label="Movimentação">'+esc(t.titulo)+' <a onclick="toggleTeor('+t.id+')" style="cursor:pointer;color:var(--muted);font-size:11px">(ver teor)</a><div class="teor" id="teor-'+t.id+'" style="display:none;font-size:12px;color:var(--muted);margin-top:6px">'+teorHtml+'</div></td>'+
+      '<td data-label="Sugestão">'+'<b>'+esc(sug.ativ)+'</b><div class="note" style="margin:0">prazo sugerido: '+pz+'</div></td>'+
       (t.done
-        ? '<td><span style="color:#0F6E56;font-weight:600;font-size:12px">✓ tratada</span> <button class="btn sm ghost" onclick="reabrirTriagem('+t.id+')" title="Voltar para a fila">reabrir</button></td>'
-        : '<td><button class="btn sm gold" onclick="acaoTriagem('+t.id+')">criar atividade &rarr;</button> <button class="btn sm ghost" onclick="cienciaTriagem('+t.id+')">ciência</button></td>');
+        ? '<td data-label="Classificar"><span style="color:#0F6E56;font-weight:600;font-size:12px">✓ tratada</span> <button class="btn sm ghost" onclick="reabrirTriagem('+t.id+')" title="Voltar para a fila">reabrir</button></td>'
+        : '<td data-label="Classificar"><button class="btn sm gold" onclick="acaoTriagem('+t.id+')">criar atividade &rarr;</button> <button class="btn sm ghost" onclick="cienciaTriagem('+t.id+')">ciência</button></td>');
     tb.appendChild(tr);
   });
 }
@@ -3297,6 +3297,16 @@ function contatoDoProcesso(p){
     .grid2{grid-template-columns:1fr!important}
     .card{padding:13px 14px;overflow-x:auto}
     table{font-size:12.5px;min-width:520px} .card table{display:table}
+    /* Publicações (triagem): no celular vira CARTÕES empilhados, sem rolagem lateral */
+    .tbl-triagem{min-width:0!important;width:100%!important;font-size:13px}
+    .tbl-triagem thead{display:none}
+    .tbl-triagem tbody,.tbl-triagem tr,.tbl-triagem td{display:block;width:auto!important}
+    .tbl-triagem tr{border:1px solid var(--line);border-radius:10px;margin:0 0 12px;padding:8px 6px;background:#fff;box-shadow:0 1px 3px rgba(30,39,51,.05)}
+    .tbl-triagem td{border:none!important;padding:5px 10px;max-width:none!important}
+    .tbl-triagem td[data-label]:before{content:attr(data-label);display:block;font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:700;margin-bottom:3px}
+    .tbl-triagem td.proc{font-size:14px}
+    .tbl-triagem td[data-label="Classificar"]{display:flex;gap:8px;flex-wrap:wrap;padding-top:8px}
+    .tbl-triagem td[data-label="Classificar"]:before{width:100%}
     .searchbar{flex-wrap:wrap} .searchbar input{max-width:none}
     .agtools{flex-wrap:wrap}
     .parties{font-size:15.5px}
