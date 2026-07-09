@@ -980,14 +980,20 @@ function primeiroUltimo(n){var p=String(n||"").trim().split(/\s+/);if(p.length<=
 function moverLead(dragId,targetId){var di=LEADS.findIndex(function(x){return x.id===dragId;});var t=LEADS.find(function(x){return x.id===targetId;});if(di<0||!t||dragId===targetId)return;var d=LEADS[di];d.estagio=t.estagio;LEADS.splice(di,1);var ti=LEADS.findIndex(function(x){return x.id===targetId;});LEADS.splice(ti,0,d);renderCaptacao();}
 function initKanban(){
   if(KAN)return; KAN=[];
-  /* se já vieram tarefas do banco (kanban_tarefas), usa elas; senão, cai no seed + agenda do Astrea */
+  /* As tarefas salvas no banco (kanban_tarefas) entram primeiro e PREVALECEM.
+     Mas o seed do Astrea (tarefas/prazos importados) deve continuar aparecendo
+     MESMO com o banco populado — antes, qualquer linha no banco fazia toda a
+     agenda do Astrea sumir do Kanban e da Agenda. Agora mesclamos os dois,
+     deduplicando por título+número+cliente (o que já veio do banco vence). */
   if(window.__KANDB && window.__KANDB.length){
     window.__KANDB.forEach(function(t){ KAN.push(t); });
-  } else {
-    DADOS.kanbanSeed.forEach(function(p,i){KAN.push({id:i+1,titulo:p.titulo,cliente:p.cliente,numero:p.numero,col:"distribuir"});});
-    /* tarefas e prazos importados do Astrea (embutidos) */
-    if(typeof ASTREA_TAREFAS_SEED!=='undefined'){ ASTREA_TAREFAS_SEED.forEach(function(t){ KAN.push({id:t.id,titulo:t.titulo,cliente:t.cliente,numero:t.numero,col:t.col||'distribuir',resp:t.resp,data:t.data,prazo:t.prazo,tipoForm:t.tipoForm}); }); }
   }
+  var _vistos={}; KAN.forEach(function(a){ _vistos[_kanKey(a)]=1; });
+  function _semDup(a){ var k=_kanKey(a); if(_vistos[k]) return false; _vistos[k]=1; return true; }
+  /* seed inicial de processos a distribuir */
+  DADOS.kanbanSeed.forEach(function(p,i){ var a={id:i+1,titulo:p.titulo,cliente:p.cliente,numero:p.numero,col:"distribuir"}; if(_semDup(a)) KAN.push(a); });
+  /* tarefas e prazos importados da agenda do Astrea (embutidos) — sempre presentes */
+  if(typeof ASTREA_TAREFAS_SEED!=='undefined'){ ASTREA_TAREFAS_SEED.forEach(function(t){ var a={id:t.id,titulo:t.titulo,cliente:t.cliente,numero:t.numero,col:t.col||'distribuir',resp:t.resp,data:t.data,prazo:t.prazo,tipoForm:t.tipoForm}; if(_semDup(a)) KAN.push(a); }); }
   /* re-aplica as colunas salvas localmente (cookie) por cima do seed/banco,
      para o card não voltar para "A distribuir" depois do F5. */
   _aplicarKanbanCookie();
