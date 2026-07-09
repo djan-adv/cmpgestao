@@ -801,7 +801,7 @@ function abrir(i){
     (function(){ var vinc=(p.hist_full&&p.hist_full.length>0)&&p.foro; return ' &nbsp;·&nbsp; <span style="display:inline-block;border-radius:20px;padding:2px 10px;font-size:11px;font-weight:600;'+(vinc?'background:#e5f4ed;color:#127a53">vinculado jus.br':'background:#fbeceb;color:#b5342b">não vinculado')+'</span>'; })()+_casoCtrlHTML(p)+'</div>'+
     '<div id="ctl-chips" style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center"></div>'+
     '<div id="proc-vinculados" style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center"></div>'+
-    '<div style="margin-top:10px"><button class="btn sm" onclick="novaTarefaDoProcesso()">+ Nova tarefa neste processo</button> <button class="btn sm" style="background:#faf3ee;color:#D97757;border:1px solid #edd7c9;font-weight:700" onclick="agendarClaude()" title="Deixar mensagem para o cliente a qualquer hora — o Claude envia somente em horário comercial"><span style="font-size:13px">✳</span> Agendar com Claude</button> <button class="btn sm" style="background:#eef4fb;color:#185FA5;border:1px solid #cfe0f2;font-weight:700" onclick="abrirTribunal(\''+p.numero+'\')" title="Abrir o sistema do tribunal (PJe/e-SAJ/Projudi) no grau deste processo — o número é copiado para você colar na busca">&#9878; Abrir no tribunal</button></div>'+
+    '<div style="margin-top:10px"><button class="btn sm" onclick="novaTarefaDoProcesso()">+ Nova tarefa neste processo</button> <button class="btn sm" style="background:#faf3ee;color:#D97757;border:1px solid #edd7c9;font-weight:700" onclick="agendarClaude()" title="Deixar mensagem para o cliente a qualquer hora — o Claude envia somente em horário comercial"><span style="font-size:13px">✳</span> Agendar com Claude</button> <button class="btn sm" style="background:#eef4fb;color:#185FA5;border:1px solid #cfe0f2;font-weight:700" onclick="abrirTribunal(\''+p.numero+'\')" title="Abrir o sistema do tribunal (PJe/e-SAJ/Projudi) no grau deste processo — o número é copiado para você colar na busca">&#9878; Abrir no tribunal</button> <button class="btn sm" style="background:#eef7f1;color:#0F6E56;border:1px solid #cfe8db;font-weight:700" onclick="abrirAcompanhamento(\''+p.numero+'\')" title="Ativar aviso por e-mail à cliente quando houver movimentação oficial (sem expor o teor)">&#128231; Acompanhamento</button></div>'+
     /* ponto 12: bloco de processos vinculados no canto inferior direito da aba (perto do botão Encerrar) */
     '<div id="proc-vinculados-rodape" style="position:absolute;bottom:12px;right:14px;max-width:60%;display:flex;gap:6px;flex-wrap:wrap;align-items:center;justify-content:flex-end;font-size:12px"></div>'+
     '</div>';
@@ -3159,6 +3159,87 @@ function abrirTribunal(numero){
   <label>Link do balcão virtual desta vara (opcional)</label><input id="co-link" style="width:100%;box-sizing:border-box;margin-bottom:8px" />
   <div style="margin-top:8px;display:flex;gap:8px"><button class="btn" onclick="salvarContatoOrgao()">Salvar</button><button class="btn ghost" onclick="fecharContatoOrgao()">Cancelar</button></div>
 </div></div>
+<!-- Acompanhamento por e-mail — Fase 1: cadastro do vínculo (o envio semanal é a Fase 2) -->
+<div id="modal-acomp" class="overlay hidden"><div class="modal" style="max-width:540px">
+  <h2>Acompanhamento por e-mail</h2>
+  <div class="note" id="ac-proc" style="margin-bottom:8px"></div>
+  <p style="font-size:13px;color:var(--muted);margin:0 0 10px">Quando houver <b>movimentação oficial</b> (DJEN/tribunal) neste processo, o sistema envia à cliente, no máximo <b>uma vez por semana</b>, um aviso de que há novidade — <b>sem expor o teor</b>. A cliente pode se descadastrar a qualquer momento.</p>
+  <label>E-mail da cliente</label>
+  <input id="ac-email" type="email" placeholder="cliente@email.com" style="width:100%;box-sizing:border-box;margin-bottom:8px" />
+  <label>Nome da cliente (opcional)</label>
+  <input id="ac-nome" style="width:100%;box-sizing:border-box;margin-bottom:8px" />
+  <div id="ac-status" style="font-size:12.5px;margin:6px 0"></div>
+  <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+    <button class="btn" onclick="salvarAcompanhamento()">Ativar / salvar</button>
+    <button class="btn ghost" id="ac-btn-desativar" onclick="desativarAcompanhamento()" style="display:none">Desativar</button>
+    <button class="btn ghost" onclick="fecharAcompanhamento()">Fechar</button>
+  </div>
+</div></div>
+<script>
+/* Acompanhamento por e-mail (vínculo cliente↔processo). Só cadastra/gerencia a
+   assinatura; o disparo semanal do aviso é feito por um job à parte (Fase 2). */
+window.__acCtx=null;
+async function abrirAcompanhamento(numero){
+  var p=(DADOS.processos||[]).filter(function(x){return x.numero===numero;})[0]||{numero:numero};
+  window.__acCtx={numero:numero, sub:null};
+  document.getElementById('ac-proc').innerHTML='Processo nº <b>'+esc(numero)+'</b>'+(p.cliente?(' — '+esc(p.cliente)):'');
+  document.getElementById('ac-email').value='';
+  document.getElementById('ac-nome').value=p.cliente||'';
+  document.getElementById('ac-status').textContent='';
+  document.getElementById('ac-btn-desativar').style.display='none';
+  document.getElementById('modal-acomp').classList.remove('hidden');
+  try{
+    var sb=window.__sb; if(!sb) return;
+    var r=await sb.from('assinaturas').select('*').eq('processo_numero',numero).eq('canal','email').order('criado_em',{ascending:false}).limit(1);
+    if(r&&r.data&&r.data.length){
+      var s=r.data[0]; window.__acCtx.sub=s;
+      document.getElementById('ac-email').value=s.destino||'';
+      if(s.cliente_nome) document.getElementById('ac-nome').value=s.cliente_nome;
+      document.getElementById('ac-status').innerHTML = s.ativo ? '<span style="color:#0F6E56;font-weight:600">&#10003; Acompanhamento ATIVO</span>' : '<span style="color:#b5342b;font-weight:600">Inativo</span>';
+      document.getElementById('ac-btn-desativar').style.display = s.ativo ? '' : 'none';
+    }
+  }catch(e){ console.warn('acomp load:',e); }
+}
+function fecharAcompanhamento(){ document.getElementById('modal-acomp').classList.add('hidden'); }
+async function _acEscritorioId(sb){
+  try{ var ug=await sb.auth.getUser(); var uid=ug&&ug.data&&ug.data.user&&ug.data.user.id; if(!uid) return null;
+    var pf=await sb.from('usuarios').select('escritorio_id').eq('id',uid).single();
+    return (pf&&pf.data&&pf.data.escritorio_id)||null;
+  }catch(e){ return null; }
+}
+async function salvarAcompanhamento(){
+  var ctx=window.__acCtx; if(!ctx) return;
+  var email=(document.getElementById('ac-email').value||'').trim();
+  var nome=(document.getElementById('ac-nome').value||'').trim();
+  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ alert('Digite um e-mail válido da cliente.'); return; }
+  var sb=window.__sb; if(!sb){ alert('Sem conexão com o banco.'); return; }
+  var esc2=await _acEscritorioId(sb); if(!esc2){ alert('Não foi possível identificar seu escritório. Recarregue e tente de novo.'); return; }
+  var adv=(document.getElementById('who-name')||{}).textContent||'';
+  try{
+    if(ctx.sub && ctx.sub.id){
+      var u=await sb.from('assinaturas').update({destino:email,cliente_nome:(nome||null),ativo:true}).eq('id',ctx.sub.id);
+      if(u&&u.error) throw u.error; ctx.sub.destino=email; ctx.sub.ativo=true;
+    } else {
+      var ins=await sb.from('assinaturas').insert({escritorio_id:esc2,processo_numero:ctx.numero,cliente_nome:(nome||null),canal:'email',destino:email,ativo:true,consentimento_via:'ficha',criado_por:adv}).select('*').single();
+      if(ins&&ins.error) throw ins.error; if(ins&&ins.data) ctx.sub=ins.data;
+    }
+    document.getElementById('ac-status').innerHTML='<span style="color:#0F6E56;font-weight:600">&#10003; Acompanhamento ATIVO</span>';
+    document.getElementById('ac-btn-desativar').style.display='';
+    alert('Acompanhamento ativado para '+email+'.\n\nA cliente receberá, no máximo 1x por semana, um aviso quando houver movimentação oficial — sem o teor.');
+  }catch(e){ alert('Erro ao salvar: '+(e&&e.message||e)); }
+}
+async function desativarAcompanhamento(){
+  var ctx=window.__acCtx; if(!ctx||!ctx.sub||!ctx.sub.id) return;
+  if(!confirm('Desativar o acompanhamento por e-mail deste processo?')) return;
+  var sb=window.__sb; if(!sb) return;
+  try{
+    var u=await sb.from('assinaturas').update({ativo:false}).eq('id',ctx.sub.id);
+    if(u&&u.error) throw u.error; ctx.sub.ativo=false;
+    document.getElementById('ac-status').innerHTML='<span style="color:#b5342b;font-weight:600">Inativo</span>';
+    document.getElementById('ac-btn-desativar').style.display='none';
+  }catch(e){ alert('Erro ao desativar: '+(e&&e.message||e)); }
+}
+</script>
 <script>
 window.__CO=null;
 async function loadCO(force){ if(window.__CO && !force) return window.__CO; var sb=window.__sb; if(!sb){ window.__CO=[]; return window.__CO; } var r=await sb.from('contatos_orgao').select('*'); window.__CO=(r&&r.data)||[]; return window.__CO; }
