@@ -1145,7 +1145,7 @@ function renderTriagem(){
       '<td data-label="Sugestão">'+'<b>'+esc(sug.ativ)+'</b><div class="note" style="margin:0">prazo sugerido: '+pz+'</div></td>'+
       (t.done
         ? '<td data-label="Classificar"><span style="color:#0F6E56;font-weight:600;font-size:12px">✓ tratada</span> <button class="btn sm ghost" onclick="reabrirTriagem('+t.id+')" title="Voltar para a fila">reabrir</button></td>'
-        : '<td data-label="Classificar"><button class="btn sm gold" onclick="acaoTriagem('+t.id+')">criar atividade &rarr;</button> <button class="btn sm ghost" onclick="cienciaTriagem('+t.id+')">ciência</button></td>');
+        : '<td data-label="Classificar"><button class="btn sm gold" onclick="acaoTriagem('+t.id+')">criar atividade &rarr;</button> <button class="btn sm ghost" onclick="cienciaTriagem('+t.id+')">ciência</button> <button class="btn sm ghost" style="color:#0b7285" onclick="abrirAtualizarCliente(\''+String(t.numero).replace(/'/g,"")+'\')" title="Comunicar a cliente por e-mail (informar a movimentação ou pedir uma providência)">&#9993; cliente</button></td>');
     tb.appendChild(tr);
   });
 }
@@ -3265,8 +3265,13 @@ async function desativarAcompanhamento(){
 <div id="modal-atualizar" class="overlay hidden"><div class="modal" style="max-width:640px">
   <h2>Atualizar cliente por e-mail</h2>
   <div class="note" id="atz-proc" style="margin-bottom:8px"></div>
+  <div style="margin-bottom:8px;font-size:13px">
+    <label style="margin-right:14px;cursor:pointer"><input type="radio" name="atz-modo" value="informar" checked onchange="_atzModo()"> Informar movimentação</label>
+    <label style="cursor:pointer"><input type="radio" name="atz-modo" value="pedido" onchange="_atzModo()"> Pedir providência ao cliente</label>
+  </div>
   <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:8px">
-    <div><label>Quantas movimentações</label><br><select id="atz-qtd" onchange="_gerarRascunhoAtualizacao()" style="padding:6px"><option value="1">Última</option><option value="3">Últimas 3</option><option value="5" selected>Últimas 5</option><option value="10">Últimas 10</option></select></div>
+    <div id="atz-qtd-box"><label>Quantas movimentações</label><br><select id="atz-qtd" onchange="_gerarRascunhoAtualizacao()" style="padding:6px"><option value="1">Última</option><option value="3">Últimas 3</option><option value="5" selected>Últimas 5</option><option value="10">Últimas 10</option></select></div>
+    <div id="atz-pedido-box" style="display:none"><label>Providência</label><br><select id="atz-pedido-tipo" onchange="_gerarRascunhoAtualizacao()" style="padding:6px;max-width:320px"><option value="grat">Documentos para gratuidade (comprovantes de renda)</option><option value="provas">Documentos/provas para instruir o pedido</option><option value="dados">Confirmar dados e endereço atualizados</option><option value="audiencia">Confirmar audiência e testemunhas</option><option value="livre">Outro (escrever no texto)</option></select></div>
     <div style="flex:1;min-width:220px"><label>E-mail da cliente (do cadastro)</label><input id="atz-email" type="email" placeholder="cliente@email.com" style="width:100%;box-sizing:border-box" /></div>
   </div>
   <label>Assunto</label>
@@ -3314,19 +3319,48 @@ function explicaParaCliente(texto){
   if(/arquiv/.test(t)) return 'O processo teve movimentação de arquivamento.';
   return 'Houve uma nova movimentação processual.';
 }
+function _atzModoAtual(){ var r=document.querySelector('input[name="atz-modo"]:checked'); return (r&&r.value)||'informar'; }
+function _atzModo(){
+  var m=_atzModoAtual();
+  var qb=document.getElementById('atz-qtd-box'), pb=document.getElementById('atz-pedido-box');
+  if(qb) qb.style.display=(m==='pedido')?'none':'';
+  if(pb) pb.style.display=(m==='pedido')?'':'none';
+  _gerarRascunhoAtualizacao();
+}
+var _ATZ_PEDIDOS={
+  grat:'os comprovantes de renda dos últimos 3 meses (contracheques, extratos ou declaração), para instruirmos o pedido de gratuidade da Justiça',
+  provas:'os documentos e provas que possam instruir o seu pedido (contratos, comprovantes, fotos, mensagens, etc.)',
+  dados:'a confirmação dos seus dados atualizados: endereço completo, telefone e e-mail',
+  audiencia:'a confirmação da sua presença na audiência e os dados de contato das suas testemunhas',
+  livre:'[descreva aqui o que a cliente deve providenciar]'
+};
 function _gerarRascunhoAtualizacao(){
   var ctx=window.__atzCtx; if(!ctx) return; var p=ctx.p;
-  var n=parseInt((document.getElementById('atz-qtd')||{}).value,10)||5;
-  var movs=_movsOficiais(p,n);
   var nome=(nomeBonito(p.cliente||'')||'').trim();
-  var linhas=movs.map(function(m){ var d=_atzDataBR(m.data); return '• '+(d?(d+' — '):'')+explicaParaCliente(m.texto); });
-  var corpo='Prezado(a)'+(nome?(' '+nome):' cliente')+',\n\n'
-    +'Segue a atualização do seu processo nº '+p.numero+':\n\n'
-    +(linhas.length?linhas.join('\n'):'• Sem movimentações oficiais recentes registradas.')+'\n\n'
-    +'Seguimos acompanhando o processo e comunicaremos as próximas movimentações.\n\n'
-    +'Atenciosamente,\n'+(((document.getElementById('who-name')||{}).textContent)||'')+'\nCrispim Mendonça e Pinheiro Advogados';
+  var assinatura='Atenciosamente,\n'+(((document.getElementById('who-name')||{}).textContent)||'')+'\nCrispim Mendonça e Pinheiro Advogados';
+  var corpo, assunto;
+  if(_atzModoAtual()==='pedido'){
+    var tipo=(document.getElementById('atz-pedido-tipo')||{}).value||'grat';
+    var item=_ATZ_PEDIDOS[tipo]||_ATZ_PEDIDOS.livre;
+    corpo='Prezado(a)'+(nome?(' '+nome):' cliente')+',\n\n'
+      +'Sobre o seu processo nº '+p.numero+', precisamos da sua ajuda para dar andamento. Por gentileza, providencie:\n\n'
+      +'• '+item+'\n\n'
+      +'Assim que possível, envie por este e-mail ou pelo WhatsApp do escritório. Ficamos à disposição para esclarecer qualquer dúvida.\n\n'
+      +assinatura;
+    assunto='Providência no seu processo — [Ref: '+p.numero+']';
+  } else {
+    var n=parseInt((document.getElementById('atz-qtd')||{}).value,10)||5;
+    var movs=_movsOficiais(p,n);
+    var linhas=movs.map(function(m){ var d=_atzDataBR(m.data); return '• '+(d?(d+' — '):'')+explicaParaCliente(m.texto); });
+    corpo='Prezado(a)'+(nome?(' '+nome):' cliente')+',\n\n'
+      +'Segue a atualização do seu processo nº '+p.numero+':\n\n'
+      +(linhas.length?linhas.join('\n'):'• Sem movimentações oficiais recentes registradas.')+'\n\n'
+      +'Seguimos acompanhando o processo e comunicaremos as próximas movimentações.\n\n'
+      +assinatura;
+    assunto='Atualização do seu processo — [Ref: '+p.numero+']';
+  }
   var el=document.getElementById('atz-corpo'); if(el) el.value=corpo;
-  var as=document.getElementById('atz-assunto'); if(as) as.value='Atualização do seu processo — [Ref: '+p.numero+']';
+  var as=document.getElementById('atz-assunto'); if(as) as.value=assunto;
 }
 async function abrirAtualizarCliente(numero){
   var p=(DADOS.processos||[]).filter(function(x){return x.numero===numero;})[0];
@@ -3334,9 +3368,10 @@ async function abrirAtualizarCliente(numero){
   window.__atzCtx={p:p};
   document.getElementById('atz-proc').innerHTML='Processo nº <b>'+esc(numero)+'</b>'+(p.cliente?(' — '+esc(nomeBonito(p.cliente))):'');
   var q=document.getElementById('atz-qtd'); if(q) q.value='5';
+  var mi=document.querySelector('input[name="atz-modo"][value="informar"]'); if(mi) mi.checked=true;
   document.getElementById('atz-email').value='';
   document.getElementById('modal-atualizar').classList.remove('hidden');
-  _gerarRascunhoAtualizacao();
+  _atzModo();
   try{
     var sb=window.__sb; if(!sb) return;
     var r=await sb.from('assinaturas').select('destino').eq('processo_numero',numero).eq('canal','email').eq('ativo',true).order('criado_em',{ascending:false}).limit(1);
@@ -3362,9 +3397,15 @@ function copiarAtualizacao(){
 async function registrarEnvioAtualizacao(){
   var ctx=window.__atzCtx; if(!ctx) return; var p=ctx.p;
   var email=(document.getElementById('atz-email').value||'').trim();
-  var n=parseInt((document.getElementById('atz-qtd')||{}).value,10)||5;
   var hoje=new Date().toISOString().slice(0,10);
-  var texto='[E-mail ao cliente] Atualização enviada'+(email?(' a '+email):'')+' — '+_movsOficiais(p,n).length+' movimentação(ões).';
+  var texto;
+  if(_atzModoAtual()==='pedido'){
+    var tp=(document.getElementById('atz-pedido-tipo')||{}).value||'';
+    texto='[E-mail ao cliente] Pedido de providência enviado'+(email?(' a '+email):'')+(tp?(' ('+tp+')'):'')+'.';
+  } else {
+    var n=parseInt((document.getElementById('atz-qtd')||{}).value,10)||5;
+    texto='[E-mail ao cliente] Atualização enviada'+(email?(' a '+email):'')+' — '+_movsOficiais(p,n).length+' movimentação(ões).';
+  }
   var sb=window.__sb;
   try{
     if(sb && p._id){ var ins=await sb.from('andamentos').insert({processo_id:p._id,data:hoje,texto:texto,fonte:'manual'}).select('id').single(); if(ins&&ins.error) throw ins.error; }
