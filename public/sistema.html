@@ -1671,6 +1671,8 @@ function toggleConcluirTarefa(id){
       if(!ag.error&&ag.data){
         window.__AGDB=ag.data.map(function(e){return {data:String(e.data).slice(0,10),hora:e.hora||'09:00',tipo:e.tipo||'nt',tt:e.titulo,resp:e.resp||'',p:{numero:e.processo_numero||'—',cliente:''}};});
         AGENDA=null; initAgenda();
+        /* CORREÇÃO: re-renderiza a agenda agora que os dados chegaram (evita ficar em branco até trocar de view) */
+        try{ var __sec=(document.querySelector('#s-agenda') && !document.getElementById('s-agenda').classList.contains('hidden')); if(__sec && typeof renderAgendaView==='function') renderAgendaView(); }catch(eR){}
         console.log('CMPGestao: '+window.__AGDB.length+' eventos de agenda carregados (sincronizados com Google).');
       }
     }catch(eAg){ console.log('agenda: '+(eAg&&eAg.message||eAg)); }
@@ -1678,6 +1680,14 @@ function toggleConcluirTarefa(id){
       var __pn=window.__restoreProc;
       if(__pn){ var __ix=DADOS.processos.findIndex(function(p){return p.numero===__pn;}); if(__ix>=0){ abrir(__ix); } window.__restoreProc=null; }
     }catch(eRe){}
+    /* CORREÇÃO GERAL: agora que TODOS os dados chegaram, re-renderiza a tela ativa
+       (evita agenda/processos/painel em branco quando a pessoa abre antes do carregamento). */
+    try{
+      var _secs=['painel','triagem','agenda','processos','crm','etiquetas','encerrados','inove','diligencias','relatorio'];
+      var _ativa=_secs.find(function(s){var el=document.getElementById('s-'+s);return el && !el.classList.contains('hidden');});
+      if(_ativa==='agenda' && typeof renderAgendaView==='function') renderAgendaView();
+      else if(_ativa && typeof go==='function') go(_ativa);
+    }catch(eRR){}
     console.log('CMPGestao: '+DADOS.processos.length+' processos carregados do banco.');
   }catch(err){
     alert('Erro ao carregar dados do banco: '+(err.message||err));
