@@ -801,7 +801,7 @@ function abrir(i){
     (function(){ var vinc=(p.hist_full&&p.hist_full.length>0)&&p.foro; return ' &nbsp;·&nbsp; <span style="display:inline-block;border-radius:20px;padding:2px 10px;font-size:11px;font-weight:600;'+(vinc?'background:#e5f4ed;color:#127a53">vinculado jus.br':'background:#fbeceb;color:#b5342b">não vinculado')+'</span>'; })()+_casoCtrlHTML(p)+'</div>'+
     '<div id="ctl-chips" style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center"></div>'+
     '<div id="proc-vinculados" style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center"></div>'+
-    '<div style="margin-top:10px"><button class="btn sm" onclick="novaTarefaDoProcesso()">+ Nova tarefa neste processo</button> <button class="btn sm" style="background:#faf3ee;color:#D97757;border:1px solid #edd7c9;font-weight:700" onclick="agendarClaude()" title="Deixar mensagem para o cliente a qualquer hora — o Claude envia somente em horário comercial"><span style="font-size:13px">✳</span> Agendar com Claude</button> <button class="btn sm" style="background:#eef4fb;color:#185FA5;border:1px solid #cfe0f2;font-weight:700" onclick="abrirTribunal(\''+p.numero+'\')" title="Abrir o sistema do tribunal (PJe/e-SAJ/Projudi) no grau deste processo — o número é copiado para você colar na busca">&#9878; Abrir no tribunal</button> <button class="btn sm" style="background:#eef7f1;color:#0F6E56;border:1px solid #cfe8db;font-weight:700" onclick="abrirAcompanhamento(\''+p.numero+'\')" title="Ativar aviso por e-mail à cliente quando houver movimentação oficial (sem expor o teor)">&#128231; Acompanhamento</button></div>'+
+    '<div style="margin-top:10px"><button class="btn sm" onclick="novaTarefaDoProcesso()">+ Nova tarefa neste processo</button> <button class="btn sm" style="background:#faf3ee;color:#D97757;border:1px solid #edd7c9;font-weight:700" onclick="agendarClaude()" title="Deixar mensagem para o cliente a qualquer hora — o Claude envia somente em horário comercial"><span style="font-size:13px">✳</span> Agendar com Claude</button> <button class="btn sm" style="background:#eef4fb;color:#185FA5;border:1px solid #cfe0f2;font-weight:700" onclick="abrirTribunal(\''+p.numero+'\')" title="Abrir o sistema do tribunal (PJe/e-SAJ/Projudi) no grau deste processo — o número é copiado para você colar na busca">&#9878; Abrir no tribunal</button> <button class="btn sm" style="background:#eef7f1;color:#0F6E56;border:1px solid #cfe8db;font-weight:700" onclick="abrirAcompanhamento(\''+p.numero+'\')" title="Ativar aviso por e-mail à cliente quando houver movimentação oficial (sem expor o teor)">&#128231; Acompanhamento</button> <button class="btn sm" style="background:#eaf4f4;color:#0b7285;border:1px solid #cfe6e6;font-weight:700" onclick="abrirAtualizarCliente(\''+p.numero+'\')" title="Montar um e-mail de atualização com as últimas movimentações, em linguagem simples, para revisar e enviar">&#9993; Atualizar cliente</button></div>'+
     /* ponto 12: bloco de processos vinculados no canto inferior direito da aba (perto do botão Encerrar) */
     '<div id="proc-vinculados-rodape" style="position:absolute;bottom:12px;right:14px;max-width:60%;display:flex;gap:6px;flex-wrap:wrap;align-items:center;justify-content:flex-end;font-size:12px"></div>'+
     '</div>';
@@ -3259,6 +3259,119 @@ async function desativarAcompanhamento(){
     document.getElementById('ac-status').innerHTML='<span style="color:#b5342b;font-weight:600">Inativo</span>';
     document.getElementById('ac-btn-desativar').style.display='none';
   }catch(e){ alert('Erro ao desativar: '+(e&&e.message||e)); }
+}
+</script>
+<!-- Atualizar cliente — Passo 1: monta e-mail com as últimas movimentações (revisar + enviar pelo seu Gmail) -->
+<div id="modal-atualizar" class="overlay hidden"><div class="modal" style="max-width:640px">
+  <h2>Atualizar cliente por e-mail</h2>
+  <div class="note" id="atz-proc" style="margin-bottom:8px"></div>
+  <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:8px">
+    <div><label>Quantas movimentações</label><br><select id="atz-qtd" onchange="_gerarRascunhoAtualizacao()" style="padding:6px"><option value="1">Última</option><option value="3">Últimas 3</option><option value="5" selected>Últimas 5</option><option value="10">Últimas 10</option></select></div>
+    <div style="flex:1;min-width:220px"><label>E-mail da cliente (do cadastro)</label><input id="atz-email" type="email" placeholder="cliente@email.com" style="width:100%;box-sizing:border-box" /></div>
+  </div>
+  <label>Assunto</label>
+  <input id="atz-assunto" style="width:100%;box-sizing:border-box;margin-bottom:8px" />
+  <label>Mensagem (revise e edite antes de enviar)</label>
+  <textarea id="atz-corpo" rows="12" style="width:100%;box-sizing:border-box;font-family:inherit;font-size:13px"></textarea>
+  <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+    <button class="btn" style="background:#128C7E;color:#fff" onclick="abrirNoGmail()">Abrir no Gmail</button>
+    <button class="btn ghost" onclick="copiarAtualizacao()">Copiar texto</button>
+    <button class="btn ghost" onclick="registrarEnvioAtualizacao()">Registrar envio no histórico</button>
+    <button class="btn ghost" onclick="fecharAtualizar()">Fechar</button>
+  </div>
+  <p class="note" style="margin-top:8px">Fluxo: revise o texto &rarr; <b>Abrir no Gmail</b> (abre já preenchido) &rarr; enviar &rarr; <b>Registrar envio no histórico</b>.</p>
+</div></div>
+<script>
+/* Passo 1: e-mail de atualização ao cliente, montado com as últimas movimentações
+   OFICIAIS (djen/datajud), em linguagem simples. Não envia sozinho — abre pronto no
+   Gmail para revisão/envio manual. O envio é registrado no histórico editável. */
+window.__atzCtx=null;
+function _atzDataBR(iso){ var s=String(iso||'').slice(0,10); var m=s.split('-'); if(m.length===3 && m[0]>'1900' && m[0]<'2100') return m[2]+'/'+m[1]+'/'+m[0]; return ''; }
+function _movsOficiais(p,n){
+  var arr=(p.hist_full||[]).filter(function(m){ if(!m||m.f==='manual') return false; var y=String(m.data||'').slice(0,4); return !(y>='2100'); });
+  arr=arr.slice().sort(function(a,b){ return String(b.data||'').localeCompare(String(a.data||'')); });
+  return arr.slice(0,n);
+}
+/* descreve, para o cliente, O QUE aconteceu (status objetivo, em português simples) */
+function explicaParaCliente(texto){
+  var t=(texto||'').toLowerCase();
+  /* ordem importa: casos específicos antes dos genéricos (ex.: "conclusos para
+     sentença" e "cumprimento de sentença" NÃO são "sentença proferida"). */
+  if(/tr[âa]nsito em julgado/.test(t)) return 'Houve trânsito em julgado (a decisão tornou-se definitiva).';
+  if(/conclus[oa]/.test(t)) return 'Os autos foram conclusos ao juiz (aguardando decisão/sentença).';
+  if(/cumprimento de senten[çc]a|pagamento volunt|art\.?\s*523/.test(t)) return 'Movimentação na fase de cumprimento de sentença (cobrança).';
+  if(/ac[óo]rd[ãa]o|deram provimento|negaram provimento|nega-se provimento|d[áa]-se provimento/.test(t)) return 'O tribunal julgou o recurso (acórdão).';
+  if(/embargos de declara/.test(t)) return 'Foram opostos embargos de declaração (pedido de esclarecimento/correção da decisão).';
+  if(/senten[çc]a\s+(proferida|publicada|prolatada)|profiro\s+senten|julgo\s+(procedente|improcedente|parcialmente|extinto)|resolvo o m[ée]rito|\bcondeno\b|decreto\s+a/.test(t)) return 'Foi proferida a sentença (decisão do juiz sobre o mérito do processo).';
+  if(/contrarraz|contra-?raz/.test(t)) return 'Foi aberto prazo para contrarrazões ao recurso da parte contrária.';
+  if(/apela[çc][ãa]o|agravo|\brecurso\b/.test(t)) return 'Houve movimentação relacionada a recurso.';
+  if(/audi[êe]ncia|designa/.test(t)) return 'Houve movimentação sobre audiência (designação ou realização).';
+  if(/cita[çc][ãa]o|citad[oa]/.test(t)) return 'Houve citação da parte no processo.';
+  if(/penhora|sisbajud|bacenjud|bloqueio de valores/.test(t)) return 'Houve movimentação sobre penhora/bloqueio de valores.';
+  if(/intim/.test(t)) return 'Foi feita uma intimação no processo (há prazo/providência a cumprir).';
+  if(/junta|peti[çc]|manifesta/.test(t)) return 'Foi juntada uma petição/manifestação aos autos.';
+  if(/despacho|vistos|mero expediente/.test(t)) return 'O juiz proferiu um despacho (ordem de andamento do processo).';
+  if(/arquiv/.test(t)) return 'O processo teve movimentação de arquivamento.';
+  return 'Houve uma nova movimentação processual.';
+}
+function _gerarRascunhoAtualizacao(){
+  var ctx=window.__atzCtx; if(!ctx) return; var p=ctx.p;
+  var n=parseInt((document.getElementById('atz-qtd')||{}).value,10)||5;
+  var movs=_movsOficiais(p,n);
+  var nome=(nomeBonito(p.cliente||'')||'').trim();
+  var linhas=movs.map(function(m){ var d=_atzDataBR(m.data); return '• '+(d?(d+' — '):'')+explicaParaCliente(m.texto); });
+  var corpo='Prezado(a)'+(nome?(' '+nome):' cliente')+',\n\n'
+    +'Segue a atualização do seu processo nº '+p.numero+':\n\n'
+    +(linhas.length?linhas.join('\n'):'• Sem movimentações oficiais recentes registradas.')+'\n\n'
+    +'Seguimos acompanhando o processo e comunicaremos as próximas movimentações.\n\n'
+    +'Atenciosamente,\n'+(((document.getElementById('who-name')||{}).textContent)||'')+'\nCrispim Mendonça e Pinheiro Advogados';
+  var el=document.getElementById('atz-corpo'); if(el) el.value=corpo;
+  var as=document.getElementById('atz-assunto'); if(as) as.value='Atualização do seu processo — [Ref: '+p.numero+']';
+}
+async function abrirAtualizarCliente(numero){
+  var p=(DADOS.processos||[]).filter(function(x){return x.numero===numero;})[0];
+  if(!p){ p=(typeof atual!=='undefined'&&atual)||{numero:numero,hist_full:[]}; }
+  window.__atzCtx={p:p};
+  document.getElementById('atz-proc').innerHTML='Processo nº <b>'+esc(numero)+'</b>'+(p.cliente?(' — '+esc(nomeBonito(p.cliente))):'');
+  var q=document.getElementById('atz-qtd'); if(q) q.value='5';
+  document.getElementById('atz-email').value='';
+  document.getElementById('modal-atualizar').classList.remove('hidden');
+  _gerarRascunhoAtualizacao();
+  try{
+    var sb=window.__sb; if(!sb) return;
+    var r=await sb.from('assinaturas').select('destino').eq('processo_numero',numero).eq('canal','email').eq('ativo',true).order('criado_em',{ascending:false}).limit(1);
+    if(r&&r.data&&r.data.length){ document.getElementById('atz-email').value=r.data[0].destino||''; }
+  }catch(e){ console.warn('atz email:',e); }
+}
+function fecharAtualizar(){ document.getElementById('modal-atualizar').classList.add('hidden'); }
+function _atzGmailURL(){
+  var to=encodeURIComponent((document.getElementById('atz-email').value||'').trim());
+  var su=encodeURIComponent(document.getElementById('atz-assunto').value||'');
+  var bo=encodeURIComponent(document.getElementById('atz-corpo').value||'');
+  return 'https://mail.google.com/mail/?view=cm&fs=1&to='+to+'&su='+su+'&body='+bo;
+}
+function abrirNoGmail(){
+  var e=(document.getElementById('atz-email').value||'').trim();
+  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)){ alert('Informe o e-mail da cliente (do cadastro).'); return; }
+  window.open(_atzGmailURL(),'_blank','noopener');
+}
+function copiarAtualizacao(){
+  var txt=(document.getElementById('atz-assunto').value||'')+'\n\n'+(document.getElementById('atz-corpo').value||'');
+  try{ navigator.clipboard.writeText(txt); alert('Texto copiado. Cole no seu e-mail e envie.'); }catch(e){ alert('Não foi possível copiar automaticamente — selecione o texto e copie manualmente.'); }
+}
+async function registrarEnvioAtualizacao(){
+  var ctx=window.__atzCtx; if(!ctx) return; var p=ctx.p;
+  var email=(document.getElementById('atz-email').value||'').trim();
+  var n=parseInt((document.getElementById('atz-qtd')||{}).value,10)||5;
+  var hoje=new Date().toISOString().slice(0,10);
+  var texto='[E-mail ao cliente] Atualização enviada'+(email?(' a '+email):'')+' — '+_movsOficiais(p,n).length+' movimentação(ões).';
+  var sb=window.__sb;
+  try{
+    if(sb && p._id){ var ins=await sb.from('andamentos').insert({processo_id:p._id,data:hoje,texto:texto,fonte:'manual'}).select('id').single(); if(ins&&ins.error) throw ins.error; }
+    if(!p.hist_full) p.hist_full=[]; p.hist_full.unshift({id:null,data:hoje+'T00:00:00.000Z',texto:texto,f:'manual'});
+    if(typeof renderHistorico==='function') renderHistorico();
+    alert('Envio registrado no histórico do processo.');
+  }catch(e){ alert('Registrado na tela, mas houve erro ao gravar no banco: '+(e&&e.message||e)); }
 }
 </script>
 <script>
