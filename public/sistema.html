@@ -1550,12 +1550,30 @@ function _tarChipHTML(a){
 function renderTarefasMes(){
   var cal=document.getElementById('tar-cal'); if(!cal) return;
   document.getElementById('tar-label').textContent=MESES[tarM]+' de '+tarY;
-  cal.innerHTML=''; cal.style.gridTemplateColumns='repeat(7,1fr)';
+  var lista=tarefasFiltradas();
+  var mm=String(tarM+1).padStart(2,'0');
+  var prefMes=tarY+'-'+mm;
+  /* separa: deste mês, sem data, e de outros meses (para nada "sumir") */
+  var semData=lista.filter(function(a){return !_tarISO(a);});
+  var outroMes=lista.filter(function(a){var iso=_tarISO(a);return iso && iso.slice(0,7)!==prefMes;});
+  /* faixa acima do calendário: sem data + aviso de outros meses */
+  var avisoHTML='';
+  if(semData.length){
+    avisoHTML+='<div style="background:#fff6e6;border:1px solid #f0dca8;border-radius:10px;padding:8px 10px;margin-bottom:8px">'
+      +'<div style="font-size:12px;font-weight:700;color:#8a5a00;margin-bottom:6px">Sem data definida ('+semData.length+') — não some, mas defina o prazo</div>'
+      +'<div style="display:flex;flex-wrap:wrap;gap:6px">'
+      +semData.map(function(a){ var w=document.createElement('div'); w.innerHTML=_tarChipHTML(a); return w.innerHTML; }).join('')
+      +'</div></div>';
+  }
+  if(outroMes.length){
+    avisoHTML+='<div class="note" style="margin:0 0 8px">'+outroMes.length+' atividade(s) em outros meses — use ‹ anterior / próximo › ou a visão <a onclick="setTarView(\'lista\')" style="cursor:pointer;text-decoration:underline;color:var(--navy)">Lista</a> para ver todas.</div>';
+  }
+  cal.innerHTML='';
+  if(avisoHTML){ var av=document.createElement('div'); av.style.gridColumn='1 / -1'; av.innerHTML=avisoHTML; cal.style.gridTemplateColumns='repeat(7,1fr)'; cal.appendChild(av); }
+  else { cal.style.gridTemplateColumns='repeat(7,1fr)'; }
   ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'].forEach(function(d){var h=document.createElement('div');h.className='dow';h.textContent=d;cal.appendChild(h);});
   var first=new Date(tarY,tarM,1),start=first.getDay(),dim=new Date(tarY,tarM+1,0).getDate();
   for(var i=0;i<start;i++){var o=document.createElement('div');o.className='day out';cal.appendChild(o);}
-  var mm=String(tarM+1).padStart(2,'0');
-  var lista=tarefasFiltradas();
   for(var d=1;d<=dim;d++){
     var iso=tarY+'-'+mm+'-'+String(d).padStart(2,'0');
     var cell=document.createElement('div');cell.className='day'+(iso===todayISO?' today':'');
