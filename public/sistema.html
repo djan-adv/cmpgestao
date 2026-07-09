@@ -3409,7 +3409,8 @@ async function desativarAcompanhamento(){
   <label>Mensagem (revise e edite antes de enviar)</label>
   <textarea id="atz-corpo" rows="12" style="width:100%;box-sizing:border-box;font-family:inherit;font-size:13px"></textarea>
   <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
-    <button class="btn" style="background:#128C7E;color:#fff" onclick="abrirNoGmail()">Abrir no Gmail</button>
+    <button class="btn" style="background:#0F6E56;color:#fff" onclick="enviarAgoraAtualizacao()" title="Envia direto pelo contato@cmpadvogados.com.br (requer o envio pelo servidor ativado)">Enviar agora (contato@)</button>
+    <button class="btn ghost" onclick="abrirNoGmail()">Abrir no Gmail</button>
     <button class="btn ghost" onclick="copiarAtualizacao()">Copiar texto</button>
     <button class="btn ghost" onclick="registrarEnvioAtualizacao()">Registrar envio no histórico</button>
     <button class="btn ghost" onclick="fecharAtualizar()">Fechar</button>
@@ -3551,7 +3552,26 @@ function copiarAtualizacao(){
   var txt=(document.getElementById('atz-assunto').value||'')+'\n\n'+(document.getElementById('atz-corpo').value||'');
   try{ navigator.clipboard.writeText(txt); alert('Texto copiado. Cole no seu e-mail e envie.'); }catch(e){ alert('Não foi possível copiar automaticamente — selecione o texto e copie manualmente.'); }
 }
-async function registrarEnvioAtualizacao(){
+/* envia DIRETO pelo servidor (contato@cmpadvogados.com.br) — resolve o remetente
+   e usa e-mail HTML com logo. Requer o Passo 2 ativado no VPS (SMTP + nodemailer). */
+async function enviarAgoraAtualizacao(){
+  var email=(document.getElementById('atz-email').value||'').trim();
+  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ alert('Informe o e-mail da cliente.'); return; }
+  var assunto=(document.getElementById('atz-assunto').value||'').trim();
+  var corpo=(document.getElementById('atz-corpo').value||'').trim();
+  if(!corpo){ alert('Mensagem vazia.'); return; }
+  if(!confirm('Enviar agora para '+email+' pelo contato@cmpadvogados.com.br?')) return;
+  try{
+    var tok=await docToken();
+    var r=await fetch('/api/enviar-email',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({para:email,assunto:assunto,corpo:corpo})});
+    var j=await r.json().catch(function(){return {};});
+    if(!r.ok||j.erro){ alert('Não enviou: '+(j.erro||('HTTP '+r.status))+'\n\nSe o envio pelo servidor ainda não foi ativado, use "Abrir no Gmail" por enquanto.'); return; }
+    alert('E-mail enviado de '+(j.de||'contato@cmpadvogados.com.br')+' para '+email+'.');
+    await registrarEnvioAtualizacao(true);
+    fecharAtualizar();
+  }catch(e){ alert('Erro ao enviar: '+(e&&e.message||e)); }
+}
+async function registrarEnvioAtualizacao(silent){
   var ctx=window.__atzCtx; if(!ctx) return; var p=ctx.p;
   var email=(document.getElementById('atz-email').value||'').trim();
   var assunto=(document.getElementById('atz-assunto').value||'').trim();
@@ -3569,7 +3589,7 @@ async function registrarEnvioAtualizacao(){
     if(sb && p._id){ var ins=await sb.from('andamentos').insert({processo_id:p._id,data:hoje,texto:texto,fonte:'manual'}).select('id').single(); if(ins&&ins.error) throw ins.error; }
     if(!p.hist_full) p.hist_full=[]; p.hist_full.unshift({id:null,data:hoje+'T00:00:00.000Z',texto:texto,f:'manual'});
     if(typeof renderHistorico==='function') renderHistorico();
-    alert('Envio registrado no histórico do processo.');
+    if(!silent) alert('Envio registrado no histórico do processo.');
   }catch(e){ alert('Registrado na tela, mas houve erro ao gravar no banco: '+(e&&e.message||e)); }
 }
 </script>
