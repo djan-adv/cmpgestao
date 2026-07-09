@@ -857,18 +857,29 @@ function mergeContatoNoProcesso(p,tel,email){
 function syncContatosClientes(silent){
   var existentes=(CONTATOS||[]).slice(), porNome={};
   existentes.forEach(function(c){ if(c&&c.nome) porNome[normClienteNome(c.nome)]=c; });
+  /* contatos importados do banco (382), indexados por nome normalizado */
+  var db=(window.__CONTATOSDB||[]), porNomeDB={};
+  db.forEach(function(c){ if(c&&c.nome){ var nk=normClienteNome(c.nome); if(!porNomeDB[nk]) porNomeDB[nk]=c; } });
+  function telDB(c){ var v=_primeiroValor(c&&(c.telefone||c.telefones)); return v||'—'; }
+  function emailDB(c){ var v=_primeiroValor(c&&(c.email||c.emails)); return v||'—'; }
   var mapa={}, nomesOrig={};
   DADOS.processos.forEach(function(p){ if(p.cliente){ var nk=normClienteNome(p.cliente); mapa[nk]=(mapa[nk]||0)+1; if(!nomesOrig[nk]) nomesOrig[nk]=p.cliente; } });
   var nomes=Object.keys(mapa).sort();
   CONTATOS=nomes.map(function(nk){
-    var ex=porNome[nk];
-    if(ex){ ex.proc=mapa[nk]; if(!ex.tipo) ex.tipo='cliente'; if(!ex.nome||ex.nome==='—') ex.nome=nomesOrig[nk]; return ex; }
-    return {id:cseq++,nome:nomesOrig[nk],tipo:'cliente',tel:'—',email:'—',origem:'—',proc:mapa[nk],labels:[]};
+    var ex=porNome[nk], reg=porNomeDB[nk];
+    if(ex){ ex.proc=mapa[nk]; if(!ex.tipo) ex.tipo='cliente'; if(!ex.nome||ex.nome==='—') ex.nome=nomesOrig[nk];
+      if(reg){ if(!ex.tel||ex.tel==='—') ex.tel=telDB(reg); if(!ex.email||ex.email==='—') ex.email=emailDB(reg); if(!ex.origem||ex.origem==='—') ex.origem=reg.origem||ex.origem; }
+      return ex; }
+    return {id:cseq++,nome:nomesOrig[nk],tipo:'cliente',tel:(reg?telDB(reg):'—'),email:(reg?emailDB(reg):'—'),origem:(reg&&reg.origem)||'—',proc:mapa[nk],labels:[]};
   });
   existentes.forEach(function(c){
     if(!c||!c.nome) return;
     if(!mapa[normClienteNome(c.nome)] && c.tipo!=='cliente') CONTATOS.push(c);
   });
+  /* adiciona os contatos do banco que NÃO têm processo (para os 382 aparecerem todos) */
+  var jaTem={}; CONTATOS.forEach(function(c){ if(c&&c.nome) jaTem[normClienteNome(c.nome)]=1; });
+  db.forEach(function(c){ if(!c||!c.nome) return; var nk=normClienteNome(c.nome); if(jaTem[nk]) return; jaTem[nk]=1;
+    CONTATOS.push({id:cseq++,nome:c.nome,tipo:'cliente',tel:telDB(c),email:emailDB(c),origem:c.origem||'importado',proc:0,labels:[]}); });
   CONTATOS.sort(function(a,b){return String(a.nome||'').localeCompare(String(b.nome||''),'pt-BR');});
   (CONTATOS||[]).forEach(function(c){
     if(c.tipo!=='cliente') return;
@@ -1775,6 +1786,19 @@ function toggleConcluirTarefa(id){
         console.log('CMPGestao: '+window.__KANDB.length+' tarefas do Kanban carregadas do banco.');
       }
     }catch(eKt){ console.log('kanban: '+(eKt&&eKt.message||eKt)); }
+    /* carrega os contatos importados (382) da tabela `contatos` do Supabase.
+       Lê '*' para funcionar com as colunas do import (nome, telefones, emails, cpf_cnpj...). */
+    try{
+      var ct=await sb.from('contatos').select('*').limit(5000);
+      if(!ct.error && ct.data && ct.data.length){
+        window.__CONTATOSDB=ct.data;
+        CONTATOS=null; /* força re-sync mesclando com o banco */
+        if(typeof syncContatosClientes==='function') syncContatosClientes(true);
+        var __cr=document.getElementById('s-crm');
+        if(__cr && !__cr.classList.contains('hidden') && typeof renderContatos==='function') renderContatos();
+        console.log('CMPGestao: '+window.__CONTATOSDB.length+' contatos carregados do banco.');
+      }
+    }catch(eCt){ console.log('contatos: '+(eCt&&eCt.message||eCt)); }
     try{
       var __pn=window.__restoreProc;
       if(__pn){ var __ix=DADOS.processos.findIndex(function(p){return p.numero===__pn;}); if(__ix>=0){ abrir(__ix); } window.__restoreProc=null; }
@@ -2621,21 +2645,29 @@ async function addHistManual(){
    Buscamos e salvamos na tabela `contatos` pelo nome do cliente, então o mesmo número
    aparece em TODOS os processos daquele cliente (ex.: Sergio Assabbi com vários processos). */
 function _nomeClienteBase(){ return String((atual&&atual.cliente)||'').split(';')[0].trim(); }
-async function buscaTelefoneCliente(nome){
+/* pega o primeiro valor de uma lista "a | b | c" (o import trás vários tel/email juntos) */
+function _primeiroValor(v){ if(!v) return ''; return String(v).split(/[|;,]/)[0].trim(); }
+/* lê telefone tanto de 'telefone' (singular) quanto de 'telefones' (plural, do import CSV) */
+function _telDoContato(c){ return _primeiroValor(c&&(c.telefone||c.telefones)); }
+function _emailDoContato(c){ return _primeiroValor(c&&(c.email||c.emails)); }
+async function buscaContatoCliente(nome){
   if(!nome) return null;
   try{
     var sb=window.__sb; if(!sb) return null;
-    var r=await sb.from('contatos').select('telefone,nome').ilike('nome','%'+nome.split(' ')[0]+'%').limit(20);
+    // pede as duas grafias de coluna; o Supabase ignora as que não existirem? não —
+    // por isso pedimos '*' e lemos o que vier.
+    var r=await sb.from('contatos').select('*').ilike('nome','%'+nome.split(' ')[0]+'%').limit(20);
     if(r&&r.data){
       var alvo=nome.toLowerCase();
-      // preferimos correspondência mais próxima do nome completo
-      var hit=r.data.find(function(c){return c.telefone && String(c.nome||'').trim().toLowerCase()===alvo;})
-            ||r.data.find(function(c){return c.telefone && String(c.nome||'').toLowerCase().indexOf(alvo.split(' ')[0])>-1;});
-      if(hit&&hit.telefone) return hit.telefone;
+      var hit=r.data.find(function(c){return String(c.nome||'').trim().toLowerCase()===alvo;})
+            ||r.data.find(function(c){return String(c.nome||'').toLowerCase().indexOf(alvo.split(' ')[0])>-1;});
+      if(hit) return {tel:_telDoContato(hit), email:_emailDoContato(hit), nome:hit.nome, id:hit.id};
     }
   }catch(e){}
   return null;
 }
+/* compatibilidade: continua devolvendo só o telefone para quem chama a antiga */
+async function buscaTelefoneCliente(nome){ var c=await buscaContatoCliente(nome); return c&&c.tel?c.tel:null; }
 async function salvaTelefoneCliente(nome,tel){
   var sb=window.__sb; if(!sb||!nome||!tel) return;
   try{
