@@ -110,6 +110,8 @@
   textarea{width:100%;padding:9px 12px;border:1px solid var(--line);border-radius:8px;font-family:inherit;font-size:14px;min-height:56px}
   .cev.nt{background:#3d4c60}
   .task.pri-alta{border-left-color:#b5342b} .task.pri-media{border-left-color:#E0A800} .task.pri-baixa{border-left-color:#127a53}
+  .quick-link{display:inline-flex;align-items:center;gap:6px;background:var(--accentbg);color:var(--navy);border-radius:16px;padding:4px 10px;font-size:12px;font-weight:600;margin:4px 6px 0 0;cursor:pointer}
+  .quick-link.del{background:#fbeceb;color:var(--danger)}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
@@ -140,7 +142,7 @@
     <div class="brand"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAALQAAAA6CAYAAAAZd3OaAAAJHklEQVR42u2dz2/byBXH35DDGY1kRokWUjfJOtsmBoqqQIJAhwYBWuYSQAVy6YE9BcjNhwVy2P4DXP0FPQTowbcFspfy2oMAXaxLsSlgGFi0BhZwgiZu0KwMyFZoaTz8NT3YQh07sSTbpCh7voAvlkgOZz588/jmzROAkpKSkpKSkpKSkpKSkpKSkpKSUsaEMt9Cx9Fqf/uvXi5Tbdt8pwX8CiqJAQIA+AkADJqXBtuSl73PY85LUbsNMUAjPvnlHK3ROPnx0+gfaDQkAMiD/7Zth3Q6a4QQKpO4bHe/398DRL8GiFzXjRTQnx4lrWqvYbxNjTlGtNAXH7QTHxikj30mYhzBNQhWlpbCwwM9SrVHi/mbbCt0XdfPOsu2bevblOZaz58PDt9nvf6UdqFLcUJAH+x3TKjc4X4cXhbBmusGk/b5WUrPmrWx4Of0+h0vhzkYWANN0zEc/juoj34WcF3rBcbC3d8av7pxD62v/2Nsi/vlnd/hbS9Pi3e/lJtra1GWYX4rzHwgdLTx4+qRh29h4TeYA8eH++usdLjPiaEjzMGo/uIOnp//g3z9uj2VWU7LygBVbZvcX90ocBaS4VN/UusyPDYQu6gLXWrZXxVqi4vGBBMqzHkkV7VtkmWYQ18gg+ZkVtqFCZV9RjTO1vP1+lN6IYF2HEe7/fBxYc4jucPuxFl1ciB2kf6mz+7ZNhvXzcKEyixCPYQ5ib46yz7vQpdaT57kLhTQluXg1upGIadLPenBwYTK2COGZdkFx3G0WYT6IMxZFyZU8p9CkralnhrQtcVFg7P1VC0NJlRyRrTW6kbBsiw8S1DPEsxHLLXl4HMNdK22aOhv+mwaUyYmVIa+QJuVijbJMXMeydXrdTpLMEehj7IANVQ2c5BSRA1PZ3DCHMD4MA9DRJhQadCcJNvv9479GYAvLqFA7KKD3xl1rh3T312bMCyHCZVd/zNarz+FZvOZSM8ts/BbYbJJjzPNd5J3ICLcT8Ro9PfDqeMYJe71tHr9KUmj39IGGnWgzAB2xwYZEyojXAjhGgS/v3o1ahxdREC2bWv/oqDjbWrkfKF/CuyTwvwh1F1q238NXfePURowB8Vb7CTH7sfRE4ulO46jvXjxwngP18g4/cZpZOy3J9FZOdUp6Z5ts9gjxjhPdegLpJl+MA/gT7IKZVkW3iLz9PCLZugLFN0o8JWlpeD4Nn7NYq/zyTaGvkCMLwza7UaYBZgNmpNt9y99mNJihuM42vLaWj4QJho1nmn0W2o+tG3b+rgwAwBEmwX+vevySZdU2+12+EPreb8EJXFwNSvaHA1zVmRZzoktc9pqNBpxBYCP9+1/J+4RpAY051fGfqG6Tr3Bysrp4Gs2n4noRoEDABi9eX7a86UL88ZMwHzAvYmMXhQcTkM4rB2TJs4bTmeQLNwJ+3gc63ydeoOzSnTZt8gT53MomCdXpTIIXnuEHOdHM7ql7bu5iY1HKhZaVCojl51DX6Bt6okEsrZmAuZabdGYVZj3rXTMzOKI/I1y4u1IA2hEoXzsSmDoCxThQrg2AxluScGsl/sMlLIPtGU5Ovd6I68z5/14MWFe3IM5q3kZE7z0a+OM88wDzVh3ZIpqMUJRu90OLyTMb2YfZgCATidvjHIpt/YWxORMA72JhT7qRnX9ioJ5tq2zHhT1kSHZK9f0xBejEge6JAYjl0c5/yFSMM+mHMfROgBj+f87/6QzDzTyL186NjaJCZUPHjyILwrMVdsm5wJmx9Hq9TptrW4URq0SAgAwsxivrCwlPhPjLPRNo/GNBGhcCJjnPJJLA2bbtkmnA4ltku2vbmhd+AzhMXzi0Bfokl9IPI8jM0BfFMs8KcziLd4tlQakz8jEM6nnfY52jHc6ZSSx2W/ce2FmMW66z1KJYmViT6HjfIPOM8y2beuTwmz0XvKVlaVglMt2nHRMpu7WhL5AO69CASktcCUN9P9zl4+54eXlZe08A93pdCaC0ui95PthzJl+0ENfoBKURJp5NImD1KV5OSpphbHb+mwN1XJiZz4AM8w6zIxjP83NEKkAXQ6PD9VgQmUUbSlfHvYSs2Yd5tAXaGiZ2+1vd9O+fuJAc14aGXvs6VJPcyNlVmHOSjmt04BcjFDE+H8GaVvm1IButxvR6CwsAEJeUgXz7AF8EOQd099ttZ73pznLpGEVpYDNKPY/vVsFEyp7vtCrtk0uWsbdNGH+YMPxxO9GhUwWa0xlmp8H8F8DGKN86TkPcpblxGe672yvOmesYD5qYS/5Bb/Zen5q12AtQ32aSrjMdd0owoVwVLQDEyqD4gYbtwjMKA3r5dVqk9S1Sx4kg+bkrPvMWVVq8d+bbGtsSxAUb7FTVipClvUkN6yXp5f7bLJijcnBzMxi/KBaVjDPOtCu60aMY3+UlR5qziO52qPF/KTWulZbNB4+fJznLCRDnx0TKvU3fTbtcl7M9OMH1fJgpgqqz5hSDZW129+Khw8f6z1fjCzOiAmV4PcxZ1/g2qPFkLOtcP/lYwiDBAAE4CDLWtYYu61H0Rbu6X29T6g8nDQz9NFt24a0i5nv7PwS0WIo29WFQVvBfH6ABgB5//4t3lrdKIzVuCH0fh/PeQS/JVRa9lcSYBMIpdIXAgViA3H/C8ShC5gdBfnw+V5PAeqbN7fiarXa/7uC+dwBDY1GI7Ysh0+yw/mgNQ/ELgIwIRCAAMiRz8c516stny3U62i92Uwl+K/85XPoQ3/oejRCozfPp3Ht0Bdo7ko5umuaoRp+BfSZQn2degODenLcF8WzgLkYoUhFGZTLkeBULPv37D/lwmMKJJ4VzJrpBy3X3W21QKqhVxY6ISH5vftnHt0o8CSsdegLZPQ8OSz+CKBgVhY6BQ3r0C3U6+Q6NQ3u7W07OonVHj4UjPvx9QoItznd385TuoBA70uuN5tiHcCv1RYxXAUDQ6hPYrWZWYxjWgyDV/2wvfJdqEBWQGcC7P1tOwEAIMuydMZu68OfRgbYq/fRpXkJADDniXizMojLnU7cbn4XnQZimu9K6PgxidBHz+H7PqpUKqk9JCYPYyE+/VspNMYfbYtpliTvvDv2PsxKST3sSkpKSkpKSkpKSkpKSkpKSkpKSknrf9BywIwhtOkQAAAAAElFTkSuQmCC" alt="CMP"><div class="sys"><b>CMPGestão</b><br>Crispim Mendonça e Pinheiro</div></div>
     <nav class="nav" id="nav">
       <a data-s="painel" class="active" onclick="go('painel')"><span class="ic">▤</span> Painel</a>
-      <a data-s="triagem" onclick="go('triagem')"><span class="ic">⚑</span> Triagem</a>
+      <a data-s="triagem" onclick="go('triagem')"><span class="ic">⚑</span> Publicações</a>
       <a data-s="agenda" onclick="go('agenda')"><span class="ic">◧</span> Agenda (Kanban)</a>
       <a data-s="processos" onclick="go('processos')"><span class="ic">⚖</span> Processos <span id="nav-n-proc" style="margin-left:auto;font-size:10.5px;background:var(--navy2);border-radius:10px;padding:1px 7px"></span></a>
       <a data-s="diligencias" onclick="go('diligencias')"><span class="ic">◔</span> Diligências</a>
@@ -184,9 +186,9 @@
 
     <section id="s-agenda" class="hidden">
       <div class="agtools">
-        <div class="switch"><button id="sw-ag" class="on" onclick="setViewAg('agenda')">Agenda</button><button id="sw-kan" onclick="setViewAg('kanban')">Kanban</button></div>
+        <div class="switch"><button id="sw-ag" class="on" onclick="setViewAg('agenda')">Agenda (reuniões e audiências)</button><button id="sw-kan" onclick="setViewAg('kanban')">Kanban</button><button id="sw-tar" onclick="setViewAg('tarefas')">Agenda (prazos e tarefas)</button></div>
         <button class="btn sm" style="margin-left:auto" onclick="abrirNovaTarefa()">+ Nova tarefa</button>
-        <div class="legend"><span class="lg"><i class="dot az"></i>Audiência</span><span class="lg"><i class="dot am"></i>Manifestação</span><span class="lg"><i class="dot vm"></i>Prazo importante</span></div>
+        <div class="legend"><span class="lg"><i class="dot az"></i>Audiência / Reunião</span><span class="lg"><i class="dot am"></i>Manifestação</span><span class="lg"><i class="dot vm"></i>Prazo importante</span></div>
       </div>
       <div id="view-agenda"><div class="card">
         <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
@@ -198,6 +200,16 @@
         <div class="cal" id="cal"></div>
       </div></div>
       <div id="view-kanban" class="hidden"><p class="note" style="margin-bottom:10px">Etapas reais do CMP. Arraste os cards entre as colunas.</p><div class="kanwrap"><div class="kanban" id="kanban"></div></div></div>
+      <div id="view-tarefas" class="hidden"><div class="card">
+        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
+          <div class="switch"><button id="tg-mes" class="on" onclick="setTarView('mes')">Mês</button><button id="tg-lista" onclick="setTarView('lista')">Lista</button></div>
+          <label style="margin:0;color:var(--muted);font-size:13px">Responsável:</label>
+          <select id="tar-resp" style="width:auto" onchange="setTarResp(this.value)"><option>Todos</option><option>Djan</option><option>Maria Rita</option><option>Jader Pinheiro</option><option>Maria Eduarda</option><option>Estagiário(a)</option></select>
+          <label style="margin:0;color:var(--muted);font-size:13px"><input type="checkbox" id="tar-ocultar-concl" onchange="renderTarefasView()"> ocultar concluídas</label>
+        </div>
+        <div class="calnav" id="tar-nav"><button class="navbtn" onclick="navegaTar(-1)">‹ anterior</button><b id="tar-label"></b><button class="navbtn" onclick="navegaTar(1)">próximo ›</button></div>
+        <div class="cal" id="tar-cal"></div>
+      </div></div>
     </section>
 
     <section id="s-inove" class="hidden">
@@ -212,7 +224,7 @@
     </section>
     <section id="s-processos" class="hidden">
       <div class="searchbar"><input id="busca" placeholder="Buscar por cliente, número, oponente ou assunto..." oninput="renderProc()"><select id="ordena" onchange="renderProc()" class="btn sm" style="margin-left:8px"><option value="">Novos Protocolos</option><option value="az">Cliente (A→Z)</option><option value="za">Cliente (Z→A)</option><option value="data_desc">Movimentação mais recente</option><option value="parados">Parados (mov. mais antiga)</option><option value="valor">Valor da causa (maior→menor)</option></select><select id="filtroEtq" onchange="renderProc()" class="btn sm" style="margin-left:8px"><option value="">Todas as etiquetas</option></select><select id="porPagina" onchange="renderProc()" class="btn sm" style="margin-left:8px"><option value="20">20 por página</option><option value="40">40</option><option value="60">60</option><option value="80">80</option><option value="100">100</option><option value="todos" selected>Todos</option></select><span class="note" id="proc-count" style="align-self:center"></span><button class="btn sm" style="margin-left:auto" onclick="abrirNovaTarefa()">+ Nova tarefa</button><button class="btn sm" style="margin-left:8px" onclick="abrirBusca()">+ Cadastrar por número</button></div>
-      <div class="card"><table><thead><tr><th style="width:36%">Cliente</th><th style="width:150px">Processo</th><th style="width:22%">Assunto</th><th style="width:175px"><select id="filtroMov" onchange="renderProc()" style="font-weight:700;font-size:12px;border:none;background:transparent;color:inherit;max-width:170px;cursor:pointer;padding:0"><option value="">Última movimentação</option><option value="Concluso c/petição posterior s/despacho">Concluso c/petição posterior s/despacho</option><option value="Concluso">Concluso</option><option value="Petição">Petição</option><option value="Despacho/Sentença">Despacho/Sentença</option><option value="Intimação">Intimação</option><option value="__sem">Sem classificação</option></select></th><th style="width:110px"><select id="filtroOrigem" onchange="renderProc()" style="font-weight:700;font-size:12px;border:none;background:transparent;color:inherit;max-width:105px;cursor:pointer;padding:0"><option value="">Status</option><option value="astrea">astrea</option><option value="djen">djen</option><option value="atualizado">atualizado</option></select></th><th style="width:70px"></th></tr></thead><tbody id="proc-body"></tbody></table></div><div id="proc-pager" style="display:flex;gap:6px;align-items:center;justify-content:center;padding:14px;flex-wrap:wrap"></div>
+      <div class="card"><table><thead><tr><th style="width:36%">Cliente</th><th style="width:150px">Processo</th><th style="width:22%">Assunto</th><th style="width:175px"><select id="filtroMov" onchange="renderProc()" style="font-weight:700;font-size:12px;border:none;background:transparent;color:inherit;max-width:170px;cursor:pointer;padding:0"><option value="">Última movimentação</option><option value="Concluso c/petição posterior s/despacho">Concluso c/petição posterior s/despacho</option><option value="Concluso">Concluso</option><option value="Petição">Petição</option><option value="Despacho/Sentença">Despacho/Sentença</option><option value="Intimação">Intimação</option><option value="__sem">Sem classificação</option></select></th><th style="width:110px"><select id="filtroOrigem" onchange="renderProc()" style="font-weight:700;font-size:12px;border:none;background:transparent;color:inherit;max-width:105px;cursor:pointer;padding:0"><option value="">Status</option><option value="astrea">astrea</option><option value="djen">djen</option><option value="atualizado">atualizado</option></select></th><th style="width:130px"><select id="ordenaPrazo" onchange="setOrdenaPrazo(this.value)" style="font-weight:700;font-size:12px;border:none;background:transparent;color:inherit;max-width:125px;cursor:pointer;padding:0" title="Ordenar pela data do prazo fatal"><option value="">Prazo fatal</option><option value="prox">Mais próximo → distante</option><option value="dist">Mais distante → próximo</option></select></th></tr></thead><tbody id="proc-body"></tbody></table></div><div id="proc-pager" style="display:flex;gap:6px;align-items:center;justify-content:center;padding:14px;flex-wrap:wrap"></div>
     </section>
 
     <section id="s-proc-det" class="hidden">
@@ -227,8 +239,8 @@
       </div>
       <div id="crm-contatos">
         <div class="kpis" id="crm-kpis"></div>
-        <div class="searchbar"><input id="buscaCli" placeholder="Buscar por nome, tipo, telefone, origem..." oninput="renderContatos()"><span class="note" id="cli-count" style="align-self:center"></span><button class="btn sm" style="margin-left:auto" onclick="novoContato()">+ Novo contato</button></div>
-        <div class="card"><table><thead><tr><th>Nome</th><th>Tipo</th><th>Telefone</th><th>E-mail</th><th>Origem</th><th>Proc.</th></tr></thead><tbody id="crm-body"></tbody></table></div>
+        <div class="searchbar"><input id="buscaCli" placeholder="Buscar por nome, tipo, telefone, origem..." oninput="renderContatos()"><span class="note" id="cli-count" style="align-self:center"></span><button class="btn sm" onclick="syncContatosClientes()">Sincronizar por cliente</button><button class="btn sm" style="margin-left:auto" onclick="novoContato()">+ Novo contato</button></div>
+        <div class="card"><table><thead><tr><th>Nome</th><th>Tipo</th><th>Telefone</th><th>E-mail</th><th>Origem</th><th>Proc.</th><th>Editar</th><th>Excluir</th></tr></thead><tbody id="crm-body"></tbody></table></div>
       </div>
       <div id="crm-captacao" class="hidden">
         <div id="cap-filtro" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px"></div>
@@ -239,16 +251,25 @@
     </section>
 
     <section id="s-etiquetas" class="hidden">
-      <div class="card"><p class="sectlabel">Criar etiqueta</p>
-        <div class="lblform">
-          <div><label>Nome da etiqueta (você escolhe)</label><input id="lbl-nome" placeholder="Ex.: Prioritário, Valores altos, Aguardando cliente..."></div>
-          <div><label>Cor</label><input type="color" id="lbl-cor" value="#185FA5"></div>
-          <button class="btn" onclick="criarEtiqueta()">Criar etiqueta</button>
+      <div class="grid2">
+        <div>
+          <div class="card"><p class="sectlabel">Criar etiqueta</p>
+            <div class="lblform">
+              <div><label>Nome da etiqueta (você escolhe)</label><input id="lbl-nome" placeholder="Ex.: Prioritário, Valores altos, Aguardando cliente..."></div>
+              <div><label>Cor</label><input type="color" id="lbl-cor" value="#185FA5"></div>
+              <button class="btn" onclick="criarEtiqueta()">Criar etiqueta</button>
+            </div>
+            <p class="note">Nome e cor são do seu gosto. A etiqueta fica disponível para aplicar em qualquer processo (na tela do processo).</p>
+          </div>
+          <div class="card"><p class="sectlabel">Suas etiquetas</p><div id="lbl-lista"></div></div>
         </div>
-        <p class="note">Nome e cor são do seu gosto. A etiqueta fica disponível para aplicar em qualquer processo (na tela do processo).</p>
+        <div>
+          <div class="card">
+            <p class="sectlabel">Tarefas do escritório</p>
+            <div id="etq-tarefas"></div>
+          </div>
+        </div>
       </div>
-      <div class="card"><p class="sectlabel">Suas etiquetas</p><div id="lbl-lista"></div></div>
-
     </section>
 
     <section id="s-procedimentos" class="hidden">
@@ -265,7 +286,7 @@
         <div class="flowrow"><span class="stage">A distribuir</span><span class="stage">Produção</span><span class="stage">Em revisão</span><span class="stage">A executar</span><span class="stage">Acompanhamento</span><span class="stage alt">Aguardando cliente</span></div>
         <p class="note">Passar de etapa = mover o card + abrir a tarefa do próximo responsável. Passos fixos (revisão semanal de prazos às segundas; aviso ao cliente) entram como tarefas recorrentes.</p>
       </div>
-      <div class="card"><p class="sectlabel">Triagem diária (Parte F)</p>
+      <div class="card"><p class="sectlabel">Publicações — triagem diária</p>
         A captura (DJEN) sugere ação + prazo; a equipe <b>confirma, atribui responsável e separa ciência de ação</b> — no mesmo dia da publicação. <span class="sla">Eduarda ou Rita (uma faz, a outra cobre).</span></div>
       <div class="grid2">
         <div class="card"><p class="sectlabel">Checklist — petição inicial (Parte D)</p>
@@ -329,6 +350,42 @@
     <div class="foot"><button class="btn ghost" onclick="fecharTarefa()">Cancelar</button><button class="btn" onclick="salvarTarefa()">Criar e distribuir</button></div>
   </div>
 </div>
+<div id="modal-partes" class="overlay hidden">
+  <div class="modal">
+    <h2>Sugestão de partes pelo histórico</h2>
+    <p class="note" id="partes-intro" style="margin-top:0">Encontrei estes nomes no histórico do processo. Escolha quem é a <b>parte contrária</b> (ou ajuste o cliente). Nada é gravado sem sua confirmação.</p>
+    <div style="margin:10px 0">
+      <label>Cliente principal</label>
+      <input id="partes-cliente" placeholder="Nome do cliente">
+    </div>
+    <div style="margin:10px 0">
+      <label>Parte contrária (escolha um candidato ou digite)</label>
+      <input id="partes-oponente" placeholder="Nome da parte contrária">
+      <div id="partes-candidatos" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px"></div>
+    </div>
+    <div class="foot">
+      <button class="btn ghost" onclick="fecharPartes()">Cancelar</button>
+      <button class="btn" onclick="salvarPartes()">Salvar partes</button>
+    </div>
+  </div>
+</div>
+<div id="modal-evento" class="overlay hidden">
+  <div class="modal">
+    <h2>Editar evento da agenda</h2>
+    <div id="ev-proc-link" style="font-size:13px;color:var(--muted);margin-bottom:10px">Processo: —</div>
+    <label>Título</label><input id="ev-titulo" placeholder="Ex.: Audiência de instrução">
+    <div class="row3">
+      <div><label>Data</label><input id="ev-data" type="date"></div>
+      <div><label>Hora</label><input id="ev-hora" type="time"></div>
+      <div><label>Responsável</label><input id="ev-resp" placeholder="Nome"></div>
+    </div>
+    <div class="foot">
+      <button class="btn ghost" onclick="fecharEventoAgenda()">Cancelar</button>
+      <button class="btn ghost" onclick="abrirProcessoDoEvento()">Abrir processo</button>
+      <button class="btn" onclick="salvarEventoAgenda()">Salvar</button>
+    </div>
+  </div>
+</div>
 <div id="modal-contato" class="overlay hidden"><div class="modal">
   <h2 id="mc-titulo">Contato</h2>
   <label>Nome</label><input id="c-nome">
@@ -358,8 +415,17 @@
 <script>
 var DADOS = {"processos": [], "kpis": {"total": 480, "clientes": 302, "acionaveis": 113, "status": [["Ativo 1º Grau", 451], ["Ativo", 17], ["Ativo 2º Grau", 11], ["Ativo Superior", 1]]}, "kanbanSeed": [{"numero": "0503371-04.2017.8.05.0001", "cliente": "PK COMERCIO DE MOVEIS,", "titulo": "PRAZO PARA RECORRER - Realizado: protocolado", "tipo": "DIREITO CIVIL (899) - Obrigaçõ"}, {"numero": "0804855-43.2017.8.15.0731", "cliente": "HIGIENE CONS E LIMPEZA LTDA -", "titulo": "prazo pra embargos - verificar - improcedencia e sem gratuidade - Realizado: emb", "tipo": "Adimplemento e Extinção (7690)"}, {"numero": "0815979-78.2026.8.15.2001", "cliente": "JADER GABRIEL PINHEIRO DOS", "titulo": "replica", "tipo": "Atraso de vôo (4829)"}, {"numero": "0826159-56.2026.8.15.2001", "cliente": "SERGIO ASSABBI", "titulo": "Lembrar cliente, advogado e testemunha(s) da audiência", "tipo": "Procedimento do Juizado Especi"}, {"numero": "0805174-55.2026.8.15.0000", "cliente": "JOANA ANA DA CONCEICAO", "titulo": "Decorrido prazo de JOANA ANA DA CONCEICAO FILHA em 30/06/2026 23:59.", "tipo": "Agravo de Instrumento"}, {"numero": "0823900-88.2026.8.15.2001", "cliente": "CICERA FERREIRA ALVES", "titulo": "AUDIENCIA UNA - Realizado: realizada - rita -processo concluso, audiencia adiada", "tipo": "PROCEDIMENTO DO JUIZADO ESPECI"}, {"numero": "0800168-78.2026.8.15.2001", "cliente": "Andre Henrique Silva da Conceição", "titulo": "Juntada de Petição de execução / cumprimento de sentença", "tipo": "Indenização por Dano Material "}, {"numero": "0000179-83.2026.5.05.0251", "cliente": "SERGIO ASSABBI", "titulo": "Recebido(s) o(s) Embargos de Declaração de ARISTARCO TELES QUINTILIANO DOS SANTO", "tipo": "ETCiv"}, {"numero": "0131694-07.2015.5.13.0026", "cliente": "FRANCISCA EVARISTO DE LIMA", "titulo": "Juntada a petição de Manifestação", "tipo": "ATOrd"}, {"numero": "0001608-19.2026.5.05.0661", "cliente": "F. A. B. B.", "titulo": "Juntada a petição de Manifestação", "tipo": "ATSum"}, {"numero": "0806949-91.2018.8.15.2003", "cliente": "YGOR MENDES JORGE DE SOUZA", "titulo": "Juntada de Petição de contestação", "tipo": "Indenização por Dano Moral (77"}, {"numero": "0051095-09.2011.8.15.2001", "cliente": "JOSENILDO DEOLINDO DA SILVA", "titulo": "PROTOCOLADO PEDIDO DE CUMPRIMENTO DA SENTENÇA", "tipo": "Gratificação Extraordinária - "}, {"numero": "0051098-61.2011.8.15.2001", "cliente": "GERMANO LEITE PRAXEDES", "titulo": "INTIMAR o executado para impugnar a execução, no prazo de 30 (trinta) dias. João", "tipo": "Descontos Indevidos (10296)"}, {"numero": "0046557-82.2011.8.15.2001", "cliente": "PBPREV PARAIBA PREVIDENCIA", "titulo": "EXCELENTÍSSIMO(A) SENHOR(A) DOUTOR(A) JUIZ(A) DE DIREITO DO NÚCLEO DE JUSTIÇA 4.", "tipo": "Cumprimento de Sentença contra"}, {"numero": "8034561-27.2022.8.05.0001", "cliente": "JEFERSON ROQUE DA SILVA", "titulo": "Decorrido prazo de MUNICIPIO DE SALVADOR em 26/06/2026 23:59.", "tipo": "DIREITO TRIBUTÁRIO (14) - Impo"}, {"numero": "0000904-12.2015.8.15.2003", "cliente": "INOVE CONSULTORIA ATUARIAL", "titulo": "Conhecido o recurso de CLEONICE DA COSTA DUARTE (APELANTE) e não-provido", "tipo": "Indenização por Dano Moral (10"}, {"numero": "8016001-15.2025.8.05.0039", "cliente": "EMANUEL PINHEIRO BARBOSA DA", "titulo": "Decorrido prazo de MUNICIPIO DE CAMACARI em 29/04/2026 23:59.", "tipo": "DIREITO TRIBUTÁRIO (14) - Impo"}, {"numero": "0000494-98.2026.5.05.0029", "cliente": "C. S. C.", "titulo": "Decorrido o prazo de CAMILE SILVA DA CONCEICAO em 25/06/2026", "tipo": "AÇÃO TRABALHISTA"}, {"numero": "0045915-12.2011.8.15.2001", "cliente": "ABDIAS BRANDAO DOS SANTOS", "titulo": "Decorrido prazo de ABDIAS BRANDAO DOS SANTOS em 25/06/2026 23:59.", "tipo": "Indenização por Dano Material "}, {"numero": "4058814-54.2025.8.26.0100", "cliente": "ALEXANDRE MARQUES DAS NEVES", "titulo": "Decorrido prazo - Refer. aos Eventos: 74 e 75 Usuário: SECFP", "tipo": "EXECUÇÃO DE TÍTULO EXTRAJUDICI"}, {"numero": "0260956-84.2022.8.06.0001", "cliente": "MARCOS HELENO CHAGAS", "titulo": "Decorrido prazo de OLIMPIO STUDART GALDINO em 23/06/2026 23:59.", "tipo": "Promessa de Compra e Venda (10"}, {"numero": "0800727-69.2026.8.23.0010", "cliente": "DON SILVA MARTINS", "titulo": "DECORRIDO PRAZO DE DON SILVA MARTINS", "tipo": "10439 - Indenização por Dano M"}, {"numero": "0078269-50.2022.8.17.2001", "cliente": "INOVE CONSULTORIA ATUARIAL", "titulo": "Decorrido prazo de CARLOS MAGNO DE FREITAS EVANGELISTA em 19/06/2026 23:59.", "tipo": "Citação"}, {"numero": "0000211-41.2026.5.13.0033", "cliente": "CONCEITO INDUSTRIA DE", "titulo": "Decorrido o prazo de CONCEITO INDUSTRIA DE ESTOFADOS LTDA em 19/06/2026", "tipo": "ATOrd"}, {"numero": "0008140-30.2016.8.17.2001", "cliente": "INOVE CONSULTORIA ATUARIAL", "titulo": "Proferido despacho de mero expediente - Tribunal de Justiça de Pernambuco Poder ", "tipo": "Planos de Saúde"}, {"numero": "0000601-71.2022.5.05.0001", "cliente": "ODAISE", "titulo": "Decorrido o prazo de BANCOSEGURO S.A. em 16/06/2026", "tipo": "ATSum"}, {"numero": "2801096-38.2026.8.13.0000", "cliente": "DJAN HENRIQUE MENDONCA", "titulo": "CONTRARRAZÕES", "tipo": ""}, {"numero": "0000234-98.2025.5.05.0532", "cliente": "Itallo Pericles Oliveira Lima", "titulo": "Decorrido o prazo de ITALLO PERICLES OLIVEIRA LIMA em 16/06/2026", "tipo": "ATOrd"}, {"numero": "1030952-65.2025.8.26.0002", "cliente": "GRANTUBOS - COMERCIO", "titulo": "Execução/Cumprimento de Sentença Iniciada (o) 0004518- 22.2026.8.26.0002 - Cumpr", "tipo": "Inclusão Indevida em Cadastro "}, {"numero": "0000373-54.2026.5.13.0027", "cliente": "CONCEITO INDUSTRIA DE", "titulo": "Juntada a petição de Manifestação", "tipo": "ATSum"}, {"numero": "0014422-07.2015.8.17.0001", "cliente": "INOVE CONSULTORIA ATUARIAL", "titulo": "Decorrido prazo de VISION MED ASSISTENCIA MEDICA LTDA em 15/06/2026 23:59.", "tipo": "Planos de Saúde"}, {"numero": "0805438-64.2018.8.15.2001", "cliente": "SYLVIO MARCUS FERNANDES DE", "titulo": "Situação: Cumprimento de sentença em curso. Última distribuição: 02/02/2026. Val", "tipo": "Rescisão / Resolução (10582)"}, {"numero": "0042391-59.2025.8.17.2001", "cliente": "Iara Costa Da Silva", "titulo": "DESPACHO R.H. Intime-se a parte demandada para, no prazo de 15 (quinze) dias, ma", "tipo": "AÇÃO DE INDENIZAÇÃO POR DANOS "}, {"numero": "0130135-80.2013.5.13.0027", "cliente": "VALTEX IND E COM DE", "titulo": "Decorrido o prazo de ANGELA ALCANTARA FERREIRA MIRANDA em 12/06/2026", "tipo": "ATSum"}, {"numero": "0816420-69.2020.8.15.2001", "cliente": "JOANA ANA DA CONCEICAO", "titulo": "Decorrido prazo de JOANA ANA DA CONCEICAO FILHA em 12/06/2026 23:59.", "tipo": "DIREITO CIVIL (899) - Responsa"}, {"numero": "0053227-49.2003.8.17.0001", "cliente": "INOVE CONSULTORIA ATUARIAL", "titulo": "Decorrido prazo de EDVALDO LAURENTINO VASCONCELOS em 11/06/2026 23:59.", "tipo": ""}, {"numero": "0802501-79.2016.8.15.0731", "cliente": "ADRIANO MUSSOLIN", "titulo": "Decorrido prazo de JALINE CRISPIM MENDONÇA em 11/06/2026 23:59.", "tipo": "Produto Impróprio (11867)"}, {"numero": "8010314-49.2024.8.05.0150", "cliente": "MARIA JOSE ANDRADE CHAVES", "titulo": "Juntada de Petição de embargos de declaração", "tipo": "DIREITO CIVIL (899) - Obrigaçõ"}, {"numero": "0003555-40.2026.8.05.0150", "cliente": "NATALIA BARBOSA DA SILVA", "titulo": "N° 38 Decorrido prazo de Advogados de NATALIA BARBOSA DA SILVA Decorrido prazo d", "tipo": "AÇÃO DECLARATÓRIA DE INEXISTÊN"}, {"numero": "0802871-55.2021.8.15.2001", "cliente": "MANUELLA THEREZA PEREIRA", "titulo": "Decorrido prazo de YOUBE WORK SERVICOS DE COWORKING E ESCRITORIOS VIRTUAIS LTDA ", "tipo": "Incorporação Imobiliária (1047"}, {"numero": "0810617-95.2026.8.15.2001", "cliente": "LEGACY EMPREENDIMENTOS E", "titulo": "D-1 resposta a impugnação ao cumprimento de sentença - Realizado: PROTOCOLADA CO", "tipo": "Cumprimento Provisório de Sent"}, {"numero": "0084523-06.2014.8.17.0001", "cliente": "Diniz de Carvalho Nogueira Ferraz", "titulo": "Proferido despacho de mero expediente - Tribunal de Justiça de Pernambuco Poder ", "tipo": "Inventário e Partilha"}, {"numero": "0801204-27.2023.8.15.0461", "cliente": "INOVE CONSULTORIA ATUARIAL", "titulo": "Decorrido prazo de FRANCISCO CARMENATO DE OLIVEIRA GOMES em 09/06/2026 23:59.", "tipo": "Ausência de Cobrança Administr"}, {"numero": "0826449-52.2018.8.15.2001", "cliente": "SILVIO ROMERO DE ARAUJO", "titulo": "Decorrido prazo de SILVIO ROMERO DE ARAUJO FARIAS em 09/06/2026 23:59.", "tipo": "Assunção de Dívida (7689)"}, {"numero": "0802448-30.2018.8.15.0731", "cliente": "HIGIENE CONS E LIMPEZA LTDA -", "titulo": "Decorrido prazo de MARIA DE FATIMA BRAGA FERNANDES em 09/06/2026 23:59.", "tipo": "ISS/ Imposto sobre Serviços (5"}, {"numero": "0850958-18.2016.8.15.2001", "cliente": "RODRIGO PINHEIRO DE TOLEDO", "titulo": "Decorrido prazo de RODRIGO PINHEIRO DE TOLEDO VIANNA em 09/06/2026 23:59.", "tipo": "Provas (8990)"}, {"numero": "0009757-50.2014.8.15.2001", "cliente": "SERGIO ASSABBI", "titulo": "Decorrido prazo de inativo em 08/06/2026 23:59.", "tipo": "Esbulho / Turbação / Ameaça (1"}, {"numero": "5054812-60.2021.8.13.0024", "cliente": "INOVE CONSULTORIA ATUARIAL", "titulo": "Juntada de Petição de manifestação", "tipo": ""}, {"numero": "0000335-07.2022.5.05.0641", "cliente": "SAMUEL DIAS VIANA", "titulo": "Decorrido o prazo de MARINALDO COSTA DE ALMEIDA em 01/06/2026", "tipo": "ATOrd"}, {"numero": "1051769-13.2026.8.13.0024", "cliente": "DJAN HENRIQUE MENDONCA DO", "titulo": "Comprovar pagamento das custas iniciais ou agravar - Realizado: AI PROTOCOLADO", "tipo": "PROCEDIMENTO COMUM CÍVEL"}, {"numero": "0861883-29.2023.8.15.2001", "cliente": "PRAXISAUDE GESTAO E SERVICOS", "titulo": "Decorrido prazo de FRANCISCO FREIRE DE FIGUEIREDO FILHO em 29/05/2026 23:59.", "tipo": "Depósito Elisivo (10924)"}, {"numero": "0872381-36.2024.8.20.5001", "cliente": "Philipy de Oliveira Mourao", "titulo": "Contrarrazões a apelaçãoz - Realizado: PROTOCOLADO", "tipo": "DIREITO PROCESSUAL CIVIL E DO "}, {"numero": "0881238-54.2025.8.15.2001", "cliente": "Julia Sarmento", "titulo": "AUDIENCIA UNA - Realizado: realizada - djan", "tipo": "Indenização por Dano Moral (77"}, {"numero": "0000790-25.2007.8.05.0001", "cliente": "INOVE CONSULTORIA ATUARIAL", "titulo": "Decorrido prazo de EVERALDO RODRIGUES DAYUBE em 28/05/2026 23:59.", "tipo": "DIREITO DO CONSUMIDOR (1156) -"}, {"numero": "0808789-45.2018.8.15.2001", "cliente": "JOSE LEITAO SOBRINHO", "titulo": "Decorrido prazo de MARIA GORETE FELIX LEITAO em 28/05/2026 23:59.", "tipo": "Indenização por Dano Moral (10"}, {"numero": "0000623-92.2022.5.13.0006", "cliente": "CARLOS LUAN FELIX DA SILVA", "titulo": "AUDIENCIA - Realizado: realizada - djan", "tipo": "ATOrd"}, {"numero": "8117765-32.2023.8.05.0001", "cliente": "JODIAEL SIMOES DOS SANTOS", "titulo": "Decorrido prazo de BANCO SANTANDER (BRASIL) S.A. em 27/05/2026 23:59.", "tipo": "DIREITO CIVIL (899) - Responsa"}, {"numero": "0801262-27.2022.8.15.0441", "cliente": "EDSON DE MEDEIROS DANTAS", "titulo": "Decorrido prazo de JAMES LAURENCE DEVELOPMENTS CONSTRUCOES INCORPORACOES E IMOBI", "tipo": "Indenização por Dano Moral (10"}, {"numero": "0800742-62.2025.8.15.0441", "cliente": "Iara Costa Da Silva", "titulo": "Decorrido prazo de JOSE FRANCISCO DOS SANTOS FILHO em 26/05/2026 23:59.", "tipo": "Procedimento Comum Civel"}, {"numero": "0818243-05.2025.8.15.2001", "cliente": "CASSIO LUIZ DE ANDRADE SILVA", "titulo": "Decorrido prazo de REDIANA VIEIRA SILVA DE ANDRADE em 26/05/2026 23:59.", "tipo": "Cláusulas Abusivas (11974)"}]};
 var PUBLICACOES = [];
-var COLS=[["distribuir","A distribuir"],["producao","Produção"],["revisao","Em revisão"],["executar","A executar"],["acompanhamento","Acompanhamento"],["cliente","Aguardando cliente"]];
+var COLS=[["distribuir","A distribuir"],["producao","Produção"],["revisao","Em revisão"],["executar","A executar"],["acompanhamento","Acompanhamento"],["cliente","Aguardando cliente"],["finalizado","Finalizados"]];
 var perfis={socio:{nome:"Djan H. M. do Nascimento",pill:"socio",label:"sócio"},adv:{nome:"Maria Rita Caldas",pill:"adv",label:"advogado"},est:{nome:"Estagiário(a)",pill:"est",label:"estagiário"}};
+var USUARIOS_VISUAIS=[
+  {id:'djan',nome:'Djan H. M. do Nascimento',perfil:'socio',email:'',senha:'',ativo:true},
+  {id:'jader',nome:'Jader Gabriel Pinheiro',perfil:'adv',email:'',senha:'',ativo:true},
+  {id:'eduarda',nome:'Maria Eduarda',perfil:'adv',email:'',senha:'',ativo:true},
+  {id:'rita',nome:'Maria Rita',perfil:'adv',email:'',senha:'',ativo:true},
+  {id:'est1',nome:'Estagiário 1',perfil:'est',email:'',senha:'',ativo:true},
+  {id:'est2',nome:'Estagiário 2',perfil:'est',email:'',senha:'',ativo:true}
+];
+var USUARIO_ATUAL_VISUAL='djan';
 var KAN=null, atual=null, TRIAGEM=null, AGENDA=null, VIEWAG="agenda", curY=2026, curM=6, curD=2, agView="mes", triagemAtual=null, crmView="contatos", agResp="Todos", canalSel="Geral", histShown=10, PUBIDX=null;
 
 function entrar(){
@@ -371,14 +437,56 @@ function entrar(){
   var __sec="painel"; try{ __sec=localStorage.getItem('cmp_secao')||"painel"; }catch(e){}
   try{ window.__restoreProc=(__sec==='proc-det')?localStorage.getItem('cmp_proc'):null; }catch(eR){ window.__restoreProc=null; }
   if(__sec==='proc-det') __sec='processos'; /* a ficha é reaberta após carregar os dados */
-  initKanban();initTriagem();initEtiquetas();go(__sec);
+  initKanban();initTriagem();initEtiquetas();go(__sec);renderSeletorUsuariosVisual();
+}
+function usuarioVisualAtual(){ return (USUARIOS_VISUAIS||[]).find(function(u){return u.id===USUARIO_ATUAL_VISUAL;})||USUARIOS_VISUAIS[0]; }
+function setUsuarioVisual(id){
+  var u=(USUARIOS_VISUAIS||[]).find(function(x){return x.id===id&&x.ativo!==false;}); if(!u) return;
+  USUARIO_ATUAL_VISUAL=id;
+  var p=perfis[u.perfil]||perfis.adv;
+  document.getElementById('who-name').textContent=u.nome;
+  var pill=document.getElementById('who-pill'); if(pill){ pill.className='pill '+p.pill; pill.textContent=p.label; }
+  renderSeletorUsuariosVisual();
+}
+function cadastroVisualUsuario(id){
+  var u=(USUARIOS_VISUAIS||[]).find(function(x){return x.id===id;}); if(!u) return;
+  var em=prompt('E-mail de acesso para '+u.nome+':',u.email||''); if(em===null) return;
+  var se=prompt('Senha visual para '+u.nome+':',u.senha||''); if(se===null) return;
+  u.email=(em||'').trim(); u.senha=(se||'').trim();
+  alert('Acesso visual atualizado para '+u.nome+'.\n\nE-mail: '+(u.email||'—')+'\nSenha: '+(u.senha? 'definida':'—'));
+  renderSeletorUsuariosVisual();
+}
+function removerCadastroVisual(id){
+  var u=(USUARIOS_VISUAIS||[]).find(function(x){return x.id===id;}); if(!u) return;
+  if(!confirm('Limpar e-mail e senha visuais de '+u.nome+'?')) return;
+  u.email=''; u.senha=''; renderSeletorUsuariosVisual();
+}
+function trocarNomeVisual(id){
+  var u=(USUARIOS_VISUAIS||[]).find(function(x){return x.id===id;}); if(!u) return;
+  var n=prompt('Nome exibido para este acesso:',u.nome||''); if(n===null||!n.trim()) return;
+  u.nome=n.trim(); renderSeletorUsuariosVisual();
+}
+function renderSeletorUsuariosVisual(){
+  var box=document.getElementById('user-switcher'); if(!box) return;
+  var atual=usuarioVisualAtual();
+  box.innerHTML='<div style="font-size:11px;color:#8fa0b5;margin-bottom:6px">Acessos visuais</div>'+
+    '<div class="note" style="margin:0 0 8px;color:#c7cfdb">Cada pessoa pode usar o mesmo link do sistema. No seu acesso, você cadastra ou altera os e-mails e senhas visuais abaixo.</div>'+
+    (USUARIOS_VISUAIS||[]).filter(function(u){return u.ativo!==false;}).map(function(u){
+      var on=u.id===atual.id;
+      var isSocio=u.id==='djan';
+      return '<div style="display:flex;align-items:center;gap:6px;margin:4px 0;flex-wrap:wrap">'
+        +'<span class="quick-link" style="background:'+(on?'#fff':'rgba(255,255,255,.08)')+';color:'+(on?'var(--navy)':'#fff')+'" onclick="setUsuarioVisual(\''+u.id+'\')">'+esc(u.nome)+'</span>'
+        +'<span class="note" style="margin:0;color:#c7cfdb">'+esc(u.email||'sem cadastro')+'</span>'
+        +(USUARIO_ATUAL_VISUAL==='djan'?('<a href="#" style="font-size:11px;color:#fff" onclick="cadastroVisualUsuario(\''+u.id+'\');return false;">'+(u.email?'editar acesso':'cadastrar')+'</a>'+(isSocio?'':' <a href="#" style="font-size:11px;color:#fff" onclick="trocarNomeVisual(\''+u.id+'\');return false;">renomear</a> <a href="#" style="font-size:11px;color:#ffdddd" onclick="removerCadastroVisual(\''+u.id+'\');return false;">limpar</a>')):'')
+        +'</div>';
+    }).join('');
 }
 function go(s){
   ["painel","triagem","agenda","processos","proc-det","crm","etiquetas","procedimentos"].forEach(function(id){var e=document.getElementById("s-"+id);if(e)e.classList.add("hidden")});
   document.getElementById("s-"+s).classList.remove("hidden");
   document.querySelectorAll("#nav a").forEach(function(a){a.classList.remove("active")});
   var link=document.querySelector('#nav a[data-s="'+s+'"]');if(link)link.classList.add("active");
-  var t={painel:"Painel",triagem:"Triagem diária",agenda:"Agenda — Kanban (etapas CMP)",processos:"Processos",crm:"CRM",procedimentos:"Procedimentos CMP",etiquetas:"Etiquetas","proc-det":"Processo"};
+  var t={painel:"Painel",triagem:"Publicações",agenda:"Agenda — Kanban (etapas CMP)",processos:"Processos",crm:"CRM",procedimentos:"Procedimentos CMP",etiquetas:"Etiquetas","proc-det":"Processo"};
   document.getElementById("scr-title").textContent=t[s]||"Painel";
   if(s==="painel")renderPainel(); if(s==="triagem")renderTriagem(); if(s==="processos")renderProc(); if(s==="crm")renderCrm(); if(s==="etiquetas")renderEtiquetas(); if(s==="agenda")renderAgendaView();
   window.scrollTo(0,0);
@@ -583,31 +691,33 @@ function stCls(s){return /2º|superior/i.test(s||"")?"warn":"ok"}
 function kv(k,v){return '<div class="kv"><div class="k">'+k+'</div><div class="v">'+(v||'—')+'</div></div>';}
 function abrir(i){
   atual=DADOS.processos[i]; var p=atual, resp="Djan Henrique";
-  var trib=(p.foro||'').split(' ')[0];
   var html='';
   // cabeçalho: partes no mesmo tamanho, cliente em negrito e marcado
   var __enc=/encerr/i.test(p.status||'');
   html+='<div class="card" style="position:relative"><div class="parties" style="padding-right:130px"><span style="display:inline-block;vertical-align:top;line-height:1.15"><span class="cli">'+esc(p.cliente)+'</span><br><span class="tag-cli" style="margin:3px 0 0;font-size:9px;padding:1px 7px;display:inline-block">cliente principal</span></span>'+
     '<span class="vs" style="vertical-align:top">×</span><span style="display:inline-block;vertical-align:top;line-height:1.15"><span class="op">'+esc(p.oponente||'—')+'</span><br><span style="font-size:9.5px;color:var(--muted);display:inline-block;margin-top:3px">parte contrária</span></span>'+
-    '<button class="btn sm ghost" style="margin-left:12px;font-size:11px;padding:4px 9px;vertical-align:top" onclick="inverterPolos()" title="Trocar cliente ↔ oponente (o cliente fica sempre à esquerda)">⇄ inverter polos</button></div>'+
+    '<button class="btn sm ghost" style="margin-left:12px;font-size:11px;padding:4px 9px;vertical-align:top" onclick="inverterPolos()" title="Trocar cliente ↔ oponente (o cliente fica sempre à esquerda)">⇄ inverter polos</button>'+
+    ((!p.oponente||!String(p.oponente).trim())?'<button class="btn sm ghost" style="margin-left:6px;font-size:11px;padding:4px 9px;vertical-align:top" onclick="sugerirPartes()" title="Ler o histórico do processo e sugerir os nomes das partes que estão faltando">✨ sugerir partes pelo histórico</button>':'')+'</div>'+
     (typeof JALINE!=='undefined'&&JALINE[String(p.numero||'').replace(/\D/g,'')]?'<button class="btn sm gold" style="position:absolute;top:14px;right:112px;cursor:default" title="Pasta de Jaline — honorários exclusivos Djan e Jaline">Jaline</button>':'')+
     '<button class="btn sm '+(__enc?'gold':'ghost')+'" style="position:absolute;top:14px;right:14px" onclick="encerrarProcesso()">'+(__enc?'Reativar':'Encerrar')+'</button>'+
-    '<div style="position:absolute;top:52px;right:14px;text-align:right;font-size:12.5px;color:var(--muted);line-height:1.5">Honorários: faturado <b style="color:var(--navy)">R$ 0,00</b> · a faturar <b style="color:var(--navy)">R$ 0,00</b><br>Valor da causa: <b style="color:var(--navy)">'+(p.causa&&p.causa!=='0,00'?('R$ '+p.causa):'—')+'</b></div>'+
+    '<div style="position:absolute;top:52px;right:14px;text-align:right;font-size:12.5px;color:var(--muted);line-height:1.5">Honorários: faturado <b style="color:var(--navy);cursor:pointer;border-bottom:1px dotted var(--muted)" title="Clique para editar" onclick="editarHonorario(\'faturado\')">R$ '+esc(hFmt(p.hon_faturado))+'</b> · a faturar <b style="color:var(--navy);cursor:pointer;border-bottom:1px dotted var(--muted)" title="Clique para editar" onclick="editarHonorario(\'afaturar\')">R$ '+esc(hFmt(p.hon_afaturar))+'</b><br>Valor da causa: <b style="color:var(--navy)">'+(p.causa&&p.causa!=='0,00'?('R$ '+p.causa):'—')+'</b></div>'+
     '<div class="subhead">Processo nº <span onclick="copiarNumero(this,\''+p.numero+'\')" style="cursor:pointer;border-bottom:1px dotted var(--muted)" title="Clique para copiar o número">'+p.numero+'</span> &nbsp;·&nbsp; <span class="b '+stCls(p.status)+'">'+esc(p.status||'—')+'</span>'+
     ' &nbsp;·&nbsp; Responsável: '+resp+
     (function(){ var vinc=(p.hist_full&&p.hist_full.length>0)&&p.foro; return ' &nbsp;·&nbsp; <span style="display:inline-block;border-radius:20px;padding:2px 10px;font-size:11px;font-weight:600;'+(vinc?'background:#e5f4ed;color:#127a53">vinculado jus.br':'background:#fbeceb;color:#b5342b">não vinculado')+'</span>'; })()+'</div>'+
     '<div id="ctl-chips" style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center"></div>'+
-    '<div style="margin-top:10px"><button class="btn sm" onclick="novaTarefaDoProcesso()">+ Nova tarefa neste processo</button> <button class="btn sm" style="background:#faf3ee;color:#D97757;border:1px solid #edd7c9;font-weight:700" onclick="agendarClaude()" title="Deixar mensagem para o cliente a qualquer hora — o Claude envia somente em horário comercial"><span style="font-size:13px">✳</span> Agendar com Claude</button></div></div>';
+    '<div id="proc-vinculados" style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center"></div>'+
+    '<div style="margin-top:10px"><button class="btn sm" onclick="novaTarefaDoProcesso()">+ Nova tarefa neste processo</button> <button class="btn sm" style="background:#faf3ee;color:#D97757;border:1px solid #edd7c9;font-weight:700" onclick="agendarClaude()" title="Deixar mensagem para o cliente a qualquer hora — o Claude envia somente em horário comercial"><span style="font-size:13px">✳</span> Agendar com Claude</button></div>'+
+    /* ponto 12: bloco de processos vinculados no canto inferior direito da aba (perto do botão Encerrar) */
+    '<div id="proc-vinculados-rodape" style="position:absolute;bottom:12px;right:14px;max-width:60%;display:flex;gap:6px;flex-wrap:wrap;align-items:center;justify-content:flex-end;font-size:12px"></div>'+
+    '</div>';
   // dados do processo
   html+='<div class="card"><p class="sectlabel">Dados do processo</p><div class="kvgrid">'+
     kv('Ação / assunto',esc(p.tipo))+kv('Número',p.numero)+kv('Juízo / foro',esc(p.foro))+
-    kv('Valor da causa',p.causa?('R$ '+p.causa):'—')+kv('Valor de condenação','—')+kv('Tribunal',esc(trib))+
+    /* linha "Valor da causa · Valor de condenação · Tribunal" removida a pedido — repetitiva (valor da causa já consta no topo da ficha) e alongava o painel */
     '</div><div style="margin-top:8px;font-size:13px;border-top:1px solid #eef2f7;padding-top:8px">'+bvLine(p.numero)+'</div></div>';
   /* card "Partes" removido — cliente principal e parte contrária já constam no cabeçalho */
   // histórico (termos oficiais)
-  var _pubs=pubsDoProcesso(p.numero);
-  if(_pubs.length){var _ph="";_pubs.forEach(function(pb,pi){_ph+='<li style="cursor:pointer" onclick="togglePub('+pi+')"><div class="dt">'+esc((pb.data||"").slice(0,10).split("-").reverse().join("/"))+' · '+esc(pb.ato||"")+' <span style="color:var(--gold);font-size:11px">(ver teor)</span></div><div id="pub-'+pi+'" style="display:none;white-space:pre-wrap;font-size:13px;color:var(--muted);margin-top:4px;max-height:320px;overflow:auto">'+esc(pb.texto||"")+'</div></li>';});
-    html+='<div class="card"><p class="sectlabel">Publicações com inteiro teor (DJEN) — '+_pubs.length+'</p><ul class="timeline">'+_ph+'</ul><p class="note">Clique numa publicação para ler a decisão/despacho completo.</p></div>';}
+  /* aba "Publicações com inteiro teor (DJEN)" removida a pedido — sem utilidade prática */
   html+='<div class="card"><p class="sectlabel" style="display:flex;justify-content:space-between;align-items:center">Histórico completo (termos oficiais)'+(p.hist_full&&p.hist_full.length?(' — '+p.hist_full.length+' andamentos'):'')+'<button class="btn sm ghost" style="font-size:12px" onclick="addHistManual()">+ histórico manual</button></p><ul class="timeline" id="det-hist"></ul><div id="det-hist-more" style="margin-top:8px"></div></div>';
   // IA
   if(!KAN)initKanban(); initAgenda();
@@ -621,11 +731,20 @@ function abrir(i){
     '<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><select id="det-etq-sel" style="width:auto;max-width:280px"></select><button class="btn sm" onclick="addEtqProc()">adicionar etiqueta</button></div></div>';
   // blocos estilo Astrea (onde entram os dados nas próximas fases)
   html+='<div class="grid2">'+
-    '<div class="card" id="doc-card"><p class="sectlabel">Documentos do processo <a style="float:right;cursor:pointer;color:#185FA5;text-transform:none;letter-spacing:0;font-weight:600" onclick="document.getElementById(\'doc-file\').click()" title="Enviar arquivos do seu computador para a pasta aberta">+ incluir</a></p><input type="file" id="doc-file" multiple style="display:none" onchange="enviarDocs(this)"><div id="doc-panel"><div class="note">Carregando documentos…</div></div></div>'+
+    '<div class="card" id="doc-card"><p class="sectlabel">Documentos do processo'+
+      '<span style="float:right;display:flex;gap:10px;text-transform:none;letter-spacing:0;font-weight:600">'+
+        '<a style="cursor:pointer;color:#185FA5" onclick="document.getElementById(\'doc-file\').click()" title="Enviar arquivos soltos para a pasta aberta">+ arquivos</a>'+
+        '<a style="cursor:pointer;color:#185FA5" onclick="document.getElementById(\'doc-dir\').click()" title="Enviar uma pasta inteira (com subpastas), preservando a estrutura">+ pasta</a>'+
+        '<a style="cursor:pointer;color:#127a53" onclick="criarPastaDoc()" title="Criar uma pasta vazia dentro da pasta aberta">nova pasta</a>'+
+      '</span></p>'+
+      '<input type="file" id="doc-file" multiple style="display:none" onchange="enviarDocs(this)">'+
+      '<input type="file" id="doc-dir" webkitdirectory directory multiple style="display:none" onchange="enviarPasta(this)">'+
+      '<div id="doc-panel"><div class="note">Carregando documentos…</div></div></div>'+
     '</div>';
   document.getElementById("det-body").innerHTML=html;
   histShown=10; renderHistorico();
   renderDetEtq();
+  renderProcVinculados();
   go("proc-det");
 }
 function traduzir(){
@@ -659,20 +778,63 @@ function setCrmView(v){crmView=v;
   document.getElementById("crm-captacao").classList.toggle("hidden",v!=="captacao");
   renderCrm();}
 function renderCrm(){ if(crmView==="captacao")renderCaptacao(); else renderContatos(); }
-function seedContatos(){ if(CONTATOS)return;
-  var mapa={};DADOS.processos.forEach(function(p){if(p.cliente)mapa[p.cliente]=(mapa[p.cliente]||0)+1;});
-  CONTATOS=Object.keys(mapa).sort().map(function(n){return {id:cseq++,nome:n,tipo:"cliente",tel:"—",email:"—",origem:"—",proc:mapa[n]};});
+function seedContatos(){ if(CONTATOS)return; syncContatosClientes(true); }
+function normClienteNome(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim(); }
+function splitCtlTokens(s){ return String(s||'').split(/[,;\n]+/).map(function(x){return x.trim();}).filter(Boolean); }
+function isEmailTok(s){ return /@/.test(String(s||'')); }
+function telDigits(s){ return String(s||'').replace(/\D/g,''); }
+function mergeContatoNoProcesso(p,tel,email){
+  var toks=splitCtlTokens(p.ctl||'');
+  var seenTel={}, seenMail={}, out=[];
+  toks.forEach(function(t){
+    if(isEmailTok(t)){ var mk=String(t).toLowerCase(); if(!seenMail[mk]){ seenMail[mk]=1; out.push(t); } }
+    else { var dk=telDigits(t); if(dk && !seenTel[dk]){ seenTel[dk]=1; out.push(t); } }
+  });
+  if(tel && tel!=='—'){ var d=telDigits(tel); if(d && !seenTel[d]) out.push(tel); }
+  if(email && email!=='—'){ var em=String(email).toLowerCase(); if(em && !seenMail[em]) out.push(email); }
+  p.ctl=out.join(', ');
+}
+function syncContatosClientes(silent){
+  var existentes=(CONTATOS||[]).slice(), porNome={};
+  existentes.forEach(function(c){ if(c&&c.nome) porNome[normClienteNome(c.nome)]=c; });
+  var mapa={}, nomesOrig={};
+  DADOS.processos.forEach(function(p){ if(p.cliente){ var nk=normClienteNome(p.cliente); mapa[nk]=(mapa[nk]||0)+1; if(!nomesOrig[nk]) nomesOrig[nk]=p.cliente; } });
+  var nomes=Object.keys(mapa).sort();
+  CONTATOS=nomes.map(function(nk){
+    var ex=porNome[nk];
+    if(ex){ ex.proc=mapa[nk]; if(!ex.tipo) ex.tipo='cliente'; if(!ex.nome||ex.nome==='—') ex.nome=nomesOrig[nk]; return ex; }
+    return {id:cseq++,nome:nomesOrig[nk],tipo:'cliente',tel:'—',email:'—',origem:'—',proc:mapa[nk],labels:[]};
+  });
+  existentes.forEach(function(c){
+    if(!c||!c.nome) return;
+    if(!mapa[normClienteNome(c.nome)] && c.tipo!=='cliente') CONTATOS.push(c);
+  });
+  CONTATOS.sort(function(a,b){return String(a.nome||'').localeCompare(String(b.nome||''),'pt-BR');});
+  (CONTATOS||[]).forEach(function(c){
+    if(c.tipo!=='cliente') return;
+    var nk=normClienteNome(c.nome);
+    DADOS.processos.forEach(function(p){ if(normClienteNome(p.cliente)===nk) mergeContatoNoProcesso(p,c.tel,c.email); });
+  });
+  if(!silent){ renderContatos(); if(typeof atual!=='undefined'&&atual&&typeof renderCtlChips==='function') renderCtlChips(); alert('Contatos sincronizados por cliente.'); }
+}
+function excluirContato(id){
+  seedContatos();
+  var c=CONTATOS.find(function(x){return x.id===id;});
+  if(!c) return;
+  if(!confirm('Excluir o contato "'+(c.nome||'')+'"?')) return;
+  CONTATOS=CONTATOS.filter(function(x){return x.id!==id;});
+  renderContatos();
 }
 function renderContatos(){
   seedContatos();
   var q=(document.getElementById("buscaCli").value||"").toLowerCase();
   var f=CONTATOS.filter(function(c){return !q||(c.nome+" "+c.tipo+" "+c.tel+" "+c.origem).toLowerCase().indexOf(q)>-1;});
-  document.getElementById("cli-count").textContent=f.length+" contatos (clique para editar)";
+  document.getElementById("cli-count").textContent=f.length+" contatos";
   var ativos=LEADS.filter(function(l){return l.estagio!=="ganho"&&l.estagio!=="perdido";}).length;
   document.getElementById("crm-kpis").innerHTML=kpi("contatos",CONTATOS.length)+kpi("clientes",CONTATOS.filter(function(c){return c.tipo==="cliente";}).length)+kpi("leads ativos",ativos)+kpi("origem que + converte","Indicação");
   var b=document.getElementById("crm-body");b.innerHTML="";
-  f.slice(0,300).forEach(function(c){var tr=document.createElement("tr");tr.className="click";tr.onclick=(function(id){return function(){editarContato(id);};})(c.id);
-    tr.innerHTML='<td>'+esc(c.nome)+' '+chipsFor(c.labels)+'</td><td><span class="b '+(c.tipo==="lead"?"warn":"ok")+'">'+esc(c.tipo)+'</span></td><td>'+esc(c.tel)+'</td><td>'+esc(c.email)+'</td><td>'+esc(c.origem)+'</td><td>'+(c.proc||"")+'</td>';
+  f.slice(0,300).forEach(function(c){var tr=document.createElement("tr");
+    tr.innerHTML='<td>'+esc(c.nome)+' '+chipsFor(c.labels)+'</td><td><span class="b '+(c.tipo==="lead"?"warn":"ok")+'">'+esc(c.tipo)+'</span></td><td>'+esc(c.tel)+'</td><td>'+esc(c.email)+'</td><td>'+esc(c.origem)+'</td><td>'+(c.proc||"")+'</td><td><button class="btn sm ghost" onclick="editarContato('+c.id+')">Editar</button></td><td><button class="btn sm ghost" style="color:var(--danger)" onclick="excluirContato('+c.id+')">Excluir</button></td>';
     b.appendChild(tr);});
 }
 function renderCaptacao(){
@@ -717,7 +879,14 @@ function initKanban(){
 function initTriagem(){
   if(TRIAGEM)return; var seen={},id=0; TRIAGEM=[];
   PUBLICACOES.forEach(function(p){
-    var k=(p.numero||"")+"|"+(p.data||"")+"|"+(p.texto||"").slice(0,90);
+    /* regra CMP: apenas UMA publicação por processo por dia.
+       As publicações chegam repetidas por vários canais (Projudi, DJEN, etc.) — mantemos a
+       primeira do processo naquele dia e descartamos as demais, deixando o painel limpo.
+       A chave usa só número (normalizado) + data, ignorando o texto. */
+    var numKey=String(p.numero||"").replace(/\D/g,"");
+    var dataKey=String(p.data||"").slice(0,10);
+    var k=numKey+"|"+dataKey;
+    if(!numKey&&!dataKey){ k="sem|"+(p.texto||"").slice(0,90); } /* sem número/data: cai no antigo p/ não sumir */
     if(seen[k])return; seen[k]=1; id++;
     TRIAGEM.push({id:id,numero:p.numero,cliente:p.cliente,titulo:p.ato,texto:p.texto,tribunal:p.tribunal,data:p.data,prazo:p.prazo,done:false});
   });
@@ -811,10 +980,81 @@ function criarEtiqueta(){var n=document.getElementById("lbl-nome").value.trim();
 function removerEtiqueta(id){LABELS=LABELS.filter(function(l){return l.id!==id});for(var k in ASSIGN)ASSIGN[k]=ASSIGN[k].filter(function(x){return x!==id});renderEtiquetas();}
 function renderEtiquetas(){var count={};for(var k in ASSIGN)ASSIGN[k].forEach(function(id){count[id]=(count[id]||0)+1;});
   var l=document.getElementById("lbl-lista");l.innerHTML="";
-  if(!LABELS.length){l.innerHTML='<span class="note">Nenhuma etiqueta ainda. Crie a primeira acima — o nome e a cor são do seu gosto.</span>';return;}
-  LABELS.forEach(function(lb){var row=document.createElement("div");row.className="lblrow";
-    row.innerHTML=chip(lb)+'<span class="note" style="margin:0">'+(count[lb.id]||0)+' processos</span>'+'<button class="btn sm ghost" style="margin-left:auto" onclick="removerEtiqueta(\''+lb.id+'\')">excluir</button>';
-    l.appendChild(row);});}
+  if(!LABELS.length){l.innerHTML='<span class="note">Nenhuma etiqueta ainda. Crie a primeira acima — o nome e a cor são do seu gosto.</span>';}
+  else{
+    LABELS.forEach(function(lb){var row=document.createElement("div");row.className="lblrow";
+      row.innerHTML=chip(lb)+'<span class="note" style="margin:0">'+(count[lb.id]||0)+' processos</span>'+'<button class="btn sm ghost" style="margin-left:auto" onclick="removerEtiqueta(\''+lb.id+'\')">excluir</button>';
+      l.appendChild(row);});
+  }
+  renderPainelTarefasEtiquetas();
+}
+function statusTarefaItem(a){
+  if(a.col==='finalizado') return 'concluida';
+  if(a.data){
+    var hoje=new Date();hoje.setHours(0,0,0,0);
+    var d=new Date(a.data+'T00:00:00');
+    if(!isNaN(d)&&d<hoje) return 'atrasada';
+  }
+  return 'pendente';
+}
+function abrirTarefaKanban(id){
+  if(!KAN)initKanban();
+  var a=KAN.find(function(x){return x.id===id});
+  if(!a) return;
+  abrirNovaTarefa(a.numero||a.cliente||'');
+  document.getElementById('t-titulo').value=a.titulo||'';
+  if(a.resp) document.getElementById('t-resp').value=a.resp;
+  if(a.data) document.getElementById('t-data').value=a.data;
+  if(a.hora && a.hora!=='Dia todo') document.getElementById('t-hora').value=a.hora;
+  if(a.prazo) document.getElementById('t-prazo').value=a.prazo;
+  if(a.tipoForm) document.getElementById('t-tipo').value=a.tipoForm;
+}
+function concluirTarefaKanban(id){
+  if(!KAN)initKanban();
+  var a=KAN.find(function(x){return x.id===id});
+  if(!a) return;
+  a.col='finalizado';
+  renderKanban();
+  renderPainelTarefasEtiquetas();
+}
+function abrirProcessoDaTarefa(numero){
+  if(!numero||numero==='—') return;
+  irParaCaso(String(numero));
+}
+function renderPainelTarefasEtiquetas(){
+  if(!KAN)initKanban();
+  var el=document.getElementById('etq-tarefas'); if(!el) return;
+  var pend=[], atr=[], hist=[];
+  (KAN||[]).forEach(function(a){
+    var st=statusTarefaItem(a);
+    if(st==='concluida') hist.push(a);
+    else if(st==='atrasada') atr.push(a);
+    else pend.push(a);
+  });
+  function bloco(tit,arr,vazio){
+    var h='<div style="margin-bottom:14px"><div style="font-size:12px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">'+tit+' ('+arr.length+')</div>';
+    if(!arr.length) return h+'<div class="note">'+vazio+'</div></div>';
+    /* ponto 2: ordena por prazo fatal (mais urgente primeiro); mostra data prevista e data fatal */
+    arr=arr.slice().sort(function(a,b){var pa=a.prazo||a.data||'9999',pb=b.prazo||b.data||'9999';return pa<pb?-1:(pa>pb?1:0);});
+    h+=arr.slice(0,80).map(function(a){
+      var datas=[];
+      if(a.data) datas.push('prevista: <b>'+esc(a.data)+'</b>');
+      if(a.prazo) datas.push('<span style="color:var(--erro,#b3261e)">fatal: <b>'+esc(a.prazo)+'</b></span>');
+      var datasHtml=datas.length?('<div style="font-size:12px;margin-bottom:6px">'+datas.join(' · ')+'</div>'):'';
+      return '<div style="border:1px solid var(--line);border-radius:10px;padding:10px 11px;margin-bottom:8px">'
+        +'<div style="font-weight:600;color:var(--navy);margin-bottom:3px">'+esc(a.titulo||'—')+'</div>'
+        +'<div style="font-size:12px;color:var(--muted);margin-bottom:6px">'+esc(a.cliente||'—')+' · <span class="proc">'+esc(a.numero||'—')+'</span></div>'
+        +datasHtml
+        +'<div style="display:flex;gap:6px;flex-wrap:wrap">'
+        +'<button class="btn sm ghost" onclick="abrirTarefaKanban('+a.id+')">Abrir tarefa</button>'
+        +'<button class="btn sm ghost" onclick="abrirProcessoDaTarefa(\''+String(a.numero||'').replace(/'/g,'')+'\')">Abrir processo</button>'
+        +(a.col!=='finalizado'?'<button class="btn sm" onclick="concluirTarefaKanban('+a.id+')">Concluir</button>':'')
+        +'</div></div>';
+    }).join('');
+    return h+'</div>';
+  }
+  el.innerHTML=bloco('Pendentes',pend,'Nenhuma tarefa pendente.')+bloco('Atrasadas',atr,'Nenhuma tarefa atrasada.')+bloco('Histórico / concluídas',hist,'Nenhuma tarefa concluída ainda.');
+}
 function renderDetEtq(){var sel=document.getElementById("det-etq-sel");if(!sel)return;
   sel.innerHTML=LABELS.map(function(l){return '<option value="'+l.id+'">'+esc(l.nome)+'</option>';}).join("");
   var ids=ASSIGN[atual.numero]||[];var box=document.getElementById("det-etq");
@@ -824,11 +1064,13 @@ function delEtqProc(id){ASSIGN[atual.numero]=(ASSIGN[atual.numero]||[]).filter(f
 function setViewAg(v){VIEWAG=v;
   document.getElementById("sw-ag").classList.toggle("on",v==="agenda");
   document.getElementById("sw-kan").classList.toggle("on",v==="kanban");
+  var swt=document.getElementById("sw-tar"); if(swt) swt.classList.toggle("on",v==="tarefas");
   document.getElementById("view-agenda").classList.toggle("hidden",v!=="agenda");
   document.getElementById("view-kanban").classList.toggle("hidden",v!=="kanban");
+  var vt=document.getElementById("view-tarefas"); if(vt) vt.classList.toggle("hidden",v!=="tarefas");
   renderAgendaView();
 }
-function renderAgendaView(){ if(VIEWAG==="kanban")renderKanban(); else renderAgViewInner(); }
+function renderAgendaView(){ if(VIEWAG==="kanban")renderKanban(); else if(VIEWAG==="tarefas")renderTarefasView(); else renderAgViewInner(); }
 function initAgenda(){
   if(AGENDA)return;
   /* agenda real: carregada do banco (agenda_eventos) — sincronizada com o Google Calendar */
@@ -841,8 +1083,37 @@ function isoOf(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"
 function addD(d,n){var x=new Date(d);x.setDate(x.getDate()+n);return x;}
 function firstName(r){return r?String(r).split(" ")[0]:"";}
 function setAgResp(v){agResp=v;renderAgViewInner();}
-function eventosDoDia(iso){initAgenda();return AGENDA.filter(function(e){return e.data===iso && (agResp==="Todos"||e.resp===agResp);}).sort(function(a,b){return a.hora<b.hora?-1:1;});}
-function evChip(e){var ev=document.createElement("div");ev.className="cev "+e.tipo;ev.title=e.hora+" "+e.tt+(e.resp?(" · "+e.resp):"");ev.textContent=e.hora+" "+e.tt+(e.resp?(" · "+firstName(e.resp)):"");ev.onclick=(function(n){return function(){irParaCaso(String(n));};})(e.p.numero);return ev;}
+function eventosDoDia(iso){initAgenda();return AGENDA.filter(function(e){var okTipo=(e.tipo==='az'); return e.data===iso && okTipo && (agResp==="Todos"||e.resp===agResp);}).sort(function(a,b){return a.hora<b.hora?-1:1;});}
+function evChip(e){var ev=document.createElement("div");ev.className="cev "+e.tipo;ev.title=e.hora+" "+e.tt+(e.resp?(" · "+e.resp):"");ev.textContent=e.hora+" "+e.tt+(e.resp?(" · "+firstName(e.resp)):"");ev.onclick=(function(ref){return function(){abrirEventoAgenda(ref);};})(e);return ev;}
+/* ponto 10: clicar no evento abre a edição do próprio evento, com link para o processo */
+var _evEdit=null;
+function abrirEventoAgenda(e){
+  _evEdit=e;
+  var proc=(e.p&&e.p.numero&&e.p.numero!=='—')?e.p.numero:'';
+  var linkProc=proc?('<a onclick="abrirProcessoDaTarefa(\''+String(proc).replace(/'/g,'')+'\')" style="cursor:pointer;color:var(--navy);text-decoration:underline">'+esc(proc)+'</a>'):'<span class="note">—</span>';
+  var m=document.getElementById('modal-evento');
+  document.getElementById('ev-titulo').value=e.tt||'';
+  document.getElementById('ev-data').value=e.data||'';
+  document.getElementById('ev-hora').value=(e.hora&&e.hora!=='Dia todo')?e.hora:'';
+  document.getElementById('ev-resp').value=e.resp||'';
+  document.getElementById('ev-proc-link').innerHTML='Processo: '+linkProc;
+  m.classList.remove('hidden');
+}
+function fecharEventoAgenda(){document.getElementById('modal-evento').classList.add('hidden');_evEdit=null;}
+function salvarEventoAgenda(){
+  if(!_evEdit)return;
+  _evEdit.tt=_v('ev-titulo')||_evEdit.tt;
+  _evEdit.data=_v('ev-data')||_evEdit.data;
+  var h=_v('ev-hora'); _evEdit.hora=h||'Dia todo';
+  _evEdit.resp=_v('ev-resp');
+  /* persiste no banco quando o evento tem id (agenda_eventos) — se não houver, atualiza só na tela */
+  try{ var sb=window.__sb; if(sb && _evEdit.id){ sb.from('agenda_eventos').update({titulo:_evEdit.tt,data:_evEdit.data,hora:_evEdit.hora,resp:(_evEdit.resp||null)}).eq('id',_evEdit.id).then(function(){}); } }catch(eP){}
+  fecharEventoAgenda();
+  renderAgViewInner();
+}
+function abrirProcessoDoEvento(){
+  if(_evEdit&&_evEdit.p&&_evEdit.p.numero&&_evEdit.p.numero!=='—'){var n=_evEdit.p.numero;fecharEventoAgenda();irParaCaso(String(n));}
+}
 function setAgView(v){agView=v;
   document.getElementById("ag-mes").classList.toggle("on",v==="mes");
   document.getElementById("ag-sem").classList.toggle("on",v==="semana");
@@ -875,7 +1146,7 @@ function renderDia(){
   if(!evs.length){cal.innerHTML='<div class="note">Sem atividades neste dia.</div>';return;}
   evs.forEach(function(e){var row=document.createElement("div");row.className="agev "+e.tipo;
     row.innerHTML='<div class="hora">'+e.hora+'</div><div class="corpo"><div class="tt">'+esc(e.tt)+'</div><div class="cli">'+esc(e.p.cliente)+' · '+e.p.numero+(e.resp?(' · <b>'+esc(e.resp)+'</b>'):'')+'</div></div>';
-    row.onclick=(function(n){return function(){irParaCaso(String(n));};})(e.p.numero);
+    row.onclick=(function(ref){return function(){abrirEventoAgenda(ref);};})(e);
     cal.appendChild(row);});
 }
 function renderMes(){
@@ -890,11 +1161,9 @@ function renderMes(){
     var iso=curY+"-"+mm+"-"+String(d).padStart(2,"0");
     var cell=document.createElement("div");cell.className="day"+(iso==="2026-07-02"?" today":"");
     cell.innerHTML='<div class="dn">'+d+'</div>';
-    AGENDA.filter(function(e){return e.data===iso}).sort(function(a,b){return a.hora<b.hora?-1:1}).forEach(function(e){
-      var ev=document.createElement("div");ev.className="cev "+e.tipo;ev.title=e.hora+" "+e.tt+" — "+e.p.cliente;
-      ev.textContent=e.hora+" "+e.tt;
-      ev.onclick=(function(num){return function(){irParaCaso(String(num));};})(e.p.numero);
-      cell.appendChild(ev);
+    /* ponto 8: na agenda só entram audiências e reuniões (tipo 'az'); prazos/tarefas vivem no Kanban */
+    eventosDoDia(iso).forEach(function(e){
+      cell.appendChild(evChip(e));
     });
     cal.appendChild(cell);
   }
@@ -907,10 +1176,10 @@ function novaTarefaDoProcesso(){abrirNovaTarefa(atual?atual.numero:"");}
 function fecharTarefa(){document.getElementById("modal-tarefa").classList.add("hidden");triagemAtual=null;}
 function salvarTarefa(){
   var tit=_v("t-titulo"); if(!tit){alert("Descreva a tarefa.");return;}
-  var proc=_v("t-proc"), resp=_v("t-resp"), tipo=_v("t-tipo"), data=_v("t-data"), hora=_v("t-hora");
+  var proc=_v("t-proc"), resp=_v("t-resp"), tipo=_v("t-tipo"), data=_v("t-data"), hora=_v("t-hora"), prazo=_v("t-prazo");
   var fromTri=triagemAtual;
   if(!KAN)initKanban();
-  KAN.push({id:5000+KAN.length,titulo:tit,cliente:(resp||proc||"—"),numero:(proc||"—"),col:"distribuir"});
+  KAN.push({id:5000+KAN.length,titulo:tit,cliente:(resp||proc||"—"),numero:(proc||"—"),col:"distribuir",resp:resp,data:data,prazo:prazo,hora:(document.getElementById("t-dia").checked?"Dia todo":hora),tipoForm:tipo});
   if(document.getElementById("t-agenda").checked && data){
     initAgenda();
     var __hAg=(document.getElementById("t-dia").checked?"Dia todo":(hora||"09:00")), __tAg=(TIPOCOR[tipo]||"nt");
@@ -922,6 +1191,7 @@ function salvarTarefa(){
   if(fromTri!=null){var ti=TRIAGEM.find(function(x){return x.id===fromTri;});if(ti)ti.done=true;}
   fecharTarefa();
   ["t-proc","t-titulo","t-data","t-hora","t-prazo","t-local","t-desc"].forEach(function(id){var e=document.getElementById(id);if(e)e.value="";});
+  renderPainelTarefasEtiquetas();
   if(fromTri!=null){go("triagem");}else{go("agenda");setViewAg("agenda");}
 }
 function chipsFor(ids){return (ids||[]).map(function(id){var lb=lblById(id);return lb?('<span class="chip2" style="background:'+lb.cor+';color:'+textColor(lb.cor)+'">'+esc(lb.nome)+'</span>'):"";}).join("");}
@@ -948,6 +1218,11 @@ function fecharContato(){document.getElementById("modal-contato").classList.add(
 function salvarContato(){var c=window._cedit;var nome=_v("c-nome");if(!nome){alert("Informe o nome.");return;}
   var obj={nome:nome,tipo:_v("c-tipo"),tel:_v("c-tel")||"—",email:_v("c-email")||"—",origem:_v("c-origem")||"—",labels:(window._csel||[]).slice()};
   if(c.id){Object.assign(c,obj);}else{obj.id=cseq++;obj.proc=0;CONTATOS.push(obj);}
+  if(obj.tipo==='cliente'){
+    var nk=normClienteNome(obj.nome);
+    DADOS.processos.forEach(function(p){ if(normClienteNome(p.cliente)===nk) mergeContatoNoProcesso(p,obj.tel,obj.email); });
+    if(typeof atual!=='undefined'&&atual&&normClienteNome(atual.cliente)===nk&&typeof renderCtlChips==='function') renderCtlChips();
+  }
   fecharContato();renderContatos();}
 function novoLead(){editarLead(null);}
 function editarLead(id){var l=id?LEADS.find(function(x){return x.id===id;}):{id:null,nome:"",canal:"Indicação",estagio:FUNIL[0].id,tel:"",email:"",valor:"",lemdata:"",lemtxt:""};window._ledit=l;
@@ -1024,6 +1299,30 @@ function renderHistorico(){
       +'<span style="color:#0F6E56">●</span> peça &nbsp;<span style="color:#6d28a8">●</span> decisão &nbsp;<span style="color:#185FA5">●</span> andamento &nbsp;<span style="color:#8a5a00">●</span> publicação'
     +'</span></div>';
   ul.appendChild(bar);
+  /* tarefa pendente no TOPO do histórico, com data fatal em vermelho */
+  (function(){
+    if(!KAN)initKanban();
+    var pend=(KAN||[]).filter(function(a){ return a.numero===atual.numero && a.col!=='finalizado'; });
+    if(!pend.length) return;
+    function _iso(a){var s=a.prazo||a.data||'';s=String(s).trim();if(/^\d{4}-\d{2}-\d{2}/.test(s))return s.slice(0,10);var m=s.split('/');return m.length===3?(m[2]+'-'+String(m[1]).padStart(2,'0')+'-'+String(m[0]).padStart(2,'0')):'';}
+    pend.sort(function(a,b){var x=_iso(a)||'9999',y=_iso(b)||'9999';return x<y?-1:(x>y?1:0);});
+    var a=pend[0];
+    var fatalBR=a.prazo?String(a.prazo).slice(0,10).split('-').reverse().join('/'):'';
+    if(fatalBR.indexOf('/')<0 && a.prazo){ fatalBR=a.prazo; }
+    var prevBR=a.data?String(a.data).slice(0,10).split('-').reverse().join('/'):'';
+    var li=document.createElement("li");
+    li.style.cssText="list-style:none;border-left:3px solid #C9A227;background:#fbf7ec;border-radius:0 8px 8px 0;padding:8px 10px;margin-bottom:12px";
+    li.innerHTML='<div style="font-size:11px;color:#8a5a00;font-weight:700;text-transform:uppercase;letter-spacing:.03em">Tarefa a executar'+(pend.length>1?(' (+'+(pend.length-1)+' pendente'+(pend.length-1>1?'s':'')+')'):'')+'</div>'
+      +'<div style="font-weight:600;color:var(--navy);margin:2px 0 3px">'+esc(a.titulo||'—')+'</div>'
+      +'<div style="font-size:12px">'
+        +(fatalBR?('<span style="color:#b3261e;font-weight:700">prazo fatal: '+esc(fatalBR)+'</span>'):'')
+        +((fatalBR&&prevBR)?' · ':'')
+        +(prevBR?('<span style="color:var(--muted)">prevista: '+esc(prevBR)+'</span>'):'')
+        +(a.resp?(' · <span style="color:var(--muted)">'+esc(a.resp)+'</span>'):'')
+      +'</div>'
+      +'<div style="margin-top:6px"><button class="btn sm ghost" onclick="abrirTarefaKanban('+a.id+')">Abrir tarefa</button></div>';
+    ul.appendChild(li);
+  })();
   if(!arr.length){var li0=document.createElement("li");li0.style.listStyle="none";li0.innerHTML='<div class="note">Sem itens para este filtro.</div>';ul.appendChild(li0);more.innerHTML="";return;}
   var lim=Math.min(histShown,arr.length);
   for(var k=0;k<lim;k++){(function(mv){
@@ -1076,14 +1375,101 @@ function renderKanban(){
     var itens=KAN.filter(function(a){return a.col===c[0]});
     var col=document.createElement("div");col.className="col";
     col.ondragover=function(e){e.preventDefault()};
-    col.ondrop=function(e){e.preventDefault();var id=+e.dataTransfer.getData("id");var a=KAN.find(function(x){return x.id===id});if(a){a.col=c[0];renderKanban();}};
+    col.ondrop=function(e){e.preventDefault();var id=+e.dataTransfer.getData("id");var a=KAN.find(function(x){return x.id===id});if(a){a.col=c[0];renderKanban();renderPainelTarefasEtiquetas();}};
     col.innerHTML='<h3>'+c[1]+' <span>'+itens.length+'</span></h3>';
     itens.forEach(function(a){var el=document.createElement("div");el.className="task";el.draggable=true;
       el.ondragstart=function(e){e.dataTransfer.setData("id",a.id)};
-      el.innerHTML='<div class="t">'+esc(a.titulo)+'</div><div class="meta">'+esc(a.cliente)+' · '+a.numero+'</div>';
+      /* ponto 2: clicar na tarefa abre a TAREFA (edição). Abrir o processo fica no painel de pendências. */
+      el.onclick=function(ev){ev.stopPropagation();abrirTarefaKanban(a.id);};
+      el.ondblclick=function(ev){ev.stopPropagation();abrirTarefaKanban(a.id);};
+      var _pf=(a.prazo?('fatal '+esc(a.prazo)):'')+(a.data?((a.prazo?' · ':'')+'prev. '+esc(a.data)):'');
+      el.innerHTML='<div class="t">'+esc(a.titulo)+'</div><div class="meta">'+esc(a.cliente)+' · '+a.numero+(_pf?(' · '+_pf):'')+'</div>';
       col.appendChild(el);});
     k.appendChild(col);
   });
+}
+/* ===== Agenda de prazos e tarefas (nova 3ª visão da aba Agenda) ===== */
+var tarView="mes", tarResp="Todos", tarY=curY, tarM=curM;
+function setTarView(v){ tarView=v;
+  var a=document.getElementById('tg-mes'), b=document.getElementById('tg-lista');
+  if(a)a.classList.toggle('on',v==='mes'); if(b)b.classList.toggle('on',v==='lista');
+  var nav=document.getElementById('tar-nav'); if(nav) nav.style.display=(v==='mes')?'':'none';
+  renderTarefasView();
+}
+function setTarResp(v){ tarResp=v; renderTarefasView(); }
+function navegaTar(d){ tarM+=d; if(tarM<0){tarM=11;tarY--;} if(tarM>11){tarM=0;tarY++;} renderTarefasView(); }
+/* data de referência da tarefa na agenda = prazo fatal se houver, senão a data prevista */
+function _tarISO(a){
+  var s=a.prazo||a.data||''; s=String(s).trim();
+  if(/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0,10);
+  var m=s.split('/'); if(m.length===3) return m[2]+'-'+String(m[1]).padStart(2,'0')+'-'+String(m[0]).padStart(2,'0');
+  return '';
+}
+function _tarConcluida(a){ return a.col==='finalizado'; }
+function tarefasFiltradas(){
+  if(!KAN)initKanban();
+  var oc=document.getElementById('tar-ocultar-concl');
+  var ocultar=oc&&oc.checked;
+  return (KAN||[]).filter(function(a){
+    if(tarResp!=='Todos'){ var r=(a.resp||''); if(r.split(' ')[0].toLowerCase()!==tarResp.split(' ')[0].toLowerCase()) return false; }
+    if(ocultar && _tarConcluida(a)) return false;
+    return true;
+  });
+}
+function renderTarefasView(){ if(tarView==='lista') renderTarefasLista(); else renderTarefasMes(); }
+function _tarChipHTML(a){
+  var concl=_tarConcluida(a);
+  var estilo='cursor:pointer;'+(concl?'text-decoration:line-through;opacity:.6;':'');
+  var pf=a.prazo?'fatal':'prev.';
+  var title=(a.titulo||'')+' — '+(a.cliente||'')+(a.numero&&a.numero!=='—'?(' · '+a.numero):'');
+  return '<div class="cev '+(a.prazo?'vm':'nt')+'" style="'+estilo+'" title="'+esc(title)+'" onclick="toggleConcluirTarefa('+a.id+')">'+esc(a.titulo||'—')+'</div>';
+}
+function renderTarefasMes(){
+  var cal=document.getElementById('tar-cal'); if(!cal) return;
+  document.getElementById('tar-label').textContent=MESES[tarM]+' de '+tarY;
+  cal.innerHTML=''; cal.style.gridTemplateColumns='repeat(7,1fr)';
+  ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'].forEach(function(d){var h=document.createElement('div');h.className='dow';h.textContent=d;cal.appendChild(h);});
+  var first=new Date(tarY,tarM,1),start=first.getDay(),dim=new Date(tarY,tarM+1,0).getDate();
+  for(var i=0;i<start;i++){var o=document.createElement('div');o.className='day out';cal.appendChild(o);}
+  var mm=String(tarM+1).padStart(2,'0');
+  var lista=tarefasFiltradas();
+  for(var d=1;d<=dim;d++){
+    var iso=tarY+'-'+mm+'-'+String(d).padStart(2,'0');
+    var cell=document.createElement('div');cell.className='day'+(iso===todayISO?' today':'');
+    cell.innerHTML='<div class="dn">'+d+'</div>';
+    lista.filter(function(a){return _tarISO(a)===iso;}).forEach(function(a){
+      var w=document.createElement('div'); w.innerHTML=_tarChipHTML(a); cell.appendChild(w.firstChild);
+    });
+    cal.appendChild(cell);
+  }
+}
+function renderTarefasLista(){
+  var cal=document.getElementById('tar-cal'); if(!cal) return;
+  document.getElementById('tar-label').textContent='Todas as tarefas e prazos';
+  cal.style.gridTemplateColumns='1fr'; cal.innerHTML='';
+  var lista=tarefasFiltradas().slice().sort(function(a,b){var x=_tarISO(a)||'9999',y=_tarISO(b)||'9999';return x<y?-1:(x>y?1:0);});
+  if(!lista.length){ cal.innerHTML='<div class="note">Nenhuma tarefa ou prazo.</div>'; return; }
+  lista.forEach(function(a){
+    var concl=_tarConcluida(a);
+    var iso=_tarISO(a); var dataBR=iso?iso.split('-').reverse().join('/'):'sem data';
+    var row=document.createElement('div'); row.className='agev '+(a.prazo?'vm':'nt');
+    row.style.cssText='display:flex;align-items:center;gap:10px;'+(concl?'opacity:.6;':'');
+    row.innerHTML='<input type="checkbox" '+(concl?'checked':'')+' onclick="toggleConcluirTarefa('+a.id+')" style="width:16px;height:16px;cursor:pointer">'+
+      '<div style="flex:1;min-width:0"><div class="tt" style="'+(concl?'text-decoration:line-through':'')+'">'+esc(a.titulo||'—')+'</div>'+
+      '<div class="cli">'+esc(a.cliente||'—')+(a.numero&&a.numero!=='—'?(' · '+esc(a.numero)):'')+' · '+(a.prazo?'prazo fatal':'previsto')+' '+esc(dataBR)+(a.resp?(' · '+esc(a.resp)):'')+'</div></div>'+
+      '<button class="btn sm ghost" onclick="event.stopPropagation();abrirTarefaKanban('+a.id+')">Abrir</button>';
+    cal.appendChild(row);
+  });
+}
+/* marca/desmarca conclusão: concluída = vai para a coluna 'finalizado' (fica tachada, como no Astrea) */
+function toggleConcluirTarefa(id){
+  if(!KAN)initKanban();
+  var a=KAN.find(function(x){return x.id===id;}); if(!a) return;
+  a.col=(a.col==='finalizado')?'distribuir':'finalizado';
+  renderTarefasView();
+  if(typeof renderPainelTarefasEtiquetas==='function') renderPainelTarefasEtiquetas();
+  /* persiste o status da tarefa quando houver vínculo no banco (kanban_tarefas). Silencioso se não existir. */
+  try{ var sb=window.__sb; if(sb && a.dbid){ sb.from('kanban_tarefas').update({coluna:a.col}).eq('id',a.dbid).then(function(){}); } }catch(e){}
 }
 </script>
 
@@ -1100,13 +1486,19 @@ function renderKanban(){
   function fmtData(iso){ if(!iso) return ''; var p=String(iso).slice(0,10).split('-'); return p.length===3?(p[2]+'/'+p[1]+'/'+p[0]):''; }
   function fmtCausa(v){ if(v==null||v==='') return '0,00'; var n=Number(v); if(isNaN(n)) return '0,00'; return n.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
   try{
-    var res=await sb.from('processos').select('id,numero,cliente_nome,oponente,assunto,foro,status,valor_causa,ultima_movimentacao,contatos_livres,andamentos(id,data,texto,fonte)').order('ultima_movimentacao',{ascending:false,nullsFirst:false}).limit(3000);
+    /* select estendido (honorários + vinculados). Se essas colunas ainda não existirem no banco,
+       o select falha e caímos automaticamente no select básico — sem quebrar o carregamento. */
+    var selExt='id,numero,cliente_nome,oponente,assunto,foro,status,valor_causa,ultima_movimentacao,contatos_livres,hon_faturado,hon_afaturar,vinculados,fora_inove,andamentos(id,data,texto,fonte)';
+    var selBas='id,numero,cliente_nome,oponente,assunto,foro,status,valor_causa,ultima_movimentacao,contatos_livres,andamentos(id,data,texto,fonte)';
+    var res=await sb.from('processos').select(selExt).order('ultima_movimentacao',{ascending:false,nullsFirst:false}).limit(3000);
+    if(res.error){ res=await sb.from('processos').select(selBas).order('ultima_movimentacao',{ascending:false,nullsFirst:false}).limit(3000); }
     if(res.error) throw res.error;
     var rows=res.data||[];
     DADOS.processos=rows.map(function(p){
       var hf=(p.andamentos||[]).map(function(a){return {id:a.id, data:(a.data? a.data+'T00:00:00.000Z':null), texto:a.texto, f:a.fonte||''};});
       hf.sort(function(x,y){return (y.data||'').localeCompare(x.data||'');});
-      return {_id:p.id, cliente:p.cliente_nome||'', numero:p.numero, oponente:p.oponente||'', tipo:p.assunto||'', foro:p.foro||'', status:p.status||'', data:fmtData(p.ultima_movimentacao), hist:'', causa:fmtCausa(p.valor_causa), hist_full:hf, ctl:p.contatos_livres||''};
+      var vinc=Array.isArray(p.vinculados)?p.vinculados:(p.vinculados?[].concat(p.vinculados):[]);
+      return {_id:p.id, cliente:p.cliente_nome||'', numero:p.numero, oponente:p.oponente||'', tipo:p.assunto||'', foro:p.foro||'', status:p.status||'', data:fmtData(p.ultima_movimentacao), hist:'', causa:fmtCausa(p.valor_causa), hist_full:hf, ctl:p.contatos_livres||'', hon_faturado:(p.hon_faturado!=null?p.hon_faturado:0), hon_afaturar:(p.hon_afaturar!=null?p.hon_afaturar:0), vinculados:vinc, fora_inove:!!p.fora_inove};
     });
     if(DADOS.kpis){ DADOS.kpis.total=DADOS.processos.length; }
     /* publicações novas (robô DJEN) → fila de triagem */
@@ -1153,19 +1545,25 @@ function renderKanban(){
 </script>
 <script>
 async function cadastrarPorNumero(){
-  var num=prompt('Cadastrar processo — digite o número (CNJ):');
+  var num=prompt('Cadastrar processo — digite ou cole o número (CNJ):');
   if(!num) return; num=num.trim(); var dig=num.replace(/\D/g,'');
   if(!dig){ return; }
   if(DADOS.processos.some(function(p){return (p.numero||'').replace(/\D/g,'')===dig;})){ alert('Esse processo já está cadastrado.'); go('processos'); return; }
   var sb=window.__sb; if(!sb){ alert('Sessão não encontrada — recarregue a página e faça login.'); return; }
   var dj={};
   try{ var r=await fetch('/api/processo?numero='+encodeURIComponent(num)); dj=await r.json(); }catch(e){ dj={erro:'falha na consulta ao DataJud'}; }
+  /* ponto 1: quando NÃO localiza (processo recém-distribuído, ainda sem dados na fonte),
+     oferecemos o cadastro manual e abrimos a ficha com o número informado. */
+  var naoLocalizou = !!dj.erro || (!dj.classe && !dj.assunto && !(dj.andamentos&&dj.andamentos.length));
+  if(naoLocalizou){
+    if(!confirm('Não localizei este processo na consulta automática (comum em processos recém-distribuídos).\n\nDeseja cadastrá-lo manualmente? A ficha abrirá com o número informado para você preencher o restante.')){ return; }
+  }
   var ug=await sb.auth.getUser();
   var pf=await sb.from('usuarios').select('escritorio_id').eq('id',ug.data.user.id).single();
   var esc=pf.data&&pf.data.escritorio_id; if(!esc){ alert('Escritório não encontrado para o seu usuário.'); return; }
   var ands=dj.andamentos||[];
   var ultmov=(ands[0]&&ands[0].data)? String(ands[0].data).slice(0,10): null;
-  var ins=await sb.from('processos').insert({escritorio_id:esc,numero:num,classe:dj.classe||null,assunto:dj.assunto||null,orgao:dj.orgao||null,ultima_movimentacao:ultmov,fonte:'datajud'}).select('id').single();
+  var ins=await sb.from('processos').insert({escritorio_id:esc,numero:num,classe:dj.classe||null,assunto:dj.assunto||null,orgao:dj.orgao||null,ultima_movimentacao:ultmov,fonte:(naoLocalizou?'manual':'datajud')}).select('id').single();
   if(ins.error){ alert('Erro ao salvar: '+ins.error.message); return; }
   var pid=ins.data.id;
   var arows=ands.filter(function(a){return a.texto;}).map(function(a){return {processo_id:pid,data:(a.data?String(a.data).slice(0,10):null),texto:a.texto,fonte:'datajud'};});
@@ -1173,10 +1571,19 @@ async function cadastrarPorNumero(){
   function fd(iso){ if(!iso) return ''; var p=String(iso).slice(0,10).split('-'); return p.length===3?(p[2]+'/'+p[1]+'/'+p[0]):''; }
   var hf=ands.map(function(a){return {data:(a.data?String(a.data).slice(0,10)+'T00:00:00.000Z':null),texto:a.texto};});
   hf.sort(function(x,y){return (y.data||'').localeCompare(x.data||'');});
-  DADOS.processos.unshift({cliente:'',numero:num,oponente:'',tipo:dj.assunto||'',foro:dj.orgao||'',status:'Ativo 1º Grau',data:fd(ultmov),hist:'',causa:'0,00',hist_full:hf});
+  var novo={_id:pid,cliente:'',numero:num,oponente:'',tipo:dj.assunto||'',foro:dj.orgao||'',status:'Ativo 1º Grau',data:fd(ultmov),hist:'',causa:'0,00',hist_full:hf,hon_faturado:0,hon_afaturar:0,vinculados:[]};
+  DADOS.processos.unshift(novo);
   if(DADOS.kpis) DADOS.kpis.total=DADOS.processos.length;
-  go('processos');
-  alert(dj.erro? ('Cadastrado. Não deu para preencher automático ('+dj.erro+'). Complete o cliente/valor na ficha.') : ('Cadastrado! '+(dj.totalAndamentos||arows.length)+' andamentos encontrados. Complete cliente/valor na ficha.'));
+  if(naoLocalizou){
+    /* abre direto a ficha do processo recém-criado, com o número informado */
+    var idx=DADOS.processos.indexOf(novo);
+    go('processos');
+    if(idx>=0) abrir(idx);
+    alert('Processo cadastrado manualmente. Preencha cliente, valor e demais dados na ficha. Quando a fonte publicar os dados, os andamentos entram automaticamente.');
+  }else{
+    go('processos');
+    alert('Cadastrado! '+(dj.totalAndamentos||arows.length)+' andamentos encontrados. Complete cliente/valor na ficha.');
+  }
 }
 </script>
 <script>
@@ -1372,12 +1779,22 @@ function resumo3(s){
   if(parts.length<=3) return s;
   return parts.slice(0,3).join('; ')+' (... e outros)';
 }
+/* prazo fatal mais próximo do processo (a partir das tarefas do Kanban não concluídas). ISO ou '' */
+function _prazoFatalDoProc(p){
+  if(!KAN)initKanban();
+  var num=p.numero;
+  var fatais=(KAN||[]).filter(function(a){ return a.numero===num && a.col!=='finalizado' && a.prazo; })
+    .map(function(a){ var s=String(a.prazo).trim(); if(/^\d{4}-\d{2}-\d{2}/.test(s))return s.slice(0,10); var m=s.split('/'); return m.length===3?(m[2]+'-'+String(m[1]).padStart(2,'0')+'-'+String(m[0]).padStart(2,'0')):''; })
+    .filter(Boolean).sort();
+  return fatais.length?fatais[0]:'';
+}
+function setOrdenaPrazo(v){ window.__ordenaPrazo=v; renderProc(); }
 function renderProc(){
   var q=(document.getElementById("busca").value||"").toLowerCase();
   var sm=(document.getElementById("ordena")||{}).value||"";
   var eq=(document.getElementById("filtroEtq")||{}).value||"";
   var ppv=(document.getElementById("porPagina")||{}).value||"todos"; var pp=(ppv==="todos")?1000000:(parseInt(ppv,10)||20);
-  var sig=q+'|'+sm+'|'+eq+'|'+pp+'|'+((document.getElementById("filtroMov")||{}).value||'')+'|'+((document.getElementById("filtroOrigem")||{}).value||'');
+  var sig=q+'|'+sm+'|'+eq+'|'+pp+'|'+((document.getElementById("filtroMov")||{}).value||'')+'|'+((document.getElementById("filtroOrigem")||{}).value||'')+'|'+(window.__ordenaPrazo||'');
   if(sig!==window.__procSig){ window.__procPage=1; window.__procSig=sig; }
   function pd(x){ if(!x) return 0; var m=String(x).split('/'); return m.length===3? parseInt(m[2]+m[1]+m[0],10):0; }
   function pv(x){ if(!x) return 0; return parseFloat(String(x).replace(/\./g,'').replace(',','.'))||0; }
@@ -1386,7 +1803,18 @@ function renderProc(){
     var oke=true; if(eq){ var ids=(typeof ASSIGN!=='undefined'&&ASSIGN[p.numero])||[]; oke=ids.indexOf(eq)>-1; }
     return okq&&oke&&movFiltroOk(p)&&origemFiltroOk(p)&&!/encerr/i.test(p.status||'')&&!isInove(p);
   });
-  if(sm==='az') lista.sort(function(a,b){var A=(a.cliente||'').trim(),B=(b.cliente||'').trim(); if(!A&&!B)return 0; if(!A)return 1; if(!B)return -1; return A.localeCompare(B,'pt');});
+  /* ordenação por prazo fatal (coluna): mais próximo → distante, ou o inverso.
+     Tem prioridade sobre a ordenação padrão quando escolhida. */
+  var op=window.__ordenaPrazo||'';
+  if(op==='prox'||op==='dist'){
+    lista.sort(function(a,b){
+      var pa=_prazoFatalDoProc(a), pb=_prazoFatalDoProc(b);
+      /* processos sem prazo fatal vão para o fim, sempre */
+      if(!pa&&!pb) return 0; if(!pa) return 1; if(!pb) return -1;
+      return op==='prox' ? (pa<pb?-1:(pa>pb?1:0)) : (pa>pb?-1:(pa<pb?1:0));
+    });
+  }
+  else if(sm==='az') lista.sort(function(a,b){var A=(a.cliente||'').trim(),B=(b.cliente||'').trim(); if(!A&&!B)return 0; if(!A)return 1; if(!B)return -1; return A.localeCompare(B,'pt');});
   else if(sm==='za') lista.sort(function(a,b){var A=(a.cliente||'').trim(),B=(b.cliente||'').trim(); if(!A&&!B)return 0; if(!A)return 1; if(!B)return -1; return B.localeCompare(A,'pt');});
   else if(sm==='data_desc') lista.sort(function(a,b){return pd(b.data)-pd(a.data);});
   else if(sm==='parados') lista.sort(function(a,b){return pd(a.data)-pd(b.data);});
@@ -1402,7 +1830,18 @@ function renderProc(){
     var tr=document.createElement("tr");tr.className="click";tr.onclick=function(){abrir(i)};
     var um=(p.hist_full&&p.hist_full[0]&&p.hist_full[0].texto)||'';
     var cm=classHist(p);
-    tr.innerHTML='<td style="max-width:260px"><span style="font-weight:700;color:var(--navy)">'+esc(resumo3(p.cliente))+'</span><div style="font-size:12px;color:var(--muted);margin-top:2px">× '+(esc(resumo3(p.oponente))||'—')+'</div></td><td class="proc">'+p.numero+'</td><td style="font-size:12px">'+esc(p.tipo)+'<div style="margin-top:4px">'+etiquetasDoProc(p.numero)+'</div></td><td style="max-width:170px;white-space:normal" title="'+esc(um.slice(0,300))+'">'+(cm?'<span style="font-weight:600;color:var(--navy)">'+cm+'</span>':'<span style="font-size:12.5px">'+esc(um.slice(0,60))+'</span>')+'<div style="font-size:12px;color:var(--muted)">'+esc(p.data||'')+'</div></td><td><span class="b '+stCls(p.status)+'">'+esc(p.status||'—')+'</span><div style="margin-top:4px">'+origemBtnHTML(p)+'</div></td><td><button style="background:#f0f2f5;color:#697180;border:1px solid #e4e8ef;border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer" onclick="event.stopPropagation();abrirNovaTarefa(decodeURIComponent(\''+encodeURIComponent(p.numero)+'\'))">tarefa</button></td>';
+    /* coluna Prazo fatal: data do prazo fatal mais próximo (das tarefas do processo) */
+    var pf=_prazoFatalDoProc(p);
+    var pfHTML;
+    if(pf){
+      var hojeISO=todayISO;
+      var venc=pf<hojeISO;
+      var cor=venc?'#b3261e':'#0F6E56';
+      pfHTML='<span style="color:'+cor+';font-weight:700;font-size:13px">'+pf.split('-').reverse().join('/')+'</span>'+(venc?'<div style="font-size:10.5px;color:#b3261e">vencido</div>':'');
+    }else{
+      pfHTML='<span class="note" style="margin:0">—</span>';
+    }
+    tr.innerHTML='<td style="max-width:260px"><span style="font-weight:700;color:var(--navy)">'+esc(resumo3(p.cliente))+'</span><div style="font-size:12px;color:var(--muted);margin-top:2px">× '+(esc(resumo3(p.oponente))||'—')+'</div></td><td class="proc">'+p.numero+'</td><td style="font-size:12px">'+esc(p.tipo)+'<div style="margin-top:4px">'+etiquetasDoProc(p.numero)+'</div></td><td style="max-width:170px;white-space:normal" title="'+esc(um.slice(0,300))+'">'+(cm?'<span style="font-weight:600;color:var(--navy)">'+cm+'</span>':'<span style="font-size:12.5px">'+esc(um.slice(0,60))+'</span>')+'<div style="font-size:12px;color:var(--muted)">'+esc(p.data||'')+'</div></td><td><span class="b '+stCls(p.status)+'">'+esc(p.status||'—')+'</span><div style="margin-top:4px">'+origemBtnHTML(p)+'</div></td><td>'+pfHTML+'</td>';
     b.appendChild(tr);
   });
   var pager=document.getElementById("proc-pager");
@@ -1435,7 +1874,7 @@ function go(s){
   var sec=document.getElementById("s-"+s); if(sec) sec.classList.remove("hidden");
   document.querySelectorAll("#nav a").forEach(function(a){a.classList.remove("active")});
   var link=document.querySelector('#nav a[data-s="'+s+'"]');if(link)link.classList.add("active");
-  var t={painel:"Painel",triagem:"Triagem diária",agenda:"Agenda — Kanban (etapas CMP)",processos:"Processos",crm:"CRM",procedimentos:"Procedimentos CMP",etiquetas:"Etiquetas","proc-det":"Processo",diligencias:"Diligências"};
+  var t={painel:"Painel",triagem:"Publicações",agenda:"Agenda — Kanban (etapas CMP)",processos:"Processos",crm:"CRM",procedimentos:"Procedimentos CMP",etiquetas:"Etiquetas","proc-det":"Processo",diligencias:"Diligências"};
   var st=document.getElementById("scr-title"); if(st) st.textContent=t[s]||"Painel";
   if(s==="painel")renderPainel(); if(s==="triagem")renderTriagem(); if(s==="processos")renderProc(); if(s==="crm")renderCrm(); if(s==="etiquetas")renderEtiquetas(); if(s==="agenda")renderAgendaView(); if(s==="diligencias")renderDiligencias();
   window.scrollTo(0,0);
@@ -1500,7 +1939,7 @@ function go(s){
   var sec=document.getElementById("s-"+s); if(sec) sec.classList.remove("hidden");
   document.querySelectorAll("#nav a").forEach(function(a){a.classList.remove("active")});
   var link=document.querySelector('#nav a[data-s="'+s+'"]');if(link)link.classList.add("active");
-  var t={painel:"Painel",triagem:"Triagem diária",agenda:"Agenda — Kanban (etapas CMP)",processos:"Processos",crm:"Comercial",procedimentos:"Procedimentos CMP",etiquetas:"Etiquetas","proc-det":"Processo",diligencias:"Diligências",relatorio:"Relatório mensal para clientes"};
+  var t={painel:"Painel",triagem:"Publicações",agenda:"Agenda — Kanban (etapas CMP)",processos:"Processos",crm:"Comercial",procedimentos:"Procedimentos CMP",etiquetas:"Etiquetas","proc-det":"Processo",diligencias:"Diligências",relatorio:"Relatório mensal para clientes"};
   var st=document.getElementById("scr-title"); if(st) st.textContent=t[s]||"Painel";
   if(s==="painel")renderPainel(); if(s==="triagem")renderTriagem(); if(s==="processos")renderProc(); if(s==="crm")renderCrm(); if(s==="etiquetas")renderEtiquetas(); if(s==="agenda")renderAgendaView(); if(s==="diligencias")renderDiligencias();
   window.scrollTo(0,0);
@@ -1514,7 +1953,7 @@ function go(s){
   var sec=document.getElementById("s-"+showId); if(sec) sec.classList.remove("hidden");
   document.querySelectorAll("#nav a").forEach(function(a){a.classList.remove("active")});
   var link=document.querySelector('#nav a[data-s="'+s+'"]');if(link)link.classList.add("active");
-  var t={painel:"Painel",triagem:"Triagem diária",agenda:"Agenda — Kanban (etapas CMP)",processos:"Processos",crm:"Comercial",contatos:"Contatos",procedimentos:"Procedimentos CMP",etiquetas:"Etiquetas","proc-det":"Processo",diligencias:"Diligências",relatorio:"Relatório mensal para clientes",encerrados:"Processos encerrados",inove:"Processos Inove (terceiros)"};
+  var t={painel:"Painel",triagem:"Publicações",agenda:"Agenda — Kanban (etapas CMP)",processos:"Processos",crm:"Comercial",contatos:"Contatos",procedimentos:"Procedimentos CMP",etiquetas:"Etiquetas","proc-det":"Processo",diligencias:"Diligências",relatorio:"Relatório mensal para clientes",encerrados:"Processos encerrados",inove:"Processos Inove (terceiros)"};
   var st=document.getElementById("scr-title"); if(st) st.textContent=t[s]||"Painel";
   var sw=document.querySelector('#s-crm .switch'); if(sw) sw.style.display='none';
   if(s==="painel")renderPainel(); if(s==="triagem")renderTriagem(); if(s==="processos")renderProc();
@@ -1544,7 +1983,7 @@ function renderInove(){
     var tr=document.createElement('tr'); tr.className='click'; tr.onclick=function(){abrir(i)};
     var um=(p.hist_full&&p.hist_full[0]&&p.hist_full[0].texto)||'';
     var cm=classHist(p);
-    tr.innerHTML='<td style="max-width:260px"><span style="font-weight:700;color:var(--navy)">'+esc(resumo3(p.cliente))+'</span><div style="font-size:12px;color:var(--muted);margin-top:2px">× '+(esc(resumo3(p.oponente))||'—')+'</div></td><td class="proc">'+p.numero+'</td><td style="font-size:12px">'+esc(p.tipo)+'</td><td style="max-width:170px;white-space:normal" title="'+esc(um.slice(0,300))+'">'+(cm?'<span style="font-weight:600;color:var(--navy)">'+cm+'</span>':'<span style="font-size:12.5px">'+esc(um.slice(0,60))+'</span>')+'<div style="font-size:12px;color:var(--muted)">'+esc(p.data||'')+'</div></td><td><span class="b '+stCls(p.status)+'">'+esc(p.status||'—')+'</span></td><td><button style="background:#f0f2f5;color:#697180;border:1px solid #e4e8ef;border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer" onclick="event.stopPropagation();abrirNovaTarefa(decodeURIComponent(\''+encodeURIComponent(p.numero)+'\'))">tarefa</button></td>';
+    tr.innerHTML='<td style="max-width:260px"><span style="font-weight:700;color:var(--navy)">'+esc(resumo3(p.cliente))+'</span><div style="font-size:12px;color:var(--muted);margin-top:2px">× '+(esc(resumo3(p.oponente))||'—')+'</div></td><td class="proc">'+p.numero+'</td><td style="font-size:12px">'+esc(p.tipo)+'</td><td style="max-width:170px;white-space:normal" title="'+esc(um.slice(0,300))+'">'+(cm?'<span style="font-weight:600;color:var(--navy)">'+cm+'</span>':'<span style="font-size:12.5px">'+esc(um.slice(0,60))+'</span>')+'<div style="font-size:12px;color:var(--muted)">'+esc(p.data||'')+'</div></td><td><span class="b '+stCls(p.status)+'">'+esc(p.status||'—')+'</span></td><td><button style="background:#f0f2f5;color:#697180;border:1px solid #e4e8ef;border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer" onclick="event.stopPropagation();abrirNovaTarefa(decodeURIComponent(\''+encodeURIComponent(p.numero)+'\'))">tarefa</button> <button style="background:#e5f4ed;color:#127a53;border:1px solid #b9e2ce;border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer" title="Tirar da Inove e mandar para a lista comum de processos" onclick="event.stopPropagation();moverParaListaComum(decodeURIComponent(\''+encodeURIComponent(p.numero)+'\'))">→ lista comum</button></td>';
     b.appendChild(tr);
   });
 }
@@ -1654,6 +2093,56 @@ async function enviarDocs(inp){
     }
   }catch(e){ alert('Erro no envio: '+(e&&e.message||e)); }
   finally{ try{ if(inp&&inp.value!==undefined) inp.value=''; }catch(e2){} carregarDocs(atual.numero, sub); }
+}
+/* ponto 6/13: enviar uma PASTA inteira (com subpastas), preservando a estrutura.
+   Usa f.webkitRelativePath para reconstruir os caminhos; o back-end /api/docs cria os
+   diretórios intermediários do `path` (mesmo mecanismo já usado para subpastas). */
+async function enviarPasta(inp){
+  var files=Array.prototype.slice.call((inp&&inp.files)?inp.files:(inp||[]));
+  if(!files.length||!atual) return;
+  var sub=window.__docSub||'';
+  try{
+    var dig=String(atual.numero||'').replace(/\D/g,''); if(!dig){ alert('Processo sem número.'); return; }
+    if(/(^|\/)Lixeira$/.test(sub)){ alert('Não é possível enviar para a Lixeira.'); return; }
+    var tok=await docToken();
+    if(!tok){ alert('Sessão expirada — recarregue a página (F5) e tente de novo.'); return; }
+    var el=document.getElementById('doc-panel');
+    for(var i=0;i<files.length;i++){
+      var f=files[i];
+      /* webkitRelativePath ex.: "MinhaPasta/sub/arquivo.pdf" — preserva a hierarquia enviada */
+      var rel=(f.webkitRelativePath||f.name).replace(/\\/g,'/');
+      if(el) el.innerHTML='<div class="note">Enviando pasta: '+esc(rel)+' ('+(i+1)+' de '+files.length+')…</div>';
+      var relPath=dig+(sub?'/'+sub:'')+'/'+rel;
+      var bytes=new Uint8Array(await f.arrayBuffer());
+      var CH=512*1024, off=0;
+      do{
+        var slice=bytes.subarray(off,Math.min(off+CH,bytes.length));
+        var s=''; for(var k=0;k<slice.length;k+=0x8000){ s+=String.fromCharCode.apply(null, slice.subarray(k,Math.min(k+0x8000,slice.length))); }
+        var r=await fetch('/api/docs',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},
+          body:JSON.stringify({path:relPath,b64:btoa(s),append:off>0,mtime:new Date(f.lastModified).toISOString()})});
+        if(!r.ok){ var ej=await r.json().catch(function(){return {};}); alert('Falha ao enviar '+rel+' (HTTP '+r.status+(ej.erro?': '+ej.erro:'')+').\n\nSe o servidor não aceitar criação de pastas, avise o Djan para habilitar a rota /api/docs (mkdir).'); carregarDocs(atual.numero, sub); return; }
+        off+=CH;
+      }while(off<bytes.length);
+    }
+  }catch(e){ alert('Erro no envio da pasta: '+(e&&e.message||e)); }
+  finally{ try{ if(inp&&inp.value!==undefined) inp.value=''; }catch(e2){} carregarDocs(atual.numero, sub); }
+}
+/* ponto 6/13: criar uma pasta vazia dentro da pasta aberta.
+   Requer que o back-end /api/docs aceite {path, mkdir:true} para criar diretório. */
+async function criarPastaDoc(){
+  if(!atual) return;
+  var nome=prompt('Nome da nova pasta:'); if(!nome||!nome.trim()) return;
+  nome=nome.trim().replace(/[\\/]+/g,'-'); /* evita criar hierarquia acidental pelo nome */
+  var sub=window.__docSub||'';
+  var dig=String(atual.numero||'').replace(/\D/g,''); if(!dig){ alert('Processo sem número.'); return; }
+  try{
+    var tok=await docToken(); if(!tok){ alert('Sessão expirada — recarregue a página.'); return; }
+    var relPath=dig+(sub?'/'+sub:'')+'/'+nome;
+    var r=await fetch('/api/docs',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},
+      body:JSON.stringify({path:relPath,mkdir:true})});
+    if(!r.ok){ var ej=await r.json().catch(function(){return {};}); alert('Não foi possível criar a pasta (HTTP '+r.status+(ej.erro?': '+ej.erro:'')+').\n\nO servidor /api/docs precisa aceitar {path, mkdir:true}. Avise o Djan para habilitar.'); return; }
+  }catch(e){ alert('Erro ao criar pasta: '+(e&&e.message||e)); }
+  finally{ carregarDocs(atual.numero, sub); }
 }
 /* excluir com segurança: move para a Lixeira do processo (30 dias) */
 async function lixeiraDoc(dig, rel, numero, sub){
@@ -1808,25 +2297,51 @@ async function addHistManual(){
     histShown=10; renderHistorico();
   }catch(e){ alert('Erro: '+(e&&e.message||e)); }
 }
+/* ponto 4: o telefone/WhatsApp é do CLIENTE, não do processo.
+   Buscamos e salvamos na tabela `contatos` pelo nome do cliente, então o mesmo número
+   aparece em TODOS os processos daquele cliente (ex.: Sergio Assabbi com vários processos). */
+function _nomeClienteBase(){ return String((atual&&atual.cliente)||'').split(';')[0].trim(); }
+async function buscaTelefoneCliente(nome){
+  if(!nome) return null;
+  try{
+    var sb=window.__sb; if(!sb) return null;
+    var r=await sb.from('contatos').select('telefone,nome').ilike('nome','%'+nome.split(' ')[0]+'%').limit(20);
+    if(r&&r.data){
+      var alvo=nome.toLowerCase();
+      // preferimos correspondência mais próxima do nome completo
+      var hit=r.data.find(function(c){return c.telefone && String(c.nome||'').trim().toLowerCase()===alvo;})
+            ||r.data.find(function(c){return c.telefone && String(c.nome||'').toLowerCase().indexOf(alvo.split(' ')[0])>-1;});
+      if(hit&&hit.telefone) return hit.telefone;
+    }
+  }catch(e){}
+  return null;
+}
+async function salvaTelefoneCliente(nome,tel){
+  var sb=window.__sb; if(!sb||!nome||!tel) return;
+  try{
+    // atualiza contato existente do cliente; se não houver, cria um
+    var r=await sb.from('contatos').select('id,nome,telefone').ilike('nome','%'+nome.split(' ')[0]+'%').limit(20);
+    var alvo=nome.toLowerCase();
+    var ja=(r&&r.data)?r.data.find(function(c){return String(c.nome||'').trim().toLowerCase()===alvo;}):null;
+    if(ja){ await sb.from('contatos').update({telefone:tel}).eq('id',ja.id); }
+    else{
+      var esc=null;
+      try{ var ug=await sb.auth.getUser(); var pf=await sb.from('usuarios').select('escritorio_id').eq('id',ug.data.user.id).single(); esc=pf&&pf.data&&pf.data.escritorio_id; }catch(e){}
+      var reg={nome:nome,telefone:tel}; if(esc) reg.escritorio_id=esc;
+      await sb.from('contatos').insert(reg);
+    }
+    // reflete localmente em todos os processos do mesmo cliente já carregados
+    (DADOS.processos||[]).forEach(function(p){ if(String(p.cliente||'').split(';')[0].trim().toLowerCase()===alvo){ p.cli_tel=tel; } });
+  }catch(e){ console.warn('salvaTelefoneCliente:',e); }
+}
 async function waCliente(){
   if(!atual) return;
-  var sb=window.__sb; var tel=null;
-  try{
-    var nome=String(atual.cliente||'').split(';')[0].trim();
-    if(nome){ var r=await sb.from('contatos').select('telefone,nome').ilike('nome','%'+nome.split(' ')[0]+'%').limit(10);
-      if(r.data){ var hit=r.data.find(function(c){return c.telefone && String(c.nome||'').toLowerCase().indexOf(nome.toLowerCase().split(' ')[0])>-1;}); if(hit) tel=hit.telefone; } }
-  }catch(e){}
+  var nome=_nomeClienteBase();
+  var tel=atual.cli_tel||await buscaTelefoneCliente(nome);
   if(!tel){
-    tel=window.prompt('WhatsApp do cliente (com DDD):',''); if(!tel) return;
-    /* grava o número inserido nos contatos do processo (chips) */
-    try{
-      var jaTem=String(atual.ctl||'').replace(/\D/g,'').indexOf(String(tel).replace(/\D/g,''))>-1;
-      if(!jaTem){
-        var novoCtl=(atual.ctl?atual.ctl+', ':'')+tel.trim();
-        var w=await sb.from('processos').update({contatos_livres:novoCtl}).eq('id',atual._id);
-        if(!w.error){ atual.ctl=novoCtl; if(typeof renderCtlChips==='function') renderCtlChips(); }
-      }
-    }catch(eSave){}
+    tel=window.prompt('WhatsApp do cliente '+(nome?('('+nome+') '):'')+'(com DDD):',''); if(!tel) return;
+    atual.cli_tel=tel.trim();
+    await salvaTelefoneCliente(nome,tel.trim());
   }
   var d=String(tel).replace(/\D/g,''); if(d.length<=11) d='55'+d;
   window.open('https://wa.me/'+d,'_blank');
@@ -1839,6 +2354,98 @@ async function inverterPolos(){
   if(sb&&atual._id){ var r=await sb.from('processos').update({cliente_nome:novoCli||null,oponente:novoOp||null}).eq('id',atual._id); if(r.error){ alert('Erro ao salvar: '+r.error.message); return; } }
   atual.cliente=novoCli; atual.oponente=novoOp;
   var i=DADOS.processos.indexOf(atual); if(i>=0) abrir(i);
+}
+/* ===== Sugerir partes pelo histórico (nomes que faltam na ficha) =====
+   Lê os andamentos do processo e extrai nomes de partes com padrões reais do fórum.
+   NÃO grava nada sozinho: mostra os candidatos e o usuário confirma um a um. */
+function _normNome(s){ return String(s||'').trim().replace(/\s+/g,' ').replace(/[\.,;:]+$/,''); }
+function _ehNomeValido(s){
+  s=_normNome(s);
+  if(s.length<4||s.length>70) return false;
+  if(/advogad|OAB|\bDr\.|\bDra\.|ju[íi]z|magistrad|cart[óo]ri|secretari|minist[ée]rio p[úu]blico|promotor|defensor/i.test(s)) return false;
+  return /[A-Za-zÀ-ú]/.test(s);
+}
+function extrairPartesCandidatas(p){
+  var textos=[];
+  (p.hist_full||[]).forEach(function(a){ if(a&&a.texto) textos.push(a.texto); });
+  if(p.hist) textos.push(p.hist);
+  var pats=[
+    /[Dd]ecorrido (?:o )?prazo de ([A-ZÀ-Ú][A-ZÀ-Úa-zà-ú\.\- ]{3,60}?) em /g,
+    /[Cc]onhecido o recurso de ([A-ZÀ-Ú][A-ZÀ-Úa-zà-ú\.\- ]{3,60}?) \(/g,
+    /[Rr]ecurso de ([A-ZÀ-Ú][A-ZÀ-Úa-zà-ú\.\- ]{3,60}?) \(/g,
+    /[Ee]mbargos de [Dd]eclara[çc][ãa]o de ([A-ZÀ-Ú][A-ZÀ-Úa-zà-ú\.\- ]{3,60})/g,
+    /em face de ([A-ZÀ-Ú][A-ZÀ-Úa-zà-ú\.\- ]{3,60})/g,
+    /(?:contra|réu:?|requerid[oa]:?|executad[oa]:?|reclamad[oa]:?) ([A-ZÀ-Ú][A-ZÀ-Úa-zà-ú\.\- ]{3,60})/g
+  ];
+  var freq={};
+  textos.forEach(function(t){
+    pats.forEach(function(rx){
+      rx.lastIndex=0; var m;
+      while((m=rx.exec(t))!==null){
+        var nome=_normNome(m[1]);
+        if(_ehNomeValido(nome)) freq[nome]=(freq[nome]||0)+1;
+      }
+    });
+  });
+  var cliNorm=normClienteNome? normClienteNome(p.cliente||'') : String(p.cliente||'').toLowerCase();
+  var arr=Object.keys(freq).map(function(n){
+    var ehCliente=(normClienteNome? normClienteNome(n):n.toLowerCase())===cliNorm;
+    return {nome:n, freq:freq[n], ehCliente:ehCliente};
+  });
+  arr.sort(function(a,b){return b.freq-a.freq;});
+  return arr;
+}
+var _partesCands=[];
+function sugerirPartes(){
+  if(!atual) return;
+  _partesCands=extrairPartesCandidatas(atual);
+  document.getElementById('partes-cliente').value=atual.cliente||'';
+  document.getElementById('partes-oponente').value=atual.oponente||'';
+  var box=document.getElementById('partes-candidatos');
+  var intro=document.getElementById('partes-intro');
+  if(!_partesCands.length){
+    box.innerHTML='<span class="note">Não encontrei nomes claros no histórico deste processo. Você pode digitar manualmente acima.</span>';
+    intro.innerHTML='Não achei candidatos automáticos — digite a parte contrária manualmente, se quiser.';
+  }else{
+    intro.innerHTML='Encontrei estes nomes no histórico. Clique num deles para preencher a <b>parte contrária</b> (ou digite). Nada é gravado sem sua confirmação.';
+    box.innerHTML=_partesCands.map(function(c){
+      var tag=c.ehCliente?' <span style="font-size:10px;color:#b45f06">(parece o cliente)</span>':'';
+      return '<span class="quick-link" style="cursor:pointer" onclick="document.getElementById(\'partes-oponente\').value=\''+esc(c.nome).replace(/'/g,"\\'")+'\'">'+esc(c.nome)+' <span style="opacity:.6">×'+c.freq+'</span>'+tag+'</span>';
+    }).join('');
+  }
+  document.getElementById('modal-partes').classList.remove('hidden');
+}
+function fecharPartes(){ document.getElementById('modal-partes').classList.add('hidden'); }
+async function salvarPartes(){
+  if(!atual) return;
+  var cli=_normNome(document.getElementById('partes-cliente').value);
+  var op=_normNome(document.getElementById('partes-oponente').value);
+  var sb=window.__sb;
+  if(sb&&atual._id){
+    var r=await sb.from('processos').update({cliente_nome:cli||null,oponente:op||null}).eq('id',atual._id);
+    if(r.error){ alert('Erro ao salvar: '+r.error.message); return; }
+  }
+  atual.cliente=cli; atual.oponente=op;
+  fecharPartes();
+  var i=DADOS.processos.indexOf(atual); if(i>=0) abrir(i);
+}
+/* ponto 5: honorários editáveis (faturado / a faturar).
+   Requer colunas processos.hon_faturado e processos.hon_afaturar (numeric).
+   Se não existirem, o valor fica salvo na tela e o erro é apenas logado. */
+function hFmt(v){ var n=Number(v); if(!v||isNaN(n)) return '0,00'; return n.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function hParse(s){ s=String(s||'').replace(/[^\d,.-]/g,'').replace(/\./g,'').replace(',','.'); var n=parseFloat(s); return isNaN(n)?null:n; }
+function editarHonorario(qual){
+  if(!atual) return;
+  var campo=(qual==='faturado')?'hon_faturado':'hon_afaturar';
+  var rotulo=(qual==='faturado')?'honorários faturados':'honorários a faturar';
+  var atualVal=hFmt(atual[campo]);
+  var v=prompt('Valor de '+rotulo+' (R$):', atualVal);
+  if(v===null) return;
+  var num=hParse(v);
+  if(num===null){ alert('Valor inválido. Use apenas números, ex.: 1500,00'); return; }
+  atual[campo]=num;
+  var i=DADOS.processos.indexOf(atual); if(i>=0) abrir(i);
+  try{ var sb=window.__sb; if(sb && atual._id){ var upd={}; upd[campo]=num; sb.from('processos').update(upd).eq('id',atual._id).then(function(r){ if(r&&r.error){ console.warn('honorário não persistido (crie a coluna processos.'+campo+'):',r.error.message); } }); } }catch(e){ console.warn(e); }
 }
 async function encerrarProcesso(){
   if(!atual) return;
@@ -1954,7 +2561,26 @@ var JALINE={};
 /* Pasta Inove — processos de terceiro, rodam separados (só intimações/histórico) */
 var INOVE_SET={};
 ["00007902520078050001","00009041220158152003","00020061120218172001","00022544220148150751","00024596320078050244","00038151020158250001","00057580720168172990","00081403020168172001","00110231320178172001","00117749220208172001","00118281520138150011","00136009620098152001","00137304720138152001","00144220720158170001","00180998920108152001","00227867920158172001","00387616820208172001","00422441520108152001","00440342920138152001","00481447120138152001","00505304520118152001","00532274920038170001","00681702720128152001","00696893620198172001","00745200720188172990","00782695020228172001","00943813120218152001","01185679020128152001","05051262920188050001","05151814420158050001","05163702820138050001","05264351420158050001","07047085720198020001","07360583720078152001","08012042720238150461","08106684420168150001","08117508020238152001","08242300320178152001","08256713420198150001","08352635820158152001","50548126020218130024","80670092420208050001","80743151020218050001"].forEach(function(n){INOVE_SET[n]=1;});
-function isInove(p){ return typeof INOVE_SET!=='undefined' && !!INOVE_SET[String(p.numero||'').replace(/\D/g,'')]; }
+/* processos removidos manualmente da lista Inove (voltam pra lista comum).
+   Preenchido pelo botão "mover para a lista comum" e persistido no banco (processos.fora_inove). */
+var INOVE_REMOVIDOS={};
+function isInove(p){
+  var num=String(p.numero||'').replace(/\D/g,'');
+  if(INOVE_REMOVIDOS[num]) return false;      /* removido manualmente → lista comum */
+  if(p&&p.fora_inove) return false;           /* flag vinda do banco */
+  return typeof INOVE_SET!=='undefined' && !!INOVE_SET[num];
+}
+async function moverParaListaComum(numEnc){
+  var num=decodeURIComponent(numEnc);
+  var p=(DADOS.processos||[]).filter(function(x){return x.numero===num;})[0];
+  if(!p) return;
+  if(!confirm('Mover este processo para a lista comum?\n\n'+esc(p.cliente||num)+'\n\nEle sai da lista da Inove e passa a aparecer na lista principal de processos, com as automações normais.')) return;
+  var num2=String(num).replace(/\D/g,'');
+  INOVE_REMOVIDOS[num2]=1; p.fora_inove=true;
+  /* persiste no banco (coluna processos.fora_inove boolean). Silencioso se a coluna não existir. */
+  try{ var sb=window.__sb; if(sb && p._id){ sb.from('processos').update({fora_inove:true}).eq('id',p._id).then(function(r){ if(r&&r.error){ console.warn('fora_inove não persistido (crie a coluna processos.fora_inove boolean):',r.error.message); } }); } }catch(e){}
+  renderInove(); atualizaNavContagens();
+}
 /* Lista Astrea (atualizada 05/07/2026) — origem da captura */
 var ASTREA_SET={};
 ["00000106920208173340","00000212820255050036","00000392920265130024","00001025520265050031","00001116520235230081","00001178320265120013","00001197320265050037","00001199020098150441","00001798320265050251","00002114120265130033","00002349820255050532","00002556620265050491","00002762920148150331","00003094420225060006","00003234420255050008","00003350720225050641","00003359520255050028","00003489320265050017","00003735420265130027","00004316320218172810","00004949820265050029","00005997220235090125","00006017120225050001","00006239220225130006","00006343720175130026","00006362020255050003","00007521220225130002","00007902520078050001","00008597320265090084","00009041220158152003","00009106620175050034","00009712620235190001","00010325520268050150","00010377720268050150","00012348320128150331","00012371420078150331","00013318320128150331","00013478220218250027","00014476520078150331","00015092419988190036","00016081920265050661","00019747120128150321","00020061120218172001","00022102720128152001","00022544220148150751","00024092420148172001","00024278020068152001","00024596320078050244","00029810820058160001","00030341020238250000","00030359220238250000","00031447720148150331","00032902120148150331","00033316620068150331","00033846620148150331","00035526820148150331","00035554020268050150","00035656720148150331","00038151020158250001","00040086720048150331","00042929420138152001","00043374720268050150","00045182220268260002","00056429820248190036","00057580720168172990","0005832025130005","00061479120258050150","00067737420228160194","00076322220124058200","00079153520148152001","00079567720228160001","00081403020168172001","00085270320218173090","00085447220158152001","00092336820094058200","00094274120238050150","00094837420238050150","00096520320268050103","00097367420148152001","00097375920148152001","00097522820148152001","00097575020148152001","00098669020068200001","00100315620245030058","00102929120248190036","00103513920235150016","00104488120258050150","0010532024130004","00105981120158152001","00106384420258050150","00107727320158150011","00110231320178172001","00111437920265030029","00113309220088160001","00113317720088160001","00114084820245150084","00117749220208172001","00118281520138150011","00120872020148152001","00132012820138152001","00136009620098152001","00137304720138152001","00143351420248250001","00144220720158170001","00158078820248050039","00160256320265160016","00180998920108152001","00196596620108152001","00207404820225040332","00221677720138152001","00227867920158172001","00269669620184013300","00275261620268050001","00283826920138152001","00297824720228172810","00327496520228172810","00330206720254058200","00330275920254058200","00356007020254058200","00377127320024013400","00381261720228172810","00387616820208172001","00422441520108152001","00423915920258172001","00440342920138152001","00444584220118152001","00444887720118152001","00445147520118152001","00447523520148172001","00452361220118152001","00459134220118152001","00459151220118152001","00459974320118152001","00460364020118152001","00460416220118152001","00461386220118152001","00461602320118152001","00462027220118152001","00462265120254058200","00462659720118152001","00464434620118152001","00465578220118152001","00470762820098152001","00474905520118152001","00476278120048152001","00481447120138152001","00503082120248179000","00505304520118152001","00509037620118152001","00510360320218060164","00510787020118152001","00510847720118152001","00510881720118152001","00510950920118152001","00510986120118152001","00511116020118152001","00532274920038170001","00648275220148152001","00677003920135130005","00681702720128152001","00696893620198172001","00702456720218172001","00710941120128152001","00745200720188172990","00764635920238160000","00782695020228172001","00819894620038152001","00845230620148170001","00943813120218172001","01033648820128152001","01185679020128152001","01301358020135130027","01312280820168172001","01316940720155130026","01357319120248172001","01442821620238050001","02001323320228060140","02006124020248060140","02006793920238060140","02403176720258050001","02418610520218060001","02609568420228060001","02615339620218060001","02648301420218060001","05033710420178050001","05051262920188050001","05151814420158050001","05163702820138050001","05264351420158050001","07006609220208020042","07047085720198020001","07360583720078152001","07924924620078152001","07964024820228040001","08000028520178150441","08000297820158150331","08000341720228150441","08000644320128150331","08001038820188150441","08001211720208152001","08001311520258150731","08001428520188150441","08001523220188150441","08001687820268152001","08001753420198150411","08002783420128150331","08003667520258150021","08004173420188150441","08004410920158150331","08004575520188150331","08005021820188100034","08005593820188150441","08005698520188150731","08005706420258120034","08005723420258120034","08005740420258120034","08006217820188150441","08006321020188150441","08006525020128150331","08006821020268100016","08006959120258150731","08007123620198150021","08007207220238150441","08007276920268230010","08007426220258150441","08008081820208150441","08008532620178150021","08009083620218150441","08009835620224058200","08009947920188152003","08010540920238150441","08011684520238150441","08012042720238150461","08012085620258150441","08012244820218150021","08012622720228150441","08012631220228150441","08013143220188152003","08013840620238150441","08013983320188152003","08014269820188152003","08014540520178150321","08015202220248150391","08016133420218150441","08018722420248150441","08018937420238150751","08018978220218150751","08019067620188152003","08020516020268152001","08021352620248152003","08022972720198150441","08024234920218150751","08024483020188150731","08025017920168150731","08025390220218205121","08025501920188152003","08025614920218152001","08025631820188152003","08025703320248150731","08025874120218152003","08026013120218152001","08026280820218152003","08026498120218152003","08026933720208152003","08027557720208152003","08027697220178152001","08028330420208150441","08028715520218152001","08030464920218152001","08030531720158150331","08030793820188152003","08031086220258150251","08031244220188152003","08035502020198152003","08036467620178150751","08038583820184058200","08039200520198152001","08040886520228150331","08041431020208150000","08043759620218152001","08044599720218152001","08045378020248152003","08045765920188150331","08047457620268153011","08047603320248152003","08048380220208150731","08048554320178150731","08049089420178152001","08049364020188150251","08049483620188152003","08049702720228150331","08050579020178152001","08051745520268150000","08052605220178152001","08052844520158152003","08053481720228152001","08053993820204058200","08054386420188152001","08054440820178152001","08058754220178152001","08058771220178152001","08061672720178152001","08061905520268152001","08063675720198152003","08064767220218150331","08069499120188152003","08069507620188152003","08070401620208152003","08070854720258152002","08071100420188152003","08076696420188152001","08076765620188152001","08076904020188152001","08077381720238152003","08081953120188152001","08081988320188152001","08082420520188152001","08082601620238150331","08083754720188152001","08084575420174058200","08086465620188152001","08087842320188152001","08087894520188152001","08094605220218150000","08094613720218150000","08098654620184058200","08106179520268152001","08106684420168150001","08109028820268152001","08111723820258150000","08112982720218150001","08115850920188152001","08115903120188152001","08116164820268152001","08116878920228152001","08117508020238152001","08122209520268150000","08125629820188152001","08125724520188152001","08128033820198152001","08131215520188152001","08131288920258150000","08131399520268152001","08133165920268152001","08135112020218152001","08143570820198152001","08147592120218152001","08152840520218205124","08155023620188152001","08159217820148205001","08159797820268152001","08160206020178152001","08160612720178152001","08164206920208152001","08175299420158152001","08175385620158152001","08182430520258152001","08183688020198152001","08191219020268152001","08194439120188152001","08213866520268152001","08232791720258150000","08239008820268152001","08242300320178152001","08245103720188152001","08251876720188152001","08256713420198150001","08259809320248152001","08261595620268152001","08264495220188152001","08265777220188152001","08268755920218152001","08270233120258152001","08271492820188152001","08276214820268152001","08276995720178152001","08294663320178152001","08297500720188152001","08300549820218152001","08321335020218152001","08321343520218152001","08342888420258152001","08346156820218152001","08346708220228152001","08351439720248152001","08352635820158152001","08363780220248152001","08367213220238152001","08379107420258152001","08379944620238152001","08380643920188152001","08394119720248152001","08407769420218152001","08412898620268152001","08422316020228152001","08439585920198152001","08441767720258152001","08442411420218152001","08442550220238190001","08442936820258152001","08443372420248152001","08453775120188152001","08456577520258152001","08466095920228152001","08475619620268152001","08483134420218152001","08484667220248152001","08498149120258152001","08505790420218152001","08509581820168152001","08524728820258152001","08530618520228152001","08549159020178152001","08580556920168152001","08615882120258152001","08618832920238152001","08621745820258152001","08631820720248152001","08633942820248152001","08633946220238152001","08667742520258152001","08689637320258152001","08705893020258152001","08723813620248205001","08744623820258152001","08745050920248152001","08749052320248152001","08749075620258152001","08756307520258152001","08786951520248152001","08812307720258152001","08812385420258152001","08812523820258152001","10012048920255020039","10016119720158260372","10019463820255020711","10020509420264013301","10026977220268110037","10049463120174013300","10145191720248260100","10309526520258260002","10517691320268130024","10518746220268130000","11451228120248260100","202150000356","202150000914","202300110976","21254969720268260000","28010963820268130000","40588145420258260100","43340125120268130000","50000181020268240024","50001969220268130596","50002246520174036100","50003657920268130596","50011844720258130112","50017242920268080006","50042734920238130112","50043271020268090051","50043643720268090051","50082663920268240064","50181488820258130024","50261649420258080048","50400076320248080048","50548126020218130024","51943806520268090012","54884566120198090168","59702542920258090051","59729131120258090051","59730266220258090051","60285194420258090012","80016095620258050076","80022967620258050191","80036253520218050201","80036881420248050150","80103144920248050150","80115197920258050150","80160011520258050039","80209962520248050001","80345612720228050001","80670092420208050001","80743151020218050001","80808106520248050001","80909413620238050001","81177653220238050001","81754225820258050001"].forEach(function(n){ASTREA_SET[n]=1;});
@@ -2088,6 +2714,41 @@ function refreshContato(){
   var md=document.getElementById('modal-dilig');
   if(md && !md.classList.contains('hidden') && window.__dilCtx){ var p=(DADOS.processos||[]).filter(function(x){return x.numero===window.__dilCtx.numero;})[0]||{}; var db=document.getElementById('dil-balcao'); if(db) db.innerHTML=contatoBlocoHTML(p); return; }
   if(typeof atual!=='undefined' && atual){ var i=DADOS.processos.indexOf(atual); var sec=document.getElementById('s-proc-det'); if(i>=0 && sec && !sec.classList.contains('hidden')) abrir(i); }
+}
+function procVincList(p){ if(!p) return []; if(!p.vinculados) p.vinculados=[]; return p.vinculados.slice(0,4); }
+function renderProcVinculados(){
+  if(!atual) return;
+  var arr=procVincList(atual);
+  var html='<span class="note" style="margin:0 4px 0 0">Vinculados:</span>';
+  arr.forEach(function(n){
+    html+='<span class="quick-link" onclick="irParaCaso(\''+String(n).replace(/'/g,'')+'\')" title="Abrir processo vinculado">↗ '+esc(n)+'</span>';
+    html+='<span class="quick-link del" onclick="removerProcVinculado(\''+String(n).replace(/'/g,'')+'\')" title="Desvincular">×</span>';
+  });
+  if(arr.length<4) html+='<span class="quick-link" onclick="adicionarProcVinculado()">+ inserir processo vinculado</span>';
+  if(!arr.length) html='<span class="note">Sem processos vinculados. </span><span class="quick-link" onclick="adicionarProcVinculado()">+ inserir processo vinculado</span>';
+  /* preenche tanto o bloco do cabeçalho quanto o do rodapé (canto inferior direito) */
+  ['proc-vinculados','proc-vinculados-rodape'].forEach(function(cid){var el=document.getElementById(cid); if(el) el.innerHTML=html;});
+}
+function _sanitizeProcNum(s){ return String(s||'').trim(); }
+function adicionarProcVinculado(){
+  if(!atual) return;
+  var n=prompt('Cole o número do processo vinculado:'); if(!n||!n.trim()) return;
+  if(!atual.vinculados) atual.vinculados=[];
+  var dig=_sanitizeProcNum(n);
+  var soDigitos=dig.replace(/\D/g,'');
+  if(soDigitos.length<15){ alert('Número de processo parece incompleto. Cole o número completo (padrão CNJ).'); return; }
+  if(atual.vinculados.indexOf(dig)>-1){ alert('Este processo já está vinculado.'); return; }
+  if(atual.vinculados.length>=4){ alert('Limite de 4 processos vinculados por ficha.'); return; }
+  atual.vinculados.push(dig); renderProcVinculados(); persisteVinculados();
+}
+function removerProcVinculado(n){
+  if(!atual||!atual.vinculados) return;
+  atual.vinculados=atual.vinculados.filter(function(x){return x!==n;}); renderProcVinculados(); persisteVinculados();
+}
+/* ponto 12: persiste os vinculados no banco. Requer coluna processos.vinculados (jsonb ou text[]).
+   Se a coluna não existir, o erro é silenciado e a vinculação continua válida na tela. */
+function persisteVinculados(){
+  try{ var sb=window.__sb; if(sb && atual && atual._id){ sb.from('processos').update({vinculados:(atual.vinculados||[])}).eq('id',atual._id).then(function(r){ if(r&&r.error){ console.warn('vinculados não persistidos (crie a coluna processos.vinculados):',r.error.message); } }); } }catch(e){ console.warn('persisteVinculados falhou:',e); }
 }
 function gerarDiligencia(pid,numEnc){
   var num=decodeURIComponent(numEnc); var p=(DADOS.processos||[]).filter(function(x){return x.numero===num;})[0]||{};
@@ -2304,7 +2965,7 @@ function contatoDoProcesso(p){
   var sideEl=document.querySelector('.side');
   if(sideEl && !sideEl.querySelector('.userft')){
     var uf=document.createElement('div'); uf.className='userft';
-    uf.innerHTML='<div class="av" id="uf-av">—</div><div><div class="nm" id="uf-nm"></div><div class="pp" id="uf-pp"></div></div>';
+    uf.innerHTML='<div class="av" id="uf-av">—</div><div style="flex:1;min-width:0"><div class="nm" id="uf-nm"></div><div class="pp" id="uf-pp"></div><div id="user-switcher" style="margin-top:8px"></div></div>';
     sideEl.appendChild(uf);
     var syncUser=function(){
       var n=(document.getElementById('who-name')||{}).textContent||'';
@@ -2312,6 +2973,7 @@ function contatoDoProcesso(p){
       var ini=n.trim().split(/\s+/).slice(0,2).map(function(x){return x[0]||'';}).join('').toUpperCase()||'—';
       var av=document.getElementById('uf-av'), nm=document.getElementById('uf-nm'), pp=document.getElementById('uf-pp');
       if(av)av.textContent=ini; if(nm)nm.textContent=n.split(' ').slice(0,2).join(' '); if(pp)pp.textContent=p;
+      if(typeof renderSeletorUsuariosVisual==='function') renderSeletorUsuariosVisual();
     };
     syncUser(); setTimeout(syncUser,1500); setInterval(syncUser,10000);
   }
