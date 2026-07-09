@@ -1483,10 +1483,13 @@ function tarefasFiltradas(){
 function renderTarefasView(){ if(tarView==='lista') renderTarefasLista(); else renderTarefasMes(); }
 function _tarChipHTML(a){
   var concl=_tarConcluida(a);
-  var estilo='cursor:pointer;'+(concl?'text-decoration:line-through;opacity:.6;':'');
-  var pf=a.prazo?'fatal':'prev.';
-  var title=(a.titulo||'')+' — '+(a.cliente||'')+(a.numero&&a.numero!=='—'?(' · '+a.numero):'');
-  return '<div class="cev '+(a.prazo?'vm':'nt')+'" style="'+estilo+'" title="'+esc(title)+'" onclick="toggleConcluirTarefa('+a.id+')">'+esc(a.titulo||'—')+'</div>';
+  var estilo='cursor:pointer;display:flex;align-items:center;gap:4px;'+(concl?'text-decoration:line-through;opacity:.6;':'');
+  var title=(a.titulo||'')+' — '+(a.cliente||'')+(a.numero&&a.numero!=='—'?(' · '+a.numero):'')+' (clique para abrir a atividade)';
+  /* clique no texto ABRE a atividade (edição, com link do processo); o ✓ à esquerda conclui/reabre */
+  return '<div class="cev '+(a.prazo?'vm':'nt')+'" style="'+estilo+'" title="'+esc(title)+'">'
+    +'<span onclick="event.stopPropagation();toggleConcluirTarefa('+a.id+')" title="'+(concl?'Reabrir':'Concluir')+'" style="cursor:pointer;flex-shrink:0;width:13px;height:13px;border:1.5px solid currentColor;border-radius:3px;display:inline-flex;align-items:center;justify-content:center;font-size:9px;line-height:1">'+(concl?'✓':'')+'</span>'
+    +'<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" onclick="abrirTarefaKanban('+a.id+')">'+esc(a.titulo||'—')+'</span>'
+    +'</div>';
 }
 function renderTarefasMes(){
   var cal=document.getElementById('tar-cal'); if(!cal) return;
@@ -1518,8 +1521,8 @@ function renderTarefasLista(){
     var iso=_tarISO(a); var dataBR=iso?iso.split('-').reverse().join('/'):'sem data';
     var row=document.createElement('div'); row.className='agev '+(a.prazo?'vm':'nt');
     row.style.cssText='display:flex;align-items:center;gap:10px;'+(concl?'opacity:.6;':'');
-    row.innerHTML='<input type="checkbox" '+(concl?'checked':'')+' onclick="toggleConcluirTarefa('+a.id+')" style="width:16px;height:16px;cursor:pointer">'+
-      '<div style="flex:1;min-width:0"><div class="tt" style="'+(concl?'text-decoration:line-through':'')+'">'+esc(a.titulo||'—')+'</div>'+
+    row.innerHTML='<input type="checkbox" '+(concl?'checked':'')+' onclick="event.stopPropagation();toggleConcluirTarefa('+a.id+')" style="width:16px;height:16px;cursor:pointer" title="Concluir/reabrir">'+
+      '<div style="flex:1;min-width:0;cursor:pointer" onclick="abrirTarefaKanban('+a.id+')" title="Abrir atividade no processo"><div class="tt" style="'+(concl?'text-decoration:line-through':'')+'">'+esc(a.titulo||'—')+'</div>'+
       '<div class="cli">'+esc(a.cliente||'—')+(a.numero&&a.numero!=='—'?(' · '+esc(a.numero)):'')+' · '+(a.prazo?'prazo fatal':'previsto')+' '+esc(dataBR)+(a.resp?(' · '+esc(a.resp)):'')+'</div></div>'+
       '<button class="btn sm ghost" onclick="event.stopPropagation();abrirTarefaKanban('+a.id+')">Abrir</button>';
     cal.appendChild(row);
