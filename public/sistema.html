@@ -42,6 +42,9 @@
   .sectlabel{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin:0 0 10px;font-weight:600}
   table{width:100%;border-collapse:collapse;font-size:13.5px} th{text-align:left;color:var(--muted);font-size:12px;padding:8px;border-bottom:1px solid var(--line)}
   td{padding:9px 8px;border-bottom:1px solid var(--line);vertical-align:top} tr.click{cursor:pointer} tr.click:hover{background:#f7f9fc}
+  #s-processos .searchbar .sb-sel{padding:4px 8px;font-size:12px;height:28px;line-height:1;background-position:right 6px center}
+  #s-processos .searchbar .sb-btn{padding:4px 10px;font-size:12px;min-height:0;line-height:1.15}
+  .tbl-triagem td,.tbl-triagem th{white-space:normal;word-break:break-word;overflow-wrap:anywhere} .tbl-triagem .teor,.tbl-triagem .teor *{max-width:100%;word-break:break-word;overflow-wrap:anywhere} .tbl-triagem .teor>div[style*="pre-wrap"]{white-space:pre-wrap;overflow-wrap:anywhere;overflow:auto}
   .proc{font-family:ui-monospace,Menlo,monospace;font-size:12px}
   .b{font-size:11px;padding:2px 8px;border-radius:20px;border:1px solid var(--line);white-space:nowrap}
   .b.ok{background:var(--okbg);color:var(--ok)} .b.warn{background:var(--warnbg);color:var(--warn)} .b.na{background:#f1f2f5;color:var(--muted)}
@@ -180,7 +183,7 @@
       <p class="note" style="margin-bottom:10px">Regra CMP: cada publicação capturada é triada no mesmo dia — a maioria é <b>ciência</b> (arquiva) e a minoria é <b>ação</b> (vira card no Kanban, em "A distribuir"), com responsável e prazo. Eduarda ou Rita (uma faz, a outra cobre).</p>
       <div class="card"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><p class="sectlabel" style="margin:0">Fila de triagem — movimentações a classificar</p><div id="triagem-abas" class="switch"></div></div>
         <p class="note" style="margin:6px 0 10px">Mostra <b>todas</b> as publicações não tratadas (não só as de hoje). Ao "criar atividade" ou dar "ciência", a publicação vai para a aba <b>Tratadas</b>.</p>
-        <table><thead><tr><th>Processo</th><th>Cliente</th><th>Movimentação</th><th>Sugestão (atividade · prazo)</th><th style="width:210px">Classificar</th></tr></thead><tbody id="triagem"></tbody></table>
+        <div style="overflow-x:auto;-webkit-overflow-scrolling:touch"><table class="tbl-triagem" style="table-layout:fixed;width:100%;min-width:760px"><thead><tr><th style="width:150px">Processo</th><th style="width:130px">Cliente</th><th style="width:auto">Movimentação</th><th style="width:210px">Sugestão (atividade · prazo)</th><th style="width:170px">Classificar</th></tr></thead><tbody id="triagem"></tbody></table></div>
         <p class="note" id="triagem-vazia" style="display:none">Fila vazia — tudo triado.</p>
       </div>
     </section>
@@ -224,7 +227,7 @@
       <p class="note" style="margin-top:8px">Processos encerrados nunca são apagados — para reativar, abra o processo e use o botão "Reativar".</p></div>
     </section>
     <section id="s-processos" class="hidden">
-      <div class="searchbar"><input id="busca" placeholder="Buscar por cliente, número, oponente ou assunto..." oninput="renderProc()"><select id="ordena" onchange="renderProc()" class="btn sm" style="margin-left:8px"><option value="">Novos Protocolos</option><option value="az">Cliente (A→Z)</option><option value="za">Cliente (Z→A)</option><option value="data_desc">Movimentação mais recente</option><option value="parados">Parados (mov. mais antiga)</option><option value="valor">Valor da causa (maior→menor)</option></select><select id="filtroEtq" onchange="renderProc()" class="btn sm" style="margin-left:8px"><option value="">Todas as etiquetas</option></select><select id="porPagina" onchange="renderProc()" class="btn sm" style="margin-left:8px"><option value="20">20 por página</option><option value="40">40</option><option value="60">60</option><option value="80">80</option><option value="100">100</option><option value="todos" selected>Todos</option></select><span class="note" id="proc-count" style="align-self:center"></span><button class="btn sm" style="margin-left:auto" onclick="abrirNovaTarefa()">+ Nova tarefa</button><button class="btn sm" style="margin-left:8px" onclick="abrirBusca()">+ Cadastrar por número</button><button class="btn sm" style="margin-left:8px" onclick="abrirCadManual()">+ Cadastrar manual / caso</button></div>
+      <div class="searchbar"><input id="busca" placeholder="Buscar por cliente, número, oponente ou assunto..." oninput="renderProc()"><select id="ordena" onchange="renderProc()" class="btn sm sb-sel" style="margin-left:8px;max-width:120px"><option value="">Novos Protocolos</option><option value="az">Cliente (A→Z)</option><option value="za">Cliente (Z→A)</option><option value="data_desc">Movimentação mais recente</option><option value="parados">Parados (mov. mais antiga)</option><option value="valor">Valor da causa (maior→menor)</option></select><select id="filtroEtq" onchange="renderProc()" class="btn sm sb-sel" style="margin-left:8px;max-width:112px"><option value="">Todas as etiquetas</option></select><select id="porPagina" onchange="renderProc()" class="btn sm sb-sel" style="margin-left:8px;max-width:76px"><option value="20">20 por página</option><option value="40">40</option><option value="60">60</option><option value="80">80</option><option value="100">100</option><option value="todos" selected>Todos</option></select><span class="note" id="proc-count" style="align-self:center"></span><button class="btn sm sb-btn" style="margin-left:auto" onclick="abrirNovaTarefa()">+ Nova tarefa</button><button class="btn sm gold sb-btn" style="margin-left:8px" onclick="abrirBusca()">+ Cadastrar por número <span style="font-weight:400;font-size:10px;opacity:.8">(pesquisa pelo djen)</span></button><button class="btn sm sb-btn" style="margin-left:8px;background:var(--navy);color:#fff;border-color:var(--navy)" onclick="abrirCadManual()">+ Cadastrar manual / caso</button></div>
       <div class="card"><table><thead><tr><th style="width:36%">Cliente</th><th style="width:150px">Processo</th><th style="width:22%">Assunto</th><th style="width:175px"><select id="filtroMov" onchange="renderProc()" style="font-weight:700;font-size:12px;border:none;background:transparent;color:inherit;max-width:170px;cursor:pointer;padding:0"><option value="">Última movimentação</option><option value="Concluso c/petição posterior s/despacho">Concluso c/petição posterior s/despacho</option><option value="Concluso">Concluso</option><option value="Petição">Petição</option><option value="Despacho/Sentença">Despacho/Sentença</option><option value="Intimação">Intimação</option><option value="__sem">Sem classificação</option></select></th><th style="width:110px"><select id="filtroOrigem" onchange="renderProc()" style="font-weight:700;font-size:12px;border:none;background:transparent;color:inherit;max-width:105px;cursor:pointer;padding:0"><option value="">Status</option><option value="astrea">astrea</option><option value="djen">djen</option><option value="atualizado">atualizado</option></select></th><th style="width:130px"><select id="ordenaPrazo" onchange="setOrdenaPrazo(this.value)" style="font-weight:700;font-size:12px;border:none;background:transparent;color:inherit;max-width:125px;cursor:pointer;padding:0" title="Ordenar pela data do prazo fatal"><option value="">Prazo fatal</option><option value="prox">Mais próximo → distante</option><option value="dist">Mais distante → próximo</option></select></th></tr></thead><tbody id="proc-body"></tbody></table></div><div id="proc-pager" style="display:flex;gap:6px;align-items:center;justify-content:center;padding:14px;flex-wrap:wrap"></div>
     </section>
 
@@ -939,9 +942,21 @@ function initKanban(){
     /* tarefas e prazos importados do Astrea (embutidos) */
     if(typeof ASTREA_TAREFAS_SEED!=='undefined'){ ASTREA_TAREFAS_SEED.forEach(function(t){ KAN.push({id:t.id,titulo:t.titulo,cliente:t.cliente,numero:t.numero,col:t.col||'distribuir',resp:t.resp,data:t.data,prazo:t.prazo,tipoForm:t.tipoForm}); }); }
   }
+  /* re-aplica as colunas salvas localmente (cookie) por cima do seed/banco,
+     para o card não voltar para "A distribuir" depois do F5. */
+  _aplicarKanbanCookie();
 }
+/* --- Persistência local do Kanban (cookie) — garante que as colunas NÃO voltem
+   ao estado inicial após F5, mesmo que a tabela kanban_tarefas ainda não exista no
+   banco. É um espelho local; quando o banco estiver disponível ele prevalece. --- */
+function _kanKey(a){ if(!a) return ''; if(a.dbid) return 'db:'+a.dbid; return 't:'+String(a.titulo||'')+'|'+String(a.numero||'')+'|'+String(a.cliente||''); }
+function _kanCookieLer(){ try{ var m=document.cookie.match(/(?:^|;\s*)cmpKan=([^;]+)/); return m?JSON.parse(decodeURIComponent(m[1])):{}; }catch(e){ return {}; } }
+function _kanCookieGravar(mapa){ try{ var v=encodeURIComponent(JSON.stringify(mapa)); document.cookie='cmpKan='+v+';path=/;max-age=31536000;samesite=lax'; }catch(e){} }
+function _kanSalvarLocal(a){ if(!a) return; var mapa=_kanCookieLer(); mapa[_kanKey(a)]=a.col||'distribuir'; _kanCookieGravar(mapa); }
+function _aplicarKanbanCookie(){ try{ var mapa=_kanCookieLer(); if(!mapa||!KAN) return; KAN.forEach(function(a){ var c=mapa[_kanKey(a)]; if(c) a.col=c; }); }catch(e){} }
 /* grava a coluna (e demais campos) de uma tarefa no banco. Silencioso se a tabela não existir. */
 function persisteKanban(a){
+  _kanSalvarLocal(a);
   try{
     var sb=window.__sb; if(!sb||!a) return;
     if(a.dbid){ /* já existe no banco: atualiza */
@@ -1039,10 +1054,10 @@ function renderTriagem(){
   if(vazia){ vazia.style.display=lista.length?"none":"block"; vazia.textContent=(triagemAba==='tratadas')?'Nenhuma publicação tratada ainda.':'Fila vazia — tudo triado.'; }
   lista.slice(0,300).forEach(function(t){
     var sug=sugestaoTeor(t.texto||t.titulo); var pz=sug.prazo?(sug.prazo+" dias"):"agendar";
-    var teorHtml=t.texto?('<div style="background:var(--accentbg);border-left:3px solid var(--gold);padding:8px 10px;border-radius:0 6px 6px 0;margin:6px 0;color:var(--ink);white-space:normal"><b>Sugestão de tratamento (IA):</b> '+esc(sug.ativ)+' — <b>prazo sugerido: '+pz+'</b></div><div style="font-weight:600">Teor do despacho:</div><div style="white-space:pre-wrap;max-height:240px;overflow:auto">'+esc(t.texto)+'</div>'):'<div class="note">Sem teor disponível.</div>';
+    var teorHtml=t.texto?('<div style="background:var(--accentbg);border-left:3px solid var(--gold);padding:8px 10px;border-radius:0 6px 6px 0;margin:6px 0;color:var(--ink);white-space:normal"><b>Sugestão de tratamento (IA):</b> '+esc(sug.ativ)+' — <b>prazo sugerido: '+pz+'</b></div><div style="font-weight:600">Teor do despacho:</div><div style="white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;max-height:240px;overflow:auto">'+esc(t.texto)+'</div>'):'<div class="note">Sem teor disponível.</div>';
     var tr=document.createElement("tr");
     tr.innerHTML='<td class="proc"><a onclick="irParaProcesso(\''+String(t.numero).replace(/'/g,"")+'\')" style="cursor:pointer;color:var(--navy);text-decoration:underline">'+esc(t.numero)+'</a>'+(t.tribunal?('<div class="note" style="margin:0">'+esc(t.tribunal)+' · '+esc(t.data||"")+'</div>'):'')+'</td><td>'+esc(t.cliente||"—")+'</td>'+
-      '<td>'+esc(t.titulo)+' <a onclick="toggleTeor('+t.id+')" style="cursor:pointer;color:var(--muted);font-size:11px">(recolher/expandir)</a><div class="teor" id="teor-'+t.id+'" style="display:block;font-size:12px;color:var(--muted);margin-top:6px">'+teorHtml+'</div></td>'+
+      '<td>'+esc(t.titulo)+' <a onclick="toggleTeor('+t.id+')" style="cursor:pointer;color:var(--muted);font-size:11px">(ver teor)</a><div class="teor" id="teor-'+t.id+'" style="display:none;font-size:12px;color:var(--muted);margin-top:6px">'+teorHtml+'</div></td>'+
       '<td><b>'+esc(sug.ativ)+'</b><div class="note" style="margin:0">prazo sugerido: '+pz+'</div></td>'+
       (t.done
         ? '<td><span style="color:#0F6E56;font-weight:600;font-size:12px">✓ tratada</span> <button class="btn sm ghost" onclick="reabrirTriagem('+t.id+')" title="Voltar para a fila">reabrir</button></td>'
@@ -1635,13 +1650,8 @@ function renderTarefasMes(){
   var outroMes=lista.filter(function(a){var iso=_tarISO(a);return iso && iso.slice(0,7)!==prefMes;});
   /* faixa acima do calendário: sem data + aviso de outros meses */
   var avisoHTML='';
-  if(semData.length){
-    avisoHTML+='<div style="background:#fff6e6;border:1px solid #f0dca8;border-radius:10px;padding:8px 10px;margin-bottom:8px">'
-      +'<div style="font-size:12px;font-weight:700;color:#8a5a00;margin-bottom:6px">Sem data definida ('+semData.length+') — não some, mas defina o prazo</div>'
-      +'<div style="display:flex;flex-wrap:wrap;gap:6px">'
-      +semData.map(function(a){ var w=document.createElement('div'); w.innerHTML=_tarChipHTML(a); return w.innerHTML; }).join('')
-      +'</div></div>';
-  }
+  /* "Sem data definida" removido da visão mês a pedido — os agendamentos sem data
+     não são apagados (continuam na visão Lista), apenas não aparecem aqui. */
   if(outroMes.length){
     avisoHTML+='<div class="note" style="margin:0 0 8px">'+outroMes.length+' atividade(s) em outros meses — use ‹ anterior / próximo › ou a visão <a onclick="setTarView(\'lista\')" style="cursor:pointer;text-decoration:underline;color:var(--navy)">Lista</a> para ver todas.</div>';
   }
