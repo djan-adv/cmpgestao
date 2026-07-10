@@ -46,15 +46,18 @@ export async function POST(request) {
 
   // 1) versão antes
   const antes = await run('git rev-parse --short HEAD')
-  // 2) puxa a versão nova
-  const pull = await run('git pull origin main 2>&1')
+  // 2) sincroniza FORÇADO com o GitHub — descarta edições locais soltas em arquivos
+  //    versionados para não travar o deploy. .env.local (senhas), node_modules e .next
+  //    NÃO são versionados e, portanto, não são afetados.
+  await run('git fetch origin main 2>&1')
+  const pull = await run('git reset --hard origin/main 2>&1')
   // 3) versão depois
   const depois = await run('git rev-parse --short HEAD')
 
   const de = (antes.stdout || '').trim()
   const para = (depois.stdout || '').trim()
-  const jaAtual = /Already up to date|Já atualizado/i.test(pull.stdout)
   const ok = pull.code === 0
+  const jaAtual = ok && de === para
 
   return Response.json({
     ok,
