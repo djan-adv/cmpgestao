@@ -254,8 +254,10 @@
         <div class="card"><table><thead><tr><th>Nome</th><th>Tipo</th><th>Telefone</th><th>E-mail</th><th>Origem</th><th>Proc.</th><th>Editar</th><th>Excluir</th></tr></thead><tbody id="crm-body"></tbody></table></div>
       </div>
       <div id="crm-captacao" class="hidden">
-        <div id="cap-mes" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;align-items:center"></div>
-        <div id="cap-filtro" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px"></div>
+        <div style="display:flex;flex-wrap:wrap;gap:24px;margin-bottom:12px;align-items:flex-end">
+          <div id="cap-mes"></div>
+          <div id="cap-filtro"></div>
+        </div>
         <div class="kpis" id="cap-kpis"></div>
         <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:stretch"><div class="card" style="flex:1;min-width:300px"><p class="sectlabel">Panorama por canal — clique numa fatia/canal ou nos indicadores para ver quem</p><div id="cap-canais"></div><p class="note">O tráfego pago não converte no CMP; foque em indicação, Google Meu Negócio e conteúdo orgânico.</p></div><div class="card" style="flex:1;min-width:300px"><p class="sectlabel">Funil comercial — leads por etapa</p><div id="funil-dash" style="display:flex;gap:8px;flex-wrap:wrap"></div></div></div>
         <div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><p class="sectlabel" style="margin:0">Funil de captação (arraste os leads; clique para editar)</p><div><button class="btn sm" onclick="novoLead()">+ Novo lead</button> <button class="btn sm ghost" onclick="addEtapa()">+ Etapa</button></div></div><div class="kanwrap"><div class="kanban" id="funil"></div></div></div>
@@ -1262,12 +1264,14 @@ function leadsDoMes(){ if(mesSel==='todos') return LEADS; return LEADS.filter(fu
 function setMesSel(m){ mesSel=(m==='todos')?'todos':parseInt(m,10); renderCaptacao(); }
 function renderCaptacao(){
   /* filtro por mês (janeiro…dezembro) — em cima de tudo */
-  var MES=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  var MESLONG=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  var _selSt='padding:8px 11px;border:1px solid var(--line);border-radius:8px;background:#fff;font-size:13px;color:var(--navy);font-weight:600;cursor:pointer';
   var cm=document.getElementById("cap-mes");
-  if(cm){ var mchips='<span style="font-size:11.5px;color:var(--muted);font-weight:600;margin-right:2px">Mês:</span>';
-    mchips+='<span class="chip2" style="cursor:pointer;background:'+(mesSel==='todos'?'#2E3A4B':'#e9ebf0')+';color:'+(mesSel==='todos'?'#fff':'#5f5e5a')+'" onclick="setMesSel(\'todos\')">Ano todo</span>';
-    MES.forEach(function(nm,i){ var on=(mesSel===i); mchips+='<span class="chip2" style="cursor:pointer;background:'+(on?'#2E3A4B':'#e9ebf0')+';color:'+(on?'#fff':'#5f5e5a')+'" onclick="setMesSel('+i+')">'+nm+'</span>'; });
-    cm.innerHTML=mchips; }
+  if(cm){
+    var mesOpts='<option value="todos"'+(mesSel==='todos'?' selected':'')+'>Ano todo</option>';
+    MESLONG.forEach(function(nm,i){ mesOpts+='<option value="'+i+'"'+(mesSel===i?' selected':'')+'>'+nm+'</option>'; });
+    cm.innerHTML='<label style="display:flex;flex-direction:column;gap:4px;font-size:11.5px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.3px">Mês<select style="'+_selSt+';min-width:150px" onchange="setMesSel(this.value)">'+mesOpts+'</select></label>';
+  }
   var L=leadsDoMes();
   var base=(canalSel==="Geral")?L:L.filter(function(l){return l.canal===canalSel;});
   var total=base.length, ganho=base.filter(function(l){return l.estagio==="ganho";}).length;
@@ -1275,7 +1279,7 @@ function renderCaptacao(){
   var canalAll={};L.forEach(function(l){canalAll[l.canal]=(canalAll[l.canal]||0)+1;});
   var top=Object.keys(canalAll).sort(function(a,b){return canalAll[b]-canalAll[a];})[0]||"—";
   var chips=["Geral"];CANAIS_LIST.forEach(function(c){if(chips.indexOf(c)<0)chips.push(c);});Object.keys(canalAll).forEach(function(c){if(chips.indexOf(c)<0)chips.push(c);});
-  document.getElementById("cap-filtro").innerHTML=chips.map(function(c){var on=(c===canalSel);return '<span class="chip2" style="cursor:pointer;background:'+(on?"#2E3A4B":"#e9ebf0")+';color:'+(on?"#fff":"#5f5e5a")+'" onclick="setCanalSel(\''+String(c).replace(/'/g,"")+'\')">'+esc(c)+'</span>';}).join("");
+  document.getElementById("cap-filtro").innerHTML='<label style="display:flex;flex-direction:column;gap:4px;font-size:11.5px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.3px">Canal de aquisição<select style="'+_selSt+';min-width:210px" onchange="setCanalSel(this.value)">'+chips.map(function(c){return '<option value="'+esc(c)+'"'+(c===canalSel?' selected':'')+'>'+esc(c)+'</option>';}).join("")+'</select></label>';
   var lbl4=(canalSel==="Geral")?"principal canal":"canal selecionado",val4=(canalSel==="Geral")?top:canalSel,h4="drillTipo('"+String(canalSel==="Geral"?top:canalSel).replace(/'/g,"")+"')";
   document.getElementById("cap-kpis").innerHTML=kpiC((canalSel==="Geral"?"leads (total)":("leads — "+canalSel)),total,"drillTipo('todos')")+kpiC("convertidos",ganho,"drillTipo('ganho')")+kpiC("taxa de conversão",taxa+"%","drillTipo('ganho')")+kpiC(lbl4,val4,h4);
   drawPie("cap-canais",canalAll);
@@ -1296,11 +1300,12 @@ function renderCaptacao(){
       el.ondrop=(function(tid){return function(e){e.preventDefault();e.stopPropagation();moverLead(+e.dataTransfer.getData("id"),tid);};})(l.id);
       el.onclick=(function(id){return function(){editarLead(id);};})(l.id);
       var lem=l.lemdata?('<div class="meta" style="color:var(--warn)">&#128276; '+l.lemdata+'</div>'):'';
-      el.innerHTML='<div class="t">'+esc(primeiroUltimo(l.nome))+'</div><div class="meta">'+esc(l.acao||l.lemtxt||"—")+'</div>'+lem+(l.labels&&l.labels.length?('<div style="margin-top:4px">'+chipsFor(l.labels)+'</div>'):'');
+      el.innerHTML='<div class="t" style="display:flex;justify-content:space-between;align-items:center;gap:6px"><span>'+esc(primeiroUltimo(l.nome))+'</span><a title="Apagar lead" onclick="excluirLead('+l.id+',event)" style="cursor:pointer;color:#b5342b;font-size:14px;line-height:1;opacity:.55;flex:0 0 auto">&#128465;</a></div><div class="meta">'+esc(l.acao||l.lemtxt||"—")+'</div>'+lem+(l.labels&&l.labels.length?('<div style="margin-top:4px">'+chipsFor(l.labels)+'</div>'):'');
       col.appendChild(el);});
     fu.appendChild(col);
   });
 }
+function excluirLead(id,ev){ if(ev){ ev.stopPropagation(); } var l=LEADS.find(function(x){return x.id===id;}); if(!l) return; if(!confirm('Apagar o lead "'+(l.nome||'')+'"?\n\nEssa ação não pode ser desfeita.')) return; var i=LEADS.findIndex(function(x){return x.id===id;}); if(i>=0){ LEADS.splice(i,1); salvarLeadsLocal(); renderCaptacao(); } }
 function primeiroUltimo(n){var p=String(n||"").trim().split(/\s+/);if(p.length<=1)return p[0]||"";return p[0]+" "+p[p.length-1];}
 function moverLead(dragId,targetId){var di=LEADS.findIndex(function(x){return x.id===dragId;});var t=LEADS.find(function(x){return x.id===targetId;});if(di<0||!t||dragId===targetId)return;var d=LEADS[di];d.estagio=t.estagio; if(t.estagio==='ganho'&&!d.dataFechamento) d.dataFechamento=hojeISO(); LEADS.splice(di,1);var ti=LEADS.findIndex(function(x){return x.id===targetId;});LEADS.splice(ti,0,d);salvarLeadsLocal();renderCaptacao();}
 function initKanban(){
