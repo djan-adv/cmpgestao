@@ -3586,12 +3586,19 @@ async function syncMatchDBUnmatched(){
 }
 async function syncEnviar(){
   var groups=window.__syncGroups||[]; if(!groups.length){ alert('Selecione uma pasta primeiro.'); return; }
-  /* aplica as escolhas dos selects */
+  /* 1) guarda as escolhas manuais dos selects */
+  Array.prototype.slice.call(document.querySelectorAll('#sync-preview select[data-g]')).forEach(function(sel){ var gi=+sel.getAttribute('data-g'); if(groups[gi]) groups[gi].idx=(sel.value===''?-1:parseInt(sel.value,10)); });
+  /* 2) garante que a busca no banco terminou para as ainda não casadas (evita corrida) */
+  var st=document.getElementById('sync-status'); if(st) st.innerHTML='Conferindo destinos no banco…';
+  try{ await syncMatchDBUnmatched(); }catch(e){}
+  /* 3) relê os selects (a busca no banco pode ter atualizado) */
   Array.prototype.slice.call(document.querySelectorAll('#sync-preview select[data-g]')).forEach(function(sel){ var gi=+sel.getAttribute('data-g'); if(groups[gi]) groups[gi].idx=(sel.value===''?-1:parseInt(sel.value,10)); });
   var alvos=groups.filter(function(g){ return g.idx>=0; });
-  if(!alvos.length){ alert('Nenhuma pasta tem processo de destino selecionado.'); return; }
+  if(!alvos.length){ alert('Nenhuma pasta foi ligada a um processo.\n\nUse a caixa "buscar processo" ao lado de cada pasta (pode buscar por qualquer nome, inclusive do cônjuge) e escolha o processo; depois clique em Enviar.'); return; }
   var totalArq=alvos.reduce(function(a,g){return a+g.files.length;},0);
-  if(!confirm('Enviar '+totalArq+' arquivo(s) de '+alvos.length+' pasta(s) para os processos correspondentes?')) return;
+  var vazios=0; alvos.forEach(function(g){ g.files.forEach(function(it){ if(it.f && it.f.size===0) vazios++; }); });
+  var aviso=vazios?('\n\nATENÇÃO: '+vazios+' arquivo(s) estão com 0 KB — provavelmente a pasta do OneDrive está "somente online". Clique com o botão direito na pasta → "Sempre manter neste dispositivo" e tente de novo.'):'';
+  if(!confirm('Enviar '+totalArq+' arquivo(s) de '+alvos.length+' pasta(s) para os processos correspondentes?'+aviso)) return;
   var tok; try{ tok=await docToken(); }catch(e){}
   if(!tok){ alert('Sessão expirada — recarregue a página (F5) e tente de novo.'); return; }
   var fixNome=(document.getElementById('sync-fixnome')||{}).checked;
