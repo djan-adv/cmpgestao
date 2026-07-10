@@ -127,7 +127,7 @@
 <script>try{if(localStorage.getItem('sb-ndeqlyrydcijbgjiviuw-auth-token')){document.documentElement.setAttribute('data-boot','1');}}catch(e){}</script>
 <style>html[data-boot="1"] #login{display:none!important}html[data-boot="1"] body::before{content:"Carregando o CMPGestão…";display:block;text-align:center;color:#697180;font-size:14px;padding:48px}</style>
 <style>@media(min-width:900px){.side{position:fixed!important;top:0;left:0;bottom:0;width:212px;overflow-y:auto;z-index:30;height:auto}.main{margin-left:212px}#nav{padding-bottom:110px}}
-@media(min-width:1100px){#s-proc-det{padding-right:calc(21vw + 4px);position:relative}#doc-card{position:fixed;right:14px;top:150px;width:21vw;max-height:calc(100vh - 170px);overflow:auto;z-index:20;box-shadow:0 6px 22px rgba(30,39,51,.10)}#doc-card table td{font-size:12px!important;word-break:break-word}}</style>
+@media(min-width:1100px){#s-proc-det{padding-right:calc(21vw + 4px);position:relative}#docs-col{position:fixed;right:14px;top:150px;width:21vw;max-height:calc(100vh - 170px);overflow:auto;z-index:20}#doc-card,#docop-card{box-shadow:0 6px 22px rgba(30,39,51,.10)}#doc-card table td,#docop-card table td{font-size:12px!important;word-break:break-word}}</style>
 
 <section id="login">
   <div class="loginbox">
@@ -826,6 +826,7 @@ function abrir(i){
     '<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><select id="det-etq-sel" style="width:auto;max-width:280px"></select><button class="btn sm" onclick="addEtqProc()">adicionar etiqueta</button></div></div>';
   // blocos estilo Astrea (onde entram os dados nas próximas fases)
   html+='<div class="grid2">'+
+    '<div id="docs-col">'+
     '<div class="card" id="doc-card"><p class="sectlabel">Documentos do processo'+
       '<span style="float:right;display:flex;gap:10px;text-transform:none;letter-spacing:0;font-weight:600">'+
         '<a style="cursor:pointer;color:#185FA5" onclick="document.getElementById(\'doc-file\').click()" title="Enviar arquivos soltos para a pasta aberta">+ arquivos</a>'+
@@ -835,6 +836,16 @@ function abrir(i){
       '<input type="file" id="doc-file" multiple style="display:none" onchange="enviarDocs(this)">'+
       '<input type="file" id="doc-dir" webkitdirectory directory multiple style="display:none" onchange="enviarPasta(this)">'+
       '<div id="doc-panel"><div class="note">Carregando documentos…</div></div></div>'+
+    '<div class="card" id="docop-card" style="margin-top:12px"><p class="sectlabel">Documentos da outra parte'+
+      '<span style="float:right;display:flex;gap:10px;text-transform:none;letter-spacing:0;font-weight:600">'+
+        '<a style="cursor:pointer;color:#185FA5" onclick="document.getElementById(\'docop-file\').click()" title="Enviar arquivos soltos para a pasta aberta">+ arquivos</a>'+
+        '<a style="cursor:pointer;color:#185FA5" onclick="document.getElementById(\'docop-dir\').click()" title="Enviar uma pasta inteira (com subpastas), preservando a estrutura">+ pasta</a>'+
+        '<a style="cursor:pointer;color:#127a53" onclick="criarPastaDoc(\'outra\')" title="Criar uma pasta vazia dentro da pasta aberta">nova pasta</a>'+
+      '</span></p>'+
+      '<input type="file" id="docop-file" multiple style="display:none" onchange="enviarDocs(this,\'outra\')">'+
+      '<input type="file" id="docop-dir" webkitdirectory directory multiple style="display:none" onchange="enviarPasta(this,\'outra\')">'+
+      '<div id="docop-panel"><div class="note">Carregando documentos…</div></div></div>'+
+    '</div>'+
     '</div>';
   document.getElementById("det-body").innerHTML=html;
   histShown=10; renderHistorico();
@@ -2480,23 +2491,37 @@ function renderEncerrados(){
   });
 }
 /* ===== Documentos do processo (VPS /opt/cmpdocs) — estilo OneDrive ===== */
+/* Escopos de documentos: "processo" (raiz) e "outra parte" (subpasta reservada
+   _OUTRA_PARTE dentro da pasta do processo). Cada escopo tem seu painel, seu input
+   de arquivos/pasta e sua subpasta-base. Assim o mesmo backend /api/docs serve os dois
+   sem misturar arquivos. */
+var DOC_ESCOPOS={
+  proc:  { panel:'doc-panel',    file:'doc-file',    dir:'doc-dir',    base:'',            subVar:'__docSub'    },
+  outra: { panel:'docop-panel',  file:'docop-file',  dir:'docop-dir',  base:'_OUTRA_PARTE', subVar:'__docSubOp' }
+};
+function _docEsc(escopo){ return DOC_ESCOPOS[escopo]||DOC_ESCOPOS.proc; }
+/* junta a base do escopo com a subpasta navegada */
+function _docDir(escopo, sub){ var b=_docEsc(escopo).base; return b?(b+(sub?('/'+sub):'')):(sub||''); }
 async function docToken(){ var s=await window.__sb.auth.getSession(); return s&&s.data&&s.data.session&&s.data.session.access_token; }
-async function carregarDocs(numero, sub){
-  var el=document.getElementById('doc-panel'); if(!el) return;
+async function carregarDocs(numero, sub, escopo){
+  escopo=escopo||'proc'; var E=_docEsc(escopo);
+  var el=document.getElementById(E.panel); if(!el) return;
   var dig=String(numero||'').replace(/\D/g,'');
-  window.__docSub=sub||'';
+  window[E.subVar]=sub||'';
   if(!dig){ el.innerHTML='<div class="note">Processo sem número.</div>'; return; }
   try{
     var tok=await docToken();
-    var dir=dig+(sub?('/'+sub):'');
+    var dir=dig+'/'+_docDir(escopo, sub); dir=dir.replace(/\/+$/,'');
     var r=await fetch('/api/docs?dir='+encodeURIComponent(dir),{headers:{Authorization:'Bearer '+tok}});
     var j=await r.json(); var itens=(j&&j.itens)||[];
+    /* no escopo "processo" (raiz), esconde a pasta técnica _OUTRA_PARTE para não misturar */
+    if(escopo==='proc' && !sub){ itens=itens.filter(function(x){ return !(x.tipo==='pasta' && x.nome==='_OUTRA_PARTE'); }); }
     el.innerHTML='';
     if(sub){
       var volta=document.createElement('div'); volta.style.marginBottom='6px';
       var a=document.createElement('a'); a.href='#'; a.textContent='⬅ voltar'; a.style.color='#185FA5';
       var up=sub.split('/').slice(0,-1).join('/');
-      a.onclick=function(ev){ev.preventDefault(); carregarDocs(numero, up);};
+      a.onclick=function(ev){ev.preventDefault(); carregarDocs(numero, up, escopo);};
       volta.appendChild(a);
       var lbl=document.createElement('span'); lbl.className='note'; lbl.textContent='  /'+sub; volta.appendChild(lbl);
       el.appendChild(volta);
@@ -2513,23 +2538,24 @@ async function carregarDocs(numero, sub){
       var td2=document.createElement('td'); td2.className='note'; td2.style.cssText='text-align:right;white-space:nowrap';
       var dtm=x.mod?String(x.mod).slice(0,10).split('-').reverse().join('/'):'';
       td2.textContent=(x.tam?(Math.max(1,Math.round(x.tam/1024))+' KB · '):'')+dtm+(naLix&&x.resta!=null?(' · '+x.resta+'d'):'');
-      var rel=(sub?sub+'/':'')+x.nome;
+      var relNav=(sub?sub+'/':'')+x.nome;               /* caminho relativo ao escopo (para navegar) */
+      var relFull=_docDir(escopo, relNav);               /* caminho real dentro da pasta do processo (inclui a base) */
       if(x.tipo!=='pasta'&&!naLix){
         var del=document.createElement('span'); del.textContent=' 🗑'; del.title='Enviar para a Lixeira (fica guardado 30 dias)';
         del.style.cssText='cursor:pointer;opacity:.5;margin-left:5px';
         del.onmouseover=function(){del.style.opacity='1';}; del.onmouseout=function(){del.style.opacity='.5';};
-        del.onclick=function(ev){ ev.stopPropagation(); lixeiraDoc(dig, rel, numero, sub); };
+        del.onclick=(function(rf,rn){return function(ev){ ev.stopPropagation(); lixeiraDoc(dig, rf, numero, rn, escopo); };})(relFull, sub);
         td2.appendChild(del);
       }
       if(x.tipo!=='pasta'&&naLix){
         var rst=document.createElement('span'); rst.textContent=' ↩'; rst.title='Restaurar para o local original';
         rst.style.cssText='cursor:pointer;color:#127a53;font-weight:700;margin-left:5px';
-        rst.onclick=function(ev){ ev.stopPropagation(); restaurarDoc(dig, rel, numero, sub); };
+        rst.onclick=(function(rf,rn){return function(ev){ ev.stopPropagation(); restaurarDoc(dig, rf, numero, rn, escopo); };})(relFull, sub);
         td2.appendChild(rst);
       }
       tr.appendChild(td1); tr.appendChild(td2);
-      if(x.tipo==='pasta') tr.onclick=function(){ carregarDocs(numero, rel); };
-      else tr.onclick=function(){ baixarDoc(dig, rel); };
+      if(x.tipo==='pasta') tr.onclick=(function(rn){return function(){ carregarDocs(numero, rn, escopo); };})(relNav);
+      else tr.onclick=(function(rf){return function(){ baixarDoc(dig, rf); };})(relFull);
       tb.appendChild(tr);
     });
     el.appendChild(tb);
@@ -2544,20 +2570,21 @@ async function baixarDoc(dig, rel){
   setTimeout(function(){URL.revokeObjectURL(a.href);},5000);
 }
 /* enviar arquivos do computador para a pasta aberta no painel */
-async function enviarDocs(inp){
+async function enviarDocs(inp, escopo){
+  escopo=escopo||'proc'; var E=_docEsc(escopo);
   var files=Array.prototype.slice.call((inp&&inp.files)?inp.files:(inp||[])); /* copia imediata — o input pode ser limpo depois */
   if(!files.length||!atual) return;
-  var sub=window.__docSub||'';
+  var sub=window[E.subVar]||'';
   try{
     var dig=String(atual.numero||'').replace(/\D/g,''); if(!dig){ alert('Processo sem número.'); return; }
     if(/(^|\/)Lixeira$/.test(sub)){ alert('Não é possível enviar arquivos para a Lixeira.'); return; }
     var tok=await docToken();
     if(!tok){ alert('Sessão expirada — recarregue a página (F5) e tente de novo.'); return; }
-    var el=document.getElementById('doc-panel');
+    var el=document.getElementById(E.panel);
     for(var i=0;i<files.length;i++){
       var f=files[i];
       if(el) el.innerHTML='<div class="note">Enviando '+esc(f.name)+' ('+(i+1)+' de '+files.length+')…</div>';
-      var relPath=dig+(sub?'/'+sub:'')+'/'+f.name;
+      var relPath=dig+'/'+_docDir(escopo, sub)+'/'+f.name;
       var bytes=new Uint8Array(await f.arrayBuffer());
       var CH=512*1024, off=0;
       do{
@@ -2565,32 +2592,33 @@ async function enviarDocs(inp){
         var s=''; for(var k=0;k<slice.length;k+=0x8000){ s+=String.fromCharCode.apply(null, slice.subarray(k,Math.min(k+0x8000,slice.length))); }
         var r=await fetch('/api/docs',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},
           body:JSON.stringify({path:relPath,b64:btoa(s),append:off>0,mtime:new Date(f.lastModified).toISOString()})});
-        if(!r.ok){ var ej=await r.json().catch(function(){return {};}); alert('Falha ao enviar '+f.name+' (HTTP '+r.status+(ej.erro?': '+ej.erro:'')+').'); carregarDocs(atual.numero, sub); return; }
+        if(!r.ok){ var ej=await r.json().catch(function(){return {};}); alert('Falha ao enviar '+f.name+' (HTTP '+r.status+(ej.erro?': '+ej.erro:'')+').'); carregarDocs(atual.numero, sub, escopo); return; }
         off+=CH;
       }while(off<bytes.length);
     }
   }catch(e){ alert('Erro no envio: '+(e&&e.message||e)); }
-  finally{ try{ if(inp&&inp.value!==undefined) inp.value=''; }catch(e2){} carregarDocs(atual.numero, sub); }
+  finally{ try{ if(inp&&inp.value!==undefined) inp.value=''; }catch(e2){} carregarDocs(atual.numero, sub, escopo); }
 }
 /* ponto 6/13: enviar uma PASTA inteira (com subpastas), preservando a estrutura.
    Usa f.webkitRelativePath para reconstruir os caminhos; o back-end /api/docs cria os
    diretórios intermediários do `path` (mesmo mecanismo já usado para subpastas). */
-async function enviarPasta(inp){
+async function enviarPasta(inp, escopo){
+  escopo=escopo||'proc'; var E=_docEsc(escopo);
   var files=Array.prototype.slice.call((inp&&inp.files)?inp.files:(inp||[]));
   if(!files.length||!atual) return;
-  var sub=window.__docSub||'';
+  var sub=window[E.subVar]||'';
   try{
     var dig=String(atual.numero||'').replace(/\D/g,''); if(!dig){ alert('Processo sem número.'); return; }
     if(/(^|\/)Lixeira$/.test(sub)){ alert('Não é possível enviar para a Lixeira.'); return; }
     var tok=await docToken();
     if(!tok){ alert('Sessão expirada — recarregue a página (F5) e tente de novo.'); return; }
-    var el=document.getElementById('doc-panel');
+    var el=document.getElementById(E.panel);
     for(var i=0;i<files.length;i++){
       var f=files[i];
       /* webkitRelativePath ex.: "MinhaPasta/sub/arquivo.pdf" — preserva a hierarquia enviada */
       var rel=(f.webkitRelativePath||f.name).replace(/\\/g,'/');
       if(el) el.innerHTML='<div class="note">Enviando pasta: '+esc(rel)+' ('+(i+1)+' de '+files.length+')…</div>';
-      var relPath=dig+(sub?'/'+sub:'')+'/'+rel;
+      var relPath=dig+'/'+_docDir(escopo, sub)+'/'+rel;
       var bytes=new Uint8Array(await f.arrayBuffer());
       var CH=512*1024, off=0;
       do{
@@ -2598,45 +2626,46 @@ async function enviarPasta(inp){
         var s=''; for(var k=0;k<slice.length;k+=0x8000){ s+=String.fromCharCode.apply(null, slice.subarray(k,Math.min(k+0x8000,slice.length))); }
         var r=await fetch('/api/docs',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},
           body:JSON.stringify({path:relPath,b64:btoa(s),append:off>0,mtime:new Date(f.lastModified).toISOString()})});
-        if(!r.ok){ var ej=await r.json().catch(function(){return {};}); alert('Falha ao enviar '+rel+' (HTTP '+r.status+(ej.erro?': '+ej.erro:'')+').\n\nSe o servidor não aceitar criação de pastas, avise o Djan para habilitar a rota /api/docs (mkdir).'); carregarDocs(atual.numero, sub); return; }
+        if(!r.ok){ var ej=await r.json().catch(function(){return {};}); alert('Falha ao enviar '+rel+' (HTTP '+r.status+(ej.erro?': '+ej.erro:'')+').\n\nSe o servidor não aceitar criação de pastas, avise o Djan para habilitar a rota /api/docs (mkdir).'); carregarDocs(atual.numero, sub, escopo); return; }
         off+=CH;
       }while(off<bytes.length);
     }
   }catch(e){ alert('Erro no envio da pasta: '+(e&&e.message||e)); }
-  finally{ try{ if(inp&&inp.value!==undefined) inp.value=''; }catch(e2){} carregarDocs(atual.numero, sub); }
+  finally{ try{ if(inp&&inp.value!==undefined) inp.value=''; }catch(e2){} carregarDocs(atual.numero, sub, escopo); }
 }
 /* ponto 6/13: criar uma pasta vazia dentro da pasta aberta.
    Requer que o back-end /api/docs aceite {path, mkdir:true} para criar diretório. */
-async function criarPastaDoc(){
+async function criarPastaDoc(escopo){
+  escopo=escopo||'proc'; var E=_docEsc(escopo);
   if(!atual) return;
   var nome=prompt('Nome da nova pasta:'); if(!nome||!nome.trim()) return;
   nome=nome.trim().replace(/[\\/]+/g,'-'); /* evita criar hierarquia acidental pelo nome */
-  var sub=window.__docSub||'';
+  var sub=window[E.subVar]||'';
   var dig=String(atual.numero||'').replace(/\D/g,''); if(!dig){ alert('Processo sem número.'); return; }
   try{
     var tok=await docToken(); if(!tok){ alert('Sessão expirada — recarregue a página.'); return; }
-    var relPath=dig+(sub?'/'+sub:'')+'/'+nome;
+    var relPath=dig+'/'+_docDir(escopo, sub)+'/'+nome;
     var r=await fetch('/api/docs',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},
       body:JSON.stringify({path:relPath,mkdir:true})});
     if(!r.ok){ var ej=await r.json().catch(function(){return {};}); alert('Não foi possível criar a pasta (HTTP '+r.status+(ej.erro?': '+ej.erro:'')+').\n\nO servidor /api/docs precisa aceitar {path, mkdir:true}. Avise o Djan para habilitar.'); return; }
   }catch(e){ alert('Erro ao criar pasta: '+(e&&e.message||e)); }
-  finally{ carregarDocs(atual.numero, sub); }
+  finally{ carregarDocs(atual.numero, sub, escopo); }
 }
 /* excluir com segurança: move para a Lixeira do processo (30 dias) */
-async function lixeiraDoc(dig, rel, numero, sub){
+async function lixeiraDoc(dig, rel, numero, sub, escopo){
   if(!confirm('Enviar "'+rel.split('/').pop()+'" para a Lixeira?\n\nO arquivo fica guardado por 30 dias e pode ser restaurado nesse período.')) return;
   var tok=await docToken();
   var r=await fetch('/api/docs',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},
     body:JSON.stringify({op:'trash',path:dig+'/'+rel})});
   if(!r.ok){ alert('Não foi possível mover para a Lixeira.'); return; }
-  carregarDocs(numero, sub||'');
+  carregarDocs(numero, sub||'', escopo||'proc');
 }
-async function restaurarDoc(dig, rel, numero, sub){
+async function restaurarDoc(dig, rel, numero, sub, escopo){
   var tok=await docToken();
   var r=await fetch('/api/docs',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},
     body:JSON.stringify({op:'restore',path:dig+'/'+rel})});
   if(!r.ok){ alert('Não foi possível restaurar.'); return; }
-  carregarDocs(numero, sub||'');
+  carregarDocs(numero, sub||'', escopo||'proc');
 }
 function copiarNumero(el,num){
   var fim=function(){ var o=el.getAttribute('data-o')||el.textContent; el.setAttribute('data-o',o); el.textContent='✓ copiado!'; setTimeout(function(){ el.textContent=o; },900); };
@@ -3713,9 +3742,9 @@ function gerarDiligencia(pid,numEnc){
   document.getElementById('modal-dilig').classList.remove('hidden');
 }
 /* carrega documentos quando a ficha abre */
-(function(){ if(!window.__abrirWrapped && typeof abrir==='function'){ window.__abrirWrapped=true; var _ab=abrir; window.abrir=function(i){ _ab(i); try{ if(atual&&atual.numero) carregarDocs(atual.numero,''); }catch(e){} try{ renderCtlChips(); }catch(e2){} try{ if(atual&&atual.numero){ localStorage.setItem('cmp_proc', atual.numero); localStorage.setItem('cmp_secao','proc-det'); } }catch(e3){}
-  try{ /* alinha o topo do painel de documentos com o cabeçalho da ficha */
-    if(window.innerWidth>=1100){ var __fc=document.querySelector('#s-proc-det .card'); var __dc=document.getElementById('doc-card');
+(function(){ if(!window.__abrirWrapped && typeof abrir==='function'){ window.__abrirWrapped=true; var _ab=abrir; window.abrir=function(i){ _ab(i); try{ if(atual&&atual.numero){ carregarDocs(atual.numero,'','proc'); carregarDocs(atual.numero,'','outra'); } }catch(e){} try{ renderCtlChips(); }catch(e2){} try{ if(atual&&atual.numero){ localStorage.setItem('cmp_proc', atual.numero); localStorage.setItem('cmp_secao','proc-det'); } }catch(e3){}
+  try{ /* alinha o topo da coluna de documentos com o cabeçalho da ficha */
+    if(window.innerWidth>=1100){ var __fc=document.querySelector('#s-proc-det .card'); var __dc=document.getElementById('docs-col');
       if(__fc&&__dc){ var __r=__fc.getBoundingClientRect(); var __t=Math.max(70, Math.round(__r.top)); __dc.style.top=__t+'px'; __dc.style.maxHeight='calc(100vh - '+(__t+20)+'px)'; } }
   }catch(e4){} }; } })();
 </script>
