@@ -2426,13 +2426,14 @@ function renderProc(){
   <div id="cm-caso-id-wrap" style="display:none"><label>Identificação do caso <span style="color:#b3261e">*obrigatório</span></label><input id="cm-casoid" placeholder="Ex.: PA 123/2026, Requerimento INSS, Protocolo SEI..."></div>
   <div id="cm-novo-wrap" style="display:none">
     <div style="background:#eef7f1;border:1px solid #cfe8db;border-radius:9px;padding:10px 12px;margin-bottom:10px;font-size:12.5px;color:#0F6E56;line-height:1.5">
-      <b>Cliente novo (ainda sem processo).</b> Preencha a ficha de atendimento no <b>modelo padrão CMP</b>, depois clique em <b>Gerar caso</b>: o sistema abre a ficha do cliente (vinculando se ele já existir) e registra o pedido para o Claude elaborar a peça no padrão CMP.
-      <br><a href="/Ficha-de-Atendimento-CMP.docx" download style="display:inline-block;margin-top:6px;color:#0F6E56;font-weight:700;text-decoration:underline">&#8681; Baixar modelo da ficha de atendimento (Word)</a>
-      <div style="margin-top:8px">
-        <button class="btn sm" type="button" style="background:#0F6E56;border-color:#0F6E56" onclick="document.getElementById('cm-ficha-file').click()">&#8682; Ler ficha preenchida (Word/PDF)</button>
-        <input type="file" id="cm-ficha-file" accept=".docx,.pdf" style="display:none" onchange="lerFichaAtendimento(this)">
-        <span id="cm-ficha-status" style="font-size:12px;margin-left:8px"></span>
+      <b>Cliente novo (ainda sem processo).</b> Preencha a ficha no <b>modelo padrão CMP</b>, depois anexe a ficha + os documentos e clique em <b>Gerar caso</b>: o sistema lê a ficha, cria/vincula o cliente, sobe os arquivos para a pasta do caso e registra o pedido para o Claude elaborar a peça no padrão CMP.
+      <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <button class="btn sm" type="button" style="background:#fff;color:#0F6E56;border:1px solid #0F6E56" onclick="baixarModeloFicha()">&#8681; Baixar modelo da ficha (Word)</button>
+        <button class="btn sm" type="button" style="background:#0F6E56;border-color:#0F6E56" onclick="document.getElementById('cm-ficha-file').click()">&#128206; Anexar ficha + documentos</button>
+        <input type="file" id="cm-ficha-file" accept=".docx,.pdf,.doc,.jpg,.jpeg,.png,.webp" multiple style="display:none" onchange="anexarFichaDocs(this)">
+        <span id="cm-ficha-status" style="font-size:12px"></span>
       </div>
+      <div id="cm-ficha-lista" style="display:none;margin-top:6px;font-size:12px;color:#334"></div>
       <div id="cm-ficha-resumo" style="display:none;margin-top:8px;background:#fff;border:1px solid #cfe8db;border-radius:8px;padding:8px 10px;font-size:12px;color:#334"></div>
     </div>
     <div class="row2">
@@ -2459,8 +2460,8 @@ function renderProc(){
 <script>
 var cadTipo='processo';
 function abrirCadManual(){ cadTipo='processo'; setCadTipo('processo'); ['cm-numero','cm-casoid','cm-cliente','cm-oponente','cm-assunto','cm-foro','cm-causa','cm-obs','cm-peca-livre'].forEach(function(id){var e=document.getElementById(id);if(e)e.value='';}); var pe=document.getElementById('cm-peca'); if(pe) pe.selectedIndex=0;
-  try{ seedContatos(); }catch(e){} window.__cmCliMatch=null; window.__fichaExtraida=null; cmClienteStatus(''); var dd=document.getElementById('cm-cli-drop'); if(dd){dd.classList.remove('on');dd.innerHTML='';}
-  var fr=document.getElementById('cm-ficha-resumo'); if(fr){fr.style.display='none';fr.innerHTML='';} var fs=document.getElementById('cm-ficha-status'); if(fs) fs.textContent='';
+  try{ seedContatos(); }catch(e){} window.__cmCliMatch=null; window.__fichaExtraida=null; window.__cmDocs=[]; cmClienteStatus(''); var dd=document.getElementById('cm-cli-drop'); if(dd){dd.classList.remove('on');dd.innerHTML='';}
+  var fr=document.getElementById('cm-ficha-resumo'); if(fr){fr.style.display='none';fr.innerHTML='';} var fs=document.getElementById('cm-ficha-status'); if(fs) fs.textContent=''; var fl=document.getElementById('cm-ficha-lista'); if(fl){fl.style.display='none';fl.innerHTML='';}
   document.getElementById('modal-cadmanual').classList.remove('hidden'); }
 function fecharCadManual(){ document.getElementById('modal-cadmanual').classList.add('hidden'); var dd=document.getElementById('cm-cli-drop'); if(dd){dd.classList.remove('on');dd.innerHTML='';} }
 /* Cliente da base × novo — sugere contatos existentes ao digitar. Se escolher um
@@ -2594,10 +2595,18 @@ async function gerarCasoNovoCliente(){
   CONTATOS=null;
   DADOS.processos.unshift(novo);
   if(DADOS.kpis) DADOS.kpis.total=DADOS.processos.length;
+  var digCaso=num.replace(/\D/g,'');
+  var anexos=(window.__cmDocs||[]).slice();
   fecharCadManual();
   var idx=DADOS.processos.indexOf(novo);
   go('processos'); if(idx>=0) abrir(idx);
-  setTimeout(function(){ alert('Caso criado e ficha aberta!\n\n1) Anexe aqui a FICHA DE ATENDIMENTO (padrão CMP) e os documentos do caso, na seção de Documentos.\n2) Depois, no Cowork, diga ao Claude: "faça as peças pendentes" — ele lê a ficha e os documentos e redige a '+peca+' no padrão CMP, salvando na pasta do caso para sua revisão.'); },400);
+  /* sobe os anexos (ficha + documentos) para a pasta do caso e atualiza o painel de docs */
+  if(anexos.length){
+    var st0='Enviando '+anexos.length+' arquivo(s)…';
+    _subirDocsCaso(digCaso, anexos).then(function(){ try{ if(atual&&String(atual.numero||'').replace(/\D/g,'')===digCaso) carregarDocs(atual.numero,'','proc'); }catch(e){} });
+  }
+  window.__cmDocs=[];
+  setTimeout(function(){ alert('Caso criado e ficha aberta!'+(anexos.length?('\n\n'+anexos.length+' arquivo(s) enviados para a pasta do caso (ficha + documentos).'):'\n\nDica: anexe a ficha e os documentos na seção Documentos.')+'\n\nAgora, no Cowork, diga ao Claude: "faça as peças pendentes" — ele lê a ficha e os documentos e redige a '+peca+' no padrão CMP, salvando na pasta do caso para sua revisão.'); },400);
 }
 /* ===== Ler ficha de atendimento preenchida (Word .docx ou PDF) e preencher os campos ===== */
 function _ensureJSZip(){
@@ -2627,8 +2636,8 @@ function _fichaCampo(txt,label){
   return v;
 }
 function _acharCPF(w){ var m=/\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b/.exec(String(w||'')); return m?m[0]:''; }
-async function lerFichaAtendimento(input){
-  var file=input&&input.files&&input.files[0]; if(!file) return;
+async function _lerFichaFile(file){
+  if(!file) return;
   var st=document.getElementById('cm-ficha-status'); if(st){ st.style.color='#475569'; st.textContent='Lendo '+file.name+'…'; }
   try{
     var buf=await file.arrayBuffer(); var txt='';
@@ -2670,7 +2679,80 @@ async function lerFichaAtendimento(input){
       res.style.display=''; }
     if(st){ st.style.color='#127a53'; st.textContent='✓ ficha lida'; }
   }catch(e){ if(st){ st.style.color='#b5342b'; st.textContent='✗ '+(e&&e.message||e); } }
+}
+/* Anexar: guarda TODOS os arquivos para subir ao caso e lê a ficha automaticamente
+   (o candidato a ficha é o arquivo com "ficha" no nome, ou o 1º Word/PDF). */
+function anexarFichaDocs(input){
+  var files=Array.prototype.slice.call((input&&input.files)||[]);
+  if(!files.length) return;
+  window.__cmDocs=(window.__cmDocs||[]).concat(files);
+  var lista=document.getElementById('cm-ficha-lista');
+  if(lista){ lista.style.display=''; lista.innerHTML='<b>Anexos ('+window.__cmDocs.length+'):</b> '+window.__cmDocs.map(function(f){return esc(f.name);}).join(', ')+' <a onclick="limparAnexosCaso()" style="cursor:pointer;color:#b5342b;text-decoration:underline;margin-left:6px">limpar</a>'; }
+  /* escolhe a ficha para leitura automática */
+  var ficha=files.filter(function(f){return /\.(docx|pdf)$/i.test(f.name);})
+                 .sort(function(a,b){return (/ficha/i.test(b.name)?1:0)-(/ficha/i.test(a.name)?1:0);})[0];
+  if(ficha){ _lerFichaFile(ficha); }
   input.value='';
+}
+function limparAnexosCaso(){ window.__cmDocs=[]; var l=document.getElementById('cm-ficha-lista'); if(l){ l.style.display='none'; l.innerHTML=''; } }
+/* Sobe os arquivos anexados para a pasta do caso recém-criado (mesmo /api/docs). */
+async function _subirDocsCaso(dig, files){
+  if(!dig||!files||!files.length) return;
+  var tok; try{ tok=await docToken(); }catch(e){}
+  if(!tok) return;
+  for(var i=0;i<files.length;i++){
+    var f=files[i], relPath=dig+'/'+f.name;
+    try{
+      var bytes=new Uint8Array(await f.arrayBuffer());
+      var CH=512*1024, off=0;
+      do{ var slice=bytes.subarray(off,Math.min(off+CH,bytes.length));
+        var s=''; for(var k=0;k<slice.length;k+=0x8000){ s+=String.fromCharCode.apply(null, slice.subarray(k,Math.min(k+0x8000,slice.length))); }
+        var r=await fetch('/api/docs',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},
+          body:JSON.stringify({path:relPath,b64:btoa(s),append:off>0,mtime:new Date(f.lastModified).toISOString()})});
+        if(!r.ok) break; off+=CH;
+      }while(off<bytes.length);
+    }catch(e){ console.warn('subir doc caso:',f.name,e&&e.message||e); }
+  }
+}
+/* Gera o modelo da ficha (Word .docx) NO NAVEGADOR — não depende de arquivo no servidor. */
+async function baixarModeloFicha(){
+  var st=document.getElementById('cm-ficha-status'); if(st){ st.style.color='#475569'; st.textContent='Gerando modelo…'; }
+  try{
+    var JSZip=await _ensureJSZip();
+    var LN='_______________________________________________________________';
+    function esc2(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+    function p(txt,opt){ opt=opt||{}; var pPr=opt.head?'<w:pPr><w:spacing w:before="180" w:after="60"/></w:pPr>':''; var rPr=(opt.bold||opt.head)?('<w:rPr>'+(opt.b?'<w:b/>':(opt.head?'<w:b/><w:color w:val="B8912E"/><w:sz w:val="26"/>':(opt.bold?'<w:b/>':'')))+'</w:rPr>'):''; return '<w:p>'+pPr+'<w:r>'+rPr+'<w:t xml:space="preserve">'+esc2(txt)+'</w:t></w:r></w:p>'; }
+    function campo(rot,val){ return '<w:p><w:r><w:rPr><w:b/></w:rPr><w:t xml:space="preserve">'+esc2(rot)+': </w:t></w:r><w:r><w:t xml:space="preserve">'+esc2(val||LN)+'</w:t></w:r></w:p>'; }
+    var body='';
+    body+='<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:b/><w:sz w:val="36"/><w:color w:val="1E2A3B"/></w:rPr><w:t>FICHA DE ATENDIMENTO</w:t></w:r></w:p>';
+    body+='<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:color w:val="697180"/></w:rPr><w:t>Crispim Mendonça e Pinheiro Advogados</w:t></w:r></w:p>';
+    body+=p('Preencha o máximo que souber. Esta ficha e os documentos serão a base para o Claude elaborar a peça no padrão CMP.');
+    body+=p('1. Identificação do cliente',{head:true});
+    ['Nome completo','CPF/CNPJ','RG / órgão emissor','Nacionalidade / estado civil / profissão','Data de nascimento','Endereço completo','Telefone / WhatsApp','E-mail'].forEach(function(r){ body+=campo(r); });
+    body+=p('2. Parte contrária',{head:true});
+    ['Nome / razão social','CPF/CNPJ (se souber)','Endereço (se souber)'].forEach(function(r){ body+=campo(r); });
+    body+=p('3. O caso',{head:true});
+    ['Área / tipo de ação','Objeto / o que o cliente quer'].forEach(function(r){ body+=campo(r); });
+    body+=p('Fatos (o que aconteceu, em ordem, com datas):',{bold:true});
+    for(var i=0;i<5;i++) body+=p(LN);
+    ['Fundamento / direito','Pedidos','Valor da causa / valor pretendido','Urgência / prazo','Gratuidade da justiça?'].forEach(function(r){ body+=campo(r); });
+    body+=p('4. Provas e documentos anexados',{head:true});
+    for(var j=0;j<5;j++) body+=p('• '+LN);
+    body+=p('5. Peça a elaborar',{head:true});
+    body+=p('( ) Petição inicial    ( ) Minuta de contrato    ( ) Notificação extrajudicial    ( ) Outra: __________________');
+    body+=p('6. Observações internas',{head:true});
+    for(var m2=0;m2<3;m2++) body+=p(LN);
+    body+=p('Atendido por: ___________________________     Data: ____/____/______');
+    var doc='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>'+body+'<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134"/></w:sectPr></w:body></w:document>';
+    var ct='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>';
+    var rels='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>';
+    var zip=new JSZip();
+    zip.file('[Content_Types].xml',ct); zip.folder('_rels').file('.rels',rels); zip.folder('word').file('document.xml',doc);
+    var blob=await zip.generateAsync({type:'blob',mimeType:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'});
+    var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='Ficha-de-Atendimento-CMP.docx'; document.body.appendChild(a); a.click();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); },4000);
+    if(st){ st.style.color='#127a53'; st.textContent='✓ modelo baixado'; }
+  }catch(e){ if(st){ st.style.color='#b5342b'; st.textContent='✗ '+(e&&e.message||e); } alert('Não foi possível gerar o modelo: '+(e&&e.message||e)); }
 }
 function abrirBusca(){ var m=document.getElementById('modal-busca'); document.getElementById('busca-nums').value=''; document.getElementById('busca-result').innerHTML=''; m.classList.remove('hidden'); }
 function fecharBusca(){ document.getElementById('modal-busca').classList.add('hidden'); }
