@@ -2449,6 +2449,11 @@ function renderProc(){
 <div id="modal-sync" class="overlay hidden"><div class="modal" style="max-width:860px">
   <h2>Sincronizar pasta de processos</h2>
   <p class="note" style="margin:2px 0 10px">Selecione a pasta (ex.: <b>Brisas</b>) que contém <b>uma subpasta por processo</b>. O sistema reconhece cada subpasta pelo nome do cliente e envia para o processo certo, <b>preservando as subpastas internas</b>. Nada é enviado até você conferir e clicar em Enviar. Para testar, selecione só a pasta de <b>Dimas Germano</b>.</p>
+  <div style="background:#f7f9fc;border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-bottom:10px">
+    <label style="font-size:12px;font-weight:600;color:var(--navy)">Réu em comum (âncora — deixa o reconhecimento mais preciso)</label>
+    <input type="text" id="sync-reu" value="James Laurence Developments Construções Incorporações e Imobiliária LTDA" style="width:100%;box-sizing:border-box;font-size:12px;padding:5px 7px;border:1px solid var(--line);border-radius:6px;margin-top:3px">
+    <label style="display:flex;align-items:center;gap:6px;font-size:12px;margin-top:7px;cursor:pointer"><input type="checkbox" id="sync-fixnome" checked> Completar o nome do autor com o nome da pasta (útil para <b>casais</b> — facilita buscas futuras)</label>
+  </div>
   <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
     <button class="btn sm" style="background:#0F6E56;color:#fff;border-color:#0F6E56" onclick="document.getElementById('sync-dir').click()">&#128193; Escolher pasta</button>
     <input type="file" id="sync-dir" webkitdirectory directory multiple style="display:none" onchange="syncPreparar(this)">
@@ -3398,29 +3403,75 @@ async function enviarPasta(inp, escopo){
    você conferir. */
 function abrirSyncPastas(){ window.__syncGroups=null; document.getElementById('sync-preview').innerHTML=''; document.getElementById('sync-status').textContent=''; document.getElementById('sync-btn-enviar').style.display='none'; document.getElementById('modal-sync').classList.remove('hidden'); }
 function fecharSync(){ document.getElementById('modal-sync').classList.add('hidden'); }
+/* "palheiro" de busca por processo: cliente + oponente + textos do histórico
+   (as movimentações citam os dois cônjuges — resolve casais em que o sistema tem
+   só um dos nomes). Construído uma vez por sincronização. */
+function _syncHaystacks(){
+  if(window.__syncHay) return window.__syncHay;
+  window.__syncHay=(DADOS.processos||[]).map(function(p){
+    if(/encerr/i.test(p.status||'')) return '';
+    var t=normClienteNome(p.cliente)+' '+normClienteNome(p.oponente);
+    var h=(p.hist_full||[]); for(var i=0;i<h.length && i<25;i++){ t+=' '+normClienteNome(h[i].texto||''); }
+    return t;
+  });
+  return window.__syncHay;
+}
+/* conjunto "Brisas": processos que têm o réu comum informado (ex.: James Laurence).
+   Serve de âncora: restringe o reconhecimento a esses processos, evitando casar a
+   pasta com um homônimo de outro caso. */
+function _brisasSet(){
+  if(window.__brisasSet) return window.__brisasSet;
+  var reu=normClienteNome(window.__syncReu||'james laurence developments');
+  var chave=reu.split(' ').filter(function(t){return t.length>=4;}).slice(0,3).join(' ');
+  var hay=_syncHaystacks(); window.__brisasSet=[];
+  hay.forEach(function(t,i){ if(t && (t.indexOf(chave)>-1 || t.indexOf('james laurence')>-1)) window.__brisasSet.push(i); });
+  return window.__brisasSet;
+}
 function _syncMatchIdx(folderNome){
-  var q=normClienteNome(folderNome); if(!q) return -1;
-  var qtok=q.split(' ').filter(Boolean);
+  var q=normClienteNome(folderNome); if(!q) return {idx:-1,via:''};
+  var qtok=q.split(' ').filter(function(t){ return t.length>=3; });
+  if(!qtok.length) return {idx:-1,via:''};
+  /* 1) pelo cliente (forte) */
   var best=-1, bestScore=0;
   (DADOS.processos||[]).forEach(function(p,i){ if(/encerr/i.test(p.status||'')) return;
-    var cn=normClienteNome(p.cliente); if(!cn) return;
-    var score=0;
-    if(cn===q) score=100;
-    else if(cn.indexOf(q)===0 || q.indexOf(cn)===0) score=85;
-    else { var all=qtok.length && qtok.every(function(t){ return cn.indexOf(t)>-1; }); if(all) score=60+qtok.length; }
-    if(score>bestScore){ bestScore=score; best=i; }
+    var cn=normClienteNome(p.cliente); if(!cn) return; var sc=0;
+    if(cn===q) sc=100; else if(cn.indexOf(q)===0 || q.indexOf(cn)===0) sc=90;
+    else { var all=qtok.every(function(t){ return cn.indexOf(t)>-1; }); if(all) sc=70+qtok.length; }
+    if(sc>bestScore){ bestScore=sc; best=i; }
   });
-  return bestScore>=62?best:-1;
+  if(bestScore>=72) return {idx:best,via:'cliente'};
+  /* 2) pelo histórico (casais) — o nome da pasta pode ser o cônjuge citado nos autos.
+     Procura primeiro no conjunto do réu comum (mais seguro), depois em todos. */
+  var hay=_syncHaystacks(); var min=Math.max(1,Math.ceil(qtok.length*0.6));
+  function buscaEm(idxs,limiar){ var b=-1,s=0; idxs.forEach(function(i){ var t=hay[i]; if(!t) return; var hits=0; qtok.forEach(function(tk){ if(t.indexOf(tk)>-1) hits++; }); var r=hits/qtok.length; if(hits>=min && r>s){ s=r; b=i; } }); return (b>=0&&s>=limiar)?b:-1; }
+  var bs=_brisasSet();
+  if(bs.length){ var rb=buscaEm(bs,0.5); if(rb>=0) return {idx:rb,via:'réu comum'}; }
+  var todos=[]; for(var j=0;j<(DADOS.processos||[]).length;j++) todos.push(j);
+  var rt=buscaEm(todos,0.6); if(rt>=0) return {idx:rt,via:'histórico'};
+  return {idx:-1,via:''};
 }
-function _syncProcOptions(sel){
+function _syncProcOptions(sel, termo){
   var opts='<option value="">— não enviar —</option>';
+  var hay=termo?_syncHaystacks():null; var tq=termo?normClienteNome(termo):'';
+  var ttok=tq?tq.split(' ').filter(function(t){return t.length>=2;}):[];
+  var n=0;
   (DADOS.processos||[]).forEach(function(p,i){ if(/encerr/i.test(p.status||'')) return;
+    if(ttok.length){ var t=hay[i]||''; var ok=ttok.every(function(tk){ return t.indexOf(tk)>-1; }); if(!ok && i!==sel) return; }
+    if(n++>400 && i!==sel) return;
     opts+='<option value="'+i+'"'+(i===sel?' selected':'')+'>'+esc(String(p.cliente||'(sem cliente)').slice(0,44))+' — '+esc(p.numero)+'</option>'; });
   return opts;
+}
+function syncBuscarNaLinha(gi, termo){
+  var g=(window.__syncGroups||[])[gi]; if(!g) return;
+  var sel=document.querySelector('#sync-preview select[data-g="'+gi+'"]'); if(!sel) return;
+  var cur=sel.value===''?-1:parseInt(sel.value,10);
+  sel.innerHTML=_syncProcOptions(cur, termo);
 }
 function syncPreparar(inp){
   var files=Array.prototype.slice.call((inp&&inp.files)||[]);
   if(!files.length){ return; }
+  window.__syncHay=null; window.__brisasSet=null; /* recomeça o palheiro para esta sincronização */
+  window.__syncReu=(document.getElementById('sync-reu')||{}).value||'';
   var groupsMap={};
   files.forEach(function(f){
     var rel=(f.webkitRelativePath||f.name).replace(/\\/g,'/');
@@ -3431,15 +3482,19 @@ function syncPreparar(inp){
     else { folder=parts[0]||'(raiz)'; inner=parts[0]; }
     (groupsMap[folder]=groupsMap[folder]||[]).push({f:f, inner:inner});
   });
-  var groups=Object.keys(groupsMap).sort().map(function(folder){ var idx=_syncMatchIdx(folder); return {folder:folder, files:groupsMap[folder], idx:idx}; });
+  var groups=Object.keys(groupsMap).sort().map(function(folder){ var m=_syncMatchIdx(folder); return {folder:folder, files:groupsMap[folder], idx:m.idx, via:m.via}; });
   window.__syncGroups=groups;
   var casados=groups.filter(function(g){return g.idx>=0;}).length;
-  document.getElementById('sync-status').innerHTML='<b>'+groups.length+'</b> pasta(s) · '+files.length+' arquivo(s) · <b style="color:#127a53">'+casados+' já reconhecida(s)</b>'+(groups.length-casados?(' · <b style="color:#8a6d1a">'+(groups.length-casados)+' para você escolher</b>'):'');
+  document.getElementById('sync-status').innerHTML='<b>'+groups.length+'</b> pasta(s) · '+files.length+' arquivo(s) · <b style="color:#127a53">'+casados+' reconhecida(s)</b>'+(groups.length-casados?(' · <b style="color:#8a6d1a">'+(groups.length-casados)+' para você escolher</b>'):'')+'<div class="note" style="font-size:11px;margin-top:3px">Onde marcar "via histórico", confira com atenção (é palpite pelas partes citadas). Use a busca ao lado para achar por qualquer nome — inclusive do cônjuge.</div>';
   var rows=groups.map(function(g,gi){
-    return '<tr>'+
-      '<td style="padding:6px 6px;vertical-align:top"><b>'+esc(g.folder)+'</b><div class="note" style="font-size:11px">'+g.files.length+' arquivo(s)</div></td>'+
-      '<td style="padding:6px 6px">'+(g.idx>=0?'<span style="color:#127a53;font-weight:600">✓ '+esc(String((DADOS.processos[g.idx]||{}).cliente||'').slice(0,30))+'</span>':'<span style="color:#8a6d1a;font-weight:600">? escolher</span>')+
-        '<br><select data-g="'+gi+'" style="max-width:340px;font-size:12px;padding:4px;border:1px solid var(--line);border-radius:6px;margin-top:3px">'+_syncProcOptions(g.idx)+'</select></td>'+
+    var alvo=g.idx>=0?('<span style="color:'+(g.via==='cliente'?'#127a53':'#8a6d1a')+';font-weight:600">✓ '+esc(String((DADOS.processos[g.idx]||{}).cliente||'').slice(0,30))+(g.via==='histórico'?' <span style="font-weight:400">(via histórico)</span>':'')+'</span>'):'<span style="color:#b5342b;font-weight:600">? não reconhecida</span>';
+    return '<tr style="border-top:1px solid #eef2f7">'+
+      '<td style="padding:7px 6px;vertical-align:top"><b>'+esc(g.folder)+'</b><div class="note" style="font-size:11px">'+g.files.length+' arquivo(s)</div></td>'+
+      '<td style="padding:7px 6px">'+alvo+
+        '<div style="margin-top:4px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">'+
+        '<input type="text" placeholder="buscar processo (qualquer nome)…" oninput="syncBuscarNaLinha('+gi+',this.value)" style="width:200px;font-size:12px;padding:4px 6px;border:1px solid var(--line);border-radius:6px">'+
+        '<select data-g="'+gi+'" style="max-width:330px;font-size:12px;padding:4px;border:1px solid var(--line);border-radius:6px">'+_syncProcOptions(g.idx)+'</select>'+
+        '</div></td>'+
     '</tr>';
   }).join('');
   document.getElementById('sync-preview').innerHTML='<table style="width:100%;font-size:13px"><thead><tr><th style="text-align:left">Pasta</th><th style="text-align:left">Processo de destino</th></tr></thead><tbody>'+rows+'</tbody></table>';
@@ -3456,12 +3511,14 @@ async function syncEnviar(){
   if(!confirm('Enviar '+totalArq+' arquivo(s) de '+alvos.length+' pasta(s) para os processos correspondentes?')) return;
   var tok; try{ tok=await docToken(); }catch(e){}
   if(!tok){ alert('Sessão expirada — recarregue a página (F5) e tente de novo.'); return; }
+  var fixNome=(document.getElementById('sync-fixnome')||{}).checked;
   var btn=document.getElementById('sync-btn-enviar'); btn.disabled=true;
   var st=document.getElementById('sync-status');
-  var enviados=0, falhas=0, feito=0;
+  var enviados=0, falhas=0, feito=0, nomesAt=0;
   for(var a=0;a<alvos.length;a++){
     var g=alvos[a], p=DADOS.processos[g.idx], dig=String(p.numero||'').replace(/\D/g,'');
     if(!dig){ falhas+=g.files.length; continue; }
+    if(fixNome){ try{ if(await _syncCompletarAutor(p, g.folder)) nomesAt++; }catch(e){} }
     for(var i=0;i<g.files.length;i++){
       var item=g.files[i], f=item.f, inner=String(item.inner||f.name).replace(/^\/+/,'');
       st.innerHTML='Enviando <b>'+esc(g.folder)+'</b> → '+esc(String(p.cliente||'').slice(0,26))+' — '+esc(inner.slice(0,40))+' ('+(feito+1)+'/'+totalArq+')…';
@@ -3480,9 +3537,23 @@ async function syncEnviar(){
     }
   }
   btn.disabled=false;
-  st.innerHTML='<b style="color:#127a53">Concluído:</b> '+enviados+' enviado(s)'+(falhas?(' · <b style="color:#b5342b">'+falhas+' falha(s)</b>'):'');
-  alert('Sincronização concluída!\n'+enviados+' arquivo(s) enviado(s)'+(falhas?(', '+falhas+' com falha'):'')+'.\n\nAbra um processo e confira a seção Documentos.');
+  st.innerHTML='<b style="color:#127a53">Concluído:</b> '+enviados+' enviado(s)'+(falhas?(' · <b style="color:#b5342b">'+falhas+' falha(s)</b>'):'')+(nomesAt?(' · '+nomesAt+' nome(s) de autor completado(s)'):'');
+  alert('Sincronização concluída!\n'+enviados+' arquivo(s) enviado(s)'+(falhas?(', '+falhas+' com falha'):'')+(nomesAt?('\n'+nomesAt+' nome(s) de autor completado(s) com o casal'):'')+'.\n\nAbra um processo e confira a seção Documentos.');
   try{ if(atual) carregarDocs(atual.numero,'','proc'); }catch(e){}
+  try{ if(typeof renderProc==='function') renderProc(); }catch(e){}
+}
+/* Completa o nome do autor com o nome da pasta (casal), quando o nome da pasta ainda
+   não está no cadastro. Grava em processos.cliente_nome e reflete na tela. */
+async function _syncCompletarAutor(p, folder){
+  if(!p || !folder) return false;
+  var fnorm=normClienteNome(folder); var ftok=fnorm.split(' ').filter(function(t){return t.length>=3;});
+  if(!ftok.length) return false;
+  var cn=normClienteNome(p.cliente);
+  if(ftok.every(function(t){ return cn.indexOf(t)>-1; })) return false; /* já consta */
+  var novo=(String(p.cliente||'').trim()) ? (String(p.cliente).trim()+' e '+nomeBonito(folder)) : nomeBonito(folder);
+  try{ var sb=window.__sb; if(sb && p._id){ var w=await sb.from('processos').update({cliente_nome:novo}).eq('id',p._id); if(w&&w.error) return false; } }catch(e){ return false; }
+  p.cliente=novo;
+  return true;
 }
 /* ponto 6/13: criar uma pasta vazia dentro da pasta aberta.
    Requer que o back-end /api/docs aceite {path, mkdir:true} para criar diretório. */
