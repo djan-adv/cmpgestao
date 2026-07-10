@@ -639,11 +639,7 @@ function renderPainel(){
   var prazos7=(AGENDA||[]).filter(function(a){return (a.tipo==="vm"||a.tipo==="am") && dOf(a)>=hoje && dOf(a)<em7;}).length;
   var par30=0;
   try{
-    var lim=new Date(hoje); lim.setDate(lim.getDate()-30);
-    (DADOS.processos||[]).forEach(function(p){
-      var md=null; (p.hist_full||[]).forEach(function(a){ if(a.data && (!md||a.data>md)) md=a.data; });
-      if(md && new Date(md)<lim) par30++;
-    });
+    (DADOS.processos||[]).forEach(function(p){ var d=(typeof diasParadoOficial==='function')?diasParadoOficial(p):null; if(d!=null && d>30) par30++; });
   }catch(e){}
   var hello=document.getElementById("painel-hello");
   if(hello){
@@ -2596,14 +2592,43 @@ function go(s){
   window.scrollTo(0,0);
 }
 function pdias(d){ if(!d) return -1; var m=String(d).split('/'); if(m.length!==3) return -1; var dt=new Date(+m[2],+m[1]-1,+m[0]); if(isNaN(dt.getTime())) return -1; return Math.floor((Date.now()-dt.getTime())/86400000); }
+/* uma movimentação é "da parte" (NÃO zera o contador de parado) quando é peticionamento/
+   manifestação da parte. Atos do JUÍZO/CARTÓRIO (intimação, despacho, decisão, sentença,
+   conclusão, expedição, certidão, audiência...) têm prioridade e SEMPRE zeram; o que não
+   for claramente da parte também zera. */
+function ehMovimentacaoParte(texto){
+  var t=(texto||'').toLowerCase();
+  if(/intim|despacho|decis[ãa]o|senten[çc]a|ac[óo]rd[ãa]o|conclus|expedi|certid[ãa]o|ato ordinat|publica[çc]|audi[êe]ncia|remessa|recebiment|julgamento|determin|\bvistos\b|homolog|distribu|mero expediente/.test(t)) return false;
+  return /junta.{0,25}(peti[çc]|document|comprovante|procura[çc]|substabelec|guia|custas|contrato)/.test(t)
+    || /\bpeti[çc][aã]o\b|peticion/.test(t)
+    || /manifesta[çc]|manifesto/.test(t)
+    || /contesta[çc]|contrarraz|r[ée]plica|impugna[çc]/.test(t)
+    || /substabelec|procura[çc][aã]o/.test(t)
+    || /(interp|op[õo]s|apresent).{0,25}(recurso|apela|agravo|embargos)/.test(t)
+    || /peti[çc][õo]es diversas/.test(t);
+}
+/* dias desde a última movimentação do JUÍZO/CARTÓRIO (ignora histórico manual e mov. das partes) */
+function diasParadoOficial(p){
+  var melhor=null;
+  ((p&&p.hist_full)||[]).forEach(function(a){
+    if(!a||a.f==='manual'||!a.data) return;
+    var iso=String(a.data).slice(0,10), y=iso.slice(0,4);
+    if(y>='2100'||y<'1990') return;
+    if(ehMovimentacaoParte(a.texto)) return;
+    if(!melhor||iso>melhor) melhor=iso;
+  });
+  if(!melhor) return null;
+  return Math.floor((Date.now()-new Date(melhor+'T00:00:00').getTime())/86400000);
+}
 async function renderDiligencias(){
   var min=parseInt((document.getElementById('dilig-min')||{}).value||'30',10)||30;
-  var parados=(DADOS.processos||[]).map(function(p){return {p:p,dias:pdias(p.data)};}).filter(function(x){return x.dias>min;}).sort(function(a,b){return b.dias-a.dias;});
+  var parados=(DADOS.processos||[]).map(function(p){var d=diasParadoOficial(p); return {p:p,dias:(d==null?pdias(p.data):d)};}).filter(function(x){return x.dias>min;}).sort(function(a,b){return b.dias-a.dias;});
   var cnt=document.getElementById('dilig-count'); if(cnt) cnt.textContent=parados.length+' processo(s) parado(s)';
   var b=document.getElementById('dilig-body');
   if(b){ b.innerHTML=''; parados.slice(0,300).forEach(function(x,ix){
     var p=x.p; var tr=document.createElement('tr');
-    tr.innerHTML='<td style="color:var(--muted);text-align:right">'+(ix+1)+'</td><td><b>'+esc(p.cliente||'—')+'</b></td><td class="proc">'+p.numero+'</td><td>'+x.dias+' dias</td><td style="text-align:right"><button class="btn sm" onclick="gerarDiligencia(\''+(p._id||'')+'\',\''+encodeURIComponent(p.numero)+'\')">Gerar diligência</button></td>';
+    var _cor=x.dias>=90?'#b5342b':(x.dias>=60?'#b8912e':'#475569');
+    tr.innerHTML='<td style="color:var(--muted);text-align:right">'+(ix+1)+'</td><td><b>'+esc(p.cliente||'—')+'</b></td><td class="proc">'+p.numero+'</td><td style="text-align:right;white-space:nowrap"><b style="color:'+_cor+'">'+x.dias+' dias</b><div class="note" style="margin:0;font-size:10px">sem mov. do juízo</div></td><td style="text-align:right"><button class="btn sm" onclick="gerarDiligencia(\''+(p._id||'')+'\',\''+encodeURIComponent(p.numero)+'\')">Gerar diligência</button></td>';
     b.appendChild(tr);
   }); }
   var el=document.getElementById('dilig-andamento'); if(!el) return;
