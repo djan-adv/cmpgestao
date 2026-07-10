@@ -158,6 +158,7 @@
       <a data-s="crm" onclick="go('crm')"><span class="ic">▣</span> Comercial</a>
       <a data-s="contatos" onclick="go('contatos')"><span class="ic">☎</span> Contatos</a>
       <a data-s="etiquetas" onclick="go('etiquetas')"><span class="ic">⬤</span> Etiquetas</a>
+      <a data-s="fases" onclick="go('fases')"><span class="ic">◑</span> Revisar fases</a>
       <a data-s="procedimentos" onclick="go('procedimentos')"><span class="ic">☰</span> Procedimentos</a>
       <a data-s="inove" onclick="go('inove')" style="margin-top:12px;opacity:.8"><span class="ic">◈</span> Inove <span id="nav-n-inove" style="margin-left:auto;font-size:10.5px;background:var(--navy2);border-radius:10px;padding:1px 7px"></span></a>
       <a data-s="encerrados" onclick="go('encerrados')" style="opacity:.75"><span class="ic">▤</span> Encerrados <span id="nav-n-enc" style="margin-left:auto;font-size:10.5px;background:var(--navy2);border-radius:10px;padding:1px 7px"></span></a>
@@ -278,6 +279,22 @@
             <div id="etq-tarefas"></div>
           </div>
         </div>
+      </div>
+    </section>
+
+    <section id="s-fases" class="hidden">
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+          <p class="sectlabel" style="margin:0">Revisar a fase de cada processo</p>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <input id="fases-busca" placeholder="Buscar cliente, número, assunto…" oninput="renderFasesRevisao()" style="width:auto;min-width:220px;font-size:13px;padding:6px 10px">
+            <select id="fases-filtro" onchange="renderFasesRevisao()" class="btn sm" style="max-width:210px"><option value="">Todas as fases</option></select>
+            <label class="note" style="margin:0;display:flex;gap:5px;align-items:center;cursor:pointer"><input type="checkbox" id="fases-so-auto" onchange="renderFasesRevisao()"> só não confirmados</label>
+          </div>
+        </div>
+        <p class="note" style="margin:6px 0 4px">A coluna <b>Sugerida</b> é o palpite automático pelo histórico. Ajuste onde discordar e clique <b>Salvar</b> na linha — a fase escolhida fica <b>travada</b> (não muda mais sozinha). Use <b>Salvar todos os visíveis</b> para gravar em massa o que estiver na tela.</p>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:8px 0"><button class="btn sm gold" onclick="salvarFasesVisiveis()">Salvar todos os visíveis (travar a sugerida)</button><span id="fases-count" class="note" style="margin:0"></span></div>
+        <div style="overflow:auto"><table style="width:100%;font-size:13px"><thead><tr><th style="text-align:left">Cliente</th><th style="text-align:left;width:170px">Processo</th><th style="text-align:left">Assunto</th><th style="text-align:left;width:150px">Último andamento</th><th style="text-align:left;width:150px">Fase atual</th><th style="width:180px">Definir</th><th style="width:70px"></th></tr></thead><tbody id="fases-body"></tbody></table></div>
       </div>
     </section>
 
@@ -1283,6 +1300,73 @@ function avisoEvolucaoFase(p){
       ' <button class="btn sm ghost" onclick="this.closest(\'div\').remove()">Agora não</button>';
     host.insertBefore(div, host.firstChild);
   }catch(e){}
+}
+/* ===== Tela "Revisar fases": lista processos com a fase sugerida, para aprovar/corrigir ===== */
+function _fasesListaBase(){
+  var q=((document.getElementById('fases-busca')||{}).value||'').toLowerCase();
+  var ff=(document.getElementById('fases-filtro')||{}).value||'';
+  var soAuto=!!((document.getElementById('fases-so-auto')||{}).checked);
+  return (DADOS.processos||[]).filter(function(p){
+    if(/encerr/i.test(p.status||'')) return false;
+    if(isInove(p)) return false;
+    if(soAuto && p.fase_manual) return false;              /* só os ainda não confirmados */
+    if(ff && faseDoProc(p)!==ff) return false;
+    if(q){ var s=((p.cliente||'')+' '+(p.numero||'')+' '+(p.tipo||'')).toLowerCase(); if(s.indexOf(q)<0) return false; }
+    return true;
+  });
+}
+function renderFasesRevisao(){
+  /* preenche o filtro de fases uma vez */
+  var fsel=document.getElementById('fases-filtro');
+  if(fsel && fsel.getAttribute('data-ok')!=='1'){ fsel.innerHTML='<option value="">Todas as fases</option>'+FASES_META.map(function(f){return '<option value="'+f[0]+'">'+esc(f[1])+'</option>';}).join(''); fsel.setAttribute('data-ok','1'); }
+  var b=document.getElementById('fases-body'); if(!b) return;
+  var lista=_fasesListaBase();
+  var cc=document.getElementById('fases-count'); if(cc) cc.textContent=lista.length+' processos';
+  b.innerHTML=lista.slice(0,800).map(function(p){
+    var idx=DADOS.processos.indexOf(p);
+    var atualF=faseDoProc(p); var chute=guessFase(p); var manual=!!p.fase_manual;
+    var ult=(p.hist_full&&p.hist_full[0]&&p.hist_full[0].texto)||'';
+    var badge='<span style="display:inline-block;border-radius:14px;padding:1px 8px;font-size:11px;font-weight:700;color:#fff;background:'+_corFase(atualF)+'">'+esc(_nomeFase(atualF))+'</span>'+(manual?' <span class="note" style="margin:0;color:#0F6E56">travada</span>':' <span class="note" style="margin:0">auto</span>');
+    var selId='fsel-'+idx;
+    var opts=FASES_META.map(function(f){ return '<option value="'+f[0]+'"'+(f[0]===atualF?' selected':'')+'>'+esc(f[1])+'</option>'; }).join('');
+    return '<tr>'+
+      '<td><a onclick="abrir('+idx+')" style="cursor:pointer;color:var(--navy);text-decoration:underline">'+esc(resumo3(p.cliente)||'—')+'</a></td>'+
+      '<td class="proc">'+esc(p.numero)+'</td>'+
+      '<td style="font-size:12px">'+esc((p.tipo||'').slice(0,40))+'</td>'+
+      '<td style="font-size:11px;color:var(--muted);max-width:150px;white-space:normal" title="'+esc(ult.slice(0,300))+'">'+esc(ult.replace(/\s+/g,' ').slice(0,55))+'</td>'+
+      '<td>'+badge+'</td>'+
+      '<td><select id="'+selId+'" style="width:100%;font-size:12px;padding:3px 6px">'+opts+'</select></td>'+
+      '<td><button class="btn sm" onclick="salvarFaseLinha('+idx+')">Salvar</button></td>'+
+      '</tr>';
+  }).join('');
+}
+function salvarFaseLinha(idx){
+  var p=DADOS.processos[idx]; if(!p) return;
+  var sel=document.getElementById('fsel-'+idx); if(!sel) return;
+  var fid=sel.value;
+  p.fase_manual=fid;
+  try{ var sb=window.__sb; if(sb&&p._id){ sb.from('processos').update({fase:fid}).eq('id',p._id).then(function(r){ if(r&&r.error) console.warn('fase:',r.error.message); }); } }catch(e){}
+  renderFasesRevisao();
+}
+/* grava em massa a fase que está selecionada em cada linha visível (por padrão = a sugerida) */
+async function salvarFasesVisiveis(){
+  var lista=_fasesListaBase().slice(0,800);
+  if(!lista.length){ alert('Nenhum processo na lista.'); return; }
+  if(!confirm('Travar a fase de '+lista.length+' processos com o valor selecionado em cada linha?\n\nVocê pode ajustar qualquer um depois.')) return;
+  var sb=window.__sb; var ok=0, fail=0;
+  var cc=document.getElementById('fases-count');
+  for(var k=0;k<lista.length;k++){
+    var p=lista[k]; var idx=DADOS.processos.indexOf(p);
+    var sel=document.getElementById('fsel-'+idx);
+    var fid=sel?sel.value:faseDoProc(p);
+    p.fase_manual=fid;
+    if(cc) cc.textContent='Salvando '+(k+1)+' de '+lista.length+'…';
+    try{ if(sb&&p._id){ var r=await sb.from('processos').update({fase:fid}).eq('id',p._id); if(r&&r.error){ fail++; } else ok++; } }catch(e){ fail++; }
+  }
+  if(cc) cc.textContent='';
+  alert('Fases salvas: '+ok+(fail?(' · falhas: '+fail):'')+'.');
+  renderFasesRevisao();
+  if(typeof renderPainel==='function'){ try{ renderPainel(); }catch(e){} }
 }
 /* remove a fase manual — volta a usar o chute automático */
 function limparFaseManual(num){
@@ -2518,11 +2602,11 @@ function go(s){
 function go(s){
   try{ localStorage.setItem('cmp_secao', s); if(s!=='proc-det') localStorage.removeItem('cmp_proc'); }catch(e){}
   var showId=(s==='contatos')?'crm':s;
-  ["painel","triagem","agenda","processos","proc-det","crm","etiquetas","procedimentos","diligencias","relatorio","encerrados","inove"].forEach(function(id){var e=document.getElementById("s-"+id);if(e)e.classList.add("hidden")});
+  ["painel","triagem","agenda","processos","proc-det","crm","etiquetas","procedimentos","diligencias","relatorio","encerrados","inove","fases"].forEach(function(id){var e=document.getElementById("s-"+id);if(e)e.classList.add("hidden")});
   var sec=document.getElementById("s-"+showId); if(sec) sec.classList.remove("hidden");
   document.querySelectorAll("#nav a").forEach(function(a){a.classList.remove("active")});
   var link=document.querySelector('#nav a[data-s="'+s+'"]');if(link)link.classList.add("active");
-  var t={painel:"Painel",triagem:"Publicações",agenda:"Agenda — Kanban (etapas CMP)",processos:"Processos",crm:"Comercial",contatos:"Contatos",procedimentos:"Procedimentos CMP",etiquetas:"Etiquetas","proc-det":"Processo",diligencias:"Diligências",relatorio:"Relatório mensal para clientes",encerrados:"Processos encerrados",inove:"Processos Inove (terceiros)"};
+  var t={painel:"Painel",triagem:"Publicações",agenda:"Agenda — Kanban (etapas CMP)",processos:"Processos",crm:"Comercial",contatos:"Contatos",procedimentos:"Procedimentos CMP",etiquetas:"Etiquetas","proc-det":"Processo",diligencias:"Diligências",relatorio:"Relatório mensal para clientes",encerrados:"Processos encerrados",inove:"Processos Inove (terceiros)",fases:"Revisar fases dos processos"};
   var st=document.getElementById("scr-title"); if(st) st.textContent=t[s]||"Painel";
   var sw=document.querySelector('#s-crm .switch'); if(sw) sw.style.display='none';
   if(s==="painel")renderPainel(); if(s==="triagem")renderTriagem(); if(s==="processos")renderProc();
@@ -2531,6 +2615,7 @@ function go(s){
   if(s==="etiquetas")renderEtiquetas(); if(s==="agenda")renderAgendaView(); if(s==="diligencias")renderDiligencias();
   if(s==="encerrados")renderEncerrados();
   if(s==="inove")renderInove();
+  if(s==="fases" && typeof renderFasesRevisao==='function')renderFasesRevisao();
   window.scrollTo(0,0);
 }
 function atualizaNavContagens(){
