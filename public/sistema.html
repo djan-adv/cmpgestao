@@ -2390,7 +2390,7 @@ function renderProc(){
   <div id="cm-caso-id-wrap" style="display:none"><label>Identificação do caso <span style="color:#b3261e">*obrigatório</span></label><input id="cm-casoid" placeholder="Ex.: PA 123/2026, Requerimento INSS, Protocolo SEI..."></div>
   <p class="note" style="margin:6px 0 12px">Os campos abaixo são <b>opcionais</b> — preencha o que souber. O que a captura automática traria você pode inserir aqui.</p>
   <div class="row2">
-    <div><label>Cliente</label><input id="cm-cliente" placeholder="Nome do cliente"></div>
+    <div style="position:relative"><label>Cliente</label><input id="cm-cliente" placeholder="Digite para buscar na base ou cadastrar novo" autocomplete="off" oninput="cmClienteInput(this.value)" onfocus="cmClienteInput(this.value)" onblur="setTimeout(cmClienteFecha,160)"><div id="cm-cli-drop" class="cm-drop"></div><div id="cm-cli-status" style="font-size:11.5px;margin-top:3px;min-height:15px"></div></div>
     <div><label>Parte contrária</label><input id="cm-oponente" placeholder="Oponente"></div>
   </div>
   <div class="row2">
@@ -2406,8 +2406,36 @@ function renderProc(){
 </div></div>
 <script>
 var cadTipo='processo';
-function abrirCadManual(){ cadTipo='processo'; setCadTipo('processo'); ['cm-numero','cm-casoid','cm-cliente','cm-oponente','cm-assunto','cm-foro','cm-causa','cm-obs'].forEach(function(id){var e=document.getElementById(id);if(e)e.value='';}); document.getElementById('modal-cadmanual').classList.remove('hidden'); }
-function fecharCadManual(){ document.getElementById('modal-cadmanual').classList.add('hidden'); }
+function abrirCadManual(){ cadTipo='processo'; setCadTipo('processo'); ['cm-numero','cm-casoid','cm-cliente','cm-oponente','cm-assunto','cm-foro','cm-causa','cm-obs'].forEach(function(id){var e=document.getElementById(id);if(e)e.value='';});
+  try{ seedContatos(); }catch(e){} window.__cmCliMatch=null; cmClienteStatus(''); var dd=document.getElementById('cm-cli-drop'); if(dd){dd.classList.remove('on');dd.innerHTML='';}
+  document.getElementById('modal-cadmanual').classList.remove('hidden'); }
+function fecharCadManual(){ document.getElementById('modal-cadmanual').classList.add('hidden'); var dd=document.getElementById('cm-cli-drop'); if(dd){dd.classList.remove('on');dd.innerHTML='';} }
+/* Cliente da base × novo — sugere contatos existentes ao digitar. Se escolher um
+   da base, vincula (e traz o contato dele). Se for nome novo, ao salvar cria um
+   contato na aba Contatos. */
+function cmClienteStatus(html){ var s=document.getElementById('cm-cli-status'); if(s) s.innerHTML=html||''; }
+function cmClienteFecha(){ var dd=document.getElementById('cm-cli-drop'); if(dd){dd.classList.remove('on');dd.innerHTML='';} }
+function cmClientePick(nk){
+  var c=(CONTATOS||[]).find(function(x){return normClienteNome(x.nome)===nk;});
+  var inp=document.getElementById('cm-cliente'); if(c&&inp) inp.value=c.nome;
+  window.__cmCliMatch=c||null; cmClienteFecha();
+  if(c) cmClienteStatus('<span style="color:#127a53;font-weight:600">✓ cliente da base'+(c.proc>0?(' · '+c.proc+' processo'+(c.proc===1?'':'s')):'')+'</span>'+((c.tel&&c.tel!=='—')||(c.email&&c.email!=='—')?' <span style="color:var(--muted)">— dados serão vinculados</span>':''));
+}
+function cmClienteInput(v){
+  window.__cmCliMatch=null;
+  var q=normClienteNome(v||''); var dd=document.getElementById('cm-cli-drop'); if(!dd) return;
+  if(q.length<2){ cmClienteFecha(); cmClienteStatus(''); return; }
+  try{ seedContatos(); }catch(e){}
+  var exato=(CONTATOS||[]).find(function(c){return normClienteNome(c.nome)===q;});
+  var achados=(CONTATOS||[]).filter(function(c){ return normClienteNome(c.nome).indexOf(q)>-1; })
+    .sort(function(a,b){return (b.proc||0)-(a.proc||0);}).slice(0,8);
+  if(achados.length){
+    dd.innerHTML=achados.map(function(c){ return '<div class="cm-item" onclick="cmClientePick(\''+normClienteNome(c.nome).replace(/'/g,"\\'")+'\')">'+esc(nomeBonito(c.nome))+' <span class="cm-sub">'+(c.proc>0?('· '+c.proc+' proc.'):'· sem processo')+(c.tel&&c.tel!=='—'?(' · '+esc(c.tel)):'')+'</span></div>'; }).join('');
+    dd.classList.add('on');
+  } else { cmClienteFecha(); }
+  if(exato){ window.__cmCliMatch=exato; cmClienteStatus('<span style="color:#127a53;font-weight:600">✓ cliente já cadastrado</span>'); }
+  else cmClienteStatus('<span style="color:#8a6d1a;font-weight:600">＋ novo cliente</span> <span style="color:var(--muted)">— será criado um contato na aba Contatos</span>');
+}
 function setCadTipo(t){ cadTipo=t;
   document.getElementById('cm-tab-proc').classList.toggle('on',t==='processo');
   document.getElementById('cm-tab-caso').classList.toggle('on',t==='caso');
@@ -2433,6 +2461,25 @@ async function salvarCadManual(){
     if(esc){ var ins=await sb.from('processos').insert({escritorio_id:esc,numero:num,cliente_nome:cli||null,oponente:op||null,assunto:assunto||null,foro:foro||null,status:status,fonte:(ehCaso?'caso':'manual')}).select('id').single(); if(ins&&ins.data){ novo._id=ins.data.id;
       if(obs){ await sb.from('andamentos').insert({processo_id:ins.data.id,data:new Date().toISOString().slice(0,10),texto:'[Cadastro manual] '+obs,fonte:'manual'}); } } }
   } }catch(e){ console.warn('cadastro manual (banco):',e&&e.message||e); }
+  /* Vincular a cliente da base OU criar contato novo */
+  if(cli){
+    try{ seedContatos(); }catch(e){}
+    var nk=normClienteNome(cli);
+    var match=(window.__cmCliMatch&&normClienteNome(window.__cmCliMatch.nome)===nk)?window.__cmCliMatch:((CONTATOS||[]).find(function(x){return normClienteNome(x.nome)===nk;}));
+    if(match){
+      /* cliente já existe → traz os dados de contato dele para o processo */
+      var mtel=(match.tel&&match.tel!=='—')?match.tel:'', mmail=(match.email&&match.email!=='—')?match.email:'';
+      if(mtel||mmail){ try{ mergeContatoNoProcesso(novo,mtel,mmail); }catch(e){} }
+    } else {
+      /* cliente novo → cria contato (aba Contatos) e persiste no banco */
+      try{ var sb2=window.__sb; if(sb2){ var esc3=null; try{ var ug2=await sb2.auth.getUser(); var pf2=await sb2.from('usuarios').select('escritorio_id').eq('id',ug2.data.user.id).single(); esc3=pf2&&pf2.data&&pf2.data.escritorio_id; }catch(e){}
+        var regc={nome:cli,origem:'cadastro de processo'}; if(esc3) regc.escritorio_id=esc3;
+        await sb2.from('contatos').insert(regc);
+        window.__CONTATOSDB=(window.__CONTATOSDB||[]); window.__CONTATOSDB.push({nome:cli,origem:'cadastro de processo'});
+      } }catch(e){ console.warn('criar contato:',e&&e.message||e); }
+    }
+    CONTATOS=null; /* força re-sincronizar para refletir na aba Contatos */
+  }
   DADOS.processos.unshift(novo);
   if(DADOS.kpis) DADOS.kpis.total=DADOS.processos.length;
   fecharCadManual();
@@ -4312,6 +4359,12 @@ function contatoDoProcesso(p){
   #gbusca-drop .gb-nome{font-weight:600;font-size:13px;color:var(--navy)}
   #gbusca-drop .gb-sub{font-size:11.5px;color:var(--muted);margin-top:1px}
   #gbusca-drop .gb-empty{padding:12px;font-size:12.5px;color:var(--muted);text-align:center}
+  .cm-drop{position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid var(--line);border-radius:9px;box-shadow:0 10px 26px rgba(30,42,59,.16);max-height:220px;overflow:auto;z-index:50;display:none;margin-top:2px}
+  .cm-drop.on{display:block}
+  .cm-drop .cm-item{padding:7px 11px;cursor:pointer;font-size:13px;border-bottom:1px solid #f1f4f8}
+  .cm-drop .cm-item:last-child{border-bottom:none}
+  .cm-drop .cm-item:hover,.cm-drop .cm-item.sel{background:#eef4fb}
+  .cm-drop .cm-sub{font-size:11px;color:var(--muted)}
   #tb-tools{justify-content:flex-start}
   #tb-data{font-size:12px;color:var(--muted);white-space:nowrap}
   #tb-sino{position:relative;cursor:pointer;font-size:17px}
