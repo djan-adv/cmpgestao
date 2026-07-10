@@ -903,18 +903,27 @@ function renderMeuDia(){
       var d=new Date(a.data+"T00:00:00");
       var atras=d<hoje;
       var dia=String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0");
+      var diaFull=dia+"/"+d.getFullYear();
       var tg=TAGS[a.tipo]||["TAREFA","background:var(--accentbg);color:var(--navy)"];
       var gi=(AGENDA||[]).indexOf(a);
+      var num=(a.p&&a.p.numero)||"";
+      var temProc=num&&num!=='—';
+      var numHtml=temProc
+        ? '<span class="proc" onclick="event.stopPropagation();abrirProcessoDaTarefa(\''+String(num).replace(/'/g,"")+'\')" style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted" title="Abrir o processo">'+esc(num)+'</span>'
+        : '<span class="proc">'+esc(num)+'</span>';
+      var prazo='<div style="font-size:11.5px;color:'+(atras?"var(--danger)":"var(--muted)")+';font-weight:'+(atras?"700":"400")+'">'+(atras?"⚠ Deveria ter sido feita em "+diaFull:diaFull)+(a.hora?(" · "+a.hora):"")+'</div>';
       var acoes='<div style="display:flex;gap:4px;align-items:center">'
         +'<button title="Concluir e registrar no histórico do processo" onclick="event.stopPropagation();mdConcluir('+gi+')" style="cursor:pointer;border:1px solid #cfe8db;background:#eef7f1;color:#0F6E56;border-radius:7px;padding:3px 7px;font-size:12px">✓</button>'
+        +'<button title="Editar a tarefa (título, data, hora, responsável, processo)" onclick="event.stopPropagation();mdEditar('+gi+')" style="cursor:pointer;border:1px solid #e2e5ea;background:#f4f5f7;color:#3d4c60;border-radius:7px;padding:3px 7px;font-size:12px">✎</button>'
         +'<button title="Reagendar (muda a data; vai para a agenda do responsável)" onclick="event.stopPropagation();mdReagendar('+gi+')" style="cursor:pointer;border:1px solid #cfe0f2;background:#eef4fb;color:#185FA5;border-radius:7px;padding:3px 7px;font-size:12px">↻</button>'
         +'<button title="Excluir este agendamento" onclick="event.stopPropagation();mdExcluir('+gi+')" style="cursor:pointer;border:1px solid #f0d5d2;background:#fbeceb;color:#b5342b;border-radius:7px;padding:3px 7px;font-size:12px">🗑</button>'
         +'</div>';
       return '<div style="display:flex;gap:9px;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--accentbg)">'
         +'<span style="min-width:56px;font-weight:700;font-size:12.5px;color:'+(atras?"var(--danger)":"var(--navy)")+'">'+(atras?"atrasado":dia)+'</span>'
         +'<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:12px;white-space:nowrap;'+tg[1]+'">'+tg[0]+'</span>'
-        +'<div style="flex:1;min-width:0"><div style="font-weight:600;font-size:13px">'+esc(a.tt)+(a.hora?(" · "+a.hora):"")+'</div>'
-        +'<div style="font-size:11.5px;color:var(--muted)">'+esc((a.p&&a.p.cliente)||"")+' <span class="proc">'+esc((a.p&&a.p.numero)||"")+'</span></div></div>'
+        +'<div style="flex:1;min-width:0"><div style="font-weight:600;font-size:13px">'+esc(a.tt)+'</div>'
+        + prazo
+        +'<div style="font-size:11.5px;color:var(--muted)">'+esc((a.p&&a.p.cliente)||"")+' '+numHtml+'</div></div>'
         +'<span style="font-size:11px;background:var(--accentbg);color:var(--navy);border-radius:12px;padding:2px 8px;font-weight:600;white-space:nowrap">'+esc(a.resp||"")+'</span>'
         +acoes+'</div>';
     }).join("");
@@ -922,8 +931,10 @@ function renderMeuDia(){
   html+='<div style="margin-top:10px"><button class="btn sm ghost" onclick="go(\'agenda\')">abrir agenda &rarr;</button> <button class="btn sm ghost" onclick="abrirNovaTarefa()">+ Nova tarefa</button></div>';
   el.innerHTML=html;
 }
-/* ===== Ações rápidas do "Meu dia": concluir / reagendar / excluir ===== */
+/* ===== Ações rápidas do "Meu dia": concluir / editar / reagendar / excluir ===== */
 function _mdItem(gi){ return (AGENDA||[])[gi]||null; }
+/* EDITAR: abre a mesma janela de edição da agenda (título, data, hora, responsável, processo) */
+function mdEditar(gi){ var a=_mdItem(gi); if(!a) return; if(typeof abrirEventoAgenda==='function'){ window.__evVoltaMeuDia=true; abrirEventoAgenda(a); } }
 function _procIdPorNumero(num){ var d=String(num||'').replace(/\D/g,''); var p=(DADOS.processos||[]).find(function(x){return String(x.numero||'').replace(/\D/g,'')===d && d;}); return p?p._id:null; }
 /* CONCLUIR: registra um andamento no histórico do processo e remove o item da agenda. */
 async function mdConcluir(gi){
@@ -1901,6 +1912,8 @@ function salvarEventoAgenda(){
   try{ var sb=window.__sb; if(sb && _evEdit.id){ sb.from('agenda_eventos').update({titulo:_evEdit.tt,data:_evEdit.data,hora:_evEdit.hora,resp:(_evEdit.resp||null)}).eq('id',_evEdit.id).then(function(){}); } }catch(eP){}
   fecharEventoAgenda();
   renderAgViewInner();
+  try{ if(typeof renderMeuDia==='function') renderMeuDia(); }catch(e){}
+  try{ if(typeof renderAudSemana==='function') renderAudSemana(); }catch(e){}
 }
 function abrirProcessoDoEvento(){
   var n=(_evEdit&&_evEdit._procResolvido)||(_evEdit&&_evEdit.p&&_evEdit.p.numero&&_evEdit.p.numero!=='—'?_evEdit.p.numero:'');
