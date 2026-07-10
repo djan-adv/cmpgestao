@@ -2314,8 +2314,8 @@ function renderProc(){
     return okq&&oke&&movFiltroOk(p)&&origemFiltroOk(p)&&!/encerr/i.test(p.status||'')&&!isInove(p);
   });
   if(sm==='az') lista.sort(function(a,b){return (a.cliente||'').localeCompare(b.cliente||'','pt');});
-  else if(sm==='data_desc') lista.sort(function(a,b){return pd(b.data)-pd(a.data);});
-  else if(sm==='parados') lista.sort(function(a,b){return pd(a.data)-pd(b.data);});
+  else if(sm==='data_desc') lista.sort(function(a,b){return diasMovOrd(a)-diasMovOrd(b);}); /* movimentação oficial mais recente primeiro */
+  else if(sm==='parados') lista.sort(function(a,b){return diasMovOrd(b)-diasMovOrd(a);}); /* parados há mais tempo primeiro */
   else if(sm==='valor') lista.sort(function(a,b){return pv(b.causa)-pv(a.causa);});
   var pc=document.getElementById("proc-count"); if(pc) pc.textContent=lista.length+" de "+DADOS.processos.length+(lista.length>200?" (mostrando 200)":"");
   var b=document.getElementById("proc-body"); if(!b) return; b.innerHTML="";
@@ -2352,8 +2352,8 @@ function renderProc(){
   });
   if(sm==='az') lista.sort(function(a,b){var A=(a.cliente||'').trim(),B=(b.cliente||'').trim(); if(!A&&!B)return 0; if(!A)return 1; if(!B)return -1; return A.localeCompare(B,'pt');});
   else if(sm==='za') lista.sort(function(a,b){var A=(a.cliente||'').trim(),B=(b.cliente||'').trim(); if(!A&&!B)return 0; if(!A)return 1; if(!B)return -1; return B.localeCompare(A,'pt');});
-  else if(sm==='data_desc') lista.sort(function(a,b){return pd(b.data)-pd(a.data);});
-  else if(sm==='parados') lista.sort(function(a,b){return pd(a.data)-pd(b.data);});
+  else if(sm==='data_desc') lista.sort(function(a,b){return diasMovOrd(a)-diasMovOrd(b);}); /* movimentação oficial mais recente primeiro */
+  else if(sm==='parados') lista.sort(function(a,b){return diasMovOrd(b)-diasMovOrd(a);}); /* parados há mais tempo primeiro */
   else if(sm==='valor') lista.sort(function(a,b){return pv(b.causa)-pv(a.causa);});
   var total=lista.length, pages=Math.max(1,Math.ceil(total/pp));
   if(window.__procPage>pages) window.__procPage=pages;
@@ -2686,8 +2686,8 @@ function renderProc(){
   }
   else if(sm==='az') lista.sort(function(a,b){var A=(a.cliente||'').trim(),B=(b.cliente||'').trim(); if(!A&&!B)return 0; if(!A)return 1; if(!B)return -1; return A.localeCompare(B,'pt');});
   else if(sm==='za') lista.sort(function(a,b){var A=(a.cliente||'').trim(),B=(b.cliente||'').trim(); if(!A&&!B)return 0; if(!A)return 1; if(!B)return -1; return B.localeCompare(A,'pt');});
-  else if(sm==='data_desc') lista.sort(function(a,b){return pd(b.data)-pd(a.data);});
-  else if(sm==='parados') lista.sort(function(a,b){return pd(a.data)-pd(b.data);});
+  else if(sm==='data_desc') lista.sort(function(a,b){return diasMovOrd(a)-diasMovOrd(b);}); /* movimentação oficial mais recente primeiro */
+  else if(sm==='parados') lista.sort(function(a,b){return diasMovOrd(b)-diasMovOrd(a);}); /* parados há mais tempo primeiro */
   else if(sm==='valor') lista.sort(function(a,b){return pv(b.causa)-pv(a.causa);});
   var total=lista.length, pages=Math.max(1,Math.ceil(total/pp));
   if(window.__procPage>pages) window.__procPage=pages;
@@ -2774,6 +2774,16 @@ function diasParadoOficial(p){
   });
   if(!melhor) return null;
   return Math.floor((Date.now()-new Date(melhor+'T00:00:00').getTime())/86400000);
+}
+/* Métrica de ordenação por movimentação OFICIAL (mesma regra do "Sem movimentação há"):
+   dias desde a última movimentação do juízo/cartório (ignora petições das partes e
+   histórico manual). Sem histórico oficial → cai para a última movimentação bruta;
+   sem data alguma → vai para o fim da lista. */
+function diasMovOrd(p){
+  var d=(typeof diasParadoOficial==='function')?diasParadoOficial(p):null;
+  if(d!=null) return d;
+  var pd2=(typeof pdias==='function')?pdias(p&&p.data):-1;
+  return pd2<0 ? 1e9 : pd2;
 }
 // Data em que o processo começou: prioriza o andamento de "distribuição/autuação";
 // se não houver, usa o andamento mais antigo do histórico; por último, o ano do nº CNJ.
