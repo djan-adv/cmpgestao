@@ -4405,7 +4405,25 @@ window.__CO=null;
 async function loadCO(force){ if(window.__CO && !force) return window.__CO; var sb=window.__sb; if(!sb){ window.__CO=[]; return window.__CO; } var r=await sb.from('contatos_orgao').select('*'); window.__CO=(r&&r.data)||[]; return window.__CO; }
 (function tryCO(){ if(window.__sb){ loadCO(); } else { setTimeout(tryCO,800); } })();
 function normOrg(x){ return String(x||'').toLowerCase().replace(/\s+/g,' ').trim(); }
-function contatoDoProcesso(p){ if(!window.__CO) return null; var trib=tribunalAlias(p.numero); var fo=normOrg(p.foro); if(!fo) return null; return window.__CO.filter(function(c){ return (c.tribunal===trib||!c.tribunal) && normOrg(c.orgao)===fo; })[0]||null; }
+/* normalização "forte": remove acentos, corta sufixos de fórum/seção e o nome da
+   comarca que às vezes vem grudado no fim do foro (ex.: "...da Capital JOÃO PESSOA"),
+   para casar o mesmo órgão apesar do ruído dos dados. */
+function normOrgForte(x){
+  var s=String(x||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+  s=s.split(' - ')[0];
+  s=s.replace(/\s+(joao pessoa|santa rita|cabedelo|campina grande|bayeux|patos|alhandra|caapora|solanea|teixeira|conde|salvador|aracaju|goiania|aparecida de goiania|curitiba|maceio|contagem|ilheus|formiga|paracuru|lauro de freitas|camacari|sao paulo|rio de janeiro|belo horizonte|regiao metropo).*$/,'');
+  s=s.replace(/\bsecao [a-z]\b/g,'');
+  s=s.replace(/[.,]/g,' ').replace(/\s+/g,' ').trim();
+  return s;
+}
+function contatoDoProcesso(p){ if(!window.__CO) return null; var trib=tribunalAlias(p.numero); var fo=normOrg(p.foro); if(!fo) return null;
+  /* 1) match exato */
+  var c=window.__CO.filter(function(c){ return (c.tribunal===trib||!c.tribunal) && normOrg(c.orgao)===fo; })[0];
+  if(c) return c;
+  /* 2) match "forte" (ignora ruído de comarca/fórum/seção), só quando há e-mail */
+  var fof=normOrgForte(p.foro); if(!fof) return null;
+  return window.__CO.filter(function(c){ return c.email && (c.tribunal===trib||!c.tribunal) && normOrgForte(c.orgao)===fof; })[0]||null;
+}
 function contatoBlocoHTML(p){
   var bl=balcaoLink(p.numero); var trib=bl.trib?bl.trib.toUpperCase():'tribunal';
   var h='<b>Balcão virtual</b> ('+trib+'): <a href="'+bl.url+'" target="_blank" rel="noopener" style="color:#185FA5">abrir</a>'+(bl.verificado?'':' <span style="color:#888">(via busca)</span>');
