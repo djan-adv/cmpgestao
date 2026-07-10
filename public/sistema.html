@@ -1303,6 +1303,11 @@ function renderCaptacao(){
     var delEtapa=(c.id==='perdido')?'':' <a onclick="excluirEtapa('+idx+')" style="cursor:pointer;color:#b5342b;text-decoration:none" title="excluir etapa">&#128465;</a>';
     var h=document.createElement("h3");h.innerHTML=esc(c.nome)+' <span>'+itens.length+' '+mvL+'<a onclick="renameEtapa('+idx+')" style="cursor:pointer;text-decoration:none" title="renomear">&#9998;</a>'+delEtapa+mvR+'</span>';
     col.appendChild(h);
+    if(idx>0 && c.id!=='perdido'){
+      var jn=document.createElement("div"); jn.style.cssText="margin:-2px 0 7px";
+      jn.innerHTML='<a onclick="toggleNivel('+idx+')" title="'+(c.juntar?'Separar: virar um andar próprio no gráfico do funil':'Juntar no mesmo andar do gráfico do funil que a etapa à esquerda')+'" style="cursor:pointer;text-decoration:none;font-size:10px;font-weight:700;padding:2px 7px;border-radius:9px;background:'+(c.juntar?'#e5f4ed':'#eef0f3')+';color:'+(c.juntar?'#0F6E56':'#8a8f98')+'">'+(c.juntar?'▣ mesmo andar':'▢ mesmo andar')+'</a>';
+      col.appendChild(jn);
+    }
     itens.forEach(function(l){var el=document.createElement("div");el.className="task pri-"+(l.prioridade||"media");el.draggable=true;
       el.title="canal: "+l.canal+(l.valor?(" · R$ "+l.valor):"");
       var _cc=corCanal(l.canal); el.style.borderLeftColor=_cc; el.style.borderLeftWidth='5px';
@@ -1369,6 +1374,8 @@ function moverEtapa(idx,dir){
   var tmp=FUNIL[idx]; FUNIL[idx]=FUNIL[j]; FUNIL[j]=tmp;
   salvarFunilLocal(); renderCaptacao();
 }
+/* marca/desmarca a etapa como "mesmo andar" da anterior — no gráfico as duas dividem a faixa */
+function toggleNivel(idx){ var f=FUNIL[idx]; if(!f) return; f.juntar=!f.juntar; salvarFunilLocal(); renderCaptacao(); }
 function primeiroUltimo(n){var p=String(n||"").trim().split(/\s+/);if(p.length<=1)return p[0]||"";return p[0]+" "+p[p.length-1];}
 function moverLead(dragId,targetId){var di=LEADS.findIndex(function(x){return x.id===dragId;});var t=LEADS.find(function(x){return x.id===targetId;});if(di<0||!t||dragId===targetId)return;var d=LEADS[di];d.estagio=t.estagio; if(t.estagio==='ganho'&&!d.dataFechamento) d.dataFechamento=hojeISO(); LEADS.splice(di,1);var ti=LEADS.findIndex(function(x){return x.id===targetId;});LEADS.splice(ti,0,d);salvarLeadsLocal();renderCaptacao();}
 function initKanban(){
@@ -4408,18 +4415,26 @@ function renderFunilDash(){
   if(typeof canalSel!=='undefined' && canalSel!=='Geral') _L=_L.filter(function(l){return l.canal===canalSel;});
   var counts={}; _L.forEach(function(l){counts[l.estagio]=(counts[l.estagio]||0)+1;});
   /* acompanha as etapas reais do funil (sem "Perdido", que não é degrau do funil) */
-  var stages=FUNIL.filter(function(f){return f.id!=='perdido';}); if(!stages.length) stages=FUNIL.slice();
-  var cores=['#2E3A4B','#185FA5','#1D9E75','#BA7517','#7F77DD','#0F6E56','#0e7490','#9a6a12','#b5342b'];
-  var n=stages.length||1, maxW=180, minW=50, H=200, bandH=H/n;
+  var seq=FUNIL.filter(function(f){return f.id!=='perdido';}); if(!seq.length) seq=FUNIL.slice();
+  var cores=['#2E3A4B','#185FA5','#1D9E75','#BA7517','#7F77DD','#0F6E56','#0e7490','#9a6a12','#b5342b','#C13584'];
+  var colorOf={}; seq.forEach(function(f,i){ colorOf[f.id]=cores[i%cores.length]; });
+  /* agrupa etapas no MESMO andar: 'juntar' faz a etapa dividir a faixa com a anterior */
+  var bands=[]; seq.forEach(function(f,i){ if(i===0||!f.juntar||!bands.length) bands.push([f]); else bands[bands.length-1].push(f); });
+  var n=bands.length||1, maxW=180, minW=50, H=200, bandH=H/n;
   function wAt(i){ return maxW-(maxW-minW)*(i/n); }
   var polys='';
-  stages.forEach(function(f,i){
-    var y0=i*bandH+4, y1=(i+1)*bandH-3, tw=wAt(i), bw=wAt(i+1), c=cores[i%cores.length];
-    polys+='<polygon points="'+(100-tw/2)+','+y0+' '+(100+tw/2)+','+y0+' '+(100+bw/2)+','+y1+' '+(100-bw/2)+','+y1+'" fill="'+c+'"/>';
-    polys+='<text x="100" y="'+((y0+y1)/2+5)+'" text-anchor="middle" fill="#fff" font-size="15" font-weight="700">'+(counts[f.id]||0)+'</text>';
+  bands.forEach(function(band,i){
+    var y0=i*bandH+4, y1=(i+1)*bandH-3, twTop=wAt(i), twBot=wAt(i+1), segs=band.length;
+    band.forEach(function(f,si){
+      var a=si/segs, b=(si+1)/segs;
+      var xTL=(100-twTop/2)+twTop*a, xTR=(100-twTop/2)+twTop*b, xBL=(100-twBot/2)+twBot*a, xBR=(100-twBot/2)+twBot*b, c=colorOf[f.id];
+      polys+='<polygon points="'+xTL.toFixed(1)+','+y0+' '+xTR.toFixed(1)+','+y0+' '+xBR.toFixed(1)+','+y1+' '+xBL.toFixed(1)+','+y1+'" fill="'+c+'"/>';
+      var cx=(xTL+xTR+xBL+xBR)/4;
+      polys+='<text x="'+cx.toFixed(1)+'" y="'+((y0+y1)/2+5)+'" text-anchor="middle" fill="#fff" font-size="14" font-weight="700">'+(counts[f.id]||0)+'</text>';
+    });
   });
-  var legend=stages.map(function(f,i){ var c=cores[i%cores.length];
-    return '<div style="display:flex;align-items:center;gap:6px;font-size:12px;margin:5px 0"><span style="width:10px;height:10px;border-radius:2px;background:'+c+';display:inline-block"></span><span style="color:#5f5e5a">'+esc(f.nome)+'</span> <b style="margin-left:auto;color:'+c+'">'+(counts[f.id]||0)+'</b></div>';
+  var legend=seq.map(function(f){ var c=colorOf[f.id];
+    return '<div style="display:flex;align-items:center;gap:6px;font-size:12px;margin:5px 0"><span style="width:10px;height:10px;border-radius:2px;background:'+c+';display:inline-block"></span><span style="color:#5f5e5a">'+esc(f.nome)+(f.juntar?' <span style="font-size:10px;color:#9aa0aa">(mesmo andar)</span>':'')+'</span> <b style="margin-left:auto;color:'+c+'">'+(counts[f.id]||0)+'</b></div>';
   }).join('');
   el.innerHTML='<div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap"><svg width="200" height="200" viewBox="0 0 200 200" style="flex:0 0 auto">'+polys+'</svg><div style="flex:1;min-width:150px">'+legend+'</div></div>';
 }
