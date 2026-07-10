@@ -4416,13 +4416,38 @@ function normOrgForte(x){
   s=s.replace(/[.,]/g,' ').replace(/\s+/g,' ').trim();
   return s;
 }
-function contatoDoProcesso(p){ if(!window.__CO) return null; var trib=tribunalAlias(p.numero); var fo=normOrg(p.foro); if(!fo) return null;
-  /* 1) match exato */
-  var c=window.__CO.filter(function(c){ return (c.tribunal===trib||!c.tribunal) && normOrg(c.orgao)===fo; })[0];
-  if(c) return c;
-  /* 2) match "forte" (ignora ruído de comarca/fórum/seção), só quando há e-mail */
-  var fof=normOrgForte(p.foro); if(!fof) return null;
-  return window.__CO.filter(function(c){ return c.email && (c.tribunal===trib||!c.tribunal) && normOrgForte(c.orgao)===fof; })[0]||null;
+/* Seed de contatos de vara VERIFICADOS na lista oficial do Balcão Virtual (TJPB),
+   incluindo as reorganizações em cartórios unificados. Serve de padrão quando o
+   contatos_orgao do banco ainda não tem a vara. O banco sempre tem prioridade.
+   OBS honesta: muitas varas do TJPB (ex.: Comarca Integrada de Conde) só oferecem
+   Balcão Virtual por vídeo — não há e-mail a cadastrar; nesses casos usa-se o vídeo. */
+var CO_SEED=[
+  {trib:'tjpb', re:/vara de fazenda p.?blica da capital/i, orgao:'Fazenda Pública de João Pessoa — Seção Conhecimento (cartório unificado)', email:'jpa-cufaz@tjpb.jus.br'},
+  {trib:'tjpb', re:/1[ªa]\s*vara especializada de cumpriment.*(execu|extrajudic)/i, orgao:'1ª Vara Especializada de Cumprimentos de Sentença e Execuções Extrajudiciais', email:'jpa-vcse01@tjpb.jus.br'},
+  {trib:'tjpb', re:/2[ªa]\s*vara especializada de cumpriment.*(execu|extrajudic)/i, orgao:'2ª Vara Especializada de Cumprimentos de Sentença e Execuções Extrajudiciais', email:'jpa-vcse02@tjpb.jus.br'},
+  {trib:'tjpb', re:/n.cleo.*justi.a\s*4\.?0.*fazend/i, orgao:'Núcleos de Justiça 4.0 - Cumprimento de Sentença Fazendário', email:'jpa-un40@tjpb.jus.br'},
+  {trib:'tjpb', re:/1[ºo]\s*juizado especial c.vel.*(jo.o pessoa|capital)/i, orgao:'1º Juizado Especial Cível de João Pessoa e de Cabedelo', email:'jpa-jciv01@tjpb.jus.br', whatsapp:'(83) 99142-3265'},
+  {trib:'tjpb', re:/2[ºo]\s*juizado especial c.vel.*(jo.o pessoa|capital)/i, orgao:'2º Juizado Especial Cível de João Pessoa e de Cabedelo', email:'jpa-jciv02@tjpb.jus.br', whatsapp:'(83) 99142-3265'},
+  {trib:'tjpb', re:/3[ºo]\s*juizado especial c.vel.*(jo.o pessoa|capital)/i, orgao:'3º Juizado Especial Cível de João Pessoa e de Cabedelo', email:'jpa-jciv03@tjpb.jus.br', whatsapp:'(83) 99142-3265'},
+  {trib:'tjpb', re:/9[ºo]\s*juizado especial c.vel.*(capital|cabedelo)/i, orgao:'9º Juizado Especial Cível da Capital e de Cabedelo', email:'jpa-jciv09@tjpb.jus.br'},
+  {trib:'tjpb', re:/3[ªa]\s*vara estadual de sucess/i, orgao:'3ª Vara Estadual de Sucessões da Paraíba', whatsapp:'(83) 99143-4231'}
+];
+function contatoSeed(p){ var trib=tribunalAlias(p.numero); var fo=String(p&&p.foro||''); if(!fo) return null;
+  for(var i=0;i<CO_SEED.length;i++){ var s=CO_SEED[i]; if((s.trib===trib||!s.trib) && s.re.test(fo)){
+    return {tribunal:s.trib, orgao:s.orgao, email:s.email||'', whatsapp:s.whatsapp||'', balcao_link:'https://www.tjpb.jus.br/balcaovirtual', _seed:true}; } }
+  return null;
+}
+function contatoDoProcesso(p){ if(!p) return null; var trib=tribunalAlias(p.numero); var fo=normOrg(p.foro);
+  if(fo && window.__CO){
+    /* 1) match exato no banco */
+    var c=window.__CO.filter(function(c){ return (c.tribunal===trib||!c.tribunal) && normOrg(c.orgao)===fo; })[0];
+    if(c) return c;
+    /* 2) match "forte" no banco (ignora ruído de comarca/fórum/seção) */
+    var fof=normOrgForte(p.foro);
+    if(fof){ var c2=window.__CO.filter(function(c){ return c.email && (c.tribunal===trib||!c.tribunal) && normOrgForte(c.orgao)===fof; })[0]; if(c2) return c2; }
+  }
+  /* 3) seed oficial verificado (Balcão Virtual TJPB) */
+  return contatoSeed(p);
 }
 function contatoBlocoHTML(p){
   var bl=balcaoLink(p.numero); var trib=bl.trib?bl.trib.toUpperCase():'tribunal';
