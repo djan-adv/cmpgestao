@@ -812,16 +812,80 @@ function renderMeuDia(){
       var atras=d<hoje;
       var dia=String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0");
       var tg=TAGS[a.tipo]||["TAREFA","background:var(--accentbg);color:var(--navy)"];
+      var gi=(AGENDA||[]).indexOf(a);
+      var acoes='<div style="display:flex;gap:4px;align-items:center">'
+        +'<button title="Concluir e registrar no histórico do processo" onclick="event.stopPropagation();mdConcluir('+gi+')" style="cursor:pointer;border:1px solid #cfe8db;background:#eef7f1;color:#0F6E56;border-radius:7px;padding:3px 7px;font-size:12px">✓</button>'
+        +'<button title="Reagendar (muda a data; vai para a agenda do responsável)" onclick="event.stopPropagation();mdReagendar('+gi+')" style="cursor:pointer;border:1px solid #cfe0f2;background:#eef4fb;color:#185FA5;border-radius:7px;padding:3px 7px;font-size:12px">↻</button>'
+        +'<button title="Excluir este agendamento" onclick="event.stopPropagation();mdExcluir('+gi+')" style="cursor:pointer;border:1px solid #f0d5d2;background:#fbeceb;color:#b5342b;border-radius:7px;padding:3px 7px;font-size:12px">🗑</button>'
+        +'</div>';
       return '<div style="display:flex;gap:9px;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--accentbg)">'
         +'<span style="min-width:56px;font-weight:700;font-size:12.5px;color:'+(atras?"var(--danger)":"var(--navy)")+'">'+(atras?"atrasado":dia)+'</span>'
         +'<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:12px;white-space:nowrap;'+tg[1]+'">'+tg[0]+'</span>'
         +'<div style="flex:1;min-width:0"><div style="font-weight:600;font-size:13px">'+esc(a.tt)+(a.hora?(" · "+a.hora):"")+'</div>'
         +'<div style="font-size:11.5px;color:var(--muted)">'+esc((a.p&&a.p.cliente)||"")+' <span class="proc">'+esc((a.p&&a.p.numero)||"")+'</span></div></div>'
-        +'<span style="font-size:11px;background:var(--accentbg);color:var(--navy);border-radius:12px;padding:2px 8px;font-weight:600;white-space:nowrap">'+esc(a.resp||"")+'</span></div>';
+        +'<span style="font-size:11px;background:var(--accentbg);color:var(--navy);border-radius:12px;padding:2px 8px;font-weight:600;white-space:nowrap">'+esc(a.resp||"")+'</span>'
+        +acoes+'</div>';
     }).join("");
   }
   html+='<div style="margin-top:10px"><button class="btn sm ghost" onclick="go(\'agenda\')">abrir agenda &rarr;</button> <button class="btn sm ghost" onclick="abrirNovaTarefa()">+ Nova tarefa</button></div>';
   el.innerHTML=html;
+}
+/* ===== Ações rápidas do "Meu dia": concluir / reagendar / excluir ===== */
+function _mdItem(gi){ return (AGENDA||[])[gi]||null; }
+function _procIdPorNumero(num){ var d=String(num||'').replace(/\D/g,''); var p=(DADOS.processos||[]).find(function(x){return String(x.numero||'').replace(/\D/g,'')===d && d;}); return p?p._id:null; }
+/* CONCLUIR: registra um andamento no histórico do processo e remove o item da agenda. */
+async function mdConcluir(gi){
+  var a=_mdItem(gi); if(!a) return;
+  if(!confirm('Concluir "'+(a.tt||'')+'"?\n\nSerá registrado no histórico do processo e sai da lista.')) return;
+  try{
+    var sb=window.__sb;
+    var hoje=new Date(); var iso=hoje.getFullYear()+'-'+String(hoje.getMonth()+1).padStart(2,'0')+'-'+String(hoje.getDate()).padStart(2,'0');
+    var pid=_procIdPorNumero(a.p&&a.p.numero);
+    var texto='[Agenda] Concluído: '+(a.tt||'')+' — em '+iso.split('-').reverse().join('/')+(a.resp?(' · '+a.resp):'');
+    if(sb && pid){
+      var w=await sb.from('andamentos').insert({processo_id:pid,data:iso,texto:texto,fonte:'manual'}).select('id').single();
+      if(w.error){ alert('Não foi possível registrar no histórico: '+w.error.message); return; }
+      /* reflete na ficha aberta, se for a do mesmo processo */
+      try{ if(typeof atual!=='undefined' && atual && atual._id===pid){ atual.hist_full=atual.hist_full||[]; atual.hist_full.unshift({id:w.data&&w.data.id,data:iso+'T00:00:00.000Z',texto:texto,f:'manual'}); if(typeof renderHistorico==='function') renderHistorico(); } }catch(eH){}
+    } else if(!pid){ alert('Este item não tem processo vinculado, então não há histórico onde registrar. Vou apenas concluí-lo (sair da lista).'); }
+    /* remove o evento do banco (concluído sai da agenda) e da memória */
+    if(sb && a.id){ await sb.from('agenda_eventos').delete().eq('id',a.id); }
+    var i=(AGENDA||[]).indexOf(a); if(i>=0) AGENDA.splice(i,1);
+    if(window.__AGDB && a.id){ window.__AGDB=window.__AGDB.filter(function(x){return x.id!==a.id;}); }
+    renderMeuDia(); if(typeof renderAudSemana==='function') renderAudSemana();
+  }catch(e){ alert('Erro ao concluir: '+(e&&e.message||e)); }
+}
+/* REAGENDAR: muda a data/hora/responsável; o item vai para a agenda/kanban da pessoa. */
+async function mdReagendar(gi){
+  var a=_mdItem(gi); if(!a) return;
+  var novaData=window.prompt('Reagendar "'+(a.tt||'')+'" para qual data? (dd/mm/aaaa)', a.data.split('-').reverse().join('/'));
+  if(!novaData) return;
+  var m=novaData.trim().split('/'); if(m.length!==3){ alert('Data inválida. Use dd/mm/aaaa.'); return; }
+  var iso=m[2]+'-'+String(m[1]).padStart(2,'0')+'-'+String(m[0]).padStart(2,'0');
+  if(isNaN(new Date(iso+'T00:00:00').getTime())){ alert('Data inválida.'); return; }
+  var novaHora=window.prompt('Horário (HH:MM):', a.hora||'09:00')||a.hora||'09:00';
+  var novoResp=window.prompt('Responsável (para ir à agenda dessa pessoa):', a.resp||'')||a.resp||'';
+  try{
+    var sb=window.__sb;
+    if(sb && a.id){ var r=await sb.from('agenda_eventos').update({data:iso,hora:novaHora,resp:(novoResp||null)}).eq('id',a.id); if(r&&r.error){ alert('Não foi possível reagendar: '+r.error.message); return; } }
+    a.data=iso; a.hora=novaHora; a.resp=novoResp;
+    if(window.__AGDB && a.id){ window.__AGDB.forEach(function(x){ if(x.id===a.id){ x.data=iso; x.hora=novaHora; x.resp=novoResp; } }); }
+    renderMeuDia();
+    try{ if(typeof renderAgendaView==='function'){ AGENDA=null; initAgenda(); } }catch(eA){}
+    alert('Reagendado para '+novaData+(novoResp?(' · '+novoResp):'')+'. Já aparece na agenda dessa pessoa.');
+  }catch(e){ alert('Erro ao reagendar: '+(e&&e.message||e)); }
+}
+/* EXCLUIR: apaga o agendamento de vez do banco. */
+async function mdExcluir(gi){
+  var a=_mdItem(gi); if(!a) return;
+  if(!confirm('Excluir definitivamente "'+(a.tt||'')+'"?\n\nEsta ação NÃO pode ser desfeita.')) return;
+  try{
+    var sb=window.__sb;
+    if(sb && a.id){ var r=await sb.from('agenda_eventos').delete().eq('id',a.id); if(r&&r.error){ alert('Não foi possível excluir: '+r.error.message); return; } }
+    var i=(AGENDA||[]).indexOf(a); if(i>=0) AGENDA.splice(i,1);
+    if(window.__AGDB && a.id){ window.__AGDB=window.__AGDB.filter(function(x){return x.id!==a.id;}); }
+    renderMeuDia(); if(typeof renderAudSemana==='function') renderAudSemana();
+  }catch(e){ alert('Erro ao excluir: '+(e&&e.message||e)); }
 }
 function renderAudSemana(){
   var el=document.getElementById("painel-aud"); if(!el) return;
@@ -895,6 +959,9 @@ function abrir(i){
     (function(){ if(/encerr/i.test(p.status||'')) return ''; var d=(typeof diasParadoOficial==='function')?diasParadoOficial(p):null; if(d==null) return ''; var cor=d>=90?'#b5342b':(d>=60?'#8a6d1a':'#5f6b7a'), bg=d>=90?'#fbeceb':(d>=60?'#fdf3e7':'#eef1f5'); return '<div style="margin-bottom:8px"><span style="display:inline-block;border-radius:20px;padding:3px 12px;font-size:12px;font-weight:700;background:'+bg+';color:'+cor+'" title="Dias desde a última movimentação do juízo/cartório — não conta petições/manifestações das partes nem o histórico manual">&#9201; Parado há '+d+' dia'+(d===1?'':'s')+' sem movimentação do juízo</span></div>'; })()+
     bvLine(p.numero)+'</div></div>';
   /* card "Partes" removido — cliente principal e parte contrária já constam no cabeçalho */
+  // observações (um único ponto de observação por processo, criável/editável — estilo Astrea)
+  html+='<div class="card" id="obs-card"><p class="sectlabel" style="display:flex;justify-content:space-between;align-items:center">Observações'+
+    '<span id="obs-acoes"></span></p><div id="obs-corpo"></div></div>';
   // histórico (termos oficiais)
   /* aba "Publicações com inteiro teor (DJEN)" removida a pedido — sem utilidade prática */
   html+='<div class="card"><p class="sectlabel" style="display:flex;justify-content:space-between;align-items:center">Histórico completo (termos oficiais)'+(p.hist_full&&p.hist_full.length?(' — '+p.hist_full.length+' andamentos'):'')+'<button class="btn sm ghost" style="font-size:12px" onclick="addHistManual()">+ histórico manual</button></p><ul class="timeline" id="det-hist"></ul><div id="det-hist-more" style="margin-top:8px"></div></div>';
@@ -934,6 +1001,7 @@ function abrir(i){
   document.getElementById("det-body").innerHTML=html;
   histShown=10; renderHistorico();
   renderDetEtq();
+  renderObservacoes();
   renderProcVinculados();
   go("proc-det");
 }
@@ -2060,7 +2128,7 @@ function toggleConcluirTarefa(id){
   try{
     /* select estendido (honorários + vinculados). Se essas colunas ainda não existirem no banco,
        o select falha e caímos automaticamente no select básico — sem quebrar o carregamento. */
-    var selExt='id,numero,cliente_nome,oponente,assunto,foro,status,valor_causa,ultima_movimentacao,contatos_livres,hon_faturado,hon_afaturar,vinculados,fora_inove,fonte,fase,andamentos(id,data,texto,fonte)';
+    var selExt='id,numero,cliente_nome,oponente,assunto,foro,status,valor_causa,ultima_movimentacao,contatos_livres,hon_faturado,hon_afaturar,vinculados,fora_inove,fonte,fase,observacoes,andamentos(id,data,texto,fonte)';
     var selBas='id,numero,cliente_nome,oponente,assunto,foro,status,valor_causa,ultima_movimentacao,contatos_livres,andamentos(id,data,texto,fonte)';
     var res=await sb.from('processos').select(selExt).order('ultima_movimentacao',{ascending:false,nullsFirst:false}).limit(3000);
     if(res.error){ res=await sb.from('processos').select(selBas).order('ultima_movimentacao',{ascending:false,nullsFirst:false}).limit(3000); }
@@ -2070,7 +2138,7 @@ function toggleConcluirTarefa(id){
       var hf=(p.andamentos||[]).map(function(a){return {id:a.id, data:(a.data? a.data+'T00:00:00.000Z':null), texto:a.texto, f:a.fonte||''};});
       hf.sort(function(x,y){return (y.data||'').localeCompare(x.data||'');});
       var vinc=Array.isArray(p.vinculados)?p.vinculados:(p.vinculados?[].concat(p.vinculados):[]);
-      return {_id:p.id, cliente:p.cliente_nome||'', numero:p.numero, oponente:p.oponente||'', tipo:p.assunto||'', foro:p.foro||'', status:p.status||'', data:fmtData(p.ultima_movimentacao), hist:'', causa:fmtCausa(p.valor_causa), hist_full:hf, ctl:p.contatos_livres||'', hon_faturado:(p.hon_faturado!=null?p.hon_faturado:0), hon_afaturar:(p.hon_afaturar!=null?p.hon_afaturar:0), vinculados:vinc, fora_inove:!!p.fora_inove, fonte:p.fonte||'', ehCaso:(p.fonte==='caso'), fase_manual:(p.fase||'')};
+      return {_id:p.id, cliente:p.cliente_nome||'', numero:p.numero, oponente:p.oponente||'', tipo:p.assunto||'', foro:p.foro||'', status:p.status||'', data:fmtData(p.ultima_movimentacao), hist:'', causa:fmtCausa(p.valor_causa), hist_full:hf, ctl:p.contatos_livres||'', hon_faturado:(p.hon_faturado!=null?p.hon_faturado:0), hon_afaturar:(p.hon_afaturar!=null?p.hon_afaturar:0), vinculados:vinc, fora_inove:!!p.fora_inove, fonte:p.fonte||'', ehCaso:(p.fonte==='caso'), fase_manual:(p.fase||''), observacoes:(p.observacoes||'')};
     });
     if(DADOS.kpis){ DADOS.kpis.total=DADOS.processos.length; }
     /* publicações novas (robô DJEN) → fila de triagem */
@@ -2100,9 +2168,9 @@ function toggleConcluirTarefa(id){
       if(typeof go==='function') go(cur);
     }
     try{
-      var ag=await sb.from('agenda_eventos').select('data,hora,tipo,titulo,resp,processo_numero').order('data',{ascending:true}).limit(2000);
+      var ag=await sb.from('agenda_eventos').select('id,data,hora,tipo,titulo,resp,processo_numero').order('data',{ascending:true}).limit(2000);
       if(!ag.error&&ag.data){
-        window.__AGDB=ag.data.map(function(e){return {data:String(e.data).slice(0,10),hora:e.hora||'09:00',tipo:e.tipo||'nt',tt:e.titulo,resp:e.resp||'',p:{numero:e.processo_numero||'—',cliente:''}};});
+        window.__AGDB=ag.data.map(function(e){return {id:e.id,data:String(e.data).slice(0,10),hora:e.hora||'09:00',tipo:e.tipo||'nt',tt:e.titulo,resp:e.resp||'',p:{numero:e.processo_numero||'—',cliente:''}};});
         AGENDA=null; initAgenda();
         /* CORREÇÃO: re-renderiza a agenda agora que os dados chegaram (evita ficar em branco até trocar de view) */
         try{ var __sec=(document.querySelector('#s-agenda') && !document.getElementById('s-agenda').classList.contains('hidden')); if(__sec && typeof renderAgendaView==='function') renderAgendaView(); }catch(eR){}
@@ -3174,6 +3242,35 @@ async function agendarClaude(){
     histShown=10; renderHistorico();
     alert('Mensagem agendada! O Claude verifica os pedidos pendentes nos dias úteis pela manhã, envia ao cliente pelos contatos do processo e marca como enviada no histórico.');
   }catch(e){ alert('Erro: '+(e&&e.message||e)); }
+}
+/* ===== Observações do processo (um único ponto, criável/editável — estilo Astrea) ===== */
+function renderObservacoes(){
+  var corpo=document.getElementById('obs-corpo'), acoes=document.getElementById('obs-acoes');
+  if(!corpo||!atual) return;
+  var txt=(atual.observacoes||'').trim();
+  if(acoes) acoes.innerHTML= txt
+    ? '<button class="btn sm ghost" style="font-size:12px" onclick="editarObservacoes()">editar</button>'
+    : '<button class="btn sm ghost" style="font-size:12px" onclick="editarObservacoes()">+ adicionar observação</button>';
+  corpo.innerHTML= txt
+    ? '<div style="white-space:pre-wrap;font-size:13.5px;color:var(--ink);line-height:1.55">'+esc(txt)+'</div>'
+    : '<p class="note" style="margin:0">Nenhuma observação neste processo. Clique em "+ adicionar observação".</p>';
+}
+function editarObservacoes(){
+  var corpo=document.getElementById('obs-corpo'), acoes=document.getElementById('obs-acoes');
+  if(!corpo||!atual) return;
+  if(acoes) acoes.innerHTML='';
+  var atualTxt=(atual.observacoes||'');
+  corpo.innerHTML='<textarea id="obs-input" rows="5" style="width:100%;box-sizing:border-box;font-family:inherit;font-size:13.5px;padding:8px 10px" placeholder="Anotações internas sobre este processo (só o escritório vê)…"></textarea>'+
+    '<div style="margin-top:8px;display:flex;gap:8px"><button class="btn sm gold" onclick="salvarObservacoes()">Salvar</button><button class="btn sm ghost" onclick="renderObservacoes()">Cancelar</button></div>';
+  var ta=document.getElementById('obs-input'); if(ta){ ta.value=atualTxt; ta.focus(); }
+}
+async function salvarObservacoes(){
+  if(!atual) return;
+  var ta=document.getElementById('obs-input'); if(!ta) return;
+  var v=ta.value.trim();
+  atual.observacoes=v;
+  try{ var sb=window.__sb; if(sb&&atual._id){ var r=await sb.from('processos').update({observacoes:(v||null)}).eq('id',atual._id); if(r&&r.error){ alert('Não foi possível salvar a observação: '+r.error.message); } } }catch(e){ alert('Erro ao salvar: '+(e&&e.message||e)); }
+  renderObservacoes();
 }
 async function addHistManual(){
   if(!atual) return;
