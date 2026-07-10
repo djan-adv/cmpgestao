@@ -162,6 +162,7 @@
       <a data-s="procedimentos" onclick="go('procedimentos')"><span class="ic">☰</span> Procedimentos</a>
       <a data-s="inove" onclick="go('inove')" style="margin-top:12px;opacity:.8"><span class="ic">◈</span> Inove <span id="nav-n-inove" style="margin-left:auto;font-size:10.5px;background:var(--navy2);border-radius:10px;padding:1px 7px"></span></a>
       <a data-s="encerrados" onclick="go('encerrados')" style="opacity:.75"><span class="ic">▤</span> Encerrados <span id="nav-n-enc" style="margin-left:auto;font-size:10.5px;background:var(--navy2);border-radius:10px;padding:1px 7px"></span></a>
+      <a data-s="sugestoes" onclick="go('sugestoes')" style="margin-top:12px;color:#ffd98a"><span class="ic">💡</span> Sugestões / Melhorias</a>
     </nav>
   </aside>
   <main class="main">
@@ -346,6 +347,26 @@
     <h3 style="margin-top:0">Diligências em andamento</h3>
     <div id="dilig-andamento"></div>
   </div>
+  </div>
+</section>
+<section id="s-sugestoes" class="hidden">
+  <div class="card">
+    <h3 style="margin-top:0">💡 Sugestões e melhorias</h3>
+    <p class="note" style="margin-top:0">Escreva aqui o que você gostaria de melhorar ou corrigir no sistema. Sua sugestão fica registrada e é implementada pelo desenvolvimento. Você acompanha o andamento (e as alterações feitas) na lista abaixo.</p>
+    <div class="row2">
+      <div><label>Área</label><select id="sg-area"><option value="">Geral</option><option>Publicações / Triagem</option><option>Agenda / Kanban</option><option>Processos</option><option>Diligências</option><option>Comercial</option><option>Contatos</option><option>Documentos</option><option>Relatórios</option><option>Outra</option></select></div>
+      <div><label>Seu nome</label><input id="sg-autor" placeholder="Seu nome"></div>
+    </div>
+    <label>Sugestão / melhoria</label>
+    <textarea id="sg-texto" rows="4" placeholder="Descreva com detalhes o que melhorar, corrigir ou criar..."></textarea>
+    <div class="foot" style="justify-content:flex-start"><button class="btn" style="background:#0F6E56;border-color:#0F6E56" onclick="enviarSugestao()">Enviar sugestão</button><span id="sg-msg" class="note" style="margin-left:10px;align-self:center"></span></div>
+  </div>
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <h3 style="margin:0">Sugestões e histórico de alterações</h3>
+      <select id="sg-filtro" onchange="renderSugestoes()" class="btn sm"><option value="">Todas</option><option value="nova">Novas</option><option value="em_analise">Em análise</option><option value="feita">Feitas</option><option value="descartada">Descartadas</option></select>
+    </div>
+    <div id="sg-lista"><div class="note">Carregando…</div></div>
   </div>
 </section>
 <section id="s-relatorio" class="hidden">
@@ -3228,7 +3249,7 @@ function go(s){
 function go(s){
   try{ localStorage.setItem('cmp_secao', s); if(s!=='proc-det') localStorage.removeItem('cmp_proc'); }catch(e){}
   var showId=(s==='contatos')?'crm':s;
-  ["painel","triagem","agenda","processos","proc-det","crm","etiquetas","procedimentos","diligencias","relatorio","encerrados","inove","fases"].forEach(function(id){var e=document.getElementById("s-"+id);if(e)e.classList.add("hidden")});
+  ["painel","triagem","agenda","processos","proc-det","crm","etiquetas","procedimentos","diligencias","relatorio","encerrados","inove","fases","sugestoes"].forEach(function(id){var e=document.getElementById("s-"+id);if(e)e.classList.add("hidden")});
   var sec=document.getElementById("s-"+showId); if(sec) sec.classList.remove("hidden");
   document.querySelectorAll("#nav a").forEach(function(a){a.classList.remove("active")});
   var link=document.querySelector('#nav a[data-s="'+s+'"]');if(link)link.classList.add("active");
@@ -3242,7 +3263,54 @@ function go(s){
   if(s==="encerrados")renderEncerrados();
   if(s==="inove")renderInove();
   if(s==="fases" && typeof renderFasesRevisao==='function')renderFasesRevisao();
+  if(s==="sugestoes" && typeof renderSugestoes==='function'){ var _an=document.getElementById('sg-autor'); if(_an && !_an.value){ _an.value=((document.getElementById('who-name')||{}).textContent||'').trim(); } renderSugestoes(); }
   window.scrollTo(0,0);
+}
+/* ===== Sugestões / melhorias (sócios sem Claude Code enviam daqui; eu leio no banco) ===== */
+async function enviarSugestao(){
+  var texto=(document.getElementById('sg-texto').value||'').trim();
+  if(!texto){ alert('Escreva a sugestão.'); return; }
+  var msg=document.getElementById('sg-msg'); if(msg){ msg.style.color='#475569'; msg.textContent='Enviando…'; }
+  try{
+    var sb=window.__sb; if(!sb){ alert('Sessão não encontrada.'); return; }
+    var ug=await sb.auth.getUser(); var email=(ug&&ug.data&&ug.data.user&&ug.data.user.email)||null;
+    var pf=await sb.from('usuarios').select('escritorio_id').eq('id',ug.data.user.id).single();
+    var esc=pf&&pf.data&&pf.data.escritorio_id;
+    var reg={escritorio_id:esc,autor_nome:(document.getElementById('sg-autor').value||'').trim()||null,autor_email:email,area:(document.getElementById('sg-area').value||'')||null,texto:texto,status:'nova'};
+    var r=await sb.from('sugestoes').insert(reg);
+    if(r&&r.error){ if(msg){ msg.style.color='#b5342b'; msg.textContent='Erro: '+r.error.message; } return; }
+    document.getElementById('sg-texto').value='';
+    if(msg){ msg.style.color='#127a53'; msg.textContent='✓ Enviada! Obrigado.'; }
+    renderSugestoes();
+  }catch(e){ if(msg){ msg.style.color='#b5342b'; msg.textContent='Erro: '+(e&&e.message||e); } }
+}
+async function renderSugestoes(){
+  var el=document.getElementById('sg-lista'); if(!el) return;
+  var filtro=(document.getElementById('sg-filtro')||{}).value||'';
+  try{
+    var sb=window.__sb; if(!sb){ el.innerHTML='<div class="note">Sessão não encontrada.</div>'; return; }
+    var q=sb.from('sugestoes').select('*').order('criado_em',{ascending:false}).limit(300);
+    if(filtro) q=q.eq('status',filtro);
+    var r=await q;
+    if(r&&r.error){ el.innerHTML='<div class="note">Não foi possível carregar ('+esc(r.error.message)+').</div>'; return; }
+    var itens=(r&&r.data)||[];
+    if(!itens.length){ el.innerHTML='<div class="note">Nenhuma sugestão'+(filtro?' neste filtro':' ainda')+'.</div>'; return; }
+    var badge={nova:['Nova','#8a6d1a','#fdf3e7'],em_analise:['Em análise','#185FA5','#eaf1fb'],feita:['Feita','#127a53','#e5f4ed'],descartada:['Descartada','#8a8f98','#eef0f3']};
+    el.innerHTML=itens.map(function(s){
+      var b=badge[s.status]||badge.nova;
+      var eu=(s.autor_nome==='Claude Code'||(s.area||'')==='changelog');
+      var d=(s.criado_em||'').slice(0,10).split('-').reverse().join('/');
+      return '<div style="border:1px solid var(--line);border-left:4px solid '+b[1]+';border-radius:9px;padding:10px 12px;margin-bottom:8px;background:'+(eu?'#f4faf7':'#fff')+'">'+
+        '<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap">'+
+          '<span style="font-weight:700;color:var(--navy)">'+esc(eu?'🛠 Alteração feita':(s.autor_nome||'Sugestão'))+(s.area&&(s.area!=='changelog')?(' <span style="font-weight:400;color:var(--muted);font-size:12px">· '+esc(s.area)+'</span>'):'')+'</span>'+
+          '<span style="font-size:11px;font-weight:700;color:'+b[1]+';background:'+b[2]+';border-radius:12px;padding:2px 9px">'+b[0]+'</span>'+
+        '</div>'+
+        '<div style="font-size:13px;margin-top:5px;white-space:pre-wrap">'+esc(s.texto||'')+'</div>'+
+        (s.resposta?('<div style="font-size:12.5px;margin-top:7px;padding:7px 9px;background:#eef4fb;border-radius:7px;color:#22405f"><b>Resposta do desenvolvimento:</b> '+esc(s.resposta)+'</div>'):'')+
+        '<div class="note" style="font-size:11px;margin-top:5px">'+esc(d)+'</div>'+
+      '</div>';
+    }).join('');
+  }catch(e){ el.innerHTML='<div class="note">Erro ao carregar: '+esc(e&&e.message||e)+'</div>'; }
 }
 function atualizaNavContagens(){
   try{
