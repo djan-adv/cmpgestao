@@ -2428,6 +2428,12 @@ function renderProc(){
     <div style="background:#eef7f1;border:1px solid #cfe8db;border-radius:9px;padding:10px 12px;margin-bottom:10px;font-size:12.5px;color:#0F6E56;line-height:1.5">
       <b>Cliente novo (ainda sem processo).</b> Preencha a ficha de atendimento no <b>modelo padrão CMP</b>, depois clique em <b>Gerar caso</b>: o sistema abre a ficha do cliente (vinculando se ele já existir) e registra o pedido para o Claude elaborar a peça no padrão CMP.
       <br><a href="/Ficha-de-Atendimento-CMP.docx" download style="display:inline-block;margin-top:6px;color:#0F6E56;font-weight:700;text-decoration:underline">&#8681; Baixar modelo da ficha de atendimento (Word)</a>
+      <div style="margin-top:8px">
+        <button class="btn sm" type="button" style="background:#0F6E56;border-color:#0F6E56" onclick="document.getElementById('cm-ficha-file').click()">&#8682; Ler ficha preenchida (Word/PDF)</button>
+        <input type="file" id="cm-ficha-file" accept=".docx,.pdf" style="display:none" onchange="lerFichaAtendimento(this)">
+        <span id="cm-ficha-status" style="font-size:12px;margin-left:8px"></span>
+      </div>
+      <div id="cm-ficha-resumo" style="display:none;margin-top:8px;background:#fff;border:1px solid #cfe8db;border-radius:8px;padding:8px 10px;font-size:12px;color:#334"></div>
     </div>
     <div class="row2">
       <div><label>Peça a elaborar</label><select id="cm-peca"><option value="Petição inicial">Petição inicial</option><option value="Minuta de contrato">Minuta de contrato</option><option value="Notificação extrajudicial">Notificação extrajudicial</option><option value="Outra">Outra (descrever abaixo)</option></select></div>
@@ -2453,7 +2459,8 @@ function renderProc(){
 <script>
 var cadTipo='processo';
 function abrirCadManual(){ cadTipo='processo'; setCadTipo('processo'); ['cm-numero','cm-casoid','cm-cliente','cm-oponente','cm-assunto','cm-foro','cm-causa','cm-obs','cm-peca-livre'].forEach(function(id){var e=document.getElementById(id);if(e)e.value='';}); var pe=document.getElementById('cm-peca'); if(pe) pe.selectedIndex=0;
-  try{ seedContatos(); }catch(e){} window.__cmCliMatch=null; cmClienteStatus(''); var dd=document.getElementById('cm-cli-drop'); if(dd){dd.classList.remove('on');dd.innerHTML='';}
+  try{ seedContatos(); }catch(e){} window.__cmCliMatch=null; window.__fichaExtraida=null; cmClienteStatus(''); var dd=document.getElementById('cm-cli-drop'); if(dd){dd.classList.remove('on');dd.innerHTML='';}
+  var fr=document.getElementById('cm-ficha-resumo'); if(fr){fr.style.display='none';fr.innerHTML='';} var fs=document.getElementById('cm-ficha-status'); if(fs) fs.textContent='';
   document.getElementById('modal-cadmanual').classList.remove('hidden'); }
 function fecharCadManual(){ document.getElementById('modal-cadmanual').classList.add('hidden'); var dd=document.getElementById('cm-cli-drop'); if(dd){dd.classList.remove('on');dd.innerHTML='';} }
 /* Cliente da base × novo — sugere contatos existentes ao digitar. Se escolher um
@@ -2570,12 +2577,19 @@ async function gerarCasoNovoCliente(){
   } }catch(e){ console.warn('gerar caso (banco):',e&&e.message||e); }
   /* vínculo com cliente (base) ou criação de contato novo — mesma lógica do cadastro */
   try{ seedContatos(); }catch(e){}
+  var fe=window.__fichaExtraida||{};
+  var feTel=(fe.tel||''), feMail=(fe.email||'');
   var nk=normClienteNome(cli);
   var match=(window.__cmCliMatch&&normClienteNome(window.__cmCliMatch.nome)===nk)?window.__cmCliMatch:((CONTATOS||[]).find(function(x){return normClienteNome(x.nome)===nk;}));
-  if(match){ var mtel=(match.tel&&match.tel!=='—')?match.tel:'', mmail=(match.email&&match.email!=='—')?match.email:''; if(mtel||mmail){ try{ mergeContatoNoProcesso(novo,mtel,mmail); }catch(e){} } }
-  else { try{ var sb2=window.__sb; if(sb2){ var esc3=null; try{ var ug2=await sb2.auth.getUser(); var pf2=await sb2.from('usuarios').select('escritorio_id').eq('id',ug2.data.user.id).single(); esc3=pf2&&pf2.data&&pf2.data.escritorio_id; }catch(e){}
-      var regc={nome:cli,origem:'cliente novo'}; if(esc3) regc.escritorio_id=esc3; await sb2.from('contatos').insert(regc);
-      window.__CONTATOSDB=(window.__CONTATOSDB||[]); window.__CONTATOSDB.push({nome:cli,origem:'cliente novo'});
+  if(match){ var mtel=(match.tel&&match.tel!=='—')?match.tel:feTel, mmail=(match.email&&match.email!=='—')?match.email:feMail; if(mtel||mmail){ try{ mergeContatoNoProcesso(novo,mtel,mmail); }catch(e){} }
+    /* completa o contato existente com dados novos da ficha, se faltavam */
+    try{ var sbm=window.__sb; if(sbm&&(feTel||feMail)){ var upd={}; if(feMail&&(!match.email||match.email==='—')) upd.email=feMail; if(feTel&&(!match.tel||match.tel==='—')) upd.telefone=feTel;
+      if(Object.keys(upd).length){ await sbm.from('contatos').update(upd).ilike('nome',cli); if(feMail&&upd.email)match.email=feMail; if(feTel&&upd.telefone)match.tel=feTel; } } }catch(e){}
+  }
+  else { try{ mergeContatoNoProcesso(novo,feTel,feMail); }catch(e){}
+    try{ var sb2=window.__sb; if(sb2){ var esc3=null; try{ var ug2=await sb2.auth.getUser(); var pf2=await sb2.from('usuarios').select('escritorio_id').eq('id',ug2.data.user.id).single(); esc3=pf2&&pf2.data&&pf2.data.escritorio_id; }catch(e){}
+      var regc={nome:cli,origem:'cliente novo'}; if(feMail) regc.email=feMail; if(feTel) regc.telefone=feTel; if(esc3) regc.escritorio_id=esc3; await sb2.from('contatos').insert(regc);
+      window.__CONTATOSDB=(window.__CONTATOSDB||[]); window.__CONTATOSDB.push({nome:cli,email:feMail,telefone:feTel,origem:'cliente novo'});
     } }catch(e){ console.warn('criar contato:',e&&e.message||e); } }
   CONTATOS=null;
   DADOS.processos.unshift(novo);
@@ -2584,6 +2598,79 @@ async function gerarCasoNovoCliente(){
   var idx=DADOS.processos.indexOf(novo);
   go('processos'); if(idx>=0) abrir(idx);
   setTimeout(function(){ alert('Caso criado e ficha aberta!\n\n1) Anexe aqui a FICHA DE ATENDIMENTO (padrão CMP) e os documentos do caso, na seção de Documentos.\n2) Depois, no Cowork, diga ao Claude: "faça as peças pendentes" — ele lê a ficha e os documentos e redige a '+peca+' no padrão CMP, salvando na pasta do caso para sua revisão.'); },400);
+}
+/* ===== Ler ficha de atendimento preenchida (Word .docx ou PDF) e preencher os campos ===== */
+function _ensureJSZip(){
+  return new Promise(function(res,rej){
+    if(window.JSZip) return res(window.JSZip);
+    var s=document.createElement('script');
+    s.src='https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js';
+    s.onload=function(){ res(window.JSZip); };
+    s.onerror=function(){ rej(new Error('Falha ao carregar o leitor de Word (CDN)')); };
+    document.head.appendChild(s);
+  });
+}
+async function _extrairTextoDocx(arrbuf){
+  var JSZip=await _ensureJSZip();
+  var zip=await JSZip.loadAsync(arrbuf);
+  var f=zip.file('word/document.xml'); if(!f) throw new Error('Arquivo Word inválido.');
+  var xml=await f.async('string');
+  xml=xml.replace(/<\/w:p>/g,'\n').replace(/<w:tab\/>/g,' ');
+  var txt=xml.replace(/<[^>]+>/g,'');
+  return txt.replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&#0?39;/g,"'").replace(/&apos;/g,"'");
+}
+function _fichaCampo(txt,label){
+  var re=new RegExp(label+'\\s*:?[ \\t]*([^\\n]*)','i');
+  var m=re.exec(txt); if(!m) return '';
+  /* remove só as "(dicas)" do modelo (parênteses COM letra); mantém DDD numérico ex.: (83) */
+  var v=(m[1]||'').replace(/\([^)]*[A-Za-zÀ-ú][^)]*\)/g,' ').replace(/_+/g,' ').replace(/\s{2,}/g,' ').trim();
+  return v;
+}
+function _acharCPF(w){ var m=/\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b/.exec(String(w||'')); return m?m[0]:''; }
+async function lerFichaAtendimento(input){
+  var file=input&&input.files&&input.files[0]; if(!file) return;
+  var st=document.getElementById('cm-ficha-status'); if(st){ st.style.color='#475569'; st.textContent='Lendo '+file.name+'…'; }
+  try{
+    var buf=await file.arrayBuffer(); var txt='';
+    if(/\.pdf$/i.test(file.name)) txt=await _extrairTextoPdf(buf);
+    else txt=await _extrairTextoDocx(buf);
+    if(!txt||txt.replace(/\s/g,'').length<20) throw new Error('Não consegui ler texto (a ficha pode estar como imagem/escaneada).');
+    var nome=_fichaCampo(txt,'Nome completo');
+    var cpf=_fichaCampo(txt,'CPF/CNPJ')||''; cpf=_acharCPF(cpf)||_acharCPF(txt);
+    var rg=_fichaCampo(txt,'RG / [óo]rg[ãa]o emissor');
+    var qualif=_fichaCampo(txt,'Nacionalidade / estado civil / profiss[ãa]o');
+    var nasc=_fichaCampo(txt,'Data de nascimento');
+    var end=_fichaCampo(txt,'Endere[çc]o completo');
+    var telRaw=_fichaCampo(txt,'Telefone / WhatsApp'); var telD=(telRaw||'').replace(/\D/g,''); if(telD.length<10){ var tm=(txt.match(/\(?\d{2}\)?\s?9?\d{4}[-\s]?\d{4}/)||[])[0]; if(tm) telD=tm.replace(/\D/g,''); }
+    var tel=telD.length>=10?_fmtTel(telD):'';
+    var mails=_acharEmails(txt); var email=_fichaCampo(txt,'E-?mail'); if(!/@/.test(email)) email=mails[0]||'';
+    var oponente=_fichaCampo(txt,'Nome / raz[ãa]o social');
+    var objeto=_fichaCampo(txt,'Objeto / o que o cliente quer')||_fichaCampo(txt,'[ÁA]rea / tipo de a[çc][ãa]o');
+    /* peça marcada com (X) */
+    var pmatch=/\(\s*[xX]\s*\)\s*(Peti[çc][ãa]o inicial|Minuta de contrato|Notifica[çc][ãa]o extrajudicial|Outra[^\n]*)/.exec(txt);
+    if(pmatch){ var pv=pmatch[1]; var pe=document.getElementById('cm-peca');
+      if(/inicial/i.test(pv)) pe.value='Petição inicial';
+      else if(/contrato/i.test(pv)) pe.value='Minuta de contrato';
+      else if(/notifica/i.test(pv)) pe.value='Notificação extrajudicial';
+      else { pe.value='Outra'; var liv=pv.replace(/^Outra[:\s]*/i,'').trim(); if(liv) document.getElementById('cm-peca-livre').value=liv; } }
+    /* preenche os campos do formulário (sem sobrescrever o que já estiver digitado) */
+    function setIf(id,val){ var e=document.getElementById(id); if(e&&val&&!(e.value||'').trim()){ e.value=val; } }
+    setIf('cm-cliente',nome); setIf('cm-oponente',oponente); setIf('cm-assunto',objeto);
+    if(nome){ try{ cmClienteInput(nome); }catch(e){} }
+    /* qualificação completa vai para Observações (o caso guarda) */
+    var qparts=[]; if(nome)qparts.push(nome); if(qualif)qparts.push(qualif); if(rg)qparts.push('RG '+rg); if(cpf)qparts.push('CPF '+cpf); if(nasc)qparts.push('nascido(a) em '+nasc); if(end)qparts.push('residente em '+end);
+    var qtxt=qparts.join(', '); var ctxt=[email,tel].filter(Boolean).join(' / ');
+    var bloco='Qualificação (via ficha): '+(qtxt||'—')+(ctxt?('. Contato: '+ctxt):'')+'.';
+    var obsEl=document.getElementById('cm-obs'); if(obsEl){ var cur=(obsEl.value||'').trim(); if(cur.indexOf('Qualificação (via ficha)')<0) obsEl.value=(cur?cur+'\n':'')+bloco; }
+    window.__fichaExtraida={nome:nome,cpf:cpf,rg:rg,qualif:qualif,nasc:nasc,end:end,email:email,tel:tel,oponente:oponente,objeto:objeto};
+    /* resumo visível do que foi capturado */
+    var res=document.getElementById('cm-ficha-resumo');
+    if(res){ function li(r,v){ return v?('<div><b>'+r+':</b> '+esc(v)+'</div>'):''; }
+      res.innerHTML='<div style="font-weight:700;color:#0F6E56;margin-bottom:4px">✓ Dados capturados da ficha</div>'+li('Cliente',nome)+li('CPF/CNPJ',cpf)+li('Qualificação',qualif)+li('RG',rg)+li('Nascimento',nasc)+li('Endereço',end)+li('E-mail',email)+li('Telefone',tel)+li('Parte contrária',oponente)+li('Objeto',objeto)+'<div style="color:var(--muted);margin-top:5px">Confira/edite os campos acima. Ao clicar em <b>Gerar caso</b>, o contato é criado/atualizado com estes dados.</div>';
+      res.style.display=''; }
+    if(st){ st.style.color='#127a53'; st.textContent='✓ ficha lida'; }
+  }catch(e){ if(st){ st.style.color='#b5342b'; st.textContent='✗ '+(e&&e.message||e); } }
+  input.value='';
 }
 function abrirBusca(){ var m=document.getElementById('modal-busca'); document.getElementById('busca-nums').value=''; document.getElementById('busca-result').innerHTML=''; m.classList.remove('hidden'); }
 function fecharBusca(){ document.getElementById('modal-busca').classList.add('hidden'); }
