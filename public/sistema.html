@@ -3417,7 +3417,7 @@ function _syncHaystacks(){
   window.__syncHay=(DADOS.processos||[]).map(function(p){
     if(/encerr/i.test(p.status||'')) return '';
     var t=normClienteNome(p.cliente)+' '+normClienteNome(p.oponente);
-    var h=(p.hist_full||[]); for(var i=0;i<h.length && i<25;i++){ t+=' '+normClienteNome(h[i].texto||''); }
+    var h=(p.hist_full||[]); for(var i=0;i<h.length && t.length<6000;i++){ t+=' '+normClienteNome(h[i].texto||''); }
     return t;
   });
   return window.__syncHay;
