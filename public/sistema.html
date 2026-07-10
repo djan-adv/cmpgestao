@@ -2453,6 +2453,11 @@ function renderProc(){
     <label style="font-size:12px;font-weight:600;color:var(--navy)">Réu em comum (âncora — deixa o reconhecimento mais preciso)</label>
     <input type="text" id="sync-reu" value="James Laurence Developments Construções Incorporações e Imobiliária LTDA" style="width:100%;box-sizing:border-box;font-size:12px;padding:5px 7px;border:1px solid var(--line);border-radius:6px;margin-top:3px">
     <label style="display:flex;align-items:center;gap:6px;font-size:12px;margin-top:7px;cursor:pointer"><input type="checkbox" id="sync-fixnome" checked> Completar o nome do autor com o nome da pasta (útil para <b>casais</b> — facilita buscas futuras)</label>
+    <div style="margin-top:7px;font-size:12px">
+      <span style="font-weight:600;color:var(--navy)">A pasta que escolhi é:</span>
+      <label style="margin-left:6px;cursor:pointer"><input type="radio" name="sync-modo" value="mae" checked onchange="window.__syncFlipped=true;syncReagrupar()"> pasta-mãe (cada subpasta é um processo)</label>
+      <label style="margin-left:10px;cursor:pointer"><input type="radio" name="sync-modo" value="unico" onchange="window.__syncFlipped=true;syncReagrupar()"> de um único processo</label>
+    </div>
   </div>
   <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
     <button class="btn sm" style="background:#0F6E56;color:#fff;border-color:#0F6E56" onclick="document.getElementById('sync-dir').click()">&#128193; Escolher pasta</button>
@@ -3467,27 +3472,48 @@ function syncBuscarNaLinha(gi, termo){
   var cur=sel.value===''?-1:parseInt(sel.value,10);
   sel.innerHTML=_syncProcOptions(cur, termo);
 }
+function _syncModo(){ var r=document.querySelector('input[name="sync-modo"]:checked'); return r?r.value:'mae'; }
 function syncPreparar(inp){
   var files=Array.prototype.slice.call((inp&&inp.files)||[]);
   if(!files.length){ return; }
-  window.__syncHay=null; window.__brisasSet=null; /* recomeça o palheiro para esta sincronização */
+  window.__syncFiles=files; window.__syncFlipped=false;
+  /* auto-detecção do modo: se há arquivos SOLTOS direto na pasta escolhida (profundidade 2),
+     é a pasta de um único processo; se está tudo em sub-subpastas, é pasta-mãe. */
+  var temSolto=files.some(function(f){ return (f.webkitRelativePath||f.name).replace(/\\/g,'/').split('/').filter(Boolean).length===2; });
+  var raizes={}; files.forEach(function(f){ var p2=(f.webkitRelativePath||f.name).replace(/\\/g,'/').split('/').filter(Boolean); if(p2.length>=2) raizes[p2[1]]=1; });
+  var modoAuto=(temSolto || Object.keys(raizes).length<=1)?'unico':'mae';
+  var rb=document.querySelector('input[name="sync-modo"][value="'+modoAuto+'"]'); if(rb) rb.checked=true;
+  if(inp) inp.value='';
+  syncReagrupar();
+}
+function syncReagrupar(){
+  var files=window.__syncFiles||[]; if(!files.length) return;
+  window.__syncHay=null; window.__brisasSet=null;
   window.__syncReu=(document.getElementById('sync-reu')||{}).value||'';
+  var modo=_syncModo();
   var groupsMap={};
   files.forEach(function(f){
     var rel=(f.webkitRelativePath||f.name).replace(/\\/g,'/');
     var parts=rel.split('/').filter(Boolean);
     var folder, inner;
-    if(parts.length>=3){ folder=parts[1]; inner=parts.slice(2).join('/'); }
-    else if(parts.length===2){ folder=parts[0]; inner=parts[1]; }
+    if(modo==='unico'){ folder=parts[0]||'(pasta)'; inner=parts.slice(1).join('/')||parts[0]; }
+    else if(parts.length>=3){ folder=parts[1]; inner=parts.slice(2).join('/'); }
+    else if(parts.length===2){ folder=parts[1]; inner=parts[1]; }   /* arquivo solto na mãe: usa o nome do arquivo */
     else { folder=parts[0]||'(raiz)'; inner=parts[0]; }
     (groupsMap[folder]=groupsMap[folder]||[]).push({f:f, inner:inner});
   });
   var groups=Object.keys(groupsMap).sort().map(function(folder){ var m=_syncMatchIdx(folder); return {folder:folder, files:groupsMap[folder], idx:m.idx, via:m.via}; });
   window.__syncGroups=groups;
   var casados=groups.filter(function(g){return g.idx>=0;}).length;
+  /* auto-ajuste: se no modo "mãe" nada foi reconhecido, provavelmente é a pasta de UM
+     processo (as subpastas internas não são processos) — tenta de novo como "único". */
+  if(modo==='mae' && casados===0 && groups.length>0 && !window.__syncFlipped){
+    window.__syncFlipped=true; var rb=document.querySelector('input[name="sync-modo"][value="unico"]'); if(rb) rb.checked=true; return syncReagrupar();
+  }
   document.getElementById('sync-status').innerHTML='<b>'+groups.length+'</b> pasta(s) · '+files.length+' arquivo(s) · <b style="color:#127a53">'+casados+' reconhecida(s)</b>'+(groups.length-casados?(' · <b style="color:#8a6d1a">'+(groups.length-casados)+' para você escolher</b>'):'')+'<div class="note" style="font-size:11px;margin-top:3px">Onde marcar "via histórico", confira com atenção (é palpite pelas partes citadas). Use a busca ao lado para achar por qualquer nome — inclusive do cônjuge.</div>';
   var rows=groups.map(function(g,gi){
-    var alvo=g.idx>=0?('<span style="color:'+(g.via==='cliente'?'#127a53':'#8a6d1a')+';font-weight:600">✓ '+esc(String((DADOS.processos[g.idx]||{}).cliente||'').slice(0,30))+(g.via==='histórico'?' <span style="font-weight:400">(via histórico)</span>':'')+'</span>'):'<span style="color:#b5342b;font-weight:600">? não reconhecida</span>';
+    var viaLbl=(g.via&&g.via!=='cliente')?(' <span style="font-weight:400">(via '+esc(g.via)+')</span>'):'';
+    var alvo=g.idx>=0?('<span style="color:'+(g.via==='cliente'?'#127a53':'#8a6d1a')+';font-weight:600">✓ '+esc(String((DADOS.processos[g.idx]||{}).cliente||'').slice(0,30))+viaLbl+'</span>'):'<span style="color:#b5342b;font-weight:600">? não reconhecida</span>';
     return '<tr style="border-top:1px solid #eef2f7">'+
       '<td style="padding:7px 6px;vertical-align:top"><b>'+esc(g.folder)+'</b><div class="note" style="font-size:11px">'+g.files.length+' arquivo(s)</div></td>'+
       '<td style="padding:7px 6px">'+alvo+
@@ -3499,7 +3525,6 @@ function syncPreparar(inp){
   }).join('');
   document.getElementById('sync-preview').innerHTML='<table style="width:100%;font-size:13px"><thead><tr><th style="text-align:left">Pasta</th><th style="text-align:left">Processo de destino</th></tr></thead><tbody>'+rows+'</tbody></table>';
   document.getElementById('sync-btn-enviar').style.display=groups.length?'':'none';
-  if(inp) inp.value='';
 }
 async function syncEnviar(){
   var groups=window.__syncGroups||[]; if(!groups.length){ alert('Selecione uma pasta primeiro.'); return; }
@@ -3514,10 +3539,10 @@ async function syncEnviar(){
   var fixNome=(document.getElementById('sync-fixnome')||{}).checked;
   var btn=document.getElementById('sync-btn-enviar'); btn.disabled=true;
   var st=document.getElementById('sync-status');
-  var enviados=0, falhas=0, feito=0, nomesAt=0;
+  var enviados=0, falhas=0, feito=0, nomesAt=0, erro1='';
   for(var a=0;a<alvos.length;a++){
     var g=alvos[a], p=DADOS.processos[g.idx], dig=String(p.numero||'').replace(/\D/g,'');
-    if(!dig){ falhas+=g.files.length; continue; }
+    if(!dig){ falhas+=g.files.length; if(!erro1) erro1='processo "'+(p.cliente||'')+'" sem número CNJ (não dá para criar a pasta).'; continue; }
     if(fixNome){ try{ if(await _syncCompletarAutor(p, g.folder)) nomesAt++; }catch(e){} }
     for(var i=0;i<g.files.length;i++){
       var item=g.files[i], f=item.f, inner=String(item.inner||f.name).replace(/^\/+/,'');
@@ -3529,16 +3554,16 @@ async function syncEnviar(){
           var s=''; for(var k=0;k<slice.length;k+=0x8000){ s+=String.fromCharCode.apply(null, slice.subarray(k,Math.min(k+0x8000,slice.length))); }
           var r=await fetch('/api/docs',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},
             body:JSON.stringify({path:dig+'/'+inner,b64:btoa(s),append:off>0,mtime:new Date(f.lastModified).toISOString()})});
-          if(!r.ok){ okf=false; break; } off+=CH;
+          if(!r.ok){ okf=false; if(!erro1){ var ej=await r.json().catch(function(){return {};}); erro1='HTTP '+r.status+(ej&&ej.erro?(': '+ej.erro):'')+' ao enviar '+inner; } break; } off+=CH;
         }while(off<bytes.length);
         if(okf) enviados++; else falhas++;
-      }catch(e){ falhas++; }
+      }catch(e){ falhas++; if(!erro1) erro1=(e&&e.message||String(e)); }
       feito++;
     }
   }
   btn.disabled=false;
   st.innerHTML='<b style="color:#127a53">Concluído:</b> '+enviados+' enviado(s)'+(falhas?(' · <b style="color:#b5342b">'+falhas+' falha(s)</b>'):'')+(nomesAt?(' · '+nomesAt+' nome(s) de autor completado(s)'):'');
-  alert('Sincronização concluída!\n'+enviados+' arquivo(s) enviado(s)'+(falhas?(', '+falhas+' com falha'):'')+(nomesAt?('\n'+nomesAt+' nome(s) de autor completado(s) com o casal'):'')+'.\n\nAbra um processo e confira a seção Documentos.');
+  alert('Sincronização concluída!\n'+enviados+' arquivo(s) enviado(s)'+(falhas?(', '+falhas+' com falha'):'')+(nomesAt?('\n'+nomesAt+' nome(s) de autor completado(s) com o casal'):'')+'.'+(erro1?('\n\n1ª falha: '+erro1):'')+'\n\nAbra um processo e confira a seção Documentos.');
   try{ if(atual) carregarDocs(atual.numero,'','proc'); }catch(e){}
   try{ if(typeof renderProc==='function') renderProc(); }catch(e){}
 }
