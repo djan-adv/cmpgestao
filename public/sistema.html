@@ -969,8 +969,8 @@ function abrir(i){
   var html='';
   // cabeçalho: partes no mesmo tamanho, cliente em negrito e marcado
   var __enc=/encerr/i.test(p.status||'');
-  html+='<div class="card" style="position:relative"><div class="parties" style="padding-right:130px"><span style="display:inline-block;vertical-align:top;line-height:1.15"><span class="cli">'+esc(p.cliente)+'</span><br><span class="tag-cli" style="margin:3px 0 0;font-size:9px;padding:1px 7px;display:inline-block">cliente principal</span></span>'+
-    '<span class="vs" style="vertical-align:top">×</span><span style="display:inline-block;vertical-align:top;line-height:1.15"><span class="op">'+esc(p.oponente||'—')+'</span><br><span style="font-size:9.5px;color:var(--muted);display:inline-block;margin-top:3px">parte contrária</span></span>'+
+  html+='<div class="card" style="position:relative"><div class="parties" style="padding-right:130px"><span style="display:inline-block;vertical-align:top;line-height:1.15"><span class="cli">'+nomeDisplay(p.cliente)+'</span><br><span class="tag-cli" style="margin:3px 0 0;font-size:9px;padding:1px 7px;display:inline-block">cliente principal</span></span>'+
+    '<span class="vs" style="vertical-align:top">×</span><span style="display:inline-block;vertical-align:top;line-height:1.15"><span class="op">'+nomeDisplay(p.oponente||'—')+'</span><br><span style="font-size:9.5px;color:var(--muted);display:inline-block;margin-top:3px">parte contrária</span></span>'+
     '<button class="btn sm ghost" style="margin-left:12px;font-size:11px;padding:4px 9px;vertical-align:top" onclick="editarCliente()" title="Editar o nome do cliente/autor — ex.: colocar o casal (Fulano e Fulana)">✎ editar autor</button>'+
     '<button class="btn sm ghost" style="margin-left:6px;font-size:11px;padding:4px 9px;vertical-align:top" onclick="inverterPolos()" title="Trocar cliente ↔ oponente (o cliente fica sempre à esquerda)">⇄ inverter polos</button>'+
     ((!p.oponente||!String(p.oponente).trim())?'<button class="btn sm ghost" style="margin-left:6px;font-size:11px;padding:4px 9px;vertical-align:top" onclick="sugerirPartes()" title="Ler o histórico do processo e sugerir os nomes das partes que estão faltando">✨ sugerir partes pelo histórico</button>':'')+'</div>'+
@@ -1151,6 +1151,14 @@ function nomeBonito(nome){
     if(CONECT[low] && i>0) return low;               /* partícula no meio → minúscula */
     return p.split('-').map(capPalavra).join('-');   /* trata nomes com hífen */
   }).join(' ');
+}
+/* Exibição de nome: sempre em Caixa de Título (igual aos Contatos) e, se for muito
+   longo, mostra os 3 primeiros nomes normais e o resto em fonte menor. Retorna HTML. */
+function nomeDisplay(nome, maxPrim){
+  var t=nomeBonito(nome); if(!t) return esc(String(nome||'—'));
+  var w=t.split(' '); var mp=maxPrim||3;
+  if(w.length<=mp+1 && t.length<=30) return esc(t);
+  return esc(w.slice(0,mp).join(' '))+' <span style="font-size:0.66em;font-weight:400;opacity:.8">'+esc(w.slice(mp).join(' '))+'</span>';
 }
 function renderContatos(){
   seedContatos();
