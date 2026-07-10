@@ -233,7 +233,7 @@
       <p class="note" style="margin-top:8px">Processos encerrados nunca são apagados — para reativar, abra o processo e use o botão "Reativar".</p></div>
     </section>
     <section id="s-processos" class="hidden">
-      <div class="searchbar"><input id="busca" placeholder="Buscar por cliente, número, oponente ou assunto..." oninput="renderProc()"><select id="ordena" onchange="renderProc()" class="btn sm sb-sel" style="margin-left:8px;max-width:120px"><option value="">Novos Protocolos</option><option value="az">Cliente (A→Z)</option><option value="za">Cliente (Z→A)</option><option value="data_desc">Movimentação mais recente</option><option value="parados">Parados (mov. mais antiga)</option><option value="valor">Valor da causa (maior→menor)</option></select><select id="filtroEtq" onchange="renderProc()" class="btn sm sb-sel" style="margin-left:8px;max-width:112px"><option value="">Todas as etiquetas</option></select><select id="porPagina" onchange="renderProc()" class="btn sm sb-sel" style="margin-left:8px;max-width:76px"><option value="20">20 por página</option><option value="40">40</option><option value="60">60</option><option value="80">80</option><option value="100">100</option><option value="todos" selected>Todos</option></select><span class="note" id="proc-count" style="align-self:center"></span><button class="btn sm sb-btn" style="margin-left:auto" onclick="abrirNovaTarefa()">+ Nova tarefa</button><button class="btn sm gold sb-btn" style="margin-left:8px" onclick="abrirBusca()">+ Cadastrar por número <span style="font-weight:400;font-size:10px;opacity:.8">(pesquisa pelo djen)</span></button><button class="btn sm sb-btn" style="margin-left:8px;background:var(--navy);color:#fff;border-color:var(--navy)" onclick="abrirCadManual()">+ Cadastrar manual / caso</button></div>
+      <div class="searchbar"><input id="busca" placeholder="Buscar por cliente, número, oponente ou assunto..." oninput="renderProc()"><select id="ordena" onchange="renderProc()" class="btn sm sb-sel" style="margin-left:8px;max-width:120px"><option value="">Novos Protocolos</option><option value="az">Cliente (A→Z)</option><option value="za">Cliente (Z→A)</option><option value="data_desc">Movimentação mais recente</option><option value="parados">Parados (mov. mais antiga)</option><option value="valor">Valor da causa (maior→menor)</option></select><select id="filtroEtq" onchange="renderProc()" class="btn sm sb-sel" style="margin-left:8px;max-width:112px"><option value="">Todas as etiquetas</option></select><select id="porPagina" onchange="renderProc()" class="btn sm sb-sel" style="margin-left:8px;max-width:76px"><option value="20">20 por página</option><option value="40">40</option><option value="60">60</option><option value="80">80</option><option value="100">100</option><option value="todos" selected>Todos</option></select><span class="note" id="proc-count" style="align-self:center"></span><button class="btn sm sb-btn" style="margin-left:auto" onclick="abrirNovaTarefa()">+ Nova tarefa</button><button class="btn sm gold sb-btn" style="margin-left:8px" onclick="abrirBusca()">+ Cadastrar por número <span style="font-weight:400;font-size:10px;opacity:.8">(pesquisa pelo djen)</span></button><button class="btn sm sb-btn" style="margin-left:8px;background:var(--navy);color:#fff;border-color:var(--navy)" onclick="abrirCadManual()">+ Cadastrar manual / caso</button><button class="btn sm sb-btn" style="margin-left:8px;background:#0F6E56;color:#fff;border-color:#0F6E56" onclick="abrirSyncPastas()" title="Enviar de uma vez uma pasta com vários processos — o sistema reconhece cada subpasta e manda para o processo certo">&#8645; Sincronizar pasta</button></div>
       <div class="card"><table><thead><tr><th style="width:36%">Cliente</th><th style="width:150px">Processo</th><th style="width:22%">Assunto</th><th style="width:175px"><select id="filtroMov" onchange="renderProc()" style="font-weight:700;font-size:12px;border:none;background:transparent;color:inherit;max-width:170px;cursor:pointer;padding:0"><option value="">Última movimentação</option><option value="Concluso c/petição posterior s/despacho">Concluso c/petição posterior s/despacho</option><option value="Concluso">Concluso</option><option value="Petição">Petição</option><option value="Despacho/Sentença">Despacho/Sentença</option><option value="Intimação">Intimação</option><option value="__sem">Sem classificação</option></select></th><th style="width:120px">Sem movimentação há</th><th style="width:110px"><select id="filtroOrigem" onchange="renderProc()" style="font-weight:700;font-size:12px;border:none;background:transparent;color:inherit;max-width:105px;cursor:pointer;padding:0"><option value="">Status</option><option value="astrea">astrea</option><option value="djen">djen</option><option value="atualizado">atualizado</option></select></th><th style="width:130px"><select id="ordenaPrazo" onchange="setOrdenaPrazo(this.value)" style="font-weight:700;font-size:12px;border:none;background:transparent;color:inherit;max-width:125px;cursor:pointer;padding:0" title="Ordenar pela data do prazo fatal"><option value="">Prazo fatal</option><option value="prox">Mais próximo → distante</option><option value="dist">Mais distante → próximo</option></select></th></tr></thead><tbody id="proc-body"></tbody></table></div><div id="proc-pager" style="display:flex;gap:6px;align-items:center;justify-content:center;padding:14px;flex-wrap:wrap"></div>
     </section>
 
@@ -2446,6 +2446,17 @@ function renderProc(){
   <div style="display:flex;gap:8px"><button class="btn" onclick="buscarProcessos()">Buscar processos</button><button class="btn ghost" onclick="fecharBusca()">Cancelar</button></div>
   <div id="busca-result" style="margin-top:14px;max-height:360px;overflow:auto"></div>
 </div></div>
+<div id="modal-sync" class="overlay hidden"><div class="modal" style="max-width:860px">
+  <h2>Sincronizar pasta de processos</h2>
+  <p class="note" style="margin:2px 0 10px">Selecione a pasta (ex.: <b>Brisas</b>) que contém <b>uma subpasta por processo</b>. O sistema reconhece cada subpasta pelo nome do cliente e envia para o processo certo, <b>preservando as subpastas internas</b>. Nada é enviado até você conferir e clicar em Enviar. Para testar, selecione só a pasta de <b>Dimas Germano</b>.</p>
+  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+    <button class="btn sm" style="background:#0F6E56;color:#fff;border-color:#0F6E56" onclick="document.getElementById('sync-dir').click()">&#128193; Escolher pasta</button>
+    <input type="file" id="sync-dir" webkitdirectory directory multiple style="display:none" onchange="syncPreparar(this)">
+    <span id="sync-status" class="note"></span>
+  </div>
+  <div id="sync-preview" style="max-height:50vh;overflow:auto;margin-top:12px"></div>
+  <div class="foot"><button class="btn ghost" onclick="fecharSync()">Fechar</button><button class="btn" id="sync-btn-enviar" style="display:none;background:#0F6E56;border-color:#0F6E56" onclick="syncEnviar()">Enviar para os processos</button></div>
+</div></div>
 <div id="modal-cadmanual" class="overlay hidden"><div class="modal" style="max-width:640px">
   <h2>Cadastrar manualmente</h2>
   <div class="switch" style="margin-bottom:10px"><button id="cm-tab-proc" class="on" onclick="setCadTipo('processo')">Processo (com nº CNJ)</button><button id="cm-tab-caso" onclick="setCadTipo('caso')">Caso (administrativo, sem CNJ)</button><button id="cm-tab-novo" onclick="setCadTipo('novo')">Cliente novo</button></div>
@@ -3380,6 +3391,98 @@ async function enviarPasta(inp, escopo){
     }
   }catch(e){ alert('Erro no envio da pasta: '+(e&&e.message||e)); }
   finally{ try{ if(inp&&inp.value!==undefined) inp.value=''; }catch(e2){} carregarDocs(atual.numero, sub, escopo); }
+}
+/* ===== Sincronizar pasta com vários processos (ex.: Brisas) =====
+   Reconhece cada subpasta pelo nome do cliente e envia para o processo certo,
+   preservando as subpastas internas. Tudo roda no navegador; nada é enviado sem
+   você conferir. */
+function abrirSyncPastas(){ window.__syncGroups=null; document.getElementById('sync-preview').innerHTML=''; document.getElementById('sync-status').textContent=''; document.getElementById('sync-btn-enviar').style.display='none'; document.getElementById('modal-sync').classList.remove('hidden'); }
+function fecharSync(){ document.getElementById('modal-sync').classList.add('hidden'); }
+function _syncMatchIdx(folderNome){
+  var q=normClienteNome(folderNome); if(!q) return -1;
+  var qtok=q.split(' ').filter(Boolean);
+  var best=-1, bestScore=0;
+  (DADOS.processos||[]).forEach(function(p,i){ if(/encerr/i.test(p.status||'')) return;
+    var cn=normClienteNome(p.cliente); if(!cn) return;
+    var score=0;
+    if(cn===q) score=100;
+    else if(cn.indexOf(q)===0 || q.indexOf(cn)===0) score=85;
+    else { var all=qtok.length && qtok.every(function(t){ return cn.indexOf(t)>-1; }); if(all) score=60+qtok.length; }
+    if(score>bestScore){ bestScore=score; best=i; }
+  });
+  return bestScore>=62?best:-1;
+}
+function _syncProcOptions(sel){
+  var opts='<option value="">— não enviar —</option>';
+  (DADOS.processos||[]).forEach(function(p,i){ if(/encerr/i.test(p.status||'')) return;
+    opts+='<option value="'+i+'"'+(i===sel?' selected':'')+'>'+esc(String(p.cliente||'(sem cliente)').slice(0,44))+' — '+esc(p.numero)+'</option>'; });
+  return opts;
+}
+function syncPreparar(inp){
+  var files=Array.prototype.slice.call((inp&&inp.files)||[]);
+  if(!files.length){ return; }
+  var groupsMap={};
+  files.forEach(function(f){
+    var rel=(f.webkitRelativePath||f.name).replace(/\\/g,'/');
+    var parts=rel.split('/').filter(Boolean);
+    var folder, inner;
+    if(parts.length>=3){ folder=parts[1]; inner=parts.slice(2).join('/'); }
+    else if(parts.length===2){ folder=parts[0]; inner=parts[1]; }
+    else { folder=parts[0]||'(raiz)'; inner=parts[0]; }
+    (groupsMap[folder]=groupsMap[folder]||[]).push({f:f, inner:inner});
+  });
+  var groups=Object.keys(groupsMap).sort().map(function(folder){ var idx=_syncMatchIdx(folder); return {folder:folder, files:groupsMap[folder], idx:idx}; });
+  window.__syncGroups=groups;
+  var casados=groups.filter(function(g){return g.idx>=0;}).length;
+  document.getElementById('sync-status').innerHTML='<b>'+groups.length+'</b> pasta(s) · '+files.length+' arquivo(s) · <b style="color:#127a53">'+casados+' já reconhecida(s)</b>'+(groups.length-casados?(' · <b style="color:#8a6d1a">'+(groups.length-casados)+' para você escolher</b>'):'');
+  var rows=groups.map(function(g,gi){
+    return '<tr>'+
+      '<td style="padding:6px 6px;vertical-align:top"><b>'+esc(g.folder)+'</b><div class="note" style="font-size:11px">'+g.files.length+' arquivo(s)</div></td>'+
+      '<td style="padding:6px 6px">'+(g.idx>=0?'<span style="color:#127a53;font-weight:600">✓ '+esc(String((DADOS.processos[g.idx]||{}).cliente||'').slice(0,30))+'</span>':'<span style="color:#8a6d1a;font-weight:600">? escolher</span>')+
+        '<br><select data-g="'+gi+'" style="max-width:340px;font-size:12px;padding:4px;border:1px solid var(--line);border-radius:6px;margin-top:3px">'+_syncProcOptions(g.idx)+'</select></td>'+
+    '</tr>';
+  }).join('');
+  document.getElementById('sync-preview').innerHTML='<table style="width:100%;font-size:13px"><thead><tr><th style="text-align:left">Pasta</th><th style="text-align:left">Processo de destino</th></tr></thead><tbody>'+rows+'</tbody></table>';
+  document.getElementById('sync-btn-enviar').style.display=groups.length?'':'none';
+  if(inp) inp.value='';
+}
+async function syncEnviar(){
+  var groups=window.__syncGroups||[]; if(!groups.length){ alert('Selecione uma pasta primeiro.'); return; }
+  /* aplica as escolhas dos selects */
+  Array.prototype.slice.call(document.querySelectorAll('#sync-preview select[data-g]')).forEach(function(sel){ var gi=+sel.getAttribute('data-g'); if(groups[gi]) groups[gi].idx=(sel.value===''?-1:parseInt(sel.value,10)); });
+  var alvos=groups.filter(function(g){ return g.idx>=0; });
+  if(!alvos.length){ alert('Nenhuma pasta tem processo de destino selecionado.'); return; }
+  var totalArq=alvos.reduce(function(a,g){return a+g.files.length;},0);
+  if(!confirm('Enviar '+totalArq+' arquivo(s) de '+alvos.length+' pasta(s) para os processos correspondentes?')) return;
+  var tok; try{ tok=await docToken(); }catch(e){}
+  if(!tok){ alert('Sessão expirada — recarregue a página (F5) e tente de novo.'); return; }
+  var btn=document.getElementById('sync-btn-enviar'); btn.disabled=true;
+  var st=document.getElementById('sync-status');
+  var enviados=0, falhas=0, feito=0;
+  for(var a=0;a<alvos.length;a++){
+    var g=alvos[a], p=DADOS.processos[g.idx], dig=String(p.numero||'').replace(/\D/g,'');
+    if(!dig){ falhas+=g.files.length; continue; }
+    for(var i=0;i<g.files.length;i++){
+      var item=g.files[i], f=item.f, inner=String(item.inner||f.name).replace(/^\/+/,'');
+      st.innerHTML='Enviando <b>'+esc(g.folder)+'</b> → '+esc(String(p.cliente||'').slice(0,26))+' — '+esc(inner.slice(0,40))+' ('+(feito+1)+'/'+totalArq+')…';
+      try{
+        var bytes=new Uint8Array(await f.arrayBuffer());
+        var CH=512*1024, off=0, okf=true;
+        do{ var slice=bytes.subarray(off,Math.min(off+CH,bytes.length));
+          var s=''; for(var k=0;k<slice.length;k+=0x8000){ s+=String.fromCharCode.apply(null, slice.subarray(k,Math.min(k+0x8000,slice.length))); }
+          var r=await fetch('/api/docs',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},
+            body:JSON.stringify({path:dig+'/'+inner,b64:btoa(s),append:off>0,mtime:new Date(f.lastModified).toISOString()})});
+          if(!r.ok){ okf=false; break; } off+=CH;
+        }while(off<bytes.length);
+        if(okf) enviados++; else falhas++;
+      }catch(e){ falhas++; }
+      feito++;
+    }
+  }
+  btn.disabled=false;
+  st.innerHTML='<b style="color:#127a53">Concluído:</b> '+enviados+' enviado(s)'+(falhas?(' · <b style="color:#b5342b">'+falhas+' falha(s)</b>'):'');
+  alert('Sincronização concluída!\n'+enviados+' arquivo(s) enviado(s)'+(falhas?(', '+falhas+' com falha'):'')+'.\n\nAbra um processo e confira a seção Documentos.');
+  try{ if(atual) carregarDocs(atual.numero,'','proc'); }catch(e){}
 }
 /* ponto 6/13: criar uma pasta vazia dentro da pasta aberta.
    Requer que o back-end /api/docs aceite {path, mkdir:true} para criar diretório. */
