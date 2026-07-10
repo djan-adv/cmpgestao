@@ -457,6 +457,7 @@
   <div class="row2"><div><label>Canal</label><select id="l-canal"><option>Indicação</option><option>Google Meu Negócio</option><option>Google Ads</option><option>Meta Ads (Instagram/Facebook)</option><option>Instagram orgânico</option><option>TikTok</option><option>YouTube</option><option>Site / Blog (SEO)</option><option>LinkedIn</option><option>Eventos / Palestras</option><option>Parceiro / Correspondente</option><option>WhatsApp</option><option>Jusbrasil</option><option>Outro</option></select></div><div><label>Etapa do funil</label><select id="l-estagio"></select></div></div>
   <div class="row2"><div><label>Telefone</label><input id="l-tel"></div><div><label>E-mail</label><input id="l-email"></div></div>
   <div class="row2"><div><label>Data de entrada</label><input id="l-data" type="date"></div><div><label>Valor estimado (R$)</label><input id="l-valor"></div></div>
+  <div class="row2"><div><label>Valor fechado (R$) <span style="color:var(--muted);font-weight:400">— honorário contratado</span></label><input id="l-valorf" placeholder="preenchido quando fechar"></div><div><label>Motivo da perda <span style="color:var(--muted);font-weight:400">(se perdido)</span></label><select id="l-motivo"><option value="">—</option><option>Preço / honorários</option><option>Sumiu / parou de responder</option><option>Foi a outro escritório</option><option>Sem viabilidade jurídica</option><option>Fora da nossa área</option><option>Só queria informação</option><option>Demorou / concorrente foi mais rápido</option><option>Outro</option></select></div></div>
   <div class="row2"><div><label>Prioridade</label><select id="l-prio"><option value="alta">Alta</option><option value="media">Média</option><option value="baixa">Baixa</option></select></div><div><label>Próxima ação (o que fazer)</label><input id="l-acao" placeholder="Ex.: enviar proposta, ligar de volta"></div></div>
   <div class="row2"><div><label>Lembrete — data</label><input id="l-lemdata" type="date"></div><div><label>Lembrete — o quê</label><input id="l-lemtxt" placeholder="Ex.: ligar de volta"></div></div>
   <label>Anotações</label><textarea id="l-obs" placeholder="Observações sobre o lead (contexto, histórico da conversa, próximos passos)..."></textarea>
@@ -1222,7 +1223,7 @@ function renderCaptacao(){
     itens.sort(function(a,b){return (PRANK[a.prioridade]||1)-(PRANK[b.prioridade]||1);});
     var col=document.createElement("div");col.className="col";
     col.ondragover=function(e){e.preventDefault();};
-    col.ondrop=function(e){e.preventDefault();var id=+e.dataTransfer.getData("id");var l=LEADS.find(function(x){return x.id===id;});if(l){l.estagio=c.id;renderCaptacao();}};
+    col.ondrop=function(e){e.preventDefault();var id=+e.dataTransfer.getData("id");var l=LEADS.find(function(x){return x.id===id;});if(l){l.estagio=c.id; if(c.id==='ganho'&&!l.dataFechamento) l.dataFechamento=hojeISO(); salvarLeadsLocal(); renderCaptacao();}};
     var h=document.createElement("h3");h.innerHTML=esc(c.nome)+' <span>'+itens.length+' <a onclick="renameEtapa('+idx+')" style="cursor:pointer" title="renomear">&#9998;</a></span>';
     col.appendChild(h);
     itens.forEach(function(l){var el=document.createElement("div");el.className="task pri-"+(l.prioridade||"media");el.draggable=true;
@@ -1238,7 +1239,7 @@ function renderCaptacao(){
   });
 }
 function primeiroUltimo(n){var p=String(n||"").trim().split(/\s+/);if(p.length<=1)return p[0]||"";return p[0]+" "+p[p.length-1];}
-function moverLead(dragId,targetId){var di=LEADS.findIndex(function(x){return x.id===dragId;});var t=LEADS.find(function(x){return x.id===targetId;});if(di<0||!t||dragId===targetId)return;var d=LEADS[di];d.estagio=t.estagio;LEADS.splice(di,1);var ti=LEADS.findIndex(function(x){return x.id===targetId;});LEADS.splice(ti,0,d);renderCaptacao();}
+function moverLead(dragId,targetId){var di=LEADS.findIndex(function(x){return x.id===dragId;});var t=LEADS.find(function(x){return x.id===targetId;});if(di<0||!t||dragId===targetId)return;var d=LEADS[di];d.estagio=t.estagio; if(t.estagio==='ganho'&&!d.dataFechamento) d.dataFechamento=hojeISO(); LEADS.splice(di,1);var ti=LEADS.findIndex(function(x){return x.id===targetId;});LEADS.splice(ti,0,d);salvarLeadsLocal();renderCaptacao();}
 function initKanban(){
   if(KAN)return; KAN=[];
   /* As tarefas salvas no banco (kanban_tarefas) entram primeiro e PREVALECEM.
@@ -1923,13 +1924,26 @@ function editarLead(id){var l=id?LEADS.find(function(x){return x.id===id;}):{id:
   document.getElementById("l-estagio").value=l.estagio; document.getElementById("l-tel").value=l.tel||""; document.getElementById("l-email").value=l.email||"";
   document.getElementById("l-valor").value=l.valor||""; document.getElementById("l-prio").value=l.prioridade||"media"; document.getElementById("l-acao").value=l.acao||""; document.getElementById("l-lemdata").value=l.lemdata||""; document.getElementById("l-lemtxt").value=l.lemtxt||""; document.getElementById("l-obs").value=l.obs||"";
   document.getElementById("l-data").value=l.data||(id?"":(new Date().getFullYear()+'-'+String(new Date().getMonth()+1).padStart(2,'0')+'-'+String(new Date().getDate()).padStart(2,'0')));
+  document.getElementById("l-valorf").value=l.valorFechado||""; document.getElementById("l-motivo").value=l.motivo||"";
   window._lsel=(l.labels?l.labels.slice():[]); renderEtqPicker("l-etq",window._lsel);
   document.getElementById("modal-lead").classList.remove("hidden");}
 function fecharLead(){document.getElementById("modal-lead").classList.add("hidden");}
 function salvarLead(){var l=window._ledit;var nome=_v("l-nome");if(!nome){alert("Informe o nome.");return;}
-  var obj={nome:nome,canal:_v("l-canal"),estagio:_v("l-estagio"),tel:_v("l-tel"),email:_v("l-email"),valor:_v("l-valor"),data:_v("l-data"),lemdata:_v("l-lemdata"),lemtxt:_v("l-lemtxt"),obs:_v("l-obs"),prioridade:_v("l-prio"),acao:_v("l-acao"),labels:(window._lsel||[]).slice()};
+  var estagio=_v("l-estagio");
+  var obj={nome:nome,canal:_v("l-canal"),estagio:estagio,tel:_v("l-tel"),email:_v("l-email"),valor:_v("l-valor"),valorFechado:_v("l-valorf"),motivo:_v("l-motivo"),data:_v("l-data"),lemdata:_v("l-lemdata"),lemtxt:_v("l-lemtxt"),obs:_v("l-obs"),prioridade:_v("l-prio"),acao:_v("l-acao"),labels:(window._lsel||[]).slice()};
+  /* data de fechamento (para tempo de conversão): grava quando vira "ganho" */
+  var jaFech=(l&&l.dataFechamento)||'';
+  if(estagio==='ganho'){ obj.dataFechamento=jaFech||hojeISO(); } else { obj.dataFechamento=jaFech; }
   if(l.id){Object.assign(l,obj);}else{obj.id=lseq++;LEADS.push(obj);}
+  salvarLeadsLocal();
   fecharLead();renderCaptacao();}
+function hojeISO(){ var d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+/* tempo de conversão em dias (entrada → fechamento) */
+function leadDiasConversao(l){ if(!l||!l.data||!l.dataFechamento) return null; var a=new Date(l.data+'T00:00:00'), b=new Date(l.dataFechamento+'T00:00:00'); if(isNaN(a)||isNaN(b)) return null; return Math.max(0,Math.round((b-a)/86400000)); }
+/* persistência local (interina) — evita perder leads ao recarregar até termos a tabela no banco */
+function salvarLeadsLocal(){ try{ localStorage.setItem('cmpLeads', JSON.stringify(LEADS)); }catch(e){} }
+function carregarLeadsLocal(){ try{ var s=localStorage.getItem('cmpLeads'); if(s){ var arr=JSON.parse(s); if(Array.isArray(arr)&&arr.length){ LEADS=arr; var mx=0; LEADS.forEach(function(l){ if(l.id>mx)mx=l.id; }); lseq=Math.max(lseq,mx+1); } } }catch(e){} }
+try{ carregarLeadsLocal(); }catch(e){}
 function addEtapa(){var n=prompt("Nome da nova etapa do funil:");if(!n)return;FUNIL.push({id:"e"+Date.now(),nome:n});renderCaptacao();}
 function renameEtapa(idx){var f=FUNIL[idx];var n=prompt("Renomear etapa:",f.nome);if(n){f.nome=n;renderCaptacao();}}
 function kpiC(l,n,h){return '<div class="kpi" style="cursor:pointer" onclick="'+h+'"><div class="n">'+n+'</div><div class="l">'+l+' &rsaquo;</div></div>';}
