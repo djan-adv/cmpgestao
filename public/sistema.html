@@ -652,6 +652,18 @@ function renderPainel(){
     hello.innerHTML='<div style="font-size:21px;font-weight:800;color:var(--navy)">'+sauda+(nome?", "+nome:"")+'</div>'
       +'<div style="color:var(--muted);font-size:13px;margin:2px 0 14px">'+pend+' publicações a triar · '+prazos7+' prazos nos próximos 7 dias · '+par30+' processos parados há 30+ dias</div>';
   }
+  /* ===== Alertas no painel: parados 30+, diligências a cobrar (7 dias) e possível retorno ===== */
+  try{
+    var _host=document.getElementById('painel-alertas');
+    if(!_host){ var _hb=document.getElementById('painel-hello'); if(_hb&&_hb.parentNode){ _host=document.createElement('div'); _host.id='painel-alertas'; _hb.parentNode.insertBefore(_host,_hb.nextSibling); } }
+    if(_host){
+      var _pa='';
+      if(par30>0){ _pa+='<div style="background:#fdf3e7;border:1px solid #f0d9b8;border-radius:8px;padding:9px 11px;margin-bottom:8px;font-size:13px"><b>⚠ '+par30+' processo(s) parado(s) há mais de 30 dias.</b> Sugerimos gerar diligência para dar andamento. <a onclick="go(\'diligencias\')" style="cursor:pointer;color:#b8912e;text-decoration:underline;font-weight:600">ver e diligenciar &rarr;</a></div>'; }
+      _pa+='<div id="painel-alertas-dilig"></div>';
+      _host.innerHTML=_pa;
+      if(typeof renderAlertasDiligencias==='function') renderAlertasDiligencias();
+    }
+  }catch(e){}
   var fatais7=(AGENDA||[]).filter(function(a){return a.tipo==="vm" && dOf(a)>=hoje && dOf(a)<em7;}).length;
   var aud7=(AGENDA||[]).filter(function(a){return a.tipo==="az" && dOf(a)>=hoje && dOf(a)<em7;}).length;
   var cards=[
@@ -672,6 +684,57 @@ function renderPainel(){
   renderRecentes();
   renderProd();
   renderFasesPainel();
+}
+/* Alertas de diligência no painel: "a cobrar" (7+ dias sem retorno) e "possível retorno"
+   (entrou movimentação oficial nova depois da diligência). */
+async function renderAlertasDiligencias(){
+  var box=document.getElementById('painel-alertas-dilig'); if(!box) return;
+  var sb=window.__sb; if(!sb){ box.innerHTML=''; return; }
+  try{
+    var r=await sb.from('diligencias').select('id,status,canal,criado_em,ultima_cobranca,data_retorno,processos(numero,cliente_nome)').neq('status','resolvida').order('criado_em',{ascending:true});
+    var ds=(r&&r.data)||[]; if(!ds.length){ box.innerHTML=''; return; }
+    var agora=Date.now(), cobrar=[], retorno=[];
+    ds.forEach(function(d){
+      var pr=d.processos||{}, num=pr.numero||'';
+      var proc=(DADOS.processos||[]).filter(function(x){return x.numero===num;})[0];
+      var teveMov=false;
+      if(proc){ var base=new Date(d.criado_em).getTime();
+        (proc.hist_full||[]).forEach(function(a){ if((a.f==='djen'||a.f==='datajud')&&a.data){ var tt=new Date(String(a.data).slice(0,10)+'T00:00:00').getTime(); if(tt>base) teveMov=true; } }); }
+      if(teveMov && !d.data_retorno){ retorno.push({num:num,cli:pr.cliente_nome}); return; }
+      var ref=new Date(d.ultima_cobranca||d.criado_em).getTime();
+      var dias=Math.floor((agora-ref)/86400000);
+      if(dias>=7 && !d.data_retorno){ cobrar.push({num:num,cli:pr.cliente_nome,dias:dias}); }
+    });
+    var html='';
+    if(retorno.length){
+      html+='<div style="background:#eaf7f1;border:1px solid #bfe6d6;border-radius:8px;padding:9px 11px;margin-bottom:8px;font-size:13px"><b>🟢 Possível retorno ('+retorno.length+') — revisar:</b> '
+        +retorno.map(function(x){return '<a onclick="go(\'diligencias\')" style="cursor:pointer;color:#0f6e56;text-decoration:underline">'+esc(x.cli||x.num)+'</a>';}).join(' · ')
+        +' <span class="note">(entrou movimentação nova após a diligência — confirme e resolva)</span></div>';
+    }
+    if(cobrar.length){
+      html+='<div style="background:#fbefe9;border:1px solid #f0cfc0;border-radius:8px;padding:9px 11px;margin-bottom:8px;font-size:13px"><b>🔔 Diligências a cobrar ('+cobrar.length+') — 7+ dias sem retorno:</b><div style="margin-top:5px">'
+        +cobrar.map(function(x){return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:3px 0;border-top:1px dashed #eedcd2"><span>'+esc(x.cli||x.num)+' <span class="note">('+x.dias+' dias)</span></span><button class="btn sm" onclick="cobrarDiligencia(\''+String(x.num).replace(/'/g,'')+'\')">Cobrar por e-mail</button></div>';}).join('')
+        +'</div></div>';
+    }
+    box.innerHTML=html;
+  }catch(e){ box.innerHTML=''; console.warn('alertas dilig:',e); }
+}
+/* reenvia a cobrança de andamento à vara pelo contato@ (servidor) e atualiza a data */
+async function cobrarDiligencia(num){
+  var p=(DADOS.processos||[]).filter(function(x){return x.numero===num;})[0]; if(!p){ alert('Processo não encontrado.'); return; }
+  var c=(typeof contatoDoProcesso==='function')?contatoDoProcesso(p):null;
+  if(!c||!c.email){ alert('Sem e-mail da vara cadastrado para este processo.\nCadastre em "Balcão da vara" na ficha do processo e tente de novo.'); return; }
+  var msg=bvMsg(num,'geral');
+  if(!confirm('Reenviar a cobrança de andamento para a vara ('+c.email+'), pelo contato@?')) return;
+  try{
+    var tok=await docToken();
+    var r=await fetch('/api/enviar-email',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({para:c.email,assunto:'Processo nº '+num+' — reiteração de pedido de andamento — CMP Advogados',corpo:msg})});
+    var j=await r.json().catch(function(){return {};});
+    if(!r.ok||j.erro){ alert('Não enviou: '+(j.erro||('HTTP '+r.status))+'\n\nSe o envio pelo servidor não estiver ativo, use o botão "E-mail" na ficha do processo.'); return; }
+    var sb=window.__sb; if(sb&&p._id){ await sb.from('diligencias').update({ultima_cobranca:new Date().toISOString(),canal:'email'}).eq('processo_id',p._id).neq('status','resolvida'); }
+    alert('Cobrança reenviada para a vara ('+c.email+'). Volta a alertar em 7 dias se não houver retorno.');
+    if(typeof renderAlertasDiligencias==='function') renderAlertasDiligencias();
+  }catch(e){ alert('Erro ao cobrar: '+(e&&e.message||e)); }
 }
 function renderTriagemCard(pend){
   var el=document.getElementById("painel-triagem"); if(!el) return;
@@ -2583,7 +2646,7 @@ async function salvarDiligencia(){
   try{ await navigator.clipboard.writeText(msg); }catch(e){}
   fecharDilig(); renderDiligencias(); alert('Diligência criada. Mensagem copiada para a área de transferência.');
 }
-async function dilRetorno(id){ var t=prompt('Retorno recebido:'); if(t==null) return; var sb=window.__sb; await sb.from('diligencias').update({status:'retorno',retorno:t}).eq('id',id); renderDiligencias(); }
+async function dilRetorno(id){ var t=prompt('Retorno recebido:'); if(t==null) return; var sb=window.__sb; await sb.from('diligencias').update({status:'retorno',retorno:t,data_retorno:new Date().toISOString().slice(0,10)}).eq('id',id); renderDiligencias(); try{ if(typeof renderAlertasDiligencias==='function') renderAlertasDiligencias(); }catch(e){} }
 async function dilResolver(id){ var sb=window.__sb; await sb.from('diligencias').update({status:'resolvida'}).eq('id',id); renderDiligencias(); }
 </script>
 <script>
@@ -3831,9 +3894,31 @@ function bvSend(canal,numEnc,el){
   var sel=el&&el.parentElement?el.parentElement.querySelector('select.bv-mod'):null;
   var tipo=sel?sel.value:'geral';
   var msg=bvMsg(num,tipo);
-  if(canal==='wa'&&c.whatsapp){ var d=String(c.whatsapp).replace(/\D/g,''); if(d.length<=11)d='55'+d; window.open('https://wa.me/'+d+'?text='+encodeURIComponent(msg),'_blank'); }
-  else if(canal==='em'&&c.email){ window.open('https://mail.google.com/mail/?view=cm&fs=1&to='+encodeURIComponent(c.email)+'&su='+encodeURIComponent('Processo nº '+num+' — solicitação de andamento — CMP Advogados')+'&body='+encodeURIComponent(msg),'_blank'); }
-  else if(canal==='vid'&&c.balcao_link){ window.open(c.balcao_link,'_blank'); }
+  var enviado=false, canalLabel='';
+  if(canal==='wa'&&c.whatsapp){ var d=String(c.whatsapp).replace(/\D/g,''); if(d.length<=11)d='55'+d; window.open('https://wa.me/'+d+'?text='+encodeURIComponent(msg),'_blank'); enviado=true; canalLabel='whatsapp'; }
+  else if(canal==='em'&&c.email){ window.open('https://mail.google.com/mail/?view=cm&fs=1&to='+encodeURIComponent(c.email)+'&su='+encodeURIComponent('Processo nº '+num+' — solicitação de andamento — CMP Advogados')+'&body='+encodeURIComponent(msg),'_blank'); enviado=true; canalLabel='email'; }
+  else if(canal==='vid'&&c.balcao_link){ window.open(c.balcao_link,'_blank'); enviado=true; canalLabel='sala_virtual'; }
+  if(enviado) _registrarDiligencia(p, canalLabel, msg);
+}
+/* registra/atualiza a diligência ao enviar pela página do processo, para aparecer
+   em "Diligências em andamento". Se já houver uma aberta para o processo, atualiza
+   a data da cobrança; senão cria uma nova. */
+async function _registrarDiligencia(p, canalLabel, msg){
+  try{
+    var sb=window.__sb; if(!sb||!p||!p._id) return;
+    var ug=await sb.auth.getUser(); var uid=ug&&ug.data&&ug.data.user&&ug.data.user.id; if(!uid) return;
+    var pf=await sb.from('usuarios').select('escritorio_id').eq('id',uid).single();
+    var esc2=pf&&pf.data&&pf.data.escritorio_id; if(!esc2) return;
+    var agora=new Date().toISOString();
+    var ex=await sb.from('diligencias').select('id').eq('processo_id',p._id).neq('status','resolvida').limit(1);
+    if(ex&&ex.data&&ex.data.length){
+      await sb.from('diligencias').update({ultima_cobranca:agora,mensagem:msg,canal:canalLabel}).eq('id',ex.data[0].id);
+    } else {
+      await sb.from('diligencias').insert({escritorio_id:esc2,processo_id:p._id,status:'a_fazer',canal:canalLabel,mensagem:msg,ultima_cobranca:agora});
+    }
+    try{ var sd=document.getElementById('s-diligencias'); if(sd && !sd.classList.contains('hidden') && typeof renderDiligencias==='function') renderDiligencias(); }catch(e){}
+    try{ var sp=document.getElementById('s-painel'); if(sp && !sp.classList.contains('hidden') && typeof renderAlertasDiligencias==='function') renderAlertasDiligencias(); }catch(e){}
+  }catch(e){ console.warn('registrar diligência:', e); }
 }
 function bvLine(numero){ var p=(DADOS.processos||[]).filter(function(x){return x.numero===numero;})[0]||{numero:numero}; return contatoBlocoHTML(p); }
 window.__coCtx=null;
