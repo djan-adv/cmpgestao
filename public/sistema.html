@@ -2421,9 +2421,19 @@ function renderProc(){
 </div></div>
 <div id="modal-cadmanual" class="overlay hidden"><div class="modal" style="max-width:640px">
   <h2>Cadastrar manualmente</h2>
-  <div class="switch" style="margin-bottom:10px"><button id="cm-tab-proc" class="on" onclick="setCadTipo('processo')">Processo (com nº CNJ)</button><button id="cm-tab-caso" onclick="setCadTipo('caso')">Caso (administrativo, sem CNJ)</button></div>
+  <div class="switch" style="margin-bottom:10px"><button id="cm-tab-proc" class="on" onclick="setCadTipo('processo')">Processo (com nº CNJ)</button><button id="cm-tab-caso" onclick="setCadTipo('caso')">Caso (administrativo, sem CNJ)</button><button id="cm-tab-novo" onclick="setCadTipo('novo')">Cliente novo</button></div>
   <div id="cm-proc-num-wrap"><label>Número do processo (CNJ) <span style="color:#b3261e">*obrigatório</span></label><input id="cm-numero" placeholder="0000000-00.0000.0.00.0000"></div>
   <div id="cm-caso-id-wrap" style="display:none"><label>Identificação do caso <span style="color:#b3261e">*obrigatório</span></label><input id="cm-casoid" placeholder="Ex.: PA 123/2026, Requerimento INSS, Protocolo SEI..."></div>
+  <div id="cm-novo-wrap" style="display:none">
+    <div style="background:#eef7f1;border:1px solid #cfe8db;border-radius:9px;padding:10px 12px;margin-bottom:10px;font-size:12.5px;color:#0F6E56;line-height:1.5">
+      <b>Cliente novo (ainda sem processo).</b> Preencha a ficha de atendimento no <b>modelo padrão CMP</b>, depois clique em <b>Gerar caso</b>: o sistema abre a ficha do cliente (vinculando se ele já existir) e registra o pedido para o Claude elaborar a peça no padrão CMP.
+      <br><a href="/Ficha-de-Atendimento-CMP.docx" download style="display:inline-block;margin-top:6px;color:#0F6E56;font-weight:700;text-decoration:underline">&#8681; Baixar modelo da ficha de atendimento (Word)</a>
+    </div>
+    <div class="row2">
+      <div><label>Peça a elaborar</label><select id="cm-peca"><option value="Petição inicial">Petição inicial</option><option value="Minuta de contrato">Minuta de contrato</option><option value="Notificação extrajudicial">Notificação extrajudicial</option><option value="Outra">Outra (descrever abaixo)</option></select></div>
+      <div><label>Se "Outra", qual peça?</label><input id="cm-peca-livre" placeholder="Ex.: requerimento administrativo, parecer..."></div>
+    </div>
+  </div>
   <p class="note" style="margin:6px 0 12px">Os campos abaixo são <b>opcionais</b> — preencha o que souber. O que a captura automática traria você pode inserir aqui.</p>
   <div class="row2">
     <div style="position:relative"><label>Cliente</label><input id="cm-cliente" placeholder="Digite para buscar na base ou cadastrar novo" autocomplete="off" oninput="cmClienteInput(this.value)" onfocus="cmClienteInput(this.value)" onblur="setTimeout(cmClienteFecha,160)"><div id="cm-cli-drop" class="cm-drop"></div><div id="cm-cli-status" style="font-size:11.5px;margin-top:3px;min-height:15px"></div></div>
@@ -2438,11 +2448,11 @@ function renderProc(){
     <div><label>Status</label><select id="cm-status"><option>Ativo 1º Grau</option><option>Ativo 2º Grau</option><option>Ativo</option><option>Administrativo</option></select></div>
   </div>
   <label>Observações</label><textarea id="cm-obs" placeholder="Anotações iniciais sobre o processo/caso"></textarea>
-  <div class="foot"><button class="btn ghost" onclick="fecharCadManual()">Cancelar</button><button class="btn" onclick="salvarCadManual()">Cadastrar e abrir ficha</button></div>
+  <div class="foot"><button class="btn ghost" onclick="fecharCadManual()">Cancelar</button><button id="cm-btn-salvar" class="btn" onclick="salvarCadManual()">Cadastrar e abrir ficha</button><button id="cm-btn-gerar" class="btn" style="display:none;background:#0F6E56;border-color:#0F6E56" onclick="gerarCasoNovoCliente()">Gerar caso</button></div>
 </div></div>
 <script>
 var cadTipo='processo';
-function abrirCadManual(){ cadTipo='processo'; setCadTipo('processo'); ['cm-numero','cm-casoid','cm-cliente','cm-oponente','cm-assunto','cm-foro','cm-causa','cm-obs'].forEach(function(id){var e=document.getElementById(id);if(e)e.value='';});
+function abrirCadManual(){ cadTipo='processo'; setCadTipo('processo'); ['cm-numero','cm-casoid','cm-cliente','cm-oponente','cm-assunto','cm-foro','cm-causa','cm-obs','cm-peca-livre'].forEach(function(id){var e=document.getElementById(id);if(e)e.value='';}); var pe=document.getElementById('cm-peca'); if(pe) pe.selectedIndex=0;
   try{ seedContatos(); }catch(e){} window.__cmCliMatch=null; cmClienteStatus(''); var dd=document.getElementById('cm-cli-drop'); if(dd){dd.classList.remove('on');dd.innerHTML='';}
   document.getElementById('modal-cadmanual').classList.remove('hidden'); }
 function fecharCadManual(){ document.getElementById('modal-cadmanual').classList.add('hidden'); var dd=document.getElementById('cm-cli-drop'); if(dd){dd.classList.remove('on');dd.innerHTML='';} }
@@ -2475,8 +2485,16 @@ function cmClienteInput(v){
 function setCadTipo(t){ cadTipo=t;
   document.getElementById('cm-tab-proc').classList.toggle('on',t==='processo');
   document.getElementById('cm-tab-caso').classList.toggle('on',t==='caso');
+  var tn=document.getElementById('cm-tab-novo'); if(tn) tn.classList.toggle('on',t==='novo');
   document.getElementById('cm-proc-num-wrap').style.display=(t==='processo')?'':'none';
   document.getElementById('cm-caso-id-wrap').style.display=(t==='caso')?'':'none';
+  var nw=document.getElementById('cm-novo-wrap'); if(nw) nw.style.display=(t==='novo')?'':'none';
+  /* no modo "cliente novo" escondemos campos de número/valor/status (não se aplicam ainda) */
+  var ehNovo=(t==='novo');
+  ['cm-foro','cm-causa','cm-status'].forEach(function(id){ var e=document.getElementById(id); if(e&&e.closest('div')) e.closest('div').style.display=ehNovo?'none':''; });
+  var bs=document.getElementById('cm-btn-salvar'), bg=document.getElementById('cm-btn-gerar');
+  if(bs) bs.style.display=ehNovo?'none':'';
+  if(bg) bg.style.display=ehNovo?'':'none';
 }
 async function salvarCadManual(){
   var num, ehCaso=(cadTipo==='caso');
@@ -2521,6 +2539,51 @@ async function salvarCadManual(){
   fecharCadManual();
   var idx=DADOS.processos.indexOf(novo);
   go('processos'); if(idx>=0) abrir(idx);
+}
+/* Fluxo "Cliente novo → Gerar caso": cria um caso (sem CNJ), vincula/cria o cliente
+   e registra o pedido para o Claude (Cowork) elaborar a peça no padrão CMP. A ficha
+   de atendimento e os documentos são anexados na pasta do caso já aberto. */
+async function gerarCasoNovoCliente(){
+  var cli=(document.getElementById('cm-cliente').value||'').trim();
+  if(!cli){ alert('Informe o nome do cliente.'); document.getElementById('cm-cliente').focus(); return; }
+  var op=(document.getElementById('cm-oponente').value||'').trim();
+  var assunto=(document.getElementById('cm-assunto').value||'').trim();
+  var obs=(document.getElementById('cm-obs').value||'').trim();
+  var peca=(document.getElementById('cm-peca')||{}).value||'Petição inicial';
+  if(peca==='Outra'){ peca=(document.getElementById('cm-peca-livre').value||'').trim(); if(!peca){ alert('Descreva qual peça o Claude deve elaborar.'); document.getElementById('cm-peca-livre').focus(); return; } }
+  var d=new Date(), pad=function(n){return String(n).padStart(2,'0');};
+  var dbr=pad(d.getDate())+'/'+pad(d.getMonth()+1)+'/'+d.getFullYear();
+  var stamp=dbr+' '+pad(d.getHours())+':'+pad(d.getMinutes());
+  var primeiro=(cli.split(/\s+/)[0]||'Cliente');
+  var num='Caso novo — '+primeiro+' ('+stamp+')';
+  var isoDia=d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+  var pedido='[PEÇA SOLICITADA AO CLAUDE] '+peca+' — '+cli+(op?(' × '+op):'')+(assunto?(' — '+assunto):'')+'. Ficha de atendimento e documentos anexados na pasta do caso; elaborar no padrão CMP. (solicitada em '+dbr+', pendente de elaboração)';
+  var hist=[{data:isoDia+'T00:00:00.000Z',texto:pedido,f:'manual'}];
+  if(obs) hist.unshift({data:isoDia+'T00:00:00.000Z',texto:'[Cadastro manual] '+obs,f:'manual'});
+  var novo={_id:null,cliente:cli,numero:num,oponente:op,tipo:assunto||peca,foro:'',status:'Administrativo',data:'',hist:'',causa:'0,00',hist_full:hist,hon_faturado:0,hon_afaturar:0,vinculados:[],ehCaso:true,fonte:'caso'};
+  marcaCasoLocal(num);
+  /* grava no banco (tolerante) */
+  try{ var sb=window.__sb; if(sb){ var ug=await sb.auth.getUser(); var pf=await sb.from('usuarios').select('escritorio_id').eq('id',ug.data.user.id).single(); var esc=pf&&pf.data&&pf.data.escritorio_id;
+    if(esc){ var ins=await sb.from('processos').insert({escritorio_id:esc,numero:num,cliente_nome:cli||null,oponente:op||null,assunto:(assunto||peca)||null,status:'Administrativo',fonte:'caso'}).select('id').single(); if(ins&&ins.data){ novo._id=ins.data.id;
+      if(obs) await sb.from('andamentos').insert({processo_id:ins.data.id,data:isoDia,texto:'[Cadastro manual] '+obs,fonte:'manual'});
+      await sb.from('andamentos').insert({processo_id:ins.data.id,data:isoDia,texto:pedido,fonte:'manual'}); } }
+  } }catch(e){ console.warn('gerar caso (banco):',e&&e.message||e); }
+  /* vínculo com cliente (base) ou criação de contato novo — mesma lógica do cadastro */
+  try{ seedContatos(); }catch(e){}
+  var nk=normClienteNome(cli);
+  var match=(window.__cmCliMatch&&normClienteNome(window.__cmCliMatch.nome)===nk)?window.__cmCliMatch:((CONTATOS||[]).find(function(x){return normClienteNome(x.nome)===nk;}));
+  if(match){ var mtel=(match.tel&&match.tel!=='—')?match.tel:'', mmail=(match.email&&match.email!=='—')?match.email:''; if(mtel||mmail){ try{ mergeContatoNoProcesso(novo,mtel,mmail); }catch(e){} } }
+  else { try{ var sb2=window.__sb; if(sb2){ var esc3=null; try{ var ug2=await sb2.auth.getUser(); var pf2=await sb2.from('usuarios').select('escritorio_id').eq('id',ug2.data.user.id).single(); esc3=pf2&&pf2.data&&pf2.data.escritorio_id; }catch(e){}
+      var regc={nome:cli,origem:'cliente novo'}; if(esc3) regc.escritorio_id=esc3; await sb2.from('contatos').insert(regc);
+      window.__CONTATOSDB=(window.__CONTATOSDB||[]); window.__CONTATOSDB.push({nome:cli,origem:'cliente novo'});
+    } }catch(e){ console.warn('criar contato:',e&&e.message||e); } }
+  CONTATOS=null;
+  DADOS.processos.unshift(novo);
+  if(DADOS.kpis) DADOS.kpis.total=DADOS.processos.length;
+  fecharCadManual();
+  var idx=DADOS.processos.indexOf(novo);
+  go('processos'); if(idx>=0) abrir(idx);
+  setTimeout(function(){ alert('Caso criado e ficha aberta!\n\n1) Anexe aqui a FICHA DE ATENDIMENTO (padrão CMP) e os documentos do caso, na seção de Documentos.\n2) Depois, no Cowork, diga ao Claude: "faça as peças pendentes" — ele lê a ficha e os documentos e redige a '+peca+' no padrão CMP, salvando na pasta do caso para sua revisão.'); },400);
 }
 function abrirBusca(){ var m=document.getElementById('modal-busca'); document.getElementById('busca-nums').value=''; document.getElementById('busca-result').innerHTML=''; m.classList.remove('hidden'); }
 function fecharBusca(){ document.getElementById('modal-busca').classList.add('hidden'); }
