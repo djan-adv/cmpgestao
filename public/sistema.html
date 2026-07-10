@@ -3511,10 +3511,19 @@ function syncReagrupar(){
   if(modo==='mae' && casados===0 && groups.length>0 && !window.__syncFlipped){
     window.__syncFlipped=true; var rb=document.querySelector('input[name="sync-modo"][value="unico"]'); if(rb) rb.checked=true; return syncReagrupar();
   }
-  document.getElementById('sync-status').innerHTML='<b>'+groups.length+'</b> pasta(s) · '+files.length+' arquivo(s) · <b style="color:#127a53">'+casados+' reconhecida(s)</b>'+(groups.length-casados?(' · <b style="color:#8a6d1a">'+(groups.length-casados)+' para você escolher</b>'):'')+'<div class="note" style="font-size:11px;margin-top:3px">Onde marcar "via histórico", confira com atenção (é palpite pelas partes citadas). Use a busca ao lado para achar por qualquer nome — inclusive do cônjuge.</div>';
+  syncRenderGroups();
+  /* reforço: para as pastas não reconhecidas na memória, procura NO BANCO (histórico
+     completo, 91k andamentos) — resolve casais cujo cônjuge não veio no carregamento. */
+  syncMatchDBUnmatched();
+}
+function syncRenderGroups(){
+  var groups=window.__syncGroups||[]; var files=window.__syncFiles||[];
+  var casados=groups.filter(function(g){return g.idx>=0;}).length;
+  var buscandoBanco=groups.some(function(g){return g._buscandoBanco;});
+  document.getElementById('sync-status').innerHTML='<b>'+groups.length+'</b> pasta(s) · '+files.length+' arquivo(s) · <b style="color:#127a53">'+casados+' reconhecida(s)</b>'+(groups.length-casados?(' · <b style="color:#8a6d1a">'+(groups.length-casados)+' para escolher</b>'):'')+(buscandoBanco?' · <span style="color:#185FA5">procurando no banco…</span>':'')+'<div class="note" style="font-size:11px;margin-top:3px">Onde marcar "(via ...)", confira (é palpite pelas partes citadas). Use a busca ao lado para achar por qualquer nome — inclusive do cônjuge.</div>';
   var rows=groups.map(function(g,gi){
     var viaLbl=(g.via&&g.via!=='cliente')?(' <span style="font-weight:400">(via '+esc(g.via)+')</span>'):'';
-    var alvo=g.idx>=0?('<span style="color:'+(g.via==='cliente'?'#127a53':'#8a6d1a')+';font-weight:600">✓ '+esc(String((DADOS.processos[g.idx]||{}).cliente||'').slice(0,30))+viaLbl+'</span>'):'<span style="color:#b5342b;font-weight:600">? não reconhecida</span>';
+    var alvo=g.idx>=0?('<span style="color:'+(g.via==='cliente'?'#127a53':'#8a6d1a')+';font-weight:600">✓ '+esc(String((DADOS.processos[g.idx]||{}).cliente||'').slice(0,30))+viaLbl+'</span>'):(g._buscandoBanco?'<span style="color:#185FA5">procurando no banco…</span>':'<span style="color:#b5342b;font-weight:600">? não reconhecida</span>');
     return '<tr style="border-top:1px solid #eef2f7">'+
       '<td style="padding:7px 6px;vertical-align:top"><b>'+esc(g.folder)+'</b><div class="note" style="font-size:11px">'+g.files.length+' arquivo(s)</div></td>'+
       '<td style="padding:7px 6px">'+alvo+
@@ -3526,6 +3535,33 @@ function syncReagrupar(){
   }).join('');
   document.getElementById('sync-preview').innerHTML='<table style="width:100%;font-size:13px"><thead><tr><th style="text-align:left">Pasta</th><th style="text-align:left">Processo de destino</th></tr></thead><tbody>'+rows+'</tbody></table>';
   document.getElementById('sync-btn-enviar').style.display=groups.length?'':'none';
+}
+async function syncMatchDBUnmatched(){
+  var sb=window.__sb; if(!sb) return;
+  var groups=window.__syncGroups||[]; if(!groups.length) return;
+  var reuToks=normClienteNome(window.__syncReu||'').split(' ').filter(function(t){return t.length>=5;});
+  for(var gi=0; gi<groups.length; gi++){ var g=groups[gi]; if(g.idx>=0) continue;
+    var tok=normClienteNome(g.folder).split(' ').filter(function(t){return t.length>=4;});
+    if(!tok.length) continue;
+    var termo=tok.slice(0,2).join('%'); /* ex.: dimas%germano */
+    g._buscandoBanco=true;
+    try{
+      var r=await sb.from('andamentos').select('processos!inner(numero,cliente_nome,oponente,status)').ilike('texto','%'+termo+'%').limit(40);
+      var achado=null;
+      if(r&&r.data&&r.data.length){
+        /* prioriza processo ativo cujo réu (qualquer token distintivo) apareça — tolera
+           nomes concatenados como "JAMESLAURENCE..." */
+        for(var k=0;k<r.data.length;k++){ var pr=r.data[k].processos; if(!pr||/encerr/i.test(pr.status||'')) continue;
+          var op=normClienteNome((pr.cliente_nome||'')+' '+(pr.oponente||'')).replace(/ /g,'');
+          var bateReu=reuToks.length && reuToks.some(function(t){ return op.indexOf(t)>-1; });
+          if(bateReu){ achado=pr.numero; break; } if(!achado) achado=pr.numero; }
+      }
+      if(achado){ var idx=(DADOS.processos||[]).findIndex(function(p){return String(p.numero)===String(achado);});
+        if(idx>=0){ g.idx=idx; g.via='banco'; } }
+    }catch(e){}
+    g._buscandoBanco=false;
+  }
+  syncRenderGroups();
 }
 async function syncEnviar(){
   var groups=window.__syncGroups||[]; if(!groups.length){ alert('Selecione uma pasta primeiro.'); return; }
