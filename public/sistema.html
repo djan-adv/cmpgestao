@@ -667,15 +667,26 @@ function renderPainel(){
   }catch(e){}
   var fatais7=(AGENDA||[]).filter(function(a){return a.tipo==="vm" && dOf(a)>=hoje && dOf(a)<em7;}).length;
   var aud7=(AGENDA||[]).filter(function(a){return a.tipo==="az" && dOf(a)>=hoje && dOf(a)<em7;}).length;
-  var cards=[
+  function cardHTML(c){return '<div class="kpi v2 '+c[2]+'" onclick="'+c[3]+'"><div class="n"'+c[4]+'>'+c[1]+'</div><div class="l">'+c[0]+'</div><div class="d">'+c[5]+'</div></div>';}
+  var cardsA=[
     ["Publicações a triar",pend,"gold","go('triagem')","","robô DJEN · diário 5h"],
     ["Prazos na semana",prazos7,"","go('agenda')","",(fatais7?fatais7+" fatais":"nenhum fatal")],
-    ["Audiências da semana",aud7,"","go('agenda')","","próximos 7 dias"],
-    ["Parados 30+ dias",par30,"warn","go('diligencias')","","gerar diligências"],
-    ["Movimentados em 30 dias",mov30,"","go('processos')","","com andamento recente do juízo"],
+    ["Audiências da semana",aud7,"","go('agenda')","","próximos 7 dias"]
+  ];
+  var cardsB=[
     ["Diligências em andamento","…","","go('diligencias')",' id="kpi-dilig"',"aguardando retorno"]
   ];
-  el.innerHTML=cards.map(function(c){return '<div class="kpi v2 '+c[2]+'" onclick="'+c[3]+'"><div class="n"'+c[4]+'>'+c[1]+'</div><div class="l">'+c[0]+'</div><div class="d">'+c[5]+'</div></div>'}).join("");
+  /* Card combinado "Processos e casos" (estilo Astrea): escolhe o período e mostra
+     quantos foram MOVIMENTADOS e quantos NÃO (mesma regra do juízo). Junta num só os
+     antigos cards "Parados 30+" e "Movimentados em 30". */
+  if(window.__procMovDias==null) window.__procMovDias=30;
+  var _pers=[['0','Hoje'],['7','Últimos 7 dias'],['30','Últimos 30 dias'],['60','Últimos 60 dias'],['90','Últimos 90 dias']];
+  var combinado='<div class="kpi v2" style="cursor:default">'+
+    '<select id="proc-mov-per" onchange="setProcMovDias(this.value)" onclick="event.stopPropagation()" style="width:100%;box-sizing:border-box;font-size:11px;padding:3px 5px;border:1px solid var(--line);border-radius:6px;background:var(--bg);margin-bottom:7px">'+
+    _pers.map(function(o){return '<option value="'+o[0]+'"'+(String(window.__procMovDias)===o[0]?' selected':'')+'>'+o[1]+'</option>';}).join('')+
+    '</select><div id="proc-mov-body"></div><div class="l" style="margin-top:4px">Processos e casos</div></div>';
+  el.innerHTML=cardsA.map(cardHTML).join("")+combinado+cardsB.map(cardHTML).join("");
+  renderProcMov();
   try{ var sbk=window.__sb; if(sbk){ sbk.from('diligencias').select('id',{count:'exact',head:true}).neq('status','resolvida').then(function(r){ var e=document.getElementById('kpi-dilig'); if(e&&r&&typeof r.count==='number') e.textContent=r.count; }); } }catch(e){}
   var bd=document.getElementById("tb-badge");
   if(bd){ bd.textContent=pend||""; bd.style.display=pend?"grid":"none"; }
@@ -687,6 +698,22 @@ function renderPainel(){
   renderProd();
   renderFasesPainel();
 }
+/* Card "Processos e casos": conta movimentados × não movimentados no período escolhido,
+   usando a mesma regra do juízo (diasMovOrd). Encerrados/INOVE ficam de fora. */
+function renderProcMov(){
+  var dias=parseInt(window.__procMovDias!=null?window.__procMovDias:30,10); if(isNaN(dias)) dias=30;
+  var mov=0,par=0;
+  try{ (DADOS.processos||[]).forEach(function(p){
+    if(/encerr/i.test(p.status||'')) return; if(typeof isInove==='function'&&isInove(p)) return;
+    var d=(typeof diasMovOrd==='function')?diasMovOrd(p):null; if(d==null||d>=1e9) return;
+    if(d<=dias) mov++; else par++;
+  }); }catch(e){}
+  var body=document.getElementById('proc-mov-body'); if(!body) return;
+  body.innerHTML=
+    '<div onclick="event.stopPropagation();go(\'processos\')" title="Tiveram movimentação do juízo no período" style="cursor:pointer;display:flex;align-items:baseline;gap:6px"><span style="font-size:19px;font-weight:800;color:#127a53;line-height:1.1">'+mov+'</span><span style="font-size:11px;color:var(--muted)">movimentados</span></div>'+
+    '<div onclick="event.stopPropagation();go(\'diligencias\')" title="Sem movimentação do juízo no período — candidatos a diligência" style="cursor:pointer;display:flex;align-items:baseline;gap:6px;margin-top:3px"><span style="font-size:19px;font-weight:800;color:#b8912e;line-height:1.1">'+par+'</span><span style="font-size:11px;color:var(--muted)">não movimentados</span></div>';
+}
+function setProcMovDias(v){ window.__procMovDias=parseInt(v,10); if(isNaN(window.__procMovDias)) window.__procMovDias=30; renderProcMov(); }
 /* Alertas de diligência no painel: "a cobrar" (7+ dias sem retorno) e "possível retorno"
    (entrou movimentação oficial nova depois da diligência). */
 async function renderAlertasDiligencias(){
@@ -4342,7 +4369,7 @@ function contatoDoProcesso(p){
   body.mini .side .brand img{width:40px;margin:4px auto 10px;display:block}
   body.mini .nav a{font-size:0;justify-content:center;padding:11px 0}
   body.mini .nav a .ic{font-size:16px;width:auto}
-  .kpis.kpis5{grid-template-columns:repeat(6,1fr)}
+  .kpis.kpis5{grid-template-columns:repeat(5,1fr)}
   .pv2-cols{display:grid;grid-template-columns:1.35fr 1fr;gap:14px;align-items:start;margin-bottom:14px}
   .pv2-cols .card{margin-bottom:14px}
   .kpi .d{font-size:11px;margin-top:4px;color:var(--muted)}
