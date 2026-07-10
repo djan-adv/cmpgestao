@@ -604,9 +604,14 @@ function drillFase(fid){
   var arr=DADOS.processos.filter(function(p){return guessFase(p)===fid;});
   document.getElementById("drill-tit").textContent=(meta?meta[1]:fid)+" — "+arr.length+" processos";
   document.getElementById("drill-head").innerHTML='<th>Cliente</th><th>Processo</th><th>Assunto</th><th>Status</th>';
-  document.getElementById("drill-body").innerHTML=arr.slice(0,300).map(function(p){return '<tr><td>'+esc(p.cliente)+'</td><td class="proc">'+esc(p.numero)+'</td><td>'+esc(p.tipo)+'</td><td>'+esc(p.status||"—")+'</td></tr>';}).join("");
+  document.getElementById("drill-body").innerHTML=arr.slice(0,300).map(function(p){
+    var idx=DADOS.processos.indexOf(p);
+    return '<tr class="click" style="cursor:pointer" onclick="abrirDoDrill('+idx+')" title="Abrir a página do processo"><td>'+esc(p.cliente)+'</td><td class="proc">'+esc(p.numero)+'</td><td>'+esc(p.tipo)+'</td><td>'+esc(p.status||"—")+'</td></tr>';
+  }).join("");
   document.getElementById("modal-drill").classList.remove("hidden");
 }
+/* clicar numa linha do painel/drill: fecha o modal e abre a ficha do processo */
+function abrirDoDrill(i){ try{ fecharDrill(); }catch(e){} if(i>=0 && typeof abrir==='function') abrir(i); }
 function renderPainel(){
   var k=DADOS.kpis||{}, el=document.getElementById("kpis");
   var pend=TRIAGEM?TRIAGEM.filter(function(t){return !t.done}).length:0;
