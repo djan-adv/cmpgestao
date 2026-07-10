@@ -1256,11 +1256,17 @@ function initKanban(){
      MESMO com o banco populado — antes, qualquer linha no banco fazia toda a
      agenda do Astrea sumir do Kanban e da Agenda. Agora mesclamos os dois,
      deduplicando por título+número+cliente (o que já veio do banco vence). */
+  /* dedup por CONTEÚDO (título+número/cliente) — vale para banco E seed, senão a
+     tarefa do Astrea concluída (que vira linha no banco) reaparece aberta pelo seed. */
+  var _vistos={};
   if(window.__KANDB && window.__KANDB.length){
-    window.__KANDB.forEach(function(t){ KAN.push(t); });
+    window.__KANDB.forEach(function(t){ var k=_kanContentKey(t); var prev=_vistos[k];
+      if(prev){ /* duplicata no próprio banco: mantém uma; se qualquer cópia é finalizada, a mantida vira finalizada */
+        if(t.col==='finalizado' && prev.col!=='finalizado') prev.col='finalizado';
+        prev._dups=prev._dups||[]; prev._dups.push(t.dbid); return; }
+      _vistos[k]=t; KAN.push(t); });
   }
-  var _vistos={}; KAN.forEach(function(a){ _vistos[_kanKey(a)]=1; });
-  function _semDup(a){ var k=_kanKey(a); if(_vistos[k]) return false; _vistos[k]=1; return true; }
+  function _semDup(a){ var k=_kanContentKey(a); if(_vistos[k]) return false; _vistos[k]=a; return true; }
   /* seed inicial de processos a distribuir */
   DADOS.kanbanSeed.forEach(function(p,i){ var a={id:i+1,titulo:p.titulo,cliente:p.cliente,numero:p.numero,col:"distribuir"}; if(_semDup(a)) KAN.push(a); });
   /* tarefas e prazos importados da agenda do Astrea (embutidos) — sempre presentes */
@@ -1273,6 +1279,13 @@ function initKanban(){
    ao estado inicial após F5, mesmo que a tabela kanban_tarefas ainda não exista no
    banco. É um espelho local; quando o banco estiver disponível ele prevalece. --- */
 function _kanKey(a){ if(!a) return ''; if(a.dbid) return 'db:'+a.dbid; return 't:'+String(a.titulo||'')+'|'+String(a.numero||'')+'|'+String(a.cliente||''); }
+/* chave por CONTEÚDO (independe de ter dbid) — usada para não duplicar a mesma tarefa
+   entre o seed do Astrea e a linha persistida no banco. */
+function _kanContentKey(a){ if(!a) return '';
+  var num=String(a.numero||'').replace(/\D/g,'');
+  var tit=String(a.titulo||'').toLowerCase().replace(/\s+/g,' ').trim();
+  var cli=String(a.cliente||'').toLowerCase().replace(/\s+/g,' ').trim();
+  return tit+'|'+(num||cli); }
 function _kanCookieLer(){ try{ var m=document.cookie.match(/(?:^|;\s*)cmpKan=([^;]+)/); return m?JSON.parse(decodeURIComponent(m[1])):{}; }catch(e){ return {}; } }
 function _kanCookieGravar(mapa){ try{ var v=encodeURIComponent(JSON.stringify(mapa)); document.cookie='cmpKan='+v+';path=/;max-age=31536000;samesite=lax'; }catch(e){} }
 function _kanSalvarLocal(a){ if(!a) return; var mapa=_kanCookieLer(); mapa[_kanKey(a)]=a.col||'distribuir'; _kanCookieGravar(mapa); }
