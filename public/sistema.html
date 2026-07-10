@@ -249,7 +249,7 @@
       </div>
       <div id="crm-contatos">
         <div class="kpis" id="crm-kpis"></div>
-        <div class="searchbar"><input id="buscaCli" placeholder="Buscar por nome, tipo, telefone, origem..." oninput="renderContatos()"><span class="note" id="cli-count" style="align-self:center"></span><button class="btn sm" onclick="syncContatosClientes()">Sincronizar por cliente</button><button class="btn sm" style="margin-left:auto" onclick="novoContato()">+ Novo contato</button></div>
+        <div class="searchbar"><input id="buscaCli" placeholder="Buscar por nome, tipo, telefone, origem..." oninput="renderContatos()"><span class="note" id="cli-count" style="align-self:center"></span><button class="btn sm" onclick="syncContatosClientes()">Sincronizar por cliente</button><select id="ordCli" onchange="renderContatos()" style="font-size:12px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--bg)" title="Ordenar a lista de contatos"><option value="az">Ordenar: A → Z</option><option value="proc">Mais processos ativos</option></select><button class="btn sm" style="margin-left:auto" onclick="novoContato()">+ Novo contato</button></div>
         <div class="card"><table><thead><tr><th>Nome</th><th>Tipo</th><th>Telefone</th><th>E-mail</th><th>Origem</th><th>Proc.</th><th>Editar</th><th>Excluir</th></tr></thead><tbody id="crm-body"></tbody></table></div>
       </div>
       <div id="crm-captacao" class="hidden">
@@ -1126,6 +1126,15 @@ function renderContatos(){
   seedContatos();
   var q=(document.getElementById("buscaCli").value||"").toLowerCase();
   var f=CONTATOS.filter(function(c){return !q||(c.nome+" "+c.tipo+" "+c.tel+" "+c.origem).toLowerCase().indexOf(q)>-1;});
+  /* ordenação da lista: A→Z (padrão) ou por nº de processos ATIVOS (maior→menor) */
+  var ord=(document.getElementById("ordCli")||{}).value||"az";
+  if(ord==="proc"){
+    var ativ={}; (DADOS.processos||[]).forEach(function(p){ if(!/encerr/i.test(p.status||'')){ var nk=normClienteNome(p.cliente); if(nk) ativ[nk]=(ativ[nk]||0)+1; } });
+    f.forEach(function(c){ c._ativos=ativ[normClienteNome(c.nome)]||0; });
+    f.sort(function(a,b){ if(b._ativos!==a._ativos) return b._ativos-a._ativos; return String(a.nome||'').localeCompare(String(b.nome||''),'pt-BR'); });
+  } else {
+    f.sort(function(a,b){ return String(a.nome||'').localeCompare(String(b.nome||''),'pt-BR'); });
+  }
   document.getElementById("cli-count").textContent=f.length+" contatos";
   var ativos=LEADS.filter(function(l){return l.estagio!=="ganho"&&l.estagio!=="perdido";}).length;
   document.getElementById("crm-kpis").innerHTML=kpi("contatos",CONTATOS.length)+kpi("clientes",CONTATOS.filter(function(c){return c.tipo==="cliente";}).length)+kpi("leads ativos",ativos)+kpi("origem que + converte","Indicação");
