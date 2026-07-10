@@ -637,9 +637,9 @@ function renderPainel(){
   var em7=new Date(hoje); em7.setDate(em7.getDate()+7);
   function dOf(a){return new Date(a.data+"T00:00:00");}
   var prazos7=(AGENDA||[]).filter(function(a){return (a.tipo==="vm"||a.tipo==="am") && dOf(a)>=hoje && dOf(a)<em7;}).length;
-  var par30=0;
+  var par30=0, mov30=0;
   try{
-    (DADOS.processos||[]).forEach(function(p){ var d=(typeof diasParadoOficial==='function')?diasParadoOficial(p):null; if(d!=null && d>30) par30++; });
+    (DADOS.processos||[]).forEach(function(p){ var d=(typeof diasParadoOficial==='function')?diasParadoOficial(p):null; if(d==null) return; if(d>30) par30++; else mov30++; });
   }catch(e){}
   var hello=document.getElementById("painel-hello");
   if(hello){
@@ -667,6 +667,7 @@ function renderPainel(){
     ["Prazos na semana",prazos7,"","go('agenda')","",(fatais7?fatais7+" fatais":"nenhum fatal")],
     ["Audiências da semana",aud7,"","go('agenda')","","próximos 7 dias"],
     ["Parados 30+ dias",par30,"warn","go('diligencias')","","gerar diligências"],
+    ["Movimentados em 30 dias",mov30,"","go('processos')","","com andamento recente do juízo"],
     ["Diligências em andamento","…","","go('diligencias')",' id="kpi-dilig"',"aguardando retorno"]
   ];
   el.innerHTML=cards.map(function(c){return '<div class="kpi v2 '+c[2]+'" onclick="'+c[3]+'"><div class="n"'+c[4]+'>'+c[1]+'</div><div class="l">'+c[0]+'</div><div class="d">'+c[5]+'</div></div>'}).join("");
