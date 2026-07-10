@@ -506,7 +506,7 @@ var USUARIOS_VISUAIS=[
   {id:'djan',nome:'Djan H. M. do Nascimento',perfil:'socio',email:'',senha:'',ativo:true},
   {id:'jader',nome:'Jader Gabriel Pinheiro',perfil:'adv',email:'',senha:'',ativo:true},
   {id:'eduarda',nome:'Maria Eduarda',perfil:'adv',email:'',senha:'',ativo:true},
-  {id:'rita',nome:'Maria Rita Caldas',perfil:'adv',email:'ritinhahenriques02@gmail.com',senha:'definida',ativo:true},
+  {id:'rita',nome:'Maria Rita Caldas',perfil:'adv',email:'',senha:'',ativo:true},
   {id:'est1',nome:'Estagiário 1',perfil:'est',email:'',senha:'',ativo:true},
   {id:'est2',nome:'Estagiário 2',perfil:'est',email:'',senha:'',ativo:true}
 ];
@@ -538,37 +538,70 @@ function _podeGerenciarAcesso(u){
   if(USUARIO_ATUAL_VISUAL==='djan') return true;      /* coordenador gerencia todos */
   return u.id===USUARIO_ATUAL_VISUAL;                  /* demais: só o próprio cadastro */
 }
-function cadastroVisualUsuario(id){
+/* chama a API do servidor que cria/altera a conta de verdade (Supabase Auth) */
+async function apiAcessos(acao,payload){
+  var sb=window.__sb, jwt='';
+  if(sb){ var s=await sb.auth.getSession(); jwt=(s&&s.data&&s.data.session&&s.data.session.access_token)||''; }
+  var r=await fetch('/api/acessos',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+jwt},body:JSON.stringify(Object.assign({acao:acao},payload||{}))});
+  var j={}; try{ j=await r.json(); }catch(e){}
+  if(!r.ok||!j.ok) throw new Error((j&&j.erro)||('HTTP '+r.status));
+  return j;
+}
+function _normNomeAcesso(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,' ').trim(); }
+/* reflete o estado real (contas que existem no banco) na lista visual */
+async function syncAcessosDoBanco(){
+  if(USUARIO_ATUAL_VISUAL!=='djan') return;
+  try{
+    var j=await apiAcessos('listar',{});
+    var rows=(j&&j.usuarios)||[];
+    (USUARIOS_VISUAIS||[]).forEach(function(u){
+      var m=rows.find(function(r){
+        return (u.email&&r.email&&String(r.email).toLowerCase()===String(u.email).toLowerCase())
+            || (r.nome&&u.nome&&_normNomeAcesso(r.nome)===_normNomeAcesso(u.nome));
+      });
+      if(m){ u.email=m.email||u.email; u.senha='definida'; if(typeof m.ativo==='boolean') u.ativo=m.ativo; }
+    });
+  }catch(e){ /* silencioso: sem a chave de admin, mantém o visual */ }
+}
+async function cadastroVisualUsuario(id){
   var u=(USUARIOS_VISUAIS||[]).find(function(x){return x.id===id;}); if(!u) return;
   if(!_podeGerenciarAcesso(u)){ alert('Você só pode alterar o seu próprio acesso.'); return; }
-  var em=prompt('E-mail de acesso para '+u.nome+':',u.email||''); if(em===null) return;
-  var se=prompt('Senha para '+u.nome+':',u.senha||''); if(se===null) return;
-  u.email=(em||'').trim(); u.senha=(se||'').trim();
-  alert('Acesso atualizado para '+u.nome+'.\n\nE-mail: '+(u.email||'—')+'\nSenha: '+(u.senha? 'definida':'—'));
-  renderAcessos(); renderSeletorUsuariosVisual();
+  var em=prompt('E-mail de acesso para '+u.nome+' (ex.: nome@gmail.com):',u.email||''); if(em===null) return;
+  em=(em||'').trim().toLowerCase();
+  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)){ alert('E-mail inválido.'); return; }
+  var se=prompt('Senha para '+u.nome+' (mínimo 6 caracteres).\nÉ com essa senha que a pessoa vai entrar:',''); if(se===null) return;
+  se=(se||'').trim();
+  if(se.length<6){ alert('A senha precisa de pelo menos 6 caracteres.'); return; }
+  try{
+    var j=await apiAcessos('salvar',{email:em,senha:se,nome:u.nome,papel:u.perfil});
+    u.email=em; u.senha='definida'; u.ativo=true;
+    alert('Acesso '+(j.criado?'CRIADO':'atualizado')+' para '+u.nome+'.\n\nPeça para a pessoa entrar no mesmo link do sistema com:\nE-mail: '+em+'\nSenha: a que você acabou de definir.');
+    renderAcessos(); renderSeletorUsuariosVisual();
+  }catch(e){ alert('Não foi possível salvar o acesso.\n\n'+(e&&e.message||e)); }
 }
-function removerCadastroVisual(id){
-  var u=(USUARIOS_VISUAIS||[]).find(function(x){return x.id===id;}); if(!u) return;
-  if(!_podeGerenciarAcesso(u)){ alert('Você só pode alterar o seu próprio acesso.'); return; }
-  if(!confirm('Limpar e-mail e senha de '+u.nome+'?')) return;
-  u.email=''; u.senha=''; renderAcessos(); renderSeletorUsuariosVisual();
-}
-function trocarNomeVisual(id){
+async function trocarNomeVisual(id){
   var u=(USUARIOS_VISUAIS||[]).find(function(x){return x.id===id;}); if(!u) return;
   if(!_podeGerenciarAcesso(u)){ alert('Você só pode alterar o seu próprio acesso.'); return; }
   var n=prompt('Nome exibido para este acesso:',u.nome||''); if(n===null||!n.trim()) return;
-  u.nome=n.trim(); renderAcessos(); renderSeletorUsuariosVisual();
+  var novo=n.trim();
+  if(u.email){ try{ await apiAcessos('renomear',{email:u.email,nome:novo}); }catch(e){ alert('Não foi possível renomear.\n\n'+(e&&e.message||e)); return; } }
+  u.nome=novo; renderAcessos(); renderSeletorUsuariosVisual();
 }
 /* apenas o coordenador (Djan) ativa/desativa acessos */
-function toggleAtivoAcesso(id){
+async function toggleAtivoAcesso(id){
   if(USUARIO_ATUAL_VISUAL!=='djan'){ alert('Apenas o coordenador pode ativar/desativar acessos.'); return; }
   var u=(USUARIOS_VISUAIS||[]).find(function(x){return x.id===id;}); if(!u) return;
   if(u.id==='djan'){ alert('O acesso do coordenador não pode ser desativado.'); return; }
-  u.ativo=(u.ativo===false)?true:false;
-  renderAcessos(); renderSeletorUsuariosVisual();
+  if(!u.email){ alert('Este acesso ainda não foi cadastrado. Clique em "Cadastrar" primeiro.'); return; }
+  var desativar=(u.ativo!==false);
+  if(!confirm((desativar?'Desativar':'Reativar')+' o acesso de '+u.nome+'?'+(desativar?'\n\nA pessoa deixa de conseguir entrar até você reativar.':''))) return;
+  try{
+    await apiAcessos(desativar?'desativar':'ativar',{email:u.email});
+    u.ativo=!desativar; renderAcessos(); renderSeletorUsuariosVisual();
+  }catch(e){ alert('Não foi possível alterar.\n\n'+(e&&e.message||e)); }
 }
 /* ===== Tela de Acessos (estilo Astrea), aberta pelo botão do nome ===== */
-function abrirAcessos(){ renderAcessos(); document.getElementById('modal-acessos').classList.remove('hidden'); }
+function abrirAcessos(){ renderAcessos(); document.getElementById('modal-acessos').classList.remove('hidden'); syncAcessosDoBanco().then(function(){ renderAcessos(); }); }
 function fecharAcessos(){ document.getElementById('modal-acessos').classList.add('hidden'); }
 /* Publicar atualização: chama /api/deploy (git pull no servidor) autenticado pelo Supabase.
    Só o coordenador vê o botão; a rota também confere o e-mail no servidor. */
