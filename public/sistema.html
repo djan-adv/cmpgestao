@@ -253,6 +253,7 @@
         <div class="card"><table><thead><tr><th>Nome</th><th>Tipo</th><th>Telefone</th><th>E-mail</th><th>Origem</th><th>Proc.</th><th>Editar</th><th>Excluir</th></tr></thead><tbody id="crm-body"></tbody></table></div>
       </div>
       <div id="crm-captacao" class="hidden">
+        <div id="cap-mes" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;align-items:center"></div>
         <div id="cap-filtro" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px"></div>
         <div class="kpis" id="cap-kpis"></div>
         <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:stretch"><div class="card" style="flex:1;min-width:300px"><p class="sectlabel">Panorama por canal — clique numa fatia/canal ou nos indicadores para ver quem</p><div id="cap-canais"></div><p class="note">O tráfego pago não converte no CMP; foque em indicação, Google Meu Negócio e conteúdo orgânico.</p></div><div class="card" style="flex:1;min-width:300px"><p class="sectlabel">Funil comercial — leads por etapa</p><div id="funil-dash" style="display:flex;gap:8px;flex-wrap:wrap"></div></div></div>
@@ -455,7 +456,7 @@
   <label>Nome</label><input id="l-nome">
   <div class="row2"><div><label>Canal</label><select id="l-canal"><option>Indicação</option><option>Google Meu Negócio</option><option>Google Ads</option><option>Meta Ads (Instagram/Facebook)</option><option>Instagram orgânico</option><option>TikTok</option><option>YouTube</option><option>Site / Blog (SEO)</option><option>LinkedIn</option><option>Eventos / Palestras</option><option>Parceiro / Correspondente</option><option>WhatsApp</option><option>Jusbrasil</option><option>Outro</option></select></div><div><label>Etapa do funil</label><select id="l-estagio"></select></div></div>
   <div class="row2"><div><label>Telefone</label><input id="l-tel"></div><div><label>E-mail</label><input id="l-email"></div></div>
-  <label>Valor estimado (R$)</label><input id="l-valor">
+  <div class="row2"><div><label>Data de entrada</label><input id="l-data" type="date"></div><div><label>Valor estimado (R$)</label><input id="l-valor"></div></div>
   <div class="row2"><div><label>Prioridade</label><select id="l-prio"><option value="alta">Alta</option><option value="media">Média</option><option value="baixa">Baixa</option></select></div><div><label>Próxima ação (o que fazer)</label><input id="l-acao" placeholder="Ex.: enviar proposta, ligar de volta"></div></div>
   <div class="row2"><div><label>Lembrete — data</label><input id="l-lemdata" type="date"></div><div><label>Lembrete — o quê</label><input id="l-lemtxt" placeholder="Ex.: ligar de volta"></div></div>
   <label>Anotações</label><textarea id="l-obs" placeholder="Observações sobre o lead (contexto, histórico da conversa, próximos passos)..."></textarea>
@@ -488,7 +489,7 @@ var USUARIOS_VISUAIS=[
   {id:'est2',nome:'Estagiário 2',perfil:'est',email:'',senha:'',ativo:true}
 ];
 var USUARIO_ATUAL_VISUAL='djan';
-var KAN=null, atual=null, TRIAGEM=null, AGENDA=null, VIEWAG="agenda", curY=2026, curM=6, curD=2, agView="mes", triagemAtual=null, crmView="contatos", agResp="Todos", canalSel="Geral", histShown=10, PUBIDX=null;
+var KAN=null, atual=null, TRIAGEM=null, AGENDA=null, VIEWAG="agenda", curY=2026, curM=6, curD=2, agView="mes", triagemAtual=null, crmView="contatos", agResp="Todos", canalSel="Geral", mesSel="todos", histShown=10, PUBIDX=null;
 
 function entrar(){
   var r=document.getElementById("roleSel").value, p=perfis[r];
@@ -1050,14 +1051,14 @@ function traduzir(){
   document.getElementById("det-ia").innerHTML='<div class="ia"><span class="lbl">Tradução da IA</span>'+r+'</div>';
 }
 var LEADS=[
-  {id:1,nome:"Lead Exemplo A",canal:"Indicação",estagio:"novo",tel:"(83) 90000-0001",email:"a@ex.com"},
-  {id:2,nome:"Lead Exemplo B",canal:"Google Meu Negócio",estagio:"conversa",tel:"(83) 90000-0002",email:"b@ex.com"},
-  {id:3,nome:"Lead Exemplo C",canal:"Instagram",estagio:"proposta",tel:"(83) 90000-0003",email:"c@ex.com"},
-  {id:4,nome:"Lead Exemplo D",canal:"Indicação",estagio:"ganho",tel:"(83) 90000-0004",email:"d@ex.com"},
-  {id:5,nome:"Lead Exemplo E",canal:"Site",estagio:"perdido",tel:"(83) 90000-0005",email:"e@ex.com"},
-  {id:6,nome:"Lead Exemplo F",canal:"Indicação",estagio:"conversa",tel:"(83) 90000-0006",email:"f@ex.com"},
-  {id:7,nome:"Lead Exemplo G",canal:"Google Meu Negócio",estagio:"ganho",tel:"(83) 90000-0007",email:"g@ex.com"},
-  {id:8,nome:"Lead Exemplo H",canal:"Instagram",estagio:"novo",tel:"(83) 90000-0008",email:"h@ex.com"}
+  {id:1,nome:"Lead Exemplo A",canal:"Indicação",estagio:"novo",tel:"(83) 90000-0001",email:"a@ex.com",data:"2026-07-03"},
+  {id:2,nome:"Lead Exemplo B",canal:"Google Meu Negócio",estagio:"conversa",tel:"(83) 90000-0002",email:"b@ex.com",data:"2026-07-06"},
+  {id:3,nome:"Lead Exemplo C",canal:"Instagram",estagio:"proposta",tel:"(83) 90000-0003",email:"c@ex.com",data:"2026-06-18"},
+  {id:4,nome:"Lead Exemplo D",canal:"Indicação",estagio:"ganho",tel:"(83) 90000-0004",email:"d@ex.com",data:"2026-06-22"},
+  {id:5,nome:"Lead Exemplo E",canal:"Site",estagio:"perdido",tel:"(83) 90000-0005",email:"e@ex.com",data:"2026-05-11"},
+  {id:6,nome:"Lead Exemplo F",canal:"Indicação",estagio:"conversa",tel:"(83) 90000-0006",email:"f@ex.com",data:"2026-07-01"},
+  {id:7,nome:"Lead Exemplo G",canal:"Google Meu Negócio",estagio:"ganho",tel:"(83) 90000-0007",email:"g@ex.com",data:"2026-05-28"},
+  {id:8,nome:"Lead Exemplo H",canal:"Instagram",estagio:"novo",tel:"(83) 90000-0008",email:"h@ex.com",data:"2026-07-09"}
 ];
 var FUNIL=[{id:"novo",nome:"Novo lead"},{id:"conversa",nome:"Conversa inicial"},{id:"proposta",nome:"Proposta apresentada"},{id:"assinado",nome:"Procuração/contrato assinados"},{id:"checklist",nome:"Checklist de documentos"},{id:"ganho",nome:"Fechado — enviado ao operacional"},{id:"perdido",nome:"Perdido"}];
 var CONTATOS=null, cseq=1, lseq=100;
@@ -1192,11 +1193,22 @@ function verProcessosDoContato(id){
   }
   var m=document.getElementById('modal-cproc'); if(m) m.classList.remove('hidden');
 }
+function leadMes(l){ var d=String((l&&l.data)||''); var m=/^(\d{4})-(\d{2})/.exec(d); if(m) return parseInt(m[2],10)-1; var m2=/^(\d{2})\/(\d{2})\/(\d{4})/.exec(d); if(m2) return parseInt(m2[2],10)-1; return -1; }
+function leadsDoMes(){ if(mesSel==='todos') return LEADS; return LEADS.filter(function(l){ return leadMes(l)===mesSel; }); }
+function setMesSel(m){ mesSel=(m==='todos')?'todos':parseInt(m,10); renderCaptacao(); }
 function renderCaptacao(){
-  var base=(canalSel==="Geral")?LEADS:LEADS.filter(function(l){return l.canal===canalSel;});
+  /* filtro por mês (janeiro…dezembro) — em cima de tudo */
+  var MES=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  var cm=document.getElementById("cap-mes");
+  if(cm){ var mchips='<span style="font-size:11.5px;color:var(--muted);font-weight:600;margin-right:2px">Mês:</span>';
+    mchips+='<span class="chip2" style="cursor:pointer;background:'+(mesSel==='todos'?'#2E3A4B':'#e9ebf0')+';color:'+(mesSel==='todos'?'#fff':'#5f5e5a')+'" onclick="setMesSel(\'todos\')">Ano todo</span>';
+    MES.forEach(function(nm,i){ var on=(mesSel===i); mchips+='<span class="chip2" style="cursor:pointer;background:'+(on?'#2E3A4B':'#e9ebf0')+';color:'+(on?'#fff':'#5f5e5a')+'" onclick="setMesSel('+i+')">'+nm+'</span>'; });
+    cm.innerHTML=mchips; }
+  var L=leadsDoMes();
+  var base=(canalSel==="Geral")?L:L.filter(function(l){return l.canal===canalSel;});
   var total=base.length, ganho=base.filter(function(l){return l.estagio==="ganho";}).length;
   var taxa=total?Math.round(ganho/total*100):0;
-  var canalAll={};LEADS.forEach(function(l){canalAll[l.canal]=(canalAll[l.canal]||0)+1;});
+  var canalAll={};L.forEach(function(l){canalAll[l.canal]=(canalAll[l.canal]||0)+1;});
   var top=Object.keys(canalAll).sort(function(a,b){return canalAll[b]-canalAll[a];})[0]||"—";
   var chips=["Geral"];CANAIS_LIST.forEach(function(c){if(chips.indexOf(c)<0)chips.push(c);});Object.keys(canalAll).forEach(function(c){if(chips.indexOf(c)<0)chips.push(c);});
   document.getElementById("cap-filtro").innerHTML=chips.map(function(c){var on=(c===canalSel);return '<span class="chip2" style="cursor:pointer;background:'+(on?"#2E3A4B":"#e9ebf0")+';color:'+(on?"#fff":"#5f5e5a")+'" onclick="setCanalSel(\''+String(c).replace(/'/g,"")+'\')">'+esc(c)+'</span>';}).join("");
@@ -1206,7 +1218,7 @@ function renderCaptacao(){
   var fu=document.getElementById("funil");fu.innerHTML="";
   var PRANK={alta:0,media:1,baixa:2};
   FUNIL.forEach(function(c,idx){
-    var itens=LEADS.filter(function(l){return l.estagio===c.id;});
+    var itens=L.filter(function(l){return l.estagio===c.id;});
     itens.sort(function(a,b){return (PRANK[a.prioridade]||1)-(PRANK[b.prioridade]||1);});
     var col=document.createElement("div");col.className="col";
     col.ondragover=function(e){e.preventDefault();};
@@ -1910,11 +1922,12 @@ function editarLead(id){var l=id?LEADS.find(function(x){return x.id===id;}):{id:
   document.getElementById("l-nome").value=l.nome||""; document.getElementById("l-canal").value=l.canal||"Indicação";
   document.getElementById("l-estagio").value=l.estagio; document.getElementById("l-tel").value=l.tel||""; document.getElementById("l-email").value=l.email||"";
   document.getElementById("l-valor").value=l.valor||""; document.getElementById("l-prio").value=l.prioridade||"media"; document.getElementById("l-acao").value=l.acao||""; document.getElementById("l-lemdata").value=l.lemdata||""; document.getElementById("l-lemtxt").value=l.lemtxt||""; document.getElementById("l-obs").value=l.obs||"";
+  document.getElementById("l-data").value=l.data||(id?"":(new Date().getFullYear()+'-'+String(new Date().getMonth()+1).padStart(2,'0')+'-'+String(new Date().getDate()).padStart(2,'0')));
   window._lsel=(l.labels?l.labels.slice():[]); renderEtqPicker("l-etq",window._lsel);
   document.getElementById("modal-lead").classList.remove("hidden");}
 function fecharLead(){document.getElementById("modal-lead").classList.add("hidden");}
 function salvarLead(){var l=window._ledit;var nome=_v("l-nome");if(!nome){alert("Informe o nome.");return;}
-  var obj={nome:nome,canal:_v("l-canal"),estagio:_v("l-estagio"),tel:_v("l-tel"),email:_v("l-email"),valor:_v("l-valor"),lemdata:_v("l-lemdata"),lemtxt:_v("l-lemtxt"),obs:_v("l-obs"),prioridade:_v("l-prio"),acao:_v("l-acao"),labels:(window._lsel||[]).slice()};
+  var obj={nome:nome,canal:_v("l-canal"),estagio:_v("l-estagio"),tel:_v("l-tel"),email:_v("l-email"),valor:_v("l-valor"),data:_v("l-data"),lemdata:_v("l-lemdata"),lemtxt:_v("l-lemtxt"),obs:_v("l-obs"),prioridade:_v("l-prio"),acao:_v("l-acao"),labels:(window._lsel||[]).slice()};
   if(l.id){Object.assign(l,obj);}else{obj.id=lseq++;LEADS.push(obj);}
   fecharLead();renderCaptacao();}
 function addEtapa(){var n=prompt("Nome da nova etapa do funil:");if(!n)return;FUNIL.push({id:"e"+Date.now(),nome:n});renderCaptacao();}
@@ -1933,10 +1946,10 @@ function drawPie(cid,counts){
   });
   document.getElementById(cid).innerHTML='<div style="display:flex;gap:22px;flex-wrap:wrap;align-items:center"><svg width="180" height="180" viewBox="0 0 180 180">'+paths+'</svg><div style="flex:1;min-width:220px">'+leg+'</div></div>';
 }
-function drillTipo(kind){var b=(canalSel==="Geral")?LEADS:LEADS.filter(function(l){return l.canal===canalSel;});var arr,tit;
+function drillTipo(kind){var L=leadsDoMes();var b=(canalSel==="Geral")?L:L.filter(function(l){return l.canal===canalSel;});var arr,tit;
   if(kind==="todos"){arr=b;tit="Leads"+(canalSel==="Geral"?"":" — "+canalSel);}
   else if(kind==="ganho"){arr=b.filter(function(l){return l.estagio==="ganho";});tit="Convertidos"+(canalSel==="Geral"?"":" — "+canalSel);}
-  else{arr=LEADS.filter(function(l){return l.canal===kind;});tit="Leads do canal: "+kind;}
+  else{arr=L.filter(function(l){return l.canal===kind;});tit="Leads do canal: "+kind;}
   abrirDrill(tit,arr);}
 function setCanalSel(c){canalSel=c;renderCaptacao();}
 function drillCanal(c){canalSel=c;renderCaptacao();}
@@ -3930,7 +3943,8 @@ function renderFunilDash(){
 function renderFunilDash(){
   var el=document.getElementById('funil-dash'); if(!el) return;
   if(typeof LEADS==='undefined') return;
-  var counts={}; LEADS.forEach(function(l){counts[l.estagio]=(counts[l.estagio]||0)+1;});
+  var _L=(typeof leadsDoMes==='function')?leadsDoMes():LEADS;
+  var counts={}; _L.forEach(function(l){counts[l.estagio]=(counts[l.estagio]||0)+1;});
   var stages=[{id:'novo',nome:'Novo lead'},{id:'conversa',nome:'Conversa inicial'},{id:'proposta',nome:'Proposta apresentada'},{id:'assinado',nome:'Contrato/procuração assinados'}];
   var fc={ novo:(counts['novo']||0), conversa:(counts['conversa']||0), proposta:(counts['proposta']||0), assinado:((counts['assinado']||0)+(counts['checklist']||0)+(counts['ganho']||0)) };
   var cores=['#2E3A4B','#185FA5','#1D9E75','#BA7517'];
