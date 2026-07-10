@@ -1281,7 +1281,7 @@ function renderCaptacao(){
   var top=Object.keys(canalAll).sort(function(a,b){return canalAll[b]-canalAll[a];})[0]||"—";
   var chips=["Geral"];CANAIS_LIST.forEach(function(c){if(chips.indexOf(c)<0)chips.push(c);});Object.keys(canalAll).forEach(function(c){if(chips.indexOf(c)<0)chips.push(c);});
   document.getElementById("cap-filtro").innerHTML='<label style="display:flex;flex-direction:column;gap:4px;font-size:11.5px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.3px">Canal de aquisição<select style="'+_selSt+';min-width:210px" onchange="setCanalSel(this.value)">'+chips.map(function(c){return '<option value="'+esc(c)+'"'+(c===canalSel?' selected':'')+'>'+esc(c)+'</option>';}).join("")+'</select></label>';
-  var lbl4=(canalSel==="Geral")?"principal canal":"canal selecionado",val4=(canalSel==="Geral")?top:canalSel,h4="drillTipo('"+String(canalSel==="Geral"?top:canalSel).replace(/'/g,"")+"')";
+  var lbl4=(canalSel==="Geral")?"canal (todos)":"canal selecionado",val4=canalSel,h4=(canalSel==="Geral")?"drillTipo('todos')":("drillTipo('"+String(canalSel).replace(/'/g,"")+"')");
   document.getElementById("cap-kpis").innerHTML=kpiC((canalSel==="Geral"?"leads (total)":("leads — "+canalSel)),total,"drillTipo('todos')")+kpiC("convertidos",ganho,"drillTipo('ganho')")+kpiC("taxa de conversão",taxa+"%","drillTipo('ganho')")+kpiC(lbl4,val4,h4);
   drawPie("cap-canais",canalAll);
   var fu=document.getElementById("funil");fu.innerHTML="";
@@ -1292,14 +1292,16 @@ function renderCaptacao(){
     var col=document.createElement("div");col.className="col";
     col.ondragover=function(e){e.preventDefault();};
     col.ondrop=function(e){e.preventDefault();var id=+e.dataTransfer.getData("id");var l=LEADS.find(function(x){return x.id===id;});if(l){l.estagio=c.id; if(c.id==='ganho'&&!l.dataFechamento) l.dataFechamento=hojeISO(); salvarLeadsLocal(); renderCaptacao();}};
+    var mvL=(idx>0)?'<a onclick="moverEtapa('+idx+',-1)" style="cursor:pointer;color:var(--muted);text-decoration:none" title="mover para a esquerda">&#9664;</a> ':'';
+    var mvR=(idx<FUNIL.length-1)?' <a onclick="moverEtapa('+idx+',1)" style="cursor:pointer;color:var(--muted);text-decoration:none" title="mover para a direita">&#9654;</a>':'';
     if(c.id==='ganho'){
-      var hf=document.createElement("h3");hf.innerHTML=esc(c.nome)+' <span>'+itens.length+'</span>';col.appendChild(hf);
+      var hf=document.createElement("h3");hf.innerHTML=esc(c.nome)+' <span>'+itens.length+' '+mvL+mvR+'</span>';col.appendChild(hf);
       var dz=document.createElement("div");dz.className="note";dz.style.cssText="padding:12px 8px;font-size:11.5px;line-height:1.45;text-align:center;color:var(--muted)";
       dz.innerHTML='Arraste um lead para cá ao fechar o contrato.<br>Ele sai do quadro e entra em <b>Fechados por mês</b> (acima).';
       col.appendChild(dz);fu.appendChild(col);return;
     }
-    var delEtapa=(c.id==='perdido')?'':' <a onclick="excluirEtapa('+idx+')" style="cursor:pointer;color:#b5342b" title="excluir etapa">&#128465;</a>';
-    var h=document.createElement("h3");h.innerHTML=esc(c.nome)+' <span>'+itens.length+' <a onclick="renameEtapa('+idx+')" style="cursor:pointer" title="renomear">&#9998;</a>'+delEtapa+'</span>';
+    var delEtapa=(c.id==='perdido')?'':' <a onclick="excluirEtapa('+idx+')" style="cursor:pointer;color:#b5342b;text-decoration:none" title="excluir etapa">&#128465;</a>';
+    var h=document.createElement("h3");h.innerHTML=esc(c.nome)+' <span>'+itens.length+' '+mvL+'<a onclick="renameEtapa('+idx+')" style="cursor:pointer;text-decoration:none" title="renomear">&#9998;</a>'+delEtapa+mvR+'</span>';
     col.appendChild(h);
     itens.forEach(function(l){var el=document.createElement("div");el.className="task pri-"+(l.prioridade||"media");el.draggable=true;
       el.title="canal: "+l.canal+(l.valor?(" · R$ "+l.valor):"");
@@ -1360,6 +1362,12 @@ function excluirEtapa(idx){
   if(!confirm(msg)) return;
   if(comLeads.length&&destino){ comLeads.forEach(function(l){ l.estagio=destino.id; }); salvarLeadsLocal(); }
   FUNIL.splice(idx,1); salvarFunilLocal(); renderCaptacao();
+}
+/* move a etapa para a esquerda (-1) ou direita (+1); o gráfico do funil acompanha a ordem */
+function moverEtapa(idx,dir){
+  var j=idx+dir; if(j<0||j>=FUNIL.length) return;
+  var tmp=FUNIL[idx]; FUNIL[idx]=FUNIL[j]; FUNIL[j]=tmp;
+  salvarFunilLocal(); renderCaptacao();
 }
 function primeiroUltimo(n){var p=String(n||"").trim().split(/\s+/);if(p.length<=1)return p[0]||"";return p[0]+" "+p[p.length-1];}
 function moverLead(dragId,targetId){var di=LEADS.findIndex(function(x){return x.id===dragId;});var t=LEADS.find(function(x){return x.id===targetId;});if(di<0||!t||dragId===targetId)return;var d=LEADS[di];d.estagio=t.estagio; if(t.estagio==='ganho'&&!d.dataFechamento) d.dataFechamento=hojeISO(); LEADS.splice(di,1);var ti=LEADS.findIndex(function(x){return x.id===targetId;});LEADS.splice(ti,0,d);salvarLeadsLocal();renderCaptacao();}
@@ -4395,22 +4403,23 @@ function renderFunilDash(){
 <script>
 function renderFunilDash(){
   var el=document.getElementById('funil-dash'); if(!el) return;
-  if(typeof LEADS==='undefined') return;
+  if(typeof LEADS==='undefined'||typeof FUNIL==='undefined') return;
   var _L=(typeof leadsDoMes==='function')?leadsDoMes():LEADS;
+  if(typeof canalSel!=='undefined' && canalSel!=='Geral') _L=_L.filter(function(l){return l.canal===canalSel;});
   var counts={}; _L.forEach(function(l){counts[l.estagio]=(counts[l.estagio]||0)+1;});
-  var stages=[{id:'novo',nome:'Novo lead'},{id:'conversa',nome:'Conversa inicial'},{id:'proposta',nome:'Proposta apresentada'},{id:'assinado',nome:'Contrato/procuração assinados'}];
-  var fc={ novo:(counts['novo']||0), conversa:(counts['conversa']||0), proposta:(counts['proposta']||0), assinado:((counts['assinado']||0)+(counts['checklist']||0)+(counts['ganho']||0)) };
-  var cores=['#2E3A4B','#185FA5','#1D9E75','#BA7517'];
-  var n=stages.length, maxW=180, minW=50, H=200, bandH=H/n;
+  /* acompanha as etapas reais do funil (sem "Perdido", que não é degrau do funil) */
+  var stages=FUNIL.filter(function(f){return f.id!=='perdido';}); if(!stages.length) stages=FUNIL.slice();
+  var cores=['#2E3A4B','#185FA5','#1D9E75','#BA7517','#7F77DD','#0F6E56','#0e7490','#9a6a12','#b5342b'];
+  var n=stages.length||1, maxW=180, minW=50, H=200, bandH=H/n;
   function wAt(i){ return maxW-(maxW-minW)*(i/n); }
   var polys='';
   stages.forEach(function(f,i){
     var y0=i*bandH+4, y1=(i+1)*bandH-3, tw=wAt(i), bw=wAt(i+1), c=cores[i%cores.length];
     polys+='<polygon points="'+(100-tw/2)+','+y0+' '+(100+tw/2)+','+y0+' '+(100+bw/2)+','+y1+' '+(100-bw/2)+','+y1+'" fill="'+c+'"/>';
-    polys+='<text x="100" y="'+((y0+y1)/2+5)+'" text-anchor="middle" fill="#fff" font-size="15" font-weight="700">'+(fc[f.id]||0)+'</text>';
+    polys+='<text x="100" y="'+((y0+y1)/2+5)+'" text-anchor="middle" fill="#fff" font-size="15" font-weight="700">'+(counts[f.id]||0)+'</text>';
   });
   var legend=stages.map(function(f,i){ var c=cores[i%cores.length];
-    return '<div style="display:flex;align-items:center;gap:6px;font-size:12px;margin:5px 0"><span style="width:10px;height:10px;border-radius:2px;background:'+c+';display:inline-block"></span><span style="color:#5f5e5a">'+esc(f.nome)+'</span> <b style="margin-left:auto;color:'+c+'">'+(fc[f.id]||0)+'</b></div>';
+    return '<div style="display:flex;align-items:center;gap:6px;font-size:12px;margin:5px 0"><span style="width:10px;height:10px;border-radius:2px;background:'+c+';display:inline-block"></span><span style="color:#5f5e5a">'+esc(f.nome)+'</span> <b style="margin-left:auto;color:'+c+'">'+(counts[f.id]||0)+'</b></div>';
   }).join('');
   el.innerHTML='<div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap"><svg width="200" height="200" viewBox="0 0 200 200" style="flex:0 0 auto">'+polys+'</svg><div style="flex:1;min-width:150px">'+legend+'</div></div>';
 }
