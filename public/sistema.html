@@ -589,7 +589,7 @@ function go(s){
 var FASES_META=[["prot","Correção e Protocolo","#C9A227"],["post","Fase de Conhecimento","#185FA5"],["sane","Fase Saneadora","#0F6E56"],["instr","Fase Instrutória","#8a5a00"],["decis","Fase Decisória","#6d28a8"],["recur","Fase Recursal","#b5342b"],["exec","Fase de Cumprimento","#0e7490"]];
 function renderFasesPainel(){
   var cont=document.getElementById("painel-fases");if(!cont)return;
-  var cnt={};DADOS.processos.forEach(function(p){var f=guessFase(p);cnt[f]=(cnt[f]||0)+1;});
+  var cnt={};DADOS.processos.forEach(function(p){var f=faseDoProc(p);cnt[f]=(cnt[f]||0)+1;});
   var total=DADOS.processos.length;
   var html='<p class="sectlabel">Processos por fase ('+total+') — clique para ver</p>';
   FASES_META.forEach(function(f){var n=cnt[f[0]]||0;var pct=total?Math.round(n/total*100):0;
@@ -601,7 +601,7 @@ function renderFasesPainel(){
 }
 function drillFase(fid){
   var meta=null;FASES_META.forEach(function(x){if(x[0]===fid)meta=x;});
-  var arr=DADOS.processos.filter(function(p){return guessFase(p)===fid;});
+  var arr=DADOS.processos.filter(function(p){return faseDoProc(p)===fid;});
   document.getElementById("drill-tit").textContent=(meta?meta[1]:fid)+" — "+arr.length+" processos";
   document.getElementById("drill-head").innerHTML='<th>Cliente</th><th>Processo</th><th>Assunto</th><th>Status</th>';
   document.getElementById("drill-body").innerHTML=arr.slice(0,300).map(function(p){
@@ -685,7 +685,7 @@ function renderRecentes(){
     var md=null; (p.hist_full||[]).forEach(function(a){ if(a.data && (!md||a.data>md)) md=a.data; });
     var parado=md && (new Date(md)<lim);
     var dias=md?Math.round((hoje-new Date(md))/86400000):null;
-    var fase="—"; try{ fase=NOMES[guessFase(p)]||"—"; }catch(e){}
+    var fase="—"; try{ fase=NOMES[faseDoProc(p)]||"—"; }catch(e){}
     var chip=parado?('<span class="b" style="background:var(--dangerbg);color:var(--danger);border:0">Parado '+dias+'d</span>')
       :(fase==="Execução"?'<span class="b ok" style="border:0">Execução</span>':'<span class="b" style="background:var(--accentbg);color:var(--navy);border:0">'+fase+'</span>');
     html+='<tr class="click" onclick="abrir('+i+')"><td><b>'+esc(p.cliente||"—")+'</b> <span style="color:var(--muted)">×</span> '+esc(p.oponente||"—")
@@ -804,6 +804,7 @@ function abrir(i){
     '<div class="subhead">Processo nº <span onclick="copiarNumero(this,\''+p.numero+'\')" style="cursor:pointer;border-bottom:1px dotted var(--muted)" title="Clique para copiar o número">'+p.numero+'</span> &nbsp;·&nbsp; <span class="b '+stCls(p.status)+'">'+esc(p.status||'—')+'</span>'+
     ' &nbsp;·&nbsp; Responsável: '+resp+
     (function(){ var vinc=(p.hist_full&&p.hist_full.length>0)&&p.foro; return ' &nbsp;·&nbsp; <span style="display:inline-block;border-radius:20px;padding:2px 10px;font-size:11px;font-weight:600;'+(vinc?'background:#e5f4ed;color:#127a53">vinculado jus.br':'background:#fbeceb;color:#b5342b">não vinculado')+'</span>'; })()+_casoCtrlHTML(p)+'</div>'+
+    _faseCtrlHTML(p)+
     '<div id="ctl-chips" style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center"></div>'+
     '<div id="proc-vinculados" style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center"></div>'+
     '<div style="margin-top:10px"><button class="btn sm" onclick="novaTarefaDoProcesso()">+ Nova tarefa neste processo</button> <button class="btn sm" style="background:#faf3ee;color:#D97757;border:1px solid #edd7c9;font-weight:700" onclick="agendarClaude()" title="Deixar mensagem para o cliente a qualquer hora — o Claude envia somente em horário comercial"><span style="font-size:13px">✳</span> Agendar com Claude</button> <button class="btn sm" style="background:#eef4fb;color:#185FA5;border:1px solid #cfe0f2;font-weight:700" onclick="abrirTribunal(\''+p.numero+'\')" title="Abrir o sistema do tribunal (PJe/e-SAJ/Projudi) no grau deste processo — o número é copiado para você colar na busca">&#9878; Abrir no tribunal</button> <button class="btn sm" style="background:#eef7f1;color:#0F6E56;border:1px solid #cfe8db;font-weight:700" onclick="abrirAcompanhamento(\''+p.numero+'\')" title="Ativar aviso por e-mail à cliente quando houver movimentação oficial (sem expor o teor)">&#128231; Acompanhamento</button> <button class="btn sm" style="background:#eaf4f4;color:#0b7285;border:1px solid #cfe6e6;font-weight:700" onclick="abrirAtualizarCliente(\''+p.numero+'\')" title="Montar um e-mail de atualização com as últimas movimentações, em linguagem simples, para revisar e enviar">&#9993; Atualizar cliente</button></div>'+
@@ -1208,15 +1209,89 @@ var ASSIGN={};
 function textColor(hex){var c=(hex||"#000").replace("#","");if(c.length===3)c=c.split("").map(function(x){return x+x}).join("");var r=parseInt(c.substr(0,2),16),g=parseInt(c.substr(2,2),16),b=parseInt(c.substr(4,2),16);return (0.299*r+0.587*g+0.114*b)>150?"#1e2733":"#fff";}
 function lblById(id){return LABELS.find(function(l){return l.id===id});}
 function chip(lb){return '<span class="chip2" style="background:'+lb.cor+';color:'+textColor(lb.cor)+'">'+esc(lb.nome)+'</span>';}
+/* Ordem de prioridade (a 1ª que casar vence): Cumprimento → Recursal → Decisória →
+   Instrutória → Saneadora → Conhecimento. Regras conforme definição do escritório. */
+var FASE_ORDEM=["prot","post","sane","instr","decis","recur","exec"]; /* do início ao fim do fluxo, p/ comparar avanço */
 function guessFase(p){
-  var mv=(p.hist_full&&p.hist_full.length)?p.hist_full.slice(0,4).map(function(m){return m.texto||"";}).join(" "):"";
-  var t=(mv+" "+(p.hist||"")+" "+(p.tipo||"")+" "+(p.status||"")).toLowerCase();
-  if(/2º grau|inst[âa]ncia superior|superior tribunal|apela[çc]|agravo|\brecurso\b|recorrer|embargos de declara|contrarraz|turma recursal/.test(t))return "recur";
-  if(/cumprimento de senten|execu[çc]|\bpenhora|sisbajud|bacenjud|precat[óo]|liquida[çc]|adjudica|leil[ãa]o|bloqueio de valores/.test(t))return "exec";
-  if(/senten[çc]a|julgad|proced[êe]ncia|improced|ac[óo]rd[ãa]o|homolog|resolvo o m[ée]rito/.test(t))return "decis";
-  if(/audi[êe]ncia de instru|per[íi]cia|oitiva|testemunh|especificar provas|produ[çc][ãa]o de provas/.test(t))return "instr";
-  if(/sanea|pontos controvertid|organiza[çc][ãa]o do processo/.test(t))return "sane";
+  var mv=(p.hist_full&&p.hist_full.length)?p.hist_full.slice(0,6).map(function(m){return m.texto||"";}).join("  "):"";
+  var t=(mv+"  "+(p.hist||"")+"  "+(p.tipo||"")+"  "+(p.status||"")).toLowerCase();
+  /* 0) PRIORIDADE PELA CLASSE/ASSUNTO do processo — é o sinal mais confiável e vence
+     palavras soltas que aparecem no meio do texto (ex.: "execução" citada de passagem). */
+  var cls=((p.tipo||"")+" "+(p.classe||"")).toLowerCase();
+  if(/agravo de instrumento/.test(cls))return "decis";                              /* AI é fase decisória (interlocutória) */
+  if(/apela[çc][ãa]o|recurso inominado|recurso especial|recurso extraordin[áa]rio|embargos infringentes/.test(cls))return "recur";
+  if(/cumprimento de senten|cumprimento provis[óo]rio|cumprimento definitivo|execu[çc][ãa]o de t[íi]tulo|execu[çc][ãa]o fiscal/.test(cls))return "exec";
+  /* 1) CUMPRIMENTO — cumprimento de sentença / execução / constrição patrimonial */
+  if(/cumprimento de senten|cumprimento provis[óo]rio|cumprimento definitivo|execu[çc][ãa]o de t[íi]tulo|execu[çc][ãa]o fiscal|\bexecu[çc][ãa]o\b|\bpenhora|sisbajud|bacenjud|renajud|infojud|precat[óo]|requisi[çc][ãa]o de pequeno valor|\brpv\b|liquida[çc][ãa]o de senten|adjudica|arremata|leil[ãa]o|hasta p[úu]blica|bloqueio de valores|impugna[çc][ãa]o ao cumprimento/.test(t))return "exec";
+  /* 2) RECURSAL — só APÓS sentença, subida ao 2º grau (não classificar por embargos de declaração isolado) */
+  if(/apela[çc][ãa]o|\bapelo\b|2º grau|segundo grau|inst[âa]ncia superior|superior tribunal|\bstj\b|\bstf\b|turma recursal|recurso inominado|recurso especial|recurso extraordin[áa]rio|contrarraz[õo]es (de|à) apela|subida dos autos|remessa (ao|dos autos ao) tribunal|distribu[íi]do.*(desembargador|relator)|conclus[ão].*relator|ac[óo]rd[ãa]o/.test(t))return "recur";
+  /* 3) DECISÓRIA — aguardando sentença/acórdão; agravo de instrumento; tutela antecipada/urgência */
+  if(/conclus[ãao].*(senten|julgamento|decis[ãa]o)|para senten[çc]a|aguardando senten|senten[çc]a|julgad|proced[êe]ncia|improced|homolog|resolvo o m[ée]rito|agravo de instrumento|tutela antecipada|tutela de urg[êe]ncia|tutela provis[óo]ria|liminar|decis[ãa]o interlocut[óo]ria/.test(t))return "decis";
+  /* 4) INSTRUTÓRIA — audiência (instrução), perícia, provas */
+  if(/audi[êe]ncia|\baij\b|instru[çc][ãa]o e julgamento|per[íi]cia|per[íi]cial|laudo|oitiva|depoimento|testemunh|especificar provas|especifica[çc][ãa]o de provas|produ[çc][ãa]o de provas|rol de testemunh|design(ada|ado|ação) de audi/.test(t))return "instr";
+  /* 5) SANEADORA (aqui = pendências de documento/emenda) — emenda à inicial, juntar documentos, gratuidade */
+  if(/emenda (à|a) inicial|emende a inicial|emendar a inicial|juntar (novos )?documento|junte (os )?documento|comprovar (a )?(hipossufici[êe]ncia|gratuidade|renda)|comprove (a )?(hipossufici[êe]ncia|gratuidade)|declara[çc][ãa]o de hipossufici|documento(s)? faltante|regularizar (a )?representa|procura[çc][ãa]o|custas iniciais|recolher (as )?custas|indefer.*gratuidade|sanea|pontos controvertid|despacho saneador/.test(t))return "sane";
+  /* 6) CONHECIMENTO — início do processo (padrão). Audiência já jogou para instrução acima. */
   return "post";}
+/* fase efetiva: MANUAL (travada pelo usuário) sobrepõe o chute automático */
+function faseDoProc(p){ if(p&&p.fase_manual){ return p.fase_manual; } return guessFase(p); }
+function _nomeFase(fid){ var m=null; FASES_META.forEach(function(x){ if(x[0]===fid) m=x; }); return m?m[1]:fid; }
+function _corFase(fid){ var m=null; FASES_META.forEach(function(x){ if(x[0]===fid) m=x; }); return m?m[2]:'#697180'; }
+/* controle de fase na ficha: mostra a fase atual e permite travar manualmente */
+function _faseCtrlHTML(p){
+  var atualF=faseDoProc(p); var manual=!!(p&&p.fase_manual); var chute=guessFase(p);
+  var n=String(p.numero||'').replace(/'/g,"");
+  var opts=FASES_META.map(function(f){ return '<option value="'+f[0]+'"'+(f[0]===atualF?' selected':'')+'>'+esc(f[1])+'</option>'; }).join('');
+  var badge='<span style="display:inline-block;border-radius:20px;padding:2px 10px;font-size:11px;font-weight:700;color:#fff;background:'+_corFase(atualF)+'">'+esc(_nomeFase(atualF))+'</span>';
+  var origem = manual
+    ? '<span class="note" style="margin:0;color:#0F6E56">✓ fase definida manualmente</span> <a onclick="limparFaseManual(\''+n+'\')" style="cursor:pointer;color:#185FA5;font-size:11px">(voltar ao automático)</a>'
+    : '<span class="note" style="margin:0">fase estimada automaticamente'+(chute!==atualF?'':'')+'</span>';
+  return '<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:12.5px">'+
+    '<span style="color:var(--muted)">Fase:</span> '+badge+
+    ' <select id="fase-sel" onchange="definirFaseManual(\''+n+'\', this.value)" style="width:auto;max-width:220px;font-size:12px;padding:3px 8px">'+opts+'</select> '+
+    origem+'</div>';
+}
+/* grava a fase manual no banco (coluna processos.fase) — passa a valer sobre o chute */
+function definirFaseManual(num, fid){
+  var p=DADOS.processos.find(function(x){return String(x.numero)===String(num);}); if(!p) return;
+  if(fid===guessFase(p) && !p.fase_manual){ /* escolheu exatamente o chute e não havia manual: nada a travar, mas registramos p/ fixar */ }
+  p.fase_manual=fid;
+  try{ var sb=window.__sb; if(sb&&p._id){ sb.from('processos').update({fase:fid}).eq('id',p._id).then(function(r){ if(r&&r.error) console.warn('fase manual:',r.error.message); }); } }catch(e){}
+  var i=DADOS.processos.indexOf(p); if(i>=0) abrir(i);
+  if(typeof renderPainel==='function'){ try{ renderPainel(); }catch(e){} }
+}
+/* índice de avanço da fase no fluxo (maior = mais avançado) */
+function _faseIdx(fid){ var i=FASE_ORDEM.indexOf(fid); return i<0?1:i; }
+/* alerta de EVOLUÇÃO: se o processo tem fase (manual OU registrada) e o histórico agora
+   indica uma fase MAIS AVANÇADA, mostra um aviso perguntando se quer atualizar.
+   Só evolução (a>b); nunca sugere retroceder. Roda ao abrir a ficha. */
+function avisoEvolucaoFase(p){
+  try{
+    if(!p) return;
+    var atualF=faseDoProc(p);           /* o que está valendo hoje (manual ou chute) */
+    var chuteF=guessFase(p);            /* o que o histórico sugere agora */
+    if(chuteF===atualF) return;         /* sem divergência */
+    if(_faseIdx(chuteF) <= _faseIdx(atualF)) return; /* não é avanço → não incomoda */
+    var host=document.getElementById('det-body'); if(!host) return;
+    var n=String(p.numero||'').replace(/'/g,"");
+    var div=document.createElement('div');
+    div.style.cssText='background:#fff8e6;border:1px solid #f0dca8;border-left:4px solid #C9A227;border-radius:10px;padding:10px 12px;margin:0 0 12px';
+    div.innerHTML='<b style="color:#8a5a00">Evolução de fase detectada.</b> '+
+      'O andamento mais recente indica que este processo pode ter avançado para '+
+      '<b style="color:'+_corFase(chuteF)+'">'+esc(_nomeFase(chuteF))+'</b> (atual: '+esc(_nomeFase(atualF))+'). Deseja atualizar?'+
+      ' <button class="btn sm gold" style="margin-left:8px" onclick="definirFaseManual(\''+n+'\',\''+chuteF+'\')">Atualizar para '+esc(_nomeFase(chuteF))+'</button>'+
+      ' <button class="btn sm ghost" onclick="this.closest(\'div\').remove()">Agora não</button>';
+    host.insertBefore(div, host.firstChild);
+  }catch(e){}
+}
+/* remove a fase manual — volta a usar o chute automático */
+function limparFaseManual(num){
+  var p=DADOS.processos.find(function(x){return String(x.numero)===String(num);}); if(!p) return;
+  p.fase_manual='';
+  try{ var sb=window.__sb; if(sb&&p._id){ sb.from('processos').update({fase:null}).eq('id',p._id).then(function(){}); } }catch(e){}
+  var i=DADOS.processos.indexOf(p); if(i>=0) abrir(i);
+  if(typeof renderPainel==='function'){ try{ renderPainel(); }catch(e){} }
+}
 function initEtiquetas(){}
 function etiquetasDoProc(num){initEtiquetas();var ids=ASSIGN[num]||[];return ids.map(function(id){var lb=lblById(id);return lb?chip(lb):"";}).join("");}
 function criarEtiqueta(){var n=document.getElementById("lbl-nome").value.trim();if(!n){alert("Dê um nome à etiqueta.");return;}var cor=document.getElementById("lbl-cor").value;LABELS.push({id:"u"+Date.now(),nome:n,cor:cor});document.getElementById("lbl-nome").value="";renderEtiquetas();}
@@ -1840,7 +1915,7 @@ function toggleConcluirTarefa(id){
   try{
     /* select estendido (honorários + vinculados). Se essas colunas ainda não existirem no banco,
        o select falha e caímos automaticamente no select básico — sem quebrar o carregamento. */
-    var selExt='id,numero,cliente_nome,oponente,assunto,foro,status,valor_causa,ultima_movimentacao,contatos_livres,hon_faturado,hon_afaturar,vinculados,fora_inove,fonte,andamentos(id,data,texto,fonte)';
+    var selExt='id,numero,cliente_nome,oponente,assunto,foro,status,valor_causa,ultima_movimentacao,contatos_livres,hon_faturado,hon_afaturar,vinculados,fora_inove,fonte,fase,andamentos(id,data,texto,fonte)';
     var selBas='id,numero,cliente_nome,oponente,assunto,foro,status,valor_causa,ultima_movimentacao,contatos_livres,andamentos(id,data,texto,fonte)';
     var res=await sb.from('processos').select(selExt).order('ultima_movimentacao',{ascending:false,nullsFirst:false}).limit(3000);
     if(res.error){ res=await sb.from('processos').select(selBas).order('ultima_movimentacao',{ascending:false,nullsFirst:false}).limit(3000); }
@@ -1850,7 +1925,7 @@ function toggleConcluirTarefa(id){
       var hf=(p.andamentos||[]).map(function(a){return {id:a.id, data:(a.data? a.data+'T00:00:00.000Z':null), texto:a.texto, f:a.fonte||''};});
       hf.sort(function(x,y){return (y.data||'').localeCompare(x.data||'');});
       var vinc=Array.isArray(p.vinculados)?p.vinculados:(p.vinculados?[].concat(p.vinculados):[]);
-      return {_id:p.id, cliente:p.cliente_nome||'', numero:p.numero, oponente:p.oponente||'', tipo:p.assunto||'', foro:p.foro||'', status:p.status||'', data:fmtData(p.ultima_movimentacao), hist:'', causa:fmtCausa(p.valor_causa), hist_full:hf, ctl:p.contatos_livres||'', hon_faturado:(p.hon_faturado!=null?p.hon_faturado:0), hon_afaturar:(p.hon_afaturar!=null?p.hon_afaturar:0), vinculados:vinc, fora_inove:!!p.fora_inove, fonte:p.fonte||'', ehCaso:(p.fonte==='caso')};
+      return {_id:p.id, cliente:p.cliente_nome||'', numero:p.numero, oponente:p.oponente||'', tipo:p.assunto||'', foro:p.foro||'', status:p.status||'', data:fmtData(p.ultima_movimentacao), hist:'', causa:fmtCausa(p.valor_causa), hist_full:hf, ctl:p.contatos_livres||'', hon_faturado:(p.hon_faturado!=null?p.hon_faturado:0), hon_afaturar:(p.hon_afaturar!=null?p.hon_afaturar:0), vinculados:vinc, fora_inove:!!p.fora_inove, fonte:p.fonte||'', ehCaso:(p.fonte==='caso'), fase_manual:(p.fase||'')};
     });
     if(DADOS.kpis){ DADOS.kpis.total=DADOS.processos.length; }
     /* publicações novas (robô DJEN) → fila de triagem */
@@ -3747,7 +3822,7 @@ function gerarDiligencia(pid,numEnc){
   document.getElementById('modal-dilig').classList.remove('hidden');
 }
 /* carrega documentos quando a ficha abre */
-(function(){ if(!window.__abrirWrapped && typeof abrir==='function'){ window.__abrirWrapped=true; var _ab=abrir; window.abrir=function(i){ _ab(i); try{ if(atual&&atual.numero){ carregarDocs(atual.numero,'','proc'); carregarDocs(atual.numero,'','outra'); } }catch(e){} try{ renderCtlChips(); }catch(e2){} try{ if(atual&&atual.numero){ localStorage.setItem('cmp_proc', atual.numero); localStorage.setItem('cmp_secao','proc-det'); } }catch(e3){}
+(function(){ if(!window.__abrirWrapped && typeof abrir==='function'){ window.__abrirWrapped=true; var _ab=abrir; window.abrir=function(i){ _ab(i); try{ if(atual&&atual.numero){ carregarDocs(atual.numero,'','proc'); carregarDocs(atual.numero,'','outra'); } }catch(e){} try{ renderCtlChips(); }catch(e2){} try{ if(typeof avisoEvolucaoFase==='function' && atual) avisoEvolucaoFase(atual); }catch(eF){} try{ if(atual&&atual.numero){ localStorage.setItem('cmp_proc', atual.numero); localStorage.setItem('cmp_secao','proc-det'); } }catch(e3){}
   try{ /* alinha o topo da coluna de documentos com o cabeçalho da ficha */
     if(window.innerWidth>=1100){ var __fc=document.querySelector('#s-proc-det .card'); var __dc=document.getElementById('docs-col');
       if(__fc&&__dc){ var __r=__fc.getBoundingClientRect(); var __t=Math.max(70, Math.round(__r.top)); __dc.style.top=__t+'px'; __dc.style.maxHeight='calc(100vh - '+(__t+20)+'px)'; } }
