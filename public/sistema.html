@@ -1302,7 +1302,7 @@ function renderCaptacao(){
     itens.sort(function(a,b){return (PRANK[a.prioridade]||1)-(PRANK[b.prioridade]||1);});
     var col=document.createElement("div");col.className="col";
     col.ondragover=function(e){e.preventDefault();};
-    col.ondrop=function(e){e.preventDefault();var id=+e.dataTransfer.getData("id");var l=LEADS.find(function(x){return x.id===id;});if(l){l.estagio=c.id; if(c.id==='ganho'&&!l.dataFechamento) l.dataFechamento=hojeISO(); salvarLeadsLocal(); renderCaptacao();}};
+    col.ondrop=function(e){e.preventDefault();var id=+e.dataTransfer.getData("id");var l=LEADS.find(function(x){return x.id===id;});if(l){var eraGanho=(l.estagio==='ganho');l.estagio=c.id; if(c.id==='ganho'&&!l.dataFechamento) l.dataFechamento=hojeISO(); salvarLeadsLocal(); renderCaptacao(); if(c.id==='ganho'&&!eraGanho) fecharLeadEAbrirCaso(l);}};
     var mvL=(idx>0)?'<a onclick="moverEtapa('+idx+',-1)" style="cursor:pointer;color:var(--muted);text-decoration:none" title="mover para a esquerda">&#9664;</a> ':'';
     var mvR=(idx<FUNIL.length-1)?' <a onclick="moverEtapa('+idx+',1)" style="cursor:pointer;color:var(--muted);text-decoration:none" title="mover para a direita">&#9654;</a>':'';
     if(c.id==='ganho'){
@@ -1388,7 +1388,17 @@ function moverEtapa(idx,dir){
 /* marca/desmarca a etapa como "mesmo andar" da anterior — no gráfico as duas dividem a faixa */
 function toggleNivel(idx){ var f=FUNIL[idx]; if(!f) return; f.juntar=!f.juntar; salvarFunilLocal(); renderCaptacao(); }
 function primeiroUltimo(n){var p=String(n||"").trim().split(/\s+/);if(p.length<=1)return p[0]||"";return p[0]+" "+p[p.length-1];}
-function moverLead(dragId,targetId){var di=LEADS.findIndex(function(x){return x.id===dragId;});var t=LEADS.find(function(x){return x.id===targetId;});if(di<0||!t||dragId===targetId)return;var d=LEADS[di];d.estagio=t.estagio; if(t.estagio==='ganho'&&!d.dataFechamento) d.dataFechamento=hojeISO(); LEADS.splice(di,1);var ti=LEADS.findIndex(function(x){return x.id===targetId;});LEADS.splice(ti,0,d);salvarLeadsLocal();renderCaptacao();}
+function moverLead(dragId,targetId){var di=LEADS.findIndex(function(x){return x.id===dragId;});var t=LEADS.find(function(x){return x.id===targetId;});if(di<0||!t||dragId===targetId)return;var d=LEADS[di];var eraGanho=(d.estagio==='ganho');d.estagio=t.estagio; if(t.estagio==='ganho'&&!d.dataFechamento) d.dataFechamento=hojeISO(); LEADS.splice(di,1);var ti=LEADS.findIndex(function(x){return x.id===targetId;});LEADS.splice(ti,0,d);salvarLeadsLocal();renderCaptacao(); if(t.estagio==='ganho'&&!eraGanho) fecharLeadEAbrirCaso(d);}
+/* ao FECHAR um lead (arrastar para "Fechado"), abre o cadastro de caso já preenchido com o lead */
+function fecharLeadEAbrirCaso(l){
+  if(!l||typeof abrirCadManual!=='function') return;
+  try{
+    abrirCadManual();
+    if(typeof setCadTipo==='function') setCadTipo('novo');
+    var sel=document.getElementById('cm-lead'); if(sel) sel.value=String(l.id);
+    if(typeof cmPuxarLead==='function') cmPuxarLead(l.id);
+  }catch(e){}
+}
 function initKanban(){
   if(KAN)return; KAN=[];
   /* As tarefas salvas no banco (kanban_tarefas) entram primeiro e PREVALECEM.
@@ -2654,6 +2664,11 @@ function renderProc(){
       <div><label>Se "Outra", qual peça?</label><input id="cm-peca-livre" placeholder="Ex.: requerimento administrativo, parecer..."></div>
     </div>
   </div>
+  <div id="cm-lead-wrap" style="background:#f4f7fb;border:1px solid #d9e4f2;border-radius:9px;padding:10px 12px;margin:2px 0 12px">
+    <label style="color:#185FA5;font-weight:600">Puxar de um lead do Comercial (opcional)</label>
+    <select id="cm-lead" onchange="cmPuxarLead(this.value)"><option value="">— selecionar um lead do funil —</option></select>
+    <p class="note" style="margin:5px 0 0">Preenche cliente, contato, assunto e observações com o que já está no card do lead. <span id="cm-lead-status" style="color:#127a53;font-weight:600"></span></p>
+  </div>
   <p class="note" style="margin:6px 0 12px">Os campos abaixo são <b>opcionais</b> — preencha o que souber. O que a captura automática traria você pode inserir aqui.</p>
   <div class="row2">
     <div style="position:relative"><label>Cliente</label><input id="cm-cliente" placeholder="Digite para buscar na base ou cadastrar novo" autocomplete="off" oninput="cmClienteInput(this.value)" onfocus="cmClienteInput(this.value)" onblur="setTimeout(cmClienteFecha,160)"><div id="cm-cli-drop" class="cm-drop"></div><div id="cm-cli-status" style="font-size:11.5px;margin-top:3px;min-height:15px"></div></div>
@@ -2675,8 +2690,43 @@ var cadTipo='processo';
 function abrirCadManual(){ cadTipo='processo'; setCadTipo('processo'); ['cm-numero','cm-casoid','cm-cliente','cm-oponente','cm-assunto','cm-foro','cm-causa','cm-obs','cm-peca-livre'].forEach(function(id){var e=document.getElementById(id);if(e)e.value='';}); var pe=document.getElementById('cm-peca'); if(pe) pe.selectedIndex=0;
   try{ seedContatos(); }catch(e){} window.__cmCliMatch=null; window.__fichaExtraida=null; window.__cmDocs=[]; cmClienteStatus(''); var dd=document.getElementById('cm-cli-drop'); if(dd){dd.classList.remove('on');dd.innerHTML='';}
   var fr=document.getElementById('cm-ficha-resumo'); if(fr){fr.style.display='none';fr.innerHTML='';} var fs=document.getElementById('cm-ficha-status'); if(fs) fs.textContent=''; var fl=document.getElementById('cm-ficha-lista'); if(fl){fl.style.display='none';fl.innerHTML='';}
+  try{ cmPopularLeads(); }catch(e){} var _ls=document.getElementById('cm-lead-status'); if(_ls) _ls.textContent=''; var _ls2=document.getElementById('cm-lead'); if(_ls2) _ls2.value='';
   document.getElementById('modal-cadmanual').classList.remove('hidden'); }
 function fecharCadManual(){ document.getElementById('modal-cadmanual').classList.add('hidden'); var dd=document.getElementById('cm-cli-drop'); if(dd){dd.classList.remove('on');dd.innerHTML='';} }
+/* preenche a lista de leads do Comercial (funil) no seletor do cadastro de caso */
+function cmPopularLeads(){
+  var sel=document.getElementById('cm-lead'); if(!sel) return;
+  var stageNome={}; (typeof FUNIL!=='undefined'?FUNIL:[]).forEach(function(f){stageNome[f.id]=f.nome;});
+  var arr=(typeof LEADS!=='undefined'?LEADS:[]).slice().filter(function(l){return l.estagio!=='perdido';});
+  arr.sort(function(a,b){return String(a.nome||'').localeCompare(String(b.nome||''));});
+  sel.innerHTML='<option value="">— selecionar um lead do funil —</option>'+arr.map(function(l){
+    var et=stageNome[l.estagio]||l.estagio||'';
+    return '<option value="'+l.id+'">'+esc(l.nome||'(sem nome)')+(et?(' · '+esc(et)):'')+(l.canal?(' · '+esc(l.canal)):'')+'</option>';
+  }).join('');
+}
+/* copia os dados do card do lead para os campos do caso novo */
+function cmPuxarLead(id){
+  if(!id) return;
+  var l=(typeof LEADS!=='undefined'?LEADS:[]).find(function(x){return String(x.id)===String(id);}); if(!l) return;
+  function setV(cid,val){ var e=document.getElementById(cid); if(e && val!=null && String(val)!=='') e.value=val; }
+  setV('cm-cliente', l.nome);
+  if(l.acao) setV('cm-assunto', l.acao);
+  if(l.valorFechado||l.valor) setV('cm-causa', l.valorFechado||l.valor);
+  var linhas=[];
+  if(l.canal) linhas.push('Origem (canal): '+l.canal);
+  if(l.tel) linhas.push('Telefone: '+l.tel);
+  if(l.email) linhas.push('E-mail: '+l.email);
+  if(l.valor) linhas.push('Valor estimado: R$ '+l.valor);
+  if(l.valorFechado) linhas.push('Valor fechado: R$ '+l.valorFechado);
+  if(l.acao) linhas.push('Próxima ação: '+l.acao);
+  if(l.lemtxt) linhas.push('Lembrete: '+l.lemtxt+(l.lemdata?(' ('+l.lemdata+')'):''));
+  if(l.obs) linhas.push('Observações do lead: '+l.obs);
+  var resumo='— Do Comercial (lead "'+(l.nome||'')+'") —\n'+(linhas.length?linhas.join('\n'):'(sem detalhes preenchidos no card)');
+  var ob=document.getElementById('cm-obs'); if(ob){ ob.value=(ob.value?(ob.value+'\n\n'):'')+resumo; }
+  /* se o lead já for um cliente da base, vincula silenciosamente */
+  try{ var nk=normClienteNome(l.nome||''); var c=(CONTATOS||[]).find(function(x){return normClienteNome(x.nome)===nk;}); if(c){ window.__cmCliMatch=c; cmClienteStatus('<span style="color:#127a53;font-weight:600">✓ cliente da base'+(c.proc>0?(' · '+c.proc+' processo'+(c.proc===1?'':'s')):'')+'</span>'); } }catch(e){}
+  var st=document.getElementById('cm-lead-status'); if(st){ st.textContent='✓ dados do lead preenchidos abaixo.'; }
+}
 /* Cliente da base × novo — sugere contatos existentes ao digitar. Se escolher um
    da base, vincula (e traz o contato dele). Se for nome novo, ao salvar cria um
    contato na aba Contatos. */
