@@ -3569,6 +3569,17 @@ async function carregarDocs(numero, sub, escopo){
     }
     if(!itens.length){ var n=document.createElement('div'); n.className='note'; n.textContent='Nenhum documento nesta pasta ainda.'; el.appendChild(n); return; }
     var naLix=/(^|\/)Lixeira$/.test(sub||'');
+    if(!sub && !naLix){
+      var nonLix=itens.filter(function(x){return x.nome!=='Lixeira';});
+      if(nonLix.length){
+        var clr=document.createElement('div'); clr.style.cssText='margin:0 0 7px;text-align:right';
+        var cb=document.createElement('a'); cb.href='#'; cb.textContent='🗑 Limpar tudo';
+        cb.title='Enviar todos os itens desta pasta para a Lixeira (útil para desfazer um envio em massa que caiu no processo errado)';
+        cb.style.cssText='font-size:12px;color:#b5342b;cursor:pointer';
+        cb.onclick=function(ev){ev.preventDefault(); limparTodosDocs(numero, escopo);};
+        clr.appendChild(cb); el.appendChild(clr);
+      }
+    }
     var tb=document.createElement('table'); tb.style.cssText='width:100%;font-size:13px';
     itens.forEach(function(x){
       var tr=document.createElement('tr'); tr.className='click'; tr.style.cursor='pointer';
@@ -3581,14 +3592,14 @@ async function carregarDocs(numero, sub, escopo){
       td2.textContent=(x.tam?(Math.max(1,Math.round(x.tam/1024))+' KB · '):'')+dtm+(naLix&&x.resta!=null?(' · '+x.resta+'d'):'');
       var relNav=(sub?sub+'/':'')+x.nome;               /* caminho relativo ao escopo (para navegar) */
       var relFull=_docDir(escopo, relNav);               /* caminho real dentro da pasta do processo (inclui a base) */
-      if(x.tipo!=='pasta'&&!naLix){
-        var del=document.createElement('span'); del.textContent=' 🗑'; del.title='Enviar para a Lixeira (fica guardado 30 dias)';
+      if(!naLix && x.nome!=='Lixeira'){
+        var del=document.createElement('span'); del.textContent=' 🗑'; del.title=(x.tipo==='pasta'?'Enviar a pasta (e tudo dentro) para a Lixeira':'Enviar para a Lixeira')+' — fica 30 dias e pode restaurar';
         del.style.cssText='cursor:pointer;opacity:.5;margin-left:5px';
         del.onmouseover=function(){del.style.opacity='1';}; del.onmouseout=function(){del.style.opacity='.5';};
         del.onclick=(function(rf,rn){return function(ev){ ev.stopPropagation(); lixeiraDoc(dig, rf, numero, rn, escopo); };})(relFull, sub);
         td2.appendChild(del);
       }
-      if(x.tipo!=='pasta'&&naLix){
+      if(naLix && x.nome!=='Lixeira'){
         var rst=document.createElement('span'); rst.textContent=' ↩'; rst.title='Restaurar para o local original';
         rst.style.cssText='cursor:pointer;color:#127a53;font-weight:700;margin-left:5px';
         rst.onclick=(function(rf,rn){return function(ev){ ev.stopPropagation(); restaurarDoc(dig, rf, numero, rn, escopo); };})(relFull, sub);
@@ -3926,6 +3937,24 @@ async function lixeiraDoc(dig, rel, numero, sub, escopo){
     body:JSON.stringify({op:'trash',path:dig+'/'+rel})});
   if(!r.ok){ alert('Não foi possível mover para a Lixeira.'); return; }
   carregarDocs(numero, sub||'', escopo||'proc');
+}
+/* limpar tudo: envia todos os itens (arquivos e pastas) do processo para a Lixeira */
+async function limparTodosDocs(numero, escopo){
+  escopo=escopo||'proc'; var dig=String(numero||'').replace(/\D/g,''); if(!dig) return;
+  var tok; try{ tok=await docToken(); }catch(e){}
+  if(!tok){ alert('Sessão expirada — recarregue a página (F5).'); return; }
+  var base=_docDir(escopo,''); var dir=(dig+(base?('/'+base):'')).replace(/\/+$/,'');
+  var r=await fetch('/api/docs?dir='+encodeURIComponent(dir),{headers:{Authorization:'Bearer '+tok}});
+  var j=await r.json(); var itens=((j&&j.itens)||[]).filter(function(x){ return x.nome!=='Lixeira' && x.nome!=='_OUTRA_PARTE'; });
+  if(!itens.length){ alert('Não há documentos para limpar aqui.'); return; }
+  if(!confirm('Enviar TODOS os '+itens.length+' item(ns) desta pasta para a Lixeira?\n\nFicam guardados 30 dias e podem ser restaurados. Use para desfazer um envio em massa que caiu no processo errado.')) return;
+  var ok=0, fail=0;
+  for(var i=0;i<itens.length;i++){
+    var rel=_docDir(escopo, itens[i].nome);
+    try{ var rr=await fetch('/api/docs',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({op:'trash',path:dig+'/'+rel})}); if(rr.ok) ok++; else fail++; }catch(e){ fail++; }
+  }
+  alert('Limpeza concluída: '+ok+' enviado(s) para a Lixeira'+(fail?(' · '+fail+' falha(s)'):'')+'.');
+  carregarDocs(numero, '', escopo);
 }
 async function restaurarDoc(dig, rel, numero, sub, escopo){
   var tok=await docToken();
