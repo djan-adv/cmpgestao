@@ -1053,11 +1053,9 @@ function abrir(i){
     '<button class="btn sm '+(__enc?'gold':'ghost')+'" style="position:absolute;top:14px;right:14px" onclick="encerrarProcesso()">'+(__enc?'Reativar':'Encerrar')+'</button>'+
     ''+
     '<div class="subhead">Processo nº <span onclick="copiarNumero(this,\''+p.numero+'\')" style="cursor:pointer;border-bottom:1px dotted var(--muted)" title="Clique para copiar o número">'+p.numero+'</span> &nbsp;·&nbsp; <span class="b '+stCls(p.status)+'">'+esc(p.status||'—')+'</span>'+
-    ' &nbsp;·&nbsp; Responsável: '+resp+
-    (function(){ var vinc=(p.hist_full&&p.hist_full.length>0)&&p.foro; return ' &nbsp;·&nbsp; <span style="display:inline-block;border-radius:20px;padding:2px 10px;font-size:11px;font-weight:600;'+(vinc?'background:#e5f4ed;color:#127a53">vinculado jus.br':'background:#fbeceb;color:#b5342b">não vinculado')+'</span>'; })()+_casoCtrlHTML(p)+'</div>'+
-    _faseCtrlHTML(p)+
+    ' &nbsp;·&nbsp; Responsável: '+resp+'</div>'+
     '<div id="ctl-chips" style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center"></div>'+
-    '<div id="proc-vinculados" style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center"></div>'+
+    ''+
     '<div style="margin-top:10px"><button class="btn sm" onclick="novaTarefaDoProcesso()">+ Nova tarefa neste processo</button> <button class="btn sm" style="background:#faf3ee;color:#D97757;border:1px solid #edd7c9;font-weight:700" onclick="agendarClaude()" title="Deixar mensagem para o cliente a qualquer hora — o Claude envia somente em horário comercial"><span style="font-size:13px">✳</span> Agendar com Claude</button> <button class="btn sm" style="background:#eef4fb;color:#185FA5;border:1px solid #cfe0f2;font-weight:700" onclick="abrirTribunal(\''+p.numero+'\')" title="Abrir o sistema do tribunal (PJe/e-SAJ/Projudi) no grau deste processo — o número é copiado para você colar na busca">&#9878; Abrir no tribunal</button> <button class="btn sm" style="background:#eef7f1;color:#0F6E56;border:1px solid #cfe8db;font-weight:700" onclick="abrirAcompanhamento(\''+p.numero+'\')" title="Ativar aviso por e-mail à cliente quando houver movimentação oficial (sem expor o teor)">&#128231; Acompanhamento</button> <button class="btn sm" style="background:#eaf4f4;color:#0b7285;border:1px solid #cfe6e6;font-weight:700" onclick="abrirAtualizarCliente(\''+p.numero+'\')" title="Montar um e-mail de atualização com as últimas movimentações, em linguagem simples, para revisar e enviar">&#9993; Atualizar cliente</button></div>'+
     /* ponto 12: bloco de processos vinculados no canto inferior direito da aba (perto do botão Encerrar) */
     '<div id="proc-vinculados-rodape" style="position:absolute;bottom:12px;right:14px;max-width:60%;display:flex;gap:6px;flex-wrap:wrap;align-items:center;justify-content:flex-end;font-size:12px"></div>'+
@@ -1072,7 +1070,17 @@ function abrir(i){
       var di=(typeof dataInicioProcesso==='function')?dataInicioProcesso(p):null; if(!di) return kv('Data de distribuição','—'); var rot=di.soAno?'Ano de ajuizamento':(di.exata?'Data de distribuição':'Início do processo'); return kv(rot, esc(di.data)+(di.exata||di.soAno?'':' <span class="note" style="font-size:11px">(1º andamento)</span>'));
     })()+
     /* linha "Valor da causa · Valor de condenação · Tribunal" removida a pedido — repetitiva (valor da causa já consta no topo da ficha) e alongava o painel */
-    '</div><div style="margin-top:8px;font-size:13px;border-top:1px solid #eef2f7;padding-top:8px">'+
+    '</div>'+
+    /* grupo D descido do cabeçalho: vínculo, marcar como caso, Fase e processos vinculados */
+    '<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--line)">'+
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px">'+
+        (function(){ var vinc=(p.hist_full&&p.hist_full.length>0)&&p.foro; return '<span style="display:inline-block;border-radius:20px;padding:2px 10px;font-size:11px;font-weight:600;'+(vinc?'background:#e5f4ed;color:#127a53">vinculado jus.br':'background:#fbeceb;color:#b5342b">não vinculado')+'</span>'; })()+
+        _casoCtrlHTML(p)+
+      '</div>'+
+      _faseCtrlHTML(p)+
+      '<div id="proc-vinculados" style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap;align-items:center"></div>'+
+    '</div>'+
+    '<div style="margin-top:8px;font-size:13px;border-top:1px solid #eef2f7;padding-top:8px">'+
     (function(){ if(/encerr/i.test(p.status||'')) return ''; var d=(typeof diasParadoOficial==='function')?diasParadoOficial(p):null; if(d==null) return ''; var cor=d>=90?'#b5342b':(d>=60?'#8a6d1a':'#5f6b7a'), bg=d>=90?'#fbeceb':(d>=60?'#fdf3e7':'#eef1f5'); return '<div style="margin-bottom:8px"><span style="display:inline-block;border-radius:20px;padding:3px 12px;font-size:12px;font-weight:700;background:'+bg+';color:'+cor+'" title="Dias desde a última movimentação do juízo/cartório — não conta petições/manifestações das partes nem o histórico manual">&#9201; Parado há '+d+' dia'+(d===1?'':'s')+' sem movimentação do juízo</span></div>'; })()+
     bvLine(p.numero)+'</div></div>';
   /* card "Partes" removido — cliente principal e parte contrária já constam no cabeçalho */
