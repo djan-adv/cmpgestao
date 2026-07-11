@@ -127,6 +127,12 @@
 <script>try{if(localStorage.getItem('sb-ndeqlyrydcijbgjiviuw-auth-token')){document.documentElement.setAttribute('data-boot','1');}}catch(e){}</script>
 <style>html[data-boot="1"] #login{display:none!important}html[data-boot="1"] body::before{content:"Carregando o CMPGestão…";display:block;text-align:center;color:#697180;font-size:14px;padding:48px}</style>
 <style>@media(min-width:900px){.side{position:fixed!important;top:0;left:0;bottom:0;width:212px;overflow-y:auto;z-index:30;height:auto}.main{margin-left:212px}#nav{padding-bottom:110px}}
+@media(max-width:760px){
+  .hon-box{float:none!important;width:100%!important;margin:12px 0 0 0!important}
+  .parties{padding-right:96px!important}
+  .kvgrid{grid-template-columns:1fr 1fr!important}
+}
+@media(max-width:480px){ .kvgrid{grid-template-columns:1fr!important} }
 @media(min-width:1100px){#s-proc-det{padding-right:calc(21vw + 4px);position:relative}#docs-col{position:fixed;right:14px;top:150px;width:21vw;max-height:calc(100vh - 170px);overflow:auto;z-index:20}#doc-card,#docop-card{box-shadow:0 6px 22px rgba(30,39,51,.10)}#doc-card table td,#docop-card table td{font-size:12px!important;word-break:break-word}}</style>
 
 <section id="login">
@@ -4588,7 +4594,7 @@ function honRow(rot,inner){
 function honQuadroHTML(p){
   var trab=ehTrabalhista(p.numero);
   var div='<div style="border-top:1px dashed var(--line);margin:7px 0"></div>';
-  var out='<div style="float:right;width:232px;margin:36px 0 10px 16px;border:1px solid var(--line);border-radius:12px;padding:11px 15px;background:var(--panel);font-size:12.5px">'
+  var out='<div class="hon-box" style="float:right;width:232px;margin:36px 0 10px 16px;border:1px solid var(--line);border-radius:12px;padding:11px 15px;background:var(--panel);font-size:12.5px">'
     +'<p class="sectlabel" style="margin:0 0 8px">Honorários'+(trab?' <span style="font-weight:400;text-transform:none;letter-spacing:0">· trab.</span>':'')+'</p>';
   out+=honRow('Contratual',honInput('hon_pct_contratual',p.hon_pct_contratual,true));
   out+=honRow('Sucumbência',honInput('hon_pct_sucumbencia',p.hon_pct_sucumbencia,true));
