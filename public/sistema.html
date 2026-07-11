@@ -4017,8 +4017,8 @@ function renderCtlChips(){
   el.appendChild(ed2);
   var ed3=document.createElement('button');
   ed3.style.cssText='background:#eef4fb;color:#185FA5;border:1px solid #cfe0f2;border-radius:16px;padding:4px 10px;font-size:12px;cursor:pointer';
-  ed3.textContent='🔎 Puxar contato da procuração';
-  ed3.title='Lê a procuração (PDF) do processo e sugere e-mail/telefone do cliente (outorgante) para os slots de contato vazios';
+  ed3.textContent='🔎 Puxar contato do cliente';
+  ed3.title='Lê a procuração e, se faltar, a petição inicial (PDF) do processo e sugere e-mail/telefone do cliente';
   ed3.onclick=puxarContatoProcuracao;
   el.appendChild(ed3);
 }
@@ -4102,19 +4102,27 @@ async function _extrairTextoPdf(arrbuf){
   for(var i=1;i<=doc.numPages;i++){ var pg=await doc.getPage(i); var tc=await pg.getTextContent(); txt+=tc.items.map(function(it){return it.str;}).join(' ')+'\n'; }
   return txt;
 }
-async function _acharProcuracao(dig){
+/* acha o 1º PDF cujo nome casa com 're' (busca nas subpastas até profundidade 2) */
+async function _acharDocRel(dig, re){
   var tok=await docToken();
   async function listar(sub){ var r=await fetch('/api/docs?dir='+encodeURIComponent(dig+(sub?'/'+sub:'')),{headers:{Authorization:'Bearer '+tok}}); var j=await r.json(); return (j&&j.itens)||[]; }
   async function busca(sub,prof){
     var itens=await listar(sub), pastas=[];
     for(var i=0;i<itens.length;i++){ var x=itens[i], rel=(sub?sub+'/':'')+x.nome;
       if(x.tipo==='pasta'){ if(x.nome!=='Lixeira') pastas.push(rel); continue; }
-      if(/procura/i.test(x.nome) && /\.pdf$/i.test(x.nome)) return rel;
+      if(re.test(x.nome) && /\.pdf$/i.test(x.nome)) return rel;
     }
     if(prof>0){ for(var k=0;k<pastas.length;k++){ var f=await busca(pastas[k],prof-1); if(f) return f; } }
     return null;
   }
   return await busca('',2);
+}
+async function _acharProcuracao(dig){ return _acharDocRel(dig, /procura/i); }
+/* janela de texto ao redor do nome do cliente (na petição inicial fica a qualificação com contato) */
+function _janelaCliente(txt, nome){
+  var toks=String(nome||'').split(/\s+/).filter(function(x){return x.length>=4;});
+  for(var i=0;i<toks.length;i++){ try{ var re=new RegExp(toks[i].replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i'); var m=re.exec(txt); if(m){ return txt.slice(Math.max(0,m.index-200), m.index+1400); } }catch(e){} }
+  return txt.slice(0,6000);
 }
 /* só o trecho ANTES do 1º marcador de outorgado/poderes = qualificação do OUTORGANTE (cliente) */
 function _janelaOutorgante(txt){
@@ -4146,18 +4154,24 @@ async function puxarContatoProcuracao(){
   if(!dig){ alert('Processo sem número.'); return; }
   var ov=document.createElement('div'); ov.id='pcr-load';
   ov.style.cssText='position:fixed;inset:0;background:rgba(20,28,40,.35);z-index:100;display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px';
-  ov.textContent='Lendo a procuração…'; document.body.appendChild(ov);
+  ov.textContent='Lendo os documentos do processo…'; document.body.appendChild(ov);
   try{
-    var rel=await _acharProcuracao(dig);
-    if(!rel){ alert('Não encontrei um arquivo de procuração (PDF com "procura" no nome) nos anexos deste processo.'); return; }
     var tok=await docToken();
-    var r=await fetch('/api/docs?file='+encodeURIComponent(dig+'/'+rel),{headers:{Authorization:'Bearer '+tok}});
-    if(!r.ok){ alert('Não consegui abrir a procuração ('+rel+').'); return; }
-    var txt=await _extrairTextoPdf(await r.arrayBuffer());
-    if(!txt || txt.replace(/\s/g,'').length<20){ alert('A procuração parece ser um PDF digitalizado (imagem), sem texto selecionável — não dá para extrair automaticamente.'); return; }
-    var jw=_janelaOutorgante(txt);
-    _modalConfirmProcuracao(rel, _acharEmails(jw.janela), _acharTelefones(jw.janela), jw.cortou);
-  }catch(e){ alert('Erro ao ler a procuração: '+(e&&e.message||e)); }
+    async function _lerDoc(rel){ if(!rel) return ''; var r=await fetch('/api/docs?file='+encodeURIComponent(dig+'/'+rel),{headers:{Authorization:'Bearer '+tok}}); if(!r.ok) return ''; var t=await _extrairTextoPdf(await r.arrayBuffer()); return (t&&t.replace(/\s/g,'').length>=20)?t:''; }
+    function _uniq(a){ var s={},o=[]; a.forEach(function(x){ var k=String(x).toLowerCase(); if(x&&!s[k]){s[k]=1;o.push(x);} }); return o; }
+    var emails=[], tels=[], fontes=[], relUsado='';
+    /* 1) procuração — foco no outorgante (cliente) */
+    var relP=await _acharDocRel(dig,/procura/i);
+    if(relP){ var tP=await _lerDoc(relP); if(tP){ var jw=_janelaOutorgante(tP); emails=emails.concat(_acharEmails(jw.janela)); tels=tels.concat(_acharTelefones(jw.janela)); fontes.push('procuração'); relUsado=relP; } }
+    /* 2) petição inicial — janela ao redor do nome do cliente (complementa o que faltar) */
+    if(!emails.length || !tels.length){
+      var relI=await _acharDocRel(dig,/inicial|peti[çc][aã]o/i);
+      if(relI && relI!==relP){ var tI=await _lerDoc(relI); if(tI){ var jc=_janelaCliente(tI, (atual&&atual.cliente)||''); emails=emails.concat(_acharEmails(jc)); tels=tels.concat(_acharTelefones(jc)); fontes.push('petição inicial'); if(!relUsado) relUsado=relI; } }
+    }
+    emails=_uniq(emails); tels=_uniq(tels);
+    if(!emails.length && !tels.length){ alert('Não encontrei e-mail/telefone na procuração nem na petição inicial deste processo.\n\n(Se os PDFs forem digitalizados/imagem, não há texto para extrair.)'); return; }
+    _modalConfirmProcuracao(fontes.join(' + ')+(relUsado?(' — '+relUsado):''), emails, tels, false);
+  }catch(e){ alert('Erro ao ler os documentos: '+(e&&e.message||e)); }
   finally{ var l=document.getElementById('pcr-load'); if(l) l.remove(); }
 }
 function _modalConfirmProcuracao(rel, emails, tels, cortou){
