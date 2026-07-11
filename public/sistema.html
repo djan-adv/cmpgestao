@@ -1046,6 +1046,7 @@ function abrir(i){
   html+='<div class="card" style="position:relative">'+honQuadroHTML(p)+'<div class="parties" style="padding-right:130px"><span style="display:inline-block;vertical-align:top;line-height:1.15"><span class="cli">'+nomeDisplay(p.cliente)+'</span><br><span class="tag-cli" style="margin:3px 0 0;font-size:9px;padding:1px 7px;display:inline-block">cliente principal</span></span>'+
     '<span class="vs" style="vertical-align:top">×</span><span style="display:inline-block;vertical-align:top;line-height:1.15"><span class="op">'+nomeDisplay(p.oponente||'—')+'</span><br><span style="font-size:9.5px;color:var(--muted);display:inline-block;margin-top:3px">parte contrária</span></span>'+
     '<button class="btn sm ghost" style="margin-left:12px;font-size:11px;padding:4px 9px;vertical-align:top" onclick="editarCliente()" title="Editar o nome do cliente/autor — ex.: colocar o casal (Fulano e Fulana)">✎ editar autor</button>'+
+    '<button class="btn sm ghost" style="margin-left:6px;font-size:11px;padding:4px 9px;vertical-align:top" onclick="puxarNomeCliente()" title="Lê a procuração (ou a petição inicial) e sugere o nome completo do cliente, incluindo o casal">👤 Puxar nome</button>'+
     '<button class="btn sm ghost" style="margin-left:6px;font-size:11px;padding:4px 9px;vertical-align:top" onclick="inverterPolos()" title="Trocar cliente ↔ oponente (o cliente fica sempre à esquerda)">⇄ inverter polos</button>'+
     ((!p.oponente||!String(p.oponente).trim())?'<button class="btn sm ghost" style="margin-left:6px;font-size:11px;padding:4px 9px;vertical-align:top" onclick="sugerirPartes()" title="Ler o histórico do processo e sugerir os nomes das partes que estão faltando">✨ sugerir partes pelo histórico</button>':'')+'</div>'+
     (typeof JALINE!=='undefined'&&JALINE[String(p.numero||'').replace(/\D/g,'')]?'<button class="btn sm gold" style="position:absolute;top:14px;right:112px;cursor:default" title="Pasta de Jaline — honorários exclusivos Djan e Jaline">Jaline</button>':'')+
@@ -4147,6 +4148,49 @@ async function _acharDocRel(dig, re){
   return await busca('',2);
 }
 async function _acharProcuracao(dig){ return _acharDocRel(dig, /procura/i); }
+/* extrai nome(s) do(s) outorgante(s)/autor(es): um NOME seguido da qualificação
+   (brasileiro, casado, CPF...). Num casal, casam os dois (autor + cônjuge). Heurístico. */
+function _extrairNomesOutorgante(txt){
+  var t=String(txt||'').replace(/\s+/g,' ');
+  /* sem flag 'i': o 1º caractere de cada palavra do nome tem de ser MAIÚSCULO (evita casar "e sua esposa", "do lar") */
+  var re=/([A-ZÀ-Ý][A-Za-zÀ-ÿ'’.\-]*(?:\s+(?:d[aeo]s?|e|[A-ZÀ-Ý][A-Za-zÀ-ÿ'’.\-]*)){1,6})\s*,?\s*(?=brasileir|estrangeir|portugu|italian|portador|inscrit|\bCPF\b|residente|casad|solteir|divorciad|vi[úu]v|nacionalidade|profiss)/g;
+  var nomes=[], seen={}, m;
+  while((m=re.exec(t))){
+    var nome=m[1].replace(/\s+/g,' ').trim().replace(/[,.;]+$/,'');
+    if(/procura|outorg|instrumento|poderes|comarca|estado|ju[íi]zo|\bvara\b|tribunal|excelent|merit[íi]ss|reclama|requer/i.test(nome)) continue;
+    var w=nome.split(/\s+/).filter(Boolean), caps=w.filter(function(x){return /^[A-ZÀ-Ý]/.test(x);});
+    if(w.length<2 || caps.length<2) continue;   /* precisa de 2+ palavras próprias (maiúsculas) */
+    var k=normClienteNome(nome);
+    if(k && !seen[k]){ seen[k]=1; nomes.push(nome); }
+  }
+  return nomes;
+}
+/* lê procuração (ou petição inicial) e sugere o nome do cliente (inclui casal) para confirmação */
+async function puxarNomeCliente(){
+  if(!atual){ return; }
+  var dig=String(atual.numero||'').replace(/\D/g,''); if(!dig){ alert('Processo sem número.'); return; }
+  var ov=document.createElement('div'); ov.id='pcr-load';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(20,28,40,.35);z-index:100;display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px';
+  ov.textContent='Lendo procuração / petição inicial…'; document.body.appendChild(ov);
+  try{
+    var tok=await docToken();
+    async function _lerDoc(rel){ if(!rel) return ''; var r=await fetch('/api/docs?file='+encodeURIComponent(dig+'/'+rel),{headers:{Authorization:'Bearer '+tok}}); if(!r.ok) return ''; var t=await _extrairTextoPdf(await r.arrayBuffer()); return (t&&t.replace(/\s/g,'').length>=20)?t:''; }
+    var janela='', fonte='';
+    var relP=await _acharDocRel(dig,/procura/i);
+    if(relP){ var tP=await _lerDoc(relP); if(tP){ janela=_janelaOutorgante(tP).janela; fonte='procuração'; } }
+    if(_extrairNomesOutorgante(janela).length<1){
+      var relI=await _acharDocRel(dig,/inicial|peti[çc][aã]o/i);
+      if(relI){ var tI=await _lerDoc(relI); if(tI){ janela=_janelaCliente(tI, (atual&&atual.cliente)||''); fonte='petição inicial'; } }
+    }
+    var nomes=_extrairNomesOutorgante(janela);
+    if(!nomes.length){ alert('Não consegui identificar nomes claros na procuração nem na petição inicial.\n\nUse "editar autor" para ajustar manualmente.'); return; }
+    var sugest=nomes.slice(0,2).join(' e ');
+    if(typeof sugerirPartes==='function') sugerirPartes();
+    var elc=document.getElementById('partes-cliente'); if(elc) elc.value=sugest;
+    var intro=document.getElementById('partes-intro'); if(intro) intro.innerHTML='Sugestão de <b>nome do cliente</b> (da '+esc(fonte)+'): <b>'+esc(sugest)+'</b>. Confira/edite e clique em salvar.'+(nomes.length>1?(' <span class="note">Encontrados: '+nomes.map(function(n){return esc(n);}).join(' · ')+'</span>'):'');
+  }catch(e){ alert('Erro ao ler os documentos: '+(e&&e.message||e)); }
+  finally{ var l=document.getElementById('pcr-load'); if(l) l.remove(); }
+}
 /* janela de texto ao redor do nome do cliente (na petição inicial fica a qualificação com contato) */
 function _janelaCliente(txt, nome){
   var toks=String(nome||'').split(/\s+/).filter(function(x){return x.length>=4;});
