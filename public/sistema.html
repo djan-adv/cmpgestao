@@ -250,8 +250,8 @@
       </div>
       <div id="crm-contatos">
         <div class="kpis" id="crm-kpis"></div>
-        <div class="searchbar"><input id="buscaCli" placeholder="Buscar por nome, tipo, telefone, origem..." oninput="renderContatos()"><span class="note" id="cli-count" style="align-self:center"></span><button class="btn sm" onclick="syncContatosClientes()">Sincronizar por cliente</button><select id="ordCli" onchange="renderContatos()" style="font-size:12px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--bg)" title="Ordenar a lista de contatos"><option value="az">Ordenar: A → Z</option><option value="proc">Mais processos ativos</option></select><button class="btn sm" style="margin-left:auto" onclick="novoContato()">+ Novo contato</button></div>
-        <div class="card"><table><thead><tr><th>Nome</th><th>Tipo</th><th>Telefone</th><th>E-mail</th><th>Origem</th><th>Proc.</th><th>Editar</th><th>Excluir</th></tr></thead><tbody id="crm-body"></tbody></table></div>
+        <div class="searchbar"><input id="buscaCli" placeholder="Buscar por nome, tipo, telefone, origem..." oninput="renderContatos()"><span class="note" id="cli-count" style="align-self:center"></span><button class="btn sm" onclick="syncContatosClientes()">Sincronizar por cliente</button><button class="btn sm" style="background:#6d28a8;color:#fff;border-color:#6d28a8" onclick="mesclarContatos()" title="Marque 2+ contatos da mesma pessoa (nas caixinhas) e clique aqui para juntar num só">⛒ Mesclar</button><select id="ordCli" onchange="renderContatos()" style="font-size:12px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--bg)" title="Ordenar a lista de contatos"><option value="az">Ordenar: A → Z</option><option value="proc">Mais processos ativos</option></select><button class="btn sm" style="margin-left:auto" onclick="novoContato()">+ Novo contato</button></div>
+        <div class="card"><table><thead><tr><th style="width:30px" title="Marque 2+ da mesma pessoa e clique em Mesclar"></th><th>Nome</th><th>Tipo</th><th>Telefone</th><th>E-mail</th><th>Origem</th><th>Proc.</th><th>Editar</th><th>Excluir</th></tr></thead><tbody id="crm-body"></tbody></table></div>
       </div>
       <div id="crm-captacao" class="hidden">
         <div style="display:flex;flex-wrap:wrap;gap:24px;margin-bottom:12px;align-items:flex-end">
@@ -1177,9 +1177,9 @@ function syncContatosClientes(silent){
   CONTATOS=nomes.map(function(nk){
     var ex=porNome[nk], reg=porNomeDB[nk];
     if(ex){ ex.proc=mapa[nk]; if(!ex.tipo) ex.tipo='cliente'; if(!ex.nome||ex.nome==='—') ex.nome=nomesOrig[nk];
-      if(reg){ if(!ex.tel||ex.tel==='—') ex.tel=telDB(reg); if(!ex.email||ex.email==='—') ex.email=emailDB(reg); if(!ex.origem||ex.origem==='—') ex.origem=reg.origem||ex.origem; }
+      if(reg){ if(!ex.tel||ex.tel==='—') ex.tel=telDB(reg); if(!ex.email||ex.email==='—') ex.email=emailDB(reg); if(!ex.origem||ex.origem==='—') ex.origem=reg.origem||ex.origem; if(!ex.dbid&&reg.id) ex.dbid=reg.id; }
       return ex; }
-    return {id:cseq++,nome:nomesOrig[nk],tipo:'cliente',tel:(reg?telDB(reg):'—'),email:(reg?emailDB(reg):'—'),origem:(reg&&reg.origem)||'—',proc:mapa[nk],labels:[]};
+    return {id:cseq++,dbid:(reg&&reg.id)||null,nome:nomesOrig[nk],tipo:'cliente',tel:(reg?telDB(reg):'—'),email:(reg?emailDB(reg):'—'),origem:(reg&&reg.origem)||'—',proc:mapa[nk],labels:[]};
   });
   existentes.forEach(function(c){
     if(!c||!c.nome) return;
@@ -1188,7 +1188,7 @@ function syncContatosClientes(silent){
   /* adiciona os contatos do banco que NÃO têm processo (para os 382 aparecerem todos) */
   var jaTem={}; CONTATOS.forEach(function(c){ if(c&&c.nome) jaTem[normClienteNome(c.nome)]=1; });
   db.forEach(function(c){ if(!c||!c.nome) return; var nk=normClienteNome(c.nome); if(jaTem[nk]) return; jaTem[nk]=1;
-    CONTATOS.push({id:cseq++,nome:c.nome,tipo:'cliente',tel:telDB(c),email:emailDB(c),origem:c.origem||'importado',proc:0,labels:[]}); });
+    CONTATOS.push({id:cseq++,dbid:c.id,nome:c.nome,tipo:'cliente',tel:telDB(c),email:emailDB(c),origem:c.origem||'importado',proc:0,labels:[]}); });
   CONTATOS.sort(function(a,b){return String(a.nome||'').localeCompare(String(b.nome||''),'pt-BR');});
   (CONTATOS||[]).forEach(function(c){
     if(c.tipo!=='cliente') return;
@@ -1262,7 +1262,7 @@ function renderContatos(){
   document.getElementById("crm-kpis").innerHTML=kpi("contatos",CONTATOS.length)+kpi("clientes",CONTATOS.filter(function(c){return c.tipo==="cliente";}).length)+kpi("leads ativos",ativos)+kpi("origem que + converte","Indicação");
   var b=document.getElementById("crm-body");b.innerHTML="";
   f.slice(0,300).forEach(function(c){var tr=document.createElement("tr");
-    tr.innerHTML='<td><b>'+esc(nomeBonito(c.nome))+'</b> '+chipsFor(c.labels)+'</td><td><span class="b '+(c.tipo==="lead"?"warn":"ok")+'">'+esc(c.tipo)+'</span></td><td>'+esc(c.tel)+'</td><td>'+esc(c.email)+'</td><td>'+esc(c.origem)+'</td><td>'+((c.proc>0)?'<a href="#" onclick="verProcessosDoContato('+c.id+');return false;" style="font-weight:700;color:var(--gold);text-decoration:none;border-bottom:1px dotted var(--gold);cursor:pointer" title="Ver os processos deste contato">'+c.proc+'</a>':'')+'</td><td><button class="btn sm ghost" onclick="editarContato('+c.id+')">Editar</button></td><td><button class="btn sm ghost" style="color:var(--danger)" onclick="excluirContato('+c.id+')">Excluir</button></td>';
+    tr.innerHTML='<td style="text-align:center"><input type="checkbox" class="cmerge" data-id="'+c.id+'"></td><td><b>'+esc(nomeBonito(c.nome))+'</b> '+chipsFor(c.labels)+'</td><td><span class="b '+(c.tipo==="lead"?"warn":"ok")+'">'+esc(c.tipo)+'</span></td><td>'+esc(c.tel)+'</td><td>'+esc(c.email)+'</td><td>'+esc(c.origem)+'</td><td>'+((c.proc>0)?'<a href="#" onclick="verProcessosDoContato('+c.id+');return false;" style="font-weight:700;color:var(--gold);text-decoration:none;border-bottom:1px dotted var(--gold);cursor:pointer" title="Ver os processos deste contato">'+c.proc+'</a>':'')+'</td><td><button class="btn sm ghost" onclick="editarContato('+c.id+')">Editar</button></td><td><button class="btn sm ghost" style="color:var(--danger)" onclick="excluirContato('+c.id+')">Excluir</button></td>';
     b.appendChild(tr);});
 }
 /* Modal: ao clicar na quantidade de processos (coluna Proc.), lista todos os
@@ -2087,6 +2087,35 @@ function renderEtqPicker(cid,sel){var box=document.getElementById(cid);if(!box)r
     box.appendChild(sp);});}
 function novaTarefaContato(){var c=window._cedit;fecharContato();abrirNovaTarefa(c&&c.nome?c.nome:"");document.getElementById("t-tipo").value="comercial";}
 function contatoParaFunil(){var nome=_v("c-nome")||(window._cedit&&window._cedit.nome)||"";if(!nome){alert("Informe o nome.");return;}var est=_v("c-etapa");LEADS.push({id:lseq++,nome:nome,canal:_v("c-origem")||"Indicação",estagio:est,tel:_v("c-tel"),email:_v("c-email"),valor:"",lemdata:"",lemtxt:"",labels:(window._csel||[]).slice()});fecharContato();crmView="captacao";setCrmView("captacao");}
+/* Mesclar contatos duplicados (grava no banco): junta 2+ registros da mesma pessoa
+   num só — mantém o nome mais completo e consolida e-mail/telefone/processos. */
+async function mesclarContatos(){
+  var checks=Array.prototype.slice.call(document.querySelectorAll('.cmerge:checked'));
+  if(checks.length<2){ alert('Marque 2 ou mais contatos (a mesma pessoa) nas caixinhas para mesclar.'); return; }
+  var ids=checks.map(function(x){ return parseInt(x.getAttribute('data-id'),10); });
+  var sel=ids.map(function(id){ return (CONTATOS||[]).find(function(c){return c.id===id;}); }).filter(Boolean);
+  if(sel.length<2){ return; }
+  sel.sort(function(a,b){ return String(b.nome||'').length-String(a.nome||'').length; });
+  var prin=sel[0], outros=sel.slice(1);
+  var sb=window.__sb; if(!sb){ alert('Sessão não encontrada.'); return; }
+  function _dbRow(c){ if(c.dbid) return c.dbid; var db=(window.__CONTATOSDB||[]);
+    if(c.email&&c.email!=='—'){ var m=db.find(function(x){return String(x.email||'').toLowerCase()===String(c.email).toLowerCase();}); if(m) return m.id; }
+    var n=db.find(function(x){return normClienteNome(x.nome)===normClienteNome(c.nome);}); return n?n.id:null; }
+  function _pick(f){ for(var i=0;i<sel.length;i++){ var v=sel[i][f]; if(v&&v!=='—') return v; } return null; }
+  if(!confirm('Mesclar em "'+prin.nome+'":\n • '+outros.map(function(c){return c.nome;}).join('\n • ')+'\n\nOs demais são apagados e e-mail/telefone/processos passam para "'+prin.nome+'". Continuar?')) return;
+  try{
+    var esc=null; try{ var ug=await sb.auth.getUser(); var pf=await sb.from('usuarios').select('escritorio_id').eq('id',ug.data.user.id).single(); esc=pf&&pf.data&&pf.data.escritorio_id; }catch(e){}
+    var prinDb=_dbRow(prin);
+    var reg={ nome:prin.nome, email:_pick('email'), telefone:_pick('tel') };
+    if(esc) reg.escritorio_id=esc;
+    if(!prinDb){ var ins=await sb.from('contatos').insert(reg).select('id').single(); if(ins.error) throw new Error(ins.error.message); prinDb=ins.data.id; }
+    else { var up=await sb.from('contatos').update(reg).eq('id',prinDb); if(up.error) throw new Error(up.error.message); }
+    for(var k=0;k<outros.length;k++){ var d=_dbRow(outros[k]); if(d && d!==prinDb){ try{ await sb.from('processos').update({cliente_id:prinDb}).eq('cliente_id',d); }catch(e){} await sb.from('contatos').delete().eq('id',d); } }
+    var ct=await sb.from('contatos').select('*').limit(5000); if(!ct.error) window.__CONTATOSDB=ct.data;
+    CONTATOS=null; syncContatosClientes(true); renderContatos();
+    alert('Pronto! Contatos mesclados em "'+prin.nome+'".');
+  }catch(e){ alert('Erro ao mesclar: '+(e&&e.message||e)); }
+}
 function novoContato(){editarContato(null);}
 function editarContato(id){seedContatos();var c=id?CONTATOS.find(function(x){return x.id===id;}):{id:null,nome:"",tipo:"cliente",tel:"",email:"",origem:"",proc:0};window._cedit=c;
   document.getElementById("mc-titulo").textContent=id?"Editar contato":"Novo contato";
