@@ -1044,7 +1044,7 @@ function abrir(i){
     ((!p.oponente||!String(p.oponente).trim())?'<button class="btn sm ghost" style="margin-left:6px;font-size:11px;padding:4px 9px;vertical-align:top" onclick="sugerirPartes()" title="Ler o histórico do processo e sugerir os nomes das partes que estão faltando">✨ sugerir partes pelo histórico</button>':'')+'</div>'+
     (typeof JALINE!=='undefined'&&JALINE[String(p.numero||'').replace(/\D/g,'')]?'<button class="btn sm gold" style="position:absolute;top:14px;right:112px;cursor:default" title="Pasta de Jaline — honorários exclusivos Djan e Jaline">Jaline</button>':'')+
     '<button class="btn sm '+(__enc?'gold':'ghost')+'" style="position:absolute;top:14px;right:14px" onclick="encerrarProcesso()">'+(__enc?'Reativar':'Encerrar')+'</button>'+
-    '<div style="position:absolute;top:52px;right:14px;text-align:right;font-size:12.5px;color:var(--muted);line-height:1.5">Honorários: faturado <b style="color:var(--navy);cursor:pointer;border-bottom:1px dotted var(--muted)" title="Clique para editar" onclick="editarHonorario(\'faturado\')">R$ '+esc(hFmt(p.hon_faturado))+'</b> · a faturar <b style="color:var(--navy);cursor:pointer;border-bottom:1px dotted var(--muted)" title="Clique para editar" onclick="editarHonorario(\'afaturar\')">R$ '+esc(hFmt(p.hon_afaturar))+'</b><br>Valor da causa: <b style="color:var(--navy)">'+(p.causa&&p.causa!=='0,00'?('R$ '+p.causa):'—')+'</b></div>'+
+    '<div style="position:absolute;top:52px;right:14px;text-align:right;font-size:12.5px;color:var(--muted);line-height:1.5">Honorários: faturado <b style="color:var(--navy);cursor:pointer;border-bottom:1px dotted var(--muted)" title="Clique para editar" onclick="editarHonorario(\'faturado\')">R$ '+esc(hFmt(p.hon_faturado))+'</b> · a faturar <b style="color:var(--navy);cursor:pointer;border-bottom:1px dotted var(--muted)" title="Clique para editar" onclick="editarHonorario(\'afaturar\')">R$ '+esc(hFmt(p.hon_afaturar))+'</b><br>Valor da causa: <b style="color:var(--navy)">'+(p.causa&&p.causa!=='0,00'?('R$ '+p.causa):'—')+'</b><br>'+honPctHTML(p)+'</div>'+
     '<div class="subhead">Processo nº <span onclick="copiarNumero(this,\''+p.numero+'\')" style="cursor:pointer;border-bottom:1px dotted var(--muted)" title="Clique para copiar o número">'+p.numero+'</span> &nbsp;·&nbsp; <span class="b '+stCls(p.status)+'">'+esc(p.status||'—')+'</span>'+
     ' &nbsp;·&nbsp; Responsável: '+resp+
     (function(){ var vinc=(p.hist_full&&p.hist_full.length>0)&&p.foro; return ' &nbsp;·&nbsp; <span style="display:inline-block;border-radius:20px;padding:2px 10px;font-size:11px;font-weight:600;'+(vinc?'background:#e5f4ed;color:#127a53">vinculado jus.br':'background:#fbeceb;color:#b5342b">não vinculado')+'</span>'; })()+_casoCtrlHTML(p)+'</div>'+
@@ -2395,7 +2395,7 @@ function toggleConcluirTarefa(id){
   try{
     /* select estendido (honorários + vinculados). Se essas colunas ainda não existirem no banco,
        o select falha e caímos automaticamente no select básico — sem quebrar o carregamento. */
-    var selExt='id,numero,cliente_nome,oponente,assunto,foro,status,valor_causa,ultima_movimentacao,contatos_livres,hon_faturado,hon_afaturar,vinculados,fora_inove,fonte,fase,observacoes,andamentos(id,data,texto,fonte)';
+    var selExt='id,numero,cliente_nome,oponente,assunto,foro,status,valor_causa,ultima_movimentacao,contatos_livres,hon_faturado,hon_afaturar,hon_pct_contratual,hon_pct_sucumbencia,hon_pct_execucao,hon_pct_ma_fe,vinculados,fora_inove,fonte,fase,observacoes,andamentos(id,data,texto,fonte)';
     var selBas='id,numero,cliente_nome,oponente,assunto,foro,status,valor_causa,ultima_movimentacao,contatos_livres,andamentos(id,data,texto,fonte)';
     var res=await sb.from('processos').select(selExt).order('ultima_movimentacao',{ascending:false,nullsFirst:false}).limit(3000);
     if(res.error){ res=await sb.from('processos').select(selBas).order('ultima_movimentacao',{ascending:false,nullsFirst:false}).limit(3000); }
@@ -2405,7 +2405,7 @@ function toggleConcluirTarefa(id){
       var hf=(p.andamentos||[]).map(function(a){return {id:a.id, data:(a.data? a.data+'T00:00:00.000Z':null), texto:a.texto, f:a.fonte||''};});
       hf.sort(function(x,y){return (y.data||'').localeCompare(x.data||'');});
       var vinc=Array.isArray(p.vinculados)?p.vinculados:(p.vinculados?[].concat(p.vinculados):[]);
-      return {_id:p.id, cliente:p.cliente_nome||'', numero:p.numero, oponente:p.oponente||'', tipo:p.assunto||'', foro:p.foro||'', status:p.status||'', data:fmtData(p.ultima_movimentacao), hist:'', causa:fmtCausa(p.valor_causa), hist_full:hf, ctl:p.contatos_livres||'', hon_faturado:(p.hon_faturado!=null?p.hon_faturado:0), hon_afaturar:(p.hon_afaturar!=null?p.hon_afaturar:0), vinculados:vinc, fora_inove:!!p.fora_inove, fonte:p.fonte||'', ehCaso:(p.fonte==='caso'), fase_manual:(p.fase||''), observacoes:(p.observacoes||'')};
+      return {_id:p.id, cliente:p.cliente_nome||'', numero:p.numero, oponente:p.oponente||'', tipo:p.assunto||'', foro:p.foro||'', status:p.status||'', data:fmtData(p.ultima_movimentacao), hist:'', causa:fmtCausa(p.valor_causa), hist_full:hf, ctl:p.contatos_livres||'', hon_faturado:(p.hon_faturado!=null?p.hon_faturado:0), hon_afaturar:(p.hon_afaturar!=null?p.hon_afaturar:0), hon_pct_contratual:(p.hon_pct_contratual!=null?p.hon_pct_contratual:null), hon_pct_sucumbencia:(p.hon_pct_sucumbencia!=null?p.hon_pct_sucumbencia:null), hon_pct_execucao:(p.hon_pct_execucao!=null?p.hon_pct_execucao:null), hon_pct_ma_fe:(p.hon_pct_ma_fe!=null?p.hon_pct_ma_fe:null), vinculados:vinc, fora_inove:!!p.fora_inove, fonte:p.fonte||'', ehCaso:(p.fonte==='caso'), fase_manual:(p.fase||''), observacoes:(p.observacoes||'')};
     });
     if(DADOS.kpis){ DADOS.kpis.total=DADOS.processos.length; }
     /* publicações novas (robô DJEN) → fila de triagem */
@@ -4373,6 +4373,31 @@ async function salvarPartes(){
    Se não existirem, o valor fica salvo na tela e o erro é apenas logado. */
 function hFmt(v){ var n=Number(v); if(!v||isNaN(n)) return '0,00'; return n.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
 function hParse(s){ s=String(s||'').replace(/[^\d,.-]/g,'').replace(/\./g,'').replace(',','.'); var n=parseFloat(s); return isNaN(n)?null:n; }
+/* percentuais de honorários (contratual / sucumbência / execução / multa má-fé) — só registro/visualização */
+function pctFmt(v){ if(v==null||v===''||isNaN(Number(v))) return '—'; return Number(v).toLocaleString('pt-BR',{maximumFractionDigits:2})+'%'; }
+/* trabalhista pelo CNJ (segmento da Justiça = 5): não tem honorários de execução */
+function ehTrabalhista(num){ var m=String(num||'').replace(/\D/g,''); return m.length>=16 && m.slice(13,14)==='5'; }
+function honPctHTML(p){
+  function cell(tipo,rot,val){ return rot+' <b style="color:var(--navy);cursor:pointer;border-bottom:1px dotted var(--muted)" title="Clique para editar" onclick="editarHonorarioPct(\''+tipo+'\')">'+esc(pctFmt(val))+'</b>'; }
+  var partes=[ cell('contratual','contratual',p.hon_pct_contratual), cell('sucumbencia','sucumb.',p.hon_pct_sucumbencia) ];
+  if(!ehTrabalhista(p.numero)) partes.push(cell('execucao','execução',p.hon_pct_execucao));
+  partes.push(cell('mafe','má-fé',p.hon_pct_ma_fe));
+  return '<span title="Percentuais combinados — só para registro/visualização. Trabalhista não exibe execução.">%: '+partes.join(' · ')+'</span>';
+}
+function editarHonorarioPct(tipo){
+  if(!atual) return;
+  var mapa={contratual:['hon_pct_contratual','honorários contratuais'],sucumbencia:['hon_pct_sucumbencia','honorários de sucumbência'],execucao:['hon_pct_execucao','honorários de execução'],mafe:['hon_pct_ma_fe','multa por litigância de má-fé']};
+  var m=mapa[tipo]; if(!m) return; var campo=m[0];
+  var atualVal=(atual[campo]!=null&&atual[campo]!=='')?String(atual[campo]).replace('.',','):'';
+  var v=prompt('Percentual de '+m[1]+' (%). Ex.: 30 · 12 · 10. Deixe em branco para limpar:', atualVal);
+  if(v===null) return;
+  var vazio=(String(v).trim()==='');
+  var s=String(v).replace(/[^\d,.-]/g,'').replace(/\./g,'').replace(',','.'); var num=parseFloat(s);
+  if(!vazio && (isNaN(num))){ alert('Percentual inválido. Use só números, ex.: 12 ou 12,5'); return; }
+  atual[campo]=vazio?null:num;
+  var i=DADOS.processos.indexOf(atual); if(i>=0) abrir(i);
+  try{ var sb=window.__sb; if(sb && atual._id){ var upd={}; upd[campo]=atual[campo]; sb.from('processos').update(upd).eq('id',atual._id).then(function(r){ if(r&&r.error){ console.warn('percentual não persistido:',r.error.message); } }); } }catch(e){}
+}
 function editarHonorario(qual){
   if(!atual) return;
   var campo=(qual==='faturado')?'hon_faturado':'hon_afaturar';
