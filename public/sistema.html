@@ -3742,6 +3742,13 @@ function _syncMatchIdx(folderNome){
   var rt=buscaEm(todos,0.6); if(rt>=0) return {idx:rt,via:'histórico'};
   return {idx:-1,via:''};
 }
+/* opções "leves": só o destino já reconhecido (ou vazio). As demais opções carregam
+   quando o usuário digita na busca da linha — evita montar milhares de <option>. */
+function _syncProcOptionsMini(sel){
+  var opts='<option value="">— não enviar —</option>';
+  if(sel>=0){ var p=DADOS.processos[sel]||{}; opts+='<option value="'+sel+'" selected>'+esc(String(p.cliente||'(sem cliente)').slice(0,44))+' — '+esc(p.numero)+'</option>'; }
+  return opts;
+}
 function _syncProcOptions(sel, termo){
   var opts='<option value="">— não enviar —</option>';
   var hay=termo?_syncHaystacks():null; var tq=termo?normClienteNome(termo):'';
@@ -3772,7 +3779,10 @@ function syncPreparar(inp){
   var modoAuto=(Object.keys(subpastas).length>=2)?'mae':'unico';
   var rb=document.querySelector('input[name="sync-modo"][value="'+modoAuto+'"]'); if(rb) rb.checked=true;
   if(inp) inp.value='';
-  syncReagrupar();
+  var st=document.getElementById('sync-status'); if(st) st.innerHTML='Lendo <b>'+files.length+'</b> arquivo(s) e reconhecendo os processos… <span class="note">(pode levar alguns segundos)</span>';
+  var pv=document.getElementById('sync-preview'); if(pv) pv.innerHTML='';
+  /* processa fora do clique para a mensagem acima aparecer, e mostra erro se houver */
+  setTimeout(function(){ try{ syncReagrupar(); }catch(e){ if(st) st.innerHTML='<b style="color:#b5342b">Erro ao processar a pasta:</b> '+esc(e&&e.message||String(e)); } }, 60);
 }
 function syncReagrupar(){
   var files=window.__syncFiles||[]; if(!files.length) return;
@@ -3816,7 +3826,7 @@ function syncRenderGroups(){
       '<td style="padding:7px 6px">'+alvo+
         '<div style="margin-top:4px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">'+
         '<input type="text" placeholder="buscar processo (qualquer nome)…" oninput="syncBuscarNaLinha('+gi+',this.value)" style="width:200px;font-size:12px;padding:4px 6px;border:1px solid var(--line);border-radius:6px">'+
-        '<select data-g="'+gi+'" style="max-width:330px;font-size:12px;padding:4px;border:1px solid var(--line);border-radius:6px">'+_syncProcOptions(g.idx)+'</select>'+
+        '<select data-g="'+gi+'" style="max-width:330px;font-size:12px;padding:4px;border:1px solid var(--line);border-radius:6px">'+_syncProcOptionsMini(g.idx)+'</select>'+
         '</div></td>'+
     '</tr>';
   }).join('');
