@@ -1037,7 +1037,7 @@ function abrir(i){
   var html='';
   // cabeçalho: partes no mesmo tamanho, cliente em negrito e marcado
   var __enc=/encerr/i.test(p.status||'');
-  html+='<div class="card" style="position:relative"><div class="parties" style="padding-right:130px"><span style="display:inline-block;vertical-align:top;line-height:1.15"><span class="cli">'+nomeDisplay(p.cliente)+'</span><br><span class="tag-cli" style="margin:3px 0 0;font-size:9px;padding:1px 7px;display:inline-block">cliente principal</span></span>'+
+  html+='<div class="card" style="position:relative">'+honQuadroHTML(p)+'<div class="parties" style="padding-right:130px"><span style="display:inline-block;vertical-align:top;line-height:1.15"><span class="cli">'+nomeDisplay(p.cliente)+'</span><br><span class="tag-cli" style="margin:3px 0 0;font-size:9px;padding:1px 7px;display:inline-block">cliente principal</span></span>'+
     '<span class="vs" style="vertical-align:top">×</span><span style="display:inline-block;vertical-align:top;line-height:1.15"><span class="op">'+nomeDisplay(p.oponente||'—')+'</span><br><span style="font-size:9.5px;color:var(--muted);display:inline-block;margin-top:3px">parte contrária</span></span>'+
     '<button class="btn sm ghost" style="margin-left:12px;font-size:11px;padding:4px 9px;vertical-align:top" onclick="editarCliente()" title="Editar o nome do cliente/autor — ex.: colocar o casal (Fulano e Fulana)">✎ editar autor</button>'+
     '<button class="btn sm ghost" style="margin-left:6px;font-size:11px;padding:4px 9px;vertical-align:top" onclick="inverterPolos()" title="Trocar cliente ↔ oponente (o cliente fica sempre à esquerda)">⇄ inverter polos</button>'+
@@ -1056,7 +1056,6 @@ function abrir(i){
     '<div id="proc-vinculados-rodape" style="position:absolute;bottom:12px;right:14px;max-width:60%;display:flex;gap:6px;flex-wrap:wrap;align-items:center;justify-content:flex-end;font-size:12px"></div>'+
     '</div>';
   // dados do processo
-  html+=honQuadroHTML(p);
   html+='<div class="card"><p class="sectlabel">Dados do processo</p><div class="kvgrid">'+
     kv('Ação / assunto',esc(p.tipo))+kv('Número',p.numero)+kv('Juízo / foro',esc(p.foro))+
     (function(){ var di=(typeof dataInicioProcesso==='function')?dataInicioProcesso(p):null; if(!di) return ''; var rot=di.soAno?'Ano de ajuizamento':(di.exata?'Distribuição':'Início do processo'); return kv(rot, esc(di.data)+(di.exata||di.soAno?'':' <span class="note" style="font-size:11px">(1º andamento)</span>')); })()+
@@ -4378,21 +4377,36 @@ function hParse(s){ s=String(s||'').replace(/[^\d,.-]/g,'').replace(/\./g,'').re
 function pctFmt(v){ if(v==null||v===''||isNaN(Number(v))) return '0%'; return Number(v).toLocaleString('pt-BR',{maximumFractionDigits:2})+'%'; }
 /* trabalhista pelo CNJ (segmento da Justiça = 5): não tem honorários de execução */
 function ehTrabalhista(num){ var m=String(num||'').replace(/\D/g,''); return m.length>=16 && m.slice(13,14)==='5'; }
-function honRow(rot,disp,fn){
-  var val=fn?('<b style="color:var(--navy);cursor:pointer;border-bottom:1px dotted var(--muted)" title="Clique para preencher/editar" onclick="'+fn+'">'+disp+'</b>'):('<b style="color:var(--navy)">'+disp+'</b>');
-  return '<div style="display:flex;justify-content:space-between;gap:18px;padding:2px 0;line-height:1.6"><span style="color:var(--muted)">'+rot+'</span>'+val+'</div>';
+/* campo editável direto (sem pop-up); salva ao sair do campo ou apertar Enter */
+function honInput(campo,val,isPct){
+  var num=(val==null||val==='')?0:Number(val); if(isNaN(num)) num=0;
+  var v=String(num).replace('.',',');
+  var inp='<input value="'+v+'" onblur="salvarHon(\''+campo+'\',this.value)" onkeydown="if(event.key===\'Enter\')this.blur();" inputmode="decimal" style="width:58px;text-align:right;border:0;border-bottom:1px dotted var(--muted);background:transparent;font-weight:700;color:var(--navy);font-size:12.5px;padding:1px 2px;font-family:inherit;outline:none">';
+  return isPct?(inp+' <b style="color:var(--navy)">%</b>'):('<b style="color:var(--navy)">R$</b> '+inp);
+}
+function salvarHon(campo,raw){
+  if(!atual) return;
+  var t=String(raw==null?'':raw).trim();
+  var s=t.replace(/[^\d,.-]/g,'').replace(/\./g,'').replace(',','.');
+  var num=(t==='')?0:parseFloat(s); if(isNaN(num)) return;
+  atual[campo]=num;
+  try{ var sb=window.__sb; if(sb && atual._id){ var upd={}; upd[campo]=num; sb.from('processos').update(upd).eq('id',atual._id).then(function(r){ if(r&&r.error) console.warn('honorário não persistido:',r.error.message); }); } }catch(e){}
+}
+function honRow(rot,inner){
+  return '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:2px 0"><span style="color:var(--muted)">'+rot+'</span><span style="white-space:nowrap">'+inner+'</span></div>';
 }
 function honQuadroHTML(p){
   var trab=ehTrabalhista(p.numero);
   var div='<div style="border-top:1px dashed var(--line);margin:7px 0"></div>';
-  var out='<div class="card" style="max-width:360px;padding:12px 16px"><p class="sectlabel" style="margin:0 0 8px">Honorários'+(trab?' <span style="font-weight:400;text-transform:none;letter-spacing:0">· trabalhista</span>':'')+'</p>';
-  out+=honRow('Contratual',esc(pctFmt(p.hon_pct_contratual)),'editarHonorarioPct(\'contratual\')');
-  out+=honRow('Sucumbência',esc(pctFmt(p.hon_pct_sucumbencia)),'editarHonorarioPct(\'sucumbencia\')');
-  if(!trab) out+=honRow('Execução',esc(pctFmt(p.hon_pct_execucao)),'editarHonorarioPct(\'execucao\')');
-  out+=honRow('Multa má-fé',esc(pctFmt(p.hon_pct_ma_fe)),'editarHonorarioPct(\'mafe\')');
-  if(!trab) out+=honRow('Pró-labore','R$ '+esc(hFmt(p.hon_pro_labore)),'editarHonorario(\'prolabore\')');
+  var out='<div style="float:right;width:232px;margin:36px 0 10px 16px;border:1px solid var(--line);border-radius:12px;padding:11px 15px;background:var(--panel);font-size:12.5px">'
+    +'<p class="sectlabel" style="margin:0 0 8px">Honorários'+(trab?' <span style="font-weight:400;text-transform:none;letter-spacing:0">· trab.</span>':'')+'</p>';
+  out+=honRow('Contratual',honInput('hon_pct_contratual',p.hon_pct_contratual,true));
+  out+=honRow('Sucumbência',honInput('hon_pct_sucumbencia',p.hon_pct_sucumbencia,true));
+  if(!trab) out+=honRow('Execução',honInput('hon_pct_execucao',p.hon_pct_execucao,true));
+  out+=honRow('Multa má-fé',honInput('hon_pct_ma_fe',p.hon_pct_ma_fe,true));
+  if(!trab) out+=honRow('Pró-labore',honInput('hon_pro_labore',p.hon_pro_labore,false));
   out+=div;
-  out+=honRow('Valor da condenação','R$ '+esc(hFmt(p.valor_condenacao)),'editarHonorario(\'condenacao\')');
+  out+=honRow('Valor da condenação',honInput('valor_condenacao',p.valor_condenacao,false));
   out+='</div>';
   return out;
 }
