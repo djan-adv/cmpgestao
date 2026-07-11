@@ -4607,13 +4607,13 @@ function salvarHon(campo,raw){
   try{ var sb=window.__sb; if(sb && atual._id){ var upd={}; upd[campo]=num; sb.from('processos').update(upd).eq('id',atual._id).then(function(r){ if(r&&r.error) console.warn('honorário não persistido:',r.error.message); }); } }catch(e){}
 }
 function honRow(rot,inner){
-  return '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:2px 0"><span style="color:var(--muted)">'+rot+'</span><span style="white-space:nowrap">'+inner+'</span></div>';
+  return '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:0;line-height:1.42"><span style="color:var(--muted)">'+rot+'</span><span style="white-space:nowrap">'+inner+'</span></div>';
 }
 function honQuadroHTML(p){
   var trab=ehTrabalhista(p.numero);
-  var div='<div style="border-top:1px dashed var(--line);margin:7px 0"></div>';
-  var out='<div class="hon-box" style="float:right;width:232px;margin:36px 0 10px 16px;border:1px solid var(--line);border-radius:12px;padding:11px 15px;background:var(--panel);font-size:12.5px">'
-    +'<p class="sectlabel" style="margin:0 0 8px">Honorários'+(trab?' <span style="font-weight:400;text-transform:none;letter-spacing:0">· trab.</span>':'')+'</p>';
+  var div='<div style="border-top:1px dashed var(--line);margin:4px 0"></div>';
+  var out='<div class="hon-box" style="float:right;width:232px;margin:36px 0 10px 16px;border:1px solid var(--line);border-radius:12px;padding:9px 15px;background:var(--panel);font-size:12.5px">'
+    +'<p class="sectlabel" style="margin:0 0 5px">Honorários'+(trab?' <span style="font-weight:400;text-transform:none;letter-spacing:0">· trab.</span>':'')+'</p>';
   out+=honRow('Contratual',honInput('hon_pct_contratual',p.hon_pct_contratual,true));
   out+=honRow('Sucumbência',honInput('hon_pct_sucumbencia',p.hon_pct_sucumbencia,true));
   if(!trab) out+=honRow('Execução',honInput('hon_pct_execucao',p.hon_pct_execucao,true));
