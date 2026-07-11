@@ -1222,11 +1222,21 @@ function nomeBonito(nome){
 }
 /* Exibição de nome: sempre em Caixa de Título (igual aos Contatos) e, se for muito
    longo, mostra os 3 primeiros nomes normais e o resto em fonte menor. Retorna HTML. */
+/* limpa o nome para exibição: tira CNPJ/CPF e siglas societárias (LTDA, ME, EIRELI...) */
+function stripEmpresa(nome){
+  var s=String(nome||'');
+  s=s.replace(/\s*[-–—]?\s*(cnpj|cpf|c\.?n\.?p\.?j|c\.?p\.?f)\b[\s:.\-]*[\d.\/-]*.*$/i,''); /* documento e tudo depois */
+  s=s.replace(/\s*[-–—]\s*(me|epp|mei|eireli|ltda)\b\.?/ig,' ');                              /* "- ME", "- LTDA" etc. */
+  s=s.replace(/\b(ltda|eireli|epp|mei|s\.?\/?a\.?|cia)\b\.?/ig,' ');                           /* siglas soltas */
+  s=s.replace(/\b(me)\b/ig,' ');                                                               /* ME solto (por último) */
+  s=s.replace(/\s*[-–—]\s*$/,'').replace(/[\s,;-]+$/,'').replace(/\s{2,}/g,' ').trim();
+  return s||String(nome||'');
+}
 function nomeDisplay(nome, maxPrim){
-  var t=nomeBonito(nome); if(!t) return esc(String(nome||'—'));
+  var t=nomeBonito(stripEmpresa(nome)); if(!t) return esc(String(nome||'—'));
   var w=t.split(' '); var mp=maxPrim||3;
   if(w.length<=mp+1 && t.length<=30) return esc(t);
-  return esc(w.slice(0,mp).join(' '))+' <span style="font-size:0.66em;font-weight:400;opacity:.8">'+esc(w.slice(mp).join(' '))+'</span>';
+  return esc(w.slice(0,mp).join(' '))+'<br><span style="font-size:0.72em;font-weight:400;opacity:.85">'+esc(w.slice(mp).join(' '))+'</span>';
 }
 function renderContatos(){
   seedContatos();
