@@ -3706,13 +3706,17 @@ function _brisasSet(){
 }
 function _syncMatchIdx(folderNome){
   var q=normClienteNome(folderNome); if(!q) return {idx:-1,via:''};
-  var qtok=q.split(' ').filter(function(t){ return t.length>=3; });
+  /* remove "ruído" do nome da pasta: anotações (ok, email), números e termos de status,
+     que atrapalham o reconhecimento (ex.: "Sayonara 14664 ok email" -> "sayonara") */
+  var STOP={ok:1,email:1,emails:1,mail:1,gmail:1,lote:1,nao:1,existe:1,sem:1,com:1,doc:1,docs:1,pdf:1,arquivo:1,arquivos:1,pasta:1,copia:1,enviado:1,enviada:1,enviar:1,feito:1,done:1,reserva:1,habilitacao:1,divergencia:1,processo:1,autos:1};
+  var qtok=q.split(' ').filter(function(t){ return t.length>=3 && !STOP[t] && !/^\d+([.,]\d+)?$/.test(t); });
   if(!qtok.length) return {idx:-1,via:''};
+  var qc=qtok.join(' ');   /* nome da pasta já limpo do ruído */
   /* 1) pelo cliente (forte) */
   var best=-1, bestScore=0;
   (DADOS.processos||[]).forEach(function(p,i){ if(/encerr/i.test(p.status||'')) return;
     var cn=normClienteNome(p.cliente); if(!cn) return; var sc=0;
-    if(cn===q) sc=100; else if(cn.indexOf(q)===0 || q.indexOf(cn)===0) sc=90;
+    if(cn===qc) sc=100; else if(cn.indexOf(qc)===0 || qc.indexOf(cn)===0) sc=90;
     else { var all=qtok.every(function(t){ return cn.indexOf(t)>-1; }); if(all) sc=70+qtok.length; }
     if(sc>bestScore){ bestScore=sc; best=i; }
   });
@@ -3749,11 +3753,12 @@ function syncPreparar(inp){
   var files=Array.prototype.slice.call((inp&&inp.files)||[]);
   if(!files.length){ return; }
   window.__syncFiles=files; window.__syncFlipped=false;
-  /* auto-detecção do modo: se há arquivos SOLTOS direto na pasta escolhida (profundidade 2),
-     é a pasta de um único processo; se está tudo em sub-subpastas, é pasta-mãe. */
-  var temSolto=files.some(function(f){ return (f.webkitRelativePath||f.name).replace(/\\/g,'/').split('/').filter(Boolean).length===2; });
-  var raizes={}; files.forEach(function(f){ var p2=(f.webkitRelativePath||f.name).replace(/\\/g,'/').split('/').filter(Boolean); if(p2.length>=2) raizes[p2[1]]=1; });
-  var modoAuto=(temSolto || Object.keys(raizes).length<=1)?'unico':'mae';
+  /* auto-detecção do modo: conta SUBPASTAS reais (profundidade >=3, ou seja,
+     pasta-mãe/subpasta/arquivo). Se houver 2+ subpastas, é pasta-mãe (cada subpasta
+     é um processo), mesmo que existam alguns arquivos soltos na raiz. Só cai em
+     "único" quando não há subpastas de verdade. */
+  var subpastas={}; files.forEach(function(f){ var p2=(f.webkitRelativePath||f.name).replace(/\\/g,'/').split('/').filter(Boolean); if(p2.length>=3) subpastas[p2[1]]=1; });
+  var modoAuto=(Object.keys(subpastas).length>=2)?'mae':'unico';
   var rb=document.querySelector('input[name="sync-modo"][value="'+modoAuto+'"]'); if(rb) rb.checked=true;
   if(inp) inp.value='';
   syncReagrupar();
