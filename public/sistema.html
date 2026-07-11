@@ -3569,12 +3569,14 @@ async function carregarDocs(numero, sub, escopo){
     }
     if(!itens.length){ var n=document.createElement('div'); n.className='note'; n.textContent='Nenhum documento nesta pasta ainda.'; el.appendChild(n); return; }
     var naLix=/(^|\/)Lixeira$/.test(sub||'');
-    if(!sub && !naLix){
+    /* "Limpar tudo" só em processos ENCERRADOS (arquivados) — evita apagar em massa por engano num ativo */
+    var _encProc=(typeof atual!=='undefined' && atual && /encerr/i.test(atual.status||''));
+    if(!sub && !naLix && _encProc){
       var nonLix=itens.filter(function(x){return x.nome!=='Lixeira';});
       if(nonLix.length){
         var clr=document.createElement('div'); clr.style.cssText='margin:0 0 7px;text-align:right';
         var cb=document.createElement('a'); cb.href='#'; cb.textContent='🗑 Limpar tudo';
-        cb.title='Enviar todos os itens desta pasta para a Lixeira (útil para desfazer um envio em massa que caiu no processo errado)';
+        cb.title='Processo arquivado: enviar todos os documentos para a Lixeira (aliviar o sistema)';
         cb.style.cssText='font-size:12px;color:#b5342b;cursor:pointer';
         cb.onclick=function(ev){ev.preventDefault(); limparTodosDocs(numero, escopo);};
         clr.appendChild(cb); el.appendChild(clr);
