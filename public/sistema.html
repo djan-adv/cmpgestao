@@ -3667,9 +3667,13 @@ async function enviarPasta(inp, escopo){
     var el=document.getElementById(E.panel);
     for(var i=0;i<files.length;i++){
       var f=files[i];
-      /* webkitRelativePath ex.: "MinhaPasta/sub/arquivo.pdf" — preserva a hierarquia enviada */
-      var rel=(f.webkitRelativePath||f.name).replace(/\\/g,'/');
-      if(el) el.innerHTML='<div class="note">Enviando pasta: '+esc(rel)+' ('+(i+1)+' de '+files.length+')…</div>';
+      /* webkitRelativePath ex.: "Edkarla/anexos/arquivo.pdf". "Abre" a pasta escolhida:
+         tira o 1º segmento (o nome dela) e joga o conteúdo no nível atual — arquivos
+         soltos vão para a tela principal e as subpastas internas sobem preservadas. */
+      var _rp=(f.webkitRelativePath||f.name).replace(/\\/g,'/');
+      var _pp=_rp.split('/').filter(Boolean);
+      var rel=(_pp.length>1)?_pp.slice(1).join('/'):(_pp[0]||f.name);
+      if(el) el.innerHTML='<div class="note">Enviando: '+esc(rel)+' ('+(i+1)+' de '+files.length+')…</div>';
       var relPath=dig+'/'+_docDir(escopo, sub)+'/'+rel;
       var bytes=new Uint8Array(await f.arrayBuffer());
       var CH=512*1024, off=0;
