@@ -27,7 +27,7 @@ function purgarLixeira(procDir) {
     const t = new Date(info.quando).getTime()
     if (!fs.existsSync(path.join(tdir, nome))) { delete m[nome]; mudou = true; continue }
     if (agora - t > DIAS_LIXEIRA * 86400000) {
-      try { fs.unlinkSync(path.join(tdir, nome)) } catch (e) {}
+      try { fs.rmSync(path.join(tdir, nome), { recursive: true, force: true }) } catch (e) {}
       delete m[nome]; mudou = true
     }
   }
@@ -100,7 +100,7 @@ export async function POST(request) {
 
   // mover para a Lixeira do processo (fica 30 dias, depois é apagado)
   if (b.op === 'trash') {
-    if (!fs.existsSync(full) || fs.statSync(full).isDirectory()) return Response.json({ erro: 'arquivo não encontrado' }, { status: 404 })
+    if (!fs.existsSync(full)) return Response.json({ erro: 'item não encontrado' }, { status: 404 })
     const seg = rel.split('/')[0]
     const procDir = path.join(ROOT, seg)
     if (rel.split('/').includes(TRASH)) return Response.json({ erro: 'já está na Lixeira' }, { status: 400 })
@@ -114,7 +114,7 @@ export async function POST(request) {
 
   // restaurar da Lixeira para o local original
   if (b.op === 'restore') {
-    if (!fs.existsSync(full) || fs.statSync(full).isDirectory()) return Response.json({ erro: 'arquivo não encontrado' }, { status: 404 })
+    if (!fs.existsSync(full)) return Response.json({ erro: 'item não encontrado' }, { status: 404 })
     const seg = rel.split('/')[0]
     const procDir = path.join(ROOT, seg)
     const nome = path.basename(rel)
