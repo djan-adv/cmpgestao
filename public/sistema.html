@@ -4148,6 +4148,23 @@ async function _acharDocRel(dig, re){
   return await busca('',2);
 }
 async function _acharProcuracao(dig){ return _acharDocRel(dig, /procura/i); }
+/* casal a partir do HISTÓRICO: procura "Cliente e sua esposa X" ou "A e B" (mesmo sobrenome) */
+function _casalOk(n){ var w=n.split(/\s+/).filter(Boolean), caps=w.filter(function(x){return /^[A-ZÀ-Ý]/.test(x);}); return w.length>=2 && caps.length>=2 && !/procura|outorg|comarca|tribunal|\bvara\b|estado|ju[íi]zo|reclama|requer|senten|ac[óo]rd|decis|minist[ée]rio|fazenda|uni[ãa]o|\bbanco\b|caixa/i.test(n); }
+function _compartSobren(a,b){ var aw=normClienteNome(a).split(' ').filter(function(x){return x.length>=4;}).slice(1), bw=normClienteNome(b).split(' ').filter(function(x){return x.length>=4;}).slice(1); return aw.some(function(x){return bw.indexOf(x)>-1;}); }
+function _casalHistorico(p){
+  if(!p) return '';
+  var t=(p.hist_full||[]).map(function(a){return (a&&a.texto)||'';}).join(' ');
+  t=(t+' '+(p.hist||'')).replace(/\s+/g,' ');
+  var NM="[A-ZÀ-Ý][A-Za-zÀ-ÿ'’.\\-]+(?:\\s+(?:d[aeo]s?|[A-ZÀ-Ý][A-Za-zÀ-ÿ'’.\\-]+)){0,6}";
+  var re1=new RegExp('('+NM+')\\s+e\\s+(?:sua\\s+esposa|seu\\s+esposo|sua\\s+c[ôo]njuge|seu\\s+c[ôo]njuge|sua\\s+companheira|seu\\s+companheiro)\\s+('+NM+')','g');
+  var re2=new RegExp('('+NM+')\\s+e\\s+('+NM+')','g');
+  var clik=normClienteNome(p.cliente||''); var ctok=clik.split(' ').filter(function(x){return x.length>=4;});
+  function rel(a){ var na=normClienteNome(a); return ctok.some(function(tk){return na.indexOf(tk)>-1;}) || (na && clik.indexOf(na.split(' ')[0])>-1); }
+  var m;
+  while((m=re1.exec(t))){ var a=m[1].trim(), b=m[2].trim(); if(_casalOk(a)&&_casalOk(b)&&(rel(a)||rel(b))) return a+' e '+b; }
+  while((m=re2.exec(t))){ var a2=m[1].trim(), b2=m[2].trim(); if(_casalOk(a2)&&_casalOk(b2)&&(rel(a2)||rel(b2))&&_compartSobren(a2,b2)) return a2+' e '+b2; }
+  return '';
+}
 /* extrai nome(s) do(s) outorgante(s)/autor(es): um NOME seguido da qualificação
    (brasileiro, casado, CPF...). Num casal, casam os dois (autor + cônjuge). Heurístico. */
 function _extrairNomesOutorgante(txt){
@@ -4171,24 +4188,30 @@ async function puxarNomeCliente(){
   var dig=String(atual.numero||'').replace(/\D/g,''); if(!dig){ alert('Processo sem número.'); return; }
   var ov=document.createElement('div'); ov.id='pcr-load';
   ov.style.cssText='position:fixed;inset:0;background:rgba(20,28,40,.35);z-index:100;display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px';
-  ov.textContent='Lendo procuração / petição inicial…'; document.body.appendChild(ov);
+  ov.textContent='Procurando o nome do casal (histórico → procuração → petição)…'; document.body.appendChild(ov);
   try{
+    var candidatos=[], fonte='';
+    /* 1) HISTÓRICO (sempre disponível) */
+    var ch=_casalHistorico(atual);
+    if(ch){ candidatos.push(ch); fonte='histórico'; }
+    /* 2) PROCURAÇÃO / 3) PETIÇÃO INICIAL (PDF) */
     var tok=await docToken();
     async function _lerDoc(rel){ if(!rel) return ''; var r=await fetch('/api/docs?file='+encodeURIComponent(dig+'/'+rel),{headers:{Authorization:'Bearer '+tok}}); if(!r.ok) return ''; var t=await _extrairTextoPdf(await r.arrayBuffer()); return (t&&t.replace(/\s/g,'').length>=20)?t:''; }
-    var janela='', fonte='';
+    var janela='', fontePdf='';
     var relP=await _acharDocRel(dig,/procura/i);
-    if(relP){ var tP=await _lerDoc(relP); if(tP){ janela=_janelaOutorgante(tP).janela; fonte='procuração'; } }
+    if(relP){ var tP=await _lerDoc(relP); if(tP){ janela=_janelaOutorgante(tP).janela; fontePdf='procuração'; } }
     if(_extrairNomesOutorgante(janela).length<1){
       var relI=await _acharDocRel(dig,/inicial|peti[çc][aã]o/i);
-      if(relI){ var tI=await _lerDoc(relI); if(tI){ janela=_janelaCliente(tI, (atual&&atual.cliente)||''); fonte='petição inicial'; } }
+      if(relI){ var tI=await _lerDoc(relI); if(tI){ janela=_janelaCliente(tI, (atual&&atual.cliente)||''); fontePdf='petição inicial'; } }
     }
-    var nomes=_extrairNomesOutorgante(janela);
-    if(!nomes.length){ alert('Não consegui identificar nomes claros na procuração nem na petição inicial.\n\nUse "editar autor" para ajustar manualmente.'); return; }
-    var sugest=nomes.slice(0,2).join(' e ');
+    var nomesPdf=_extrairNomesOutorgante(janela);
+    if(nomesPdf.length){ var cp=nomesPdf.slice(0,2).join(' e '); if(candidatos.indexOf(cp)<0) candidatos.push(cp); if(!fonte) fonte=fontePdf; }
+    if(!candidatos.length){ alert('Não achei o nome do casal no histórico nem na procuração/petição inicial deste processo.\n\n(Se os PDFs não estiverem na pasta ou forem imagem, e o histórico não citar o cônjuge, use "editar autor".)'); return; }
+    var sugest=candidatos[0];
     if(typeof sugerirPartes==='function') sugerirPartes();
     var elc=document.getElementById('partes-cliente'); if(elc) elc.value=sugest;
-    var intro=document.getElementById('partes-intro'); if(intro) intro.innerHTML='Sugestão de <b>nome do cliente</b> (da '+esc(fonte)+'): <b>'+esc(sugest)+'</b>. Confira/edite e clique em salvar.'+(nomes.length>1?(' <span class="note">Encontrados: '+nomes.map(function(n){return esc(n);}).join(' · ')+'</span>'):'');
-  }catch(e){ alert('Erro ao ler os documentos: '+(e&&e.message||e)); }
+    var intro=document.getElementById('partes-intro'); if(intro) intro.innerHTML='Sugestão de <b>nome do cliente</b> (via '+esc(fonte)+'): <b>'+esc(sugest)+'</b>. Confira/edite e salve.'+(candidatos.length>1?(' <span class="note">Outra opção: '+candidatos.slice(1).map(function(n){return esc(n);}).join(' · ')+'</span>'):'');
+  }catch(e){ alert('Erro ao ler: '+(e&&e.message||e)); }
   finally{ var l=document.getElementById('pcr-load'); if(l) l.remove(); }
 }
 /* janela de texto ao redor do nome do cliente (na petição inicial fica a qualificação com contato) */
