@@ -549,7 +549,9 @@ var USUARIOS_VISUAIS=[
   {id:'est2',nome:'Estagiário 2',perfil:'est',email:'',senha:'',ativo:true}
 ];
 var USUARIO_ATUAL_VISUAL='djan';
-var KAN=null, atual=null, TRIAGEM=null, AGENDA=null, VIEWAG="agenda", curY=2026, curM=6, curD=2, agView="mes", triagemAtual=null, crmView="contatos", agResp="Todos", canalSel="Geral", mesSel="todos", histShown=10, PUBIDX=null;
+var __hoje0=new Date();
+var __ehCel=(typeof window!=='undefined' && window.innerWidth<=860);
+var KAN=null, atual=null, TRIAGEM=null, AGENDA=null, VIEWAG="agenda", curY=__hoje0.getFullYear(), curM=__hoje0.getMonth(), curD=__hoje0.getDate(), agView=(__ehCel?"dia":"mes"), triagemAtual=null, crmView="contatos", agResp="Todos", canalSel="Geral", mesSel="todos", histShown=10, PUBIDX=null;
 
 function entrar(){
   var r=document.getElementById("roleSel").value, p=perfis[r];
@@ -2008,7 +2010,11 @@ function setAgView(v){agView=v;
   document.getElementById("ag-sem").classList.toggle("on",v==="semana");
   document.getElementById("ag-dia").classList.toggle("on",v==="dia");
   renderAgViewInner();}
-function renderAgViewInner(){ if(agView==="semana")renderSemana(); else if(agView==="dia")renderDia(); else renderMes(); }
+function renderAgViewInner(){
+  var mb=document.getElementById("ag-mes"),sb=document.getElementById("ag-sem"),db=document.getElementById("ag-dia");
+  if(mb)mb.classList.toggle("on",agView==="mes"); if(sb)sb.classList.toggle("on",agView==="semana"); if(db)db.classList.toggle("on",agView==="dia");
+  if(agView==="semana")renderSemana(); else if(agView==="dia")renderDia(); else renderMes();
+}
 function navega(dir){
   if(agView==="mes"){curM+=dir;if(curM<0){curM=11;curY--;}if(curM>11){curM=0;curY++;}}
   else{var step=(agView==="semana")?7:1;var d=new Date(curY,curM,curD);d.setDate(d.getDate()+dir*step);curY=d.getFullYear();curM=d.getMonth();curD=d.getDate();}
@@ -2383,7 +2389,7 @@ function renderKanban(){
   });
 }
 /* ===== Agenda de prazos e tarefas (nova 3ª visão da aba Agenda) ===== */
-var tarView="mes", tarResp="Todos", tarY=curY, tarM=curM;
+var tarView=(__ehCel?"lista":"mes"), tarResp="Todos", tarY=curY, tarM=curM;
 function setTarView(v){ tarView=v;
   var a=document.getElementById('tg-mes'), b=document.getElementById('tg-lista');
   if(a)a.classList.toggle('on',v==='mes'); if(b)b.classList.toggle('on',v==='lista');
@@ -2410,7 +2416,12 @@ function tarefasFiltradas(){
     return true;
   });
 }
-function renderTarefasView(){ if(tarView==='lista') renderTarefasLista(); else renderTarefasMes(); }
+function renderTarefasView(){
+  var a=document.getElementById('tg-mes'), b=document.getElementById('tg-lista');
+  if(a)a.classList.toggle('on',tarView==='mes'); if(b)b.classList.toggle('on',tarView==='lista');
+  var nav=document.getElementById('tar-nav'); if(nav) nav.style.display=(tarView==='mes')?'':'none';
+  if(tarView==='lista') renderTarefasLista(); else renderTarefasMes();
+}
 function _tarChipHTML(a){
   var concl=_tarConcluida(a);
   var estilo='cursor:pointer;display:flex;align-items:center;gap:4px;'+(concl?'text-decoration:line-through;opacity:.6;':'');
