@@ -508,7 +508,7 @@
     var det=document.getElementById('proc-det');
     det.classList.remove('hidden'); det.innerHTML='<div class="note">Abrindo ficha…</div>';
     document.querySelector('#sec-proc .card').scrollIntoView({behavior:'smooth',block:'start'});
-    var rp=await sb.from('processos').select('id,numero,cliente_nome,oponente,assunto,classe,orgao,foro,status,valor_causa,distribuido_em,fonte,observacoes').eq('id',id).single();
+    var rp=await sb.from('processos').select('id,numero,cliente_nome,oponente,assunto,classe,orgao,foro,status,valor_causa,distribuido_em,fonte,observacoes,hon_per_fixado,hon_per_recebido,hon_per_areceber').eq('id',id).single();
     var p=(rp&&rp.data)||{};
     var ra=await sb.from('andamentos').select('data,texto,fonte').eq('processo_id',id).order('data',{ascending:false});
     var hist=(ra&&ra.data)||[];
@@ -520,8 +520,16 @@
       +'<div style="font-family:ui-monospace,monospace;font-size:12.5px;margin-top:4px">'+esc(p.numero||'')+'</div></div>'
       +'<button class="btn ghost sm" onclick="renderProc()">← voltar</button></div>'
       +'<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">'
+        +'<button class="btn sm" onclick="capturarPartes('+"'"+p.id+"'"+')">👥 Capturar dados das partes</button>'
         +'<button class="btn sm" onclick="novaTarefaProc('+"'"+esc(p.numero||'')+"'"+')">+ Nova tarefa neste processo</button>'
         +'<button class="btn ghost sm" onclick="abrirNoTribunal('+"'"+esc(p.numero||'')+"'"+')">⚖ Abrir no tribunal</button>'
+      +'</div>';
+    function honIn(rot,campo,val){ return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:4px 0"><span style="font-size:13px;color:#475569">'+rot+'</span><span style="white-space:nowrap">R$ <input type="text" value="'+(val!=null?esc(String(val).replace('.',',')):'')+'" onblur="salvarHonPer('+"'"+p.id+"'"+',\''+campo+'\',this.value)" style="width:120px;text-align:right;padding:5px 7px;font-size:13px"></span></div>'; }
+    var honper='<div style="margin-top:12px;border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:#fafbfc">'
+      +'<div style="font-size:12px;font-weight:800;letter-spacing:.3px;text-transform:uppercase;color:var(--muted);margin-bottom:6px">Honorários periciais</div>'
+      +honIn('Valor fixado','hon_per_fixado',p.hon_per_fixado)
+      +honIn('Valor recebido','hon_per_recebido',p.hon_per_recebido)
+      +honIn('Valor a receber','hon_per_areceber',p.hon_per_areceber)
       +'</div>';
     var dados='<div style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px">'
       +'<p class="sectlabel">Dados do processo</p>'
@@ -537,7 +545,25 @@
           +'<div style="font-size:12.8px;white-space:pre-wrap;margin-top:2px">'+esc(h.texto||'')+'</div></div>';
       }).join(''):'<div class="note">Sem movimentações registradas.</div>')
       +'</div>';
-    det.innerHTML=head+dados+timeline;
+    det.innerHTML=head+honper+dados+timeline;
+  }
+  async function salvarHonPer(id,campo,raw){
+    var v=String(raw||'').replace(/[^0-9,.-]/g,'').replace(/\./g,'').replace(',','.');
+    var num=(v===''?null:parseFloat(v)); if(num!=null&&isNaN(num))return;
+    var upd={atualizado_em:new Date().toISOString()}; upd[campo]=num;
+    // se atualizou fixado/recebido, sugere "a receber" quando estiver vazio
+    var r=await sb.from('processos').update(upd).eq('id',id);
+    if(r&&r.error){ alert('Não foi possível salvar: '+r.error.message); }
+  }
+  async function capturarPartes(id){
+    var p=PROC.find(function(x){return String(x.id)===String(id);})||{};
+    var cli=prompt('Autor / cliente (partes do processo):',p.cliente_nome||''); if(cli===null)return;
+    var op=prompt('Parte contrária / ré:',p.oponente||''); if(op===null)return;
+    var upd={cliente_nome:(cli||'').trim()||null,oponente:(op||'').trim()||null,atualizado_em:new Date().toISOString()};
+    var r=await sb.from('processos').update(upd).eq('id',id);
+    if(r&&r.error){ alert('Não foi possível salvar: '+r.error.message); return; }
+    if(p){ p.cliente_nome=upd.cliente_nome; p.oponente=upd.oponente; }
+    abrirFicha(id);
   }
 
   /* ===== Cadastros ===== */
