@@ -264,6 +264,7 @@
     </section>
     <section id="s-james" class="hidden">
       <div class="card"><p class="sectlabel">Processos contra James Laurence (suspensos)</p><span class="note" id="james-count"></span>
+      <input id="james-busca" oninput="renderJames()" placeholder="Buscar por cliente, número, oponente ou assunto…" style="margin-top:10px;width:100%;max-width:520px;padding:9px 12px;border:1px solid var(--line);border-radius:10px;font-size:14px;font-family:inherit">
       <table style="margin-top:10px"><thead><tr><th style="width:36%">Cliente</th><th style="width:150px">Processo</th><th style="width:22%">Assunto</th><th style="width:170px">Última movimentação</th><th>Status</th><th style="width:120px"></th></tr></thead><tbody id="james-body"></tbody></table>
       <p class="note" style="margin-top:8px">Processos com James Laurence no polo passivo, suspensos da lista principal. Para trazer um de volta, use "→ lista principal". Para suspender outro, abra o processo e use "Suspender".</p></div>
     </section>
@@ -2641,7 +2642,7 @@ function renderProc(){
     var okq=!q||(p.cliente+" "+p.numero+" "+p.oponente+" "+p.tipo).toLowerCase().indexOf(q)>-1;
     var oke=true;
     if(eq){ var ids=(typeof ASSIGN!=='undefined'&&ASSIGN[p.numero])||[]; oke=ids.indexOf(eq)>-1; }
-    return okq&&oke&&movFiltroOk(p)&&origemFiltroOk(p)&&!/encerr/i.test(p.status||'')&&!isInove(p)&&!isSuspenso(p);
+    return okq&&oke&&movFiltroOk(p)&&origemFiltroOk(p)&&!/encerr/i.test(p.status||'')&&!isInove(p)&&(!isSuspenso(p)||_buscaAtiva());
   });
   if(sm==='az') lista.sort(function(a,b){return (a.cliente||'').localeCompare(b.cliente||'','pt');});
   else if(sm==='data_desc') lista.sort(function(a,b){return diasMovOrd(a)-diasMovOrd(b);}); /* movimentação oficial mais recente primeiro */
@@ -2678,7 +2679,7 @@ function renderProc(){
   var lista=DADOS.processos.filter(function(p){
     var okq=!q||(p.cliente+" "+p.numero+" "+p.oponente+" "+p.tipo).toLowerCase().indexOf(q)>-1;
     var oke=true; if(eq){ var ids=(typeof ASSIGN!=='undefined'&&ASSIGN[p.numero])||[]; oke=ids.indexOf(eq)>-1; }
-    return okq&&oke&&movFiltroOk(p)&&origemFiltroOk(p)&&!/encerr/i.test(p.status||'')&&!isInove(p)&&!isSuspenso(p);
+    return okq&&oke&&movFiltroOk(p)&&origemFiltroOk(p)&&!/encerr/i.test(p.status||'')&&!isInove(p)&&(!isSuspenso(p)||_buscaAtiva());
   });
   if(sm==='az') lista.sort(function(a,b){var A=(a.cliente||'').trim(),B=(b.cliente||'').trim(); if(!A&&!B)return 0; if(!A)return 1; if(!B)return -1; return A.localeCompare(B,'pt');});
   else if(sm==='za') lista.sort(function(a,b){var A=(a.cliente||'').trim(),B=(b.cliente||'').trim(); if(!A&&!B)return 0; if(!A)return 1; if(!B)return -1; return B.localeCompare(A,'pt');});
@@ -3295,7 +3296,7 @@ function renderProc(){
   var lista=DADOS.processos.filter(function(p){
     var okq=!q||(p.cliente+" "+p.numero+" "+p.oponente+" "+p.tipo).toLowerCase().indexOf(q)>-1;
     var oke=true; if(eq){ var ids=(typeof ASSIGN!=='undefined'&&ASSIGN[p.numero])||[]; oke=ids.indexOf(eq)>-1; }
-    return okq&&oke&&movFiltroOk(p)&&origemFiltroOk(p)&&!/encerr/i.test(p.status||'')&&!isInove(p)&&!isSuspenso(p);
+    return okq&&oke&&movFiltroOk(p)&&origemFiltroOk(p)&&!/encerr/i.test(p.status||'')&&!isInove(p)&&(!isSuspenso(p)||_buscaAtiva());
   });
   /* ordenação por prazo fatal (coluna): mais próximo → distante, ou o inverso.
      Tem prioridade sobre a ordenação padrão quando escolhida. */
@@ -3627,10 +3628,14 @@ function renderEncerrados(){
 }
 function ehJames(p){ return !!p && /james laurence/i.test(String(p.oponente||'')); }
 function isSuspenso(p){ return !!(p&&p.suspenso); }
+/* há busca ativa na lista principal? (quando há, os suspensos voltam a aparecer no resultado) */
+function _buscaAtiva(){ var b=document.getElementById('busca'); return !!(b && String(b.value||'').trim()); }
 function renderJames(){
   atualizaNavContagens();
-  var lista=DADOS.processos.filter(function(p){return isSuspenso(p);});
-  var pc=document.getElementById('james-count'); if(pc) pc.textContent=lista.length+' processos contra James Laurence (suspensos da lista principal)';
+  var jq=((document.getElementById('james-busca')||{}).value||'').toLowerCase().trim();
+  var lista=DADOS.processos.filter(function(p){ if(!isSuspenso(p)) return false; if(!jq) return true; return (p.cliente+' '+p.numero+' '+p.oponente+' '+p.tipo).toLowerCase().indexOf(jq)>-1; });
+  var total=DADOS.processos.filter(isSuspenso).length;
+  var pc=document.getElementById('james-count'); if(pc) pc.textContent=(jq?(lista.length+' de '+total):lista.length)+' processos contra James Laurence (suspensos da lista principal)';
   var b=document.getElementById('james-body'); if(!b) return; b.innerHTML='';
   lista.forEach(function(p){
     var i=DADOS.processos.indexOf(p);
