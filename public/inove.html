@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Portal do Perito</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{--navy:#22303f;--gold:#b8892b;--bg:#eef1f5;--panel:#fff;--line:#e2e7ef;--ink:#1e2733;--muted:#6b7482;--navy2:#eef2f7}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--ink);line-height:1.5}
+  a{color:#185FA5}
+  .wrap{max-width:820px;margin:0 auto;padding:18px 14px 70px}
+  .brand{display:flex;align-items:center;gap:12px;margin:8px 0 16px}
+  .brand .dot{width:44px;height:44px;border-radius:12px;background:var(--navy);color:#fff;display:grid;place-items:center;font-weight:800;font-size:16px}
+  .brand b{color:var(--navy);font-size:17px;display:block;line-height:1.1}
+  .brand span{color:var(--muted);font-size:12.5px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:15px;padding:18px 16px;box-shadow:0 6px 22px rgba(30,39,51,.05);margin-bottom:14px}
+  h1{font-size:19px;margin:0 0 4px;color:var(--navy)}
+  .sub{color:var(--muted);font-size:13.5px;margin:0 0 14px}
+  label{display:block;font-size:13px;font-weight:700;color:var(--navy);margin:12px 0 5px}
+  input,textarea,select{width:100%;border:1px solid var(--line);border-radius:11px;padding:11px 12px;font-size:15px;font-family:inherit;background:#fff;color:var(--ink)}
+  input:focus,textarea:focus,select:focus{border-color:var(--navy);outline:none}
+  textarea{min-height:90px;resize:vertical}
+  button{cursor:pointer;font-family:inherit}
+  .btn{background:var(--navy);color:#fff;border:0;border-radius:11px;padding:12px 16px;font-size:15px;font-weight:800}
+  .btn.sm{padding:7px 11px;font-size:13px;border-radius:9px}
+  .btn.gold{background:var(--gold)}
+  .btn.ghost{background:#fff;color:var(--navy);border:1px solid var(--line)}
+  .btn:disabled{opacity:.6;cursor:default}
+  .note{color:var(--muted);font-size:12.5px}
+  .err{background:#fbeceb;color:#b5342b;border:1px solid #f0cfc0;border-radius:10px;padding:9px 12px;font-size:13px;margin-top:10px;display:none}
+  .tabs{display:flex;gap:6px;border-bottom:1px solid var(--line);margin-bottom:14px;flex-wrap:wrap}
+  .tabs a{padding:9px 12px;font-size:14px;font-weight:700;color:var(--muted);border-bottom:2px solid transparent;cursor:pointer}
+  .tabs a.on{color:var(--navy);border-bottom-color:var(--gold)}
+  .sectlabel{font-size:12px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:var(--muted);margin:0 0 8px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+  @media(max-width:560px){.grid2{grid-template-columns:1fr}}
+  .prog{height:10px;background:#eef0f3;border-radius:6px;overflow:hidden;margin-top:4px}
+  .prog>i{display:block;height:100%;background:var(--gold)}
+  .hidden{display:none!important}
+  code{background:#f2f4f7;border-radius:5px;padding:1px 5px;font-size:12px}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="tela-login" class="wrap">
+  <div class="brand"><div class="dot">PP</div><div><b>Portal do Perito</b><span>Acesso do cadastro pericial</span></div></div>
+  <div class="card">
+    <div class="tabs"><a id="tab-entrar" class="on" onclick="tabLogin('entrar')">Entrar</a><a id="tab-criar" onclick="tabLogin('criar')">Criar acesso</a></div>
+    <div id="form-entrar">
+      <label>E-mail</label><input id="li-email" type="email" autocomplete="username" placeholder="seu@email.com">
+      <label>Senha</label><input id="li-senha" type="password" autocomplete="current-password" placeholder="••••••••">
+      <div style="margin-top:16px"><button class="btn" style="width:100%" onclick="entrar()">Entrar</button></div>
+    </div>
+    <div id="form-criar" class="hidden">
+      <p class="note" style="margin:0 0 6px">Crie seu próprio acesso com o código de convite do plano. Você define o e-mail e a senha — ninguém mais tem acesso a ela.</p>
+      <label>Nome</label><input id="cr-nome" placeholder="Seu nome">
+      <label>E-mail</label><input id="cr-email" type="email" autocomplete="username" placeholder="seu@email.com">
+      <label>Senha (mín. 6)</label><input id="cr-senha" type="password" autocomplete="new-password" placeholder="crie uma senha">
+      <label>Código de convite</label><input id="cr-cod" placeholder="fornecido pelo administrador">
+      <div style="margin-top:16px"><button class="btn gold" style="width:100%" onclick="criarAcesso()">Criar acesso e entrar</button></div>
+    </div>
+    <div id="login-err" class="err"></div>
+  </div>
+  <p class="note" style="text-align:center">Ambiente de teste · Portal do Perito</p>
+</div>
+
+<!-- APP -->
+<div id="tela-app" class="wrap hidden">
+  <div class="brand"><div class="dot">PP</div><div><b>Portal do Perito</b><span id="app-user"></span></div>
+    <button class="btn ghost sm" style="margin-left:auto" onclick="sair()">Sair</button></div>
+  <div class="tabs">
+    <a id="nav-cad" class="on" onclick="ir('cad')">Cadastros (Tribunais)</a>
+    <a id="nav-sol" onclick="ir('sol')">Solicitar novas funcionalidades</a>
+    <a id="nav-doc" onclick="ir('doc')">Documento-padrão</a>
+  </div>
+
+  <section id="sec-cad">
+    <div class="card">
+      <p class="sectlabel">Cadastro nos Tribunais de Justiça</p>
+      <div id="cad-prog"></div>
+      <div id="cad-body"><div class="note">Carregando…</div></div>
+    </div>
+  </section>
+
+  <section id="sec-sol" class="hidden">
+    <div class="card">
+      <p class="sectlabel">Solicitar nova funcionalidade</p>
+      <p class="note" style="margin:0 0 8px">Descreva o recurso que precisa. Cada pedido passa por aprovação com valor; confirmado o pagamento, o desenvolvimento é iniciado.</p>
+      <label>Título</label><input id="sol-titulo" placeholder="Ex.: relatório de perícias por tribunal">
+      <label>Descrição</label><textarea id="sol-desc" placeholder="Explique o que deve fazer e por quê."></textarea>
+      <div style="margin-top:12px"><button class="btn gold" onclick="enviarSol()">Enviar solicitação</button> <span id="sol-msg" class="note"></span></div>
+    </div>
+    <div class="card"><p class="sectlabel">Minhas solicitações</p><div id="sol-lista"><div class="note">Carregando…</div></div></div>
+  </section>
+
+  <section id="sec-doc" class="hidden">
+    <div class="card">
+      <p class="sectlabel">Gerar documento-padrão por tribunal</p>
+      <p class="note" style="margin:0 0 8px">Campos entre chaves são preenchidos automaticamente: <code>{{nome}} {{cpf}} {{cnpj}} {{tribunal}} {{sigla}} {{uf}} {{data}}</code> etc.</p>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <label style="margin:0">Tribunal:</label>
+        <select id="doc-trib" style="width:auto;min-width:130px"></select>
+        <button class="btn gold sm" onclick="gerarDoc()">Gerar</button>
+        <button class="btn ghost sm" onclick="copiarDoc()">Copiar</button>
+        <button class="btn ghost sm" onclick="baixarDoc()">Baixar .txt</button>
+      </div>
+      <textarea id="doc-out" style="width:100%;min-height:230px;margin-top:10px" placeholder="O documento gerado aparece aqui — revise antes de enviar."></textarea>
+    </div>
+  </section>
+</div>
+
+<script>
+  var SB_URL='https://ndeqlyrydcijbgjiviuw.supabase.co';
+  var SB_KEY='sb_publishable_X5Jo69qYCQOMEg0fu2yc1w_gIYwWuQD';
+  var sb=window.supabase.createClient(SB_URL,SB_KEY);
+  var TRIB=[], CFG={};
+  var CAD_SIT=[['a_fazer','A fazer','#8a8f98','#eef0f3'],['enviado','Enviado','#185FA5','#e3edf7'],['em_analise','Em análise','#8a6d1a','#fbf1dc'],['pendencia','Pendência','#b5342b','#fbeceb'],['cadastrado','Cadastrado','#0F6E56','#e5f4ed']];
+  var ISOL_SIT=[['novo','Aguardando análise','#8a6d1a','#fbf1dc'],['aprovado','Aprovada — aguardando pagamento','#185FA5','#e3edf7'],['pago','Paga','#0F6E56','#e5f4ed'],['em_andamento','Em desenvolvimento','#6d28a8','#f1e9fa'],['concluido','Concluída','#0F6E56','#e5f4ed'],['recusado','Recusada','#b5342b','#fbeceb']];
+  function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+  function _sit(a,v){for(var i=0;i<a.length;i++){if(a[i][0]===v)return a[i];}return a[0];}
+  function loginErr(m){var e=document.getElementById('login-err');if(!e)return;if(!m){e.style.display='none';return;}e.textContent=m;e.style.display='block';}
+
+  function tabLogin(w){
+    document.getElementById('tab-entrar').classList.toggle('on',w==='entrar');
+    document.getElementById('tab-criar').classList.toggle('on',w==='criar');
+    document.getElementById('form-entrar').classList.toggle('hidden',w!=='entrar');
+    document.getElementById('form-criar').classList.toggle('hidden',w!=='criar');
+    loginErr('');
+  }
+  async function entrar(){
+    loginErr('');
+    var email=(document.getElementById('li-email').value||'').trim().toLowerCase();
+    var senha=document.getElementById('li-senha').value||'';
+    if(!email||!senha){loginErr('Informe e-mail e senha.');return;}
+    var r=await sb.auth.signInWithPassword({email:email,password:senha});
+    if(r.error){loginErr('Não foi possível entrar: '+r.error.message);return;}
+    abrirApp();
+  }
+  async function criarAcesso(){
+    loginErr('');
+    var nome=(document.getElementById('cr-nome').value||'').trim();
+    var email=(document.getElementById('cr-email').value||'').trim().toLowerCase();
+    var senha=document.getElementById('cr-senha').value||'';
+    var cod=(document.getElementById('cr-cod').value||'').trim();
+    if(!email||senha.length<6){loginErr('Informe e-mail e senha (mín. 6).');return;}
+    try{
+      var res=await fetch(SB_URL+'/functions/v1/inove-signup',{method:'POST',headers:{'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY},body:JSON.stringify({email:email,senha:senha,nome:nome,codigo:cod})});
+      var j={};try{j=await res.json();}catch(e){}
+      if(!res.ok||!j.ok){loginErr((j&&j.erro)||('Erro '+res.status));return;}
+      var r=await sb.auth.signInWithPassword({email:email,password:senha});
+      if(r.error){loginErr('Acesso criado, mas não entrou: '+r.error.message+'. Tente "Entrar".');return;}
+      abrirApp();
+    }catch(e){loginErr('Erro: '+(e&&e.message||e));}
+  }
+  async function sair(){await sb.auth.signOut();location.reload();}
+
+  async function abrirApp(){
+    var u=await sb.auth.getUser();
+    var email=(u&&u.data&&u.data.user&&u.data.user.email)||'';
+    document.getElementById('app-user').textContent=email;
+    document.getElementById('tela-login').classList.add('hidden');
+    document.getElementById('tela-app').classList.remove('hidden');
+    await carregar();
+    ir('cad');
+  }
+  async function carregar(){
+    var rc=await sb.from('inove_config').select('chave,valor'); CFG={}; (rc.data||[]).forEach(function(x){CFG[x.chave]=x.valor||'';});
+    var rt=await sb.from('inove_tribunais').select('*').order('uf'); TRIB=rt.data||[];
+  }
+  function ir(s){
+    ['cad','sol','doc'].forEach(function(k){
+      document.getElementById('nav-'+k).classList.toggle('on',k===s);
+      document.getElementById('sec-'+k).classList.toggle('hidden',k!==s);
+    });
+    if(s==='cad')renderCad();
+    if(s==='sol')renderSol();
+    if(s==='doc')renderDoc();
+  }
+
+  /* ===== Cadastros ===== */
+  function renderCad(){
+    var feito=TRIB.filter(function(x){return x.situacao==='cadastrado';}).length;
+    var pct=TRIB.length?Math.round(feito/TRIB.length*100):0;
+    document.getElementById('cad-prog').innerHTML='<div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700;color:var(--navy)"><span>'+feito+' de '+TRIB.length+' cadastrados</span><span>'+pct+'%</span></div><div class="prog"><i style="width:'+pct+'%"></i></div>';
+    var b=document.getElementById('cad-body');
+    b.innerHTML=TRIB.map(function(t){
+      var si=_sit(CAD_SIT,t.situacao);
+      var opts=CAD_SIT.map(function(o){return '<option value="'+o[0]+'"'+(o[0]===t.situacao?' selected':'')+'>'+o[1]+'</option>';}).join('');
+      return '<div style="border:1px solid var(--line);border-left:5px solid '+si[2]+';border-radius:11px;padding:11px 13px;margin-bottom:9px">'
+        +'<div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center">'
+        +'<div><b style="color:var(--navy)">'+esc(t.uf)+' · '+esc(t.sigla)+'</b> <span class="note">'+esc(t.tribunal||'')+'</span></div>'
+        +'<select onchange="salvarCad(\''+t.id+'\',\'situacao\',this.value)" style="width:auto;font-size:12.5px;padding:4px 8px;border-radius:8px;background:'+si[3]+';color:'+si[2]+';font-weight:700;border:1px solid '+si[2]+'44">'+opts+'</select>'
+        +'</div>'
+        +'<label class="note" style="display:block;margin-top:8px">Observações<textarea onblur="salvarCad(\''+t.id+'\',\'obs\',this.value)" style="min-height:44px">'+esc(t.obs||'')+'</textarea></label>'
+        +(t.link_cadastro?('<div style="margin-top:8px"><a href="'+esc(t.link_cadastro)+'" target="_blank" rel="noopener" class="btn ghost sm">Abrir cadastro ↗</a></div>'):'')
+        +'</div>';
+    }).join('');
+  }
+  async function salvarCad(id,campo,valor){
+    var t=TRIB.find(function(x){return String(x.id)===String(id);}); if(t)t[campo]=(valor===''?null:valor);
+    var upd={atualizado_em:new Date().toISOString()}; upd[campo]=(valor===''?null:valor);
+    var r=await sb.from('inove_tribunais').update(upd).eq('id',id);
+    if(r&&r.error){alert('Não foi possível salvar: '+r.error.message);return;}
+    if(campo==='situacao')renderCad();
+  }
+
+  /* ===== Solicitações ===== */
+  async function enviarSol(){
+    var titulo=(document.getElementById('sol-titulo').value||'').trim();
+    var descricao=(document.getElementById('sol-desc').value||'').trim();
+    var msg=document.getElementById('sol-msg');
+    if(!titulo){msg.style.color='#b5342b';msg.textContent='Escreva um título.';return;}
+    msg.style.color='#475569';msg.textContent='Enviando…';
+    var u=await sb.auth.getUser(); var sol=(u&&u.data&&u.data.user&&(u.data.user.user_metadata&&u.data.user.user_metadata.nome||u.data.user.email))||null;
+    var r=await sb.from('inove_solicitacoes').insert({titulo:titulo,descricao:descricao||null,status:'novo',solicitante:sol});
+    if(r&&r.error){msg.style.color='#b5342b';msg.textContent='Erro: '+r.error.message;return;}
+    document.getElementById('sol-titulo').value='';document.getElementById('sol-desc').value='';
+    msg.style.color='#127a53';msg.textContent='✓ Enviada! Aguarde a análise.';
+    renderSol();
+  }
+  async function renderSol(){
+    var el=document.getElementById('sol-lista');
+    var r=await sb.from('inove_solicitacoes').select('*').order('criado_em',{ascending:false}).limit(200);
+    if(r&&r.error){el.innerHTML='<div class="note">Não foi possível carregar.</div>';return;}
+    var itens=r.data||[];
+    if(!itens.length){el.innerHTML='<div class="note">Nenhuma solicitação ainda.</div>';return;}
+    el.innerHTML=itens.map(function(s){
+      var si=_sit(ISOL_SIT,s.status);
+      var d=(s.criado_em||'').slice(0,10).split('-').reverse().join('/');
+      var val=(s.valor!=null)?('R$ '+Number(s.valor).toLocaleString('pt-BR',{minimumFractionDigits:2})):'';
+      return '<div style="border:1px solid var(--line);border-left:5px solid '+si[2]+';border-radius:11px;padding:11px 13px;margin-bottom:9px">'
+        +'<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap"><span style="font-weight:700;color:var(--navy)">'+esc(s.titulo||'—')+'</span>'
+        +'<span style="font-size:11px;font-weight:700;color:'+si[2]+';background:'+si[3]+';border-radius:12px;padding:2px 10px">'+si[1]+'</span></div>'
+        +(s.descricao?('<div style="font-size:13px;margin-top:5px;white-space:pre-wrap">'+esc(s.descricao)+'</div>'):'')
+        +(val?('<div style="font-size:13px;margin-top:7px;padding:6px 9px;background:#eef4fb;border-radius:7px;color:#22405f"><b>Valor:</b> '+val+(s.status==='aprovado'?' — pague para iniciarmos.':'')+'</div>'):'')
+        +'<div class="note" style="font-size:11px;margin-top:5px">'+esc(s.solicitante||'')+(s.solicitante?' · ':'')+esc(d)+'</div></div>';
+    }).join('');
+  }
+
+  /* ===== Documento ===== */
+  function renderDoc(){
+    var sel=document.getElementById('doc-trib');
+    sel.innerHTML=TRIB.map(function(t){return '<option value="'+t.id+'">'+esc(t.uf+' · '+t.sigla)+'</option>';}).join('');
+  }
+  function _dataExt(){var d=new Date();var m=['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];return d.getDate()+' de '+m[d.getMonth()]+' de '+d.getFullYear();}
+  function gerarDoc(){
+    var id=document.getElementById('doc-trib').value;
+    var t=TRIB.find(function(x){return String(x.id)===String(id);})||{};
+    var tpl=CFG.doc_template||'';
+    var map={nome:CFG.perito_nome,cpf:CFG.perito_cpf,cnpj:CFG.perito_cnpj,rg:CFG.perito_rg,registro:CFG.perito_registro,endereco:CFG.perito_endereco,email:CFG.perito_email,telefone:CFG.perito_telefone,tribunal:t.tribunal,sigla:t.sigla,uf:t.uf,data:_dataExt()};
+    var out=tpl.replace(/\{\{(\w+)\}\}/g,function(m,k){return (map[k]!=null&&map[k]!=='')?map[k]:('{{'+k+'}}');});
+    document.getElementById('doc-out').value=out;
+    var faltam=(out.match(/\{\{(\w+)\}\}/g)||[]);
+    if(faltam.length)alert('Documento gerado. Campos ainda em branco (o administrador precisa completar o perfil): '+faltam.join(', '));
+  }
+  function copiarDoc(){var o=document.getElementById('doc-out');if(!o.value){alert('Gere o documento primeiro.');return;}o.select();try{document.execCommand('copy');}catch(e){}if(navigator.clipboard)navigator.clipboard.writeText(o.value).catch(function(){});alert('Copiado.');}
+  function baixarDoc(){var o=document.getElementById('doc-out');if(!o.value){alert('Gere o documento primeiro.');return;}var id=document.getElementById('doc-trib').value;var t=TRIB.find(function(x){return String(x.id)===String(id);})||{};var blob=new Blob([o.value],{type:'text/plain;charset=utf-8'});var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='cadastro_'+((t.sigla||'tribunal')+'').replace(/[^A-Za-z0-9]/g,'')+'.txt';document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(a.href);a.remove();},100);}
+
+  /* sessão já ativa? */
+  sb.auth.getSession().then(function(s){ if(s&&s.data&&s.data.session){ abrirApp(); } });
+</script>
+</body>
+</html>
