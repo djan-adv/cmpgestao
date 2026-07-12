@@ -297,6 +297,10 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
         <p class="sectlabel" style="margin:0 0 4px">Cadastro do atuário nos Tribunais de Justiça</p>
         <div id="cad-nome" class="note" style="margin:0 0 10px">Atuário: <b>Thiago Silveira</b> — acompanhamento do cadastro como auxiliar da justiça nos 27 TJs (26 estados + DF).</div>
         <div id="cad-prog" style="margin-bottom:12px"></div>
+        <details style="margin-bottom:12px;border:1px solid var(--line);border-radius:11px;padding:10px 12px">
+          <summary style="cursor:pointer;font-weight:700;color:var(--navy)">📄 Documento-padrão do atuário — gerar por tribunal</summary>
+          <div id="doc-cfg" style="margin-top:10px"><div class="note">Carregando…</div></div>
+        </details>
         <div id="cad-body"><div class="note">Carregando…</div></div>
       </div>
     </section>
@@ -3900,6 +3904,60 @@ async function renderCadastros(){
       +'</div></div>';
   }).join('');
   _atualizaCadBadge();
+  renderDocPerfil();
+}
+/* ===== Inove: documento-padrão do atuário (perfil + modelo com campos substituíveis) ===== */
+var DOC_CAMPOS=[['perito_nome','Nome do atuário'],['perito_cpf','CPF'],['perito_cnpj','CNPJ (Inove)'],['perito_rg','RG'],['perito_registro','Registro profissional'],['perito_endereco','Endereço'],['perito_email','E-mail'],['perito_telefone','Telefone']];
+async function renderDocPerfil(){
+  var el=document.getElementById('doc-cfg'); if(!el) return;
+  var sb=window.__sb; if(!sb){ el.innerHTML='<div class="note">Sessão não encontrada.</div>'; return; }
+  if(!window.__inoveCfg){
+    var r=await sb.from('inove_config').select('*');
+    if(r&&r.error){ el.innerHTML='<div class="note">Erro ao carregar: '+esc(r.error.message)+'</div>'; return; }
+    window.__inoveCfg={}; (r.data||[]).forEach(function(x){ window.__inoveCfg[x.chave]=x.valor||''; });
+  }
+  var c=window.__inoveCfg;
+  var campos=DOC_CAMPOS.map(function(k){
+    return '<label class="note" style="display:flex;flex-direction:column;gap:3px">'+esc(k[1])+'<input value="'+esc(c[k[0]]||'')+'" onblur="salvarDocCfg(\''+k[0]+'\',this.value)"></label>';
+  }).join('');
+  var trib=(window.__tribunais||[]).map(function(t){ return '<option value="'+t.id+'">'+esc(t.uf+' · '+t.sigla)+'</option>'; }).join('');
+  el.innerHTML='<p class="note" style="margin:0 0 8px">Dados do atuário (preencha o que faltar — nada é inventado). Use os campos entre chaves no modelo: <code>{{nome}} {{cpf}} {{cnpj}} {{rg}} {{registro}} {{endereco}} {{email}} {{telefone}} {{tribunal}} {{sigla}} {{uf}} {{data}}</code>.</p>'
+    +'<div class="kvgrid" style="grid-template-columns:1fr 1fr;gap:8px">'+campos+'</div>'
+    +'<label class="note" style="display:block;margin-top:10px">Modelo do documento<textarea id="doc-tpl" style="width:100%;min-height:180px;font-family:inherit" onblur="salvarDocCfg(\'doc_template\',this.value)">'+esc(c.doc_template||'')+'</textarea></label>'
+    +'<div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
+      +'<label class="note" style="margin:0">Tribunal:</label>'
+      +'<select id="doc-trib" style="width:auto">'+trib+'</select>'
+      +'<button class="btn sm gold" onclick="gerarDoc()">Gerar documento</button>'
+      +'<button class="btn sm" onclick="copiarDoc()">Copiar</button>'
+      +'<button class="btn sm ghost" onclick="baixarDoc()">Baixar .txt</button>'
+    +'</div>'
+    +'<textarea id="doc-out" style="width:100%;min-height:180px;margin-top:8px;font-family:inherit" placeholder="O documento gerado aparece aqui — revise antes de enviar."></textarea>';
+}
+async function salvarDocCfg(chave,valor){
+  var sb=window.__sb; if(!sb) return;
+  window.__inoveCfg=window.__inoveCfg||{}; window.__inoveCfg[chave]=valor;
+  try{ var r=await sb.from('inove_config').upsert({chave:chave,valor:valor,atualizado_em:new Date().toISOString()}); if(r&&r.error){ alert('Não foi possível salvar: '+r.error.message); } }catch(e){ alert('Erro: '+(e&&e.message||e)); }
+}
+function _dataExtenso(){
+  try{ var d=new Date(); var mes=['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro']; return d.getDate()+' de '+mes[d.getMonth()]+' de '+d.getFullYear(); }catch(e){ return ''; }
+}
+function gerarDoc(){
+  var c=window.__inoveCfg||{};
+  var id=(document.getElementById('doc-trib')||{}).value;
+  var t=(window.__tribunais||[]).find(function(x){return String(x.id)===String(id);})||{};
+  var tpl=(document.getElementById('doc-tpl')||{}).value||c.doc_template||'';
+  var map={nome:c.perito_nome,cpf:c.perito_cpf,cnpj:c.perito_cnpj,rg:c.perito_rg,registro:c.perito_registro,endereco:c.perito_endereco,email:c.perito_email,telefone:c.perito_telefone,tribunal:t.tribunal,sigla:t.sigla,uf:t.uf,data:_dataExtenso()};
+  var out=tpl.replace(/\{\{(\w+)\}\}/g,function(m,k){ return (map[k]!=null&&map[k]!=='')?map[k]:('{{'+k+'}}'); });
+  var faltam=(out.match(/\{\{(\w+)\}\}/g)||[]);
+  var o=document.getElementById('doc-out'); if(o) o.value=out;
+  if(faltam.length){ alert('Documento gerado. Campos ainda em branco (preencha o perfil do atuário): '+faltam.join(', ')); }
+}
+function copiarDoc(){ var o=document.getElementById('doc-out'); if(!o||!o.value){ alert('Gere o documento primeiro.'); return; } o.select(); try{ document.execCommand('copy'); }catch(e){} if(navigator.clipboard){ navigator.clipboard.writeText(o.value).catch(function(){}); } alert('Copiado.'); }
+function baixarDoc(){
+  var o=document.getElementById('doc-out'); if(!o||!o.value){ alert('Gere o documento primeiro.'); return; }
+  var id=(document.getElementById('doc-trib')||{}).value; var t=(window.__tribunais||[]).find(function(x){return String(x.id)===String(id);})||{};
+  var nome='cadastro_'+(t.sigla||'tribunal').replace(/[^A-Za-z0-9]/g,'')+'.txt';
+  var blob=new Blob([o.value],{type:'text/plain;charset=utf-8'}); var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=nome; document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); },100);
 }
 async function salvarTribunal(id,campo,valor){
   var sb=window.__sb; if(!sb) return;
