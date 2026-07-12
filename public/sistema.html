@@ -1084,7 +1084,7 @@ function abrir(i){
     '<div id="proc-vinculados-rodape" style="position:absolute;bottom:12px;right:14px;max-width:60%;display:flex;gap:6px;flex-wrap:wrap;align-items:center;justify-content:flex-end;font-size:12px"></div>'+
     '</div>';
   // dados do processo
-  html+='<div class="card" id="card-dados-proc"><p class="sectlabel">Dados do processo</p><div class="kvgrid">'+
+  html+='<div class="card" id="card-dados-proc"><p class="sectlabel">Dados do processo</p><div class="kvgrid" style="grid-template-columns:repeat(4,1fr)">'+
     (p.classe?kv('Classe',esc(p.classe)):'')+
     kv('Assunto',esc(p.tipo||'—'))+
     kv('Vara de origem',esc(p.foro||p.orgao||'—'))+
