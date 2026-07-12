@@ -116,7 +116,7 @@
   var SB_URL='https://ndeqlyrydcijbgjiviuw.supabase.co';
   var SB_KEY='sb_publishable_X5Jo69qYCQOMEg0fu2yc1w_gIYwWuQD';
   var sb=window.supabase.createClient(SB_URL,SB_KEY);
-  var TRIB=[], CFG={};
+  var TRIB=[], CFG={}, IS_ADMIN=false;
   var CAD_SIT=[['a_fazer','A fazer','#8a8f98','#eef0f3'],['enviado','Enviado','#185FA5','#e3edf7'],['em_analise','Em análise','#8a6d1a','#fbf1dc'],['pendencia','Pendência','#b5342b','#fbeceb'],['cadastrado','Cadastrado','#0F6E56','#e5f4ed']];
   var ISOL_SIT=[['novo','Aguardando análise','#8a6d1a','#fbf1dc'],['aprovado','Aprovada — aguardando pagamento','#185FA5','#e3edf7'],['pago','Paga','#0F6E56','#e5f4ed'],['em_andamento','Em desenvolvimento','#6d28a8','#f1e9fa'],['concluido','Concluída','#0F6E56','#e5f4ed'],['recusado','Recusada','#b5342b','#fbeceb']];
   function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
@@ -159,7 +159,7 @@
 
   async function abrirApp(){
     var u=await sb.auth.getUser();
-    var email=(u&&u.data&&u.data.user&&u.data.user.email)||'';
+    var email=((u&&u.data&&u.data.user&&u.data.user.email)||'').toLowerCase();
     document.getElementById('app-user').textContent=email;
     document.getElementById('tela-login').classList.add('hidden');
     document.getElementById('tela-app').classList.remove('hidden');
@@ -169,6 +169,9 @@
   async function carregar(){
     var rc=await sb.from('inove_config').select('chave,valor'); CFG={}; (rc.data||[]).forEach(function(x){CFG[x.chave]=x.valor||'';});
     var rt=await sb.from('inove_tribunais').select('*').order('uf'); TRIB=rt.data||[];
+    var u=await sb.auth.getUser(); var em=((u&&u.data&&u.data.user&&u.data.user.email)||'').toLowerCase();
+    var admins=(CFG.admin_emails||'').toLowerCase().split(',').map(function(s){return s.trim();}).filter(Boolean);
+    IS_ADMIN=admins.indexOf(em)>-1;
   }
   function ir(s){
     ['cad','sol','doc'].forEach(function(k){
@@ -231,13 +234,44 @@
       var si=_sit(ISOL_SIT,s.status);
       var d=(s.criado_em||'').slice(0,10).split('-').reverse().join('/');
       var val=(s.valor!=null)?('R$ '+Number(s.valor).toLocaleString('pt-BR',{minimumFractionDigits:2})):'';
+      var acoes='';
+      if(IS_ADMIN){
+        acoes='<div style="margin-top:9px;display:flex;gap:7px;flex-wrap:wrap;align-items:center;border-top:1px dashed var(--line);padding-top:8px">'
+          +'<span class="note" style="font-weight:700">Admin:</span>'
+          +'<button class="btn gold sm" onclick="isolAprovar('+s.id+')">Aprovar + valor</button>'
+          +'<button class="btn ghost sm" onclick="isolStatus('+s.id+',\'pago\')">Marcar paga</button>'
+          +'<button class="btn ghost sm" onclick="isolStatus('+s.id+',\'em_andamento\')">Iniciar</button>'
+          +'<button class="btn ghost sm" onclick="isolStatus('+s.id+',\'concluido\')">Concluir</button>'
+          +'<button class="btn ghost sm" onclick="isolStatus('+s.id+',\'recusado\')">Recusar</button>'
+          +'</div>';
+      }
       return '<div style="border:1px solid var(--line);border-left:5px solid '+si[2]+';border-radius:11px;padding:11px 13px;margin-bottom:9px">'
         +'<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap"><span style="font-weight:700;color:var(--navy)">'+esc(s.titulo||'—')+'</span>'
         +'<span style="font-size:11px;font-weight:700;color:'+si[2]+';background:'+si[3]+';border-radius:12px;padding:2px 10px">'+si[1]+'</span></div>'
         +(s.descricao?('<div style="font-size:13px;margin-top:5px;white-space:pre-wrap">'+esc(s.descricao)+'</div>'):'')
         +(val?('<div style="font-size:13px;margin-top:7px;padding:6px 9px;background:#eef4fb;border-radius:7px;color:#22405f"><b>Valor:</b> '+val+(s.status==='aprovado'?' — pague para iniciarmos.':'')+'</div>'):'')
-        +'<div class="note" style="font-size:11px;margin-top:5px">'+esc(s.solicitante||'')+(s.solicitante?' · ':'')+esc(d)+'</div></div>';
+        +'<div class="note" style="font-size:11px;margin-top:5px">'+esc(s.solicitante||'')+(s.solicitante?' · ':'')+esc(d)+'</div>'+acoes+'</div>';
     }).join('');
+  }
+
+  async function isolAprovar(id){
+    if(!IS_ADMIN)return;
+    var v=prompt('Valor (R$) desta funcionalidade para aprovar:',''); if(v===null)return;
+    v=String(v).replace(/[^0-9,.-]/g,'').replace(/\./g,'').replace(',','.');
+    var num=parseFloat(v); if(isNaN(num)){alert('Valor inválido.');return;}
+    await _isolUpd(id,{status:'aprovado',valor:num,aprovado_em:new Date().toISOString()});
+  }
+  async function isolStatus(id,st){
+    if(!IS_ADMIN)return;
+    var rot=_sit(ISOL_SIT,st)[1];
+    if(!confirm('Marcar esta solicitação como "'+rot+'"?'))return;
+    await _isolUpd(id,{status:st});
+  }
+  async function _isolUpd(id,upd){
+    upd.atualizado_em=new Date().toISOString();
+    var r=await sb.from('inove_solicitacoes').update(upd).eq('id',id);
+    if(r&&r.error){alert('Não foi possível salvar: '+r.error.message);return;}
+    renderSol();
   }
 
   /* ===== Documento ===== */
