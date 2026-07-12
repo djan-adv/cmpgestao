@@ -24,3 +24,10 @@ Cora, webhook de pagamento e emissão de NFS-e de João Pessoa via intermediári
 (Focus NFe/PlugNotas), com confirmação "Emitir nota fiscal? Sim/Não".
 Especificação completa (arquitetura, fases, segurança, custos e o que é preciso
 para iniciar) em **ops/PROJETO-GESTAO-FINANCEIRA.md**.
+
+## 4. Produto multi-empresa (SaaS / white-label) — VISÃO REGISTRADA
+Transformar o CMPGestão numa raiz única que atende vários escritórios, cada um
+com domínio/marca/e-mail próprios, planos por assentos, personalização por
+configuração (não por fork). A Inove é o 1º inquilino-protótipo. Registro
+completo das ideias/perguntas/decisões do Djan e da arquitetura em
+**ops/PROJETO-MULTIEMPRESA.md**.
