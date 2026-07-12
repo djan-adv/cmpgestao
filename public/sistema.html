@@ -192,6 +192,7 @@
       <a data-s="inove" onclick="go('inove')" style="margin-top:12px;opacity:.8"><span class="ic">◈</span> Inove <span id="nav-n-inove" style="margin-left:auto;font-size:10.5px;background:var(--navy2);border-radius:10px;padding:1px 7px"></span></a>
       <a data-s="encerrados" onclick="go('encerrados')" style="opacity:.75"><span class="ic">▤</span> Encerrados <span id="nav-n-enc" style="margin-left:auto;font-size:10.5px;background:var(--navy2);border-radius:10px;padding:1px 7px"></span></a>
       <a data-s="james" onclick="go('james')" style="opacity:.75"><span class="ic">⏸</span> James Laurence <span id="nav-n-james" style="margin-left:auto;font-size:10.5px;background:var(--navy2);border-radius:10px;padding:1px 7px"></span></a>
+      <a data-s="cadastros" onclick="go('cadastros')"><span class="ic">🏛</span> Cadastros (Tribunais) <span id="nav-n-cad" style="margin-left:auto;font-size:10.5px;background:var(--navy2);border-radius:10px;padding:1px 7px"></span></a>
       <a data-s="sugestoes" onclick="go('sugestoes')" style="margin-top:12px;color:#ffd98a"><span class="ic">💡</span> Sugestões / Melhorias</a>
     </nav>
   </aside>
@@ -268,6 +269,14 @@
       <input id="james-busca" oninput="renderJames()" placeholder="Buscar por cliente, número, oponente ou assunto…" style="margin-top:10px;width:100%;max-width:520px;padding:9px 12px;border:1px solid var(--line);border-radius:10px;font-size:14px;font-family:inherit">
       <table style="margin-top:10px"><thead><tr><th style="width:36%">Cliente</th><th style="width:150px">Processo</th><th style="width:22%">Assunto</th><th style="width:170px">Última movimentação</th><th>Status</th><th style="width:120px"></th></tr></thead><tbody id="james-body"></tbody></table>
       <p class="note" style="margin-top:8px">Processos com James Laurence no polo passivo, suspensos da lista principal. Para trazer um de volta, use "→ lista principal". Para suspender outro, abra o processo e use "Suspender".</p></div>
+    </section>
+    <section id="s-cadastros" class="hidden">
+      <div class="card">
+        <p class="sectlabel" style="margin:0 0 4px">Cadastro do atuário nos Tribunais de Justiça</p>
+        <div id="cad-nome" class="note" style="margin:0 0 10px">Atuário: <b>Thiago Silveira</b> — acompanhamento do cadastro como auxiliar da justiça nos 27 TJs (26 estados + DF).</div>
+        <div id="cad-prog" style="margin-bottom:12px"></div>
+        <div id="cad-body"><div class="note">Carregando…</div></div>
+      </div>
     </section>
     <section id="s-processos" class="hidden">
       <div class="searchbar"><input id="busca" placeholder="Buscar por cliente, número, oponente ou assunto..." oninput="renderProc()"><select id="ordena" onchange="renderProc()" class="btn sm sb-sel" style="margin-left:8px;max-width:120px"><option value="">Novos Protocolos</option><option value="az">Cliente (A→Z)</option><option value="za">Cliente (Z→A)</option><option value="data_desc">Movimentação mais recente</option><option value="parados">Parados (mov. mais antiga)</option><option value="valor">Valor da causa (maior→menor)</option></select><select id="filtroEtq" onchange="renderProc()" class="btn sm sb-sel" style="margin-left:8px;max-width:112px"><option value="">Todas as etiquetas</option></select><select id="porPagina" onchange="renderProc()" class="btn sm sb-sel" style="margin-left:8px;max-width:76px"><option value="20">20 por página</option><option value="40">40</option><option value="60">60</option><option value="80">80</option><option value="100">100</option><option value="todos" selected>Todos</option></select><span class="note" id="proc-count" style="align-self:center"></span><button class="btn sm sb-btn" style="margin-left:auto" onclick="abrirNovaTarefa()">+ Nova tarefa</button><button class="btn sm gold sb-btn" style="margin-left:8px" onclick="abrirBusca()">+ Cadastrar por número <span style="font-weight:400;font-size:10px;opacity:.8">(pesquisa pelo djen)</span></button><button class="btn sm sb-btn" style="margin-left:8px;background:var(--navy);color:#fff;border-color:var(--navy)" onclick="abrirCadManual()">+ Cadastrar manual / caso</button><button class="btn sm sb-btn" style="margin-left:8px;background:#0F6E56;color:#fff;border-color:#0F6E56" onclick="abrirSyncPastas()" title="Enviar de uma vez uma pasta com vários processos — o sistema reconhece cada subpasta e manda para o processo certo">&#8645; Sincronizar pasta</button></div>
@@ -2759,7 +2768,7 @@ function toggleConcluirTarefa(id){
     /* CORREÇÃO GERAL: agora que TODOS os dados chegaram, re-renderiza a tela ativa
        (evita agenda/processos/painel em branco quando a pessoa abre antes do carregamento). */
     try{
-      var _secs=['painel','triagem','agenda','processos','crm','etiquetas','encerrados','inove','james','diligencias','relatorio'];
+      var _secs=['painel','triagem','agenda','processos','crm','etiquetas','encerrados','inove','james','cadastros','diligencias','relatorio'];
       var _ativa=_secs.find(function(s){var el=document.getElementById('s-'+s);return el && !el.classList.contains('hidden');});
       if(_ativa==='agenda' && typeof renderAgendaView==='function') renderAgendaView();
       else if(_ativa && typeof go==='function') go(_ativa);
@@ -3706,11 +3715,11 @@ function go(s){
 function go(s){
   try{ localStorage.setItem('cmp_secao', s); if(s!=='proc-det') localStorage.removeItem('cmp_proc'); }catch(e){}
   var showId=(s==='contatos')?'crm':s;
-  ["painel","triagem","agenda","processos","proc-det","crm","etiquetas","procedimentos","diligencias","relatorio","encerrados","inove","james","fases","sugestoes"].forEach(function(id){var e=document.getElementById("s-"+id);if(e)e.classList.add("hidden")});
+  ["painel","triagem","agenda","processos","proc-det","crm","etiquetas","procedimentos","diligencias","relatorio","encerrados","inove","james","cadastros","fases","sugestoes"].forEach(function(id){var e=document.getElementById("s-"+id);if(e)e.classList.add("hidden")});
   var sec=document.getElementById("s-"+showId); if(sec) sec.classList.remove("hidden");
   document.querySelectorAll("#nav a").forEach(function(a){a.classList.remove("active")});
   var link=document.querySelector('#nav a[data-s="'+s+'"]');if(link)link.classList.add("active");
-  var t={painel:"Painel",triagem:"Publicações",agenda:"Agenda — Kanban (etapas CMP)",processos:"Processos",crm:"Comercial",contatos:"Contatos",procedimentos:"Procedimentos CMP",etiquetas:"Etiquetas","proc-det":"Processo",diligencias:"Diligências",relatorio:"Relatório mensal para clientes",encerrados:"Processos encerrados",inove:"Processos Inove (terceiros)",james:"Processos contra James Laurence",fases:"Revisar fases dos processos"};
+  var t={painel:"Painel",triagem:"Publicações",agenda:"Agenda — Kanban (etapas CMP)",processos:"Processos",crm:"Comercial",contatos:"Contatos",procedimentos:"Procedimentos CMP",etiquetas:"Etiquetas","proc-det":"Processo",diligencias:"Diligências",relatorio:"Relatório mensal para clientes",encerrados:"Processos encerrados",inove:"Processos Inove (terceiros)",james:"Processos contra James Laurence",cadastros:"Cadastros — Tribunais de Justiça",fases:"Revisar fases dos processos"};
   var st=document.getElementById("scr-title"); if(st) st.textContent=t[s]||"Painel";
   var sw=document.querySelector('#s-crm .switch'); if(sw) sw.style.display='none';
   if(s==="painel")renderPainel(); if(s==="triagem")renderTriagem(); if(s==="processos")renderProc();
@@ -3720,6 +3729,7 @@ function go(s){
   if(s==="encerrados")renderEncerrados();
   if(s==="inove")renderInove();
   if(s==="james")renderJames();
+  if(s==="cadastros")renderCadastros();
   if(s==="fases" && typeof renderFasesRevisao==='function')renderFasesRevisao();
   if(s==="sugestoes" && typeof renderSugestoes==='function'){ var _an=document.getElementById('sg-autor'); if(_an && !_an.value){ _an.value=((document.getElementById('who-name')||{}).textContent||'').trim(); } renderSugestoes(); }
   window.scrollTo(0,0);
@@ -3807,6 +3817,52 @@ function renderEncerrados(){
     tr.innerHTML='<td style="max-width:260px"><span style="font-weight:700;color:var(--navy)">'+esc(resumo3(p.cliente))+'</span><div style="font-size:12px;color:var(--muted);margin-top:2px">× '+(esc(resumo3(p.oponente))||'—')+'</div></td><td class="proc">'+p.numero+'</td><td style="font-size:12px">'+esc(p.tipo)+'</td><td style="max-width:170px;white-space:normal" title="'+esc(um.slice(0,300))+'">'+(cm?'<span style="font-weight:600;color:var(--navy)">'+cm+'</span>':'<span style="font-size:12.5px">'+esc(um.slice(0,60))+'</span>')+'<div style="font-size:12px;color:var(--muted)">'+esc(p.data||'')+'</div></td><td><span class="b '+stCls(p.status)+'">'+esc(p.status||'—')+'</span><div style="margin-top:4px">'+origemBtnHTML(p)+'</div></td><td><button style="background:#f0f2f5;color:#697180;border:1px solid #e4e8ef;border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer" onclick="event.stopPropagation();abrirNovaTarefa(decodeURIComponent(\''+encodeURIComponent(p.numero)+'\'))">tarefa</button></td>';
     b.appendChild(tr);
   });
+}
+/* ===== Módulo Inove: cadastro do atuário nos Tribunais de Justiça ===== */
+var CAD_SIT=[['a_fazer','A fazer','#8a8f98','#eef0f3'],['enviado','Enviado','#185FA5','#e3edf7'],['em_analise','Em análise','#8a6d1a','#fbf1dc'],['pendencia','Pendência','#b5342b','#fbeceb'],['cadastrado','Cadastrado','#0F6E56','#e5f4ed']];
+function _sitInfo(v){ for(var i=0;i<CAD_SIT.length;i++){ if(CAD_SIT[i][0]===v) return CAD_SIT[i]; } return CAD_SIT[0]; }
+function _atualizaCadBadge(){ try{ var l=window.__tribunais||[]; var f=l.filter(function(x){return x.situacao==='cadastrado';}).length; var el=document.getElementById('nav-n-cad'); if(el) el.textContent=l.length?(f+'/'+l.length):''; }catch(e){} }
+async function renderCadastros(){
+  var b=document.getElementById('cad-body'); if(!b) return;
+  var sb=window.__sb; if(!sb){ b.innerHTML='<div class="note">Sessão não encontrada — faça login.</div>'; return; }
+  if(!window.__tribunais){
+    var r=await sb.from('inove_tribunais').select('*').order('uf');
+    if(r.error){ b.innerHTML='<div class="note">Erro ao carregar: '+esc(r.error.message)+'</div>'; return; }
+    window.__tribunais=r.data||[];
+  }
+  var lista=window.__tribunais;
+  var feito=lista.filter(function(x){return x.situacao==='cadastrado';}).length;
+  var pct=lista.length?Math.round(feito/lista.length*100):0;
+  var pr=document.getElementById('cad-prog');
+  if(pr) pr.innerHTML='<div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700;color:var(--navy);margin-bottom:4px"><span>'+feito+' de '+lista.length+' cadastrados</span><span>'+pct+'%</span></div><div style="height:10px;background:#eef0f3;border-radius:6px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:#0F6E56;transition:width .3s"></div></div>';
+  b.innerHTML=lista.map(function(t){
+    var si=_sitInfo(t.situacao);
+    var opts=CAD_SIT.map(function(o){return '<option value="'+o[0]+'"'+(o[0]===t.situacao?' selected':'')+'>'+o[1]+'</option>';}).join('');
+    return '<div style="border:1px solid var(--line);border-left:5px solid '+si[2]+';border-radius:11px;padding:12px 14px;margin-bottom:10px">'
+      +'<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center">'
+      +'<div><b style="color:var(--navy)">'+esc(t.uf)+' · '+esc(t.sigla)+'</b> <span class="note">'+esc(t.tribunal)+'</span></div>'
+      +'<select onchange="salvarTribunal(\''+t.id+'\',\'situacao\',this.value)" style="width:auto;font-size:12.5px;padding:4px 8px;border-radius:8px;background:'+si[3]+';color:'+si[2]+';font-weight:700;border:1px solid '+si[2]+'44">'+opts+'</select>'
+      +'</div>'
+      +'<div class="kvgrid" style="grid-template-columns:1fr 1fr;margin-top:10px">'
+      +'<label class="note" style="display:flex;flex-direction:column;gap:3px">Link do cadastro<input value="'+esc(t.link_cadastro||'')+'" placeholder="cole o link deste TJ" onblur="salvarTribunal(\''+t.id+'\',\'link_cadastro\',this.value)"></label>'
+      +'<label class="note" style="display:flex;flex-direction:column;gap:3px">Protocolo<input value="'+esc(t.protocolo||'')+'" onblur="salvarTribunal(\''+t.id+'\',\'protocolo\',this.value)"></label>'
+      +'<label class="note" style="display:flex;flex-direction:column;gap:3px">Enviado em<input type="date" value="'+esc(String(t.enviado_em||'').slice(0,10))+'" onchange="salvarTribunal(\''+t.id+'\',\'enviado_em\',this.value)"></label>'
+      +'<label class="note" style="display:flex;flex-direction:column;gap:3px">Cadastrado em<input type="date" value="'+esc(String(t.cadastrado_em||'').slice(0,10))+'" onchange="salvarTribunal(\''+t.id+'\',\'cadastrado_em\',this.value)"></label>'
+      +'</div>'
+      +'<label class="note" style="display:block;margin-top:8px">Observações<textarea onblur="salvarTribunal(\''+t.id+'\',\'obs\',this.value)" style="width:100%;min-height:48px">'+esc(t.obs||'')+'</textarea></label>'
+      +'<div style="margin-top:8px;display:flex;gap:10px;flex-wrap:wrap">'
+      +(t.link_cadastro?('<a href="'+esc(t.link_cadastro)+'" target="_blank" rel="noopener" class="btn sm">Abrir cadastro ↗</a>'):'')
+      +(t.site?('<a href="'+esc(t.site)+'" target="_blank" rel="noopener" class="btn sm ghost">Site do tribunal ↗</a>'):'')
+      +'</div></div>';
+  }).join('');
+  _atualizaCadBadge();
+}
+async function salvarTribunal(id,campo,valor){
+  var sb=window.__sb; if(!sb) return;
+  var t=(window.__tribunais||[]).find(function(x){return x.id===id;}); if(t) t[campo]=(valor===''?null:valor);
+  var upd={atualizado_em:new Date().toISOString()}; upd[campo]=(valor===''?null:valor);
+  try{ var r=await sb.from('inove_tribunais').update(upd).eq('id',id); if(r&&r.error){ alert('Não foi possível salvar: '+r.error.message); return; } }catch(e){ alert('Erro: '+(e&&e.message||e)); return; }
+  if(campo==='situacao') renderCadastros();
 }
 function ehJames(p){ return !!p && /james laurence/i.test(String(p.oponente||'')); }
 function isSuspenso(p){ return !!(p&&p.suspenso); }
