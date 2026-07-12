@@ -296,7 +296,7 @@
         <div class="kpis" id="cap-kpis"></div>
         <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:stretch"><div class="card" style="flex:1;min-width:300px"><p class="sectlabel">Panorama por canal — clique numa fatia/canal ou nos indicadores para ver quem</p><div id="cap-canais"></div><p class="note">O tráfego pago não converte no CMP; foque em indicação, Google Meu Negócio e conteúdo orgânico.</p></div><div class="card" style="flex:1;min-width:300px"><p class="sectlabel">Funil comercial — leads por etapa</p><div id="funil-dash" style="display:flex;gap:8px;flex-wrap:wrap"></div></div></div>
         <div id="cap-fechados" style="margin-bottom:14px"></div>
-        <div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><p class="sectlabel" style="margin:0">Funil de captação (arraste os leads; clique para editar)</p><div><button class="btn sm" onclick="novoLead()">+ Novo lead</button> <button class="btn sm ghost" onclick="addEtapa()">+ Etapa</button></div></div><div class="kanwrap"><div class="kanban" id="funil"></div></div></div>
+        <div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><p class="sectlabel" style="margin:0">Funil de captação (arraste os leads; clique para editar)</p><div><button class="btn sm" onclick="abrirInbox()">&#128229; Caixa de entrada <span id="inbox-badge" style="display:none;font-size:10px;font-weight:700;background:var(--gold);color:#fff;border-radius:10px;padding:0 6px;margin-left:2px"></span></button> <button class="btn sm" onclick="novoLead()">+ Novo lead</button> <button class="btn sm ghost" onclick="addEtapa()">+ Etapa</button></div></div><div class="kanwrap"><div class="kanban" id="funil"></div></div></div>
       </div>
     </section>
 
@@ -522,6 +522,27 @@
   <label>Anotações</label><textarea id="l-obs" placeholder="Observações sobre o lead (contexto, histórico da conversa, próximos passos)..."></textarea>
   <label>Etiquetas</label><div id="l-etq" style="display:flex;flex-wrap:wrap;gap:6px"></div>
   <div class="foot"><button class="btn ghost" onclick="fecharLead()">Cancelar</button><button class="btn" onclick="salvarLead()">Salvar</button></div>
+</div></div>
+<div id="modal-lead-arqs" class="overlay hidden"><div class="modal">
+  <h2>Arquivos / Prints do lead</h2>
+  <div id="la-nome" class="note" style="margin:0 0 10px"></div>
+  <div style="border:1.5px dashed #cdd5e0;border-radius:12px;padding:14px;text-align:center;background:#fafbfc">
+    <label for="la-file" style="cursor:pointer;color:#185FA5;font-weight:700">&#128206; Enviar arquivos (qualquer tipo, vários)</label>
+    <input type="file" id="la-file" accept="*/*" multiple style="display:none" onchange="uploadLeadArqs(this.files)">
+    <div id="la-prog" class="note" style="display:none;margin-top:8px"></div>
+  </div>
+  <div id="la-lista" style="margin-top:12px"></div>
+  <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--line)">
+    <button class="btn sm" onclick="lerLeadComIA()" title="A IA lê os anexos e a mensagem e sugere nome, telefone, assunto e observações — sem inventar dados">&#129302; Ler com IA e preencher campos</button>
+    <div id="la-ia" class="note" style="margin-top:8px"></div>
+  </div>
+  <div class="foot"><button class="btn ghost" onclick="fecharLeadArqs()">Fechar</button></div>
+</div></div>
+<div id="modal-inbox" class="overlay hidden"><div class="modal" style="max-width:840px">
+  <h2>Caixa de entrada — leads recebidos pelo link</h2>
+  <p class="note" style="margin:0 0 12px">Leads enviados pela página pública (captar.html). "Importar" cria um card no funil com os dados e anexos; "Descartar" arquiva (anexos são apagados após 30 dias).</p>
+  <div id="inbox-body"><div class="note">Carregando…</div></div>
+  <div class="foot"><button class="btn ghost" onclick="fecharInbox()">Fechar</button></div>
 </div></div>
 <div id="modal-drill" class="overlay hidden"><div class="modal">
   <h2 id="drill-tit">Leads</h2>
@@ -1204,7 +1225,7 @@ function setCrmView(v){crmView=v;
   document.getElementById("crm-sw-f").classList.toggle("on",v==="captacao");
   document.getElementById("crm-contatos").classList.toggle("hidden",v!=="contatos");
   document.getElementById("crm-captacao").classList.toggle("hidden",v!=="captacao");
-  renderCrm();}
+  renderCrm(); if(v==="captacao"){ try{ atualizaInboxBadge(); }catch(e){} }}
 function renderCrm(){ if(crmView==="captacao")renderCaptacao(); else renderContatos(); }
 function seedContatos(){ if(CONTATOS)return; syncContatosClientes(true); }
 function normClienteNome(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim(); }
@@ -1404,7 +1425,7 @@ function renderCaptacao(){
       var lem=l.lemdata?('<div class="meta" style="color:var(--warn)">&#128276; '+l.lemdata+'</div>'):'';
       var _pdot={alta:'#b5342b',media:'#E0A800',baixa:'#127a53'}[l.prioridade||'media'];
       var _canalTag='<span style="display:inline-block;font-size:10px;font-weight:700;color:'+_cc+';background:'+_cc+'1a;border-radius:10px;padding:1px 8px;margin-top:6px">'+esc(l.canal||'—')+'</span>';
-      el.innerHTML='<div class="t" style="display:flex;justify-content:space-between;align-items:center;gap:6px"><span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+_pdot+';margin-right:5px;vertical-align:middle" title="prioridade"></span>'+esc(primeiroUltimo(l.nome))+'</span><a title="Apagar lead" onclick="excluirLead('+l.id+',event)" style="cursor:pointer;color:#b5342b;font-size:14px;line-height:1;opacity:.55;flex:0 0 auto">&#128465;</a></div><div class="meta">'+esc(l.acao||l.lemtxt||"—")+'</div>'+lem+_canalTag+(l.labels&&l.labels.length?('<div style="margin-top:4px">'+chipsFor(l.labels)+'</div>'):'');
+      el.innerHTML='<div class="t" style="display:flex;justify-content:space-between;align-items:center;gap:6px"><span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+_pdot+';margin-right:5px;vertical-align:middle" title="prioridade"></span>'+esc(primeiroUltimo(l.nome))+'</span><span style="display:inline-flex;gap:7px;align-items:center;flex:0 0 auto"><a title="Arquivos/Prints" onclick="abrirLeadArqs('+l.id+',event)" style="cursor:pointer;color:#185FA5;font-size:14px;line-height:1;opacity:.75">&#128206;'+((l.arquivos&&l.arquivos.length)?('<b style="font-size:10px;vertical-align:top">'+l.arquivos.length+'</b>'):'')+'</a><a title="Apagar lead" onclick="excluirLead('+l.id+',event)" style="cursor:pointer;color:#b5342b;font-size:14px;line-height:1;opacity:.55">&#128465;</a></span></div><div class="meta">'+esc(l.acao||l.lemtxt||"—")+'</div>'+lem+_canalTag+(l.labels&&l.labels.length?('<div style="margin-top:4px">'+chipsFor(l.labels)+'</div>'):'');
       col.appendChild(el);});
     fu.appendChild(col);
   });
@@ -2227,6 +2248,124 @@ function salvarLeadsLocal(){ try{ localStorage.setItem('cmpLeads', JSON.stringif
 function carregarLeadsLocal(){ try{ var s=localStorage.getItem('cmpLeads'); if(s){ var arr=JSON.parse(s); if(Array.isArray(arr)&&arr.length){ LEADS=arr; var mx=0; LEADS.forEach(function(l){ if(l.id>mx)mx=l.id; }); lseq=Math.max(lseq,mx+1); } } }catch(e){} }
 try{ carregarLeadsLocal(); }catch(e){}
 try{ carregarFunilLocal(); }catch(e){}
+
+/* ===== Leads: anexos, caixa de entrada (leads_publicos), mesclagem e leitura por IA ===== */
+var LEADS_BUCKET='leads-publicos';
+function _uuidL(){ try{ if(crypto&&crypto.randomUUID) return crypto.randomUUID(); }catch(e){} return 'c'+Date.now()+Math.floor(Math.random()*1e6); }
+function _slugArq(s){ return String(s||'arquivo').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^\w.\- ]+/g,'').replace(/\s+/g,'_').slice(0,120); }
+function _leadById(id){ return (LEADS||[]).find(function(x){return x.id===id;}); }
+function _soDig(s){ return String(s||'').replace(/\D/g,''); }
+
+/* ---- Anexos do lead ---- */
+function abrirLeadArqs(id,ev){ if(ev)ev.stopPropagation(); var l=_leadById(id); if(!l)return; if(!l.arquivos)l.arquivos=[]; window._laLead=l;
+  var nm=document.getElementById('la-nome'); if(nm) nm.textContent=(l.nome||'lead')+(l.canal?(' · '+l.canal):'');
+  var ia=document.getElementById('la-ia'); if(ia) ia.textContent='';
+  renderLeadArqs(); document.getElementById('modal-lead-arqs').classList.remove('hidden'); }
+function fecharLeadArqs(){ document.getElementById('modal-lead-arqs').classList.add('hidden'); try{ renderCaptacao(); }catch(e){} }
+function renderLeadArqs(){ var l=window._laLead; var el=document.getElementById('la-lista'); if(!l||!el)return;
+  if(!l.arquivos||!l.arquivos.length){ el.innerHTML='<div class="note">Nenhum arquivo anexado ainda.</div>'; return; }
+  el.innerHTML=l.arquivos.map(function(a,i){ return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;border:1px solid var(--line);border-radius:9px;padding:7px 10px;margin-bottom:6px"><span style="word-break:break-all;font-size:13px">'+esc(a.nome||a.path)+'</span><span style="flex:0 0 auto;white-space:nowrap"><a onclick="baixarLeadArq('+i+')" style="cursor:pointer;color:#185FA5;font-size:12px;margin-right:12px">baixar</a><a onclick="removerLeadArq('+i+')" style="cursor:pointer;color:#b5342b;font-size:12px">remover</a></span></div>'; }).join(''); }
+async function uploadLeadArqs(fileList){ var l=window._laLead; if(!l||!fileList||!fileList.length) return;
+  var sb=window.__sb; if(!sb){ alert('Sessão não encontrada — faça login.'); return; }
+  if(!l.arquivos)l.arquivos=[]; if(!l._pasta)l._pasta='card_'+_uuidL();
+  var prog=document.getElementById('la-prog'); if(prog){prog.style.display='block';}
+  for(var i=0;i<fileList.length;i++){ var f=fileList[i]; if(prog)prog.textContent='Enviando '+(i+1)+'/'+fileList.length+'…';
+    var path=l._pasta+'/'+_slugArq(f.name);
+    try{ var up=await sb.storage.from(LEADS_BUCKET).upload(path,f,{upsert:true,contentType:(f.type||'application/octet-stream')});
+      if(up.error){ alert('Falha ao enviar "'+f.name+'": '+up.error.message); continue; }
+      l.arquivos.push({nome:f.name,path:path,tipo:(f.type||''),tamanho:f.size,quando:new Date().toISOString()});
+    }catch(e){ alert('Erro: '+(e&&e.message||e)); }
+  }
+  if(prog)prog.style.display='none'; try{document.getElementById('la-file').value='';}catch(e){}
+  salvarLeadsLocal(); renderLeadArqs(); }
+async function baixarLeadArq(i){ var l=window._laLead; var a=l&&l.arquivos&&l.arquivos[i]; if(!a)return; var sb=window.__sb; if(!sb)return;
+  try{ var r=await sb.storage.from(LEADS_BUCKET).createSignedUrl(a.path,120); if(r.data&&r.data.signedUrl) window.open(r.data.signedUrl,'_blank'); else alert('Não foi possível abrir o arquivo.'); }catch(e){ alert('Erro: '+(e&&e.message||e)); } }
+async function removerLeadArq(i){ var l=window._laLead; var a=l&&l.arquivos&&l.arquivos[i]; if(!a)return; if(!confirm('Remover "'+(a.nome||a.path)+'"?'))return; var sb=window.__sb;
+  try{ if(sb) await sb.storage.from(LEADS_BUCKET).remove([a.path]); }catch(e){}
+  l.arquivos.splice(i,1); salvarLeadsLocal(); renderLeadArqs(); }
+
+/* ---- Caixa de entrada (leads_publicos, status=novo) ---- */
+function abrirInbox(){ document.getElementById('modal-inbox').classList.remove('hidden'); renderInboxList(); }
+function fecharInbox(){ document.getElementById('modal-inbox').classList.add('hidden'); }
+async function atualizaInboxBadge(){ try{ var sb=window.__sb; if(!sb)return; var r=await sb.from('leads_publicos').select('id',{count:'exact',head:true}).eq('status','novo'); var b=document.getElementById('inbox-badge'); if(b){ if(r&&r.count){ b.textContent=r.count; b.style.display=''; } else { b.style.display='none'; } } }catch(e){} }
+async function renderInboxList(){ var el=document.getElementById('inbox-body'); if(!el)return; el.innerHTML='<div class="note">Carregando…</div>';
+  var sb=window.__sb; if(!sb){ el.innerHTML='<div class="note">Sessão não encontrada — faça login.</div>'; return; }
+  var r=await sb.from('leads_publicos').select('*').eq('status','novo').order('criado_em',{ascending:false});
+  if(r.error){ el.innerHTML='<div class="note">Erro ao carregar: '+esc(r.error.message)+'</div>'; return; }
+  var rows=r.data||[]; window.__inbox=rows;
+  atualizaInboxBadge();
+  if(!rows.length){ el.innerHTML='<div class="note">Nenhum lead novo na caixa de entrada.</div>'; return; }
+  el.innerHTML=rows.map(function(x){
+    var dup=_leadDuplicado(x);
+    var arq=(x.arquivos&&x.arquivos.length)?(x.arquivos.length+' anexo(s)'):'sem anexos';
+    var quando=(x.criado_em||'').slice(0,16).replace('T',' ');
+    return '<div style="border:1px solid var(--line);border-radius:11px;padding:12px 14px;margin-bottom:10px">'
+      +'<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center">'
+      +'<div><b style="color:var(--navy)">'+esc(x.nome||'(sem nome)')+'</b> <span class="note">· '+esc(x.canal||'')+' · '+esc(quando)+'</span>'
+      +'<div style="font-size:13px;margin-top:2px">'+esc(x.telefone||'—')+(x.email?(' · '+esc(x.email)):'')+' <span class="note">· '+arq+'</span></div>'
+      +(x.mensagem?('<div style="font-size:13px;margin-top:5px;white-space:pre-wrap;color:#374151">'+esc(String(x.mensagem).slice(0,400))+'</div>'):'')
+      +(dup?('<div style="font-size:12px;margin-top:5px;color:#8a6d1a">⚠ possível duplicado de "<b>'+esc(dup.nome||'')+'</b>" já no funil</div>'):'')
+      +'</div>'
+      +'<div style="display:flex;gap:6px;flex-wrap:wrap;flex:0 0 auto">'
+      +(dup?('<button class="btn sm" style="background:#fbf1dc;color:#8a6d1a;border:1px solid #ecd9a8" onclick="importarLead(\''+x.id+'\',\''+dup.id+'\')">Mesclar</button>'):'')
+      +'<button class="btn sm" onclick="importarLead(\''+x.id+'\')">Importar</button>'
+      +'<button class="btn sm ghost" onclick="descartarLead(\''+x.id+'\')">Descartar</button>'
+      +'</div></div></div>';
+  }).join(''); }
+function _leadDuplicado(x){ var tel=_soDig(x.telefone); var nm=normClienteNome?normClienteNome(x.nome):String(x.nome||'').toLowerCase();
+  return (LEADS||[]).find(function(l){ if(l.estagio==='perdido')return false; if(tel&&_soDig(l.tel)&&_soDig(l.tel)===tel) return true; var ln=normClienteNome?normClienteNome(l.nome):String(l.nome||'').toLowerCase(); return !!nm && ln===nm; }); }
+function _rowInbox(id){ return (window.__inbox||[]).find(function(x){return String(x.id)===String(id);}); }
+async function importarLead(pubId,mesclarComId){
+  var x=_rowInbox(pubId); if(!x){ alert('Lead não encontrado.'); return; }
+  var pasta=(x.arquivos&&x.arquivos[0]&&x.arquivos[0].path)?String(x.arquivos[0].path).split('/')[0]:('pub_'+_uuidL());
+  var arquivos=(x.arquivos||[]).map(function(a){ return {nome:a.nome,path:a.path,tipo:(a.tipo||''),tamanho:(a.tamanho||0),quando:(x.criado_em||new Date().toISOString())}; });
+  if(mesclarComId){
+    var dst=_leadById(parseInt(mesclarComId,10))||_leadById(mesclarComId); if(!dst){ alert('Card de destino não encontrado.'); return; }
+    if(!confirm('Mesclar este lead recebido no card "'+(dst.nome||'')+'"?')) return;
+    _mesclarDados(dst, {nome:x.nome,tel:x.telefone,email:x.email,obs:x.mensagem,arquivos:arquivos,memoria:null,canal:x.canal,publicoId:x.id,_pasta:pasta});
+    salvarLeadsLocal();
+  }else{
+    var novo={ id:lseq++, nome:(x.nome||''), canal:(x.canal||'Link público'), estagio:FUNIL[0].id, tel:(x.telefone||''), email:(x.email||''),
+      valor:'', valorFechado:'', motivo:'', data:hojeISO(), lemdata:'', lemtxt:'', obs:(x.mensagem||''), prioridade:'media', acao:'', labels:[],
+      arquivos:arquivos, _pasta:pasta, publicoId:x.id, memoria:null };
+    LEADS.push(novo); salvarLeadsLocal();
+  }
+  var sb=window.__sb; try{ if(sb) await sb.from('leads_publicos').update({status:'importado',importado_em:new Date().toISOString()}).eq('id',x.id); }catch(e){}
+  renderInboxList(); try{ renderCaptacao(); }catch(e){} }
+async function descartarLead(pubId){ var x=_rowInbox(pubId); if(!x)return; if(!confirm('Descartar o lead "'+(x.nome||'')+'"?\n\nOs anexos serão mantidos por 30 dias e depois excluídos.')) return;
+  var sb=window.__sb; try{ if(sb) await sb.from('leads_publicos').update({status:'descartado',descartado_em:new Date().toISOString()}).eq('id',x.id); }catch(e){}
+  renderInboxList(); }
+/* mescla dados de "src" no lead "dst": preenche campos em branco, junta anexos, memória e anotações */
+function _mesclarDados(dst, src){
+  if(!dst.nome && src.nome) dst.nome=src.nome;
+  if(!dst.tel && src.tel) dst.tel=src.tel;
+  if(!dst.email && src.email) dst.email=src.email;
+  if(src.obs){ dst.obs=(dst.obs?(dst.obs+'\n\n'):'')+src.obs; }
+  if(!dst.arquivos) dst.arquivos=[];
+  (src.arquivos||[]).forEach(function(a){ if(!dst.arquivos.some(function(b){return b.path===a.path;})) dst.arquivos.push(a); });
+  if(src.memoria){ dst.memoria=dst.memoria?[].concat(dst.memoria,src.memoria):src.memoria; }
+  if(src.publicoId){ dst.publicoIds=(dst.publicoIds||[]); dst.publicoIds.push(src.publicoId); }
+}
+
+/* ---- Leitura por IA (server-side; nunca a chave aqui) ---- */
+async function lerLeadComIA(){ var l=window._laLead; if(!l){ return; } var ia=document.getElementById('la-ia'); if(ia){ia.textContent='Lendo com IA…';}
+  var sb=window.__sb; var jwt=''; try{ var s=await sb.auth.getSession(); jwt=s&&s.data&&s.data.session&&s.data.session.access_token||''; }catch(e){}
+  try{
+    var resp=await fetch('/api/ler-lead',{ method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+jwt},
+      body:JSON.stringify({ paths:(l.arquivos||[]).map(function(a){return a.path;}), mensagem:(l.obs||''), nome:(l.nome||''), telefone:(l.tel||'') }) });
+    if(!resp.ok){ var t=await resp.text(); if(ia) ia.textContent='IA indisponível ('+resp.status+'). '+(resp.status===404||resp.status===501?'Endpoint /api/ler-lead ainda não publicado no servidor.':t.slice(0,140)); return; }
+    var out=await resp.json();
+    var card=out.card||{}, mem=out.memoria||null;
+    // Camada CARD — só preenche em branco; nunca sobrescreve nem inventa
+    if(card.nome && !l.nome) l.nome=card.nome;
+    if(card.telefone && !l.tel) l.tel=card.telefone;
+    if(card.assunto && !l.acao) l.acao=card.assunto;
+    if(card.observacao){ l.obs=(l.obs?(l.obs+'\n\n'):'')+card.observacao; }
+    // Camada MEMÓRIA — guardada oculta no card (não aparece na tela)
+    if(mem){ l.memoria=mem; }
+    salvarLeadsLocal(); renderLeadArqs();
+    if(ia) ia.textContent='Pronto — campos preenchidos a partir do que foi identificado (o que não deu para identificar ficou em branco).';
+  }catch(e){ if(ia) ia.textContent='Falha ao ler com IA: '+(e&&e.message||e); } }
 function addEtapa(){var n=prompt("Nome da nova etapa do funil:");if(!n)return;FUNIL.push({id:"e"+Date.now(),nome:n});salvarFunilLocal();renderCaptacao();}
 function renameEtapa(idx){var f=FUNIL[idx];var n=prompt("Renomear etapa:",f.nome);if(n){f.nome=n;salvarFunilLocal();renderCaptacao();}}
 function kpiC(l,n,h){return '<div class="kpi" style="cursor:pointer" onclick="'+h+'"><div class="n">'+n+'</div><div class="l">'+l+' &rsaquo;</div></div>';}
