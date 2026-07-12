@@ -195,3 +195,30 @@ d'água). CPF Thiago 063.474.586-75; CNPJ Inove 24.756.013/0001-53 (do NUPeJ RN)
   **branding neutro**; painel **"Solicitar novas funcionalidades"** com aprovação+valor.
 - Infra (depende do Djan): apontar **DNS `inove.djan.app.br` → VPS**; **rebuild** no VPS
   para rotas novas; criar os **3+1 acessos** (link de convite).
+
+---
+
+## 11. Inove — status de entrega (atualizado 12/07/2026)
+
+**Pronto no sistema (raiz CMP, perfil neutro):**
+- Cadastros nos 27 TJs com situação real, links e senhas (módulo Cadastros/Tribunais).
+- Processos Inove (pasta própria, sem automações da CMP).
+- Perfil de login **"Perito / Inove"** com **marca neutra ("Portal do Perito")**:
+  esconde marcas e ferramentas exclusivas da CMP no menu e na ficha (Agendar com
+  Claude, e-mails de Acompanhamento/Atualizar cliente). Abre direto na pasta Inove.
+- **Solicitar novas funcionalidades** (sugestões pagas): solicitante envia →
+  coordenador aprova com valor → pago → em desenvolvimento → concluída. Tabela
+  `inove_solicitacoes`.
+- **Documento-padrão do atuário**: perfil editável (nome/CPF/CNPJ já preenchidos;
+  demais campos em branco) + modelo com campos {{substituíveis}}, geração por
+  tribunal, copiar/baixar .txt. Tabela `inove_config`. Regra respeitada: nada de
+  dado inventado — campos sem informação ficam visíveis como {{campo}}.
+
+**Depende do Djan (infra/decisão):**
+- DNS `inove.djan.app.br` → VPS (Hostinger) — ou domínio próprio do cliente depois.
+- Rebuild do VPS (`npm run build` + `pm2 restart cmpgestao`) para rotas novas.
+- Criar os **3 acessos Inove + 1 de teste (nosso)** por link de auto-cadastro
+  (o cliente define o próprio e-mail/senha; Djan não gerencia senha) — exige a
+  auth separada por inquilino (escopo real de dados por tenant).
+- Colar o **modelo real** do documento e completar os dados cadastrais do Thiago
+  (RG, registro profissional, endereço, e-mail, telefone) uma única vez.
