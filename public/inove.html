@@ -109,7 +109,8 @@
     <div class="brand"><b>Portal do Perito</b><span>Cadastro pericial</span></div>
     <nav>
       <a id="nav-painel" class="on" onclick="ir('painel')"><span class="ic">▤</span> Painel</a>
-      <a id="nav-proc" onclick="ir('proc')"><span class="ic">⚖</span> Processos <span class="cnt" id="cnt-proc"></span></a>
+      <a id="nav-proc" onclick="ir('proc')"><span class="ic">⚖</span> Processos judiciais <span class="cnt" id="cnt-proc"></span></a>
+      <a id="nav-admin" onclick="ir('admin')"><span class="ic">▦</span> Administrativos / Licitações <span class="cnt" id="cnt-admin"></span></a>
       <a id="nav-agenda" onclick="ir('agenda')"><span class="ic">◧</span> Agenda (Kanban) <span class="cnt" id="cnt-agenda"></span></a>
       <a id="nav-cad" onclick="ir('cad')"><span class="ic">🏛</span> Cadastros (Tribunais) <span class="cnt" id="cnt-cad"></span></a>
       <a id="nav-sol" onclick="ir('sol')"><span class="ic">✨</span> Solicitar novas funcionalidades <span class="cnt" id="cnt-sol"></span></a>
@@ -135,11 +136,27 @@
             <button class="btn gold sm" onclick="abrirNovoProc()">+ Cadastrar processo</button>
           </div>
           <div id="proc-form" class="hidden" style="margin:10px 0;padding:12px;border:1px solid var(--line);border-radius:12px;background:#fafbfc">
+            <label style="margin:0 0 4px">Tipo de processo</label>
+            <select id="np-tipo" onchange="toggleTipoProc()" style="margin-bottom:8px"><option value="judicial">Judicial</option><option value="administrativo">Administrativo / Licitação</option></select>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:9px">
-              <label style="margin:0">Número do processo <input id="np-numero" placeholder="0000000-00.0000.0.00.0000"></label>
-              <label style="margin:0">Cliente <input id="np-cliente" placeholder="Nome do cliente"></label>
-              <label style="margin:0">Parte contrária <input id="np-oponente" placeholder="(opcional)"></label>
-              <label style="margin:0">Assunto <input id="np-assunto" placeholder="(opcional)"></label>
+              <label style="margin:0"><span id="np-lab-num">Número do processo</span> <input id="np-numero" placeholder="0000000-00.0000.0.00.0000"></label>
+              <label style="margin:0"><span id="np-lab-cli">Cliente</span> <input id="np-cliente" placeholder="Nome do cliente"></label>
+              <label style="margin:0"><span id="np-lab-op">Parte contrária</span> <input id="np-oponente" placeholder="(opcional)"></label>
+              <label style="margin:0">Assunto / objeto <input id="np-assunto" placeholder="(opcional)"></label>
+            </div>
+            <div id="np-admin" class="hidden" style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--line)">
+              <div class="note" style="font-weight:700;margin-bottom:6px">Dados da licitação / dispensa</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:9px">
+                <label style="margin:0">Modalidade <select id="npa-modalidade"><option value="">—</option><option>Pregão eletrônico</option><option>Pregão presencial</option><option>Concorrência</option><option>Tomada de preços</option><option>Convite</option><option>Dispensa</option><option>Inexigibilidade</option><option>Credenciamento</option><option>Leilão</option><option>Diálogo competitivo</option><option>Chamamento público</option></select></label>
+                <label style="margin:0">Órgão / ente <input id="npa-orgao" placeholder="Ex.: Prefeitura de…"></label>
+                <label style="margin:0">Nº do edital / proc. adm. <input id="npa-edital" placeholder="livre"></label>
+                <label style="margin:0">Portal <select id="npa-portal"><option value="">—</option><option>PNCP</option><option>Compras.gov.br (ComprasNet)</option><option>Licitações-e (BB)</option><option>BLL</option><option>Portal de Compras Públicas</option><option>BNC</option><option>Licitanet</option><option>Outro</option></select></label>
+                <label style="margin:0">Valor estimado (R$) <input id="npa-valor" placeholder="0,00"></label>
+                <label style="margin:0">Data da sessão / abertura <input id="npa-data" type="date"></label>
+                <label style="margin:0">Situação <select id="npa-situacao"><option value="">—</option><option>Em andamento</option><option>Aguardando sessão</option><option>Habilitação</option><option>Julgamento / proposta</option><option>Recurso</option><option>Homologado</option><option>Adjudicado</option><option>Contratado</option><option>Suspenso</option><option>Fracassado</option><option>Deserto</option><option>Revogado</option><option>Anulado</option><option>Concluído</option></select></label>
+                <label style="margin:0">Nº do contrato <input id="npa-contrato" placeholder="(opcional)"></label>
+              </div>
+              <label style="margin:8px 0 0">Observações <textarea id="npa-obs" style="min-height:60px"></textarea></label>
             </div>
             <div style="margin-top:10px;display:flex;gap:8px;align-items:center"><button class="btn gold sm" onclick="salvarNovoProc()">Salvar</button><button class="btn ghost sm" onclick="abrirNovoProc(true)">Cancelar</button><span id="np-msg" class="note"></span></div>
           </div>
@@ -151,6 +168,19 @@
           <p class="note" id="proc-vazio" style="display:none;margin-top:8px">Nenhum processo.</p>
         </div>
         <div class="card hidden" id="proc-det"></div>
+      </section>
+
+      <section id="sec-admin" class="hidden">
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+            <p class="sectlabel" style="margin:0">Processos administrativos / Licitações <span class="note" id="admin-uso"></span></p>
+            <button class="btn gold sm" onclick="ir('proc');abrirNovoProc();document.getElementById('np-tipo').value='administrativo';toggleTipoProc()">+ Cadastrar administrativo</button>
+          </div>
+          <input id="admin-busca" oninput="renderAdmin()" placeholder="Buscar por órgão, objeto, modalidade ou número…" style="margin:10px 0">
+          <div style="overflow-x:auto"><table><thead><tr><th style="width:150px">Nº / edital</th><th>Órgão · objeto</th><th style="width:130px">Modalidade</th><th style="width:120px">Situação</th><th style="width:130px">Responsável</th><th style="width:100px">Prazo fatal</th></tr></thead><tbody id="admin-body"></tbody></table></div>
+          <p class="note" id="admin-vazio" style="display:none;margin-top:8px">Nenhum processo administrativo cadastrado.</p>
+        </div>
+        <div class="card hidden" id="admin-det"></div>
       </section>
 
       <section id="sec-agenda" class="hidden">
@@ -277,7 +307,7 @@
   async function carregar(){
     var rc=await sb.from('inove_config').select('chave,valor'); CFG={}; (rc.data||[]).forEach(function(x){CFG[x.chave]=x.valor||'';});
     var rt=await sb.from('inove_tribunais').select('*').order('uf'); TRIB=rt.data||[];
-    var rp=await sb.from('processos').select('id,numero,cliente_nome,oponente,assunto,status,ultima_movimentacao,inove_responsavel').eq('inove',true).order('cliente_nome'); PROC=rp.data||[];
+    var rp=await sb.from('processos').select('id,numero,cliente_nome,oponente,assunto,status,ultima_movimentacao,inove_responsavel,inove_tipo,inove_admin').eq('inove',true).order('cliente_nome'); PROC=rp.data||[];
     var rtar=await sb.from('inove_tarefas').select('*').order('prazo',{ascending:true}); TAR=rtar.data||[];
     var rm=await sb.from('inove_membros').select('nome,email').order('nome'); MEMBROS=rm.data||[];
     var u=await sb.auth.getUser(); var em=((u&&u.data&&u.data.user&&u.data.user.email)||'').toLowerCase();
@@ -287,21 +317,25 @@
     var nome=nm||'Perito';
     document.getElementById('ft-nm').textContent=nome;
     document.getElementById('ft-av').textContent=(nome[0]||'P').toUpperCase();
-    document.getElementById('cnt-proc').textContent=PROC.length||'';
+    var jud=PROC.filter(function(p){return (p.inove_tipo||'judicial')!=='administrativo';}).length;
+    var adm=PROC.filter(function(p){return p.inove_tipo==='administrativo';}).length;
+    document.getElementById('cnt-proc').textContent=jud||'';
+    document.getElementById('cnt-admin').textContent=adm||'';
     var abertas=TAR.filter(function(t){return !t.concluida;}).length;
     document.getElementById('cnt-agenda').textContent=abertas||'';
     var feito=TRIB.filter(function(x){return x.situacao==='cadastrado';}).length;
     document.getElementById('cnt-cad').textContent=TRIB.length?(feito+'/'+TRIB.length):'';
   }
-  var TITULOS={painel:'Painel',proc:'Processos',agenda:'Agenda — prazos e tarefas',cad:'Cadastros — Tribunais de Justiça',sol:'Solicitar novas funcionalidades',doc:'Documento-padrão',plano:'Plano'};
+  var TITULOS={painel:'Painel',proc:'Processos judiciais',admin:'Processos administrativos / Licitações',agenda:'Agenda — prazos e tarefas',cad:'Cadastros — Tribunais de Justiça',sol:'Solicitar novas funcionalidades',doc:'Documento-padrão',plano:'Plano'};
   function ir(s){
-    ['painel','proc','agenda','cad','sol','doc','plano'].forEach(function(k){
+    ['painel','proc','admin','agenda','cad','sol','doc','plano'].forEach(function(k){
       document.getElementById('nav-'+k).classList.toggle('on',k===s);
       document.getElementById('sec-'+k).classList.toggle('hidden',k!==s);
     });
     document.getElementById('scr-title').textContent=TITULOS[s]||'Painel';
     if(s==='painel')renderPainel();
     if(s==='proc')renderProc();
+    if(s==='admin')renderAdmin();
     if(s==='agenda')renderAgenda();
     if(s==='cad')renderCad();
     if(s==='sol')renderSol();
@@ -324,32 +358,63 @@
   function kpi(v,l){return '<div class="kpi"><b>'+esc(v)+'</b><span>'+esc(l)+'</span></div>';}
 
   /* ===== Processos ===== */
+  function toggleTipoProc(){
+    var t=document.getElementById('np-tipo').value;
+    var adm=(t==='administrativo');
+    document.getElementById('np-admin').classList.toggle('hidden',!adm);
+    document.getElementById('np-lab-num').textContent=adm?'Nº do processo (livre)':'Número do processo';
+    document.getElementById('np-numero').placeholder=adm?'numeração livre (não CNJ)':'0000000-00.0000.0.00.0000';
+    document.getElementById('np-lab-cli').textContent=adm?'Cliente / licitante':'Cliente';
+    document.getElementById('np-lab-op').textContent=adm?'Concorrente (opcional)':'Parte contrária';
+  }
   function abrirNovoProc(fechar){
     var f=document.getElementById('proc-form');
     if(fechar){ f.classList.add('hidden'); return; }
     var lim=_lim('proc_limite',200);
     if(PROC.length>=lim){ alert('Você atingiu o limite de '+lim+' processos do seu plano. Vá em "Plano" para ampliar.'); return; }
-    ['np-numero','np-cliente','np-oponente','np-assunto'].forEach(function(id){document.getElementById(id).value='';});
+    ['np-numero','np-cliente','np-oponente','np-assunto','npa-orgao','npa-edital','npa-valor','npa-data','npa-contrato','npa-obs'].forEach(function(id){var e=document.getElementById(id);if(e)e.value='';});
+    ['npa-modalidade','npa-portal','npa-situacao'].forEach(function(id){var e=document.getElementById(id);if(e)e.selectedIndex=0;});
+    document.getElementById('np-tipo').value='judicial'; toggleTipoProc();
     document.getElementById('np-msg').textContent='';
-    f.classList.toggle('hidden');
+    f.classList.remove('hidden');
   }
   async function salvarNovoProc(){
     var msg=document.getElementById('np-msg');
+    var tipo=document.getElementById('np-tipo').value;
+    var adm=(tipo==='administrativo');
     var numero=(document.getElementById('np-numero').value||'').trim();
     var cliente=(document.getElementById('np-cliente').value||'').trim();
     var oponente=(document.getElementById('np-oponente').value||'').trim();
     var assunto=(document.getElementById('np-assunto').value||'').trim();
-    if(!numero||!cliente){ msg.style.color='#b5342b'; msg.textContent='Informe número e cliente.'; return; }
+    if(!numero){ msg.style.color='#b5342b'; msg.textContent='Informe o número.'; return; }
+    if(!adm && !cliente){ msg.style.color='#b5342b'; msg.textContent='Informe o cliente.'; return; }
     var lim=_lim('proc_limite',200);
     if(PROC.length>=lim){ msg.style.color='#b5342b'; msg.textContent='Limite de '+lim+' processos atingido.'; return; }
     msg.style.color='#475569'; msg.textContent='Salvando…';
-    var reg={escritorio_id:CFG.escritorio_id,numero:numero,cliente_nome:cliente,oponente:oponente||null,assunto:assunto||null,inove:true,fonte:'inove'};
+    var reg={escritorio_id:CFG.escritorio_id,numero:numero,cliente_nome:cliente||null,oponente:oponente||null,assunto:assunto||null,inove:true,inove_tipo:tipo,fonte:'inove'};
+    if(adm){
+      var v=(document.getElementById('npa-valor').value||'').replace(/[^0-9,.-]/g,'').replace(/\./g,'').replace(',','.');
+      reg.inove_admin={
+        modalidade:(document.getElementById('npa-modalidade').value||''),
+        orgao:(document.getElementById('npa-orgao').value||'').trim(),
+        edital:(document.getElementById('npa-edital').value||'').trim(),
+        portal:(document.getElementById('npa-portal').value||''),
+        valor_estimado:(v||''),
+        data_sessao:(document.getElementById('npa-data').value||''),
+        situacao:(document.getElementById('npa-situacao').value||''),
+        contrato:(document.getElementById('npa-contrato').value||'').trim(),
+        obs:(document.getElementById('npa-obs').value||'').trim()
+      };
+      if(reg.inove_admin.situacao) reg.status=reg.inove_admin.situacao;
+    }
     var r=await sb.from('processos').insert(reg);
     if(r&&r.error){ msg.style.color='#b5342b'; msg.textContent='Erro: '+r.error.message; return; }
     document.getElementById('proc-form').classList.add('hidden');
-    var rp=await sb.from('processos').select('id,numero,cliente_nome,oponente,assunto,status,ultima_movimentacao,inove_responsavel').eq('inove',true).order('cliente_nome'); PROC=rp.data||[];
-    document.getElementById('cnt-proc').textContent=PROC.length||'';
-    renderProc();
+    var rp=await sb.from('processos').select('id,numero,cliente_nome,oponente,assunto,status,ultima_movimentacao,inove_responsavel,inove_tipo,inove_admin').eq('inove',true).order('cliente_nome'); PROC=rp.data||[];
+    var jud=PROC.filter(function(p){return (p.inove_tipo||'judicial')!=='administrativo';}).length;
+    var admc=PROC.filter(function(p){return p.inove_tipo==='administrativo';}).length;
+    document.getElementById('cnt-proc').textContent=jud||''; document.getElementById('cnt-admin').textContent=admc||'';
+    if(adm){ ir('admin'); } else { renderProc(); }
   }
   function prazoFatalDe(numero){
     var hoje=new Date().toISOString().slice(0,10);
@@ -362,7 +427,7 @@
     var lim=_lim('proc_limite',200);
     var uso=document.getElementById('proc-uso'); if(uso) uso.textContent='('+PROC.length+' de '+lim+')';
     var q=((document.getElementById('proc-busca')||{}).value||'').toLowerCase().trim();
-    var lista=PROC.filter(function(p){ if(!q)return true; return ((p.cliente_nome||'')+' '+(p.oponente||'')+' '+(p.numero||'')+' '+(p.assunto||'')).toLowerCase().indexOf(q)>-1; });
+    var lista=PROC.filter(function(p){ if((p.inove_tipo||'judicial')==='administrativo')return false; if(!q)return true; return ((p.cliente_nome||'')+' '+(p.oponente||'')+' '+(p.numero||'')+' '+(p.assunto||'')).toLowerCase().indexOf(q)>-1; });
     lista.forEach(function(p){ p.__pf=prazoFatalDe(p.numero); });
     if(PROC_ORD==='prazo') lista.sort(function(a,b){ if(!a.__pf&&!b.__pf)return 0; if(!a.__pf)return 1; if(!b.__pf)return -1; return a.__pf.localeCompare(b.__pf); });
     else if(PROC_ORD==='partes') lista.sort(function(a,b){ return (a.cliente_nome||'').localeCompare(b.cliente_nome||''); });
@@ -387,6 +452,57 @@
   async function salvarResp(id,valor){
     var p=PROC.find(function(x){return String(x.id)===String(id);}); if(p)p.inove_responsavel=valor||null;
     await sb.from('processos').update({inove_responsavel:valor||null,atualizado_em:new Date().toISOString()}).eq('id',id);
+  }
+  /* ===== Administrativos / Licitações ===== */
+  function renderAdmin(){
+    document.getElementById('admin-det').classList.add('hidden');
+    var q=((document.getElementById('admin-busca')||{}).value||'').toLowerCase().trim();
+    var lista=PROC.filter(function(p){return p.inove_tipo==='administrativo';});
+    document.getElementById('admin-uso').textContent='('+lista.length+')';
+    lista=lista.filter(function(p){ var a=p.inove_admin||{}; if(!q)return true; return ((p.numero||'')+' '+(a.orgao||'')+' '+(p.assunto||'')+' '+(a.modalidade||'')+' '+(a.edital||'')).toLowerCase().indexOf(q)>-1; });
+    lista.forEach(function(p){ p.__pf=prazoFatalDe(p.numero); });
+    lista.sort(function(a,b){ if(!a.__pf&&!b.__pf)return 0; if(!a.__pf)return 1; if(!b.__pf)return -1; return a.__pf.localeCompare(b.__pf); });
+    var hoje=new Date().toISOString().slice(0,10);
+    var opMemb='<option value="">—</option>'+MEMBROS.map(function(m){var v=m.nome||m.email;return '<option value="'+esc(v)+'">'+esc(v)+'</option>';}).join('');
+    var b=document.getElementById('admin-body'); b.innerHTML='';
+    document.getElementById('admin-vazio').style.display=lista.length?'none':'block';
+    lista.forEach(function(p){
+      var a=p.inove_admin||{};
+      var resp='<select onchange="salvarResp('+"'"+p.id+"'"+',this.value)" onclick="event.stopPropagation()" style="width:100%;font-size:12px;padding:4px 6px">'+opMemb.replace('value="'+esc(p.inove_responsavel||'')+'"','value="'+esc(p.inove_responsavel||'')+'" selected')+'</select>';
+      var pf=p.__pf; var atras=(pf&&pf<hoje);
+      var tr=document.createElement('tr');
+      tr.innerHTML='<td class="click" onclick="abrirFichaAdmin('+"'"+p.id+"'"+')" style="font-family:ui-monospace,monospace;font-size:12px;font-weight:700;color:var(--navy)">'+esc(p.numero||'')+(a.edital?('<div class="note" style="font-weight:400">'+esc(a.edital)+'</div>'):'')+'</td>'
+        +'<td class="click" onclick="abrirFichaAdmin('+"'"+p.id+"'"+')"><b>'+esc(a.orgao||'—')+'</b>'+(p.assunto?('<div class="note">'+esc(p.assunto)+'</div>'):'')+'</td>'
+        +'<td class="click" onclick="abrirFichaAdmin('+"'"+p.id+"'"+')" style="font-size:12.5px">'+esc(a.modalidade||'—')+'</td>'
+        +'<td class="click" onclick="abrirFichaAdmin('+"'"+p.id+"'"+')" style="font-size:12.5px">'+esc(a.situacao||p.status||'—')+'</td>'
+        +'<td>'+resp+'</td>'
+        +'<td style="font-weight:700;color:'+(atras?'#b5342b':'var(--navy)')+'">'+(pf?fdata(pf):'<span class="note">—</span>')+'</td>';
+      b.appendChild(tr);
+    });
+  }
+  async function abrirFichaAdmin(id){
+    var det=document.getElementById('admin-det');
+    det.classList.remove('hidden'); det.innerHTML='<div class="note">Abrindo…</div>';
+    det.scrollIntoView({behavior:'smooth',block:'start'});
+    var p=PROC.find(function(x){return String(x.id)===String(id);})||{};
+    var a=p.inove_admin||{};
+    var ra=await sb.from('andamentos').select('data,texto,fonte').eq('processo_id',id).order('data',{ascending:false});
+    var hist=(ra&&ra.data)||[];
+    function lin(rot,val){ return val?('<div style="display:flex;gap:8px;padding:3px 0;font-size:13px"><span class="note" style="min-width:150px">'+rot+'</span><span>'+esc(val)+'</span></div>'):''; }
+    var val=(a.valor_estimado)?('R$ '+Number(a.valor_estimado).toLocaleString('pt-BR',{minimumFractionDigits:2})):'';
+    det.innerHTML='<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">'
+      +'<div><div style="font-weight:800;color:var(--navy);font-size:16px">'+esc(a.orgao||p.cliente_nome||'—')+'</div>'
+      +'<div style="font-family:ui-monospace,monospace;font-size:12.5px;margin-top:3px">'+esc(p.numero||'')+(a.edital?(' · '+esc(a.edital)):'')+'</div></div>'
+      +'<button class="btn ghost sm" onclick="renderAdmin()">← voltar</button></div>'
+      +'<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn sm" onclick="novaTarefaProc('+"'"+esc(p.numero||'')+"'"+')">+ Nova tarefa neste processo</button></div>'
+      +'<div style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px"><p class="sectlabel">Dados da licitação / dispensa</p>'
+      +lin('Objeto',p.assunto)+lin('Modalidade',a.modalidade)+lin('Órgão / ente',a.orgao)+lin('Nº edital / proc. adm.',a.edital)
+      +lin('Portal',a.portal)+lin('Valor estimado',val)+lin('Data da sessão',fdata(a.data_sessao))+lin('Situação',a.situacao||p.status)+lin('Contrato',a.contrato)
+      +(a.obs?('<div style="margin-top:6px;font-size:12.5px;background:#f7f9fc;border-radius:8px;padding:8px 10px"><b>Observações:</b> '+esc(a.obs)+'</div>'):'')
+      +'</div>'
+      +'<div style="margin-top:14px;border-top:1px solid var(--line);padding-top:10px"><p class="sectlabel">Histórico ('+hist.length+')</p>'
+      +(hist.length?hist.map(function(h){return '<div style="border-left:3px solid var(--gold);padding:4px 0 8px 12px;margin-left:4px"><div style="font-size:11.5px;color:var(--muted);font-weight:700">'+esc(fdata(h.data))+'</div><div style="font-size:12.8px;white-space:pre-wrap;margin-top:2px">'+esc(h.texto||'')+'</div></div>';}).join(''):'<div class="note">Sem movimentações. Processos administrativos são atualizados manualmente (adicione tarefas/prazos na Agenda).</div>')
+      +'</div>';
   }
   async function abrirFicha(id){
     var det=document.getElementById('proc-det');
