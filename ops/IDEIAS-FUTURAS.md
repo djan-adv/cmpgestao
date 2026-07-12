@@ -17,3 +17,10 @@ formulário "Novo lead" com canal=WhatsApp e campos prontos/pré-preenchidos.
 Link do tipo: .../sistema.html#novolead?nome=...&tel=...
 Pontos a definir ao retomar: link é para o advogado abrir (captura rápida) ou
 para o cliente clicar; e se os dados vão digitados no form ou já no link.
+
+## 3. Gestão Financeira (Banco Cora + NFS-e João Pessoa) — A FAZER
+Módulo com botão "Gestão Financeira" (acesso restrito): boletos/PIX pelo Banco
+Cora, webhook de pagamento e emissão de NFS-e de João Pessoa via intermediário
+(Focus NFe/PlugNotas), com confirmação "Emitir nota fiscal? Sim/Não".
+Especificação completa (arquitetura, fases, segurança, custos e o que é preciso
+para iniciar) em **ops/PROJETO-GESTAO-FINANCEIRA.md**.
