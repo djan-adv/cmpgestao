@@ -193,6 +193,7 @@
       <a data-s="encerrados" onclick="go('encerrados')" style="opacity:.75"><span class="ic">▤</span> Encerrados <span id="nav-n-enc" style="margin-left:auto;font-size:10.5px;background:var(--navy2);border-radius:10px;padding:1px 7px"></span></a>
       <a data-s="james" onclick="go('james')" style="opacity:.75"><span class="ic">⏸</span> James Laurence <span id="nav-n-james" style="margin-left:auto;font-size:10.5px;background:var(--navy2);border-radius:10px;padding:1px 7px"></span></a>
       <a data-s="cadastros" onclick="go('cadastros')"><span class="ic">🏛</span> Cadastros (Tribunais) <span id="nav-n-cad" style="margin-left:auto;font-size:10.5px;background:var(--navy2);border-radius:10px;padding:1px 7px"></span></a>
+      <a data-s="inovesol" onclick="go('inovesol')"><span class="ic">✨</span> Solicitar novas funcionalidades <span id="nav-n-isol" style="margin-left:auto;font-size:10.5px;background:var(--navy2);border-radius:10px;padding:1px 7px"></span></a>
       <a data-s="sugestoes" onclick="go('sugestoes')" style="margin-top:12px;color:#ffd98a"><span class="ic">💡</span> Sugestões / Melhorias</a>
     </nav>
   </aside>
@@ -276,6 +277,24 @@
         <div id="cad-nome" class="note" style="margin:0 0 10px">Atuário: <b>Thiago Silveira</b> — acompanhamento do cadastro como auxiliar da justiça nos 27 TJs (26 estados + DF).</div>
         <div id="cad-prog" style="margin-bottom:12px"></div>
         <div id="cad-body"><div class="note">Carregando…</div></div>
+      </div>
+    </section>
+    <section id="s-inovesol" class="hidden">
+      <div class="card">
+        <p class="sectlabel" style="margin:0 0 4px">Solicitar novas funcionalidades</p>
+        <div class="note" style="margin:0 0 12px">Descreva o recurso que você precisa. Cada solicitação passa por aprovação. Ao aprovar, é definido o valor; confirmado o pagamento, o desenvolvimento é iniciado.</div>
+        <div class="kvgrid" style="grid-template-columns:1fr;gap:8px;max-width:640px">
+          <label class="note" style="display:flex;flex-direction:column;gap:3px">Título<input id="isol-titulo" placeholder="Ex.: relatório mensal de perícias por tribunal"></label>
+          <label class="note" style="display:flex;flex-direction:column;gap:3px">Descrição<textarea id="isol-desc" style="width:100%;min-height:110px" placeholder="Explique o que a funcionalidade deve fazer e por quê."></textarea></label>
+          <div><button class="btn gold" onclick="enviarInoveSol()">Enviar solicitação</button> <span id="isol-msg" class="note"></span></div>
+        </div>
+      </div>
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+          <p class="sectlabel" style="margin:0">Minhas solicitações</p>
+          <select id="isol-filtro" onchange="renderInoveSol()" class="btn sm sb-sel" style="max-width:170px"><option value="">Todas</option><option value="novo">Aguardando análise</option><option value="aprovado">Aprovada (aguardando pagamento)</option><option value="pago">Paga</option><option value="em_andamento">Em desenvolvimento</option><option value="concluido">Concluída</option><option value="recusado">Recusada</option></select>
+        </div>
+        <div id="isol-lista" style="margin-top:10px"><div class="note">Carregando…</div></div>
       </div>
     </section>
     <section id="s-processos" class="hidden">
@@ -3719,7 +3738,7 @@ function go(s){
   var sec=document.getElementById("s-"+showId); if(sec) sec.classList.remove("hidden");
   document.querySelectorAll("#nav a").forEach(function(a){a.classList.remove("active")});
   var link=document.querySelector('#nav a[data-s="'+s+'"]');if(link)link.classList.add("active");
-  var t={painel:"Painel",triagem:"Publicações",agenda:"Agenda — Kanban (etapas CMP)",processos:"Processos",crm:"Comercial",contatos:"Contatos",procedimentos:"Procedimentos CMP",etiquetas:"Etiquetas","proc-det":"Processo",diligencias:"Diligências",relatorio:"Relatório mensal para clientes",encerrados:"Processos encerrados",inove:"Processos Inove (terceiros)",james:"Processos contra James Laurence",cadastros:"Cadastros — Tribunais de Justiça",fases:"Revisar fases dos processos"};
+  var t={painel:"Painel",triagem:"Publicações",agenda:"Agenda — Kanban (etapas CMP)",processos:"Processos",crm:"Comercial",contatos:"Contatos",procedimentos:"Procedimentos CMP",etiquetas:"Etiquetas","proc-det":"Processo",diligencias:"Diligências",relatorio:"Relatório mensal para clientes",encerrados:"Processos encerrados",inove:"Processos Inove (terceiros)",james:"Processos contra James Laurence",cadastros:"Cadastros — Tribunais de Justiça",inovesol:"Solicitar novas funcionalidades",fases:"Revisar fases dos processos"};
   var st=document.getElementById("scr-title"); if(st) st.textContent=t[s]||"Painel";
   var sw=document.querySelector('#s-crm .switch'); if(sw) sw.style.display='none';
   if(s==="painel")renderPainel(); if(s==="triagem")renderTriagem(); if(s==="processos")renderProc();
@@ -3730,6 +3749,7 @@ function go(s){
   if(s==="inove")renderInove();
   if(s==="james")renderJames();
   if(s==="cadastros")renderCadastros();
+  if(s==="inovesol")renderInoveSol();
   if(s==="fases" && typeof renderFasesRevisao==='function')renderFasesRevisao();
   if(s==="sugestoes" && typeof renderSugestoes==='function'){ var _an=document.getElementById('sg-autor'); if(_an && !_an.value){ _an.value=((document.getElementById('who-name')||{}).textContent||'').trim(); } renderSugestoes(); }
   window.scrollTo(0,0);
@@ -3863,6 +3883,88 @@ async function salvarTribunal(id,campo,valor){
   var upd={atualizado_em:new Date().toISOString()}; upd[campo]=(valor===''?null:valor);
   try{ var r=await sb.from('inove_tribunais').update(upd).eq('id',id); if(r&&r.error){ alert('Não foi possível salvar: '+r.error.message); return; } }catch(e){ alert('Erro: '+(e&&e.message||e)); return; }
   if(campo==='situacao') renderCadastros();
+}
+/* ===== Inove: "Solicitar novas funcionalidades" (sugestões pagas, aprovadas pelo coordenador) ===== */
+var ISOL_SIT=[['novo','Aguardando análise','#8a6d1a','#fbf1dc'],['aprovado','Aprovada — aguardando pagamento','#185FA5','#e3edf7'],['pago','Paga','#0F6E56','#e5f4ed'],['em_andamento','Em desenvolvimento','#6d28a8','#f1e9fa'],['concluido','Concluída','#0F6E56','#e5f4ed'],['recusado','Recusada','#b5342b','#fbeceb']];
+function _isolInfo(v){ for(var i=0;i<ISOL_SIT.length;i++){ if(ISOL_SIT[i][0]===v) return ISOL_SIT[i]; } return ISOL_SIT[0]; }
+function _isolCoord(){ return USUARIO_ATUAL_VISUAL==='djan'; }
+function _isolMoeda(v){ if(v==null||v==='') return ''; try{ return 'R$ '+Number(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }catch(e){ return 'R$ '+v; } }
+async function enviarInoveSol(){
+  var titulo=(document.getElementById('isol-titulo').value||'').trim();
+  var descricao=(document.getElementById('isol-desc').value||'').trim();
+  var msg=document.getElementById('isol-msg');
+  if(!titulo){ if(msg){ msg.style.color='#b5342b'; msg.textContent='Escreva um título.'; } return; }
+  if(msg){ msg.style.color='#475569'; msg.textContent='Enviando…'; }
+  try{
+    var sb=window.__sb; if(!sb){ if(msg){ msg.textContent='Sessão não encontrada.'; } return; }
+    var sol=((document.getElementById('who-name')||{}).textContent||'').trim()||null;
+    var r=await sb.from('inove_solicitacoes').insert({titulo:titulo,descricao:descricao||null,status:'novo',solicitante:sol});
+    if(r&&r.error){ if(msg){ msg.style.color='#b5342b'; msg.textContent='Erro: '+r.error.message; } return; }
+    document.getElementById('isol-titulo').value=''; document.getElementById('isol-desc').value='';
+    if(msg){ msg.style.color='#127a53'; msg.textContent='✓ Enviada! Aguarde a análise.'; }
+    renderInoveSol();
+  }catch(e){ if(msg){ msg.style.color='#b5342b'; msg.textContent='Erro: '+(e&&e.message||e); } }
+}
+async function renderInoveSol(){
+  var el=document.getElementById('isol-lista'); if(!el) return;
+  var filtro=(document.getElementById('isol-filtro')||{}).value||'';
+  try{
+    var sb=window.__sb; if(!sb){ el.innerHTML='<div class="note">Sessão não encontrada.</div>'; return; }
+    var q=sb.from('inove_solicitacoes').select('*').order('criado_em',{ascending:false}).limit(300);
+    if(filtro) q=q.eq('status',filtro);
+    var r=await q;
+    if(r&&r.error){ el.innerHTML='<div class="note">Não foi possível carregar ('+esc(r.error.message)+').</div>'; return; }
+    var itens=(r&&r.data)||[];
+    var badge=document.getElementById('nav-n-isol'); if(badge){ var pend=itens.filter(function(x){return x.status==='novo';}).length; badge.textContent=pend||''; }
+    if(!itens.length){ el.innerHTML='<div class="note">Nenhuma solicitação'+(filtro?' neste filtro':' ainda')+'.</div>'; return; }
+    var coord=_isolCoord();
+    el.innerHTML=itens.map(function(s){
+      var si=_isolInfo(s.status);
+      var d=(s.criado_em||'').slice(0,10).split('-').reverse().join('/');
+      var acoes='';
+      if(coord){
+        acoes='<div style="margin-top:9px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;border-top:1px dashed var(--line);padding-top:8px">'
+          +'<span class="note" style="font-weight:700">Coordenador:</span>'
+          +'<button class="btn sm gold" onclick="isolAprovar('+s.id+')">Aprovar + valor</button>'
+          +'<button class="btn sm" onclick="isolStatus('+s.id+',\'pago\')">Marcar paga</button>'
+          +'<button class="btn sm" style="background:#6d28a8;color:#fff;border-color:#6d28a8" onclick="isolStatus('+s.id+',\'em_andamento\')">Iniciar</button>'
+          +'<button class="btn sm" style="background:#0F6E56;color:#fff;border-color:#0F6E56" onclick="isolStatus('+s.id+',\'concluido\')">Concluir</button>'
+          +'<button class="btn sm ghost" onclick="isolStatus('+s.id+',\'recusado\')">Recusar</button>'
+          +'</div>';
+      }
+      return '<div style="border:1px solid var(--line);border-left:5px solid '+si[2]+';border-radius:11px;padding:11px 13px;margin-bottom:9px">'+
+        '<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap">'+
+          '<span style="font-weight:700;color:var(--navy)">'+esc(s.titulo||'—')+'</span>'+
+          '<span style="font-size:11px;font-weight:700;color:'+si[2]+';background:'+si[3]+';border-radius:12px;padding:2px 10px">'+si[1]+'</span>'+
+        '</div>'+
+        (s.descricao?('<div style="font-size:13px;margin-top:5px;white-space:pre-wrap">'+esc(s.descricao)+'</div>'):'')+
+        (s.valor!=null?('<div style="font-size:13px;margin-top:7px;padding:6px 9px;background:#eef4fb;border-radius:7px;color:#22405f"><b>Valor:</b> '+_isolMoeda(s.valor)+(s.status==='aprovado'?' — pague para iniciarmos.':'')+'</div>'):'')+
+        (s.obs?('<div style="font-size:12.5px;margin-top:6px;color:var(--muted)"><b>Obs.:</b> '+esc(s.obs)+'</div>'):'')+
+        '<div class="note" style="font-size:11px;margin-top:5px">'+esc(s.solicitante||'')+(s.solicitante?' · ':'')+esc(d)+'</div>'+
+        acoes+
+      '</div>';
+    }).join('');
+  }catch(e){ el.innerHTML='<div class="note">Erro ao carregar: '+esc(e&&e.message||e)+'</div>'; }
+}
+async function isolAprovar(id){
+  if(!_isolCoord()){ alert('Apenas o coordenador aprova.'); return; }
+  var v=prompt('Valor (R$) desta funcionalidade para aprovar:',''); if(v===null) return;
+  v=String(v).replace(/[^0-9,.-]/g,'').replace(/\./g,'').replace(',','.');
+  var num=parseFloat(v); if(isNaN(num)){ alert('Valor inválido.'); return; }
+  var obs=prompt('Observação para o solicitante (opcional):','')||null;
+  await _isolUpdate(id,{status:'aprovado',valor:num,obs:obs,aprovado_em:new Date().toISOString()});
+}
+async function isolStatus(id,st){
+  if(!_isolCoord()){ alert('Apenas o coordenador altera o status.'); return; }
+  var rot=_isolInfo(st)[1];
+  if(!confirm('Marcar esta solicitação como "'+rot+'"?')) return;
+  await _isolUpdate(id,{status:st});
+}
+async function _isolUpdate(id,upd){
+  var sb=window.__sb; if(!sb) return;
+  upd.atualizado_em=new Date().toISOString();
+  try{ var r=await sb.from('inove_solicitacoes').update(upd).eq('id',id); if(r&&r.error){ alert('Não foi possível salvar: '+r.error.message); return; } }catch(e){ alert('Erro: '+(e&&e.message||e)); return; }
+  renderInoveSol();
 }
 function ehJames(p){ return !!p && /james laurence/i.test(String(p.oponente||'')); }
 function isSuspenso(p){ return !!(p&&p.suspenso); }
