@@ -1084,13 +1084,19 @@ function abrir(i){
     '<div id="proc-vinculados-rodape" style="position:absolute;bottom:12px;right:14px;max-width:60%;display:flex;gap:6px;flex-wrap:wrap;align-items:center;justify-content:flex-end;font-size:12px"></div>'+
     '</div>';
   // dados do processo
-  html+='<div class="card" id="card-dados-proc"><p class="sectlabel">Dados do processo</p><div class="kvgrid" style="grid-template-columns:repeat(4,1fr)">'+
-    (p.classe?kv('Classe',esc(p.classe)):'')+
-    kv('Assunto',esc(p.tipo||'—'))+
-    kv('Vara de origem',esc(p.foro||p.orgao||'—'))+
+  html+='<div class="card" id="card-dados-proc"><p class="sectlabel">Dados do processo</p><div style="font-size:13.5px;line-height:1.6;color:var(--ink)">'+
     (function(){
-      if(p.distribuido_em){ var m=String(p.distribuido_em).slice(0,10).split('-'); if(m.length===3) return kv('Data de distribuição', m[2]+'/'+m[1]+'/'+m[0]); }
-      var di=(typeof dataInicioProcesso==='function')?dataInicioProcesso(p):null; if(!di) return kv('Data de distribuição','—'); var rot=di.soAno?'Ano de ajuizamento':(di.exata?'Data de distribuição':'Início do processo'); return kv(rot, esc(di.data)+(di.exata||di.soAno?'':' <span class="note" style="font-size:11px">(1º andamento)</span>'));
+      function lab(t){ return '<span style="color:var(--muted)">'+t+':</span> '; }
+      var dd=(function(){
+        if(p.distribuido_em){ var m=String(p.distribuido_em).slice(0,10).split('-'); if(m.length===3) return {rot:'Data de distribuição', val:m[2]+'/'+m[1]+'/'+m[0]}; }
+        var di=(typeof dataInicioProcesso==='function')?dataInicioProcesso(p):null; if(!di) return {rot:'Data de distribuição', val:'—'}; var rot=di.soAno?'Ano de ajuizamento':(di.exata?'Data de distribuição':'Início do processo'); return {rot:rot, val:esc(di.data)+(di.exata||di.soAno?'':' <span class="note" style="font-size:11px">(1º andamento)</span>')};
+      })();
+      var parts=[];
+      if(p.classe) parts.push(lab('Classe')+esc(p.classe));
+      parts.push(lab('Assunto')+esc(p.tipo||'—'));
+      parts.push(lab('Vara de origem')+esc(p.foro||p.orgao||'—'));
+      parts.push(lab(dd.rot)+dd.val);
+      return parts.join('<span style="color:var(--line);margin:0 6px">·</span>');
     })()+
     /* linha "Valor da causa · Valor de condenação · Tribunal" removida a pedido — repetitiva (valor da causa já consta no topo da ficha) e alongava o painel */
     '</div>'+
