@@ -184,6 +184,7 @@
       <a data-s="procedimentos" onclick="go('procedimentos')"><span class="ic">☰</span> Procedimentos</a>
       <a data-s="inove" onclick="go('inove')" style="margin-top:12px;opacity:.8"><span class="ic">◈</span> Inove <span id="nav-n-inove" style="margin-left:auto;font-size:10.5px;background:var(--navy2);border-radius:10px;padding:1px 7px"></span></a>
       <a data-s="encerrados" onclick="go('encerrados')" style="opacity:.75"><span class="ic">▤</span> Encerrados <span id="nav-n-enc" style="margin-left:auto;font-size:10.5px;background:var(--navy2);border-radius:10px;padding:1px 7px"></span></a>
+      <a data-s="james" onclick="go('james')" style="opacity:.75"><span class="ic">⏸</span> James Laurence <span id="nav-n-james" style="margin-left:auto;font-size:10.5px;background:var(--navy2);border-radius:10px;padding:1px 7px"></span></a>
       <a data-s="sugestoes" onclick="go('sugestoes')" style="margin-top:12px;color:#ffd98a"><span class="ic">💡</span> Sugestões / Melhorias</a>
     </nav>
   </aside>
@@ -254,6 +255,11 @@
       <div class="card"><p class="sectlabel">Processos encerrados</p><span class="note" id="enc-count"></span>
       <table style="margin-top:10px"><thead><tr><th style="width:36%">Cliente</th><th style="width:150px">Processo</th><th style="width:22%">Assunto</th><th style="width:170px">Última movimentação</th><th>Status</th><th style="width:70px"></th></tr></thead><tbody id="enc-body"></tbody></table>
       <p class="note" style="margin-top:8px">Processos encerrados nunca são apagados — para reativar, abra o processo e use o botão "Reativar".</p></div>
+    </section>
+    <section id="s-james" class="hidden">
+      <div class="card"><p class="sectlabel">Processos contra James Laurence (suspensos)</p><span class="note" id="james-count"></span>
+      <table style="margin-top:10px"><thead><tr><th style="width:36%">Cliente</th><th style="width:150px">Processo</th><th style="width:22%">Assunto</th><th style="width:170px">Última movimentação</th><th>Status</th><th style="width:120px"></th></tr></thead><tbody id="james-body"></tbody></table>
+      <p class="note" style="margin-top:8px">Processos com James Laurence no polo passivo, suspensos da lista principal. Para trazer um de volta, use "→ lista principal". Para suspender outro, abra o processo e use "Suspender".</p></div>
     </section>
     <section id="s-processos" class="hidden">
       <div class="searchbar"><input id="busca" placeholder="Buscar por cliente, número, oponente ou assunto..." oninput="renderProc()"><select id="ordena" onchange="renderProc()" class="btn sm sb-sel" style="margin-left:8px;max-width:120px"><option value="">Novos Protocolos</option><option value="az">Cliente (A→Z)</option><option value="za">Cliente (Z→A)</option><option value="data_desc">Movimentação mais recente</option><option value="parados">Parados (mov. mais antiga)</option><option value="valor">Valor da causa (maior→menor)</option></select><select id="filtroEtq" onchange="renderProc()" class="btn sm sb-sel" style="margin-left:8px;max-width:112px"><option value="">Todas as etiquetas</option></select><select id="porPagina" onchange="renderProc()" class="btn sm sb-sel" style="margin-left:8px;max-width:76px"><option value="20">20 por página</option><option value="40">40</option><option value="60">60</option><option value="80">80</option><option value="100">100</option><option value="todos" selected>Todos</option></select><span class="note" id="proc-count" style="align-self:center"></span><button class="btn sm sb-btn" style="margin-left:auto" onclick="abrirNovaTarefa()">+ Nova tarefa</button><button class="btn sm gold sb-btn" style="margin-left:8px" onclick="abrirBusca()">+ Cadastrar por número <span style="font-weight:400;font-size:10px;opacity:.8">(pesquisa pelo djen)</span></button><button class="btn sm sb-btn" style="margin-left:8px;background:var(--navy);color:#fff;border-color:var(--navy)" onclick="abrirCadManual()">+ Cadastrar manual / caso</button><button class="btn sm sb-btn" style="margin-left:8px;background:#0F6E56;color:#fff;border-color:#0F6E56" onclick="abrirSyncPastas()" title="Enviar de uma vez uma pasta com vários processos — o sistema reconhece cada subpasta e manda para o processo certo">&#8645; Sincronizar pasta</button></div>
@@ -793,7 +799,7 @@ function renderProcMov(){
   var dias=parseInt(window.__procMovDias!=null?window.__procMovDias:30,10); if(isNaN(dias)) dias=30;
   var mov=0,par=0;
   try{ (DADOS.processos||[]).forEach(function(p){
-    if(/encerr/i.test(p.status||'')) return; if(typeof isInove==='function'&&isInove(p)) return;
+    if(/encerr/i.test(p.status||'')) return; if(typeof isInove==='function'&&isInove(p)) return; if(typeof isSuspenso==='function'&&isSuspenso(p)) return;
     var d=(typeof diasMovOrd==='function')?diasMovOrd(p):null; if(d==null||d>=1e9) return;
     if(d<=dias) mov++; else par++;
   }); }catch(e){}
@@ -1106,7 +1112,8 @@ function abrir(i){
         (function(){ var vinc=(p.hist_full&&p.hist_full.length>0)&&p.foro; return '<span style="display:inline-block;border-radius:20px;padding:2px 10px;font-size:11px;font-weight:600;'+(vinc?'background:#e5f4ed;color:#127a53">vinculado jus.br':'background:#fbeceb;color:#b5342b">não vinculado')+'</span>'; })()+
         _casoCtrlHTML(p)+
         _faseCtrlHTML(p)+
-        '<button class="btn sm '+(__enc?'gold':'ghost')+'" style="margin-left:auto" onclick="encerrarProcesso()">'+(__enc?'Reativar':'Encerrar')+'</button>'+
+        (ehJames(p)?'<button class="btn sm ghost" style="margin-left:auto;border-color:#c9bfe0;color:#5b4a8a" onclick="toggleSuspensoProc()" title="Suspender: tirar da lista principal e enviar para a pasta James Laurence">'+(isSuspenso(p)?'↩ tirar da suspensão':'⏸ Suspender')+'</button>':'')+
+        '<button class="btn sm '+(__enc?'gold':'ghost')+'" style="'+(ehJames(p)?'margin-left:6px':'margin-left:auto')+'" onclick="encerrarProcesso()">'+(__enc?'Reativar':'Encerrar')+'</button>'+
     '</div>'+
     '<div style="margin-top:8px;font-size:13px;border-top:1px solid #eef2f7;padding-top:8px">'+
     (function(){ if(/encerr/i.test(p.status||'')) return ''; var d=(typeof diasParadoOficial==='function')?diasParadoOficial(p):null; if(d==null) return ''; var cor=d>=90?'#b5342b':(d>=60?'#8a6d1a':'#5f6b7a'), bg=d>=90?'#fbeceb':(d>=60?'#fdf3e7':'#eef1f5'); return '<div style="margin-bottom:8px"><span style="display:inline-block;border-radius:20px;padding:3px 12px;font-size:12px;font-weight:700;background:'+bg+';color:'+cor+'" title="Dias desde a última movimentação do juízo/cartório — não conta petições/manifestações das partes nem o histórico manual">&#9201; Parado há '+d+' dia'+(d===1?'':'s')+' sem movimentação do juízo</span></div>'; })()+
@@ -2483,7 +2490,7 @@ function toggleConcluirTarefa(id){
   try{
     /* select estendido (honorários + vinculados). Se essas colunas ainda não existirem no banco,
        o select falha e caímos automaticamente no select básico — sem quebrar o carregamento. */
-    var selExt='id,numero,cliente_nome,oponente,assunto,classe,orgao,foro,status,valor_causa,distribuido_em,ultima_movimentacao,contatos_livres,hon_faturado,hon_afaturar,hon_pct_contratual,hon_pct_sucumbencia,hon_pct_execucao,hon_pct_ma_fe,hon_pro_labore,valor_condenacao,hon_val_contratual,hon_val_sucumbencia,hon_val_execucao,hon_modo,vinculados,fora_inove,fonte,fase,observacoes,andamentos(id,data,texto,fonte)';
+    var selExt='id,numero,cliente_nome,oponente,assunto,classe,orgao,foro,status,valor_causa,distribuido_em,ultima_movimentacao,contatos_livres,hon_faturado,hon_afaturar,hon_pct_contratual,hon_pct_sucumbencia,hon_pct_execucao,hon_pct_ma_fe,hon_pro_labore,valor_condenacao,hon_val_contratual,hon_val_sucumbencia,hon_val_execucao,hon_modo,suspenso,vinculados,fora_inove,fonte,fase,observacoes,andamentos(id,data,texto,fonte)';
     var selBas='id,numero,cliente_nome,oponente,assunto,classe,orgao,foro,status,valor_causa,distribuido_em,ultima_movimentacao,contatos_livres,andamentos(id,data,texto,fonte)';
     var res=await sb.from('processos').select(selExt).order('ultima_movimentacao',{ascending:false,nullsFirst:false}).limit(3000);
     if(res.error){ res=await sb.from('processos').select(selBas).order('ultima_movimentacao',{ascending:false,nullsFirst:false}).limit(3000); }
@@ -2493,7 +2500,7 @@ function toggleConcluirTarefa(id){
       var hf=(p.andamentos||[]).map(function(a){return {id:a.id, data:(a.data? a.data+'T00:00:00.000Z':null), texto:a.texto, f:a.fonte||''};});
       hf.sort(function(x,y){return (y.data||'').localeCompare(x.data||'');});
       var vinc=Array.isArray(p.vinculados)?p.vinculados:(p.vinculados?[].concat(p.vinculados):[]);
-      return {_id:p.id, cliente:p.cliente_nome||'', numero:p.numero, oponente:p.oponente||'', tipo:p.assunto||'', classe:p.classe||'', orgao:p.orgao||'', distribuido_em:(p.distribuido_em||null), foro:p.foro||'', status:p.status||'', data:fmtData(p.ultima_movimentacao), hist:'', causa:fmtCausa(p.valor_causa), hist_full:hf, ctl:p.contatos_livres||'', hon_faturado:(p.hon_faturado!=null?p.hon_faturado:0), hon_afaturar:(p.hon_afaturar!=null?p.hon_afaturar:0), hon_pct_contratual:(p.hon_pct_contratual!=null?p.hon_pct_contratual:null), hon_pct_sucumbencia:(p.hon_pct_sucumbencia!=null?p.hon_pct_sucumbencia:null), hon_pct_execucao:(p.hon_pct_execucao!=null?p.hon_pct_execucao:null), hon_pct_ma_fe:(p.hon_pct_ma_fe!=null?p.hon_pct_ma_fe:null), hon_pro_labore:(p.hon_pro_labore!=null?p.hon_pro_labore:0), valor_condenacao:(p.valor_condenacao!=null?p.valor_condenacao:0), hon_val_contratual:(p.hon_val_contratual!=null?p.hon_val_contratual:null), hon_val_sucumbencia:(p.hon_val_sucumbencia!=null?p.hon_val_sucumbencia:null), hon_val_execucao:(p.hon_val_execucao!=null?p.hon_val_execucao:null), hon_modo:(p.hon_modo||null), vinculados:vinc, fora_inove:!!p.fora_inove, fonte:p.fonte||'', ehCaso:(p.fonte==='caso'), fase_manual:(p.fase||''), observacoes:(p.observacoes||'')};
+      return {_id:p.id, cliente:p.cliente_nome||'', numero:p.numero, oponente:p.oponente||'', tipo:p.assunto||'', classe:p.classe||'', orgao:p.orgao||'', distribuido_em:(p.distribuido_em||null), foro:p.foro||'', status:p.status||'', data:fmtData(p.ultima_movimentacao), hist:'', causa:fmtCausa(p.valor_causa), hist_full:hf, ctl:p.contatos_livres||'', hon_faturado:(p.hon_faturado!=null?p.hon_faturado:0), hon_afaturar:(p.hon_afaturar!=null?p.hon_afaturar:0), hon_pct_contratual:(p.hon_pct_contratual!=null?p.hon_pct_contratual:null), hon_pct_sucumbencia:(p.hon_pct_sucumbencia!=null?p.hon_pct_sucumbencia:null), hon_pct_execucao:(p.hon_pct_execucao!=null?p.hon_pct_execucao:null), hon_pct_ma_fe:(p.hon_pct_ma_fe!=null?p.hon_pct_ma_fe:null), hon_pro_labore:(p.hon_pro_labore!=null?p.hon_pro_labore:0), valor_condenacao:(p.valor_condenacao!=null?p.valor_condenacao:0), hon_val_contratual:(p.hon_val_contratual!=null?p.hon_val_contratual:null), hon_val_sucumbencia:(p.hon_val_sucumbencia!=null?p.hon_val_sucumbencia:null), hon_val_execucao:(p.hon_val_execucao!=null?p.hon_val_execucao:null), hon_modo:(p.hon_modo||null), suspenso:(p.suspenso===true), vinculados:vinc, fora_inove:!!p.fora_inove, fonte:p.fonte||'', ehCaso:(p.fonte==='caso'), fase_manual:(p.fase||''), observacoes:(p.observacoes||'')};
     });
     if(DADOS.kpis){ DADOS.kpis.total=DADOS.processos.length; }
     /* publicações novas (robô DJEN) → fila de triagem */
@@ -2563,7 +2570,7 @@ function toggleConcluirTarefa(id){
     /* CORREÇÃO GERAL: agora que TODOS os dados chegaram, re-renderiza a tela ativa
        (evita agenda/processos/painel em branco quando a pessoa abre antes do carregamento). */
     try{
-      var _secs=['painel','triagem','agenda','processos','crm','etiquetas','encerrados','inove','diligencias','relatorio'];
+      var _secs=['painel','triagem','agenda','processos','crm','etiquetas','encerrados','inove','james','diligencias','relatorio'];
       var _ativa=_secs.find(function(s){var el=document.getElementById('s-'+s);return el && !el.classList.contains('hidden');});
       if(_ativa==='agenda' && typeof renderAgendaView==='function') renderAgendaView();
       else if(_ativa && typeof go==='function') go(_ativa);
@@ -2628,7 +2635,7 @@ function renderProc(){
     var okq=!q||(p.cliente+" "+p.numero+" "+p.oponente+" "+p.tipo).toLowerCase().indexOf(q)>-1;
     var oke=true;
     if(eq){ var ids=(typeof ASSIGN!=='undefined'&&ASSIGN[p.numero])||[]; oke=ids.indexOf(eq)>-1; }
-    return okq&&oke&&movFiltroOk(p)&&origemFiltroOk(p)&&!/encerr/i.test(p.status||'')&&!isInove(p);
+    return okq&&oke&&movFiltroOk(p)&&origemFiltroOk(p)&&!/encerr/i.test(p.status||'')&&!isInove(p)&&!isSuspenso(p);
   });
   if(sm==='az') lista.sort(function(a,b){return (a.cliente||'').localeCompare(b.cliente||'','pt');});
   else if(sm==='data_desc') lista.sort(function(a,b){return diasMovOrd(a)-diasMovOrd(b);}); /* movimentação oficial mais recente primeiro */
@@ -2665,7 +2672,7 @@ function renderProc(){
   var lista=DADOS.processos.filter(function(p){
     var okq=!q||(p.cliente+" "+p.numero+" "+p.oponente+" "+p.tipo).toLowerCase().indexOf(q)>-1;
     var oke=true; if(eq){ var ids=(typeof ASSIGN!=='undefined'&&ASSIGN[p.numero])||[]; oke=ids.indexOf(eq)>-1; }
-    return okq&&oke&&movFiltroOk(p)&&origemFiltroOk(p)&&!/encerr/i.test(p.status||'')&&!isInove(p);
+    return okq&&oke&&movFiltroOk(p)&&origemFiltroOk(p)&&!/encerr/i.test(p.status||'')&&!isInove(p)&&!isSuspenso(p);
   });
   if(sm==='az') lista.sort(function(a,b){var A=(a.cliente||'').trim(),B=(b.cliente||'').trim(); if(!A&&!B)return 0; if(!A)return 1; if(!B)return -1; return A.localeCompare(B,'pt');});
   else if(sm==='za') lista.sort(function(a,b){var A=(a.cliente||'').trim(),B=(b.cliente||'').trim(); if(!A&&!B)return 0; if(!A)return 1; if(!B)return -1; return B.localeCompare(A,'pt');});
@@ -3282,7 +3289,7 @@ function renderProc(){
   var lista=DADOS.processos.filter(function(p){
     var okq=!q||(p.cliente+" "+p.numero+" "+p.oponente+" "+p.tipo).toLowerCase().indexOf(q)>-1;
     var oke=true; if(eq){ var ids=(typeof ASSIGN!=='undefined'&&ASSIGN[p.numero])||[]; oke=ids.indexOf(eq)>-1; }
-    return okq&&oke&&movFiltroOk(p)&&origemFiltroOk(p)&&!/encerr/i.test(p.status||'')&&!isInove(p);
+    return okq&&oke&&movFiltroOk(p)&&origemFiltroOk(p)&&!/encerr/i.test(p.status||'')&&!isInove(p)&&!isSuspenso(p);
   });
   /* ordenação por prazo fatal (coluna): mais próximo → distante, ou o inverso.
      Tem prioridade sobre a ordenação padrão quando escolhida. */
@@ -3510,11 +3517,11 @@ function go(s){
 function go(s){
   try{ localStorage.setItem('cmp_secao', s); if(s!=='proc-det') localStorage.removeItem('cmp_proc'); }catch(e){}
   var showId=(s==='contatos')?'crm':s;
-  ["painel","triagem","agenda","processos","proc-det","crm","etiquetas","procedimentos","diligencias","relatorio","encerrados","inove","fases","sugestoes"].forEach(function(id){var e=document.getElementById("s-"+id);if(e)e.classList.add("hidden")});
+  ["painel","triagem","agenda","processos","proc-det","crm","etiquetas","procedimentos","diligencias","relatorio","encerrados","inove","james","fases","sugestoes"].forEach(function(id){var e=document.getElementById("s-"+id);if(e)e.classList.add("hidden")});
   var sec=document.getElementById("s-"+showId); if(sec) sec.classList.remove("hidden");
   document.querySelectorAll("#nav a").forEach(function(a){a.classList.remove("active")});
   var link=document.querySelector('#nav a[data-s="'+s+'"]');if(link)link.classList.add("active");
-  var t={painel:"Painel",triagem:"Publicações",agenda:"Agenda — Kanban (etapas CMP)",processos:"Processos",crm:"Comercial",contatos:"Contatos",procedimentos:"Procedimentos CMP",etiquetas:"Etiquetas","proc-det":"Processo",diligencias:"Diligências",relatorio:"Relatório mensal para clientes",encerrados:"Processos encerrados",inove:"Processos Inove (terceiros)",fases:"Revisar fases dos processos"};
+  var t={painel:"Painel",triagem:"Publicações",agenda:"Agenda — Kanban (etapas CMP)",processos:"Processos",crm:"Comercial",contatos:"Contatos",procedimentos:"Procedimentos CMP",etiquetas:"Etiquetas","proc-det":"Processo",diligencias:"Diligências",relatorio:"Relatório mensal para clientes",encerrados:"Processos encerrados",inove:"Processos Inove (terceiros)",james:"Processos contra James Laurence",fases:"Revisar fases dos processos"};
   var st=document.getElementById("scr-title"); if(st) st.textContent=t[s]||"Painel";
   var sw=document.querySelector('#s-crm .switch'); if(sw) sw.style.display='none';
   if(s==="painel")renderPainel(); if(s==="triagem")renderTriagem(); if(s==="processos")renderProc();
@@ -3523,6 +3530,7 @@ function go(s){
   if(s==="etiquetas")renderEtiquetas(); if(s==="agenda")renderAgendaView(); if(s==="diligencias")renderDiligencias();
   if(s==="encerrados")renderEncerrados();
   if(s==="inove")renderInove();
+  if(s==="james")renderJames();
   if(s==="fases" && typeof renderFasesRevisao==='function')renderFasesRevisao();
   if(s==="sugestoes" && typeof renderSugestoes==='function'){ var _an=document.getElementById('sg-autor'); if(_an && !_an.value){ _an.value=((document.getElementById('who-name')||{}).textContent||'').trim(); } renderSugestoes(); }
   window.scrollTo(0,0);
@@ -3575,11 +3583,12 @@ async function renderSugestoes(){
 }
 function atualizaNavContagens(){
   try{
-    var enc=0,inv=0,ativ=0;
-    (DADOS.processos||[]).forEach(function(p){ if(/encerr/i.test(p.status||''))enc++; else if(isInove(p))inv++; else ativ++; });
+    var enc=0,inv=0,ativ=0,jam=0;
+    (DADOS.processos||[]).forEach(function(p){ if(/encerr/i.test(p.status||''))enc++; else if(isSuspenso(p))jam++; else if(isInove(p))inv++; else ativ++; });
     var e1=document.getElementById('nav-n-proc'); if(e1)e1.textContent=ativ;
     var e2=document.getElementById('nav-n-inove'); if(e2)e2.textContent=inv;
     var e3=document.getElementById('nav-n-enc'); if(e3)e3.textContent=enc;
+    var e4=document.getElementById('nav-n-james'); if(e4)e4.textContent=jam;
   }catch(e){}
 }
 function renderInove(){
@@ -3609,6 +3618,40 @@ function renderEncerrados(){
     tr.innerHTML='<td style="max-width:260px"><span style="font-weight:700;color:var(--navy)">'+esc(resumo3(p.cliente))+'</span><div style="font-size:12px;color:var(--muted);margin-top:2px">× '+(esc(resumo3(p.oponente))||'—')+'</div></td><td class="proc">'+p.numero+'</td><td style="font-size:12px">'+esc(p.tipo)+'</td><td style="max-width:170px;white-space:normal" title="'+esc(um.slice(0,300))+'">'+(cm?'<span style="font-weight:600;color:var(--navy)">'+cm+'</span>':'<span style="font-size:12.5px">'+esc(um.slice(0,60))+'</span>')+'<div style="font-size:12px;color:var(--muted)">'+esc(p.data||'')+'</div></td><td><span class="b '+stCls(p.status)+'">'+esc(p.status||'—')+'</span><div style="margin-top:4px">'+origemBtnHTML(p)+'</div></td><td><button style="background:#f0f2f5;color:#697180;border:1px solid #e4e8ef;border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer" onclick="event.stopPropagation();abrirNovaTarefa(decodeURIComponent(\''+encodeURIComponent(p.numero)+'\'))">tarefa</button></td>';
     b.appendChild(tr);
   });
+}
+function ehJames(p){ return !!p && /james laurence/i.test(String(p.oponente||'')); }
+function isSuspenso(p){ return !!(p&&p.suspenso); }
+function renderJames(){
+  atualizaNavContagens();
+  var lista=DADOS.processos.filter(function(p){return isSuspenso(p);});
+  var pc=document.getElementById('james-count'); if(pc) pc.textContent=lista.length+' processos contra James Laurence (suspensos da lista principal)';
+  var b=document.getElementById('james-body'); if(!b) return; b.innerHTML='';
+  lista.forEach(function(p){
+    var i=DADOS.processos.indexOf(p);
+    var tr=document.createElement('tr'); tr.className='click'; tr.onclick=function(){abrir(i)};
+    var um=(p.hist_full&&p.hist_full[0]&&p.hist_full[0].texto)||'';
+    var cm=classHist(p);
+    tr.innerHTML='<td style="max-width:260px"><span style="font-weight:700;color:var(--navy)">'+esc(resumo3(p.cliente))+'</span><div style="font-size:12px;color:var(--muted);margin-top:2px">× '+(esc(resumo3(p.oponente))||'—')+'</div></td><td class="proc">'+p.numero+'</td><td style="font-size:12px">'+esc(p.tipo)+'</td><td style="max-width:170px;white-space:normal" title="'+esc(um.slice(0,300))+'">'+(cm?'<span style="font-weight:600;color:var(--navy)">'+cm+'</span>':'<span style="font-size:12.5px">'+esc(um.slice(0,60))+'</span>')+'<div style="font-size:12px;color:var(--muted)">'+esc(p.data||'')+'</div></td><td><span class="b '+stCls(p.status)+'">'+esc(p.status||'—')+'</span></td><td><button style="background:#f0f2f5;color:#697180;border:1px solid #e4e8ef;border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer" onclick="event.stopPropagation();abrirNovaTarefa(decodeURIComponent(\''+encodeURIComponent(p.numero)+'\'))">tarefa</button> <button style="background:#e5f4ed;color:#127a53;border:1px solid #b9e2ce;border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer" title="Tirar da suspensão e voltar para a lista principal" onclick="event.stopPropagation();dessuspenderProc(decodeURIComponent(\''+encodeURIComponent(p.numero)+'\'))">→ lista principal</button></td>';
+    b.appendChild(tr);
+  });
+}
+/* Suspender / dessuspender processos contra James Laurence (coluna processos.suspenso) */
+function toggleSuspensoProc(){
+  if(!atual || !ehJames(atual)){ alert('A suspensão só vale para processos com James Laurence no polo passivo.'); return; }
+  var novo=!isSuspenso(atual);
+  if(novo && !confirm('Suspender este processo?\n\n'+esc(atual.cliente||atual.numero)+'\n\nEle sai da lista principal de processos e passa para a pasta "James Laurence". Você pode trazê-lo de volta quando quiser.')) return;
+  atual.suspenso=novo;
+  try{ var sb=window.__sb; if(sb && atual._id){ sb.from('processos').update({suspenso:novo}).eq('id',atual._id).then(function(r){ if(r&&r.error) console.warn('suspenso não persistido:',r.error.message); }); } }catch(e){}
+  atualizaNavContagens();
+  if(novo){ go('james'); } else { var i=DADOS.processos.indexOf(atual); if(i>=0) abrir(i); }
+}
+function dessuspenderProc(numEnc){
+  var num=decodeURIComponent(numEnc);
+  var p=(DADOS.processos||[]).filter(function(x){return x.numero===num;})[0]; if(!p) return;
+  if(!confirm('Trazer este processo para a lista principal?\n\n'+esc(p.cliente||num))) return;
+  p.suspenso=false;
+  try{ var sb=window.__sb; if(sb && p._id){ sb.from('processos').update({suspenso:false}).eq('id',p._id).then(function(r){ if(r&&r.error) console.warn('suspenso não persistido:',r.error.message); }); } }catch(e){}
+  renderJames(); atualizaNavContagens();
 }
 /* ===== Documentos do processo (VPS /opt/cmpdocs) — estilo OneDrive ===== */
 /* Escopos de documentos: "processo" (raiz) e "outra parte" (subpasta reservada
