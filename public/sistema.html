@@ -2483,7 +2483,7 @@ function toggleConcluirTarefa(id){
   try{
     /* select estendido (honorários + vinculados). Se essas colunas ainda não existirem no banco,
        o select falha e caímos automaticamente no select básico — sem quebrar o carregamento. */
-    var selExt='id,numero,cliente_nome,oponente,assunto,classe,orgao,foro,status,valor_causa,distribuido_em,ultima_movimentacao,contatos_livres,hon_faturado,hon_afaturar,hon_pct_contratual,hon_pct_sucumbencia,hon_pct_execucao,hon_pct_ma_fe,hon_pro_labore,valor_condenacao,vinculados,fora_inove,fonte,fase,observacoes,andamentos(id,data,texto,fonte)';
+    var selExt='id,numero,cliente_nome,oponente,assunto,classe,orgao,foro,status,valor_causa,distribuido_em,ultima_movimentacao,contatos_livres,hon_faturado,hon_afaturar,hon_pct_contratual,hon_pct_sucumbencia,hon_pct_execucao,hon_pct_ma_fe,hon_pro_labore,valor_condenacao,hon_val_contratual,hon_val_sucumbencia,hon_val_execucao,vinculados,fora_inove,fonte,fase,observacoes,andamentos(id,data,texto,fonte)';
     var selBas='id,numero,cliente_nome,oponente,assunto,classe,orgao,foro,status,valor_causa,distribuido_em,ultima_movimentacao,contatos_livres,andamentos(id,data,texto,fonte)';
     var res=await sb.from('processos').select(selExt).order('ultima_movimentacao',{ascending:false,nullsFirst:false}).limit(3000);
     if(res.error){ res=await sb.from('processos').select(selBas).order('ultima_movimentacao',{ascending:false,nullsFirst:false}).limit(3000); }
@@ -2493,7 +2493,7 @@ function toggleConcluirTarefa(id){
       var hf=(p.andamentos||[]).map(function(a){return {id:a.id, data:(a.data? a.data+'T00:00:00.000Z':null), texto:a.texto, f:a.fonte||''};});
       hf.sort(function(x,y){return (y.data||'').localeCompare(x.data||'');});
       var vinc=Array.isArray(p.vinculados)?p.vinculados:(p.vinculados?[].concat(p.vinculados):[]);
-      return {_id:p.id, cliente:p.cliente_nome||'', numero:p.numero, oponente:p.oponente||'', tipo:p.assunto||'', classe:p.classe||'', orgao:p.orgao||'', distribuido_em:(p.distribuido_em||null), foro:p.foro||'', status:p.status||'', data:fmtData(p.ultima_movimentacao), hist:'', causa:fmtCausa(p.valor_causa), hist_full:hf, ctl:p.contatos_livres||'', hon_faturado:(p.hon_faturado!=null?p.hon_faturado:0), hon_afaturar:(p.hon_afaturar!=null?p.hon_afaturar:0), hon_pct_contratual:(p.hon_pct_contratual!=null?p.hon_pct_contratual:null), hon_pct_sucumbencia:(p.hon_pct_sucumbencia!=null?p.hon_pct_sucumbencia:null), hon_pct_execucao:(p.hon_pct_execucao!=null?p.hon_pct_execucao:null), hon_pct_ma_fe:(p.hon_pct_ma_fe!=null?p.hon_pct_ma_fe:null), hon_pro_labore:(p.hon_pro_labore!=null?p.hon_pro_labore:0), valor_condenacao:(p.valor_condenacao!=null?p.valor_condenacao:0), vinculados:vinc, fora_inove:!!p.fora_inove, fonte:p.fonte||'', ehCaso:(p.fonte==='caso'), fase_manual:(p.fase||''), observacoes:(p.observacoes||'')};
+      return {_id:p.id, cliente:p.cliente_nome||'', numero:p.numero, oponente:p.oponente||'', tipo:p.assunto||'', classe:p.classe||'', orgao:p.orgao||'', distribuido_em:(p.distribuido_em||null), foro:p.foro||'', status:p.status||'', data:fmtData(p.ultima_movimentacao), hist:'', causa:fmtCausa(p.valor_causa), hist_full:hf, ctl:p.contatos_livres||'', hon_faturado:(p.hon_faturado!=null?p.hon_faturado:0), hon_afaturar:(p.hon_afaturar!=null?p.hon_afaturar:0), hon_pct_contratual:(p.hon_pct_contratual!=null?p.hon_pct_contratual:null), hon_pct_sucumbencia:(p.hon_pct_sucumbencia!=null?p.hon_pct_sucumbencia:null), hon_pct_execucao:(p.hon_pct_execucao!=null?p.hon_pct_execucao:null), hon_pct_ma_fe:(p.hon_pct_ma_fe!=null?p.hon_pct_ma_fe:null), hon_pro_labore:(p.hon_pro_labore!=null?p.hon_pro_labore:0), valor_condenacao:(p.valor_condenacao!=null?p.valor_condenacao:0), hon_val_contratual:(p.hon_val_contratual!=null?p.hon_val_contratual:null), hon_val_sucumbencia:(p.hon_val_sucumbencia!=null?p.hon_val_sucumbencia:null), hon_val_execucao:(p.hon_val_execucao!=null?p.hon_val_execucao:null), vinculados:vinc, fora_inove:!!p.fora_inove, fonte:p.fonte||'', ehCaso:(p.fonte==='caso'), fase_manual:(p.fase||''), observacoes:(p.observacoes||'')};
     });
     if(DADOS.kpis){ DADOS.kpis.total=DADOS.processos.length; }
     /* publicações novas (robô DJEN) → fila de triagem */
@@ -4614,18 +4614,29 @@ function salvarHon(campo,raw){
 function honRow(rot,inner){
   return '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:0;line-height:1.42"><span style="color:var(--muted)">'+rot+'</span><span style="white-space:nowrap">'+inner+'</span></div>';
 }
+/* input de valor em R$ (formatado pt-BR), editável */
+function honFmtInput(campo,val){
+  return '<b style="color:var(--navy)">R$</b> <input value="'+hFmt(val)+'" onblur="salvarHon(\''+campo+'\',this.value)" onkeydown="if(event.key===\'Enter\')this.blur();" inputmode="decimal" style="width:82px;text-align:right;border:0;border-bottom:1px dotted var(--muted);background:transparent;font-weight:700;color:var(--navy);font-size:11.5px;padding:1px 2px;font-family:inherit;outline:none">';
+}
+/* linha com % (em cima) e valor em R$ (embaixo, menor) — para contratual/sucumbência/execução */
+function honFeeRow(rot,pctCampo,pctVal,valCampo,valVal){
+  return '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;padding:2px 0;line-height:1.3">'
+    +'<span style="color:var(--muted)">'+rot+'</span>'
+    +'<span style="text-align:right;white-space:nowrap">'+honInput(pctCampo,pctVal,true)
+    +'<br><span style="font-size:11px">'+honFmtInput(valCampo,valVal)+'</span></span></div>';
+}
 function honQuadroHTML(p){
   var trab=ehTrabalhista(p.numero);
   var div='<div style="border-top:1px dashed var(--line);margin:4px 0"></div>';
-  var out='<div class="hon-box" style="float:right;width:232px;margin:36px 0 10px 16px;border:1px solid var(--line);border-radius:12px;padding:9px 15px;background:var(--panel);font-size:12.5px">'
+  var out='<div class="hon-box" style="float:right;width:238px;margin:36px 0 10px 16px;border:1px solid var(--line);border-radius:12px;padding:9px 15px;background:var(--panel);font-size:12.5px">'
     +'<p class="sectlabel" style="margin:0 0 5px">Honorários'+(trab?' <span style="font-weight:400;text-transform:none;letter-spacing:0">· trab.</span>':'')+'</p>';
-  out+=honRow('Contratual',honInput('hon_pct_contratual',p.hon_pct_contratual,true));
-  out+=honRow('Sucumbência',honInput('hon_pct_sucumbencia',p.hon_pct_sucumbencia,true));
-  if(!trab) out+=honRow('Execução',honInput('hon_pct_execucao',p.hon_pct_execucao,true));
+  out+=honFeeRow('Contratual','hon_pct_contratual',p.hon_pct_contratual,'hon_val_contratual',p.hon_val_contratual);
+  out+=honFeeRow('Sucumbência','hon_pct_sucumbencia',p.hon_pct_sucumbencia,'hon_val_sucumbencia',p.hon_val_sucumbencia);
+  if(!trab) out+=honFeeRow('Execução','hon_pct_execucao',p.hon_pct_execucao,'hon_val_execucao',p.hon_val_execucao);
   out+=honRow('Multa má-fé',honInput('hon_pct_ma_fe',p.hon_pct_ma_fe,true));
   if(!trab) out+=honRow('Pró-labore',honInput('hon_pro_labore',p.hon_pro_labore,false));
   out+=div;
-  out+=honRow('Valor da condenação',honInput('valor_condenacao',p.valor_condenacao,false));
+  out+=honRow('Crédito / condenação',honInput('valor_condenacao',p.valor_condenacao,false));
   out+='</div>';
   return out;
 }
