@@ -2375,6 +2375,7 @@ async function lerLeadComIA(){ var l=window._laLead; if(!l){ return; } var ia=do
     var linhas=[];
     if(card.nome) linhas.push('<b>Nome:</b> '+esc(card.nome));
     if(card.telefone) linhas.push('<b>Telefone:</b> '+esc(card.telefone));
+    if(card.processo) linhas.push('<b>Processo:</b> '+esc(card.processo));
     if(card.assunto) linhas.push('<b>Assunto:</b> '+esc(card.assunto));
     if(card.observacao) linhas.push('<b>Observação:</b> '+esc(card.observacao));
     if(!ia) return;
@@ -2391,6 +2392,7 @@ async function lerLeadComIA(){ var l=window._laLead; if(!l){ return; } var ia=do
 function aplicarIALead(){ var l=window._laLead, c=window._laIA; if(!l||!c) return;
   if(c.nome) l.nome=c.nome;
   if(c.telefone) l.tel=c.telefone;
+  if(c.processo) l.procRef=c.processo;
   if(c.assunto) l.acao=c.assunto;
   if(c.observacao){ l.obs=(l.obs?(l.obs+'\n\n'):'')+c.observacao; }
   salvarLeadsLocal();
