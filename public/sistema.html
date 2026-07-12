@@ -2349,12 +2349,13 @@ function _mesclarDados(dst, src){
 
 /* ---- Leitura por IA (server-side; nunca a chave aqui) ---- */
 async function lerLeadComIA(){ var l=window._laLead; if(!l){ return; } var ia=document.getElementById('la-ia'); if(ia){ia.textContent='Lendo com IA…';}
-  var sb=window.__sb; var jwt=''; try{ var s=await sb.auth.getSession(); jwt=s&&s.data&&s.data.session&&s.data.session.access_token||''; }catch(e){}
+  var sb=window.__sb; if(!sb){ if(ia)ia.textContent='Sessão não encontrada — faça login.'; return; }
   try{
-    var resp=await fetch('/api/ler-lead',{ method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+jwt},
-      body:JSON.stringify({ paths:(l.arquivos||[]).map(function(a){return a.path;}), mensagem:(l.obs||''), nome:(l.nome||''), telefone:(l.tel||'') }) });
-    if(!resp.ok){ var t=await resp.text(); if(ia) ia.textContent='IA indisponível ('+resp.status+'). '+(resp.status===404||resp.status===501?'Endpoint /api/ler-lead ainda não publicado no servidor.':t.slice(0,140)); return; }
-    var out=await resp.json();
+    var r=await sb.functions.invoke('ler-lead',{ body:{ paths:(l.arquivos||[]).map(function(a){return a.path;}), mensagem:(l.obs||''), nome:(l.nome||''), telefone:(l.tel||'') } });
+    if(r.error){ var msg=(r.error&&r.error.message)||'erro'; var extra='';
+      try{ if(r.error.context&&r.error.context.json){ var j=await r.error.context.json(); if(j&&j.erro) extra=' — '+j.erro; } }catch(e){}
+      if(ia) ia.textContent='IA indisponível: '+msg+extra; return; }
+    var out=r.data||{};
     var card=out.card||{}, mem=out.memoria||null;
     // Camada CARD — só preenche em branco; nunca sobrescreve nem inventa
     if(card.nome && !l.nome) l.nome=card.nome;
