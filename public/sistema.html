@@ -1076,8 +1076,7 @@ function abrir(i){
     (typeof JALINE!=='undefined'&&JALINE[String(p.numero||'').replace(/\D/g,'')]?'<button class="btn sm gold" style="position:absolute;top:14px;right:112px;cursor:default" title="Pasta de Jaline — honorários exclusivos Djan e Jaline">Jaline</button>':'')+
     '<button class="btn sm '+(__enc?'gold':'ghost')+'" style="position:absolute;top:14px;right:14px" onclick="encerrarProcesso()">'+(__enc?'Reativar':'Encerrar')+'</button>'+
     ''+
-    '<div class="subhead">Processo nº <span onclick="copiarNumero(this,\''+p.numero+'\')" style="cursor:pointer;border-bottom:1px dotted var(--muted)" title="Clique para copiar o número">'+p.numero+'</span> &nbsp;·&nbsp; <span class="b '+stCls(p.status)+'">'+esc(p.status||'—')+'</span>'+
-    ' &nbsp;·&nbsp; Responsável: '+resp+'</div>'+
+    '<div class="subhead">Processo nº <span onclick="copiarNumero(this,\''+p.numero+'\')" style="cursor:pointer;border-bottom:1px dotted var(--muted)" title="Clique para copiar o número">'+p.numero+'</span></div>'+
     '<div id="ctl-chips" style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center"></div>'+
     ''+
     '<div style="margin-top:10px"><button class="btn sm" onclick="novaTarefaDoProcesso()">+ Nova tarefa neste processo</button> <button class="btn sm" style="background:#faf3ee;color:#D97757;border:1px solid #edd7c9;font-weight:700" onclick="agendarClaude()" title="Deixar mensagem para o cliente a qualquer hora — o Claude envia somente em horário comercial"><span style="font-size:13px">✳</span> Agendar com Claude</button> <button class="btn sm" style="background:#eef4fb;color:#185FA5;border:1px solid #cfe0f2;font-weight:700" onclick="abrirTribunal(\''+p.numero+'\')" title="Abrir o sistema do tribunal (PJe/e-SAJ/Projudi) no grau deste processo — o número é copiado para você colar na busca">&#9878; Abrir no tribunal</button> <button class="btn sm" style="background:#eef7f1;color:#0F6E56;border:1px solid #cfe8db;font-weight:700" onclick="abrirAcompanhamento(\''+p.numero+'\')" title="Ativar aviso por e-mail à cliente quando houver movimentação oficial (sem expor o teor)">&#128231; Acompanhamento</button> <button class="btn sm" style="background:#eaf4f4;color:#0b7285;border:1px solid #cfe6e6;font-weight:700" onclick="abrirAtualizarCliente(\''+p.numero+'\')" title="Montar um e-mail de atualização com as últimas movimentações, em linguagem simples, para revisar e enviar">&#9993; Atualizar cliente</button></div>'+
@@ -1097,7 +1096,9 @@ function abrir(i){
     '</div>'+
     /* grupo D descido do cabeçalho: vínculo, marcar como caso, Fase e processos vinculados */
     '<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--line)">'+
-      '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px">'+
+      '<div style="display:flex;gap:8px 10px;flex-wrap:wrap;align-items:center;margin-bottom:8px">'+
+        '<span class="b '+stCls(p.status)+'">'+esc(p.status||'—')+'</span>'+
+        '<span style="color:var(--muted);font-size:12.5px">Responsável: <b style="color:var(--ink);font-weight:600">'+resp+'</b></span>'+
         (function(){ var vinc=(p.hist_full&&p.hist_full.length>0)&&p.foro; return '<span style="display:inline-block;border-radius:20px;padding:2px 10px;font-size:11px;font-weight:600;'+(vinc?'background:#e5f4ed;color:#127a53">vinculado jus.br':'background:#fbeceb;color:#b5342b">não vinculado')+'</span>'; })()+
         _casoCtrlHTML(p)+
       '</div>'+
