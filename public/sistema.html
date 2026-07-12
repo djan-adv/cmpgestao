@@ -2357,16 +2357,30 @@ async function lerLeadComIA(){ var l=window._laLead; if(!l){ return; } var ia=do
       if(ia) ia.textContent='IA indisponível: '+msg+extra; return; }
     var out=r.data||{};
     var card=out.card||{}, mem=out.memoria||null;
-    // Camada CARD — só preenche em branco; nunca sobrescreve nem inventa
-    if(card.nome && !l.nome) l.nome=card.nome;
-    if(card.telefone && !l.tel) l.tel=card.telefone;
-    if(card.assunto && !l.acao) l.acao=card.assunto;
-    if(card.observacao){ l.obs=(l.obs?(l.obs+'\n\n'):'')+card.observacao; }
     // Camada MEMÓRIA — guardada oculta no card (não aparece na tela)
     if(mem){ l.memoria=mem; }
-    salvarLeadsLocal(); renderLeadArqs();
-    if(ia) ia.textContent='Pronto — campos preenchidos a partir do que foi identificado (o que não deu para identificar ficou em branco).';
+    window._laIA=card; salvarLeadsLocal();
+    // Prévia visível do que a IA identificou + botão para aplicar (você decide sobrescrever)
+    var linhas=[];
+    if(card.nome) linhas.push('<b>Nome:</b> '+esc(card.nome));
+    if(card.telefone) linhas.push('<b>Telefone:</b> '+esc(card.telefone));
+    if(card.assunto) linhas.push('<b>Assunto:</b> '+esc(card.assunto));
+    if(card.observacao) linhas.push('<b>Observação:</b> '+esc(card.observacao));
+    if(!ia) return;
+    if(!linhas.length){ ia.innerHTML='A IA leu os arquivos, mas não identificou nome/telefone/assunto claros neles.'+(mem?' O contexto foi guardado na memória do lead (para quando virar caso).':''); return; }
+    ia.innerHTML='<div style="text-align:left;background:#f4f7fb;border:1px solid var(--line);border-radius:9px;padding:10px 12px">'
+      +'<div style="font-weight:700;color:var(--navy);margin-bottom:5px">A IA identificou:</div>'+linhas.join('<br>')
+      +'<div style="margin-top:9px"><button class="btn sm" onclick="aplicarIALead()">Aplicar aos campos do lead</button></div>'
+      +'<div class="note" style="margin-top:6px">Ao aplicar, os campos são preenchidos com o que foi identificado (substitui o que houver). O que não foi identificado fica em branco.</div></div>';
   }catch(e){ if(ia) ia.textContent='Falha ao ler com IA: '+(e&&e.message||e); } }
+function aplicarIALead(){ var l=window._laLead, c=window._laIA; if(!l||!c) return;
+  if(c.nome) l.nome=c.nome;
+  if(c.telefone) l.tel=c.telefone;
+  if(c.assunto) l.acao=c.assunto;
+  if(c.observacao){ l.obs=(l.obs?(l.obs+'\n\n'):'')+c.observacao; }
+  salvarLeadsLocal();
+  var ia=document.getElementById('la-ia'); if(ia) ia.textContent='Aplicado aos campos do lead. Feche e abra "editar" para revisar/ajustar.';
+  try{ renderCaptacao(); }catch(e){} }
 function addEtapa(){var n=prompt("Nome da nova etapa do funil:");if(!n)return;FUNIL.push({id:"e"+Date.now(),nome:n});salvarFunilLocal();renderCaptacao();}
 function renameEtapa(idx){var f=FUNIL[idx];var n=prompt("Renomear etapa:",f.nome);if(n){f.nome=n;salvarFunilLocal();renderCaptacao();}}
 function kpiC(l,n,h){return '<div class="kpi" style="cursor:pointer" onclick="'+h+'"><div class="n">'+n+'</div><div class="l">'+l+' &rsaquo;</div></div>';}
