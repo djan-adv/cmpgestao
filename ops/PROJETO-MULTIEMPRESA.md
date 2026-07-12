@@ -154,3 +154,44 @@ não ver o conteúdo dos clientes). A decidir na fase de produto.
 ## 9. Relacionados
 - `ops/PROJETO-GESTAO-FINANCEIRA.md` — módulo financeiro (Cora + NFS-e).
 - `ops/IDEIAS-FUTURAS.md` — outras ideias guardadas.
+
+---
+
+## 10. Inove — 1º inquilino (spec de entrega)
+
+**Negócio:** perícia atuarial (perito atuário **Thiago Silveira**). Dois módulos:
+- **Cadastros (Tribunais):** cadastro do Thiago como auxiliar/perito nos **27 TJs**
+  (tabela `inove_tribunais`, já carregada com situação real: 9 cadastrado, 7 enviado,
+  11 a fazer — link, senha, observações por TJ).
+- **Processos (perícias):** triagem/kanban das perícias, usando as **57 movimentações**
+  próprias do Thiago (`inove_movimentacoes`) e os **quesitos** (`inove_quesitos`).
+
+**Endereço:** `inove.djan.app.br` (subdomínio na mesma Hostinger do VPS) — depois trocado
+pelo **domínio próprio deles**.
+
+**Perfil `inove` (restrições):**
+- **Sem** "Agendar com Claude", **sem** envio de e-mail.
+- **Sem** marca CMP em nada — tela **neutra** (sem nome/logo de advogados da CMP).
+- **Sem** busca no DJEN por advogado (cada processo tem um advogado diferente; Thiago é o
+  perito, não o advogado).
+- Vê **só a pasta dele** (isolamento por inquilino — RLS).
+
+**Acessos:** **3 logins da Inove + 1 de teste (Djan)**. Auto-cadastro por **link**
+(a pessoa cria e-mail e senha próprios; Djan não gerencia senha). Limite por plano.
+
+**Painel de sugestões próprio (comercial):** botão **"Solicitar novas funcionalidades"**
+(nome comercial). Fluxo: cliente pede → **Djan aprova e define valor** → **pagamento
+comprovado → inicia**. Separado do painel de Sugestões da CMP.
+
+**Documento-padrão:** gerar o documento de cadastro/declaração preenchido com os dados do
+Thiago (fornecidos: Dados cadastrais, Declaração perito atuarial, Currículo — com marca
+d'água). CPF Thiago 063.474.586-75; CNPJ Inove 24.756.013/0001-53 (do NUPeJ RN).
+
+**Isolado da CMP:** nada da Inove entra no painel Sugestões/Melhorias da CMP; a CMP é a raiz.
+
+### O que falta para entregar
+- App: seção **Cadastros (Tribunais)** (pronta) + módulo **Processos/triagem** com as 57
+  movimentações; **perfil inove** (esconde Agendar/e-mail/DJEN-advogado/marca CMP);
+  **branding neutro**; painel **"Solicitar novas funcionalidades"** com aprovação+valor.
+- Infra (depende do Djan): apontar **DNS `inove.djan.app.br` → VPS**; **rebuild** no VPS
+  para rotas novas; criar os **3+1 acessos** (link de convite).
