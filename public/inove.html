@@ -130,7 +130,7 @@
       </section>
 
       <section id="sec-proc" class="hidden">
-        <div class="card">
+        <div class="card" id="proc-lista-card">
           <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
             <p class="sectlabel" style="margin:0">Processos <span class="note" id="proc-uso"></span></p>
             <button class="btn gold sm" onclick="abrirNovoProc()">+ Cadastrar processo</button>
@@ -171,7 +171,7 @@
       </section>
 
       <section id="sec-admin" class="hidden">
-        <div class="card">
+        <div class="card" id="admin-lista-card">
           <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
             <p class="sectlabel" style="margin:0">Processos administrativos / Licitações <span class="note" id="admin-uso"></span></p>
             <button class="btn gold sm" onclick="ir('proc');abrirNovoProc();document.getElementById('np-tipo').value='administrativo';toggleTipoProc()">+ Cadastrar administrativo</button>
@@ -424,6 +424,7 @@
   }
   function renderProc(){
     document.getElementById('proc-det').classList.add('hidden');
+    document.getElementById('proc-lista-card').classList.remove('hidden');
     var lim=_lim('proc_limite',200);
     var uso=document.getElementById('proc-uso'); if(uso) uso.textContent='('+PROC.length+' de '+lim+')';
     var q=((document.getElementById('proc-busca')||{}).value||'').toLowerCase().trim();
@@ -456,6 +457,7 @@
   /* ===== Administrativos / Licitações ===== */
   function renderAdmin(){
     document.getElementById('admin-det').classList.add('hidden');
+    document.getElementById('admin-lista-card').classList.remove('hidden');
     var q=((document.getElementById('admin-busca')||{}).value||'').toLowerCase().trim();
     var lista=PROC.filter(function(p){return p.inove_tipo==='administrativo';});
     document.getElementById('admin-uso').textContent='('+lista.length+')';
@@ -482,8 +484,9 @@
   }
   async function abrirFichaAdmin(id){
     var det=document.getElementById('admin-det');
+    document.getElementById('admin-lista-card').classList.add('hidden');
     det.classList.remove('hidden'); det.innerHTML='<div class="note">Abrindo…</div>';
-    det.scrollIntoView({behavior:'smooth',block:'start'});
+    window.scrollTo(0,0);
     var p=PROC.find(function(x){return String(x.id)===String(id);})||{};
     var a=p.inove_admin||{};
     var ra=await sb.from('andamentos').select('data,texto,fonte').eq('processo_id',id).order('data',{ascending:false});
@@ -506,8 +509,9 @@
   }
   async function abrirFicha(id){
     var det=document.getElementById('proc-det');
+    document.getElementById('proc-lista-card').classList.add('hidden');
     det.classList.remove('hidden'); det.innerHTML='<div class="note">Abrindo ficha…</div>';
-    document.querySelector('#sec-proc .card').scrollIntoView({behavior:'smooth',block:'start'});
+    window.scrollTo(0,0);
     var rp=await sb.from('processos').select('id,numero,cliente_nome,oponente,assunto,classe,orgao,foro,status,valor_causa,distribuido_em,fonte,observacoes,hon_per_fixado,hon_per_recebido,hon_per_areceber').eq('id',id).single();
     var p=(rp&&rp.data)||{};
     var ra=await sb.from('andamentos').select('data,texto,fonte').eq('processo_id',id).order('data',{ascending:false});
