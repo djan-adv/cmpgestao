@@ -113,6 +113,7 @@
   .modal .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
   .modal .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
   .modal .foot{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
+  @media (max-width:560px){ .overlay{padding:8px;align-items:flex-start} .modal{padding:15px;max-height:94vh} .modal .row2,.modal .row3{grid-template-columns:1fr} }
   .flags{display:flex;gap:16px;flex-wrap:wrap;margin-top:10px;font-size:13px;color:var(--ink)}
   .flags label{display:flex;align-items:center;gap:5px;margin:0}
   textarea{width:100%;padding:9px 12px;border:1px solid var(--line);border-radius:8px;font-family:inherit;font-size:14px;min-height:56px}
@@ -513,13 +514,15 @@
 <div id="modal-lead" class="overlay hidden"><div class="modal">
   <h2 id="ml-titulo">Lead</h2>
   <label>Nome</label><input id="l-nome">
+  <label>Processo de referência <span style="color:var(--muted);font-weight:400">(nº do processo, se houver)</span></label><input id="l-procref" placeholder="0000000-00.0000.0.00.0000">
+  <div id="l-capt" class="note" style="margin:6px 0 2px"></div>
   <div class="row2"><div><label>Canal</label><select id="l-canal"><option>Indicação</option><option>Google Meu Negócio</option><option>Google Ads</option><option>Meta Ads (Instagram/Facebook)</option><option>Instagram orgânico</option><option>TikTok</option><option>YouTube</option><option>Site / Blog (SEO)</option><option>LinkedIn</option><option>Eventos / Palestras</option><option>Parceiro / Correspondente</option><option>WhatsApp</option><option>Jusbrasil</option><option>Outro</option></select></div><div><label>Etapa do funil</label><select id="l-estagio"></select></div></div>
   <div class="row2"><div><label>Telefone</label><input id="l-tel"></div><div><label>E-mail</label><input id="l-email"></div></div>
   <div class="row2"><div><label>Data de entrada</label><input id="l-data" type="date"></div><div><label>Valor estimado (R$)</label><input id="l-valor"></div></div>
   <div class="row2"><div><label>Valor fechado (R$) <span style="color:var(--muted);font-weight:400">— honorário contratado</span></label><input id="l-valorf" placeholder="preenchido quando fechar"></div><div><label>Motivo da perda <span style="color:var(--muted);font-weight:400">(se perdido)</span></label><select id="l-motivo"><option value="">—</option><option>Preço / honorários</option><option>Sumiu / parou de responder</option><option>Foi a outro escritório</option><option>Sem viabilidade jurídica</option><option>Fora da nossa área</option><option>Só queria informação</option><option>Demorou / concorrente foi mais rápido</option><option>Outro</option></select></div></div>
   <div class="row2"><div><label>Prioridade</label><select id="l-prio"><option value="alta">Alta</option><option value="media">Média</option><option value="baixa">Baixa</option></select></div><div><label>Próxima ação (o que fazer)</label><input id="l-acao" placeholder="Ex.: enviar proposta, ligar de volta"></div></div>
   <div class="row2"><div><label>Lembrete — data</label><input id="l-lemdata" type="date"></div><div><label>Lembrete — o quê</label><input id="l-lemtxt" placeholder="Ex.: ligar de volta"></div></div>
-  <label>Anotações</label><textarea id="l-obs" placeholder="Observações sobre o lead (contexto, histórico da conversa, próximos passos)..."></textarea>
+  <label>Anotações</label><textarea id="l-obs" style="min-height:150px" placeholder="Observações sobre o lead (contexto, histórico da conversa, próximos passos)..."></textarea>
   <label>Etiquetas</label><div id="l-etq" style="display:flex;flex-wrap:wrap;gap:6px"></div>
   <div class="foot"><button class="btn ghost" onclick="fecharLead()">Cancelar</button><button class="btn" onclick="salvarLead()">Salvar</button></div>
 </div></div>
@@ -2228,12 +2231,17 @@ function editarLead(id){var l=id?LEADS.find(function(x){return x.id===id;}):{id:
   document.getElementById("l-valor").value=l.valor||""; document.getElementById("l-prio").value=l.prioridade||"media"; document.getElementById("l-acao").value=l.acao||""; document.getElementById("l-lemdata").value=l.lemdata||""; document.getElementById("l-lemtxt").value=l.lemtxt||""; document.getElementById("l-obs").value=l.obs||"";
   document.getElementById("l-data").value=l.data||(id?"":(new Date().getFullYear()+'-'+String(new Date().getMonth()+1).padStart(2,'0')+'-'+String(new Date().getDate()).padStart(2,'0')));
   document.getElementById("l-valorf").value=l.valorFechado||""; document.getElementById("l-motivo").value=l.motivo||"";
+  document.getElementById("l-procref").value=l.procRef||"";
+  var _cap=document.getElementById("l-capt"); if(_cap){ var _c=l.capturadoEm||(l.data?(l.data+'T00:00:00'):null), _u=l.ultimaAtividade||null; _cap.innerHTML=(_c?('&#128337; Capturado em '+fmtDataHora(_c)):'&#128337; Captura: —')+(_u?('  &middot;  última atividade '+fmtDataHora(_u)):''); }
   window._lsel=(l.labels?l.labels.slice():[]); renderEtqPicker("l-etq",window._lsel);
   document.getElementById("modal-lead").classList.remove("hidden");}
+function fmtDataHora(iso){ try{ var d=new Date(iso); if(isNaN(d.getTime())) return String(iso); return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear()+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }catch(e){ return String(iso); } }
 function fecharLead(){document.getElementById("modal-lead").classList.add("hidden");}
 function salvarLead(){var l=window._ledit;var nome=_v("l-nome");if(!nome){alert("Informe o nome.");return;}
   var estagio=_v("l-estagio");
-  var obj={nome:nome,canal:_v("l-canal"),estagio:estagio,tel:_v("l-tel"),email:_v("l-email"),valor:_v("l-valor"),valorFechado:_v("l-valorf"),motivo:_v("l-motivo"),data:_v("l-data"),lemdata:_v("l-lemdata"),lemtxt:_v("l-lemtxt"),obs:_v("l-obs"),prioridade:_v("l-prio"),acao:_v("l-acao"),labels:(window._lsel||[]).slice()};
+  var obj={nome:nome,canal:_v("l-canal"),estagio:estagio,tel:_v("l-tel"),email:_v("l-email"),valor:_v("l-valor"),valorFechado:_v("l-valorf"),motivo:_v("l-motivo"),data:_v("l-data"),lemdata:_v("l-lemdata"),lemtxt:_v("l-lemtxt"),obs:_v("l-obs"),prioridade:_v("l-prio"),acao:_v("l-acao"),procRef:_v("l-procref"),labels:(window._lsel||[]).slice()};
+  obj.capturadoEm=(l&&l.capturadoEm)?l.capturadoEm:((l&&l.data)?(l.data+'T00:00:00'):new Date().toISOString());
+  obj.ultimaAtividade=new Date().toISOString();
   /* data de fechamento (para tempo de conversão): grava quando vira "ganho" */
   var jaFech=(l&&l.dataFechamento)||'';
   if(estagio==='ganho'){ obj.dataFechamento=jaFech||hojeISO(); } else { obj.dataFechamento=jaFech; }
@@ -2277,6 +2285,8 @@ async function uploadLeadArqs(fileList){ var l=window._laLead; if(!l||!fileList|
     }catch(e){ alert('Erro: '+(e&&e.message||e)); }
   }
   if(prog)prog.style.display='none'; try{document.getElementById('la-file').value='';}catch(e){}
+  if(!l.capturadoEm) l.capturadoEm=new Date().toISOString();
+  l.ultimaAtividade=new Date().toISOString();
   salvarLeadsLocal(); renderLeadArqs(); }
 async function baixarLeadArq(i){ var l=window._laLead; var a=l&&l.arquivos&&l.arquivos[i]; if(!a)return; var sb=window.__sb; if(!sb)return;
   try{ var r=await sb.storage.from(LEADS_BUCKET).createSignedUrl(a.path,120); if(r.data&&r.data.signedUrl) window.open(r.data.signedUrl,'_blank'); else alert('Não foi possível abrir o arquivo.'); }catch(e){ alert('Erro: '+(e&&e.message||e)); } }
@@ -2326,7 +2336,8 @@ async function importarLead(pubId,mesclarComId){
     salvarLeadsLocal();
   }else{
     var novo={ id:lseq++, nome:(x.nome||''), canal:(x.canal||'Link público'), estagio:FUNIL[0].id, tel:(x.telefone||''), email:(x.email||''),
-      valor:'', valorFechado:'', motivo:'', data:hojeISO(), lemdata:'', lemtxt:'', obs:(x.mensagem||''), prioridade:'media', acao:'', labels:[],
+      valor:'', valorFechado:'', motivo:'', data:hojeISO(), lemdata:'', lemtxt:'', obs:(x.mensagem||''), prioridade:'media', acao:'', procRef:'', labels:[],
+      capturadoEm:(x.criado_em||new Date().toISOString()), ultimaAtividade:new Date().toISOString(),
       arquivos:arquivos, _pasta:pasta, publicoId:x.id, memoria:null };
     LEADS.push(novo); salvarLeadsLocal();
   }
