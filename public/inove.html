@@ -110,9 +110,11 @@
     <nav>
       <a id="nav-painel" class="on" onclick="ir('painel')"><span class="ic">▤</span> Painel</a>
       <a id="nav-proc" onclick="ir('proc')"><span class="ic">⚖</span> Processos <span class="cnt" id="cnt-proc"></span></a>
+      <a id="nav-agenda" onclick="ir('agenda')"><span class="ic">◧</span> Agenda (Kanban) <span class="cnt" id="cnt-agenda"></span></a>
       <a id="nav-cad" onclick="ir('cad')"><span class="ic">🏛</span> Cadastros (Tribunais) <span class="cnt" id="cnt-cad"></span></a>
       <a id="nav-sol" onclick="ir('sol')"><span class="ic">✨</span> Solicitar novas funcionalidades <span class="cnt" id="cnt-sol"></span></a>
       <a id="nav-doc" onclick="ir('doc')"><span class="ic">📄</span> Documento-padrão</a>
+      <a id="nav-plano" onclick="ir('plano')"><span class="ic">◈</span> Plano</a>
     </nav>
     <div class="foot"><div class="av" id="ft-av">P</div><div><div class="nm" id="ft-nm">Perito</div><div class="pp">Sair</div></div>
       <button class="btn ghost sm" style="margin-left:auto" onclick="sair()">Sair</button></div>
@@ -128,10 +130,51 @@
 
       <section id="sec-proc" class="hidden">
         <div class="card">
-          <p class="sectlabel">Processos</p>
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+            <p class="sectlabel" style="margin:0">Processos <span class="note" id="proc-uso"></span></p>
+            <button class="btn gold sm" onclick="abrirNovoProc()">+ Cadastrar processo</button>
+          </div>
+          <div id="proc-form" class="hidden" style="margin:10px 0;padding:12px;border:1px solid var(--line);border-radius:12px;background:#fafbfc">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:9px">
+              <label style="margin:0">Número do processo <input id="np-numero" placeholder="0000000-00.0000.0.00.0000"></label>
+              <label style="margin:0">Cliente <input id="np-cliente" placeholder="Nome do cliente"></label>
+              <label style="margin:0">Parte contrária <input id="np-oponente" placeholder="(opcional)"></label>
+              <label style="margin:0">Assunto <input id="np-assunto" placeholder="(opcional)"></label>
+            </div>
+            <div style="margin-top:10px;display:flex;gap:8px;align-items:center"><button class="btn gold sm" onclick="salvarNovoProc()">Salvar</button><button class="btn ghost sm" onclick="abrirNovoProc(true)">Cancelar</button><span id="np-msg" class="note"></span></div>
+          </div>
           <input id="proc-busca" oninput="renderProc()" placeholder="Buscar por cliente, número ou assunto…" style="margin-bottom:10px">
           <div style="overflow-x:auto"><table><thead><tr><th style="width:34%">Cliente</th><th style="width:170px">Processo</th><th>Assunto</th><th style="width:120px">Últ. movim.</th></tr></thead><tbody id="proc-body"></tbody></table></div>
           <p class="note" id="proc-vazio" style="display:none;margin-top:8px">Nenhum processo.</p>
+        </div>
+      </section>
+
+      <section id="sec-agenda" class="hidden">
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+            <p class="sectlabel" style="margin:0">Agenda — prazos e tarefas (Kanban)</p>
+            <button class="btn gold sm" onclick="abrirNovaTarefa()">+ Nova tarefa</button>
+          </div>
+          <div id="tar-form" class="hidden" style="margin:10px 0;padding:12px;border:1px solid var(--line);border-radius:12px;background:#fafbfc">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:9px">
+              <label style="margin:0">Tarefa <input id="nt-titulo" placeholder="O que fazer"></label>
+              <label style="margin:0">Prazo <input id="nt-prazo" type="date"></label>
+              <label style="margin:0">Processo <input id="nt-proc" placeholder="(opcional)"></label>
+              <label style="margin:0">Responsável <input id="nt-resp" placeholder="(opcional)"></label>
+            </div>
+            <div style="margin-top:10px;display:flex;gap:8px;align-items:center"><button class="btn gold sm" onclick="salvarNovaTarefa()">Salvar</button><button class="btn ghost sm" onclick="abrirNovaTarefa(true)">Cancelar</button><span id="nt-msg" class="note"></span></div>
+          </div>
+          <div id="kanban" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;overflow-x:auto"></div>
+        </div>
+        <div class="card"><p class="sectlabel">Próximos prazos</p><div id="prazos-lista"><div class="note">—</div></div></div>
+      </section>
+
+      <section id="sec-plano" class="hidden">
+        <div class="card">
+          <p class="sectlabel">Seu plano</p>
+          <div id="plano-uso" class="kpis" style="grid-template-columns:1fr 1fr"></div>
+          <div id="plano-acoes" style="margin-top:14px"></div>
+          <p class="note" id="plano-nota" style="margin-top:10px"></p>
         </div>
       </section>
 
@@ -177,7 +220,8 @@
   var SB_URL='https://ndeqlyrydcijbgjiviuw.supabase.co';
   var SB_KEY='sb_publishable_X5Jo69qYCQOMEg0fu2yc1w_gIYwWuQD';
   var sb=window.supabase.createClient(SB_URL,SB_KEY);
-  var TRIB=[], CFG={}, PROC=[], SOL=[], IS_ADMIN=false;
+  var TRIB=[], CFG={}, PROC=[], SOL=[], TAR=[], IS_ADMIN=false;
+  var KAN_COLS=[['afazer','A fazer'],['fazendo','Fazendo'],['revisao','Em revisão'],['concluido','Concluído']];
   var CAD_SIT=[['a_fazer','A fazer','#8a8f98','#eef0f3'],['enviado','Enviado','#185FA5','#e3edf7'],['em_analise','Em análise','#8a6d1a','#fbf1dc'],['pendencia','Pendência','#b5342b','#fbeceb'],['cadastrado','Cadastrado','#0F6E56','#e5f4ed']];
   var ISOL_SIT=[['novo','Aguardando análise','#8a6d1a','#fbf1dc'],['aprovado','Aprovada — aguardando pagamento','#185FA5','#e3edf7'],['pago','Paga','#0F6E56','#e5f4ed'],['em_andamento','Em desenvolvimento','#6d28a8','#f1e9fa'],['concluido','Concluída','#0F6E56','#e5f4ed'],['recusado','Recusada','#b5342b','#fbeceb']];
   function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
@@ -229,6 +273,7 @@
     var rc=await sb.from('inove_config').select('chave,valor'); CFG={}; (rc.data||[]).forEach(function(x){CFG[x.chave]=x.valor||'';});
     var rt=await sb.from('inove_tribunais').select('*').order('uf'); TRIB=rt.data||[];
     var rp=await sb.from('processos').select('numero,cliente_nome,oponente,assunto,status,ultima_movimentacao').eq('inove',true).order('cliente_nome'); PROC=rp.data||[];
+    var rtar=await sb.from('inove_tarefas').select('*').order('prazo',{ascending:true}); TAR=rtar.data||[];
     var u=await sb.auth.getUser(); var em=((u&&u.data&&u.data.user&&u.data.user.email)||'').toLowerCase();
     var nm=(u&&u.data&&u.data.user&&u.data.user.user_metadata&&u.data.user.user_metadata.nome)||'';
     var admins=(CFG.admin_emails||'').toLowerCase().split(',').map(function(s){return s.trim();}).filter(Boolean);
@@ -237,23 +282,28 @@
     document.getElementById('ft-nm').textContent=nome;
     document.getElementById('ft-av').textContent=(nome[0]||'P').toUpperCase();
     document.getElementById('cnt-proc').textContent=PROC.length||'';
+    var abertas=TAR.filter(function(t){return !t.concluida;}).length;
+    document.getElementById('cnt-agenda').textContent=abertas||'';
     var feito=TRIB.filter(function(x){return x.situacao==='cadastrado';}).length;
     document.getElementById('cnt-cad').textContent=TRIB.length?(feito+'/'+TRIB.length):'';
   }
-  var TITULOS={painel:'Painel',proc:'Processos',cad:'Cadastros — Tribunais de Justiça',sol:'Solicitar novas funcionalidades',doc:'Documento-padrão'};
+  var TITULOS={painel:'Painel',proc:'Processos',agenda:'Agenda — prazos e tarefas',cad:'Cadastros — Tribunais de Justiça',sol:'Solicitar novas funcionalidades',doc:'Documento-padrão',plano:'Plano'};
   function ir(s){
-    ['painel','proc','cad','sol','doc'].forEach(function(k){
+    ['painel','proc','agenda','cad','sol','doc','plano'].forEach(function(k){
       document.getElementById('nav-'+k).classList.toggle('on',k===s);
       document.getElementById('sec-'+k).classList.toggle('hidden',k!==s);
     });
     document.getElementById('scr-title').textContent=TITULOS[s]||'Painel';
     if(s==='painel')renderPainel();
     if(s==='proc')renderProc();
+    if(s==='agenda')renderAgenda();
     if(s==='cad')renderCad();
     if(s==='sol')renderSol();
     if(s==='doc')renderDoc();
+    if(s==='plano')renderPlano();
     window.scrollTo(0,0);
   }
+  function _lim(chave,def){ var v=parseInt(CFG[chave]||'',10); return isNaN(v)?def:v; }
 
   /* ===== Painel ===== */
   async function renderPainel(){
@@ -268,7 +318,36 @@
   function kpi(v,l){return '<div class="kpi"><b>'+esc(v)+'</b><span>'+esc(l)+'</span></div>';}
 
   /* ===== Processos ===== */
+  function abrirNovoProc(fechar){
+    var f=document.getElementById('proc-form');
+    if(fechar){ f.classList.add('hidden'); return; }
+    var lim=_lim('proc_limite',200);
+    if(PROC.length>=lim){ alert('Você atingiu o limite de '+lim+' processos do seu plano. Vá em "Plano" para ampliar.'); return; }
+    ['np-numero','np-cliente','np-oponente','np-assunto'].forEach(function(id){document.getElementById(id).value='';});
+    document.getElementById('np-msg').textContent='';
+    f.classList.toggle('hidden');
+  }
+  async function salvarNovoProc(){
+    var msg=document.getElementById('np-msg');
+    var numero=(document.getElementById('np-numero').value||'').trim();
+    var cliente=(document.getElementById('np-cliente').value||'').trim();
+    var oponente=(document.getElementById('np-oponente').value||'').trim();
+    var assunto=(document.getElementById('np-assunto').value||'').trim();
+    if(!numero||!cliente){ msg.style.color='#b5342b'; msg.textContent='Informe número e cliente.'; return; }
+    var lim=_lim('proc_limite',200);
+    if(PROC.length>=lim){ msg.style.color='#b5342b'; msg.textContent='Limite de '+lim+' processos atingido.'; return; }
+    msg.style.color='#475569'; msg.textContent='Salvando…';
+    var reg={escritorio_id:CFG.escritorio_id,numero:numero,cliente_nome:cliente,oponente:oponente||null,assunto:assunto||null,inove:true,fonte:'inove'};
+    var r=await sb.from('processos').insert(reg);
+    if(r&&r.error){ msg.style.color='#b5342b'; msg.textContent='Erro: '+r.error.message; return; }
+    document.getElementById('proc-form').classList.add('hidden');
+    var rp=await sb.from('processos').select('numero,cliente_nome,oponente,assunto,status,ultima_movimentacao').eq('inove',true).order('cliente_nome'); PROC=rp.data||[];
+    document.getElementById('cnt-proc').textContent=PROC.length||'';
+    renderProc();
+  }
   function renderProc(){
+    var lim=_lim('proc_limite',200);
+    var uso=document.getElementById('proc-uso'); if(uso) uso.textContent='('+PROC.length+' de '+lim+')';
     var q=((document.getElementById('proc-busca')||{}).value||'').toLowerCase().trim();
     var lista=PROC.filter(function(p){ if(!q)return true; return ((p.cliente_nome||'')+' '+(p.numero||'')+' '+(p.assunto||'')).toLowerCase().indexOf(q)>-1; });
     var b=document.getElementById('proc-body'); b.innerHTML='';
@@ -370,6 +449,105 @@
     var r=await sb.from('inove_solicitacoes').update(upd).eq('id',id);
     if(r&&r.error){alert('Não foi possível salvar: '+r.error.message);return;}
     renderSol();
+  }
+
+  /* ===== Agenda / Kanban (só prazos e tarefas) ===== */
+  function abrirNovaTarefa(fechar){
+    var f=document.getElementById('tar-form');
+    if(fechar){ f.classList.add('hidden'); return; }
+    ['nt-titulo','nt-prazo','nt-proc','nt-resp'].forEach(function(id){document.getElementById(id).value='';});
+    document.getElementById('nt-msg').textContent='';
+    f.classList.toggle('hidden');
+  }
+  async function salvarNovaTarefa(){
+    var msg=document.getElementById('nt-msg');
+    var titulo=(document.getElementById('nt-titulo').value||'').trim();
+    if(!titulo){ msg.style.color='#b5342b'; msg.textContent='Escreva a tarefa.'; return; }
+    var reg={titulo:titulo,prazo:(document.getElementById('nt-prazo').value||null),processo_numero:(document.getElementById('nt-proc').value||'').trim()||null,responsavel:(document.getElementById('nt-resp').value||'').trim()||null,coluna:'afazer'};
+    var r=await sb.from('inove_tarefas').insert(reg);
+    if(r&&r.error){ msg.style.color='#b5342b'; msg.textContent='Erro: '+r.error.message; return; }
+    document.getElementById('tar-form').classList.add('hidden');
+    await recarregarTarefas(); renderAgenda();
+  }
+  async function recarregarTarefas(){ var r=await sb.from('inove_tarefas').select('*').order('prazo',{ascending:true}); TAR=r.data||[]; var ab=TAR.filter(function(t){return !t.concluida;}).length; document.getElementById('cnt-agenda').textContent=ab||''; }
+  function renderAgenda(){
+    var k=document.getElementById('kanban'); if(!k) return;
+    k.innerHTML=KAN_COLS.map(function(c){
+      var itens=TAR.filter(function(t){return (t.coluna||'afazer')===c[0];});
+      var cards=itens.map(function(t){
+        var atrasado=(t.prazo && !t.concluida && String(t.prazo)<new Date().toISOString().slice(0,10));
+        var mover=KAN_COLS.map(function(cc){return '<option value="'+cc[0]+'"'+(cc[0]===t.coluna?' selected':'')+'>'+cc[1]+'</option>';}).join('');
+        return '<div style="border:1px solid var(--line);border-radius:9px;padding:8px 10px;margin-bottom:7px;background:#fff'+(atrasado?';border-left:3px solid #b5342b':'')+'">'+
+          '<div style="font-weight:600;font-size:13px;color:var(--navy)">'+esc(t.titulo)+'</div>'+
+          (t.processo_numero?('<div class="note" style="font-size:11px">'+esc(t.processo_numero)+'</div>'):'')+
+          (t.prazo?('<div class="note" style="font-size:11px;color:'+(atrasado?'#b5342b':'var(--muted)')+'">Prazo: '+fdata(t.prazo)+'</div>'):'')+
+          (t.responsavel?('<div class="note" style="font-size:11px">'+esc(t.responsavel)+'</div>'):'')+
+          '<div style="margin-top:6px;display:flex;gap:5px;align-items:center"><select onchange="moverTarefa('+t.id+',this.value)" style="font-size:11px;padding:3px 5px;width:auto">'+mover+'</select><button class="btn ghost sm" style="padding:3px 7px;font-size:11px" onclick="excluirTarefa('+t.id+')">✕</button></div>'+
+        '</div>';
+      }).join('')||'<div class="note" style="font-size:11px">—</div>';
+      return '<div style="min-width:170px"><div style="font-size:11px;font-weight:800;text-transform:uppercase;color:var(--muted);margin-bottom:7px">'+c[1]+' <span style="color:var(--gold)">'+itens.length+'</span></div>'+cards+'</div>';
+    }).join('');
+    var prox=TAR.filter(function(t){return t.prazo && !t.concluida;}).sort(function(a,b){return String(a.prazo).localeCompare(String(b.prazo));}).slice(0,12);
+    document.getElementById('prazos-lista').innerHTML=prox.length?prox.map(function(t){
+      var atrasado=String(t.prazo)<new Date().toISOString().slice(0,10);
+      return '<div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--line);font-size:13px"><span>'+esc(t.titulo)+(t.processo_numero?(' <span class="note">· '+esc(t.processo_numero)+'</span>'):'')+'</span><b style="color:'+(atrasado?'#b5342b':'var(--navy)')+'">'+fdata(t.prazo)+'</b></div>';
+    }).join(''):'<div class="note">Nenhum prazo pendente.</div>';
+  }
+  async function moverTarefa(id,col){
+    var t=TAR.find(function(x){return x.id===id;}); if(t){t.coluna=col;t.concluida=(col==='concluido');}
+    await sb.from('inove_tarefas').update({coluna:col,concluida:(col==='concluido'),atualizado_em:new Date().toISOString()}).eq('id',id);
+    await recarregarTarefas(); renderAgenda();
+  }
+  async function excluirTarefa(id){
+    if(!confirm('Excluir esta tarefa?'))return;
+    await sb.from('inove_tarefas').delete().eq('id',id);
+    await recarregarTarefas(); renderAgenda();
+  }
+
+  /* ===== Plano / upgrade ===== */
+  function renderPlano(){
+    var acc=_lim('assentos',3), accMax=_lim('assentos_max',6);
+    var pl=_lim('proc_limite',200), plMax=_lim('proc_max',400);
+    var valor=_lim('upgrade_valor',500);
+    document.getElementById('plano-uso').innerHTML=
+      kpi(PROC.length+' / '+pl,'processos usados')+kpi(acc,'acessos do plano');
+    var jaMax=(pl>=plMax && acc>=accMax);
+    var acoes='';
+    if(!jaMax){
+      acoes='<p class="note" style="margin:0 0 8px">Pacote adicional: <b>dobra</b> acessos ('+acc+'→'+accMax+') e processos ('+pl+'→'+plMax+') por <b>R$ '+valor+'/mês</b>. Autorização imediata; o administrador é avisado.</p>'
+        +'<button class="btn gold sm" onclick="solicitarUpgrade()">Contratar pacote adicional (R$ '+valor+'/mês)</button>';
+    } else {
+      acoes='<p class="note" style="margin:0 0 8px">Você já está no teto automático (acessos '+acc+', processos '+pl+'). Para ampliar além disso, o valor é a negociar.</p>'
+        +'<button class="btn ghost sm" onclick="solicitarNegociar()">Solicitar ampliação (valor a negociar)</button>';
+    }
+    document.getElementById('plano-acoes').innerHTML=acoes;
+    document.getElementById('plano-nota').textContent='Novos acessos são criados na tela de login ("Criar acesso") com o código de convite, respeitando o limite do plano.';
+    if(IS_ADMIN) renderPlanoAdmin();
+  }
+  async function renderPlanoAdmin(){
+    var host=document.getElementById('plano-acoes');
+    var r=await sb.from('inove_upgrades').select('*').order('criado_em',{ascending:false}).limit(30);
+    var itens=(r&&r.data)||[];
+    if(!itens.length) return;
+    var badge={autorizado:['Autorizado','#0F6E56','#e5f4ed'],negociar:['A negociar','#8a6d1a','#fbf1dc'],recusado:['Recusado','#b5342b','#fbeceb']};
+    host.innerHTML+='<div style="margin-top:14px;border-top:1px dashed var(--line);padding-top:10px"><div style="font-weight:800;color:var(--navy);font-size:13px;margin-bottom:6px">Pedidos de plano (admin)</div>'+
+      itens.map(function(u){var b=badge[u.status]||badge.negociar;return '<div style="border:1px solid var(--line);border-radius:9px;padding:8px 10px;margin-bottom:6px"><div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><span style="font-weight:700;font-size:13px">'+esc(u.solicitante||'—')+' <span class="note">· '+esc(u.tipo)+'</span></span><span style="font-size:11px;font-weight:700;color:'+b[1]+';background:'+b[2]+';border-radius:12px;padding:2px 9px">'+b[0]+'</span></div>'+(u.detalhe?('<div class="note" style="font-size:12px;margin-top:3px">'+esc(u.detalhe)+'</div>'):'')+'<div class="note" style="font-size:11px;margin-top:3px">'+fdata(u.criado_em)+'</div></div>';}).join('')+'</div>';
+  }
+  async function solicitarUpgrade(){
+    var valor=_lim('upgrade_valor',500), accMax=_lim('assentos_max',6), plMax=_lim('proc_max',400);
+    if(!confirm('Contratar o pacote adicional por R$ '+valor+'/mês?\n\nAcessos passam para '+accMax+' e processos para '+plMax+'. A autorização é imediata e o administrador será avisado.'))return;
+    var u=await sb.auth.getUser(); var quem=(u&&u.data&&u.data.user&&(u.data.user.user_metadata&&u.data.user.user_metadata.nome))||'Perito';
+    await sb.from('inove_config').upsert([{chave:'assentos',valor:String(accMax)},{chave:'proc_limite',valor:String(plMax)},{chave:'plano',valor:'upgrade'}],{onConflict:'chave'});
+    await sb.from('inove_upgrades').insert({tipo:'pacote',solicitante:quem,status:'autorizado',detalhe:'Pacote adicional R$'+valor+'/mês — acessos '+accMax+', processos '+plMax});
+    CFG.assentos=String(accMax); CFG.proc_limite=String(plMax); CFG.plano='upgrade';
+    alert('Pacote contratado. Seus limites já foram ampliados.');
+    renderPlano();
+  }
+  async function solicitarNegociar(){
+    var motivo=prompt('Descreva quanto precisa (acessos/processos). O administrador entrará em contato para negociar o valor:',''); if(motivo===null)return;
+    var u=await sb.auth.getUser(); var quem=(u&&u.data&&u.data.user&&(u.data.user.user_metadata&&u.data.user.user_metadata.nome))||'Perito';
+    await sb.from('inove_upgrades').insert({tipo:'negociar',solicitante:quem,status:'negociar',detalhe:(motivo||'').trim()||null});
+    alert('Solicitação enviada. O administrador foi avisado e entrará em contato.');
   }
 
   /* ===== Documento ===== */
