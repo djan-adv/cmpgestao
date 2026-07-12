@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Fale com o escritório — Crispim Mendonça e Pinheiro Advogados</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{--navy:#2E3A4B;--gold:#C9A227;--bg:#eef1f5;--line:#e2e7ef;--ink:#1e2733;--muted:#6b7482}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--ink);line-height:1.5}
+  .wrap{max-width:560px;margin:0 auto;padding:22px 16px 60px}
+  .brand{display:flex;align-items:center;gap:12px;margin:6px 0 18px}
+  .brand .dot{width:42px;height:42px;border-radius:11px;background:var(--navy);color:#fff;display:grid;place-items:center;font-weight:800;font-size:17px}
+  .brand b{color:var(--navy);font-size:16px;display:block;line-height:1.15}
+  .brand span{color:var(--muted);font-size:12.5px}
+  .card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:20px 18px;box-shadow:0 6px 24px rgba(30,39,51,.06)}
+  h1{font-size:20px;margin:0 0 4px;color:var(--navy)}
+  .sub{color:var(--muted);font-size:14px;margin:0 0 16px}
+  label{display:block;font-size:13px;font-weight:700;color:var(--navy);margin:14px 0 5px}
+  .req{color:#b5342b}
+  input[type=text],input[type=tel],input[type=email],textarea{width:100%;border:1px solid var(--line);border-radius:11px;padding:12px 13px;font-size:16px;font-family:inherit;background:#fff;color:var(--ink);outline:none}
+  input:focus,textarea:focus{border-color:var(--navy)}
+  textarea{min-height:96px;resize:vertical}
+  .files{border:1.5px dashed #cdd5e0;border-radius:12px;padding:14px;text-align:center;background:#fafbfc}
+  .files label{display:inline-block;margin:0;cursor:pointer;color:#185FA5;font-weight:700}
+  #lista{margin-top:10px;text-align:left}
+  #lista .it{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:13px;padding:6px 8px;border:1px solid var(--line);border-radius:9px;margin-top:6px;background:#fff}
+  #lista .it b{font-weight:600;word-break:break-all}
+  #lista .it a{color:#b5342b;cursor:pointer;flex:0 0 auto}
+  .hp{position:absolute;left:-9999px;top:-9999px;height:0;width:0;opacity:0}
+  button.send{margin-top:20px;width:100%;background:var(--navy);color:#fff;border:0;border-radius:12px;padding:15px;font-size:16px;font-weight:800;cursor:pointer}
+  button.send:disabled{opacity:.6;cursor:default}
+  .note{color:var(--muted);font-size:12px;margin-top:12px;text-align:center}
+  .ok{text-align:center;padding:26px 8px}
+  .ok .ic{width:64px;height:64px;border-radius:50%;background:#e5f4ed;color:#127a53;display:grid;place-items:center;font-size:32px;margin:0 auto 14px}
+  .ok h2{color:var(--navy);margin:0 0 6px}
+  .err{background:#fbeceb;color:#b5342b;border:1px solid #f0cfc0;border-radius:10px;padding:10px 12px;font-size:13px;margin-top:12px;display:none}
+  .prog{font-size:13px;color:var(--muted);margin-top:8px;text-align:center;display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand"><div class="dot">CMP</div><div><b>Crispim Mendonça e Pinheiro</b><span>Advogados</span></div></div>
+
+  <div class="card" id="form-card">
+    <h1>Fale com o escritório</h1>
+    <p class="sub">Envie seu nome, um contato e, se quiser, prints ou documentos. Vamos analisar e retornar.</p>
+
+    <form id="f" autocomplete="on">
+      <label for="nome">Nome <span class="req">*</span></label>
+      <input type="text" id="nome" name="nome" required placeholder="Seu nome completo">
+
+      <label for="telefone">Telefone / WhatsApp <span class="req">*</span></label>
+      <input type="tel" id="telefone" name="telefone" required placeholder="(83) 9 9999-9999" inputmode="tel">
+
+      <label for="email">E-mail (opcional)</label>
+      <input type="email" id="email" name="email" placeholder="seu@email.com" inputmode="email">
+
+      <label for="mensagem">Como podemos ajudar?</label>
+      <textarea id="mensagem" name="mensagem" placeholder="Descreva rapidamente sua situação."></textarea>
+
+      <label>Anexos (prints, fotos, PDFs — opcional)</label>
+      <div class="files">
+        <label for="arqs">📎 Toque para escolher da câmera, galeria ou arquivos</label>
+        <input type="file" id="arqs" accept="*/*" multiple style="display:none">
+        <div id="lista"></div>
+      </div>
+
+      <!-- honeypot anti-spam: humanos não veem -->
+      <input class="hp" type="text" id="empresa" name="empresa" tabindex="-1" autocomplete="off" aria-hidden="true">
+
+      <button type="submit" class="send" id="btn">Enviar</button>
+      <div class="prog" id="prog"></div>
+      <div class="err" id="err"></div>
+      <p class="note">Ao enviar, você concorda que o escritório entre em contato pelo telefone/e-mail informado.</p>
+    </form>
+  </div>
+
+  <div class="card ok" id="ok-card" style="display:none">
+    <div class="ic">✓</div>
+    <h2>Recebido!</h2>
+    <p class="sub" style="margin:0 auto;max-width:380px">Obrigado. Sua mensagem chegou ao escritório. Em breve entraremos em contato pelo telefone ou e-mail informado.</p>
+  </div>
+</div>
+
+<script>
+(function(){
+  var SB_URL='https://ndeqlyrydcijbgjiviuw.supabase.co';
+  var SB_KEY='sb_publishable_X5Jo69qYCQOMEg0fu2yc1w_gIYwWuQD';
+  var BUCKET='leads-publicos';
+  var sb=window.supabase.createClient(SB_URL,SB_KEY);
+
+  function uuid(){ try{ if(crypto&&crypto.randomUUID) return crypto.randomUUID(); }catch(e){}
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,function(c){var r=Math.random()*16|0,v=c==='x'?r:(r&0x3|0x8);return v.toString(16);}); }
+  function param(k){ try{ return new URLSearchParams(location.search).get(k)||''; }catch(e){ return ''; } }
+  function slug(s){ return String(s||'arquivo').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^\w.\- ]+/g,'').replace(/\s+/g,'_').slice(0,120); }
+
+  var arqs=[]; // {file}
+  var inp=document.getElementById('arqs'), lista=document.getElementById('lista');
+  inp.addEventListener('change',function(){
+    Array.prototype.forEach.call(inp.files,function(f){ arqs.push(f); });
+    inp.value=''; desenha();
+  });
+  function desenha(){
+    lista.innerHTML=arqs.map(function(f,i){ return '<div class="it"><b>'+slug(f.name)+'</b><a onclick="__rm('+i+')">remover</a></div>'; }).join('');
+  }
+  window.__rm=function(i){ arqs.splice(i,1); desenha(); };
+
+  var f=document.getElementById('f'), btn=document.getElementById('btn'), prog=document.getElementById('prog'), err=document.getElementById('err');
+  f.addEventListener('submit',async function(ev){
+    ev.preventDefault();
+    err.style.display='none';
+    // honeypot: se preenchido, finge sucesso e não grava nada
+    if(document.getElementById('empresa').value){ mostraOk(); return; }
+    var nome=document.getElementById('nome').value.trim();
+    var telefone=document.getElementById('telefone').value.trim();
+    if(!nome||!telefone){ erro('Preencha nome e telefone.'); return; }
+
+    btn.disabled=true; btn.textContent='Enviando…';
+    var pasta=uuid();
+    var meta=[];
+    try{
+      for(var i=0;i<arqs.length;i++){
+        var file=arqs[i]; prog.style.display='block'; prog.textContent='Enviando anexo '+(i+1)+' de '+arqs.length+'…';
+        var path=pasta+'/'+slug(file.name);
+        var up=await sb.storage.from(BUCKET).upload(path,file,{upsert:false,contentType:file.type||'application/octet-stream'});
+        if(up.error){ throw new Error('Falha ao enviar "'+file.name+'": '+up.error.message); }
+        meta.push({ nome:file.name, path:path, tipo:file.type||'', tamanho:file.size });
+      }
+      prog.textContent='Registrando…';
+      var row={
+        nome:nome, telefone:telefone,
+        email:(document.getElementById('email').value.trim()||null),
+        canal:(param('c')||param('canal')||'Link público'),
+        mensagem:(document.getElementById('mensagem').value.trim()||null),
+        arquivos:meta,
+        origem_url:location.href,
+        status:'novo'
+      };
+      var ins=await sb.from('leads_publicos').insert(row);
+      if(ins.error){ throw new Error(ins.error.message); }
+      mostraOk();
+    }catch(e){
+      btn.disabled=false; btn.textContent='Enviar'; prog.style.display='none';
+      erro('Não foi possível enviar agora. '+(e&&e.message||e)+' Tente novamente ou nos chame pelo WhatsApp.');
+    }
+  });
+  function erro(m){ err.textContent=m; err.style.display='block'; }
+  function mostraOk(){ document.getElementById('form-card').style.display='none'; document.getElementById('ok-card').style.display='block'; window.scrollTo(0,0); }
+})();
+</script>
+</body>
+</html>
