@@ -527,9 +527,11 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
     <div id="acessos-body" class="acessos-list"></div>
     <div id="bloco-publicar" style="display:none;margin-top:14px;border-top:1px solid var(--line);padding-top:12px">
       <p class="sectlabel" style="margin:0 0 4px">Publicar atualização</p>
-      <p class="note" style="margin:0 0 8px">Coloca no ar a versão mais recente do sistema (sem precisar de terminal). Use quando avisarmos que há uma atualização.</p>
+      <p class="note" style="margin:0 0 8px">Veja abaixo o que mudou desde a última publicação e decida: <b>publicar</b> coloca no ar; <b>rejeitar</b> mantém a versão atual e some da lista.</p>
+      <div id="publicar-resumo" style="margin:0 0 10px"><div class="note">Verificando novidades…</div></div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <button class="btn sm gold" id="btn-publicar" onclick="publicarAtualizacao()">↑ Publicar atualização agora</button>
+        <button class="btn sm ghost" id="btn-rejeitar" onclick="rejeitarAtualizacao()">Rejeitar</button>
         <span id="publicar-status" class="note" style="margin:0"></span>
       </div>
     </div>
@@ -723,6 +725,32 @@ function abrirAcessos(){ renderAcessos(); document.getElementById('modal-acessos
 function fecharAcessos(){ document.getElementById('modal-acessos').classList.add('hidden'); }
 /* Publicar atualização: chama /api/deploy (git pull no servidor) autenticado pelo Supabase.
    Só o coordenador vê o botão; a rota também confere o e-mail no servidor. */
+/* lista de alterações pendentes (tabela changelog) mostrada antes de publicar */
+async function renderPublicarResumo(){
+  var el=document.getElementById('publicar-resumo'); if(!el) return;
+  var bp=document.getElementById('btn-publicar'), br=document.getElementById('btn-rejeitar');
+  try{
+    var sb=window.__sb; if(!sb){ el.innerHTML='<div class="note">Sessão não encontrada.</div>'; return; }
+    var r=await sb.from('changelog').select('*').eq('status','pendente').order('criado_em',{ascending:true}).limit(100);
+    if(r&&r.error){ el.innerHTML='<div class="note">Não foi possível ler as novidades.</div>'; return; }
+    var itens=(r&&r.data)||[];
+    window.__pendentes=itens;
+    if(!itens.length){
+      el.innerHTML='<div class="note" style="padding:8px 10px;background:#eef4fb;border-radius:8px;color:#22405f">Nenhuma alteração pendente — o sistema já está na versão publicada.</div>';
+      if(bp) bp.disabled=true; if(br) br.style.display='none';
+      return;
+    }
+    if(bp) bp.disabled=false; if(br) br.style.display='';
+    el.innerHTML='<div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:6px">'+itens.length+' alteração(ões) a publicar:</div>'+itens.map(function(c){
+      var d=(c.criado_em||'').slice(0,10).split('-').reverse().join('/');
+      return '<div style="border:1px solid var(--line);border-left:4px solid var(--gold);border-radius:9px;padding:9px 11px;margin-bottom:7px">'+
+        '<div style="font-weight:700;color:var(--navy);font-size:13.5px">'+esc(c.resumo||'')+'</div>'+
+        (c.detalhe?('<div style="font-size:12.5px;color:#475569;margin-top:3px">'+esc(c.detalhe)+'</div>'):'')+
+        '<div class="note" style="font-size:11px;margin-top:4px">'+esc(d)+'</div>'+
+      '</div>';
+    }).join('');
+  }catch(e){ el.innerHTML='<div class="note">Erro ao ler novidades: '+esc(e&&e.message||e)+'</div>'; }
+}
 async function publicarAtualizacao(){
   var btn=document.getElementById('btn-publicar'), st=document.getElementById('publicar-status');
   if(!btn) return;
@@ -734,13 +762,28 @@ async function publicarAtualizacao(){
     var r=await fetch('/api/deploy',{method:'POST',headers:{'Authorization':'Bearer '+jwt}});
     var j={}; try{ j=await r.json(); }catch(e){}
     if(r.ok && j.ok){
-      if(j.jaAtualizado){ if(st){ st.style.color='#0F6E56'; st.textContent='Já estava na versão mais recente.'; } }
+      /* marca as alterações listadas como publicadas */
+      try{ if(sb){ await sb.from('changelog').update({status:'publicado',decidido_em:new Date().toISOString()}).eq('status','pendente'); } }catch(eM){}
+      if(j.jaAtualizado){ if(st){ st.style.color='#0F6E56'; st.textContent='Já estava na versão mais recente.'; } renderPublicarResumo(); }
       else{ if(st){ st.style.color='#0F6E56'; st.textContent='Publicado! ('+(j.de||'')+' → '+(j.para||'')+'). Recarregando…'; } setTimeout(function(){ location.reload(true); }, 1400); }
     } else {
       if(st){ st.style.color='#b5342b'; st.textContent='Falha ao publicar: '+((j&&(j.erro||j.saida))||('HTTP '+r.status)); }
     }
   }catch(e){ if(st){ st.style.color='#b5342b'; st.textContent='Erro: '+(e&&e.message||e); } }
   btn.disabled=false; btn.textContent=txt0;
+}
+async function rejeitarAtualizacao(){
+  var st=document.getElementById('publicar-status');
+  var n=((window.__pendentes||[]).length)||0;
+  if(!n){ return; }
+  if(!confirm('Rejeitar '+n+' alteração(ões)?\n\nA versão atual continua no ar e estes itens somem da lista. As alterações permanecem guardadas e podem ser publicadas depois, se você quiser.')) return;
+  try{
+    var sb=window.__sb; if(!sb) return;
+    var r=await sb.from('changelog').update({status:'rejeitado',decidido_em:new Date().toISOString()}).eq('status','pendente');
+    if(r&&r.error){ if(st){ st.style.color='#b5342b'; st.textContent='Não foi possível rejeitar: '+r.error.message; } return; }
+    if(st){ st.style.color='#0F6E56'; st.textContent='Alterações rejeitadas. A versão atual permanece no ar.'; }
+    renderPublicarResumo();
+  }catch(e){ if(st){ st.style.color='#b5342b'; st.textContent='Erro: '+(e&&e.message||e); } }
 }
 function renderAcessos(){
   var body=document.getElementById('acessos-body'); if(!body) return;
@@ -750,6 +793,7 @@ function renderAcessos(){
     ? 'Você é o coordenador: pode cadastrar, editar, renomear, ativar/desativar qualquer acesso.'
     : 'Você pode cadastrar e alterar apenas o seu próprio acesso (e-mail e senha).';
   var bp=document.getElementById('bloco-publicar'); if(bp) bp.style.display=ehCoord?'block':'none';
+  if(ehCoord) renderPublicarResumo();
   body.innerHTML=(USUARIOS_VISUAIS||[]).map(function(u){
     var p=perfis[u.perfil]||perfis.adv;
     var pode=_podeGerenciarAcesso(u);
