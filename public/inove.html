@@ -143,8 +143,11 @@
             </div>
             <div style="margin-top:10px;display:flex;gap:8px;align-items:center"><button class="btn gold sm" onclick="salvarNovoProc()">Salvar</button><button class="btn ghost sm" onclick="abrirNovoProc(true)">Cancelar</button><span id="np-msg" class="note"></span></div>
           </div>
-          <input id="proc-busca" oninput="renderProc()" placeholder="Buscar por cliente, número ou assunto…" style="margin-bottom:10px">
-          <div style="overflow-x:auto"><table><thead><tr><th style="width:34%">Partes</th><th style="width:170px">Processo</th><th>Assunto</th><th style="width:120px">Últ. movim.</th></tr></thead><tbody id="proc-body"></tbody></table></div>
+          <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+            <input id="proc-busca" oninput="renderProc()" placeholder="Buscar por partes, número ou assunto…" style="flex:1;min-width:180px">
+            <select id="proc-ord" onchange="PROC_ORD=this.value;renderProc()" style="width:auto"><option value="prazo">Prazo fatal (mais próximo)</option><option value="partes">Partes (A→Z)</option><option value="mov">Movimentação recente</option></select>
+          </div>
+          <div style="overflow-x:auto"><table><thead><tr><th style="width:28%">Partes</th><th style="width:160px">Processo</th><th>Assunto</th><th style="width:130px">Responsável</th><th style="width:100px">Prazo fatal</th><th style="width:100px">Últ. movim.</th></tr></thead><tbody id="proc-body"></tbody></table></div>
           <p class="note" id="proc-vazio" style="display:none;margin-top:8px">Nenhum processo.</p>
         </div>
         <div class="card hidden" id="proc-det"></div>
@@ -221,7 +224,8 @@
   var SB_URL='https://ndeqlyrydcijbgjiviuw.supabase.co';
   var SB_KEY='sb_publishable_X5Jo69qYCQOMEg0fu2yc1w_gIYwWuQD';
   var sb=window.supabase.createClient(SB_URL,SB_KEY);
-  var TRIB=[], CFG={}, PROC=[], SOL=[], TAR=[], IS_ADMIN=false;
+  var TRIB=[], CFG={}, PROC=[], SOL=[], TAR=[], MEMBROS=[], IS_ADMIN=false;
+  var PROC_ORD='prazo';
   var KAN_COLS=[['afazer','A fazer'],['fazendo','Fazendo'],['revisao','Em revisão'],['concluido','Concluído']];
   var CAD_SIT=[['a_fazer','A fazer','#8a8f98','#eef0f3'],['enviado','Enviado','#185FA5','#e3edf7'],['em_analise','Em análise','#8a6d1a','#fbf1dc'],['pendencia','Pendência','#b5342b','#fbeceb'],['cadastrado','Cadastrado','#0F6E56','#e5f4ed']];
   var ISOL_SIT=[['novo','Aguardando análise','#8a6d1a','#fbf1dc'],['aprovado','Aprovada — aguardando pagamento','#185FA5','#e3edf7'],['pago','Paga','#0F6E56','#e5f4ed'],['em_andamento','Em desenvolvimento','#6d28a8','#f1e9fa'],['concluido','Concluída','#0F6E56','#e5f4ed'],['recusado','Recusada','#b5342b','#fbeceb']];
@@ -273,8 +277,9 @@
   async function carregar(){
     var rc=await sb.from('inove_config').select('chave,valor'); CFG={}; (rc.data||[]).forEach(function(x){CFG[x.chave]=x.valor||'';});
     var rt=await sb.from('inove_tribunais').select('*').order('uf'); TRIB=rt.data||[];
-    var rp=await sb.from('processos').select('id,numero,cliente_nome,oponente,assunto,status,ultima_movimentacao').eq('inove',true).order('cliente_nome'); PROC=rp.data||[];
+    var rp=await sb.from('processos').select('id,numero,cliente_nome,oponente,assunto,status,ultima_movimentacao,inove_responsavel').eq('inove',true).order('cliente_nome'); PROC=rp.data||[];
     var rtar=await sb.from('inove_tarefas').select('*').order('prazo',{ascending:true}); TAR=rtar.data||[];
+    var rm=await sb.from('inove_membros').select('nome,email').order('nome'); MEMBROS=rm.data||[];
     var u=await sb.auth.getUser(); var em=((u&&u.data&&u.data.user&&u.data.user.email)||'').toLowerCase();
     var nm=(u&&u.data&&u.data.user&&u.data.user.user_metadata&&u.data.user.user_metadata.nome)||'';
     var admins=(CFG.admin_emails||'').toLowerCase().split(',').map(function(s){return s.trim();}).filter(Boolean);
@@ -342,26 +347,46 @@
     var r=await sb.from('processos').insert(reg);
     if(r&&r.error){ msg.style.color='#b5342b'; msg.textContent='Erro: '+r.error.message; return; }
     document.getElementById('proc-form').classList.add('hidden');
-    var rp=await sb.from('processos').select('id,numero,cliente_nome,oponente,assunto,status,ultima_movimentacao').eq('inove',true).order('cliente_nome'); PROC=rp.data||[];
+    var rp=await sb.from('processos').select('id,numero,cliente_nome,oponente,assunto,status,ultima_movimentacao,inove_responsavel').eq('inove',true).order('cliente_nome'); PROC=rp.data||[];
     document.getElementById('cnt-proc').textContent=PROC.length||'';
     renderProc();
+  }
+  function prazoFatalDe(numero){
+    var hoje=new Date().toISOString().slice(0,10);
+    var ps=TAR.filter(function(t){return t.processo_numero && !t.concluida && t.prazo && String(t.processo_numero).replace(/\D/g,'')===String(numero||'').replace(/\D/g,'');})
+      .map(function(t){return String(t.prazo);}).sort();
+    return ps[0]||'';
   }
   function renderProc(){
     document.getElementById('proc-det').classList.add('hidden');
     var lim=_lim('proc_limite',200);
     var uso=document.getElementById('proc-uso'); if(uso) uso.textContent='('+PROC.length+' de '+lim+')';
     var q=((document.getElementById('proc-busca')||{}).value||'').toLowerCase().trim();
-    var lista=PROC.filter(function(p){ if(!q)return true; return ((p.cliente_nome||'')+' '+(p.numero||'')+' '+(p.assunto||'')).toLowerCase().indexOf(q)>-1; });
+    var lista=PROC.filter(function(p){ if(!q)return true; return ((p.cliente_nome||'')+' '+(p.oponente||'')+' '+(p.numero||'')+' '+(p.assunto||'')).toLowerCase().indexOf(q)>-1; });
+    lista.forEach(function(p){ p.__pf=prazoFatalDe(p.numero); });
+    if(PROC_ORD==='prazo') lista.sort(function(a,b){ if(!a.__pf&&!b.__pf)return 0; if(!a.__pf)return 1; if(!b.__pf)return -1; return a.__pf.localeCompare(b.__pf); });
+    else if(PROC_ORD==='partes') lista.sort(function(a,b){ return (a.cliente_nome||'').localeCompare(b.cliente_nome||''); });
+    else if(PROC_ORD==='mov') lista.sort(function(a,b){ return String(b.ultima_movimentacao||'').localeCompare(String(a.ultima_movimentacao||'')); });
+    var hoje=new Date().toISOString().slice(0,10);
     var b=document.getElementById('proc-body'); b.innerHTML='';
     document.getElementById('proc-vazio').style.display=lista.length?'none':'block';
+    var opMemb='<option value="">—</option>'+MEMBROS.map(function(m){var v=m.nome||m.email;return '<option value="'+esc(v)+'">'+esc(v)+'</option>';}).join('');
     lista.forEach(function(p){
-      var tr=document.createElement('tr'); tr.className='click'; tr.onclick=function(){abrirFicha(p.id);};
-      tr.innerHTML='<td style="font-weight:700;color:var(--navy)">'+esc(p.cliente_nome||'—')+(p.oponente?('<div class="note" style="font-weight:400">× '+esc(p.oponente)+'</div>'):'')+'</td>'
-        +'<td style="font-family:ui-monospace,monospace;font-size:12px">'+esc(p.numero||'')+'</td>'
-        +'<td style="font-size:12.5px">'+esc(p.assunto||'')+'</td>'
+      var tr=document.createElement('tr');
+      var resp='<select onchange="salvarResp('+ "'"+p.id+"'" +',this.value)" onclick="event.stopPropagation()" style="width:100%;font-size:12px;padding:4px 6px">'+opMemb.replace('value="'+esc(p.inove_responsavel||'')+'"','value="'+esc(p.inove_responsavel||'')+'" selected')+'</select>';
+      var pf=p.__pf; var atras=(pf && pf<hoje);
+      tr.innerHTML='<td class="click" onclick="abrirFicha('+"'"+p.id+"'"+')" style="font-weight:700;color:var(--navy)">'+esc(p.cliente_nome||'—')+(p.oponente?('<div class="note" style="font-weight:400">× '+esc(p.oponente)+'</div>'):'')+'</td>'
+        +'<td class="click" onclick="abrirFicha('+"'"+p.id+"'"+')" style="font-family:ui-monospace,monospace;font-size:12px">'+esc(p.numero||'')+'</td>'
+        +'<td class="click" onclick="abrirFicha('+"'"+p.id+"'"+')" style="font-size:12.5px">'+esc(p.assunto||'')+'</td>'
+        +'<td>'+resp+'</td>'
+        +'<td style="font-weight:700;color:'+(atras?'#b5342b':'var(--navy)')+'">'+(pf?fdata(pf):'<span class="note">—</span>')+'</td>'
         +'<td>'+esc(fdata(p.ultima_movimentacao))+'</td>';
       b.appendChild(tr);
     });
+  }
+  async function salvarResp(id,valor){
+    var p=PROC.find(function(x){return String(x.id)===String(id);}); if(p)p.inove_responsavel=valor||null;
+    await sb.from('processos').update({inove_responsavel:valor||null,atualizado_em:new Date().toISOString()}).eq('id',id);
   }
   async function abrirFicha(id){
     var det=document.getElementById('proc-det');
@@ -377,7 +402,11 @@
       +'<div><div style="font-weight:800;color:var(--navy);font-size:16px">'+esc(p.cliente_nome||'—')+'</div>'
       +(p.oponente?('<div class="note">× '+esc(p.oponente)+'</div>'):'')
       +'<div style="font-family:ui-monospace,monospace;font-size:12.5px;margin-top:4px">'+esc(p.numero||'')+'</div></div>'
-      +'<button class="btn ghost sm" onclick="renderProc()">← voltar</button></div>';
+      +'<button class="btn ghost sm" onclick="renderProc()">← voltar</button></div>'
+      +'<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">'
+        +'<button class="btn sm" onclick="novaTarefaProc('+"'"+esc(p.numero||'')+"'"+')">+ Nova tarefa neste processo</button>'
+        +'<button class="btn ghost sm" onclick="abrirNoTribunal('+"'"+esc(p.numero||'')+"'"+')">⚖ Abrir no tribunal</button>'
+      +'</div>';
     var dados='<div style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px">'
       +'<p class="sectlabel">Dados do processo</p>'
       +lin('Assunto',p.assunto)+lin('Classe',p.classe)+lin('Órgão/Vara',p.orgao)+lin('Foro',p.foro)
@@ -482,6 +511,19 @@
     var r=await sb.from('inove_solicitacoes').update(upd).eq('id',id);
     if(r&&r.error){alert('Não foi possível salvar: '+r.error.message);return;}
     renderSol();
+  }
+
+  function novaTarefaProc(numero){
+    ir('agenda');
+    abrirNovaTarefa();
+    var pi=document.getElementById('nt-proc'); if(pi) pi.value=numero||'';
+    var ti=document.getElementById('nt-titulo'); if(ti) ti.focus();
+  }
+  function abrirNoTribunal(numero){
+    try{ if(navigator.clipboard&&numero) navigator.clipboard.writeText(numero); }catch(e){}
+    var digs=String(numero||'').replace(/\D/g,'');
+    var url='https://comunica.pje.jus.br/consulta?numeroProcesso='+digs;
+    window.open(url,'_blank','noopener');
   }
 
   /* ===== Agenda / Kanban (só prazos e tarefas) ===== */
