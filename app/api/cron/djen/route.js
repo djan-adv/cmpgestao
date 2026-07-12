@@ -35,6 +35,19 @@ async function consultaDjen(numero, uf, dias) {
   return itens
 }
 
+// Consulta o DJEN por NÚMERO do processo (usado nos processos da Inove, onde cada
+// processo tem um advogado diferente — não dá para buscar por OAB).
+async function consultaDjenNumero(numeroDigits, dias) {
+  const fim = new Date(), ini = new Date(Date.now() - dias * 86400000)
+  const url = `${DJEN}?numeroProcesso=${numeroDigits}&dataDisponibilizacaoInicio=${iso(ini)}&dataDisponibilizacaoFim=${iso(fim)}&meio=D&pagina=1&itensPorPagina=100`
+  try {
+    const r = await fetch(url, { headers: { Accept: 'application/json', 'User-Agent': UA }, signal: AbortSignal.timeout(20000) })
+    if (!r.ok) return []
+    const d = await r.json()
+    return d.items || d.content || d.comunicacoes || []
+  } catch (e) { return [] }
+}
+
 export async function GET(request) {
   const { searchParams } = new URL(request.url)
   const dias = parseInt(searchParams.get('dias') || '2', 10) || 2
@@ -56,6 +69,23 @@ export async function GET(request) {
   let pubs = []
   for (const o of OABS) { const it = await consultaDjen(o.numero, o.uf, dias); pubs = pubs.concat(it) }
 
+  // Processos da Inove: consulta por NÚMERO (cada um tem advogado diferente).
+  // Lê a lista dos números com a chave de serviço (se disponível) e junta às publicações.
+  let inoveNums = 0
+  const svc = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (svc) {
+    try {
+      const sbAdmin = createClient(url, svc, { auth: { persistSession: false } })
+      const { data: rows } = await sbAdmin.from('processos').select('numero').eq('inove', true).is('fora_inove', false)
+      const nums = [...new Set((rows || []).map(r => String(r.numero || '').replace(/\D/g, '')).filter(n => n.length >= 16))]
+      inoveNums = nums.length
+      for (const dig of nums) {
+        const it = await consultaDjenNumero(dig, dias)
+        pubs = pubs.concat(it)
+      }
+    } catch (e) { /* segue só com as OABs */ }
+  }
+
   let inseridos = 0, jaTinha = 0, semProcesso = 0, erros = 0
   for (const p of pubs) {
     const dig = String(p.numeroProcesso || p.numero_processo || '').replace(/\D/g, '')
@@ -68,5 +98,5 @@ export async function GET(request) {
     else if (res === 'existe') jaTinha++
     else semProcesso++
   }
-  return Response.json({ ok: true, oabs: OABS.length, publicacoes: pubs.length, inseridos, jaTinha, semProcesso, erros, dias })
+  return Response.json({ ok: true, oabs: OABS.length, inoveNums, publicacoes: pubs.length, inseridos, jaTinha, semProcesso, erros, dias })
 }
