@@ -59,6 +59,21 @@ export async function POST(request) {
   const ok = pull.code === 0
   const jaAtual = ok && de === para
 
+  // Reinicia o processo APÓS responder, para que o Next.js passe a servir os
+  // arquivos estáticos novos/alterados (public/*.html) — sem isso, mudanças em
+  // arquivos estáticos só aparecem após um restart manual. Detached + delay para
+  // a resposta HTTP terminar antes do restart derrubar o processo.
+  if (ok && !jaAtual) {
+    try {
+      setTimeout(() => {
+        try {
+          exec('pm2 restart cmpgestao || npx pm2 restart cmpgestao || /usr/bin/pm2 restart cmpgestao',
+            { timeout: 20000 }, () => {})
+        } catch (e) { /* best-effort */ }
+      }, 1500)
+    } catch (e) { /* best-effort */ }
+  }
+
   return Response.json({
     ok,
     atualizou: ok && de !== para,
