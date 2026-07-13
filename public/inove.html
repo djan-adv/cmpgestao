@@ -109,7 +109,7 @@
 <!-- APP -->
 <div id="tela-app" class="hidden">
   <aside class="side">
-    <div class="brand"><b>Portal do Perito</b><span>Cadastro pericial · v12</span></div>
+    <div class="brand"><b>Portal do Perito</b><span>Cadastro pericial · v13</span></div>
     <nav>
       <a id="nav-painel" class="on" onclick="ir('painel')"><span class="ic">▤</span> Painel</a>
       <a id="nav-proc" onclick="ir('proc')"><span class="ic">⚖</span> Processos judiciais <span class="cnt" id="cnt-proc"></span></a>
@@ -515,7 +515,7 @@
     document.getElementById('proc-lista-card').classList.add('hidden');
     det.classList.remove('hidden'); det.innerHTML='<div class="note">Abrindo ficha…</div>';
     window.scrollTo(0,0);
-    var rp=await sb.from('processos').select('id,numero,cliente_nome,oponente,assunto,classe,orgao,foro,status,valor_causa,distribuido_em,fonte,observacoes,hon_per_fixado,hon_per_recebido,hon_per_areceber').eq('id',id).single();
+    var rp=await sb.from('processos').select('id,numero,cliente_nome,oponente,assunto,classe,orgao,foro,status,valor_causa,distribuido_em,fonte,observacoes,hon_per_fixado,hon_per_recebido,hon_per_areceber,inove_advogados').eq('id',id).single();
     var p=(rp&&rp.data)||{};
     var ra=await sb.from('andamentos').select('data,texto,fonte').eq('processo_id',id).order('data',{ascending:false});
     var hist=(ra&&ra.data)||[];
@@ -538,6 +538,11 @@
       +honIn('Valor recebido','hon_per_recebido',p.hon_per_recebido)
       +honIn('Valor a receber','hon_per_areceber',p.hon_per_areceber)
       +'</div>';
+    var advs=Array.isArray(p.inove_advogados)?p.inove_advogados:[];
+    var advBox=advs.length?('<div style="margin-top:12px;border:1px solid var(--line);border-radius:12px;padding:12px 14px">'
+      +'<div style="font-size:12px;font-weight:800;letter-spacing:.3px;text-transform:uppercase;color:var(--muted);margin-bottom:6px">Advogados (do DJEN)</div>'
+      +advs.map(function(a){return '<div style="font-size:12.8px;padding:2px 0">• '+esc(a)+'</div>';}).join('')
+      +'</div>'):'';
     var dados='<div style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px">'
       +'<p class="sectlabel">Dados do processo</p>'
       +lin('Assunto',p.assunto)+lin('Classe',p.classe)+lin('Órgão/Vara',p.orgao)+lin('Foro',p.foro)
@@ -552,7 +557,7 @@
           +'<div style="font-size:12.8px;white-space:pre-wrap;margin-top:2px">'+esc(h.texto||'')+'</div></div>';
       }).join(''):'<div class="note">Sem movimentações registradas.</div>')
       +'</div>';
-    det.innerHTML=head+honper+dados+timeline;
+    det.innerHTML=head+honper+advBox+dados+timeline;
   }
   async function salvarHonPer(id,campo,raw){
     var v=String(raw||'').replace(/[^0-9,.-]/g,'').replace(/\./g,'').replace(',','.');
