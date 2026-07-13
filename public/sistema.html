@@ -740,7 +740,7 @@ async function renderPublicarResumo(){
     var pend=itens.filter(function(c){return c.status==='pendente';});
     var refm=itens.filter(function(c){return c.status==='reformular';});
     window.__pendentes=pend;
-    if(bp) bp.disabled=!pend.length;
+    if(bp) bp.disabled=false;  /* publicar no servidor sempre disponível (independe das aprovações) */
     var html='';
     if(!pend.length && !refm.length){
       el.innerHTML='<div class="note" style="padding:8px 10px;background:#eef4fb;border-radius:8px;color:#22405f">Nenhuma alteração pendente — tudo decidido.</div>';
@@ -809,8 +809,7 @@ async function publicarAtualizacao(){
     var r=await fetch('/api/deploy',{method:'POST',headers:{'Authorization':'Bearer '+jwt}});
     var j={}; try{ j=await r.json(); }catch(e){}
     if(r.ok && j.ok){
-      /* marca as pendentes como publicadas; as 'reformular' permanecem */
-      try{ if(sb){ await sb.from('changelog').update({status:'publicado',decidido_em:new Date().toISOString()}).eq('status','pendente'); } }catch(eM){}
+      /* NÃO marca em massa: cada alteração é aprovada/rejeitada individualmente. */
       if(j.jaAtualizado){ if(st){ st.style.color='#0F6E56'; st.textContent='Já estava na versão mais recente.'; } renderPublicarResumo(); }
       else{ if(st){ st.style.color='#0F6E56'; st.textContent='Publicado! ('+(j.de||'')+' → '+(j.para||'')+'). Recarregando…'; } setTimeout(function(){ location.reload(true); }, 1400); }
     } else {
