@@ -23,6 +23,16 @@ async function usuario(request) {
 function admin() {
   return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } })
 }
+// CORS para o relay do userscript (roda no domínio do jus.br). Só liberamos o
+// necessário (POST + o header do segredo). O segredo continua sendo a barreira real.
+const CORS = {
+  'Access-Control-Allow-Origin': 'https://portaldeservicos.pdpj.jus.br',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, x-jusbr-relay',
+  'Access-Control-Max-Age': '86400',
+}
+export async function OPTIONS() { return new Response(null, { status: 204, headers: CORS }) }
+
 // lê o "exp" do JWT sem validar assinatura (só p/ saber quando expira)
 function expDoJwt(t) {
   try {
@@ -49,15 +59,15 @@ export async function POST(request) {
   let body
   try { body = await request.json() } catch (e) { return Response.json({ erro: 'json inválido' }, { status: 400 }) }
   const token = String(body.token || '').trim()
-  if (token.split('.').length !== 3) return Response.json({ erro: 'token inválido (esperado um JWT do PDPJ)' }, { status: 400 })
+  if (token.split('.').length !== 3) return Response.json({ erro: 'token inválido (esperado um JWT do PDPJ)' }, { status: 400, headers: CORS })
   const expira = expDoJwt(token)
   const sb = admin()
   const { error } = await sb.from('jusbr_sessao').upsert({
     escritorio_id: ESCRITORIO_CMP, token, expira,
     atualizado_por: quem, atualizado_em: new Date().toISOString(),
   }, { onConflict: 'escritorio_id' })
-  if (error) return Response.json({ erro: 'falha ao salvar token: ' + error.message }, { status: 500 })
-  return Response.json({ ok: true, expira })
+  if (error) return Response.json({ erro: 'falha ao salvar token: ' + error.message }, { status: 500, headers: CORS })
+  return Response.json({ ok: true, expira }, { headers: CORS })
 }
 
 // GET: status da sessão (sem devolver o token)
