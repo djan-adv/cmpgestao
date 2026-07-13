@@ -1289,7 +1289,7 @@ function abrir(i){
     '<span id="obs-acoes"></span></p><div id="obs-corpo"></div></div>';
   // histórico (termos oficiais)
   /* aba "Publicações com inteiro teor (DJEN)" removida a pedido — sem utilidade prática */
-  html+='<div class="card"><p class="sectlabel" style="display:flex;justify-content:space-between;align-items:center">Histórico completo (termos oficiais)'+(p.hist_full&&p.hist_full.length?(' — '+p.hist_full.length+' andamentos'):'')+'<button class="btn sm ghost" style="font-size:12px" onclick="addHistManual()">+ histórico manual</button></p><ul class="timeline" id="det-hist"></ul><div id="det-hist-more" style="margin-top:8px"></div></div>';
+  html+='<div class="card"><p class="sectlabel" style="display:flex;justify-content:space-between;align-items:center">Histórico completo (termos oficiais)'+(p.hist_full&&p.hist_full.length?(' — '+p.hist_full.length+' andamentos'):'')+'<span style="display:flex;gap:6px"><button id="btn-atu-hist" class="btn sm" style="font-size:12px" onclick="atualizarHistorico()" title="Consulta o DJEN e traz os andamentos novos deste processo">↻ Atualizar</button><button class="btn sm ghost" style="font-size:12px" onclick="addHistManual()">+ histórico manual</button></span></p><ul class="timeline" id="det-hist"></ul><div id="det-hist-more" style="margin-top:8px"></div></div>';
   // documentos do jus.br (PDPJ) — puxa sob demanda a peça escolhida (some após 30 dias)
   html+='<div class="card cmp-only" id="jusbr-card"><p class="sectlabel" style="display:flex;justify-content:space-between;align-items:center">Documentos do jus.br <button class="btn sm" style="font-size:12px" onclick="jusbrCarregar(\''+esc(p.numero)+'\')">Carregar documentos</button></p><div id="jusbr-status" class="note" style="margin-bottom:6px">Lista as peças do processo no jus.br. O arquivo escolhido é baixado sob demanda e removido do sistema após 30 dias (o original fica no tribunal).</div><div id="jusbr-lista"></div></div>';
   // IA
@@ -2662,6 +2662,29 @@ async function excluirHistManual(ev,hix){
   atual.hist_full.splice(hix,1); renderHistorico();
 }
 function verMaisHist(){histShown=99999;renderHistorico();}
+
+/* ===== Atualizar histórico agora (DJEN por número, só os novos) ===== */
+async function atualizarHistorico(){
+  if(typeof atual==='undefined' || !atual || !atual.numero) return;
+  var btn=document.getElementById('btn-atu-hist'); var t0=btn?btn.textContent:'';
+  if(btn){ btn.disabled=true; btn.textContent='atualizando…'; }
+  try{
+    var jwt=await jusbrJwt();
+    var r=await fetch('/api/djen/processo',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+jwt},body:JSON.stringify({numero:atual.numero})});
+    var d=await r.json();
+    if(!r.ok){ alert('Falha ao atualizar: '+((d&&d.erro)||'erro')); }
+    else{
+      if(d.novos>0 && atual._id){
+        try{
+          var q=await window.__sb.from('andamentos').select('id,data,texto,fonte').eq('processo_id',atual._id).order('data',{ascending:false});
+          if(q&&q.data){ atual.hist_full=q.data.map(function(a){return {id:a.id,data:(a.data?a.data+'T00:00:00.000Z':null),texto:a.texto,f:a.fonte||''};}); histShown=6; renderHistorico(); }
+        }catch(e){}
+      }
+      alert(d.novos>0 ? (d.novos+' novo(s) andamento(s) trazidos do DJEN.') : 'Nenhum andamento novo no DJEN (últimos '+(d.dias||90)+' dias).');
+    }
+  }catch(e){ alert('Falha: '+(e&&e.message||e)); }
+  if(btn){ btn.disabled=false; btn.textContent=t0; }
+}
 
 /* ===== Documentos do jus.br (PDPJ) — puxar a peça escolhida sob demanda ===== */
 async function jusbrJwt(){ try{ var s=await window.__sb.auth.getSession(); return (s&&s.data&&s.data.session&&s.data.session.access_token)||''; }catch(e){ return ''; } }
