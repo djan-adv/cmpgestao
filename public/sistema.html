@@ -1290,6 +1290,8 @@ function abrir(i){
   // histórico (termos oficiais)
   /* aba "Publicações com inteiro teor (DJEN)" removida a pedido — sem utilidade prática */
   html+='<div class="card"><p class="sectlabel" style="display:flex;justify-content:space-between;align-items:center">Histórico completo (termos oficiais)'+(p.hist_full&&p.hist_full.length?(' — '+p.hist_full.length+' andamentos'):'')+'<button class="btn sm ghost" style="font-size:12px" onclick="addHistManual()">+ histórico manual</button></p><ul class="timeline" id="det-hist"></ul><div id="det-hist-more" style="margin-top:8px"></div></div>';
+  // documentos do jus.br (PDPJ) — puxa sob demanda a peça escolhida (some após 30 dias)
+  html+='<div class="card cmp-only" id="jusbr-card"><p class="sectlabel" style="display:flex;justify-content:space-between;align-items:center">Documentos do jus.br <button class="btn sm" style="font-size:12px" onclick="jusbrCarregar(\''+esc(p.numero)+'\')">Carregar documentos</button></p><div id="jusbr-status" class="note" style="margin-bottom:6px">Lista as peças do processo no jus.br. O arquivo escolhido é baixado sob demanda e removido do sistema após 30 dias (o original fica no tribunal).</div><div id="jusbr-lista"></div></div>';
   // IA
   if(!KAN)initKanban(); initAgenda();
   var _ativs=(KAN||[]).filter(function(k){return k.numero===p.numero;});
@@ -2660,6 +2662,51 @@ async function excluirHistManual(ev,hix){
   atual.hist_full.splice(hix,1); renderHistorico();
 }
 function verMaisHist(){histShown=99999;renderHistorico();}
+
+/* ===== Documentos do jus.br (PDPJ) — puxar a peça escolhida sob demanda ===== */
+async function jusbrJwt(){ try{ var s=await window.__sb.auth.getSession(); return (s&&s.data&&s.data.session&&s.data.session.access_token)||''; }catch(e){ return ''; } }
+function jusbrMsgErro(d){ var m=(d&&d.erro)||'erro'; if(d&&(d.motivo==='sem_token'||d.motivo==='expirado')){ m+=' — abra o jus.br logado (o token sincroniza sozinho pelo Tampermonkey).'; } return esc(m); }
+function jusbrItemHtml(doc){
+  var dt=doc.data?String(doc.data).slice(0,10).split('-').reverse().join('/'):'';
+  var nomeJs=String(doc.nome||'documento').replace(/['"\\]/g,' ');
+  var acao= doc.baixado_id
+    ? '<a class="btn sm ghost" style="font-size:11px" href="#" onclick="jusbrAbrir(event,\''+doc.baixado_id+'\')">📄 ver</a> <a class="btn sm ghost" style="font-size:11px;color:#b5342b" href="#" onclick="jusbrExcluir(event,\''+doc.baixado_id+'\',this)">🗑</a>'
+    : '<button class="btn sm" style="font-size:11px" onclick="jusbrBaixar(this,\''+esc(doc.uuid||'')+'\',\''+esc(doc.href||'')+'\',\''+esc(nomeJs)+'\')">⬇ puxar</button>';
+  return '<div class="jusbr-item" data-uuid="'+esc(doc.uuid||'')+'" style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #eee"><div style="font-size:13px"><span style="color:#888">'+dt+'</span> '+esc(doc.nome||'documento')+'</div><div class="jusbr-acao" style="white-space:nowrap">'+acao+'</div></div>';
+}
+async function jusbrCarregar(numero){
+  var st=document.getElementById('jusbr-status'), lista=document.getElementById('jusbr-lista');
+  if(!st) return; st.textContent='Consultando o jus.br…'; if(lista)lista.innerHTML='';
+  window.__jusbrNum=numero;
+  var jwt=await jusbrJwt();
+  try{
+    var r=await fetch('/api/jusbr/documentos',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+jwt},body:JSON.stringify({numero:numero})});
+    var d=await r.json();
+    if(!r.ok){ st.innerHTML=jusbrMsgErro(d); return; }
+    if(!d.documentos||!d.documentos.length){ st.textContent='Nenhum documento retornado pelo jus.br.'; return; }
+    st.textContent=d.total+' documento(s) — clique em "puxar" no que quiser ver:';
+    if(lista)lista.innerHTML=d.documentos.map(jusbrItemHtml).join('');
+  }catch(e){ st.textContent='Falha: '+(e&&e.message||e); }
+}
+async function jusbrBaixar(btn,uuid,href,nome){
+  btn.disabled=true; var t0=btn.textContent; btn.textContent='baixando…';
+  var jwt=await jusbrJwt();
+  try{
+    var r=await fetch('/api/jusbr/documento',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+jwt},body:JSON.stringify({numero:window.__jusbrNum,uuid:uuid,href:href,nome:nome})});
+    var d=await r.json();
+    if(!r.ok){ alert('jus.br: '+((d&&d.erro)||'falha ao puxar')); btn.disabled=false; btn.textContent=t0; return; }
+    var acao=btn.closest('.jusbr-acao');
+    if(acao) acao.innerHTML='<a class="btn sm ghost" style="font-size:11px" href="#" onclick="jusbrAbrir(event,\''+d.id+'\')">📄 ver</a> <a class="btn sm ghost" style="font-size:11px;color:#b5342b" href="#" onclick="jusbrExcluir(event,\''+d.id+'\',this)">🗑</a>';
+  }catch(e){ alert('Falha: '+(e&&e.message||e)); btn.disabled=false; btn.textContent=t0; }
+}
+async function jusbrAbrir(ev,id){ if(ev)ev.preventDefault(); var jwt=await jusbrJwt(); window.open('/api/jusbr/arquivo?id='+encodeURIComponent(id)+'&jwt='+encodeURIComponent(jwt),'_blank'); }
+async function jusbrExcluir(ev,id,el){ if(ev)ev.preventDefault(); if(!confirm('Excluir este arquivo do sistema? (o original continua no jus.br)')) return;
+  try{ var w=await window.__sb.from('jusbr_arquivos').delete().eq('id',id).select('id');
+    if(w.error||!w.data||!w.data.length){ alert('Não foi possível excluir.'); return; }
+    var acao=el.closest('.jusbr-acao'), item=el.closest('.jusbr-item'); var uuid=item?item.getAttribute('data-uuid'):'';
+    if(acao) acao.innerHTML='<button class="btn sm" style="font-size:11px" onclick="jusbrBaixar(this,\''+esc(uuid)+'\',\'\',\'documento\')">⬇ puxar</button>';
+  }catch(e){ alert('Falha ao excluir'); }
+}
 function verMenosHist(){histShown=10;renderHistorico();window.scrollTo(0,0);}
 
 /* formata data do cartão: ISO (2026-07-09) ou dd/mm/aaaa -> dd/mm */
