@@ -1,0 +1,44 @@
+// jus.br / PDPJ — servir um arquivo já baixado (visualizar/baixar no sistema).
+//   GET /api/jusbr/arquivo?id=<uuid>[&dl=1]   (Authorization: Bearer <jwt> OU ?jwt=)
+// Devolve o PDF guardado (jusbr_arquivos). Aceita o JWT no header ou na query
+// (a query é útil para abrir o PDF direto numa nova aba / <embed>).
+
+import { createClient } from '@supabase/supabase-js'
+
+export const dynamic = 'force-dynamic'
+export const maxDuration = 20
+
+const ESCRITORIO_CMP = '908f77fc-19f5-4d86-9576-f5590af09e0a'
+
+function admin() {
+  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } })
+}
+
+export async function GET(request) {
+  const { searchParams } = new URL(request.url)
+  const id = searchParams.get('id')
+  const dl = searchParams.get('dl')
+  const jwt = (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '') || searchParams.get('jwt') || ''
+  if (!id) return Response.json({ erro: 'id ausente' }, { status: 400 })
+  if (!jwt) return Response.json({ erro: 'não autenticado' }, { status: 401 })
+
+  const auth = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
+  const u = await auth.auth.getUser(jwt)
+  if (!(u && u.data && u.data.user)) return Response.json({ erro: 'não autenticado' }, { status: 401 })
+
+  const sb = admin()
+  const { data } = await sb.from('jusbr_arquivos').select('doc_nome,doc_tipo,conteudo_b64').eq('escritorio_id', ESCRITORIO_CMP).eq('id', id).maybeSingle()
+  if (!data || !data.conteudo_b64) return Response.json({ erro: 'arquivo não encontrado (pode ter expirado)' }, { status: 404 })
+
+  const buf = Buffer.from(data.conteudo_b64, 'base64')
+  const nome = (data.doc_nome || 'documento').replace(/[^\w.\- ]+/g, '_')
+  const disp = (dl ? 'attachment' : 'inline') + '; filename="' + nome + (/\.\w+$/.test(nome) ? '' : '.pdf') + '"'
+  return new Response(buf, {
+    status: 200,
+    headers: {
+      'Content-Type': data.doc_tipo || 'application/pdf',
+      'Content-Disposition': disp,
+      'Cache-Control': 'private, max-age=300',
+    },
+  })
+}
