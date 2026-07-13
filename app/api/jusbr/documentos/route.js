@@ -11,6 +11,12 @@ export const maxDuration = 30
 
 const ESCRITORIO_CMP = '908f77fc-19f5-4d86-9576-f5590af09e0a'
 const PDPJ = 'https://portaldeservicos.pdpj.jus.br'
+// headers de navegador — o WAF do PDPJ recusa (403 HTML) requisições sem eles. NÃO remover.
+const PDPJ_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36',
+  'Origin': 'https://portaldeservicos.pdpj.jus.br',
+  'Referer': 'https://portaldeservicos.pdpj.jus.br/consulta/autosdigitais',
+}
 
 async function usuario(request) {
   const auth = request.headers.get('authorization') || ''
@@ -63,7 +69,7 @@ export async function POST(request) {
   let resp, data
   try {
     resp = await fetch(`${PDPJ}/api/v2/processos/${numero}`, {
-      headers: { Authorization: 'Bearer ' + tk.token, Accept: 'application/json' },
+      headers: { ...PDPJ_HEADERS, Authorization: 'Bearer ' + tk.token, Accept: 'application/json' },
       signal: AbortSignal.timeout(25000),
     })
     data = await resp.json().catch(() => null)

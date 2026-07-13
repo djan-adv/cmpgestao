@@ -31,12 +31,15 @@ export async function GET(request) {
   if (!data || !data.conteudo_b64) return Response.json({ erro: 'arquivo não encontrado (pode ter expirado)' }, { status: 404 })
 
   const buf = Buffer.from(data.conteudo_b64, 'base64')
+  const tipo = data.doc_tipo || 'application/pdf'
+  const ext = tipo.indexOf('html') > -1 ? '.html' : (tipo.indexOf('pdf') > -1 ? '.pdf' : '')
   const nome = (data.doc_nome || 'documento').replace(/[^\w.\- ]+/g, '_')
-  const disp = (dl ? 'attachment' : 'inline') + '; filename="' + nome + (/\.\w+$/.test(nome) ? '' : '.pdf') + '"'
+  const nomeFinal = /\.\w+$/.test(nome) ? nome : (nome + ext)
+  const disp = (dl ? 'attachment' : 'inline') + '; filename="' + nomeFinal + '"'
   return new Response(buf, {
     status: 200,
     headers: {
-      'Content-Type': data.doc_tipo || 'application/pdf',
+      'Content-Type': tipo,
       'Content-Disposition': disp,
       'Cache-Control': 'private, max-age=300',
     },
