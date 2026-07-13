@@ -2274,6 +2274,9 @@ function calcPrazoFatal(){
 function salvarTarefa(){
   var tit=_v("t-titulo"); if(!tit){alert("Descreva a tarefa.");return;}
   var proc=_v("t-proc"), resp=_v("t-resp"), tipo=_v("t-tipo"), data=_v("t-data"), hora=_v("t-hora"), prazo=_v("t-prazo");
+  /* se a pessoa esquecer de por data E prazo, agenda em HOJE — assim a tarefa não
+     "some" da visão mês (que não mostra atividades sem data). */
+  if(!data && !prazo){ data = todayISO; }
   var fromTri=triagemAtual;
   if(!KAN)initKanban();
   var _nova={id:5000+KAN.length,titulo:tit,cliente:(resp||proc||"—"),numero:(proc||"—"),col:"distribuir",resp:resp,data:data,prazo:prazo,hora:(document.getElementById("t-dia").checked?"Dia todo":hora),tipoForm:tipo};
@@ -2663,6 +2666,11 @@ async function excluirHistManual(ev,hix){
 }
 function verMaisHist(){histShown=99999;renderHistorico();}
 
+/* lê a resposta como JSON com segurança; se vier HTML (rota não publicada), avisa claro */
+async function respJson(r){ var t=''; try{ t=await r.text(); }catch(e){}
+  try{ return JSON.parse(t); }catch(e){ return {__naoJson:true, __status:r.status}; } }
+function _msgRotaFaltando(){ return 'Esta função ainda não está publicada no servidor (a rota respondeu HTML, não JSON).\n\nNo VPS rode:\ncd /opt/cmpgestao && git fetch origin main && git reset --hard origin/main && npm run build && pm2 restart cmpgestao'; }
+
 /* ===== Atualizar histórico agora (DJEN por número, só os novos) ===== */
 async function atualizarHistorico(){
   if(typeof atual==='undefined' || !atual || !atual.numero) return;
@@ -2671,7 +2679,8 @@ async function atualizarHistorico(){
   try{
     var jwt=await jusbrJwt();
     var r=await fetch('/api/djen/processo',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+jwt},body:JSON.stringify({numero:atual.numero})});
-    var d=await r.json();
+    var d=await respJson(r);
+    if(d.__naoJson){ alert(_msgRotaFaltando()); if(btn){btn.disabled=false;btn.textContent=t0;} return; }
     if(!r.ok){ alert('Falha ao atualizar: '+((d&&d.erro)||'erro')); }
     else{
       if(d.novos>0 && atual._id){
@@ -2704,7 +2713,8 @@ async function jusbrCarregar(numero){
   var jwt=await jusbrJwt();
   try{
     var r=await fetch('/api/jusbr/documentos',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+jwt},body:JSON.stringify({numero:numero})});
-    var d=await r.json();
+    var d=await respJson(r);
+    if(d.__naoJson){ st.textContent='Função ainda não publicada no servidor (falta o deploy com npm run build).'; return; }
     if(!r.ok){ st.innerHTML=jusbrMsgErro(d); return; }
     if(!d.documentos||!d.documentos.length){ st.textContent='Nenhum documento retornado pelo jus.br.'; return; }
     st.textContent=d.total+' documento(s) — clique em "puxar" no que quiser ver:';
@@ -2716,7 +2726,8 @@ async function jusbrBaixar(btn,uuid,href,nome){
   var jwt=await jusbrJwt();
   try{
     var r=await fetch('/api/jusbr/documento',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+jwt},body:JSON.stringify({numero:window.__jusbrNum,uuid:uuid,href:href,nome:nome})});
-    var d=await r.json();
+    var d=await respJson(r);
+    if(d.__naoJson){ alert(_msgRotaFaltando()); btn.disabled=false; btn.textContent=t0; return; }
     if(!r.ok){ alert('jus.br: '+((d&&d.erro)||'falha ao puxar')); btn.disabled=false; btn.textContent=t0; return; }
     var acao=btn.closest('.jusbr-acao');
     if(acao) acao.innerHTML='<a class="btn sm ghost" style="font-size:11px" href="#" onclick="jusbrAbrir(event,\''+d.id+'\')">📄 ver</a> <a class="btn sm ghost" style="font-size:11px;color:#b5342b" href="#" onclick="jusbrExcluir(event,\''+d.id+'\',this)">🗑</a>';
