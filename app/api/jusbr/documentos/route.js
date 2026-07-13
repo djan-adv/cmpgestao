@@ -24,10 +24,13 @@ function admin() {
   return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } })
 }
 async function tokenValido(sb) {
-  const { data } = await sb.from('jusbr_sessao').select('token,expira').eq('escritorio_id', ESCRITORIO_CMP).maybeSingle()
-  if (!data || !data.token) return { erro: 'sem_token' }
-  if (data.expira && new Date(data.expira).getTime() <= Date.now()) return { erro: 'expirado' }
-  return { token: data.token }
+  const encKey = process.env.JUSBR_ENC_KEY
+  if (!encKey) return { erro: 'sem_chave' }
+  const { data } = await sb.rpc('jusbr_get_token', { p_esc: ESCRITORIO_CMP, p_key: encKey })
+  const row = Array.isArray(data) ? data[0] : data
+  if (!row || !row.token) return { erro: 'sem_token' }
+  if (row.expira && new Date(row.expira).getTime() <= Date.now()) return { erro: 'expirado' }
+  return { token: row.token }
 }
 // normaliza um documento do JSON do PDPJ para o formato do app
 function normDoc(d) {
@@ -54,6 +57,7 @@ export async function POST(request) {
 
   const sb = admin()
   const tk = await tokenValido(sb)
+  if (tk.erro === 'sem_chave') return Response.json({ erro: 'servidor sem JUSBR_ENC_KEY (chave de cifragem)' }, { status: 500 })
   if (tk.erro) return Response.json({ erro: 'jus.br: ' + (tk.erro === 'expirado' ? 'token expirado — sincronize novamente' : 'sem token — sincronize a sessão do jus.br'), motivo: tk.erro }, { status: 409 })
 
   let resp, data

@@ -41,8 +41,11 @@ export async function POST(request) {
   const { data: existente } = await sb.from('jusbr_arquivos').select('id,doc_nome,tamanho,baixado_em').eq('escritorio_id', ESCRITORIO_CMP).eq('processo_numero', numero).eq('doc_uuid', uuid).maybeSingle()
   if (existente) return Response.json({ ok: true, id: existente.id, nome: existente.doc_nome, tamanho: existente.tamanho, ja_tinha: true })
 
-  // token
-  const { data: sess } = await sb.from('jusbr_sessao').select('token,expira').eq('escritorio_id', ESCRITORIO_CMP).maybeSingle()
+  // token (cifrado — decifra no servidor)
+  const encKey = process.env.JUSBR_ENC_KEY
+  if (!encKey) return Response.json({ erro: 'servidor sem JUSBR_ENC_KEY (chave de cifragem)' }, { status: 500 })
+  const { data: sessRows } = await sb.rpc('jusbr_get_token', { p_esc: ESCRITORIO_CMP, p_key: encKey })
+  const sess = Array.isArray(sessRows) ? sessRows[0] : sessRows
   if (!sess || !sess.token) return Response.json({ erro: 'jus.br: sem token — sincronize a sessão', motivo: 'sem_token' }, { status: 409 })
   if (sess.expira && new Date(sess.expira).getTime() <= Date.now()) return Response.json({ erro: 'jus.br: token expirado — sincronize novamente', motivo: 'expirado' }, { status: 409 })
 

@@ -60,12 +60,11 @@ export async function POST(request) {
   try { body = await request.json() } catch (e) { return Response.json({ erro: 'json inválido' }, { status: 400 }) }
   const token = String(body.token || '').trim()
   if (token.split('.').length !== 3) return Response.json({ erro: 'token inválido (esperado um JWT do PDPJ)' }, { status: 400, headers: CORS })
+  const encKey = process.env.JUSBR_ENC_KEY
+  if (!encKey) return Response.json({ erro: 'servidor sem JUSBR_ENC_KEY (chave de cifragem)' }, { status: 500, headers: CORS })
   const expira = expDoJwt(token)
   const sb = admin()
-  const { error } = await sb.from('jusbr_sessao').upsert({
-    escritorio_id: ESCRITORIO_CMP, token, expira,
-    atualizado_por: quem, atualizado_em: new Date().toISOString(),
-  }, { onConflict: 'escritorio_id' })
+  const { error } = await sb.rpc('jusbr_set_token', { p_esc: ESCRITORIO_CMP, p_token: token, p_key: encKey, p_expira: expira, p_por: quem })
   if (error) return Response.json({ erro: 'falha ao salvar token: ' + error.message }, { status: 500, headers: CORS })
   return Response.json({ ok: true, expira }, { headers: CORS })
 }
