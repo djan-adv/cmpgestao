@@ -109,7 +109,7 @@
 <!-- APP -->
 <div id="tela-app" class="hidden">
   <aside class="side">
-    <div class="brand"><b>Portal do Perito</b><span>Cadastro pericial · v10</span></div>
+    <div class="brand"><b>Portal do Perito</b><span>Cadastro pericial · v11</span></div>
     <nav>
       <a id="nav-painel" class="on" onclick="ir('painel')"><span class="ic">▤</span> Painel</a>
       <a id="nav-proc" onclick="ir('proc')"><span class="ic">⚖</span> Processos judiciais <span class="cnt" id="cnt-proc"></span></a>
@@ -564,8 +564,20 @@
   }
   async function capturarPartes(id){
     var p=PROC.find(function(x){return String(x.id)===String(id);})||{};
-    var cli=prompt('Autor / cliente (partes do processo):',p.cliente_nome||''); if(cli===null)return;
-    var op=prompt('Parte contrária / ré:',p.oponente||''); if(op===null)return;
+    var sug={autor:'',reu:''};
+    // 1) tenta extrair do histórico (andamentos) por IA — sem inventar
+    try{
+      var ra=await sb.from('andamentos').select('texto,data').eq('processo_id',id).order('data',{ascending:false}).limit(40);
+      var textos=((ra&&ra.data)||[]).map(function(a){return a.texto||'';}).filter(Boolean).join('\n\n');
+      if(textos.trim()){
+        var res=await fetch(SB_URL+'/functions/v1/extrair-partes',{method:'POST',headers:{'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY},body:JSON.stringify({texto:textos})});
+        var j={};try{j=await res.json();}catch(e){}
+        if(res.ok){ sug.autor=(j.autor||''); sug.reu=(j.reu||''); }
+      }
+    }catch(e){}
+    // 2) confirma/edita (sugestão do histórico já preenchida; em branco = não achou)
+    var cli=prompt('Autor / cliente'+(sug.autor?' (sugerido pelo histórico)':' (não encontrado no histórico — preencha)')+':',(sug.autor||p.cliente_nome||'')); if(cli===null)return;
+    var op=prompt('Parte contrária / ré'+(sug.reu?' (sugerido pelo histórico)':' (não encontrado — preencha)')+':',(sug.reu||p.oponente||'')); if(op===null)return;
     var upd={cliente_nome:(cli||'').trim()||null,oponente:(op||'').trim()||null,atualizado_em:new Date().toISOString()};
     var r=await sb.from('processos').update(upd).eq('id',id);
     if(r&&r.error){ alert('Não foi possível salvar: '+r.error.message); return; }
