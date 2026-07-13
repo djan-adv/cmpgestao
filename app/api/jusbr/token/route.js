@@ -41,32 +41,42 @@ function expDoJwt(t) {
   } catch (e) { return null }
 }
 
+// helper: resposta SEMPRE com CORS (o relay é cross-origin; erro sem CORS vira bloqueio opaco)
+function j(body, status) { return Response.json(body, { status: status || 200, headers: CORS }) }
+
 export async function POST(request) {
-  // aceita 2 formas de autenticação:
-  //  (a) JWT do Supabase (quando sincronizado de dentro do sistema); ou
-  //  (b) segredo de relay (x-jusbr-relay) — usado pelo userscript no jus.br,
-  //      que não tem a sessão do Supabase. O segredo fica em JUSBR_RELAY_SECRET.
-  const relay = request.headers.get('x-jusbr-relay') || ''
-  const relaySecret = process.env.JUSBR_RELAY_SECRET || ''
-  let quem = null
-  if (relaySecret && relay && relay === relaySecret) {
-    quem = 'relay'
-  } else {
-    const user = await usuario(request)
-    if (!user) return Response.json({ erro: 'não autenticado' }, { status: 401 })
-    quem = String(user.email || '')
+  try {
+    // aceita 2 formas de autenticação:
+    //  (a) JWT do Supabase (quando sincronizado de dentro do sistema); ou
+    //  (b) segredo de relay (x-jusbr-relay) — usado pelo userscript no jus.br,
+    //      que não tem a sessão do Supabase. O segredo fica em JUSBR_RELAY_SECRET.
+    const relay = request.headers.get('x-jusbr-relay') || ''
+    const relaySecret = process.env.JUSBR_RELAY_SECRET || ''
+    let quem = null
+    if (relaySecret && relay && relay === relaySecret) {
+      quem = 'relay'
+    } else {
+      const user = await usuario(request)
+      if (!user) return j({ erro: 'não autenticado (segredo de relay ausente/incorreto)' }, 401)
+      quem = String(user.email || '')
+    }
+    let body
+    try { body = await request.json() } catch (e) { return j({ erro: 'json inválido' }, 400) }
+    const token = String(body.token || '').trim()
+    if (token.split('.').length !== 3) return j({ erro: 'token inválido (esperado um JWT do PDPJ)' }, 400)
+
+    const encKey = process.env.JUSBR_ENC_KEY
+    if (!encKey) return j({ erro: 'servidor sem JUSBR_ENC_KEY (defina no .env.local)' }, 500)
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) return j({ erro: 'servidor sem SUPABASE_SERVICE_ROLE_KEY (defina no .env.local)' }, 500)
+
+    const expira = expDoJwt(token)
+    const sb = admin()
+    const { error } = await sb.rpc('jusbr_set_token', { p_esc: ESCRITORIO_CMP, p_token: token, p_key: encKey, p_expira: expira, p_por: quem })
+    if (error) return j({ erro: 'falha ao salvar token: ' + error.message }, 500)
+    return j({ ok: true, expira })
+  } catch (e) {
+    return j({ erro: 'erro no servidor: ' + String((e && e.message) || e) }, 500)
   }
-  let body
-  try { body = await request.json() } catch (e) { return Response.json({ erro: 'json inválido' }, { status: 400 }) }
-  const token = String(body.token || '').trim()
-  if (token.split('.').length !== 3) return Response.json({ erro: 'token inválido (esperado um JWT do PDPJ)' }, { status: 400, headers: CORS })
-  const encKey = process.env.JUSBR_ENC_KEY
-  if (!encKey) return Response.json({ erro: 'servidor sem JUSBR_ENC_KEY (chave de cifragem)' }, { status: 500, headers: CORS })
-  const expira = expDoJwt(token)
-  const sb = admin()
-  const { error } = await sb.rpc('jusbr_set_token', { p_esc: ESCRITORIO_CMP, p_token: token, p_key: encKey, p_expira: expira, p_por: quem })
-  if (error) return Response.json({ erro: 'falha ao salvar token: ' + error.message }, { status: 500, headers: CORS })
-  return Response.json({ ok: true, expira }, { headers: CORS })
 }
 
 // GET: status da sessão (sem devolver o token)
