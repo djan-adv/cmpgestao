@@ -4647,7 +4647,7 @@ async function carregarDocs(numero, sub, escopo){
       td1.appendChild(nmeWrap);
       if(!isFolder){
         var dtm=x.mod?String(x.mod).slice(0,10).split('-').reverse().join('/'):'';
-        var metaL=document.createElement('div'); metaL.style.cssText='font-size:11px;color:#9aa0a6;margin-top:1px';
+        var metaL=document.createElement('div'); metaL.style.cssText='font-size:9.5px;color:#9aa0a6;margin-top:1px';
         metaL.textContent=(x.tam?(Math.max(1,Math.round(x.tam/1024))+' KB · '):'')+dtm+(naLix&&x.resta!=null?(' · restam '+x.resta+'d'):'');
         td1.appendChild(metaL);
       }
