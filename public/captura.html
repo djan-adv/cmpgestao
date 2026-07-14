@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Captura rápida — CMP</title>
+<style>
+  :root{--navy:#2E3A4B;--gold:#b8912e;--green:#127a53;--muted:#8a8f98;--line:#e6e8ec}
+  *{box-sizing:border-box}
+  body{font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;margin:0;background:#f4f5f7;color:#1e2733;font-size:16px}
+  .wrap{max-width:640px;margin:0 auto;padding:16px}
+  .card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:14px}
+  h1{font-size:19px;margin:0 0 2px} .sub{color:var(--muted);font-size:13px;margin-bottom:12px}
+  label{display:block;font-size:13px;color:var(--navy);font-weight:600;margin:10px 0 4px}
+  input[type=text],textarea{width:100%;padding:12px;border:1px solid var(--line);border-radius:10px;font-size:16px;font-family:inherit}
+  textarea{min-height:100px;resize:vertical}
+  .res{border:1px solid var(--line);border-radius:10px;margin-top:6px;max-height:230px;overflow:auto}
+  .res div{padding:10px 12px;border-bottom:1px solid var(--line);cursor:pointer;font-size:14px}
+  .res div:last-child{border-bottom:0} .res div:active,.res div.on{background:#eef6f1}
+  .sel{background:#eef6f1;border:1px solid #bfe3d1;border-radius:10px;padding:10px 12px;font-size:14px;margin-top:6px;display:flex;justify-content:space-between;align-items:center}
+  .btn{display:inline-block;border:0;border-radius:10px;padding:14px 16px;font-size:16px;font-weight:700;cursor:pointer;width:100%;margin-top:8px}
+  .btn.hist{background:var(--green);color:#fff} .btn.tar{background:var(--navy);color:#fff}
+  .btn[disabled]{opacity:.5}
+  .up{border:1.5px dashed #cfd4da;border-radius:10px;padding:14px;text-align:center;color:var(--muted);cursor:pointer;margin-top:4px}
+  .files div{display:flex;justify-content:space-between;align-items:center;font-size:13px;padding:6px 0;border-bottom:1px solid var(--line)}
+  .rm{color:#b5342b;cursor:pointer;font-weight:700}
+  .ok{background:#eef6f1;border:1px solid #bfe3d1;color:var(--green);border-radius:10px;padding:14px;font-size:15px}
+  .err{color:#b5342b;font-size:13px;margin-top:6px}
+  .small{color:var(--muted);font-size:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <h1>Captura rápida</h1>
+    <div class="sub">Registre o pedido do cliente no histórico do processo — ou crie uma tarefa.</div>
+    <div id="app"></div>
+  </div>
+</div>
+<script>
+var K=new URLSearchParams(location.search).get('k')||'';
+var SEL=null, FILES=[];
+var app=document.getElementById('app');
+function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+if(!K){ app.innerHTML='<div class="err">Link inválido (sem chave). Peça o link correto.</div>'; }
+else render();
+
+function render(){
+  app.innerHTML=
+   '<label>Buscar processo (nome do cliente ou nº)</label>'+
+   '<input id="q" type="text" placeholder="Ex.: Romualdo" autocomplete="off">'+
+   '<div id="res"></div>'+
+   '<div id="selbox"></div>'+
+   '<label>O que o cliente pediu</label>'+
+   '<textarea id="txt" placeholder="Descreva o pedido / mensagem do cliente..."></textarea>'+
+   '<label>Anexos (documentos, prints)</label>'+
+   '<div class="up" id="up">📎 Toque para anexar arquivos ou fotos</div>'+
+   '<input id="file" type="file" multiple accept="*/*" style="display:none">'+
+   '<div class="files" id="files"></div>'+
+   '<button class="btn hist" id="bHist" disabled onclick="enviar(\'historico\')">✓ Gravar no histórico</button>'+
+   '<button class="btn tar" id="bTar" onclick="enviar(\'tarefa\')">＋ Criar tarefa</button>'+
+   '<div class="small" style="margin-top:8px">O botão do histórico habilita ao selecionar um processo. Sem processo, use "Criar tarefa".</div>'+
+   '<div id="msg"></div>';
+  var q=document.getElementById('q'), tmr=null;
+  q.addEventListener('input',function(){ clearTimeout(tmr); tmr=setTimeout(buscar,320); });
+  document.getElementById('up').onclick=function(){ document.getElementById('file').click(); };
+  document.getElementById('file').onchange=addFiles;
+}
+async function buscar(){
+  var q=document.getElementById('q').value.trim(); var res=document.getElementById('res');
+  if(q.length<2){ res.innerHTML=''; return; }
+  try{
+    var r=await fetch('/api/captura?k='+encodeURIComponent(K)+'&q='+encodeURIComponent(q));
+    var d=await r.json();
+    if(!d.processos||!d.processos.length){ res.innerHTML='<div class="res"><div class="small" style="cursor:default">Nenhum processo encontrado — use "Criar tarefa".</div></div>'; return; }
+    res.innerHTML='<div class="res">'+d.processos.map(function(p){
+      return '<div onclick="selecionar(\''+p.id+'\',\''+esc(p.numero)+'\',\''+esc((p.cliente||'').replace(/["\\]/g,''))+'\')"><b>'+esc(p.cliente||'—')+'</b><br><span class="small">'+esc(p.numero||'')+(p.foro?(' · '+esc(p.foro)):'')+'</span></div>';
+    }).join('')+'</div>';
+  }catch(e){ res.innerHTML='<div class="err">Falha na busca.</div>'; }
+}
+function selecionar(id,numero,cliente){
+  SEL={id:id,numero:numero,cliente:cliente};
+  document.getElementById('res').innerHTML='';
+  document.getElementById('q').value='';
+  document.getElementById('selbox').innerHTML='<div class="sel"><span>✓ <b>'+esc(cliente)+'</b> — '+esc(numero)+'</span><span class="rm" onclick="limparSel()">trocar</span></div>';
+  document.getElementById('bHist').disabled=false;
+}
+function limparSel(){ SEL=null; document.getElementById('selbox').innerHTML=''; document.getElementById('bHist').disabled=true; }
+function addFiles(ev){
+  var fs=ev.target.files||[];
+  for(var i=0;i<fs.length;i++){ (function(f){
+    var rd=new FileReader();
+    rd.onload=function(){ FILES.push({nome:f.name,tipo:f.type||'application/octet-stream',b64:String(rd.result)}); renderFiles(); };
+    rd.readAsDataURL(f);
+  })(fs[i]); }
+  ev.target.value='';
+}
+function renderFiles(){
+  document.getElementById('files').innerHTML=FILES.map(function(f,i){
+    return '<div><span>📄 '+esc(f.nome)+'</span><span class="rm" onclick="rmFile('+i+')">remover</span></div>';
+  }).join('');
+}
+function rmFile(i){ FILES.splice(i,1); renderFiles(); }
+async function enviar(acao){
+  var txt=document.getElementById('txt').value.trim();
+  var msg=document.getElementById('msg');
+  if(!txt && !FILES.length){ msg.innerHTML='<div class="err">Escreva o pedido ou anexe um arquivo.</div>'; return; }
+  if(acao==='historico' && !SEL){ msg.innerHTML='<div class="err">Selecione um processo (ou use "Criar tarefa").</div>'; return; }
+  var bH=document.getElementById('bHist'), bT=document.getElementById('bTar');
+  bH.disabled=true; bT.disabled=true; msg.innerHTML='<div class="small">Enviando…</div>';
+  var payload={ k:K, acao:acao, texto:txt, arquivos:FILES,
+    processo_id:(SEL&&SEL.id)||null, numero:(SEL&&SEL.numero)||'', cliente:(SEL&&SEL.cliente)||'',
+    registrarHistorico:(acao==='tarefa'&&!!SEL) };
+  try{
+    var r=await fetch('/api/captura',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    var d=await r.json();
+    if(!r.ok){ msg.innerHTML='<div class="err">'+esc((d&&d.erro)||'falha')+'</div>'; bH.disabled=!SEL; bT.disabled=false; return; }
+    var oq=acao==='historico'?('Registrado no histórico'+(d.processo?(' de '+esc(d.processo)):'')):'Tarefa criada';
+    app.innerHTML='<div class="ok">✓ '+oq+'.'+(d.anexos?(' '+d.anexos+' anexo(s).'):'')+'</div>'+
+      '<button class="btn tar" onclick="location.reload()">Nova captura</button>';
+  }catch(e){ msg.innerHTML='<div class="err">Falha ao enviar.</div>'; bH.disabled=!SEL; bT.disabled=false; }
+}
+</script>
+</body>
+</html>
