@@ -610,6 +610,11 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
   <table><thead><tr id="drill-head"><th>Nome</th><th>Canal</th><th>Etapa</th><th>Telefone</th></tr></thead><tbody id="drill-body"></tbody></table>
   <div class="foot"><button class="btn" onclick="fecharDrill()">Fechar</button></div>
 </div></div>
+<div id="modal-tardia" class="overlay hidden"><div class="modal" style="max-width:640px">
+  <h2 id="tardia-tit">Atividades do dia</h2>
+  <div id="tardia-body" style="max-height:65vh;overflow:auto;margin-top:6px"></div>
+  <div class="foot"><button class="btn ghost" onclick="novaTarefaDoDia()">+ Nova tarefa neste dia</button><button class="btn" onclick="fecharTarDia()">Fechar</button></div>
+</div></div>
 <div id="modal-cproc" class="overlay hidden"><div class="modal" style="max-width:680px">
   <h2 id="cproc-tit">Processos do contato</h2>
   <div id="cproc-body" style="max-height:60vh;overflow:auto;margin-top:6px"></div>
@@ -2952,7 +2957,7 @@ function _tarChipHTML(a){
   /* clique no texto ABRE a atividade (edição, com link do processo); o ✓ à esquerda conclui/reabre */
   return '<div class="cev '+(a.prazo?'vm':'nt')+'" style="'+estilo+'" title="'+esc(title)+'">'
     +'<span onclick="event.stopPropagation();toggleConcluirTarefa('+a.id+')" title="'+(concl?'Reabrir':'Concluir')+'" style="cursor:pointer;flex-shrink:0;width:13px;height:13px;border:1.5px solid currentColor;border-radius:3px;display:inline-flex;align-items:center;justify-content:center;font-size:9px;line-height:1">'+(concl?'✓':'')+'</span>'
-    +'<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" onclick="abrirTarefaKanban('+a.id+')">'+esc(a.titulo||'—')+'</span>'
+    +'<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" onclick="event.stopPropagation();abrirTarefaKanban('+a.id+')">'+esc(a.titulo||'—')+'</span>'
     +'</div>';
 }
 function renderTarefasMes(){
@@ -2980,13 +2985,52 @@ function renderTarefasMes(){
   for(var d=1;d<=dim;d++){
     var iso=tarY+'-'+mm+'-'+String(d).padStart(2,'0');
     var cell=document.createElement('div');cell.className='day'+(iso===todayISO?' today':'');
+    cell.style.cursor='pointer';
     cell.innerHTML='<div class="dn">'+d+'</div>';
-    lista.filter(function(a){return _tarISO(a)===iso;}).forEach(function(a){
-      var w=document.createElement('div'); w.innerHTML=_tarChipHTML(a); cell.appendChild(w.firstChild);
-    });
+    var dtasks=lista.filter(function(a){return _tarISO(a)===iso;});
+    if(__ehCel){
+      /* celular: os chips minúsculos ficam ilegíveis — mostra um selo com a
+         contagem (vermelho se houver prazo fatal). Toque no dia abre a lista legível. */
+      if(dtasks.length){
+        var nPz=dtasks.filter(function(a){return a.prazo;}).length;
+        var nAb=dtasks.filter(function(a){return !_tarConcluida(a);}).length;
+        var sel=document.createElement('div'); sel.style.cssText='margin-top:3px;text-align:center';
+        sel.innerHTML='<span style="display:inline-block;background:'+(nPz?'#b5342b':'#8a5a00')+';color:#fff;border-radius:9px;font-size:12px;font-weight:800;padding:2px 8px;min-width:20px">'+dtasks.length+'</span>'+(nAb?'':'<div style="font-size:10px;color:#127a53;margin-top:1px">✓</div>');
+        cell.appendChild(sel);
+      }
+    } else {
+      dtasks.forEach(function(a){ var w=document.createElement('div'); w.innerHTML=_tarChipHTML(a); cell.appendChild(w.firstChild); });
+    }
+    (function(isoC){ cell.onclick=function(){ abrirTarDia(isoC); }; })(iso);
     cal.appendChild(cell);
   }
 }
+/* ===== Detalhe do dia (toque no dia abre a lista legível — resolve a visibilidade no celular) ===== */
+var _tarDiaISO=null;
+function abrirTarDia(iso){ _tarDiaISO=iso; var m=document.getElementById('modal-tardia'); if(m){ m.classList.remove('hidden'); renderTarDia(); } }
+function fecharTarDia(){ var m=document.getElementById('modal-tardia'); if(m) m.classList.add('hidden'); }
+function renderTarDia(){
+  var iso=_tarDiaISO; if(!iso) return;
+  var dBR=iso.split('-').reverse().join('/');
+  var dow=['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'][new Date(iso+'T00:00:00').getDay()];
+  var t=document.getElementById('tardia-tit'); if(t) t.textContent=dow+', '+dBR+(iso===todayISO?' — hoje':'');
+  var lista=tarefasFiltradas().filter(function(a){return _tarISO(a)===iso;})
+    .sort(function(a,b){ var x=(_tarConcluida(a)?1:0)-(_tarConcluida(b)?1:0); if(x) return x; return (a.prazo?0:1)-(b.prazo?0:1); });
+  var el=document.getElementById('tardia-body'); if(!el) return;
+  if(!lista.length){ el.innerHTML='<div class="note">Nenhuma tarefa ou prazo neste dia.</div>'; return; }
+  el.innerHTML=lista.map(function(a){
+    var concl=_tarConcluida(a); var cor=a.prazo?'#b5342b':'#8a5a00';
+    return '<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 2px;border-bottom:1px solid var(--line);'+(concl?'opacity:.55;':'')+'">'
+      +'<input type="checkbox" '+(concl?'checked':'')+' onclick="event.stopPropagation();toggleConcluirTarefa('+a.id+');renderTarDia();" style="width:18px;height:18px;margin-top:2px;cursor:pointer" title="Concluir/reabrir">'
+      +'<div style="flex:1;min-width:0;cursor:pointer" onclick="fecharTarDia();abrirTarefaKanban('+a.id+')">'
+        +'<div style="font-weight:600;color:var(--navy);'+(concl?'text-decoration:line-through':'')+'">'+esc(a.titulo||'—')+'</div>'
+        +'<div class="note" style="margin:2px 0 0">'+esc(a.cliente||'—')+(a.numero&&a.numero!=='—'?(' · '+esc(a.numero)):'')+' · <span style="color:'+cor+';font-weight:600">'+(a.prazo?'prazo fatal':'previsto')+'</span>'+(a.resp?(' · '+esc(a.resp)):'')+((a.hora&&a.hora!=='Dia todo')?(' · '+esc(a.hora)):'')+'</div>'
+      +'</div>'
+      +'<button class="btn sm ghost" style="flex-shrink:0" onclick="fecharTarDia();abrirTarefaKanban('+a.id+')">Abrir</button>'
+    +'</div>';
+  }).join('');
+}
+function novaTarefaDoDia(){ var iso=_tarDiaISO; fecharTarDia(); if(typeof abrirNovaTarefa==='function') abrirNovaTarefa(''); var f=document.getElementById('t-data'); if(f&&iso) f.value=iso; }
 function renderTarefasLista(){
   var cal=document.getElementById('tar-cal'); if(!cal) return;
   document.getElementById('tar-label').textContent='Todas as tarefas e prazos';
