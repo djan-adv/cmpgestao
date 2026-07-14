@@ -4581,6 +4581,8 @@ async function carregarDocs(numero, sub, escopo){
     itens.sort(function(a,b){
       var la=(a.tipo==='pasta'&&a.nome==='Lixeira'), lb=(b.tipo==='pasta'&&b.nome==='Lixeira'); if(la!==lb) return la?1:-1;
       var pa=(a.tipo==='pasta'), pb=(b.tipo==='pasta'); if(pa!==pb) return pa?-1:1;
+      /* pastas sempre no topo, mais NOVAS primeiro — independente da classificação dos arquivos */
+      if(pa && pb){ var ma=String(a.mod||''), mb=String(b.mod||''); if(ma!==mb) return ma<mb?1:-1; return String(a.nome).localeCompare(String(b.nome),'pt'); }
       if(sort==='manual'){ var oa=(a.ordem==null?1e9:a.ordem), ob=(b.ordem==null?1e9:b.ordem); if(oa!==ob) return oa-ob; return String(a.nome).localeCompare(String(b.nome),'pt'); }
       if(sort==='recent'||sort==='old'){ var xa=String(a.mod||''), xb=String(b.mod||''); var c=(xa<xb?-1:(xa>xb?1:0)); return sort==='recent'?-c:c; }
       var c2=String(a.nome).localeCompare(String(b.nome),'pt'); return sort==='za'?-c2:c2;
