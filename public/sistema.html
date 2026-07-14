@@ -4546,6 +4546,44 @@ async function moverDoc(dig, srcRelFull, destDirRelFull, numero, sub, escopo){
   }catch(e){ alert('Erro ao mover: '+(e&&e.message||e)); }
   carregarDocs(numero,sub,escopo);
 }
+async function moverDocMulti(dig, rels, destDirRelFull, numero, sub, escopo){
+  try{ var tok=await docToken(); var dest=(dig+'/'+destDirRelFull).replace(/\/+$/,''); var falhas=0;
+    for(var i=0;i<rels.length;i++){
+      var r=await fetch('/api/docs',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({op:'move',path:dig+'/'+rels[i],dest:dest})});
+      if(!r.ok) falhas++;
+    }
+    if(falhas) alert(falhas+' de '+rels.length+' não puderam ser movidos (nome já existe no destino?).');
+  }catch(e){ alert('Erro ao mover: '+(e&&e.message||e)); }
+  carregarDocs(numero,sub,escopo);
+}
+async function salvarOrdemDocs(dig, dirRel, nomes, numero, sub, escopo){
+  try{ var tok=await docToken();
+    await fetch('/api/docs',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({op:'order',path:dirRel,ordem:nomes})});
+  }catch(e){}
+  carregarDocs(numero,sub,escopo);
+}
+async function docParaHistorico(dig, relFull, nomeArq, numero, sub, escopo){
+  if(typeof atual==='undefined' || !atual || !atual._id){ alert('Abra a ficha do processo primeiro.'); return; }
+  var obs=window.prompt('Adicionar uma cópia de "'+nomeArq+'" ao histórico.\nObservação (opcional):','');
+  if(obs===null) return; /* cancelou */
+  var hoje=new Date(); var iso=hoje.getFullYear()+'-'+String(hoje.getMonth()+1).padStart(2,'0')+'-'+String(hoje.getDate()).padStart(2,'0');
+  var txt='📎 '+nomeArq+(obs&&obs.trim()?(' — '+obs.trim()):'')+' (cópia do documento anexada ao histórico)';
+  try{
+    var sb=window.__sb;
+    var w=await sb.from('andamentos').insert({processo_id:atual._id,data:iso,texto:txt,fonte:'manual'}).select('id').single();
+    if(w.error){ alert('Erro ao criar o lançamento: '+w.error.message); return; }
+    var andId=w.data&&w.data.id;
+    atual.hist_full=atual.hist_full||[]; atual.hist_full.unshift({id:andId,data:iso+'T00:00:00.000Z',texto:txt,f:'manual'});
+    if(typeof histShown!=='undefined') histShown=Math.max(histShown||10,10);
+    if(typeof renderHistorico==='function') renderHistorico();
+    var tok=await docToken();
+    var r=await fetch('/api/docs',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({op:'tohist',path:dig+'/'+relFull,andamento_id:andId,processo_numero:atual.numero})});
+    var j=await r.json().catch(function(){return {};});
+    if(!r.ok){ alert('Lançamento criado, mas o anexo falhou: '+((j&&j.erro)||('HTTP '+r.status))); return; }
+    if(typeof loadAnexosProc==='function') loadAnexosProc(atual.numero);
+    alert('✓ Documento adicionado ao histórico em '+iso.split('-').reverse().join('/')+'.');
+  }catch(e){ alert('Erro: '+(e&&e.message||e)); }
+}
 async function carregarDocs(numero, sub, escopo){
   escopo=escopo||'proc'; var E=_docEsc(escopo);
   var el=document.getElementById(E.panel); if(!el) return;
@@ -4564,6 +4602,7 @@ async function carregarDocs(numero, sub, escopo){
     itens.sort(function(a,b){
       var la=(a.tipo==='pasta'&&a.nome==='Lixeira'), lb=(b.tipo==='pasta'&&b.nome==='Lixeira'); if(la!==lb) return la?1:-1;
       var pa=(a.tipo==='pasta'), pb=(b.tipo==='pasta'); if(pa!==pb) return pa?-1:1;
+      if(sort==='manual'){ var oa=(a.ordem==null?1e9:a.ordem), ob=(b.ordem==null?1e9:b.ordem); if(oa!==ob) return oa-ob; return String(a.nome).localeCompare(String(b.nome),'pt'); }
       if(sort==='recent'||sort==='old'){ var xa=String(a.mod||''), xb=String(b.mod||''); var c=(xa<xb?-1:(xa>xb?1:0)); return sort==='recent'?-c:c; }
       var c2=String(a.nome).localeCompare(String(b.nome),'pt'); return sort==='za'?-c2:c2;
     });
@@ -4579,7 +4618,7 @@ async function carregarDocs(numero, sub, escopo){
       var lbl=document.createElement('span'); lbl.className='note'; lbl.textContent='  /'+sub; left.appendChild(lbl);
     }
     var rightO=document.createElement('div'); rightO.style.cssText='font-size:11px;color:#8a8f98;white-space:nowrap';
-    rightO.innerHTML='ordenar:'+_sortBtnHTML('az','A-Z')+_sortBtnHTML('za','Z-A')+_sortBtnHTML('recent','recentes')+_sortBtnHTML('old','antigos');
+    rightO.innerHTML='ordenar:'+_sortBtnHTML('az','A-Z')+_sortBtnHTML('za','Z-A')+_sortBtnHTML('recent','recentes')+_sortBtnHTML('old','antigos')+_sortBtnHTML('manual','⇅ manual');
     bar.appendChild(left); bar.appendChild(rightO); el.appendChild(bar);
     /* "Limpar tudo" só em processos ENCERRADOS */
     var _encProc=(typeof atual!=='undefined' && atual && /encerr/i.test(atual.status||''));
@@ -4596,12 +4635,30 @@ async function carregarDocs(numero, sub, escopo){
     }
     if(!itens.length){ var n=document.createElement('div'); n.className='note'; n.textContent='Nenhum documento nesta pasta ainda.'; el.appendChild(n); return; }
     var escBaseRel=_docDir(escopo,''); /* raiz do escopo (‘’ ou ‘_OUTRA_PARTE’) para "mover p/ principal" */
+    var isManual=(sort==='manual');
+    var dirRel=dir; /* diretório atual (p/ salvar a ordem manual) */
+    var nomesArq=itens.filter(function(x){return x.tipo!=='pasta';}).map(function(x){return x.nome;}); /* ordem atual dos arquivos */
+    var SEL=window.__docSel={}; /* seleção múltipla — zera a cada carga da pasta */
+    function selRels(){ return Object.keys(SEL).filter(function(k){return SEL[k];}); }
+    var selbar=document.createElement('div'); selbar.style.cssText='display:none;align-items:center;gap:12px;flex-wrap:wrap;margin:2px 0 7px;padding:6px 9px;background:#eef6f1;border:1px solid #cfe6d8;border-radius:6px;font-size:12px';
+    el.appendChild(selbar);
+    function atualizaSelBar(){
+      var sels=selRels(), n=sels.length; selbar.innerHTML='';
+      if(!n){ selbar.style.display='none'; return; }
+      selbar.style.display='flex';
+      var t=document.createElement('span'); t.innerHTML='<b>'+n+'</b> selecionado'+(n>1?'s':'')+' — arraste para uma pasta'; selbar.appendChild(t);
+      if(sub){ var mp=document.createElement('a'); mp.href='#'; mp.textContent='mover p/ pasta principal'; mp.style.cssText='color:#185FA5;cursor:pointer;font-weight:600'; mp.onclick=function(ev){ev.preventDefault(); if(confirm('Mover '+n+' item(ns) para a pasta principal?')) moverDocMulti(dig, sels, escBaseRel, numero, sub, escopo);}; selbar.appendChild(mp); }
+      var cl=document.createElement('a'); cl.href='#'; cl.textContent='limpar seleção'; cl.style.cssText='color:#8a8f98;cursor:pointer'; cl.onclick=function(ev){ev.preventDefault(); SEL={}; window.__docSel=SEL; var cs=el.querySelectorAll('.docchk'); for(var i=0;i<cs.length;i++) cs[i].checked=false; atualizaSelBar();}; selbar.appendChild(cl);
+    }
     var tb=document.createElement('table'); tb.style.cssText='width:100%;font-size:13px';
     itens.forEach(function(x){
       var isFolder=(x.tipo==='pasta'), isLix=(x.nome==='Lixeira');
       var relNav=(sub?sub+'/':'')+x.nome;
       var relFull=_docDir(escopo, relNav);
       var tr=document.createElement('tr'); tr.style.cursor='pointer';
+      /* seleção múltipla (arquivos) */
+      var tdc=document.createElement('td'); tdc.style.cssText='width:20px;padding-left:2px';
+      if(!isFolder && !naLix && !isLix){ var chk=document.createElement('input'); chk.type='checkbox'; chk.className='docchk'; chk.checked=!!SEL[relFull]; chk.onclick=function(ev){ ev.stopPropagation(); }; chk.onchange=(function(rf,c){return function(){ if(c.checked) SEL[rf]=true; else delete SEL[rf]; atualizaSelBar(); };})(relFull, chk); tdc.appendChild(chk); }
       /* nome + ícone */
       var td1=document.createElement('td'); td1.style.cssText='padding:5px 4px';
       var nmeWrap=document.createElement('span'); nmeWrap.innerHTML=_docIcon(x);
@@ -4617,12 +4674,22 @@ async function carregarDocs(numero, sub, escopo){
       var dtm=x.mod?String(x.mod).slice(0,10).split('-').reverse().join('/'):'';
       td2.appendChild(document.createTextNode((x.tam?(Math.max(1,Math.round(x.tam/1024))+' KB · '):'')+dtm+(naLix&&x.resta!=null?(' · '+x.resta+'d'):'')));
       if(sub && !isLix && !naLix){ var up2=document.createElement('span'); up2.textContent=' ⬆'; up2.title='Mover para a pasta principal'; up2.style.cssText='cursor:pointer;color:#185FA5;margin-left:5px;font-weight:700'; up2.onclick=(function(rf){return function(ev){ ev.stopPropagation(); if(confirm('Mover "'+x.nome+'" para a pasta principal?')) moverDoc(dig, rf, escBaseRel, numero, sub, escopo); };})(relFull); td2.appendChild(up2); }
+      if(!isFolder && !isLix && !naLix){ var toh=document.createElement('span'); toh.textContent=' ➕hist'; toh.title='Adicionar uma cópia deste documento ao histórico'; toh.style.cssText='cursor:pointer;color:#127a53;margin-left:6px;font-size:11px;font-weight:700'; toh.onclick=(function(rf,nome){return function(ev){ ev.stopPropagation(); docParaHistorico(dig, rf, nome, numero, sub, escopo); };})(relFull, x.nome); td2.appendChild(toh); }
       if(!naLix && !isLix){ var del=document.createElement('span'); del.textContent=' 🗑'; del.title=(isFolder?'Enviar a pasta para a Lixeira':'Enviar para a Lixeira')+' — 30 dias, pode restaurar'; del.style.cssText='cursor:pointer;opacity:.5;margin-left:5px'; del.onmouseover=function(){del.style.opacity='1';}; del.onmouseout=function(){del.style.opacity='.5';}; del.onclick=(function(rf){return function(ev){ ev.stopPropagation(); lixeiraDoc(dig, rf, numero, sub, escopo); };})(relFull); td2.appendChild(del); }
       if(naLix && !isLix){ var rst=document.createElement('span'); rst.textContent=' ↩'; rst.title='Restaurar'; rst.style.cssText='cursor:pointer;color:#127a53;font-weight:700;margin-left:5px'; rst.onclick=(function(rf){return function(ev){ ev.stopPropagation(); restaurarDoc(dig, rf, numero, sub, escopo); };})(relFull); td2.appendChild(rst); }
-      tr.appendChild(td1); tr.appendChild(tdd); tr.appendChild(td2);
-      /* arrastar arquivo -> soltar em pasta (mover) */
-      if(!naLix && !isLix && !isFolder){ tr.draggable=true; tr.ondragstart=(function(rf){return function(ev){ try{ ev.dataTransfer.setData('text/docmove', rf); ev.dataTransfer.effectAllowed='move'; }catch(e){} };})(relFull); }
-      if(isFolder && !isLix){ tr.ondragover=function(ev){ ev.preventDefault(); tr.style.background='#eef6f1'; }; tr.ondragleave=function(){ tr.style.background=''; }; tr.ondrop=(function(destRel){return function(ev){ ev.preventDefault(); tr.style.background=''; var src=''; try{ src=ev.dataTransfer.getData('text/docmove'); }catch(e){} if(src && src!==destRel) moverDoc(dig, src, destRel, numero, sub, escopo); };})(relFull); }
+      tr.appendChild(tdc); tr.appendChild(td1); tr.appendChild(tdd); tr.appendChild(td2);
+      /* arrastar: no modo "manual" reordena (cima/baixo); nos demais modos move p/ pasta */
+      if(isManual && !isFolder && !naLix && !isLix){
+        tr.draggable=true;
+        tr.ondragstart=(function(nome){return function(ev){ try{ ev.dataTransfer.setData('text/docreorder', nome); ev.dataTransfer.effectAllowed='move'; }catch(e){} };})(x.nome);
+        tr.ondragover=function(ev){ ev.preventDefault(); tr.style.borderTop='2px solid #185FA5'; };
+        tr.ondragleave=function(){ tr.style.borderTop=''; };
+        tr.ondrop=(function(alvo){return function(ev){ ev.preventDefault(); tr.style.borderTop=''; var src=''; try{ src=ev.dataTransfer.getData('text/docreorder'); }catch(e){} if(src && src!==alvo){ var ord=nomesArq.slice(); var from=ord.indexOf(src); if(from>=0) ord.splice(from,1); var to=ord.indexOf(alvo); if(to<0) to=ord.length; ord.splice(to,0,src); salvarOrdemDocs(dig, dirRel, ord, numero, sub, escopo); } };})(x.nome);
+      } else if(!naLix && !isLix && !isFolder){
+        tr.draggable=true;
+        tr.ondragstart=(function(rf){return function(ev){ try{ ev.dataTransfer.setData('text/docmove', rf); ev.dataTransfer.effectAllowed='move'; }catch(e){} };})(relFull);
+      }
+      if(isFolder && !isLix){ tr.ondragover=function(ev){ ev.preventDefault(); tr.style.background='#eef6f1'; }; tr.ondragleave=function(){ tr.style.background=''; }; tr.ondrop=(function(destRel){return function(ev){ ev.preventDefault(); tr.style.background=''; var src=''; try{ src=ev.dataTransfer.getData('text/docmove'); }catch(e){} if(!src) return; var sels=selRels(); if(SEL[src] && sels.length>1){ moverDocMulti(dig, sels, destRel, numero, sub, escopo); } else if(src!==destRel){ moverDoc(dig, src, destRel, numero, sub, escopo); } };})(relFull); }
       /* clique: pasta navega; arquivo abre edição do nome (renomear inline) */
       if(isFolder){ tr.onclick=(function(rn){return function(){ carregarDocs(numero, rn, escopo); };})(relNav); }
       else if(!naLix){ tr.onclick=(function(rf,nome){return function(){ _renomearInline(nm, dig, rf, numero, sub, escopo, nome); };})(relFull, x.nome); }

@@ -5,6 +5,7 @@
 //   POST /api/docs {path, b64, append}      → grava arquivo (em pedaços base64)
 
 import { createClient } from '@supabase/supabase-js'
+import crypto from 'crypto'
 import fs from 'fs'
 import path from 'path'
 
@@ -13,7 +14,14 @@ export const maxDuration = 60
 
 const ROOT = '/opt/cmpdocs'
 const TRASH = 'Lixeira'
+const ORDEM = '.ordem.json'
 const DIAS_LIXEIRA = 30
+const ESCRITORIO_CMP = '908f77fc-19f5-4d86-9576-f5590af09e0a'
+
+// cliente com service role — só para copiar um documento para o histórico (Storage + tabela anexos)
+function admin() {
+  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } })
+}
 
 function metaPath(procDir) { return path.join(procDir, TRASH, '.meta.json') }
 function lerMeta(procDir) { try { return JSON.parse(fs.readFileSync(metaPath(procDir), 'utf8')) } catch (e) { return {} } }
@@ -73,9 +81,13 @@ export async function GET(request) {
   if (!fs.existsSync(full)) return Response.json({ itens: [] })
   const naLixeira = path.basename(full) === TRASH
   const meta = naLixeira && seg ? lerMeta(path.join(ROOT, seg)) : null
-  const itens = fs.readdirSync(full, { withFileTypes: true }).filter(d => d.name !== '.meta.json').map(d => {
+  // ordem manual salva pelo usuário (arrastar p/ cima/baixo) — nome -> posição
+  let ordem = {}
+  try { const arr = JSON.parse(fs.readFileSync(path.join(full, ORDEM), 'utf8')); if (Array.isArray(arr)) arr.forEach((n, i) => { ordem[n] = i }) } catch (e) {}
+  const itens = fs.readdirSync(full, { withFileTypes: true }).filter(d => d.name !== '.meta.json' && d.name !== ORDEM).map(d => {
     const st = fs.statSync(path.join(full, d.name))
     const it = { nome: d.name, tipo: d.isDirectory() ? 'pasta' : 'arquivo', tam: d.isDirectory() ? null : st.size, mod: st.mtime }
+    if (Object.prototype.hasOwnProperty.call(ordem, d.name)) it.ordem = ordem[d.name]
     if (meta && meta[d.name]) {
       const passados = Math.floor((Date.now() - new Date(meta[d.name].quando).getTime()) / 86400000)
       it.resta = Math.max(0, DIAS_LIXEIRA - passados)
@@ -158,6 +170,43 @@ export async function POST(request) {
     fs.mkdirSync(destDir, { recursive: true })
     fs.renameSync(full, dest)
     return Response.json({ ok: true, path: path.relative(ROOT, dest) })
+  }
+
+  // salvar a ordem manual dos itens de uma pasta (arrastar p/ cima/baixo)
+  if (b.op === 'order') {
+    // aqui `rel` é o diretório cuja ordem estamos salvando
+    if (!fs.existsSync(full) || !fs.statSync(full).isDirectory()) return Response.json({ erro: 'pasta não encontrada' }, { status: 404 })
+    if (rel.split('/').includes(TRASH)) return Response.json({ erro: 'não é possível ordenar a Lixeira' }, { status: 400 })
+    const nomes = Array.isArray(b.ordem) ? b.ordem.map(n => String(n).replace(/[\/\\]/g, '')).filter(Boolean) : []
+    try { fs.writeFileSync(path.join(full, ORDEM), JSON.stringify(nomes)) } catch (e) { return Response.json({ erro: 'falha ao salvar a ordem' }, { status: 500 }) }
+    return Response.json({ ok: true })
+  }
+
+  // copiar um documento do processo para o histórico (Storage 'capturas' + tabela anexos)
+  if (b.op === 'tohist') {
+    if (!fs.existsSync(full) || fs.statSync(full).isDirectory()) return Response.json({ erro: 'arquivo não encontrado' }, { status: 404 })
+    const andamentoId = b.andamento_id
+    const procNum = String(b.processo_numero || '')
+    if (!andamentoId || !procNum) return Response.json({ erro: 'informe andamento_id e processo_numero' }, { status: 400 })
+    const nome = path.basename(full)
+    const ext = (nome.match(/\.[^.]+$/) || [''])[0].toLowerCase()
+    const tipo = ext === '.pdf' ? 'application/pdf'
+      : ext === '.doc' ? 'application/msword'
+      : ext === '.docx' ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      : /\.(png|jpe?g|gif|webp)$/.test(ext) ? ('image/' + ext.replace('.', '').replace('jpg', 'jpeg'))
+      : 'application/octet-stream'
+    let buf
+    try { buf = fs.readFileSync(full) } catch (e) { return Response.json({ erro: 'falha ao ler o arquivo' }, { status: 500 }) }
+    const sb = admin()
+    const key = ESCRITORIO_CMP + '/' + procNum.replace(/\D/g, '') + '/' + crypto.randomUUID() + '_' + nome.replace(/[^\w.\-]+/g, '_')
+    const up = await sb.storage.from('capturas').upload(key, buf, { contentType: tipo, upsert: false })
+    if (up.error) return Response.json({ erro: 'falha ao enviar ao histórico: ' + up.error.message }, { status: 502 })
+    const insA = await sb.from('anexos').insert({
+      escritorio_id: ESCRITORIO_CMP, processo_numero: procNum, andamento_id: andamentoId,
+      origem: 'documento', nome, tipo, tamanho: buf.length, path: key, criado_por: (user && user.email) || null,
+    }).select('id').single()
+    if (insA.error) return Response.json({ erro: 'falha ao registrar o anexo: ' + insA.error.message }, { status: 502 })
+    return Response.json({ ok: true, anexo_id: insA.data && insA.data.id, nome })
   }
 
   fs.mkdirSync(path.dirname(full), { recursive: true })
