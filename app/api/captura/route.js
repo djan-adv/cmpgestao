@@ -210,7 +210,8 @@ export async function POST(request) {
       escritorio_id: ESCRITORIO_CMP,
       titulo: texto || 'Pedido do cliente', cliente: (cliente || (proc && proc.cliente_nome) || '—'),
       numero: (proc && proc.numero) || numero || '—', coluna: 'distribuir',
-      resp: (body.responsavel || null), data: (body.data || null), prazo: (body.prazo || null),
+      // sem data E sem prazo -> agenda em HOJE, senão a tarefa "some" da visão Mês
+      resp: (body.responsavel || null), data: (body.data || (body.prazo ? null : hoje)), prazo: (body.prazo || null),
       tipo: (body.tipo || null), origem: 'captura',
     }).select('id').single()
     kanbanId = k && k.id
