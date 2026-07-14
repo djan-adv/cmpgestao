@@ -1593,7 +1593,7 @@ function renderFechados(){
   html+='</div>';
   el.innerHTML=html;
 }
-function excluirLead(id,ev){ if(ev){ ev.stopPropagation(); } var l=LEADS.find(function(x){return x.id===id;}); if(!l) return; if(!confirm('Apagar o lead "'+(l.nome||'')+'"?\n\nEssa ação não pode ser desfeita.')) return; var i=LEADS.findIndex(function(x){return x.id===id;}); if(i>=0){ LEADS.splice(i,1); salvarLeadsLocal(); renderCaptacao(); } }
+function excluirLead(id,ev){ if(ev){ ev.stopPropagation(); } var l=LEADS.find(function(x){return x.id===id;}); if(!l) return; if(!confirm('Apagar o lead "'+(l.nome||'')+'"?\n\nEssa ação não pode ser desfeita.')) return; var i=LEADS.findIndex(function(x){return x.id===id;}); if(i>=0){ var _dbid=LEADS[i].dbid; LEADS.splice(i,1); apagarLeadDb(_dbid); salvarLeadsLocal(); renderCaptacao(); } }
 /* cor fixa por canal — para bater com o gráfico e identificar o lead pela cor do card */
 var CANAL_CORES={"Indicação":"#2E3A4B","Google Meu Negócio":"#185FA5","Google Ads":"#0e7490","Meta Ads (Instagram/Facebook)":"#6d28a8","Instagram orgânico":"#C13584","Instagram":"#C13584","TikTok":"#111827","YouTube":"#b5342b","Site / Blog (SEO)":"#127a53","Site":"#127a53","LinkedIn":"#0a66c2","Eventos / Palestras":"#C9A227","Parceiro / Correspondente":"#9a6a12","WhatsApp":"#1c9e4b","Jusbrasil":"#1f6f5c","Outro":"#8a8f98"};
 function corCanal(c){ if(CANAL_CORES[c]) return CANAL_CORES[c]; var pal=["#2E3A4B","#185FA5","#C9A227","#127a53","#b5342b","#6d28a8","#0e7490","#9a6a12","#0a66c2","#C13584"]; var s=String(c||""),h=0; for(var i=0;i<s.length;i++){ h=(h*31+s.charCodeAt(i))>>>0; } return pal[h%pal.length]; }
@@ -2421,11 +2421,52 @@ function salvarLead(){var l=window._ledit;var nome=_v("l-nome");if(!nome){alert(
 function hojeISO(){ var d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 /* tempo de conversão em dias (entrada → fechamento) */
 function leadDiasConversao(l){ if(!l||!l.data||!l.dataFechamento) return null; var a=new Date(l.data+'T00:00:00'), b=new Date(l.dataFechamento+'T00:00:00'); if(isNaN(a)||isNaN(b)) return null; return Math.max(0,Math.round((b-a)/86400000)); }
-/* persistência local (interina) — evita perder leads ao recarregar até termos a tabela no banco */
-function salvarLeadsLocal(){ try{ localStorage.setItem('cmpLeads', JSON.stringify(LEADS)); }catch(e){} }
+/* ===== Persistência dos leads no banco (crm_leads) =====
+   Antes os leads viviam só no localStorage ('cmpLeads') — por isso "sumiam" entre
+   celular e desktop. Agora o banco é a fonte da verdade; o localStorage é só cache. */
+function salvarLeadsLocal(){ try{ localStorage.setItem('cmpLeads', JSON.stringify(LEADS)); }catch(e){}
+  if(window.__leadsDbReady){ clearTimeout(window.__leadsSyncTimer); window.__leadsSyncTimer=setTimeout(syncLeadsDb,400); } }
 function carregarLeadsLocal(){ try{ var s=localStorage.getItem('cmpLeads'); if(s){ var arr=JSON.parse(s); if(Array.isArray(arr)&&arr.length){ LEADS=arr; var mx=0; LEADS.forEach(function(l){ if(l.id>mx)mx=l.id; }); lseq=Math.max(lseq,mx+1); } } }catch(e){} }
+async function escId(){ if(window.__escId) return window.__escId; try{ var sb=window.__sb; if(!sb) return null; var ug=await sb.auth.getUser(); var pf=await sb.from('usuarios').select('escritorio_id').eq('id',ug.data.user.id).single(); window.__escId=pf&&pf.data&&pf.data.escritorio_id; return window.__escId; }catch(e){ return null; } }
+function rowToLead(row,id){ return { id:id, dbid:row.id, nome:row.nome||'', canal:row.canal||'', estagio:row.estagio||'novo', tel:row.tel||'', email:row.email||'', valor:row.valor||'', valorFechado:row.valor_fechado||'', motivo:row.motivo||'', data:row.data||'', lemdata:row.lemdata||'', lemtxt:row.lemtxt||'', obs:row.obs||'', prioridade:row.prioridade||'media', acao:row.acao||'', procRef:row.proc_ref||'', labels:(row.labels||[]), arquivos:(row.arquivos||[]), memoria:(row.memoria||null), capturadoEm:row.capturado_em||'', ultimaAtividade:row.ultima_atividade||'', dataFechamento:row.data_fechamento||'', ordem:(row.ordem!=null?row.ordem:0), publicoId:row.publico_id||null }; }
+function leadToRow(l,esc,incluirId){ var row={ escritorio_id:esc, nome:l.nome||null, canal:l.canal||null, estagio:l.estagio||'novo', tel:l.tel||null, email:l.email||null, valor:l.valor||null, valor_fechado:l.valorFechado||null, motivo:l.motivo||null, data:(l.data||null), lemdata:l.lemdata||null, lemtxt:l.lemtxt||null, obs:l.obs||null, prioridade:l.prioridade||'media', acao:l.acao||null, proc_ref:l.procRef||null, labels:(l.labels||[]), arquivos:(l.arquivos||[]), memoria:(l.memoria||null), capturado_em:(l.capturadoEm||null), ultima_atividade:(l.ultimaAtividade||null), data_fechamento:(l.dataFechamento||null), ordem:(l.ordem!=null?l.ordem:0), publico_id:(l.publicoId||null) }; if(incluirId&&l.dbid) row.id=l.dbid; return row; }
+async function carregarLeadsDb(){
+  var sb=window.__sb; if(!sb) return;
+  try{
+    var r=await sb.from('crm_leads').select('*').order('ordem',{ascending:true}).order('criado_em',{ascending:true});
+    if(r.error){ console.warn('crm_leads load:',r.error.message); window.__leadsDbReady=true; return; }
+    var rows=r.data||[];
+    if(rows.length){ LEADS=rows.map(function(row,i){ return rowToLead(row,i+1); }); }
+    else { /* banco vazio: migra o que estiver no cache local, exceto os exemplos */
+      LEADS=(LEADS||[]).filter(function(l){ return l&&l.nome&&!/^Lead Exemplo/i.test(l.nome); }).map(function(l){ delete l.dbid; return l; }); }
+    var mx=0; LEADS.forEach(function(l){ if(l.id>mx)mx=l.id; }); lseq=Math.max(lseq,mx+1);
+    window.__leadsDbReady=true;
+    salvarLeadsLocal(); /* dispara migração (insere os sem dbid) e atualiza cache */
+    try{ if(typeof crmView!=='undefined' && crmView==='captacao' && typeof renderCaptacao==='function') renderCaptacao(); }catch(e){}
+  }catch(e){ console.warn('crm_leads:',e); window.__leadsDbReady=true; }
+}
+async function syncLeadsDb(){
+  var sb=window.__sb; if(!sb||!window.__leadsDbReady) return;
+  var esc=await escId(); if(!esc) return;
+  try{
+    LEADS.forEach(function(l,i){ l.ordem=i; }); /* ordem = posição atual no quadro */
+    var novos=LEADS.filter(function(l){ return !l.dbid; });
+    var velhos=LEADS.filter(function(l){ return !!l.dbid; });
+    if(novos.length){
+      var ins=await sb.from('crm_leads').insert(novos.map(function(l){ return leadToRow(l,esc,false); })).select('id');
+      if(ins&&ins.data){ ins.data.forEach(function(row,i){ if(novos[i]) novos[i].dbid=row.id; }); try{ localStorage.setItem('cmpLeads', JSON.stringify(LEADS)); }catch(e){} }
+      else if(ins&&ins.error){ console.warn('crm_leads insert:',ins.error.message); }
+    }
+    if(velhos.length){
+      var up=await sb.from('crm_leads').upsert(velhos.map(function(l){ return leadToRow(l,esc,true); }),{onConflict:'id'});
+      if(up&&up.error) console.warn('crm_leads upsert:',up.error.message);
+    }
+  }catch(e){ console.warn('syncLeadsDb:',e); }
+}
+async function apagarLeadDb(dbid){ if(!dbid) return; try{ var sb=window.__sb; if(sb) await sb.from('crm_leads').delete().eq('id',dbid); }catch(e){} }
 try{ carregarLeadsLocal(); }catch(e){}
 try{ carregarFunilLocal(); }catch(e){}
+(function tryLeadsDb(){ if(window.__sb){ carregarLeadsDb(); } else { setTimeout(tryLeadsDb,800); } })();
 
 /* ===== Leads: anexos, caixa de entrada (leads_publicos), mesclagem e leitura por IA ===== */
 var LEADS_BUCKET='leads-publicos';

@@ -20,6 +20,7 @@
   .sel{background:#eef6f1;border:1px solid #bfe3d1;border-radius:10px;padding:10px 12px;font-size:14px;margin-top:6px;display:flex;justify-content:space-between;align-items:center}
   .btn{display:inline-block;border:0;border-radius:10px;padding:14px 16px;font-size:16px;font-weight:700;cursor:pointer;width:100%;margin-top:8px}
   .btn.hist{background:var(--green);color:#fff} .btn.tar{background:var(--navy);color:#fff}
+  .btn.lead{background:var(--gold);color:#fff} .btn.nova{background:#4b5563;color:#fff}
   .btn[disabled]{opacity:.5}
   .up{border:1.5px dashed #cfd4da;border-radius:10px;padding:14px;text-align:center;color:var(--muted);cursor:pointer;margin-top:4px}
   .files div{display:flex;justify-content:space-between;align-items:center;font-size:13px;padding:6px 0;border-bottom:1px solid var(--line)}
@@ -39,7 +40,7 @@
 </div>
 <script>
 var K=new URLSearchParams(location.search).get('k')||'';
-var SEL=null, FILES=[];
+var SEL=null, FILES=[], DONE=[];
 var app=document.getElementById('app');
 function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 
@@ -54,18 +55,28 @@ function render(){
    '<div id="selbox"></div>'+
    '<label>O que o cliente pediu</label>'+
    '<textarea id="txt" placeholder="Descreva o pedido / mensagem do cliente..."></textarea>'+
+   '<label>Telefone (opcional)</label>'+
+   '<input id="tel" type="text" inputmode="tel" placeholder="(83) 90000-0000" autocomplete="off">'+
    '<label>Anexos (documentos, prints)</label>'+
    '<div class="up" id="up">📎 Toque para anexar arquivos ou fotos</div>'+
    '<input id="file" type="file" multiple accept="*/*" style="display:none">'+
    '<div class="files" id="files"></div>'+
-   '<button class="btn hist" id="bHist" disabled onclick="enviar(\'historico\')">✓ Gravar no histórico</button>'+
-   '<button class="btn tar" id="bTar" onclick="enviar(\'tarefa\')">＋ Criar tarefa</button>'+
-   '<div class="small" style="margin-top:8px">O botão do histórico habilita ao selecionar um processo. Sem processo, use "Criar tarefa".</div>'+
+   '<div id="botoes"></div>'+
+   '<div class="small" style="margin-top:8px">Histórico exige um processo selecionado. Sem processo, use "Criar tarefa" ou "Novo lead". A IA lê os prints e destaca o telefone.</div>'+
    '<div id="msg"></div>';
+  renderBotoes();
   var q=document.getElementById('q'), tmr=null;
   q.addEventListener('input',function(){ clearTimeout(tmr); tmr=setTimeout(buscar,320); });
   document.getElementById('up').onclick=function(){ document.getElementById('file').click(); };
   document.getElementById('file').onchange=addFiles;
+}
+function renderBotoes(){
+  var b=document.getElementById('botoes'); if(!b) return; var out='';
+  if(DONE.indexOf('historico')<0) out+='<button class="btn hist" id="bHist"'+(SEL?'':' disabled')+' onclick="enviar(\'historico\')">✓ Gravar no histórico</button>';
+  if(DONE.indexOf('tarefa')<0)    out+='<button class="btn tar" id="bTar" onclick="enviar(\'tarefa\')">＋ Criar tarefa</button>';
+  if(DONE.indexOf('lead')<0)      out+='<button class="btn lead" id="bLead" onclick="enviar(\'lead\')">👤 Novo lead</button>';
+  if(DONE.length)                 out+='<button class="btn nova" onclick="location.reload()">↻ Nova captura</button>';
+  b.innerHTML=out;
 }
 async function buscar(){
   var q=document.getElementById('q').value.trim(); var res=document.getElementById('res');
@@ -84,9 +95,9 @@ function selecionar(id,numero,cliente){
   document.getElementById('res').innerHTML='';
   document.getElementById('q').value='';
   document.getElementById('selbox').innerHTML='<div class="sel"><span>✓ <b>'+esc(cliente)+'</b> — '+esc(numero)+'</span><span class="rm" onclick="limparSel()">trocar</span></div>';
-  document.getElementById('bHist').disabled=false;
+  renderBotoes();
 }
-function limparSel(){ SEL=null; document.getElementById('selbox').innerHTML=''; document.getElementById('bHist').disabled=true; }
+function limparSel(){ SEL=null; document.getElementById('selbox').innerHTML=''; renderBotoes(); }
 function addFiles(ev){
   var fs=ev.target.files||[];
   for(var i=0;i<fs.length;i++){ (function(f){
@@ -103,23 +114,36 @@ function renderFiles(){
 }
 function rmFile(i){ FILES.splice(i,1); renderFiles(); }
 async function enviar(acao){
-  var txt=document.getElementById('txt').value.trim();
+  var txt=((document.getElementById('txt')||{}).value||'').trim();
+  var telv=((document.getElementById('tel')||{}).value||'').trim();
   var msg=document.getElementById('msg');
   if(!txt && !FILES.length){ msg.innerHTML='<div class="err">Escreva o pedido ou anexe um arquivo.</div>'; return; }
-  if(acao==='historico' && !SEL){ msg.innerHTML='<div class="err">Selecione um processo (ou use "Criar tarefa").</div>'; return; }
-  var bH=document.getElementById('bHist'), bT=document.getElementById('bTar');
-  bH.disabled=true; bT.disabled=true; msg.innerHTML='<div class="small">Enviando…</div>';
-  var payload={ k:K, acao:acao, texto:txt, arquivos:FILES,
-    processo_id:(SEL&&SEL.id)||null, numero:(SEL&&SEL.numero)||'', cliente:(SEL&&SEL.cliente)||'',
-    registrarHistorico:(acao==='tarefa'&&!!SEL) };
+  if(acao==='historico' && !SEL){ msg.innerHTML='<div class="err">Selecione um processo (ou use "Criar tarefa"/"Novo lead").</div>'; return; }
+  var nomeLead='';
+  if(acao==='lead'){
+    nomeLead=(SEL&&SEL.cliente)||((document.getElementById('q')||{}).value||'').trim();
+    if(!nomeLead){ nomeLead=(prompt('Nome do novo lead:')||'').trim(); if(!nomeLead){ msg.innerHTML='<div class="err">Informe o nome do lead.</div>'; return; } }
+  }
+  Array.prototype.forEach.call(document.querySelectorAll('#botoes button'),function(x){x.disabled=true;});
+  msg.innerHTML='<div class="small">Enviando…'+(FILES.length?' (lendo os anexos com IA, pode levar alguns segundos)':'')+'</div>';
+  var payload={ k:K, acao:acao, texto:txt, tel:telv, arquivos:FILES,
+    processo_id:(SEL&&SEL.id)||null, numero:(SEL&&SEL.numero)||'',
+    cliente:(acao==='lead'?nomeLead:((SEL&&SEL.cliente)||'')),
+    registrarHistorico:(acao==='tarefa'&&!!SEL&&DONE.indexOf('historico')<0) };
   try{
     var r=await fetch('/api/captura',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
     var d=await r.json();
-    if(!r.ok){ msg.innerHTML='<div class="err">'+esc((d&&d.erro)||'falha')+'</div>'; bH.disabled=!SEL; bT.disabled=false; return; }
-    var oq=acao==='historico'?('Registrado no histórico'+(d.processo?(' de '+esc(d.processo)):'')):'Tarefa criada';
-    app.innerHTML='<div class="ok">✓ '+oq+'.'+(d.anexos?(' '+d.anexos+' anexo(s).'):'')+'</div>'+
-      '<button class="btn tar" onclick="location.reload()">Nova captura</button>';
-  }catch(e){ msg.innerHTML='<div class="err">Falha ao enviar.</div>'; bH.disabled=!SEL; bT.disabled=false; }
+    if(!r.ok){ msg.innerHTML='<div class="err">'+esc((d&&d.erro)||'falha')+'</div>'; renderBotoes(); return; }
+    if(DONE.indexOf(acao)<0) DONE.push(acao);
+    var oq=acao==='historico'?('Registrado no histórico'+(d.processo?(' de '+esc(d.processo)):'')):(acao==='tarefa'?'Tarefa criada':'Lead criado');
+    var extra='';
+    if(d.anexos) extra+=' '+d.anexos+' anexo(s).';
+    if(d.transcricao) extra+=' Anexo transcrito pela IA.';
+    if(d.telefone) extra+=' 📞 '+esc(d.telefone);
+    msg.innerHTML='<div class="ok">✓ '+oq+'.'+extra+'</div>'+
+      (DONE.length< 3?'<div class="small" style="margin-top:6px">Quer também usar os mesmos dados? Toque em outra ação abaixo, ou em "Nova captura".</div>':'');
+    renderBotoes();
+  }catch(e){ msg.innerHTML='<div class="err">Falha ao enviar.</div>'; renderBotoes(); }
 }
 </script>
 </body>
