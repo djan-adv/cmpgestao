@@ -64,10 +64,12 @@ async function transcreveAnexos(decoded, contextoTexto) {
     'Extraia APENAS o conteúdo útil (a mensagem / o pedido). DESCARTE tudo que for interface do app: ' +
     'nome no topo, "online", horários, ícones, botões (Ligar, Vídeo, Pix, Pesquisar, Câmera), status de bateria/sinal, "digitando…", "visto por último".\n\n' +
     'Responda SOMENTE com um JSON válido, sem nenhum texto fora dele, exatamente assim:\n' +
-    '{"telefones":[""],"transcricao":""}\n\n' +
+    '{"telefones":[""],"transcricao":"","assunto":"","nome":""}\n\n' +
     'REGRAS OBRIGATÓRIAS:\n' +
     '- transcricao: o texto das mensagens, limpo e organizado (indique o remetente quando der para saber). Sem inventar nada. Se não houver texto legível, use "".\n' +
     '- telefones: números de telefone/WhatsApp que REALMENTE aparecem no anexo (apenas dígitos com DDD). Se não houver nenhum, use [].\n' +
+    '- assunto: resumo curto (poucas palavras) do que a pessoa quer/precisa. Ex.: "Quer contratar — cobrança".\n' +
+    '- nome: nome da pessoa se aparecer claramente no print (ex.: no topo da conversa). Senão "".\n' +
     '- Nunca invente nome, telefone, valores ou datas.'
   content.push({ type: 'text', text: instr })
   try {
@@ -84,8 +86,8 @@ async function transcreveAnexos(decoded, contextoTexto) {
     if (!m) return { status: 'falhou', transcricao: '', telefones: [] }
     const out = JSON.parse(m[0])
     const tels = Array.isArray(out.telefones) ? out.telefones.map((x) => String(x || '').replace(/\D/g, '')).filter((x) => x.length >= 8) : []
-    return { status: 'ok', transcricao: String(out.transcricao || '').trim(), telefones: tels }
-  } catch (e) { return { status: 'falhou', transcricao: '', telefones: [] } }
+    return { status: 'ok', transcricao: String(out.transcricao || '').trim(), telefones: tels, assunto: String(out.assunto || '').trim(), nome: String(out.nome || '').trim() }
+  } catch (e) { return { status: 'falhou', transcricao: '', telefones: [], assunto: '', nome: '' } }
 }
 
 // ---- GET: busca de processos por nome / número ----
@@ -162,12 +164,12 @@ export async function POST(request) {
         arquivos.push({ nome: f.nome, path, tipo: f.tipo, tamanho: f.buf.length, quando: new Date().toISOString() })
       } catch (e) { /* pula */ }
     }
-    const nomeLead = cliente || (texto ? texto.slice(0, 60) : 'Novo lead')
+    const nomeLead = cliente || (ocr.nome || '') || (texto ? texto.slice(0, 60) : 'Novo lead')
     const obs = (texto || '') + blocoOcr
     const hojeL = new Date().toISOString().slice(0, 10)
     const ins = await sb.from('crm_leads').insert({
       escritorio_id: ESCRITORIO_CMP, nome: nomeLead, canal: (body.canal || 'Captura'), estagio: 'novo',
-      tel: (tel || telOcr || null), obs: (obs || null), arquivos, prioridade: 'media',
+      tel: (tel || telOcr || null), obs: (obs || null), acao: (ocr.assunto || null), arquivos, prioridade: 'media',
       data: hojeL, capturado_em: new Date().toISOString(), ultima_atividade: new Date().toISOString(),
       memoria: (ocr.transcricao ? { transcricao: ocr.transcricao, telefones: telsOcr } : null),
       ordem: Date.now(),
