@@ -3727,9 +3727,11 @@ async function buscarProcessos(){
     try{ var r=await fetch('/api/processo?numero='+encodeURIComponent(n)); dj=await r.json(); }catch(e){ dj={erro:'falha na consulta'}; }
     var ok=!dj.erro; var idx=window.__buscaFound.length;
     window.__buscaFound.push({numero:n,dj:dj,jaTem:jaTem});
-    rows+='<tr><td>'+(jaTem?'<span class="note">já existe</span>':(ok?'<input type="checkbox" checked data-i="'+idx+'">':'<span class="note">—</span>'))+'</td>'+
+    /* mesmo SEM dados na base pública (novo/sigiloso), deixa marcar para cadastrar
+       manualmente — só o número. Antes vinha um "—" e não dava para selecionar. */
+    rows+='<tr><td>'+(jaTem?'<span class="note">já existe</span>':'<input type="checkbox" checked data-i="'+idx+'">')+'</td>'+
       '<td class="proc">'+n+'</td>'+
-      '<td>'+(ok?esc(((dj.classe||'')+' '+(dj.assunto||'')).trim()||'—'):'<span style="color:#b91c1c">'+esc(dj.erro||'não encontrado')+'</span>')+'</td>'+
+      '<td>'+(ok?esc(((dj.classe||'')+' '+(dj.assunto||'')).trim()||'—'):'<span style="color:#b91c1c">'+esc(dj.erro||'sem dados na base pública — cadastrar manualmente')+'</span>')+'</td>'+
       '<td>'+esc(dj.orgao||'—')+'</td>'+
       '<td style="text-align:center">'+(ok?(dj.totalAndamentos||0):'—')+'</td></tr>';
   }
@@ -3746,8 +3748,9 @@ async function cadastrarSelecionados(){
   var done=0;
   for(var c=0;c<checks.length;c++){
     var item=window.__buscaFound[+checks[c].getAttribute('data-i')]; var dj=item.dj, n=item.numero;
+    var naoLoc=!!(dj&&dj.erro) || !(dj && (dj.classe||dj.assunto||(dj.andamentos&&dj.andamentos.length)));
     var ands=dj.andamentos||[]; var ultmov=(ands[0]&&ands[0].data)?String(ands[0].data).slice(0,10):null;
-    var ins=await sb.from('processos').insert({escritorio_id:esc2,numero:n,classe:dj.classe||null,assunto:dj.assunto||null,orgao:dj.orgao||null,ultima_movimentacao:ultmov,fonte:'datajud'}).select('id').single();
+    var ins=await sb.from('processos').insert({escritorio_id:esc2,numero:n,classe:dj.classe||null,assunto:dj.assunto||null,orgao:dj.orgao||null,ultima_movimentacao:ultmov,fonte:(naoLoc?'manual':'datajud')}).select('id').single();
     if(ins.error) continue; var pid=ins.data.id;
     var arows=ands.filter(function(a){return a.texto;}).map(function(a){return {processo_id:pid,data:(a.data?String(a.data).slice(0,10):null),texto:a.texto,fonte:'datajud'};});
     if(arows.length) await sb.from('andamentos').insert(arows);
