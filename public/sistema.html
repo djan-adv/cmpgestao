@@ -4532,6 +4532,7 @@ function _winFolderSVG(){ return '<svg width="16" height="16" viewBox="0 0 24 24
 function _docIcon(x){ if(x.tipo==='pasta') return x.nome==='Lixeira'?'🗑️ ':_winFolderSVG(); return /\.pdf$/i.test(x.nome)?'📄 ':(/\.docx?$/i.test(x.nome)?'📝 ':(/\.(png|jpe?g|gif|webp)$/i.test(x.nome)?'🖼️ ':(/\.(zip|rar|7z)$/i.test(x.nome)?'🗜️ ':(/\.(xlsx?|csv)$/i.test(x.nome)?'📊 ':'📎 ')))); }
 function _setDocSort(s){ window.__docSort=s; var c=window.__docCtx; if(c) carregarDocs(c.numero,c.sub,c.escopo); }
 function _sortBtnHTML(val,lbl){ var on=(window.__docSort||'az')===val; return '<a href="#" onclick="_setDocSort(\''+val+'\');return false" style="text-decoration:'+(on?'underline':'none')+';color:'+(on?'#2E3A4B':'#8a8f98')+';font-weight:'+(on?'700':'400')+';margin-left:6px">'+lbl+'</a>'; }
+function _docAccBtn(txt,cor,titulo){ var s=document.createElement('span'); s.textContent=txt; s.title=titulo; s.style.cssText='display:inline-block;cursor:pointer;color:'+cor+';border:1px solid '+cor+'40;border-radius:6px;padding:1px 7px;margin-left:5px;font-size:13px;line-height:1.5;background:#fff'; s.onmouseover=function(){s.style.background=cor+'12';}; s.onmouseout=function(){s.style.background='#fff';}; return s; }
 async function renomearDoc(dig, relFull, novo, numero, sub, escopo){
   try{ var tok=await docToken();
     var r=await fetch('/api/docs',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({op:'rename',path:dig+'/'+relFull,nome:novo})});
@@ -4561,28 +4562,6 @@ async function salvarOrdemDocs(dig, dirRel, nomes, numero, sub, escopo){
     await fetch('/api/docs',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({op:'order',path:dirRel,ordem:nomes})});
   }catch(e){}
   carregarDocs(numero,sub,escopo);
-}
-async function docParaHistorico(dig, relFull, nomeArq, numero, sub, escopo){
-  if(typeof atual==='undefined' || !atual || !atual._id){ alert('Abra a ficha do processo primeiro.'); return; }
-  var obs=window.prompt('Adicionar uma cópia de "'+nomeArq+'" ao histórico.\nObservação (opcional):','');
-  if(obs===null) return; /* cancelou */
-  var hoje=new Date(); var iso=hoje.getFullYear()+'-'+String(hoje.getMonth()+1).padStart(2,'0')+'-'+String(hoje.getDate()).padStart(2,'0');
-  var txt='📎 '+nomeArq+(obs&&obs.trim()?(' — '+obs.trim()):'')+' (cópia do documento anexada ao histórico)';
-  try{
-    var sb=window.__sb;
-    var w=await sb.from('andamentos').insert({processo_id:atual._id,data:iso,texto:txt,fonte:'manual'}).select('id').single();
-    if(w.error){ alert('Erro ao criar o lançamento: '+w.error.message); return; }
-    var andId=w.data&&w.data.id;
-    atual.hist_full=atual.hist_full||[]; atual.hist_full.unshift({id:andId,data:iso+'T00:00:00.000Z',texto:txt,f:'manual'});
-    if(typeof histShown!=='undefined') histShown=Math.max(histShown||10,10);
-    if(typeof renderHistorico==='function') renderHistorico();
-    var tok=await docToken();
-    var r=await fetch('/api/docs',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({op:'tohist',path:dig+'/'+relFull,andamento_id:andId,processo_numero:atual.numero})});
-    var j=await r.json().catch(function(){return {};});
-    if(!r.ok){ alert('Lançamento criado, mas o anexo falhou: '+((j&&j.erro)||('HTTP '+r.status))); return; }
-    if(typeof loadAnexosProc==='function') loadAnexosProc(atual.numero);
-    alert('✓ Documento adicionado ao histórico em '+iso.split('-').reverse().join('/')+'.');
-  }catch(e){ alert('Erro: '+(e&&e.message||e)); }
 }
 async function carregarDocs(numero, sub, escopo){
   escopo=escopo||'proc'; var E=_docEsc(escopo);
@@ -4659,25 +4638,26 @@ async function carregarDocs(numero, sub, escopo){
       /* seleção múltipla (arquivos) */
       var tdc=document.createElement('td'); tdc.style.cssText='width:20px;padding-left:2px';
       if(!isFolder && !naLix && !isLix){ var chk=document.createElement('input'); chk.type='checkbox'; chk.className='docchk'; chk.checked=!!SEL[relFull]; chk.onclick=function(ev){ ev.stopPropagation(); }; chk.onchange=(function(rf,c){return function(){ if(c.checked) SEL[rf]=true; else delete SEL[rf]; atualizaSelBar(); };})(relFull, chk); tdc.appendChild(chk); }
-      /* nome + ícone */
-      var td1=document.createElement('td'); td1.style.cssText='padding:5px 4px';
+      /* nome (linha 1) + tamanho·data em letras pequenas (linha 2) */
+      var td1=document.createElement('td'); td1.style.cssText='padding:6px 4px';
       var nmeWrap=document.createElement('span'); nmeWrap.innerHTML=_docIcon(x);
       var nm=document.createElement('span'); nm.textContent=x.nome; nmeWrap.appendChild(nm);
       if(isFolder){ nmeWrap.style.fontWeight='600'; }
       if(isLix){ td1.style.color='#8a8f98'; td1.title='Itens excluídos ficam aqui por 30 dias'; }
       td1.appendChild(nmeWrap);
-      /* download (arquivos) */
-      var tdd=document.createElement('td'); tdd.style.cssText='width:24px;text-align:center';
-      if(!isFolder && !naLix){ var dl=document.createElement('span'); dl.textContent='⬇'; dl.title='Baixar'; dl.style.cssText='cursor:pointer;color:#185FA5;opacity:.65'; dl.onmouseover=function(){dl.style.opacity='1';}; dl.onmouseout=function(){dl.style.opacity='.65';}; dl.onclick=(function(rf){return function(ev){ ev.stopPropagation(); baixarDoc(dig, rf); };})(relFull); tdd.appendChild(dl); }
-      /* tamanho/data + mover p/ principal + excluir/restaurar */
-      var td2=document.createElement('td'); td2.className='note'; td2.style.cssText='text-align:right;white-space:nowrap';
-      var dtm=x.mod?String(x.mod).slice(0,10).split('-').reverse().join('/'):'';
-      td2.appendChild(document.createTextNode((x.tam?(Math.max(1,Math.round(x.tam/1024))+' KB · '):'')+dtm+(naLix&&x.resta!=null?(' · '+x.resta+'d'):'')));
-      if(sub && !isLix && !naLix){ var up2=document.createElement('span'); up2.textContent=' ⬆'; up2.title='Mover para a pasta principal'; up2.style.cssText='cursor:pointer;color:#185FA5;margin-left:5px;font-weight:700'; up2.onclick=(function(rf){return function(ev){ ev.stopPropagation(); if(confirm('Mover "'+x.nome+'" para a pasta principal?')) moverDoc(dig, rf, escBaseRel, numero, sub, escopo); };})(relFull); td2.appendChild(up2); }
-      if(!isFolder && !isLix && !naLix){ var toh=document.createElement('span'); toh.textContent=' ➕hist'; toh.title='Adicionar uma cópia deste documento ao histórico'; toh.style.cssText='cursor:pointer;color:#127a53;margin-left:6px;font-size:11px;font-weight:700'; toh.onclick=(function(rf,nome){return function(ev){ ev.stopPropagation(); docParaHistorico(dig, rf, nome, numero, sub, escopo); };})(relFull, x.nome); td2.appendChild(toh); }
-      if(!naLix && !isLix){ var del=document.createElement('span'); del.textContent=' 🗑'; del.title=(isFolder?'Enviar a pasta para a Lixeira':'Enviar para a Lixeira')+' — 30 dias, pode restaurar'; del.style.cssText='cursor:pointer;opacity:.5;margin-left:5px'; del.onmouseover=function(){del.style.opacity='1';}; del.onmouseout=function(){del.style.opacity='.5';}; del.onclick=(function(rf){return function(ev){ ev.stopPropagation(); lixeiraDoc(dig, rf, numero, sub, escopo); };})(relFull); td2.appendChild(del); }
-      if(naLix && !isLix){ var rst=document.createElement('span'); rst.textContent=' ↩'; rst.title='Restaurar'; rst.style.cssText='cursor:pointer;color:#127a53;font-weight:700;margin-left:5px'; rst.onclick=(function(rf){return function(ev){ ev.stopPropagation(); restaurarDoc(dig, rf, numero, sub, escopo); };})(relFull); td2.appendChild(rst); }
-      tr.appendChild(tdc); tr.appendChild(td1); tr.appendChild(tdd); tr.appendChild(td2);
+      if(!isFolder){
+        var dtm=x.mod?String(x.mod).slice(0,10).split('-').reverse().join('/'):'';
+        var metaL=document.createElement('div'); metaL.style.cssText='font-size:11px;color:#9aa0a6;margin-top:1px';
+        metaL.textContent=(x.tam?(Math.max(1,Math.round(x.tam/1024))+' KB · '):'')+dtm+(naLix&&x.resta!=null?(' · restam '+x.resta+'d'):'');
+        td1.appendChild(metaL);
+      }
+      /* botões à direita: mover p/ principal · baixar · lixeira/restaurar */
+      var tdAcc=document.createElement('td'); tdAcc.style.cssText='text-align:right;white-space:nowrap;width:1%;vertical-align:middle';
+      if(sub && !isFolder && !isLix && !naLix){ var up2=_docAccBtn('⬆','#185FA5','Mover para a pasta principal'); up2.onclick=(function(rf){return function(ev){ ev.stopPropagation(); if(confirm('Mover "'+x.nome+'" para a pasta principal?')) moverDoc(dig, rf, escBaseRel, numero, sub, escopo); };})(relFull); tdAcc.appendChild(up2); }
+      if(!isFolder && !naLix){ var dl=_docAccBtn('⬇','#185FA5','Baixar'); dl.onclick=(function(rf){return function(ev){ ev.stopPropagation(); baixarDoc(dig, rf); };})(relFull); tdAcc.appendChild(dl); }
+      if(!naLix && !isLix){ var del=_docAccBtn('🗑','#b5342b',(isFolder?'Enviar a pasta para a Lixeira':'Enviar para a Lixeira')+' — 30 dias, pode restaurar'); del.onclick=(function(rf){return function(ev){ ev.stopPropagation(); lixeiraDoc(dig, rf, numero, sub, escopo); };})(relFull); tdAcc.appendChild(del); }
+      if(naLix && !isLix){ var rst=_docAccBtn('↩','#127a53','Restaurar'); rst.onclick=(function(rf){return function(ev){ ev.stopPropagation(); restaurarDoc(dig, rf, numero, sub, escopo); };})(relFull); tdAcc.appendChild(rst); }
+      tr.appendChild(tdc); tr.appendChild(td1); tr.appendChild(tdAcc);
       /* arrastar: no modo "manual" reordena (cima/baixo); nos demais modos move p/ pasta */
       if(isManual && !isFolder && !naLix && !isLix){
         tr.draggable=true;
