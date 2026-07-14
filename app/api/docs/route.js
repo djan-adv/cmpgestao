@@ -209,6 +209,19 @@ export async function POST(request) {
     return Response.json({ ok: true, anexo_id: insA.data && insA.data.id, nome })
   }
 
+  // criar pasta vazia ({ path, mkdir:true }). Se já existir um arquivo vazio com esse
+  // nome (bug anterior, quando mkdir não era tratado), remove-o e cria a pasta.
+  if (b.mkdir) {
+    if (fs.existsSync(full)) {
+      const st = fs.statSync(full)
+      if (st.isDirectory()) return Response.json({ ok: true, path: rel })
+      if (st.isFile() && st.size === 0) { try { fs.rmSync(full) } catch (e) {} }
+      else return Response.json({ erro: 'já existe um arquivo com esse nome' }, { status: 409 })
+    }
+    fs.mkdirSync(full, { recursive: true })
+    return Response.json({ ok: true, path: rel })
+  }
+
   fs.mkdirSync(path.dirname(full), { recursive: true })
   const buf = Buffer.from(b.b64 || '', 'base64')
   if (b.append) fs.appendFileSync(full, buf)
