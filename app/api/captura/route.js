@@ -38,24 +38,36 @@ function chaveOk(k) {
   return !!(secret && k && k === secret)
 }
 
+// formata dígitos BR em (DD) 9XXXX-XXXX quando possível; senão devolve como veio
+function fmtTelBR(dig) {
+  const d = String(dig || '').replace(/\D/g, '')
+  if (d.length === 11) return '(' + d.slice(0, 2) + ') ' + d.slice(2, 7) + '-' + d.slice(7)
+  if (d.length === 10) return '(' + d.slice(0, 2) + ') ' + d.slice(2, 6) + '-' + d.slice(6)
+  return d || ''
+}
+
 // ---- OCR/transcrição via IA (Anthropic vision) — mesmo padrão de ler-lead ----
+// devolve sempre { status, transcricao, telefones }.
+// status: 'ok' | 'sem_chave' | 'sem_midia' | 'falhou'
 async function transcreveAnexos(decoded, contextoTexto) {
   const key = process.env.ANTHROPIC_API_KEY
-  if (!key) return null
+  if (!key) return { status: 'sem_chave', transcricao: '', telefones: [] }
   const content = []
   for (const f of decoded) {
     if (/^image\//.test(f.tipo)) content.push({ type: 'image', source: { type: 'base64', media_type: f.tipo, data: f.b64 } })
     else if (f.tipo === 'application/pdf' || /\.pdf$/i.test(f.nome)) content.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: f.b64 } })
   }
-  if (!content.length) return null
+  if (!content.length) return { status: 'sem_midia', transcricao: '', telefones: [] }
   const instr =
-    'Você recebe print(s) de conversa / documento(s) que um advogado capturou de um cliente.\n' +
+    'Você recebe print(s) de conversa de WhatsApp / documento(s) que um cliente enviou a um advogado.\n' +
     'Contexto digitado pelo advogado: ' + (contextoTexto || '(vazio)') + '\n\n' +
+    'Extraia APENAS o conteúdo útil (a mensagem / o pedido). DESCARTE tudo que for interface do app: ' +
+    'nome no topo, "online", horários, ícones, botões (Ligar, Vídeo, Pix, Pesquisar, Câmera), status de bateria/sinal, "digitando…", "visto por último".\n\n' +
     'Responda SOMENTE com um JSON válido, sem nenhum texto fora dele, exatamente assim:\n' +
     '{"telefones":[""],"transcricao":""}\n\n' +
     'REGRAS OBRIGATÓRIAS:\n' +
-    '- transcricao: transcreva FIELMENTE todo o texto legível do(s) anexo(s), de forma organizada e sem inventar nada. Se for print de conversa, indique quem falou quando der para saber.\n' +
-    '- telefones: liste os números de telefone/WhatsApp que REALMENTE aparecem no anexo (apenas dígitos com DDD). Se não houver nenhum, use [].\n' +
+    '- transcricao: o texto das mensagens, limpo e organizado (indique o remetente quando der para saber). Sem inventar nada. Se não houver texto legível, use "".\n' +
+    '- telefones: números de telefone/WhatsApp que REALMENTE aparecem no anexo (apenas dígitos com DDD). Se não houver nenhum, use [].\n' +
     '- Nunca invente nome, telefone, valores ou datas.'
   content.push({ type: 'text', text: instr })
   try {
@@ -65,15 +77,15 @@ async function transcreveAnexos(decoded, contextoTexto) {
       body: JSON.stringify({ model: 'claude-sonnet-5', max_tokens: 1500, messages: [{ role: 'user', content }] }),
     })
     const data = await r.json()
-    if (!r.ok) return null
+    if (!r.ok) return { status: 'falhou', transcricao: '', telefones: [] }
     let txt = ''
     try { txt = (data.content || []).map((c) => c.text || '').join('\n') } catch (e) {}
     const m = txt.match(/\{[\s\S]*\}/)
-    if (!m) return null
+    if (!m) return { status: 'falhou', transcricao: '', telefones: [] }
     const out = JSON.parse(m[0])
-    const tels = Array.isArray(out.telefones) ? out.telefones.map((x) => String(x || '').trim()).filter(Boolean) : []
-    return { transcricao: String(out.transcricao || '').trim(), telefones: tels }
-  } catch (e) { return null }
+    const tels = Array.isArray(out.telefones) ? out.telefones.map((x) => String(x || '').replace(/\D/g, '')).filter((x) => x.length >= 8) : []
+    return { status: 'ok', transcricao: String(out.transcricao || '').trim(), telefones: tels }
+  } catch (e) { return { status: 'falhou', transcricao: '', telefones: [] } }
 }
 
 // ---- GET: busca de processos por nome / número ----
@@ -130,12 +142,12 @@ export async function POST(request) {
   const sb = admin()
 
   // OCR/transcrição (uma vez) — quando houver imagem/PDF
-  let ocr = null
   const temMidia = decoded.some(f => /^image\//.test(f.tipo) || f.tipo === 'application/pdf' || /\.pdf$/i.test(f.nome))
-  if (temMidia) ocr = await transcreveAnexos(decoded, texto)
-  const telOcr = (ocr && ocr.telefones && ocr.telefones[0]) || ''
-  const blocoOcr = (ocr && ocr.transcricao)
-    ? ('\n\n— Transcrição do anexo (IA):\n' + ((ocr.telefones && ocr.telefones.length) ? ('📞 Telefone(s): ' + ocr.telefones.join(', ') + '\n') : '') + ocr.transcricao)
+  const ocr = temMidia ? await transcreveAnexos(decoded, texto) : { status: 'sem_midia', transcricao: '', telefones: [] }
+  const telsOcr = (ocr.telefones || []).map(fmtTelBR).filter(Boolean)
+  const telOcr = telsOcr[0] || ''
+  const blocoOcr = (ocr.transcricao)
+    ? ('\n\n— Transcrição do anexo (IA):\n' + (telsOcr.length ? ('📞 Telefone(s): ' + telsOcr.join(', ') + '\n') : '') + ocr.transcricao)
     : ''
 
   // ===== LEAD (novo cliente / sem processo) =====
@@ -157,21 +169,21 @@ export async function POST(request) {
       escritorio_id: ESCRITORIO_CMP, nome: nomeLead, canal: (body.canal || 'Captura'), estagio: 'novo',
       tel: (tel || telOcr || null), obs: (obs || null), arquivos, prioridade: 'media',
       data: hojeL, capturado_em: new Date().toISOString(), ultima_atividade: new Date().toISOString(),
-      memoria: (ocr ? { transcricao: ocr.transcricao, telefones: ocr.telefones } : null),
+      memoria: (ocr.transcricao ? { transcricao: ocr.transcricao, telefones: telsOcr } : null),
       ordem: Date.now(),
     }).select('id').single()
     if (ins.error) return Response.json({ erro: 'não foi possível criar o lead: ' + ins.error.message }, { status: 500 })
-    return Response.json({ ok: true, acao: 'lead', lead_id: ins.data && ins.data.id, telefone: (tel || telOcr || ''), anexos: arquivos.length })
+    return Response.json({ ok: true, acao: 'lead', lead_id: ins.data && ins.data.id, telefone: (tel || telOcr || ''), anexos: arquivos.length, transcricao: !!ocr.transcricao, ocr_status: ocr.status })
   }
 
   // ===== HISTÓRICO / TAREFA =====
   // acha o processo (por id ou número) — necessário p/ histórico
   let proc = null
   if (body.processo_id) {
-    const r = await sb.from('processos').select('id,numero,cliente_nome').eq('id', body.processo_id).maybeSingle()
+    const r = await sb.from('processos').select('id,numero,cliente_nome,contatos_livres').eq('id', body.processo_id).maybeSingle()
     proc = r.data || null
   } else if (numero.replace(/\D/g, '').length >= 16) {
-    const r = await sb.from('processos').select('id,numero,cliente_nome').eq('escritorio_id', ESCRITORIO_CMP).ilike('numero', '%' + numero.replace(/\D/g, '') + '%').maybeSingle()
+    const r = await sb.from('processos').select('id,numero,cliente_nome,contatos_livres').eq('escritorio_id', ESCRITORIO_CMP).ilike('numero', '%' + numero.replace(/\D/g, '') + '%').maybeSingle()
     proc = r.data || null
   }
   if (acao === 'historico' && !proc) return Response.json({ erro: 'processo não encontrado — use "criar tarefa"', semProcesso: true }, { status: 404 })
@@ -219,5 +231,20 @@ export async function POST(request) {
     } catch (e) { falhas++ }
   }
 
-  return Response.json({ ok: true, acao, andamento_id: andamentoId, kanban_id: kanbanId, anexos: salvos, falhas, processo: proc && proc.numero, telefone: telOcr || '', transcricao: !!(ocr && ocr.transcricao) })
+  // 4) telefone captado no print -> atualiza a ficha do processo (contatos_livres), deduplicando
+  let fichaAtualizada = false
+  if (proc && telsOcr.length) {
+    try {
+      const atuais = String(proc.contatos_livres || '').split(/[,;\n]+/).map(s => s.trim()).filter(Boolean)
+      const jaTem = (t) => atuais.some(x => x.replace(/\D/g, '') === t.replace(/\D/g, '') && t.replace(/\D/g, '').length >= 8)
+      const novos = telsOcr.filter(t => !jaTem(t))
+      if (novos.length) {
+        const merged = atuais.concat(novos).join(', ')
+        const upd = await sb.from('processos').update({ contatos_livres: merged }).eq('id', proc.id)
+        if (!upd.error) fichaAtualizada = true
+      }
+    } catch (e) { /* não bloqueia a captura */ }
+  }
+
+  return Response.json({ ok: true, acao, andamento_id: andamentoId, kanban_id: kanbanId, anexos: salvos, falhas, processo: proc && proc.numero, telefone: telOcr || '', telefones: telsOcr, transcricao: !!ocr.transcricao, ocr_status: ocr.status, ficha_atualizada: fichaAtualizada })
 }

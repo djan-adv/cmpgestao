@@ -139,7 +139,10 @@ async function enviar(acao){
     var extra='';
     if(d.anexos) extra+=' '+d.anexos+' anexo(s).';
     if(d.transcricao) extra+=' Anexo transcrito pela IA.';
+    else if(d.ocr_status==='sem_chave') extra+=' (IA não configurada no servidor — sem transcrição.)';
+    else if(d.ocr_status==='falhou') extra+=' (IA não conseguiu ler o anexo desta vez.)';
     if(d.telefone) extra+=' 📞 '+esc(d.telefone);
+    if(d.ficha_atualizada) extra+=' Telefone adicionado à ficha.';
     msg.innerHTML='<div class="ok">✓ '+oq+'.'+extra+'</div>'+
       (DONE.length< 3?'<div class="small" style="margin-top:6px">Quer também usar os mesmos dados? Toque em outra ação abaixo, ou em "Nova captura".</div>':'');
     renderBotoes();
