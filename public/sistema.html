@@ -3716,6 +3716,7 @@ async function buscarProcessos(){
   var nums=raw.split(/[,\n;]+/).map(function(x){return x.trim();}).filter(Boolean);
   if(!nums.length) return;
   if(nums.length>40){ alert('Máximo de 40 números por vez.'); return; }
+  var single=(nums.length===1); /* 1 processo: cadastro direto, sem caixinha/"selecionados" */
   var res=document.getElementById('busca-result'); window.__buscaFound=[];
   var head='<table style="width:100%"><thead><tr><th></th><th>Número</th><th>Classe / Assunto</th><th>Órgão</th><th>Andament.</th></tr></thead><tbody>';
   var rows='';
@@ -3727,37 +3728,54 @@ async function buscarProcessos(){
     try{ var r=await fetch('/api/processo?numero='+encodeURIComponent(n)); dj=await r.json(); }catch(e){ dj={erro:'falha na consulta'}; }
     var ok=!dj.erro; var idx=window.__buscaFound.length;
     window.__buscaFound.push({numero:n,dj:dj,jaTem:jaTem});
-    /* mesmo SEM dados na base pública (novo/sigiloso), deixa marcar para cadastrar
-       manualmente — só o número. Antes vinha um "—" e não dava para selecionar. */
-    rows+='<tr><td>'+(jaTem?'<span class="note">já existe</span>':'<input type="checkbox" checked data-i="'+idx+'">')+'</td>'+
+    /* mesmo SEM dados na base pública (novo/sigiloso), deixa cadastrar manualmente
+       — só o número. Antes vinha um "—" e não dava para selecionar.
+       Com 1 processo não mostra caixinha (o botão "Cadastrar processo" já resolve). */
+    var _selCell=jaTem?'<span class="note">já existe</span>':(single?'<span class="note">novo</span>':'<input type="checkbox" checked data-i="'+idx+'">');
+    rows+='<tr><td>'+_selCell+'</td>'+
       '<td class="proc">'+n+'</td>'+
       '<td>'+(ok?esc(((dj.classe||'')+' '+(dj.assunto||'')).trim()||'—'):'<span style="color:#b91c1c">'+esc(dj.erro||'sem dados na base pública — cadastrar manualmente')+'</span>')+'</td>'+
       '<td>'+esc(dj.orgao||'—')+'</td>'+
       '<td style="text-align:center">'+(ok?(dj.totalAndamentos||0):'—')+'</td></tr>';
   }
-  res.innerHTML=head+rows+'</tbody></table><div style="margin-top:12px;display:flex;gap:8px"><button class="btn" onclick="cadastrarSelecionados()">Cadastrar selecionados</button><button class="btn ghost" onclick="fecharBusca()">Fechar</button></div>';
+  var _um=(window.__buscaFound.length===1 && window.__buscaFound[0] && !window.__buscaFound[0].jaTem);
+  var _btn=_um?'<button class="btn" onclick="cadastrarUm(0)">Cadastrar processo</button>'
+    :(single?'':'<button class="btn" onclick="cadastrarSelecionados()">Cadastrar selecionados</button>');
+  res.innerHTML=head+rows+'</tbody></table><div style="margin-top:12px;display:flex;gap:8px">'+_btn+'<button class="btn ghost" onclick="fecharBusca()">Fechar</button></div>';
+}
+async function _escBusca(){ var sb=window.__sb; if(!sb) return null; try{ var ug=await sb.auth.getUser(); var pf=await sb.from('usuarios').select('escritorio_id').eq('id',ug.data.user.id).single(); return pf.data&&pf.data.escritorio_id; }catch(e){ return null; } }
+async function _cadastrarProcItem(item, esc2){
+  var sb=window.__sb; var dj=item.dj, n=item.numero;
+  var naoLoc=!!(dj&&dj.erro) || !(dj && (dj.classe||dj.assunto||(dj.andamentos&&dj.andamentos.length)));
+  var ands=dj.andamentos||[]; var ultmov=(ands[0]&&ands[0].data)?String(ands[0].data).slice(0,10):null;
+  var ins=await sb.from('processos').insert({escritorio_id:esc2,numero:n,classe:dj.classe||null,assunto:dj.assunto||null,orgao:dj.orgao||null,ultima_movimentacao:ultmov,fonte:(naoLoc?'manual':'datajud')}).select('id').single();
+  if(ins.error) return false; var pid=ins.data.id;
+  var arows=ands.filter(function(a){return a.texto;}).map(function(a){return {processo_id:pid,data:(a.data?String(a.data).slice(0,10):null),texto:a.texto,fonte:'datajud'};});
+  if(arows.length) await sb.from('andamentos').insert(arows);
+  function fd(iso){ if(!iso) return ''; var p=String(iso).slice(0,10).split('-'); return p.length===3?(p[2]+'/'+p[1]+'/'+p[0]):''; }
+  var hf=ands.map(function(a){return {data:(a.data?String(a.data).slice(0,10)+'T00:00:00.000Z':null),texto:a.texto};});
+  hf.sort(function(x,y){return (y.data||'').localeCompare(x.data||'');});
+  DADOS.processos.unshift({cliente:'',numero:n,oponente:'',tipo:dj.assunto||'',foro:dj.orgao||'',status:'Ativo 1º Grau',data:fd(ultmov),hist:'',causa:'0,00',hist_full:hf});
+  return true;
+}
+async function cadastrarUm(idx){
+  var item=window.__buscaFound[idx||0]; if(!item) return;
+  if(item.jaTem){ alert('Esse processo já está cadastrado.'); fecharBusca(); go('processos'); return; }
+  if(!window.__sb){ alert('Sessão não encontrada.'); return; }
+  var esc2=await _escBusca(); if(!esc2){ alert('Escritório não encontrado.'); return; }
+  var ok=await _cadastrarProcItem(item, esc2);
+  if(DADOS.kpis) DADOS.kpis.total=DADOS.processos.length;
+  fecharBusca(); go('processos'); alert(ok?'Processo cadastrado.':'Não foi possível cadastrar (verifique se já existe).');
 }
 async function cadastrarSelecionados(){
   var checks=Array.prototype.slice.call(document.querySelectorAll('#busca-result input[type=checkbox]:checked'));
   if(!checks.length){ alert('Marque ao menos um processo.'); return; }
-  var sb=window.__sb; if(!sb){ alert('Sessão não encontrada.'); return; }
-  var ug=await sb.auth.getUser();
-  var pf=await sb.from('usuarios').select('escritorio_id').eq('id',ug.data.user.id).single();
-  var esc2=pf.data&&pf.data.escritorio_id; if(!esc2){ alert('Escritório não encontrado.'); return; }
-  function fd(iso){ if(!iso) return ''; var p=String(iso).slice(0,10).split('-'); return p.length===3?(p[2]+'/'+p[1]+'/'+p[0]):''; }
+  if(!window.__sb){ alert('Sessão não encontrada.'); return; }
+  var esc2=await _escBusca(); if(!esc2){ alert('Escritório não encontrado.'); return; }
   var done=0;
   for(var c=0;c<checks.length;c++){
-    var item=window.__buscaFound[+checks[c].getAttribute('data-i')]; var dj=item.dj, n=item.numero;
-    var naoLoc=!!(dj&&dj.erro) || !(dj && (dj.classe||dj.assunto||(dj.andamentos&&dj.andamentos.length)));
-    var ands=dj.andamentos||[]; var ultmov=(ands[0]&&ands[0].data)?String(ands[0].data).slice(0,10):null;
-    var ins=await sb.from('processos').insert({escritorio_id:esc2,numero:n,classe:dj.classe||null,assunto:dj.assunto||null,orgao:dj.orgao||null,ultima_movimentacao:ultmov,fonte:(naoLoc?'manual':'datajud')}).select('id').single();
-    if(ins.error) continue; var pid=ins.data.id;
-    var arows=ands.filter(function(a){return a.texto;}).map(function(a){return {processo_id:pid,data:(a.data?String(a.data).slice(0,10):null),texto:a.texto,fonte:'datajud'};});
-    if(arows.length) await sb.from('andamentos').insert(arows);
-    var hf=ands.map(function(a){return {data:(a.data?String(a.data).slice(0,10)+'T00:00:00.000Z':null),texto:a.texto};});
-    hf.sort(function(x,y){return (y.data||'').localeCompare(x.data||'');});
-    DADOS.processos.unshift({cliente:'',numero:n,oponente:'',tipo:dj.assunto||'',foro:dj.orgao||'',status:'Ativo 1º Grau',data:fd(ultmov),hist:'',causa:'0,00',hist_full:hf});
-    done++;
+    var item=window.__buscaFound[+checks[c].getAttribute('data-i')];
+    if(await _cadastrarProcItem(item, esc2)) done++;
   }
   if(DADOS.kpis) DADOS.kpis.total=DADOS.processos.length;
   fecharBusca(); go('processos'); alert(done+' processo(s) cadastrado(s).');
