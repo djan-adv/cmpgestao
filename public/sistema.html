@@ -2741,7 +2741,6 @@ function renderHistorico(){
   bar.innerHTML='<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:12px">'
     +'<button class="btn sm '+(window.histFiltro==="all"?"":"ghost")+'" onclick="setFiltroHist(\'all\')">Tudo ('+full.length+')</button>'
     +'<button class="btn sm '+(window.histFiltro==="peca"?"":"ghost")+'" onclick="setFiltroHist(\'peca\')">Só nossas peças ('+nped+')</button>'
-    +'<button class="btn sm" style="background:#faf3ee;color:#D97757;border:1px solid #edd7c9;font-weight:700" onclick="peticionarClaude()" title="Pedir ao Claude a minuta de uma petição para este processo"><span style="font-size:13px">✳</span> Peticionar com Claude</button>'
     +'<span style="margin-left:auto;color:var(--muted);font-size:11px">'
       +'<span style="color:#0F6E56">●</span> peça &nbsp;<span style="color:#6d28a8">●</span> decisão &nbsp;<span style="color:#185FA5">●</span> andamento &nbsp;<span style="color:#8a5a00">●</span> publicação'
     +'</span></div>';
@@ -5267,24 +5266,41 @@ async function _aplicarContatosProcuracao(sel){
   renderCtlChips(); if(typeof renderHistorico==='function'){ try{ renderHistorico(); }catch(e){} }
   alert('Adicionado(s) aos contatos: '+add.join(', '));
 }
+/* Peticionar com Claude — modo COWORK (sem custo de API): registra o pedido no
+   histórico e entrega um texto pronto para colar no Cowork, que lê os documentos
+   do processo direto do servidor (/opt/cmpdocs) e redige com a skill peticoes-cmp
+   usando a sua assinatura (não a API paga). */
 async function peticionarClaude(){
   if(!atual) return;
   var inst=window.prompt('Peticionar com Claude — descreva o que a petição deve fazer (ex.: "contrarrazões ao recurso especial", "cumprir o despacho juntando o comprovante"):');
-  if(!inst||!inst.trim()) return;
-  if(!confirm('O Claude vai REDIGIR A MINUTA agora, lendo o histórico e os documentos deste processo (pode levar alguns segundos).\n\nÉ um RASCUNHO para sua revisão — nunca é protocolado sozinho. Continuar?')) return;
-  _peticaoOverlay('Redigindo a minuta…\n(lendo histórico e documentos do processo)');
-  try{
-    var jwt=await jusbrJwt();
-    var r=await fetch('/api/peticao',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+jwt},body:JSON.stringify({numero:atual.numero,instrucao:inst.trim()})});
-    var d=await respJson(r);
-    if(d&&d.__naoJson){ _peticaoOverlay(false); alert(_msgRotaFaltando()); return; }
-    if(!r.ok){ _peticaoOverlay(false); alert('Não foi possível gerar a minuta: '+((d&&d.erro)||'erro')); return; }
-    if(atual._id){ try{ var q=await window.__sb.from('andamentos').select('id,data,texto,fonte').eq('processo_id',atual._id).order('data',{ascending:false}); if(q&&q.data){ atual.hist_full=q.data.map(function(a){return {id:a.id,data:(a.data?a.data+'T00:00:00.000Z':null),texto:a.texto,f:a.fonte||''};}); } }catch(e){} }
-    histShown=10; renderHistorico(); if(typeof loadAnexosProc==='function') loadAnexosProc(atual.numero); if(typeof renderAtivProc==='function') renderAtivProc();
-    _peticaoOverlay(false);
-    var _docs=(d.docs_usados&&d.docs_usados.length)?('\n\nDocumentos lidos: '+d.docs_usados.join('; ')):'\n\n(Nenhum PDF na pasta do processo — a minuta saiu só do histórico; confira os pontos [VERIFICAR].)';
-    alert('✓ Minuta redigida no padrão CMP e anexada ao histórico em Word (📎), para sua revisão.'+_docs+'\n\nO "Relatório de teses" ficou no próprio lançamento (toque em "ver registro"). Criei a tarefa "protocolar/corrigir" para amanhã. No lançamento, o botão "Aprovar" envia uma cópia para "Documentos do processo".');
-  }catch(e){ _peticaoOverlay(false); alert('Falha: '+(e&&e.message||e)); }
+  if(!inst||!inst.trim()) return; inst=inst.trim();
+  var hoje=new Date(); var iso=hoje.getFullYear()+'-'+String(hoje.getMonth()+1).padStart(2,'0')+'-'+String(hoje.getDate()).padStart(2,'0');
+  var dig=String(atual.numero||'').replace(/\D/g,'');
+  var txt='[PETIÇÃO SOLICITADA AO CLAUDE] '+inst+' (solicitada em '+iso.split('-').reverse().join('/')+', a redigir no Cowork)';
+  try{ var sb=window.__sb; var w=await sb.from('andamentos').insert({processo_id:atual._id,data:iso,texto:txt,fonte:'manual'}).select('id').single();
+    if(!w.error){ atual.hist_full=atual.hist_full||[]; atual.hist_full.unshift({id:w.data&&w.data.id,data:iso+'T00:00:00.000Z',texto:txt,f:'manual'}); histShown=10; renderHistorico(); }
+  }catch(e){}
+  var pedido='Usando a skill "peticoes-cmp", redija no padrão CMP a seguinte peça:\n\n'+
+    'PEÇA: '+inst+'\n'+
+    'PROCESSO: nº '+(atual.numero||'')+' — cliente: '+(atual.cliente||'')+' — parte contrária: '+(atual.oponente||'')+'.\n'+
+    'DOCUMENTOS (leia os mais recentes/relevantes): /opt/cmpdocs/'+dig+'/   (documentos da outra parte em /opt/cmpdocs/'+dig+'/_OUTRA_PARTE/).\n'+
+    'HISTÓRICO: consulte os andamentos do processo se precisar de contexto.\n\n'+
+    'Gere a MINUTA (rascunho para revisão), no legal design com o template_cmp.docx (timbre), salve o .docx em "/opt/cmpdocs/'+dig+'/Minutas (para revisão)/" e, ao final, entregue o Relatório de teses. Não invente dados nem jurisprudência (use [A PREENCHER] / [JURISPRUDÊNCIA A CONFIRMAR]).';
+  try{ await navigator.clipboard.writeText(pedido); }catch(e){}
+  _peticaoCoworkModal(pedido);
+}
+function _peticaoCoworkModal(pedido){
+  var id='pet-cw'; var old=document.getElementById(id); if(old) old.remove();
+  var ov=document.createElement('div'); ov.id=id;
+  ov.style.cssText='position:fixed;inset:0;background:rgba(20,26,38,.55);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px';
+  ov.innerHTML='<div style="background:#fff;border-radius:12px;padding:18px;max-width:580px;width:100%;font-size:14px;color:#1e2733">'
+    +'<div style="font-weight:700;font-size:16px;margin-bottom:6px">Pedido pronto — cole no Cowork</div>'
+    +'<div class="note" style="margin-bottom:8px">Registrei o pedido no histórico. Já copiei o texto abaixo; cole no seu <b>Cowork</b> — ele lê os documentos do processo direto do servidor e redige no padrão CMP <b>sem custo de API</b>. A minuta fica salva em "Documentos do processo → Minutas (para revisão)".</div>'
+    +'<textarea id="pet-cw-txt" readonly style="width:100%;min-height:190px;font-size:13px;padding:10px;border:1px solid #e6e8ec;border-radius:8px;font-family:inherit">'+esc(pedido)+'</textarea>'
+    +'<div style="display:flex;gap:8px;margin-top:10px;justify-content:flex-end"><button class="btn ghost" onclick="var e=document.getElementById(\''+id+'\');if(e)e.remove()">Fechar</button><button class="btn" onclick="var t=document.getElementById(\'pet-cw-txt\');t.select();try{document.execCommand(\'copy\');}catch(e){};this.textContent=\'Copiado ✓\'">Copiar</button></div>'
+    +'</div>';
+  ov.onclick=function(e){ if(e.target===ov) ov.remove(); };
+  document.body.appendChild(ov);
 }
 function _peticaoOverlay(msg){
   var id='peticao-ov'; var ov=document.getElementById(id);
