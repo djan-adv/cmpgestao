@@ -2432,37 +2432,38 @@ function carregarLeadsLocal(){ try{ var s=localStorage.getItem('cmpLeads'); if(s
 async function escId(){ if(window.__escId) return window.__escId; try{ var sb=window.__sb; if(!sb) return null; var ug=await sb.auth.getUser(); var pf=await sb.from('usuarios').select('escritorio_id').eq('id',ug.data.user.id).single(); window.__escId=pf&&pf.data&&pf.data.escritorio_id; return window.__escId; }catch(e){ return null; } }
 function rowToLead(row,id){ return { id:id, dbid:row.id, nome:row.nome||'', canal:row.canal||'', estagio:row.estagio||'novo', tel:row.tel||'', email:row.email||'', valor:row.valor||'', valorFechado:row.valor_fechado||'', motivo:row.motivo||'', data:row.data||'', lemdata:row.lemdata||'', lemtxt:row.lemtxt||'', obs:row.obs||'', prioridade:row.prioridade||'media', acao:row.acao||'', procRef:row.proc_ref||'', labels:(row.labels||[]), arquivos:(row.arquivos||[]), memoria:(row.memoria||null), capturadoEm:row.capturado_em||'', ultimaAtividade:row.ultima_atividade||'', dataFechamento:row.data_fechamento||'', ordem:(row.ordem!=null?row.ordem:0), publicoId:row.publico_id||null }; }
 function leadToRow(l,esc,incluirId){ var row={ escritorio_id:esc, nome:l.nome||null, canal:l.canal||null, estagio:l.estagio||'novo', tel:l.tel||null, email:l.email||null, valor:l.valor||null, valor_fechado:l.valorFechado||null, motivo:l.motivo||null, data:(l.data||null), lemdata:l.lemdata||null, lemtxt:l.lemtxt||null, obs:l.obs||null, prioridade:l.prioridade||'media', acao:l.acao||null, proc_ref:l.procRef||null, labels:(l.labels||[]), arquivos:(l.arquivos||[]), memoria:(l.memoria||null), capturado_em:(l.capturadoEm||null), ultima_atividade:(l.ultimaAtividade||null), data_fechamento:(l.dataFechamento||null), ordem:(l.ordem!=null?l.ordem:0), publico_id:(l.publicoId||null) }; if(incluirId&&l.dbid) row.id=l.dbid; return row; }
+function _leadUuid(){ try{ if(window.crypto&&crypto.randomUUID) return crypto.randomUUID(); }catch(e){} return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,function(c){var r=Math.random()*16|0,v=c==='x'?r:(r&0x3|0x8);return v.toString(16);}); }
 async function carregarLeadsDb(){
   var sb=window.__sb; if(!sb) return;
   try{
     var r=await sb.from('crm_leads').select('*').order('ordem',{ascending:true}).order('criado_em',{ascending:true});
     if(r.error){ console.warn('crm_leads load:',r.error.message); window.__leadsDbReady=true; return; }
     var rows=r.data||[];
-    if(rows.length){ LEADS=rows.map(function(row,i){ return rowToLead(row,i+1); }); }
-    else { /* banco vazio: migra o que estiver no cache local, exceto os exemplos */
-      LEADS=(LEADS||[]).filter(function(l){ return l&&l.nome&&!/^Lead Exemplo/i.test(l.nome); }).map(function(l){ delete l.dbid; return l; }); }
+    var dbLeads=rows.map(function(row,i){ return rowToLead(row,i+1); });
+    /* MESCLA (não apaga): banco + leads locais que ainda não têm correspondência no banco.
+       Isso impede que um recarregamento apague cards que ainda não foram sincronizados. */
+    var vistos={}; dbLeads.forEach(function(l){ if(l.dbid) vistos[l.dbid]=true; });
+    var locais=(LEADS||[]).filter(function(l){ return l && l.nome && !/^Lead Exemplo/i.test(l.nome) && (!l.dbid || !vistos[l.dbid]); });
+    LEADS=dbLeads.concat(locais);
+    /* card órfão (estágio de uma coluna que não existe mais) volta a aparecer no 1º card */
+    try{ var st={}; (FUNIL||[]).forEach(function(f){ st[f.id]=true; }); LEADS.forEach(function(l){ if(l.estagio && !st[l.estagio]) l.estagio=(FUNIL&&FUNIL[0]?FUNIL[0].id:'novo'); }); }catch(e){}
     var mx=0; LEADS.forEach(function(l){ if(l.id>mx)mx=l.id; }); lseq=Math.max(lseq,mx+1);
     window.__leadsDbReady=true;
-    salvarLeadsLocal(); /* dispara migração (insere os sem dbid) e atualiza cache */
+    salvarLeadsLocal(); /* grava no banco os locais que ainda não subiram */
     try{ if(typeof crmView!=='undefined' && crmView==='captacao' && typeof renderCaptacao==='function') renderCaptacao(); }catch(e){}
   }catch(e){ console.warn('crm_leads:',e); window.__leadsDbReady=true; }
 }
 async function syncLeadsDb(){
   var sb=window.__sb; if(!sb||!window.__leadsDbReady) return;
-  var esc=await escId(); if(!esc) return;
+  var esc=await escId(); if(!esc){ console.warn('crm_leads: sem escritorio_id — leads não gravados'); return; }
   try{
-    LEADS.forEach(function(l,i){ l.ordem=i; }); /* ordem = posição atual no quadro */
-    var novos=LEADS.filter(function(l){ return !l.dbid; });
-    var velhos=LEADS.filter(function(l){ return !!l.dbid; });
-    if(novos.length){
-      var ins=await sb.from('crm_leads').insert(novos.map(function(l){ return leadToRow(l,esc,false); })).select('id');
-      if(ins&&ins.data){ ins.data.forEach(function(row,i){ if(novos[i]) novos[i].dbid=row.id; }); try{ localStorage.setItem('cmpLeads', JSON.stringify(LEADS)); }catch(e){} }
-      else if(ins&&ins.error){ console.warn('crm_leads insert:',ins.error.message); }
-    }
-    if(velhos.length){
-      var up=await sb.from('crm_leads').upsert(velhos.map(function(l){ return leadToRow(l,esc,true); }),{onConflict:'id'});
-      if(up&&up.error) console.warn('crm_leads upsert:',up.error.message);
-    }
+    /* garante ID único p/ cada card e grava TODOS via upsert (novo = inserido; existente = atualizado) */
+    LEADS.forEach(function(l,i){ l.ordem=i; if(!l.dbid) l.dbid=_leadUuid(); });
+    var rows=LEADS.map(function(l){ return leadToRow(l,esc,true); });
+    try{ localStorage.setItem('cmpLeads', JSON.stringify(LEADS)); }catch(e){}
+    if(!rows.length) return;
+    var up=await sb.from('crm_leads').upsert(rows,{onConflict:'id'});
+    if(up&&up.error){ console.warn('crm_leads upsert:',up.error.message); if(!window.__leadsErrShown){ window.__leadsErrShown=true; alert('Não consegui salvar os leads no banco:\n'+up.error.message); } }
   }catch(e){ console.warn('syncLeadsDb:',e); }
 }
 async function apagarLeadDb(dbid){ if(!dbid) return; try{ var sb=window.__sb; if(sb) await sb.from('crm_leads').delete().eq('id',dbid); }catch(e){} }
