@@ -491,9 +491,9 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
     </div>
     <label>Tarefa (o que fazer)</label><input id="t-titulo" placeholder="Ex.: Protocolar cumprimento de sentença">
     <div class="row3">
-      <div><label>Data</label><input id="t-data" type="date"></div>
+      <div><label>Data</label><input id="t-data" type="date" min="2000-01-01" max="2100-12-31" onchange="guardData(this)"></div>
       <div><label>Hora</label><input id="t-hora" type="time"></div>
-      <div><label>Prazo fatal</label><input id="t-prazo" type="date"></div>
+      <div><label>Prazo fatal</label><input id="t-prazo" type="date" min="2000-01-01" max="2100-12-31" onchange="guardData(this)"></div>
     </div>
     <div class="flags"><label><input type="checkbox" id="t-agenda" checked> Mostrar na agenda</label><label><input type="checkbox" id="t-dia"> Dia inteiro</label><label><input type="checkbox" id="t-imp"> Importante</label><label><input type="checkbox" id="t-urg"> Urgente</label></div>
     <label style="margin-top:10px">Local</label><input id="t-local" placeholder="Local (audiência/evento)">
@@ -576,7 +576,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
   <div id="l-capt" class="note" style="margin:6px 0 2px"></div>
   <div class="row2"><div><label>Canal</label><select id="l-canal"><option>Indicação</option><option>Google Meu Negócio</option><option>Google Ads</option><option>Meta Ads (Instagram/Facebook)</option><option>Instagram orgânico</option><option>TikTok</option><option>YouTube</option><option>Site / Blog (SEO)</option><option>LinkedIn</option><option>Eventos / Palestras</option><option>Parceiro / Correspondente</option><option>WhatsApp</option><option>Jusbrasil</option><option>Outro</option></select></div><div><label>Etapa do funil</label><select id="l-estagio"></select></div></div>
   <div class="row2"><div><label>Telefone</label><input id="l-tel"></div><div><label>E-mail</label><input id="l-email"></div></div>
-  <div class="row2"><div><label>Data de entrada</label><input id="l-data" type="date"></div><div><label>Valor estimado (R$)</label><input id="l-valor"></div></div>
+  <div class="row2"><div><label>Data de entrada</label><input id="l-data" type="date" min="2000-01-01" max="2100-12-31" onchange="guardData(this)"></div><div><label>Valor estimado (R$)</label><input id="l-valor"></div></div>
   <div class="row2"><div><label>Valor fechado (R$) <span style="color:var(--muted);font-weight:400">— honorário contratado</span></label><input id="l-valorf" placeholder="preenchido quando fechar"></div><div><label>Motivo da perda <span style="color:var(--muted);font-weight:400">(se perdido)</span></label><select id="l-motivo"><option value="">—</option><option>Preço / honorários</option><option>Sumiu / parou de responder</option><option>Foi a outro escritório</option><option>Sem viabilidade jurídica</option><option>Fora da nossa área</option><option>Só queria informação</option><option>Demorou / concorrente foi mais rápido</option><option>Outro</option></select></div></div>
   <div class="row2"><div><label>Prioridade</label><select id="l-prio"><option value="alta">Alta</option><option value="media">Média</option><option value="baixa">Baixa</option></select></div><div><label>Próxima ação (o que fazer)</label><input id="l-acao" placeholder="Ex.: enviar proposta, ligar de volta"></div></div>
   <div class="row2"><div><label>Lembrete — data</label><input id="l-lemdata" type="date"></div><div><label>Lembrete — o quê</label><input id="l-lemtxt" placeholder="Ex.: ligar de volta"></div></div>
@@ -2283,9 +2283,21 @@ function calcPrazoFatal(){
   if(campoPrazo) campoPrazo.value=fatalISO;
   if(campoData && !campoData.value) campoData.value=fatalISO;
 }
+/* ===== Trava anti-erro de digitação em datas (ex.: ano "20026") =====
+   Aceita só AAAA-MM-DD com ano entre 2000 e 2100 e data real; senão devolve ''. */
+function normData(v){
+  v=String(v||'').trim(); if(!v) return '';
+  var m=v.match(/^(\d{4})-(\d{2})-(\d{2})$/); if(!m) return '';
+  var y=+m[1], mo=+m[2], d=+m[3];
+  if(y<2000||y>2100||mo<1||mo>12||d<1||d>31) return '';
+  var dt=new Date(y,mo-1,d); if(dt.getFullYear()!==y||dt.getMonth()!==mo-1||dt.getDate()!==d) return '';
+  return m[1]+'-'+m[2]+'-'+m[3];
+}
+/* no onchange do campo: se a data ficou inválida (ano errado), limpa e avisa */
+function guardData(el){ if(!el) return; var v=el.value; if(v && !normData(v)){ el.value=''; try{ alert('Data inválida — verifique o ano (use o formato dd/mm/aaaa, ano entre 2000 e 2100).'); }catch(e){} } }
 function salvarTarefa(){
   var tit=_v("t-titulo"); if(!tit){alert("Descreva a tarefa.");return;}
-  var proc=_v("t-proc"), resp=_v("t-resp"), tipo=_v("t-tipo"), data=_v("t-data"), hora=_v("t-hora"), prazo=_v("t-prazo");
+  var proc=_v("t-proc"), resp=_v("t-resp"), tipo=_v("t-tipo"), data=normData(_v("t-data")), hora=_v("t-hora"), prazo=normData(_v("t-prazo"));
   /* se a pessoa esquecer de por data E prazo, agenda em HOJE — assim a tarefa não
      "some" da visão mês (que não mostra atividades sem data). */
   if(!data && !prazo){ data = todayISO; }
@@ -2416,7 +2428,7 @@ function fmtDataHora(iso){ try{ var d=new Date(iso); if(isNaN(d.getTime())) retu
 function fecharLead(){document.getElementById("modal-lead").classList.add("hidden");}
 function salvarLead(){var l=window._ledit;var nome=_v("l-nome");if(!nome){alert("Informe o nome.");return;}
   var estagio=_v("l-estagio");
-  var obj={nome:nome,canal:_v("l-canal"),estagio:estagio,tel:_v("l-tel"),email:_v("l-email"),valor:_v("l-valor"),valorFechado:_v("l-valorf"),motivo:_v("l-motivo"),data:_v("l-data"),lemdata:_v("l-lemdata"),lemtxt:_v("l-lemtxt"),obs:_v("l-obs"),prioridade:_v("l-prio"),acao:_v("l-acao"),procRef:_v("l-procref"),labels:(window._lsel||[]).slice()};
+  var obj={nome:nome,canal:_v("l-canal"),estagio:estagio,tel:_v("l-tel"),email:_v("l-email"),valor:_v("l-valor"),valorFechado:_v("l-valorf"),motivo:_v("l-motivo"),data:normData(_v("l-data")),lemdata:_v("l-lemdata"),lemtxt:_v("l-lemtxt"),obs:_v("l-obs"),prioridade:_v("l-prio"),acao:_v("l-acao"),procRef:_v("l-procref"),labels:(window._lsel||[]).slice()};
   obj.capturadoEm=(l&&l.capturadoEm)?l.capturadoEm:((l&&l.data)?(l.data+'T00:00:00'):new Date().toISOString());
   obj.ultimaAtividade=new Date().toISOString();
   /* data de fechamento (para tempo de conversão): grava quando vira "ganho" */
