@@ -2791,6 +2791,7 @@ function renderHistorico(){
       +'<div'+(isMan?' style="color:#7b1e3a;font-weight:600"':'')+'>'+esc(nome)+(label?(' <span style="color:'+cor+';font-size:11px">('+label+')</span>'):'')+'</div>'
       +(captInline?('<div style="font-size:13px;color:#374151;margin-top:4px;white-space:pre-wrap;max-height:280px;overflow:auto;background:#f4f7f5;border-radius:8px;padding:8px 10px">'+esc(captInline)+'</div>'):'')
       +anexosHtml(mv.id)
+      +((/^\[MINUTA/.test(String(mv.texto||'')) && mv.id)?('<div style="margin-top:5px">'+(/APROVADA/.test(mv.texto)?'<span style="font-size:11px;color:#127a53;font-weight:700">✓ aprovada — cópia em Documentos do processo</span>':'<button class="btn sm" style="font-size:11px;background:#127a53" onclick="aprovarMinuta(event,'+mv.id+')">✔ Aprovar (copiar p/ Documentos do processo)</button>')+'</div>'):'')
       +'<div class="hist-det" style="display:none;font-size:13px;color:var(--muted);margin-top:4px;white-space:pre-wrap;max-height:260px;overflow:auto"></div>'
       +(isMan?'<div class="hist-act" style="display:none;margin-top:6px"><button class="btn sm ghost" style="font-size:11px" onclick="editarHistManual(event,'+atual.hist_full.indexOf(mv)+')">✎ editar</button> <button class="btn sm ghost" style="font-size:11px;color:#b5342b" onclick="excluirHistManual(event,'+atual.hist_full.indexOf(mv)+')">🗑 excluir</button></div>':'');
     (function(cont){li.onclick=function(){var d=li.querySelector(".hist-det");var a=li.querySelector(".hist-act");if(d.style.display==="none"){d.textContent=cont;d.style.display="block";if(a)a.style.display="block";}else{d.style.display="none";if(a)a.style.display="none";}};})(content);
@@ -5268,18 +5269,52 @@ async function _aplicarContatosProcuracao(sel){
 }
 async function peticionarClaude(){
   if(!atual) return;
-  var inst=window.prompt('Peticionar com Claude — descreva em uma frase o que a petição deve fazer (ex.: "cumprir o despacho de 15/10, juntando comprovante"):');
+  var inst=window.prompt('Peticionar com Claude — descreva o que a petição deve fazer (ex.: "contrarrazões ao recurso especial", "cumprir o despacho juntando o comprovante"):');
   if(!inst||!inst.trim()) return;
-  var hoje=new Date(); var iso=hoje.getFullYear()+'-'+String(hoje.getMonth()+1).padStart(2,'0')+'-'+String(hoje.getDate()).padStart(2,'0');
-  var txt='[PETIÇÃO SOLICITADA AO CLAUDE] '+inst.trim()+' (solicitada em '+iso.split('-').reverse().join('/')+', pendente de elaboração)';
+  if(!confirm('O Claude vai REDIGIR A MINUTA agora, lendo o histórico e os documentos deste processo (pode levar alguns segundos).\n\nÉ um RASCUNHO para sua revisão — nunca é protocolado sozinho. Continuar?')) return;
+  _peticaoOverlay('Redigindo a minuta…\n(lendo histórico e documentos do processo)');
   try{
-    var sb=window.__sb;
-    var w=await sb.from('andamentos').insert({processo_id:atual._id,data:iso,texto:txt,fonte:'manual'}).select('id').single();
-    if(w.error){ alert('Erro ao registrar: '+w.error.message); return; }
-    atual.hist_full=atual.hist_full||[]; atual.hist_full.unshift({id:w.data&&w.data.id,data:iso+'T00:00:00.000Z',texto:txt,f:'manual'});
-    histShown=10; renderHistorico();
-    alert('Pedido registrado! Diga ao Claude no Cowork: "faça as petições pendentes" — ele localiza este pedido, redige a minuta no padrão CMP e salva na pasta de documentos deste processo para sua revisão.');
-  }catch(e){ alert('Erro: '+(e&&e.message||e)); }
+    var jwt=await jusbrJwt();
+    var r=await fetch('/api/peticao',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+jwt},body:JSON.stringify({numero:atual.numero,instrucao:inst.trim()})});
+    var d=await respJson(r);
+    if(d&&d.__naoJson){ _peticaoOverlay(false); alert(_msgRotaFaltando()); return; }
+    if(!r.ok){ _peticaoOverlay(false); alert('Não foi possível gerar a minuta: '+((d&&d.erro)||'erro')); return; }
+    if(atual._id){ try{ var q=await window.__sb.from('andamentos').select('id,data,texto,fonte').eq('processo_id',atual._id).order('data',{ascending:false}); if(q&&q.data){ atual.hist_full=q.data.map(function(a){return {id:a.id,data:(a.data?a.data+'T00:00:00.000Z':null),texto:a.texto,f:a.fonte||''};}); } }catch(e){} }
+    histShown=10; renderHistorico(); if(typeof loadAnexosProc==='function') loadAnexosProc(atual.numero); if(typeof renderAtivProc==='function') renderAtivProc();
+    _peticaoOverlay(false);
+    var _docs=(d.docs_usados&&d.docs_usados.length)?('\n\nDocumentos lidos: '+d.docs_usados.join('; ')):'\n\n(Nenhum PDF na pasta do processo — a minuta saiu só do histórico; confira os pontos [VERIFICAR].)';
+    alert('✓ Minuta redigida e anexada ao histórico em Word (📎), para sua revisão.'+_docs+'\n\nCriei a tarefa "protocolar/corrigir" para amanhã. No lançamento, o botão "Aprovar" envia uma cópia para "Documentos do processo".');
+  }catch(e){ _peticaoOverlay(false); alert('Falha: '+(e&&e.message||e)); }
+}
+function _peticaoOverlay(msg){
+  var id='peticao-ov'; var ov=document.getElementById(id);
+  if(msg===false){ if(ov) ov.remove(); return; }
+  if(!ov){ ov=document.createElement('div'); ov.id=id; ov.style.cssText='position:fixed;inset:0;background:rgba(20,26,38,.55);z-index:99999;display:flex;align-items:center;justify-content:center'; document.body.appendChild(ov); }
+  ov.innerHTML='<div style="background:#fff;border-radius:12px;padding:22px 26px;max-width:340px;text-align:center;font-size:15px;color:#1e2733;white-space:pre-line"><div style="font-size:26px;margin-bottom:8px">✳</div>'+esc(msg)+'<div class="note" style="margin-top:10px">não feche a página</div></div>';
+}
+function _blobB64(blob){ return new Promise(function(res,rej){ var r=new FileReader(); r.onload=function(){ res(String(r.result).replace(/^data:[^;]+;base64,/,'')); }; r.onerror=rej; r.readAsDataURL(blob); }); }
+async function aprovarMinuta(ev, andId){
+  if(ev){ev.preventDefault();ev.stopPropagation();}
+  var arr=(window.__anexosMap&&window.__anexosMap[andId])||[];
+  var doc=arr.filter(function(a){return /msword|officedocument|\.docx?$/i.test(String((a.tipo||'')+' '+(a.nome||'')));})[0]||arr[0];
+  if(!doc){ alert('Anexo da minuta ainda não carregou — dê F5 e tente de novo.'); return; }
+  if(!confirm('Aprovar a minuta e enviar uma cópia para "Documentos do processo"?')) return;
+  try{
+    var jwt=await jusbrJwt();
+    var rb=await fetch('/api/anexo?id='+encodeURIComponent(doc.id)+'&jwt='+encodeURIComponent(jwt));
+    if(!rb.ok){ alert('Não consegui ler o anexo da minuta.'); return; }
+    var b64=await _blobB64(await rb.blob());
+    var dig=String(atual.numero||'').replace(/\D/g,'');
+    var rp=await fetch('/api/docs',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+jwt},body:JSON.stringify({path:dig+'/'+doc.nome,b64:b64})});
+    var dp=await respJson(rp);
+    if(dp&&dp.__naoJson){ alert(_msgRotaFaltando()); return; }
+    if(!rp.ok){ alert('Não foi possível copiar para Documentos: '+((dp&&dp.erro)||'erro')); return; }
+    var mv=(atual.hist_full||[]).find(function(x){return x.id===andId;});
+    if(mv && !/APROVADA/.test(mv.texto)){ var novo=mv.texto+' ✓ APROVADA (cópia em Documentos do processo)'; try{ await window.__sb.from('andamentos').update({texto:novo}).eq('id',andId); mv.texto=novo; }catch(e){} }
+    renderHistorico();
+    try{ if(typeof carregarDocs==='function') carregarDocs(atual.numero,'','proc'); }catch(e){}
+    alert('✓ Aprovada. Cópia enviada para "Documentos do processo".');
+  }catch(e){ alert('Falha ao aprovar: '+(e&&e.message||e)); }
 }
 async function agendarClaude(){
   if(!atual) return;
