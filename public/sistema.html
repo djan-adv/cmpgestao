@@ -6156,42 +6156,64 @@ function _teorDaData(pubs, dataISO){
   for(var i=0;i<(pubs||[]).length;i++){ if(!pubs[i]||!pubs[i].texto) continue; var df=Math.abs(dDiff(String(pubs[i].data||'').slice(0,10), d)); if(df<=10 && df<best){ best=df; teor=pubs[i].texto; } }
   return teor;
 }
-/* resume o TEOR para o cliente: joga fora o cabeçalho institucional/partes e começa no
-   ato — de preferência no dispositivo (o que foi decidido). Se não houver corpo
-   reconhecível (ex.: só cabeçalho ou certidão), devolve '' (nunca manda cabeçalho cru). */
-function _teorResumo(texto, maxLen){
-  var t=String(texto||'').replace(/\s+/g,' ').trim(); if(!t) return ''; maxLen=maxLen||340;
+/* EXTRAI o corpo do ATO (cru) do teor: joga fora o cabeçalho institucional/partes e a
+   assinatura, e começa no ato — de preferência no dispositivo (o que foi decidido) ou na
+   ordem/intimação. Se não houver corpo reconhecível (só cabeçalho/certidão), devolve ''. */
+function _extraiAto(texto){
+  var t=String(texto||'').replace(/\s+/g,' ').trim(); if(!t) return '';
   t=t.replace(/^[^|]{0,80}\|\|\s*/,''); /* marcador "SENTENÇA - ||" etc. */
-  /* prioridade 1: o dispositivo/resultado (o que interessa ao cliente) */
-  var DISPOS=/\b(ante o exposto|isto posto|posto isso|diante do exposto|pelo exposto|do exposto|ao teor do exposto|julgo|decido|homologo|homologa|condeno|decreto|extingo|defiro|indefiro|dou provimento|nego (provimento|seguimento))\b/i;
-  /* prioridade 2: ordens/andamentos (despacho de mero expediente) */
-  var STARTERS=/\b(vistos|trata-se|cuida-se|dispenso o relat|dispensad[oa] o relat|relat[óo]rio dispensad|dispositivo|designo|redesigno|determino|recebo|conhe[çc]o|expe[çc]a-se|intime-?se|intimem-?se|cite-?se|manifeste-?se|aguarde-?se|arquive|suspend|convert)\b/i;
-  var m1=t.match(DISPOS), m2=t.match(STARTERS);
-  var idx=(m1?m1.index:-1); if(idx<0 && m2) idx=m2.index;
-  if(idx<0) return '';
-  t=t.slice(idx).replace(/Processo\s*(n[ºo°.]*)?\s*[-:]?\s*[\d.\-\/]{5,}/gi,'').replace(/\s+/g,' ').trim();
-  if(t.length<25) return '';
-  t=t.charAt(0).toUpperCase()+t.slice(1);
-  if(t.length>maxLen){ var corte=t.slice(0,maxLen).lastIndexOf('. '); t=(corte>maxLen*0.5)?t.slice(0,corte+1):(t.slice(0,maxLen).replace(/\s+\S*$/,'')+'…'); }
-  return t;
+  /* prioridade 1: dispositivo/resultado; prioridade 2: ordens/intimações/despacho */
+  var DISPOS=/\b(ante o exposto|isto posto|posto isso|diante do exposto|pelo exposto|ao teor do exposto|julgo|decido|homologo|homologa|condeno|decreto|extingo|defiro|indefiro|dou provimento|nego (provimento|seguimento))\b/i;
+  var ORDENS=/\b(intimo|intima-?se|intimem-?se|intime-?se|fica(m)? (a parte|intimad|o autor|a autora)|notifico|notifique-?se|cientifico|vistos|trata-se|cuida-se|dispenso o relat|dispensad[oa] o relat|designo|redesigno|determino|recebo|conhe[çc]o|expe[çc]a-se|cite-?se|manifeste-?se|aguarde-?se|arquive|suspend|convert)\b/i;
+  var m1=t.match(DISPOS), m2=t.match(ORDENS);
+  var idx=(m1?m1.index:-1); if(idx<0 && m2) idx=m2.index; if(idx<0) return '';
+  t=t.slice(idx);
+  /* corta a assinatura/rodapé do cartório */
+  t=t.replace(/\b(de ordem\b|documento (datado|assinado)|assinad[oa] eletronicamente|analista\/t[ée]cnico judici).*$/i,'');
+  t=t.replace(/\b[A-ZÀ-Ÿ][A-ZÀ-Ÿ ]{3,}\s*,\s*\d{1,2}\s+de\s+[a-zç]+\s+de\s+\d{4}\b.*$/i,'');
+  t=t.replace(/Processo\s*(n[ºo°.]*)?\s*[-:]?\s*[\d.\-\/]{5,}/gi,'').replace(/\s+/g,' ').trim();
+  return t.length>=20?t:'';
+}
+/* TRADUZ o ato para o cliente: "INTIMO a parte autora" -> "Você foi intimado(a)", etc. */
+function _humanizaAto(t){
+  if(!t) return '';
+  t=t.replace(/\bintimo\s+a\s+parte\s+autora\b/gi,'Você foi intimado(a)')
+     .replace(/\bINTIMO\b/gi,'Você foi intimado(a)')
+     .replace(/\b(intime-?se|intima-?se|intimem-?se)\s+a\s+parte\s+autora\b/gi,'Você foi intimado(a)')
+     .replace(/\bfica\s+a\s+parte\s+autora\s+intimad[oa]\b/gi,'Você foi intimado(a)')
+     .replace(/\ba\s+parte\s+autora\b/gi,'você')
+     .replace(/\b(da|a|à)\s+parte\s+(demandada|requerida|r[ée]|reclamada|executada)\b/gi,function(_,p){return p+' parte contrária';})
+     .replace(/\s+/g,' ').trim();
+  return t?(t.charAt(0).toUpperCase()+t.slice(1)):'';
+}
+/* devolve {ato: corpo cru p/ classificar, cli: versão traduzida p/ o cliente} */
+function _resumeParaCliente(texto, maxLen){
+  var ato=_extraiAto(texto); if(!ato) return {ato:'',cli:''};
+  var cli=_humanizaAto(ato); maxLen=maxLen||340;
+  if(cli.length>maxLen){ var corte=cli.slice(0,maxLen).lastIndexOf('. '); cli=(corte>maxLen*0.5)?cli.slice(0,corte+1):(cli.slice(0,maxLen).replace(/\s+\S*$/,'')+'…'); }
+  return {ato:ato, cli:cli};
 }
 /* limpeza leve para o NOME do movimento (não passa pelo extrator de ato) */
 function _limpaNome(s, maxLen){ s=String(s||'').replace(/\s+/g,' ').trim(); maxLen=maxLen||240; if(s.length>maxLen) s=s.slice(0,maxLen).replace(/\s+\S*$/,'')+'…'; return s; }
-/* monta 1 linha por movimento: rótulo simples + (quando houver) o teor/detalhe real, sem repetir */
+/* monta 1 linha por movimento: o QUE aconteceu (rótulo, classificado pelo ATO) + o teor
+   traduzido em poucas palavras, sem repetir movimentos. */
 function _linhasAtualizacao(p, n){
-  var movsAll=_movsOficiais(p,60), pubs=pubsDoProcesso(p.numero||''), linhas=[], vistos={};
+  var movsAll=_movsOficiais(p,60), pubs=pubsDoProcesso(p.numero||''), linhas=[], vistos={}, primeiroAto='';
   for(var i=0;i<movsAll.length && linhas.length<n;i++){
-    var m=movsAll[i], d=_atzDataBR(m.data), cls=classMov(m.texto), label=explicaParaCliente(m.texto);
-    var teor=_teorDaData(pubs, m.data), nomeReal=_nomeMov(m.texto), ehPeca=(cls[2]==='peca'), detalhe='';
-    if(teor){ detalhe=_teorResumo(teor, cls[2]==='decisao'?360:300); }
-    if(!detalhe && nomeReal && nomeReal.length>12 && nomeReal.toLowerCase()!==label.toLowerCase()){ detalhe=_limpaNome(nomeReal, 240); }
+    var m=movsAll[i], d=_atzDataBR(m.data);
+    var r=_resumeParaCliente(_teorDaData(pubs, m.data)||m.texto||'', 340);
+    if(i===0) primeiroAto=r.ato;
+    var baseLabel=r.ato||_nomeMov(m.texto);          /* classifica pelo ATO, não pelo cabeçalho */
+    var label=explicaParaCliente(baseLabel);
+    var detalhe=r.cli;
+    if(!detalhe){ var nm=_nomeMov(m.texto); if(nm && nm.length>12 && nm.length<120 && !/tribunal|poder judici|comarca|cep:\s*\d|cart[óo]rio/i.test(nm) && nm.toLowerCase()!==label.toLowerCase()) detalhe=_limpaNome(nm,240); }
     var chave=(d||'')+'|'+label.toLowerCase()+'|'+detalhe.slice(0,70).toLowerCase();
     if(vistos[chave]) continue; vistos[chave]=true;
-    var linha='• '+(d?(d+' — '):'')+label+(ehPeca?' (peça protocolada pelo escritório)':'');
-    if(detalhe) linha+='\n   ↳ '+detalhe;
+    var linha='• '+(d?(d+' — '):'')+label;
+    if(detalhe && detalhe.toLowerCase()!==label.toLowerCase()) linha+='\n   ↳ '+detalhe;
     linhas.push(linha);
   }
-  return { linhas: linhas, primeiro: movsAll[0] };
+  return { linhas: linhas, primeiroAto: primeiroAto, primeiro: movsAll[0] };
 }
 /* descreve, para o cliente, O QUE aconteceu (status objetivo, em português simples) */
 function explicaParaCliente(texto){
@@ -6268,7 +6290,8 @@ function _gerarRascunhoAtualizacao(){
     var n=parseInt((document.getElementById('atz-qtd')||{}).value,10)||5;
     var res=_linhasAtualizacao(p,n);
     var linhas=res.linhas;
-    var passos=res.primeiro?proximosPassosCliente(res.primeiro.texto):'';
+    var basePassos=res.primeiroAto||(res.primeiro&&res.primeiro.texto)||'';
+    var passos=basePassos?proximosPassosCliente(basePassos):'';
     corpo='Prezado(a)'+(nome?(' '+nome):' cliente')+',\n\n'
       +'Segue a atualização do seu processo nº '+p.numero+':\n\n'
       +(linhas.length?linhas.join('\n\n'):'• Sem movimentações oficiais recentes registradas.')+'\n\n'
