@@ -503,7 +503,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
     <input id="t-file" type="file" multiple style="display:none" onchange="tarefaAddFiles(event)">
     <div id="t-files" style="font-size:13px"></div>
     <div class="flags" style="margin-top:6px"><label><input type="checkbox" id="t-hist"> Registrar também no histórico do processo</label></div>
-    <div class="foot"><button class="btn ghost" onclick="fecharTarefa()">Cancelar</button><button class="btn" onclick="salvarTarefa()">Criar e distribuir</button></div>
+    <div class="foot"><button class="btn ghost" onclick="fecharTarefa()">Cancelar</button><button class="btn" id="t-btn-concluir" style="display:none;background:#127a53" onclick="concluirTarefaModal()">✓ Concluir atividade</button><button class="btn" id="t-btn-salvar" onclick="salvarTarefa()">Criar e distribuir</button></div>
   </div>
 </div>
 <div id="modal-partes" class="overlay hidden">
@@ -1304,12 +1304,7 @@ function abrir(i){
   html+='<div class="card cmp-only" id="jusbr-card"><p class="sectlabel" style="display:flex;justify-content:space-between;align-items:center">Documentos do jus.br <button class="btn sm" style="font-size:12px" onclick="jusbrCarregar(\''+esc(p.numero)+'\')">Carregar documentos</button></p><div id="jusbr-status" class="note" style="margin-bottom:6px">Lista as peças do processo no jus.br. O arquivo escolhido é baixado sob demanda e removido do sistema após 30 dias (o original fica no tribunal).</div><div id="jusbr-lista"></div></div>';
   // IA
   if(!KAN)initKanban(); initAgenda();
-  var _ativs=(KAN||[]).filter(function(k){return k.numero===p.numero;});
-  var _evs=(AGENDA||[]).filter(function(e){return e.p&&e.p.numero===p.numero;});
-  var _ah="";
-  _ativs.forEach(function(a){var col=COLS.find(function(c){return c[0]===a.col;});_ah+='<li><div class="dt">Kanban · '+(col?esc(col[1]):esc(a.col))+'</div><div>'+esc(a.titulo)+'</div></li>';});
-  _evs.forEach(function(e){_ah+='<li><div class="dt">Agenda · '+esc(e.data||"")+' '+esc(e.hora||"")+(e.resp?(" · "+esc(e.resp)):"")+'</div><div>'+esc(e.tt)+'</div></li>';});
-  html+='<div class="card"><p class="sectlabel">Atividades do escritório neste processo</p><ul class="timeline">'+(_ah||'<li><div class="note">Nenhuma atividade do escritório vinculada ainda — crie em "+ Nova tarefa neste processo".</div></li>')+'</ul></div>';
+  html+='<div class="card"><p class="sectlabel" style="display:flex;justify-content:space-between;align-items:center">Atividades do escritório neste processo (tarefas e prazos)<button class="btn sm" style="font-size:12px" onclick="novaTarefaDoProcesso()">+ Nova tarefa</button></p><div id="ativ-proc"></div></div>';
   html+='<div class="card"><p class="sectlabel">Etiquetas</p><div id="det-etq"></div>'+
     '<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><select id="det-etq-sel" style="width:auto;max-width:280px"></select><button class="btn sm" onclick="addEtqProc()">adicionar etiqueta</button></div></div>';
   // blocos estilo Astrea (onde entram os dados nas próximas fases)
@@ -1338,6 +1333,7 @@ function abrir(i){
   document.getElementById("det-body").innerHTML=html;
   posicionarHonMobile();
   histShown=10; renderHistorico(); if(typeof loadAnexosProc==='function') loadAnexosProc(p.numero);
+  if(typeof renderAtivProc==='function') renderAtivProc();
   renderDetEtq();
   renderObservacoes();
   renderProcVinculados();
@@ -2036,6 +2032,52 @@ function abrirTarefaKanban(id){
   if(a.tipoForm) document.getElementById('t-tipo').value=a.tipoForm;
   if(typeof onTipoTarefa==='function') onTipoTarefa();
   _atualizaBotaoAbrirProcModal();
+  /* modo edição: atualiza a MESMA atividade (não duplica) e mostra "Concluir" */
+  window._tarEditId=id;
+  var _cb=document.getElementById('t-btn-concluir'); if(_cb) _cb.style.display=(a.col==='finalizado'?'none':'');
+  var _sb=document.getElementById('t-btn-salvar'); if(_sb) _sb.textContent='Salvar alterações';
+}
+function concluirTarefaModal(){ var id=window._tarEditId; if(id!=null){ concluirTarefaKanban(id); } fecharTarefa(); try{ if(typeof renderAtivProc==='function') renderAtivProc(); if(typeof renderHistorico==='function') renderHistorico(); }catch(e){} }
+/* ===== Painel "Atividades do escritório neste processo" (tarefas/prazos deste processo) ===== */
+function renderAtivProc(){
+  var el=document.getElementById('ativ-proc'); if(!el) return;
+  if(!KAN)initKanban();
+  var num=(typeof atual!=='undefined'&&atual)?atual.numero:'';
+  var arr=(KAN||[]).filter(function(a){return a.numero===num;});
+  if(!arr.length){ el.innerHTML='<div class="note">Nenhuma tarefa ou prazo neste processo — crie em "+ Nova tarefa".</div>'; return; }
+  arr=arr.slice().sort(function(a,b){ var ca=_tarConcluida(a)?1:0, cb=_tarConcluida(b)?1:0; if(ca!==cb) return ca-cb; var pa=a.prazo||a.data||'9999', pb=b.prazo||b.data||'9999'; return pa<pb?-1:(pa>pb?1:0); });
+  el.innerHTML=arr.map(function(a){
+    var concl=_tarConcluida(a);
+    var prevBR=a.data?String(a.data).slice(0,10).split('-').reverse().join('/'):'';
+    var fatalBR=a.prazo?String(a.prazo).slice(0,10).split('-').reverse().join('/'):'';
+    var meta=[];
+    if(a.resp) meta.push(esc(a.resp));
+    if(prevBR) meta.push('prevista: '+prevBR);
+    if(fatalBR) meta.push('<span style="color:#b5342b;font-weight:700">prazo fatal: '+fatalBR+'</span>');
+    if(a.hora && a.hora!=='Dia todo') meta.push(esc(a.hora));
+    meta.push(concl?'<span style="color:#127a53">concluída</span>':'<span style="color:#8a5a00">a executar</span>');
+    return '<div style="display:flex;align-items:flex-start;gap:8px;padding:9px 2px;border-bottom:1px solid var(--line)'+(concl?';opacity:.6':'')+'">'
+      +'<input type="checkbox" '+(concl?'checked':'')+' onclick="toggleConcluirTarefa('+a.id+');renderAtivProc();" style="width:17px;height:17px;margin-top:2px;cursor:pointer;flex-shrink:0" title="Concluir/reabrir">'
+      +'<div style="flex:1;min-width:0">'
+        +'<div style="font-weight:600;color:var(--navy);'+(concl?'text-decoration:line-through':'')+'">'+esc(a.titulo||'—')+'</div>'
+        +'<div class="note" style="margin:2px 0 0">'+meta.join(' · ')+'</div>'
+        +'<div style="margin-top:5px;display:flex;gap:6px;flex-wrap:wrap">'
+          +'<button class="btn sm ghost" style="font-size:11px" onclick="abrirTarefaKanban('+a.id+')">✎ editar</button>'
+          +'<button class="btn sm ghost" style="font-size:11px" onclick="definirPrazoFatal('+a.id+')">⏰ prazo fatal</button>'
+          +(concl?'<button class="btn sm ghost" style="font-size:11px" onclick="toggleConcluirTarefa('+a.id+');renderAtivProc();">↩ reabrir</button>':'<button class="btn sm ghost" style="font-size:11px;color:#127a53;border-color:#bfe3d1" onclick="toggleConcluirTarefa('+a.id+');renderAtivProc();">✓ concluir</button>')
+        +'</div>'
+      +'</div>'
+    +'</div>';
+  }).join('');
+}
+function definirPrazoFatal(id){
+  if(!KAN)initKanban(); var a=KAN.find(function(x){return x.id===id;}); if(!a) return;
+  var atualV=a.prazo?String(a.prazo).slice(0,10):'';
+  var v=window.prompt('Prazo fatal (formato aaaa-mm-dd) — deixe em branco para remover:', atualV);
+  if(v===null) return; v=v.trim();
+  if(v && !normData(v)){ alert('Data inválida — use aaaa-mm-dd.'); return; }
+  a.prazo=v||null; if(v && !a.data) a.data=v; persisteKanban(a);
+  try{ if(typeof renderAtivProc==='function') renderAtivProc(); if(typeof renderHistorico==='function') renderHistorico(); if(typeof renderAgendaView==='function') renderAgendaView(); }catch(e){}
 }
 /* mostra/esconde o botão "Abrir processo" no modal de tarefa conforme houver processo resolvível */
 function _atualizaBotaoAbrirProcModal(){
@@ -2236,9 +2278,11 @@ function renderMes(){
 function irParaCaso(numero){var i=DADOS.processos.findIndex(function(p){return p.numero===numero});if(i>=0)abrir(i);else go("processos");}
 var TIPOCOR={audiencia:"az",reuniao:"az",manifestacao:"am",prazo:"vm",tarefa:"nt",diligencia:"nt",evento:"nt",comercial:"nt"};
 function _v(id){var e=document.getElementById(id);return e?(e.value||"").trim():"";}
-function abrirNovaTarefa(proc){document.getElementById("modal-tarefa").classList.remove("hidden");if(proc){document.getElementById("t-proc").value=proc;} if(typeof onTipoTarefa==='function')onTipoTarefa();}
+function abrirNovaTarefa(proc){window._tarEditId=null;document.getElementById("modal-tarefa").classList.remove("hidden");if(proc){document.getElementById("t-proc").value=proc;} if(typeof onTipoTarefa==='function')onTipoTarefa();
+  var _cb=document.getElementById('t-btn-concluir'); if(_cb) _cb.style.display='none';
+  var _sb=document.getElementById('t-btn-salvar'); if(_sb) _sb.textContent='Criar e distribuir';}
 function novaTarefaDoProcesso(){abrirNovaTarefa(atual?atual.numero:"");}
-function fecharTarefa(){document.getElementById("modal-tarefa").classList.add("hidden");triagemAtual=null;}
+function fecharTarefa(){document.getElementById("modal-tarefa").classList.add("hidden");triagemAtual=null;window._tarEditId=null;}
 /* ===== Cálculo de prazo em dias úteis (CPC art. 224) ===== */
 /* mostra/esconde o box de cálculo conforme o tipo */
 function onTipoTarefa(){
@@ -2303,9 +2347,19 @@ function salvarTarefa(){
   if(!data && !prazo){ data = todayISO; }
   var fromTri=triagemAtual;
   if(!KAN)initKanban();
-  var _nova={id:5000+KAN.length,titulo:tit,cliente:(resp||proc||"—"),numero:(proc||"—"),col:"distribuir",resp:resp,data:data,prazo:prazo,hora:(document.getElementById("t-dia").checked?"Dia todo":hora),tipoForm:tipo};
-  KAN.push(_nova); persisteKanban(_nova);
-  if(document.getElementById("t-agenda").checked && data){
+  var _dia=document.getElementById("t-dia").checked;
+  /* edição real: aberta a partir de uma atividade existente -> ATUALIZA (não duplica) */
+  var _isEdit=!!(window._tarEditId && (KAN||[]).some(function(x){return x.id===window._tarEditId;}));
+  var _nova;
+  if(_isEdit){
+    _nova=KAN.find(function(x){return x.id===window._tarEditId;});
+    _nova.titulo=tit; _nova.cliente=(resp||proc||"—"); _nova.numero=(proc||"—"); _nova.resp=resp; _nova.data=data; _nova.prazo=prazo; _nova.hora=(_dia?"Dia todo":hora); _nova.tipoForm=tipo;
+    persisteKanban(_nova);
+  } else {
+    _nova={id:5000+KAN.length,titulo:tit,cliente:(resp||proc||"—"),numero:(proc||"—"),col:"distribuir",resp:resp,data:data,prazo:prazo,hora:(_dia?"Dia todo":hora),tipoForm:tipo};
+    KAN.push(_nova); persisteKanban(_nova);
+  }
+  if(!_isEdit && document.getElementById("t-agenda").checked && data){
     initAgenda();
     var __hAg=(document.getElementById("t-dia").checked?"Dia todo":(hora||"09:00")), __tAg=(TIPOCOR[tipo]||"nt");
     AGENDA.push({data:data,hora:__hAg,tipo:__tAg,tt:tit,resp:resp,p:{numero:(proc||"—"),cliente:(resp||"—")}});
@@ -2314,10 +2368,10 @@ function salvarTarefa(){
     try{ var sbA=window.__sb; if(sbA){ sbA.auth.getUser().then(function(ug){ return sbA.from('usuarios').select('escritorio_id').eq('id',ug.data.user.id).single(); }).then(function(pf){ var escA=pf&&pf.data&&pf.data.escritorio_id; if(escA){ sbA.from('agenda_eventos').insert({escritorio_id:escA,data:data,hora:__hAg,tipo:__tAg,titulo:tit,resp:(resp||null),processo_numero:(proc||null),origem:'sistema'}).then(function(){}); } }); } }catch(ePer){}
   }
   if(fromTri!=null){var ti=TRIAGEM.find(function(x){return x.id===fromTri;});if(ti){ti.done=true;persisteTriada(ti);}}
-  /* anexos e/ou registro opcional no histórico do processo (via /api/captura) */
+  /* anexos e/ou registro opcional no histórico do processo (via /api/captura) — só ao CRIAR */
   var _tHist=document.getElementById('t-hist'), _wantHist=!!(_tHist&&_tHist.checked);
   var _tFiles=(window.__tarefaFiles||[]).slice();
-  if(_wantHist || _tFiles.length){
+  if(!_isEdit && (_wantHist || _tFiles.length)){
     var _pnum=String(proc||'').replace(/\D/g,'');
     var _pid=null;
     if(typeof atual!=='undefined' && atual && atual._id && _pnum && String(atual.numero||'').replace(/\D/g,'')===_pnum){ _pid=atual._id; }
@@ -2345,6 +2399,8 @@ function salvarTarefa(){
   fecharTarefa();
   ["t-proc","t-titulo","t-data","t-hora","t-prazo","t-local","t-desc"].forEach(function(id){var e=document.getElementById(id);if(e)e.value="";});
   renderPainelTarefasEtiquetas();
+  /* edição a partir do processo: atualiza os painéis e permanece na ficha (não pula p/ agenda) */
+  if(_isEdit){ window._tarEditId=null; try{ if(typeof renderAtivProc==='function') renderAtivProc(); if(typeof renderHistorico==='function') renderHistorico(); if(typeof renderKanban==='function') renderKanban(); }catch(e){} return; }
   /* leva para a agenda CERTA: prazo/tarefa/diligência -> "Agenda (prazos e tarefas)"; audiência/reunião -> "Agenda (reuniões)".
      Assim a atividade recém-criada aparece na hora e não "some". */
   var _ehPrazoTarefa=(tipo==='prazo'||tipo==='tarefa'||tipo==='diligencia'||tipo==='manifestacao');
@@ -2712,7 +2768,7 @@ function renderHistorico(){
         +(a.resp?(' · <span style="color:var(--muted)">'+esc(a.resp)+'</span>'):'')
       +'</div>'
       +(a.prazo?_prazoAvisoHTML(String(a.prazo).slice(0,10).match(/^\d{4}-/)?String(a.prazo).slice(0,10):(String(a.prazo).split('/').reverse().join('-'))):'')
-      +'<div style="margin-top:6px"><button class="btn sm ghost" onclick="abrirTarefaKanban('+a.id+')">Abrir tarefa</button></div>';
+      +'<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap"><button class="btn sm ghost" onclick="abrirTarefaKanban('+a.id+')">Abrir tarefa</button><button class="btn sm ghost" style="color:#127a53;border-color:#bfe3d1" onclick="concluirTarefaKanban('+a.id+');renderHistorico();if(typeof renderAtivProc===\'function\')renderAtivProc();">✓ Concluir</button></div>';
     ul.appendChild(li);
   })();
   if(!arr.length){var li0=document.createElement("li");li0.style.listStyle="none";li0.innerHTML='<div class="note">Sem itens para este filtro.</div>';ul.appendChild(li0);more.innerHTML="";return;}
