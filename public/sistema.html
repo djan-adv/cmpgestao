@@ -5283,7 +5283,7 @@ async function peticionarClaude(){
     histShown=10; renderHistorico(); if(typeof loadAnexosProc==='function') loadAnexosProc(atual.numero); if(typeof renderAtivProc==='function') renderAtivProc();
     _peticaoOverlay(false);
     var _docs=(d.docs_usados&&d.docs_usados.length)?('\n\nDocumentos lidos: '+d.docs_usados.join('; ')):'\n\n(Nenhum PDF na pasta do processo — a minuta saiu só do histórico; confira os pontos [VERIFICAR].)';
-    alert('✓ Minuta redigida e anexada ao histórico em Word (📎), para sua revisão.'+_docs+'\n\nCriei a tarefa "protocolar/corrigir" para amanhã. No lançamento, o botão "Aprovar" envia uma cópia para "Documentos do processo".');
+    alert('✓ Minuta redigida no padrão CMP e anexada ao histórico em Word (📎), para sua revisão.'+_docs+'\n\nO "Relatório de teses" ficou no próprio lançamento (toque em "ver registro"). Criei a tarefa "protocolar/corrigir" para amanhã. No lançamento, o botão "Aprovar" envia uma cópia para "Documentos do processo".');
   }catch(e){ _peticaoOverlay(false); alert('Falha: '+(e&&e.message||e)); }
 }
 function _peticaoOverlay(msg){

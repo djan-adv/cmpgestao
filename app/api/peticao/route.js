@@ -45,15 +45,27 @@ function coletaPdfs(dir, arr) {
   }
 }
 
+// carrega o Manual de Padrão CMP: override editável no servidor tem prioridade
+function carregaModelo() {
+  const cands = ['/opt/cmpdocs/_config/modelo-peticao.md', path.join(process.cwd(), 'ops', 'modelo-peticao-cmp.md')]
+  for (const p of cands) { try { if (fs.existsSync(p)) return fs.readFileSync(p, 'utf8') } catch (e) {} }
+  return ''
+}
+
 function minutaDoc(proc, texto) {
-  const paras = String(texto || '').split(/\n{2,}/).map(function (p) {
-    return '<p style="text-align:justify;margin:0 0 10pt">' + escHtml(p).replace(/\n/g, '<br>') + '</p>'
+  const blocks = String(texto || '').split(/\n{2,}/)
+  const corpo = blocks.map(function (b) {
+    const t = b.trim(); if (!t) return ''
+    const umaLinha = t.indexOf('\n') < 0
+    const ehTitulo = umaLinha && t.length < 90 && (/^[IVX]+\s*[–-]/.test(t) || (t === t.toUpperCase() && /[A-ZÀ-Ú]/.test(t)))
+    if (ehTitulo) return '<p style="text-align:center;font-weight:bold;margin:14pt 0 8pt">' + escHtml(t) + '</p>'
+    return '<p style="text-align:justify;text-indent:1.25cm;margin:0 0 8pt">' + escHtml(t).replace(/\n/g, '<br>') + '</p>'
   }).join('\n')
   return '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word">' +
-    '<head><meta charset="utf-8"><title>Minuta</title>' +
-    '<style>body{font-family:\'Times New Roman\',serif;font-size:12pt;line-height:1.5;margin:2.5cm}</style></head><body>' +
-    paras +
-    '<p style="color:#888;font-size:9pt;margin-top:24pt">— Minuta gerada por IA para REVISÃO do advogado (não protocolar sem conferência). Processo ' + escHtml(proc.numero || '') + '.</p>' +
+    '<head><meta charset="utf-8"><title>Minuta CMP</title>' +
+    '<style>body{font-family:\'Barlow\',\'Calibri\',\'Segoe UI\',sans-serif;font-size:12pt;line-height:1.5;margin:2.5cm}p{orphans:2;widows:2}</style></head><body>' +
+    corpo +
+    '<p style="color:#888;font-size:9pt;margin-top:24pt">— Minuta gerada por IA no padrão CMP para REVISÃO do advogado (não protocolar sem conferência). Processo ' + escHtml(proc.numero || '') + '.</p>' +
     '</body></html>'
 }
 
@@ -102,15 +114,16 @@ export async function POST(request) {
     } catch (e) {}
   }
 
+  const modelo = carregaModelo()
   const instr =
-    'Você é assistente jurídico do escritório de advocacia Crispim, Mendonça e Pinheiro (CMP). ' +
-    'Redija uma MINUTA (rascunho para revisão do advogado) da peça solicitada, com base EXCLUSIVA no histórico e nos documentos anexados. ' +
-    'NÃO invente fatos, provas, datas, valores, nomes ou jurisprudência que não estejam nos autos. Se faltar informação essencial, escreva [VERIFICAR: ...] no ponto.\n\n' +
-    'Processo nº ' + (proc.numero || '') + ' — Cliente: ' + (proc.cliente_nome || '') + ' — Parte contrária: ' + (proc.oponente || '') + ' — Classe/Assunto: ' + ((proc.classe || '') + ' ' + (proc.assunto || '')).trim() + ' — Órgão: ' + (proc.orgao || '') + '.\n\n' +
+    'Você é o(a) redator(a) de peças do escritório Crispim, Mendonça e Pinheiro (CMP). Redija uma MINUTA (rascunho para revisão do advogado) da peça solicitada, seguindo RIGOROSAMENTE o "Manual de Padrão CMP" abaixo: método IRAC em prosa (sem rótulos visíveis), estrutura de seções, endereçamento no padrão do escritório ("AO JUÍZO DE DIREITO DA/DO ..."), fecho "Nestes termos, / Pede deferimento." e dupla subscrição (Djan Henrique Mendonça do Nascimento — OAB/PB 5.219-A e Jader Gabriel Pinheiro — OAB/PB 33.567).\n\n' +
+    'REGRAS CRÍTICAS (do Manual): NUNCA invente dados (CPF, CNPJ, valores, nº de processo, endereços) — use [A PREENCHER]; números calculados/inferidos marque [CONFIRMAR]; NUNCA cite jurisprudência de memória — se não puder verificar, use [JURISPRUDÊNCIA A CONFIRMAR: tese]; baseie-se SOMENTE no histórico e nos documentos anexados; sinalize riscos/prazos, mas a decisão estratégica é do advogado.\n\n' +
+    (modelo ? ('===== MANUAL DE PADRÃO CMP (siga fielmente) =====\n' + modelo + '\n===== FIM DO MANUAL =====\n\n') : '') +
+    'DADOS DO PROCESSO — nº ' + (proc.numero || '') + ' | Cliente: ' + (proc.cliente_nome || '') + ' | Parte contrária: ' + (proc.oponente || '') + ' | Classe/Assunto: ' + ((proc.classe || '') + ' ' + (proc.assunto || '')).trim() + ' | Órgão: ' + (proc.orgao || '') + '.\n\n' +
     'PEDIDO DO ADVOGADO: ' + instrucao + '\n\n' +
     'HISTÓRICO RECENTE (mais novo primeiro):\n' + (histTxt || '(sem histórico)') + '\n\n' +
-    (usados ? ('Foram anexados ' + usados + ' documento(s) do processo (PDF): ' + nomesUsados.join('; ') + '.\n\n') : 'Nenhum PDF foi localizado na pasta do processo — redija com base no histórico e sinalize [VERIFICAR] onde faltar documento.\n\n') +
-    'Escreva a PEÇA COMPLETA, em português jurídico formal, pronta para revisão, no formato de petição: endereçamento ao juízo/órgão, nome da peça, breve referência aos autos, DOS FATOS, DO DIREITO (com fundamentos), DOS PEDIDOS, e fecho com local, data e "Nestes termos, pede deferimento." seguido de "Advogado(a) — OAB". Comece direto pela peça, sem comentários fora dela.'
+    (usados ? ('Documentos anexados (PDF do processo): ' + nomesUsados.join('; ') + '.\n\n') : 'Nenhum PDF localizado na pasta do processo — redija com base no histórico e marque [A PREENCHER]/[VERIFICAR] onde faltar documento.\n\n') +
+    'SAÍDA: escreva a PEÇA COMPLETA no padrão CMP, começando DIRETO pela peça (sem comentários antes). Ao final, em uma NOVA seção iniciada EXATAMENTE pela linha "===RELATORIO DE TESES===", escreva o Relatório de Teses (fora da peça), conforme o Manual (tese adotada e por quê, subsidiárias, alternativas descartadas, status da jurisprudência, pendências [A PREENCHER]/[CONFIRMAR]). Não escreva nada após o relatório.'
   content.push({ type: 'text', text: instr })
 
   let data
@@ -118,7 +131,7 @@ export async function POST(request) {
     const r = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: 'claude-sonnet-5', max_tokens: 8000, messages: [{ role: 'user', content }] }),
+      body: JSON.stringify({ model: 'claude-sonnet-5', max_tokens: 16000, messages: [{ role: 'user', content }] }),
     })
     data = await r.json()
     if (!r.ok) return Response.json({ erro: 'IA: ' + ((data && data.error && data.error.message) || r.status) }, { status: 502 })
@@ -128,17 +141,22 @@ export async function POST(request) {
   try { texto = (data.content || []).map(c => c.text || '').join('\n').trim() } catch (e) {}
   if (!texto) return Response.json({ erro: 'a IA não retornou a minuta' }, { status: 502 })
 
+  // separa a peça (vai para o Word) do Relatório de teses (vai para o histórico)
+  let pecaText = texto, relatorio = ''
+  const mi = texto.search(/^={2,}\s*RELAT[ÓO]RIO\s+DE\s+TESES\s*={0,}\s*$/im)
+  if (mi > -1) { pecaText = texto.slice(0, mi).trim(); relatorio = texto.slice(mi).replace(/^[^\n]*\n?/, '').trim() }
+
   const hoje = new Date().toISOString().slice(0, 10)
   const slug = ('minuta_' + instrucao).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w]+/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '').slice(0, 48)
   const fileName = (slug || 'minuta') + '_' + hoje + '.doc'
 
-  // 1) lançamento no histórico (na data do pedido)
-  const corpo = '[MINUTA] ' + instrucao + ' (rascunho Claude para revisão, ' + hoje.split('-').reverse().join('/') + ')'
+  // 1) lançamento no histórico (na data do pedido) — inclui o Relatório de teses
+  const corpo = '[MINUTA] ' + instrucao + ' (rascunho Claude para revisão, ' + hoje.split('-').reverse().join('/') + ')' + (relatorio ? ('\n\n— RELATÓRIO DE TESES —\n' + relatorio) : '')
   const { data: a } = await sb.from('andamentos').insert({ processo_id: proc.id, data: hoje, texto: corpo, fonte: 'minuta' }).select('id').single()
   const andId = a && a.id
 
-  // 2) Word (.doc) anexado ao histórico (bucket 'capturas' + anexos)
-  const buf = Buffer.from(minutaDoc(proc, texto), 'utf8')
+  // 2) Word (.doc) anexado ao histórico (bucket 'capturas' + anexos) — só a PEÇA
+  const buf = Buffer.from(minutaDoc(proc, pecaText), 'utf8')
   const pathCap = ESCRITORIO_CMP + '/' + dig + '/' + crypto.randomUUID() + '_' + fileName
   let anexoId = null
   try {
