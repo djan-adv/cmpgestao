@@ -129,6 +129,37 @@ export async function POST(request) {
     return Response.json({ ok: true, restaurado: path.relative(ROOT, dest) })
   }
 
+  // renomear arquivo/pasta (mesmo diretório)
+  if (b.op === 'rename') {
+    if (!fs.existsSync(full)) return Response.json({ erro: 'item não encontrado' }, { status: 404 })
+    if (rel.split('/').includes(TRASH)) return Response.json({ erro: 'não é possível renomear na Lixeira' }, { status: 400 })
+    const base = String(b.nome || '').replace(/[\/\\]/g, '').replace(/\.\.+/g, '.').trim()
+    if (!base) return Response.json({ erro: 'informe o novo nome' }, { status: 400 })
+    const novoRel = seguro(path.dirname(rel) + '/' + base)
+    const dest = path.join(ROOT, novoRel)
+    if (!dest.startsWith(ROOT)) return Response.json({ erro: 'caminho inválido' }, { status: 400 })
+    if (fs.existsSync(dest)) return Response.json({ erro: 'já existe um item com esse nome' }, { status: 409 })
+    fs.renameSync(full, dest)
+    return Response.json({ ok: true, path: novoRel })
+  }
+
+  // mover arquivo/pasta para outra pasta (dentro do mesmo processo)
+  if (b.op === 'move') {
+    if (!fs.existsSync(full)) return Response.json({ erro: 'item não encontrado' }, { status: 404 })
+    if (rel.split('/').includes(TRASH)) return Response.json({ erro: 'não é possível mover da Lixeira' }, { status: 400 })
+    const destDirRel = seguro(String(b.dest || ''))
+    const destDir = path.join(ROOT, destDirRel)
+    if (!destDir.startsWith(ROOT)) return Response.json({ erro: 'destino inválido' }, { status: 400 })
+    // não mover uma pasta para dentro dela mesma
+    if ((destDir + path.sep).startsWith(full + path.sep)) return Response.json({ erro: 'não é possível mover para dentro da própria pasta' }, { status: 400 })
+    const dest = path.join(destDir, path.basename(full))
+    if (dest === full) return Response.json({ ok: true, path: rel })
+    if (fs.existsSync(dest)) return Response.json({ erro: 'já existe um item com esse nome no destino' }, { status: 409 })
+    fs.mkdirSync(destDir, { recursive: true })
+    fs.renameSync(full, dest)
+    return Response.json({ ok: true, path: path.relative(ROOT, dest) })
+  }
+
   fs.mkdirSync(path.dirname(full), { recursive: true })
   const buf = Buffer.from(b.b64 || '', 'base64')
   if (b.append) fs.appendFileSync(full, buf)
