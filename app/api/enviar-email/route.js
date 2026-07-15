@@ -11,7 +11,6 @@
 
 import { createClient } from '@supabase/supabase-js'
 import nodemailer from 'nodemailer'
-import { ImapFlow } from 'imapflow'
 import crypto from 'crypto'
 import fs from 'fs'
 import path from 'path'
@@ -29,27 +28,40 @@ function raizThread(chave) {
 
 // grava uma cópia do e-mail enviado na pasta "Enviados" (Sent) da caixa via IMAP.
 // Best-effort: se falhar, o envio já ocorreu — devolvemos o motivo para o painel.
+// imapflow é importado DINAMICAMENTE: se a lib faltar (npm install não rodou), o
+// e-mail ainda é enviado e o painel mostra o motivo, em vez de quebrar a rota.
 async function salvarEnviados(raw) {
   const host = process.env.IMAP_HOST || (process.env.SMTP_HOST || '').replace(/^smtp\./i, 'imap.') || 'imap.hostinger.com'
   const port = parseInt(process.env.IMAP_PORT || '993', 10)
   const user = process.env.SMTP_USER, pass = process.env.SMTP_PASS
   if (!host || !user || !pass) return { ok: false, motivo: 'IMAP não configurado' }
+  let ImapFlow
+  try { ({ ImapFlow } = await import('imapflow')) }
+  catch (e) { return { ok: false, motivo: 'imapflow ausente no servidor — rode "npm install" no VPS (' + ((e && e.message) || e) + ')' } }
   const client = new ImapFlow({ host, port, secure: port === 993, auth: { user, pass }, logger: false })
   try {
     await client.connect()
-    // descobre a pasta de enviados (special-use \Sent) com fallbacks comuns
-    let destino = 'INBOX.Sent'
+    // pastas-candidatas: INBOX.Sent PRIMEIRO (é o que o webmail Hostinger mostra como
+    // "Enviado"), depois a marcada como \Sent e outros nomes comuns. Uma caixa pode ter
+    // "Sent" (topo) E "INBOX.Sent"; só a segunda aparece no webmail.
+    let detect = []
     try {
       const lista = await client.list()
-      const esp = lista.find(m => (m.specialUse === '\\Sent') || /(^|[./])sent( items)?$/i.test(m.path) || /enviad/i.test(m.path))
-      if (esp && esp.path) destino = esp.path
+      const esp = lista.find(m => m.specialUse === '\\Sent')
+      if (esp && esp.path) detect.push(esp.path)
+      for (const m of lista) { if (/(^|[./])sent( items)?$/i.test(m.path) || /enviad/i.test(m.path)) detect.push(m.path) }
     } catch (e) {}
-    await client.append(destino, raw, ['\\Seen'])
-    return { ok: true, pasta: destino }
-  } catch (e) {
-    return { ok: false, motivo: (e && e.message) || String(e) }
-  } finally {
+    let candidatos = [...new Set(['INBOX.Sent'].concat(detect).concat(['Sent', 'INBOX/Sent', 'Sent Items', 'Enviados', 'INBOX.Enviados']))]
+    let ultimo = ''
+    for (const pasta of candidatos) {
+      try { await client.append(pasta, raw, ['\\Seen']); try { await client.logout() } catch (e) {} return { ok: true, pasta } }
+      catch (e) { ultimo = (e && e.message) || String(e) }
+    }
     try { await client.logout() } catch (e) {}
+    return { ok: false, motivo: 'nenhuma pasta de enviados aceitou a cópia (' + ultimo + ')' }
+  } catch (e) {
+    try { await client.logout() } catch (_) {}
+    return { ok: false, motivo: 'IMAP ' + host + ':' + port + ' — ' + ((e && e.message) || String(e)) }
   }
 }
 
@@ -141,7 +153,7 @@ export async function POST(request) {
   try {
     const info = await transporter.sendMail({ envelope: { from: smtpUser, to: [para] }, raw })
     const copia = await salvarEnviados(raw)   // grava em "Enviados" (best-effort)
-    return Response.json({ ok: true, de: smtpUser, id: (info && info.messageId) || messageId, copiado_enviados: copia.ok, copia_motivo: copia.ok ? undefined : copia.motivo })
+    return Response.json({ ok: true, de: smtpUser, id: (info && info.messageId) || messageId, copiado_enviados: copia.ok, copia_pasta: copia.pasta, copia_motivo: copia.ok ? undefined : copia.motivo })
   } catch (e) {
     return Response.json({ erro: 'falha ao enviar: ' + (e && e.message || e) }, { status: 502 })
   }
