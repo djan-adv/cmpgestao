@@ -854,13 +854,15 @@ async function clReabrirItem(id){
   if(r&&r.error){ alert('Não foi possível: '+r.error.message); return; }
   renderPublicarResumo();
 }
+/* Aviso em destaque durante a recompilação: 3x o tamanho normal, pra ninguém fechar sem ver */
+function _stGrande(st,on){ if(!st) return; if(on){ st.style.fontSize='34px'; st.style.fontWeight='800'; st.style.fontStyle='normal'; st.style.lineHeight='1.3'; st.style.display='block'; } else { st.style.fontSize=''; st.style.fontWeight=''; st.style.fontStyle=''; st.style.lineHeight=''; st.style.display=''; } }
 /* Coloca no ar (git pull no servidor). As alterações aprovadas já entram; as
    rejeitadas ficam guardadas para reformulação e não somem da lista. */
 async function publicarAtualizacao(){
   var btn=document.getElementById('btn-publicar'), st=document.getElementById('publicar-status');
   if(!btn) return;
   btn.disabled=true; var txt0=btn.textContent; btn.textContent='Publicando…';
-  if(st){ st.style.color='var(--muted)'; st.textContent='Puxando a versão nova no servidor…'; }
+  _stGrande(st,false); if(st){ st.style.color='var(--muted)'; st.textContent='Puxando a versão nova no servidor…'; }
   try{
     var sb=window.__sb; var jwt='';
     if(sb){ var s=await sb.auth.getSession(); jwt=(s&&s.data&&s.data.session&&s.data.session.access_token)||''; }
@@ -871,7 +873,7 @@ async function publicarAtualizacao(){
       if(j.jaAtualizado){ if(st){ st.style.color='#0F6E56'; st.textContent='Já estava na versão mais recente.'; } renderPublicarResumo(); btn.disabled=false; btn.textContent=txt0; return; }
       if(j.build==='iniciado'){
         /* mudança de backend: o servidor está recompilando (1–2 min). Acompanha o status. */
-        if(st){ st.style.color='#8a5a00'; st.textContent='Publicado ('+(j.de||'')+' → '+(j.para||'')+'). 🛠️ Recompilando o servidor… pode levar 1–2 min. Não feche.'; }
+        if(st){ st.style.color='#8a5a00'; _stGrande(st,true); st.textContent='Publicado ('+(j.de||'')+' → '+(j.para||'')+'). 🛠️ Recompilando o servidor… pode levar 1–2 min. NÃO FECHE.'; }
         btn.textContent='Recompilando…';
         await _aguardarBuild(st);
         return;
@@ -892,11 +894,11 @@ async function _aguardarBuild(st){
   while(Date.now()<fim){
     await new Promise(function(res){ setTimeout(res, 4000); });
     var estado='';
-    try{ var r=await fetch('/api/deploy?status=1',{cache:'no-store'}); var j=await r.json(); estado=(j&&j.state)||''; if(estado==='error'){ if(st){ st.style.color='#b5342b'; st.textContent='⚠ Falha ao recompilar. '+((j.saida||'').slice(-300)); } if(btn){ btn.disabled=false; btn.textContent='↑ Publicar atualização agora'; } return; } }
+    try{ var r=await fetch('/api/deploy?status=1',{cache:'no-store'}); var j=await r.json(); estado=(j&&j.state)||''; if(estado==='error'){ if(st){ _stGrande(st,false); st.style.color='#b5342b'; st.textContent='⚠ Falha ao recompilar. '+((j.saida||'').slice(-300)); } if(btn){ btn.disabled=false; btn.textContent='↑ Publicar atualização agora'; } return; } }
     catch(e){ /* durante o restart o endpoint fica indisponível por alguns segundos — normal */ }
     if(estado==='done'){ if(st){ st.style.color='#0F6E56'; st.textContent='✅ Servidor recompilado e no ar! Recarregando…'; } setTimeout(function(){ location.reload(true); }, 1800); return; }
   }
-  if(st){ st.style.color='#8a5a00'; st.textContent='O build está demorando mais que o normal. Aguarde ~1 min e recarregue a página manualmente.'; }
+  if(st){ _stGrande(st,false); st.style.color='#8a5a00'; st.textContent='O build está demorando mais que o normal. Aguarde ~1 min e recarregue a página manualmente.'; }
   if(btn){ btn.disabled=false; btn.textContent='↑ Publicar atualização agora'; }
 }
 function rejeitarAtualizacao(){ /* substituído por rejeição item a item */ }
@@ -7424,6 +7426,7 @@ async function emitirCobranca(){
   if(!contato_id){ msg.textContent='Selecione o cliente.'; return; }
   if(!descricao){ msg.textContent='Descreva a cobrança.'; return; }
   if(!(centavos>0)){ msg.textContent='Informe um valor válido.'; return; }
+  if(centavos<500){ msg.textContent='O Cora exige valor mínimo de R$ 5,00 por cobrança.'; return; }
   if(!vencimento){ msg.textContent='Informe o vencimento.'; return; }
   btn.disabled=true; var txt=btn.textContent; btn.textContent='Emitindo…'; msg.textContent='';
   try{

@@ -51,6 +51,8 @@ export async function POST(request) {
   if (!contato_id) return Response.json({ erro: 'Selecione o cliente.' }, { status: 400 })
   if (!descricao) return Response.json({ erro: 'Descreva a cobrança.' }, { status: 400 })
   if (!(centavos > 0)) return Response.json({ erro: 'Valor inválido.' }, { status: 400 })
+  // o Cora rejeita amount < 500 (R$ 5,00) — validamos aqui com mensagem amigável
+  if (centavos < 500) return Response.json({ erro: 'O Cora exige valor mínimo de R$ 5,00 por cobrança.' }, { status: 400 })
   if (!/^\d{4}-\d{2}-\d{2}$/.test(vencimento)) return Response.json({ erro: 'Vencimento inválido (use AAAA-MM-DD).' }, { status: 400 })
 
   const sb = sbUsuario(jwt)
