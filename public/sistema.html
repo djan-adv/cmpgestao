@@ -5484,6 +5484,52 @@ async function _extrairTextoPdf(arrbuf){
   return txt;
 }
 /* acha o 1º PDF cujo nome casa com 're' (busca nas subpastas até profundidade 2) */
+function _ensureJsZip(){
+  return new Promise(function(res,rej){
+    if(window.JSZip) return res(window.JSZip);
+    var s=document.createElement('script');
+    s.src='https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js';
+    s.onload=function(){ window.JSZip?res(window.JSZip):rej(new Error('JSZip não carregou')); };
+    s.onerror=function(){ rej(new Error('falha ao carregar o leitor de .docx')); };
+    document.head.appendChild(s);
+  });
+}
+/* texto de um documento QUALQUER (pdf, docx, doc/html) — detecta o tipo pelo conteúdo */
+async function _extrairTextoDoc(buf){
+  try{
+    var u8=new Uint8Array(buf.slice(0,8)); var head=String.fromCharCode.apply(null,u8);
+    if(head.indexOf('%PDF')===0) return await _extrairTextoPdf(buf);
+    if(head.indexOf('PK')===0){ /* .docx (Word moderno) */
+      var JZ=await _ensureJsZip(); var zip=await JZ.loadAsync(buf);
+      var f=zip.file('word/document.xml'); if(!f) return '';
+      var xml=await f.async('string');
+      return xml.replace(/<w:p[ >]/g,'\n<w:p ').replace(/<[^>]+>/g,' ')
+        .replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&#\d+;/g,' ')
+        .replace(/[ \t]+/g,' ').trim();
+    }
+    var txt=new TextDecoder('utf-8').decode(buf);
+    if(/<html|<body|<p[ >]|<w:|<div/i.test(txt.slice(0,4000))){ /* .doc "HTML" (Word/gerados) */
+      return txt.replace(/<style[\s\S]*?<\/style>/gi,' ').replace(/<script[\s\S]*?<\/script>/gi,' ')
+        .replace(/<[^>]+>/g,' ').replace(/&nbsp;/gi,' ').replace(/[ \t]+/g,' ').trim();
+    }
+    /* .doc binário antigo: melhor esforço (sequências legíveis) */
+    var lat=new TextDecoder('iso-8859-1').decode(buf);
+    return (lat.match(/[A-Za-zÀ-ÿ0-9 ,.;:()\-\/@]{40,}/g)||[]).join('\n');
+  }catch(e){ return ''; }
+}
+/* lista TODOS os arquivos do processo (até 2 níveis), para a varredura de nomes */
+async function _listarArquivosProc(dig){
+  var tok=await docToken(); var out=[];
+  async function busca(sub,prof){
+    var r=await fetch('/api/docs?dir='+encodeURIComponent(dig+(sub?'/'+sub:'')),{headers:{Authorization:'Bearer '+tok}});
+    var j=await r.json(); var itens=(j&&j.itens)||[];
+    for(var i=0;i<itens.length;i++){ var x=itens[i], rel=(sub?sub+'/':'')+x.nome;
+      if(x.tipo==='pasta'){ if(x.nome!=='Lixeira'&&prof>0) await busca(rel,prof-1); continue; }
+      out.push(rel);
+    }
+  }
+  await busca('',2); return out;
+}
 async function _acharDocRel(dig, re){
   var tok=await docToken();
   async function listar(sub){ var r=await fetch('/api/docs?dir='+encodeURIComponent(dig+(sub?'/'+sub:'')),{headers:{Authorization:'Bearer '+tok}}); var j=await r.json(); return (j&&j.itens)||[]; }
@@ -5491,7 +5537,7 @@ async function _acharDocRel(dig, re){
     var itens=await listar(sub), pastas=[];
     for(var i=0;i<itens.length;i++){ var x=itens[i], rel=(sub?sub+'/':'')+x.nome;
       if(x.tipo==='pasta'){ if(x.nome!=='Lixeira') pastas.push(rel); continue; }
-      if(re.test(x.nome) && /\.pdf$/i.test(x.nome)) return rel;
+      if(re.test(x.nome) && /\.(pdf|docx?|html?)$/i.test(x.nome)) return rel; /* aceita Word também ("2 procuração.docx") */
     }
     if(prof>0){ for(var k=0;k<pastas.length;k++){ var f=await busca(pastas[k],prof-1); if(f) return f; } }
     return null;
@@ -5547,17 +5593,32 @@ async function puxarNomeCliente(){
     if(ch){ candidatos.push(ch); fonte='histórico'; }
     /* 2) PROCURAÇÃO / 3) PETIÇÃO INICIAL (PDF) */
     var tok=await docToken();
-    async function _lerDoc(rel){ if(!rel) return ''; var r=await fetch('/api/docs?file='+encodeURIComponent(dig+'/'+rel),{headers:{Authorization:'Bearer '+tok}}); if(!r.ok) return ''; var t=await _extrairTextoPdf(await r.arrayBuffer()); return (t&&t.replace(/\s/g,'').length>=20)?t:''; }
+    async function _lerDoc(rel){ if(!rel) return ''; var r=await fetch('/api/docs?file='+encodeURIComponent(dig+'/'+rel),{headers:{Authorization:'Bearer '+tok}}); if(!r.ok) return ''; var t=await _extrairTextoDoc(await r.arrayBuffer()); return (t&&t.replace(/\s/g,'').length>=20)?t:''; }
     var janela='', fontePdf='';
     var relP=await _acharDocRel(dig,/procura/i);
     if(relP){ var tP=await _lerDoc(relP); if(tP){ janela=_janelaOutorgante(tP).janela; fontePdf='procuração'; } }
+    var relI=null;
     if(_extrairNomesOutorgante(janela).length<1){
-      var relI=await _acharDocRel(dig,/inicial|peti[çc][aã]o/i);
+      relI=await _acharDocRel(dig,/inicial|peti[çc][aã]o/i);
       if(relI){ var tI=await _lerDoc(relI); if(tI){ janela=_janelaCliente(tI, (atual&&atual.cliente)||''); fontePdf='petição inicial'; } }
+    }
+    /* ainda nada? VARRE os demais documentos (Word primeiro — maioria das petições) */
+    if(_extrairNomesOutorgante(janela).length<1){
+      try{
+        var todos=await _listarArquivosProc(dig);
+        var docs=todos.filter(function(rr){ return /\.(docx?|pdf|html?)$/i.test(rr) && rr!==relP && rr!==relI; });
+        docs.sort(function(a,b){ function sc(x){ return /procura/i.test(x)?0:(/inicial|peti[çc]/i.test(x)?1:(/\.docx?$/i.test(x)?2:3)); } return sc(a)-sc(b); });
+        for(var di=0; di<Math.min(docs.length,8); di++){
+          var tD=await _lerDoc(docs[di]); if(!tD) continue;
+          var jw2=_janelaOutorgante(tD); janela=jw2.janela;
+          if(_extrairNomesOutorgante(janela).length<1) janela=_janelaCliente(tD,(atual&&atual.cliente)||'');
+          if(_extrairNomesOutorgante(janela).length){ fontePdf='documento "'+docs[di].split('/').pop()+'"'; break; }
+        }
+      }catch(e){}
     }
     var nomesPdf=_extrairNomesOutorgante(janela);
     if(nomesPdf.length){ var cp=nomesPdf.slice(0,2).join(' e '); if(candidatos.indexOf(cp)<0) candidatos.push(cp); if(!fonte) fonte=fontePdf; }
-    if(!candidatos.length){ alert('Não achei o nome do casal no histórico nem na procuração/petição inicial deste processo.\n\n(Se os PDFs não estiverem na pasta ou forem imagem, e o histórico não citar o cônjuge, use "editar autor".)'); return; }
+    if(!candidatos.length){ alert('Não achei o nome nos documentos deste processo (procuração, inicial e demais PDFs/Word), nem no histórico.\n\n(Se os arquivos forem só imagem escaneada, o texto não é legível — use "✎ editar dados".)'); return; }
     var sugest=candidatos[0];
     if(typeof sugerirPartes==='function') sugerirPartes();
     var elc=document.getElementById('partes-cliente'); if(elc) elc.value=sugest;
@@ -5604,7 +5665,7 @@ async function puxarContatoProcuracao(){
   ov.textContent='Lendo os documentos do processo…'; document.body.appendChild(ov);
   try{
     var tok=await docToken();
-    async function _lerDoc(rel){ if(!rel) return ''; var r=await fetch('/api/docs?file='+encodeURIComponent(dig+'/'+rel),{headers:{Authorization:'Bearer '+tok}}); if(!r.ok) return ''; var t=await _extrairTextoPdf(await r.arrayBuffer()); return (t&&t.replace(/\s/g,'').length>=20)?t:''; }
+    async function _lerDoc(rel){ if(!rel) return ''; var r=await fetch('/api/docs?file='+encodeURIComponent(dig+'/'+rel),{headers:{Authorization:'Bearer '+tok}}); if(!r.ok) return ''; var t=await _extrairTextoDoc(await r.arrayBuffer()); return (t&&t.replace(/\s/g,'').length>=20)?t:''; }
     function _uniq(a){ var s={},o=[]; a.forEach(function(x){ var k=String(x).toLowerCase(); if(x&&!s[k]){s[k]=1;o.push(x);} }); return o; }
     var emails=[], tels=[], fontes=[], relUsado='';
     /* 1) procuração — foco no outorgante (cliente) */
@@ -5925,13 +5986,23 @@ function sugerirPartes(){
     box.innerHTML='<span class="note">Não encontrei nomes claros no histórico deste processo. Você pode digitar manualmente acima.</span>';
     intro.innerHTML='Não achei candidatos automáticos — digite a parte contrária manualmente, se quiser.';
   }else{
-    intro.innerHTML='Encontrei estes nomes no histórico. Clique num deles para preencher a <b>parte contrária</b> (ou digite). Nada é gravado sem sua confirmação.';
+    intro.innerHTML='Encontrei estes nomes no histórico. Cada clique <b>ACRESCENTA</b> o nome à parte contrária (separado por "; ") — assim dá para incluir vários réus. Nada é gravado sem sua confirmação.';
     box.innerHTML=_partesCands.map(function(c){
       var tag=c.ehCliente?' <span style="font-size:10px;color:#b45f06">(parece o cliente)</span>':'';
-      return '<span class="quick-link" style="cursor:pointer" onclick="document.getElementById(\'partes-oponente\').value=\''+esc(c.nome).replace(/'/g,"\\'")+'\'">'+esc(c.nome)+' <span style="opacity:.6">×'+c.freq+'</span>'+tag+'</span>';
+      return '<span class="quick-link" style="cursor:pointer" onclick="_addOponenteCand(\''+esc(c.nome).replace(/'/g,"\\'")+'\')">'+esc(c.nome)+' <span style="opacity:.6">×'+c.freq+'</span>'+tag+'</span>';
     }).join('');
   }
   document.getElementById('modal-partes').classList.remove('hidden');
+}
+/* clique num candidato ACRESCENTA à parte contrária (com "; ") — permite vários réus */
+function _addOponenteCand(nome){
+  var e=document.getElementById('partes-oponente'); if(!e) return;
+  nome=String(nome||'').trim(); if(!nome) return;
+  var cur=(e.value||'').trim().replace(/[;\s]+$/,'');
+  if(cur){
+    if(cur.toLowerCase().indexOf(nome.toLowerCase())>-1) return; /* já está lá */
+    e.value=cur+'; '+nome;
+  } else e.value=nome;
 }
 function fecharPartes(){ document.getElementById('modal-partes').classList.add('hidden'); }
 async function salvarPartes(){
