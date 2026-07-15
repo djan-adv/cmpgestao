@@ -60,9 +60,6 @@ Arquivos: `lib/supabaseAssinatura.js` (cliente público), `lib/assinaturaApi.js`
 
 ## Pendências conhecidas
 
-- A tela `/assinatura` (gerar procuração) foi **reconstruída** a partir das RPCs e das
-  outras telas — o `index.html` original não foi enviado. Conferir se os modelos/textos
-  batem com o site antigo e ajustar se precisar.
 - Marca d'água e timbre da procuração usam `public/logo_cmp_full.png`. Se quiser a
   marca d'água exata do site antigo, copiar `cmp-marca.png` e `cmp-logo.png` para
   `public/` e trocar as referências em `app/assinar/page.jsx`.

@@ -113,8 +113,11 @@ export async function POST(request) {
       await sb.from('eventos_auditoria').insert({
         documento_id: docId,
         tipo: 'criado',
-        detalhe: (tipo === 'procuracao' ? 'Procuração gerada' : 'Documento avulso enviado') +
-          ' pelo CMPGestão (' + (user.email || 'usuário') + ') — ' + rows.length + ' signatário(s)',
+        detalhe: (tipo === 'procuracao'
+          ? 'Link de assinatura gerado para ' + (rows[0].email || rows[0].nome || 'cliente')
+          : 'Documento avulso enviado (' + rows.length + ' signatário(s))') +
+          ' — pelo CMPGestão (' + (user.email || 'usuário') + ')' +
+          (body.processo ? ' · processo ' + String(body.processo).slice(0, 40) : ''),
       })
       return Response.json({ ok: true, doc_id: docId, signatarios: ins.data || [] })
     }

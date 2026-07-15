@@ -1,116 +1,149 @@
 'use client'
-// Gerar PROCURAÇÃO para assinatura (equivalente ao index.html do assinador antigo).
-// Cria o documento no banco do assinador e gera o link público /assinar?d=…&s=…
-// que pode ser copiado, mandado por WhatsApp ou enviado por e-mail ao cliente.
+// Gerar PROCURAÇÃO para assinatura (port do index.html do assinador antigo).
+// Escolhe o tipo + gratuidade, gera o link público /assinar?d=…&s=… e envia
+// por e-mail automaticamente; dá pra copiar, mandar por WhatsApp ou reenviar.
 import { useEffect, useState } from 'react'
 import { signSb } from '../../lib/supabaseAssinatura'
 import { apiAssinatura } from '../../lib/assinaturaApi'
 
 const NAVY = '#2E3A4B'
 
-// Modelos de procuração — os mesmos códigos que a tela pública /assinar entende
-// (cláusula de honorários + gratuidade da justiça variam por modelo).
-const MODELOS = [
-  ['trabalhista', 'Trabalhista — 30% + gratuidade da justiça'],
-  ['previdenciario', 'Previdenciário — 30% + gratuidade da justiça'],
-  ['civel30g', 'Cível — 30% + gratuidade da justiça'],
-  ['civel30', 'Cível — 30% (sem gratuidade)'],
-  ['civel20g', 'Cível — 20% + gratuidade da justiça'],
-  ['civel20', 'Cível — 20% (sem gratuidade)'],
-  ['defesag', 'Defesa — sem honorários no êxito, com gratuidade'],
-  ['defesa', 'Defesa — sem cláusula de honorários'],
-  ['defesa10g', 'Defesa — 10% + gratuidade da justiça'],
-  ['defesa10', 'Defesa — 10% (sem gratuidade)'],
+// Tipos base — o modelo final vira base + 'g' quando a gratuidade está marcada
+// (trabalhista e previdenciária já têm gratuidade embutida no modelo, sem sufixo).
+const TIPOS = [
+  ['trabalhista', 'Trabalhista (êxito 30%)'],
+  ['previdenciario', 'Previdenciária (êxito 30%)'],
+  ['civel20', 'Cível (êxito 20%)'],
+  ['civel30', 'Cível (êxito 30%)'],
+  ['defesa', 'Defesa (sem êxito)'],
+  ['defesa10', 'Defesa com êxito (10%)'],
 ]
+const LABELS = {
+  trabalhista: 'Procuração Trabalhista', previdenciario: 'Procuração Previdenciária',
+  civel20: 'Procuração Cível 20%', civel30: 'Procuração Cível 30%',
+  defesa: 'Procuração Defesa', defesa10: 'Procuração Defesa (êxito 10%)',
+}
+// regras do checkbox de gratuidade por tipo (marcado / travado), como no site antigo
+const gratRegra = base =>
+  (base === 'trabalhista' || base === 'previdenciario') ? { marcada: true, travada: true }
+    : base === 'civel30' ? { marcada: true, travada: false }
+      : { marcada: false, travada: false }
 
-const estCampo = { width: '100%', padding: 10, border: '1px solid #d9dde3', borderRadius: 8, fontSize: 14, boxSizing: 'border-box' }
-const estRotulo = { display: 'block', fontSize: 12.5, fontWeight: 600, color: '#5b6673', margin: '12px 0 4px' }
+const emailValido = e => /.+@.+\..+/.test((e || '').trim())
+const estCampo = { width: '100%', padding: '11px 12px', border: '1px solid #d9dde3', borderRadius: 8, fontSize: 15, boxSizing: 'border-box' }
+const estRotulo = { display: 'block', fontSize: 12.5, fontWeight: 600, color: '#5b6673', margin: '14px 0 4px' }
 
 export default function GerarProcuracao() {
-  const [modelo, setModelo] = useState('trabalhista')
-  const [titulo, setTitulo] = useState('')
-  const [tituloManual, setTituloManual] = useState(false)
-  const [nome, setNome] = useState('')
-  const [email, setEmail] = useState('')
+  const [base, setBase] = useState('trabalhista')
+  const [grat, setGrat] = useState(true)
+  const [emailCli, setEmailCli] = useState('')
+  const [nomeCli, setNomeCli] = useState('')
   const [telefone, setTelefone] = useState('')
   const [processo, setProcesso] = useState('')
   const [busy, setBusy] = useState(false)
-  const [msg, setMsg] = useState(null) // {texto, ok}
-  const [resultado, setResultado] = useState(null) // {link, nome, email, titulo}
+  const [msg, setMsg] = useState(null)          // mensagem do formulário
+  const [msgEnvio, setMsgEnvio] = useState(null) // mensagem da área do link
+  const [resultado, setResultado] = useState(null) // {link, titulo, sig_id}
+  const [emailRow, setEmailRow] = useState(false)
+  const [emailDest, setEmailDest] = useState('')
+  const [hist, setHist] = useState([])
 
   // chega pré-preenchido quando vem da ficha do processo ou do contato do CRM
   useEffect(() => {
     const q = new URLSearchParams(window.location.search)
-    if (q.get('nome')) setNome(q.get('nome'))
-    if (q.get('email')) setEmail(q.get('email'))
+    if (q.get('nome')) setNomeCli(q.get('nome'))
+    if (q.get('email')) setEmailCli(q.get('email'))
     if (q.get('tel')) setTelefone(q.get('tel'))
     if (q.get('processo')) setProcesso(q.get('processo'))
   }, [])
 
-  useEffect(() => {
-    if (!tituloManual) setTitulo('Procuração' + (nome.trim() ? ' — ' + nome.trim() : ''))
-  }, [nome, tituloManual])
+  function mudarTipo(v) {
+    setBase(v)
+    setGrat(gratRegra(v).marcada)
+  }
+  const regra = gratRegra(base)
 
   async function gerar() {
-    setBusy(true); setMsg({ texto: 'Criando o documento…', ok: true }); setResultado(null)
+    if (!emailValido(emailCli)) { setMsg({ texto: 'Informe um e-mail válido do cliente antes de gerar.', ok: false }); return }
+    setBusy(true); setResultado(null); setMsgEnvio(null)
+    setMsg({ texto: 'Gerando e enviando…', ok: true })
+    const semGrat = base !== 'trabalhista' && base !== 'previdenciario'
+    const modelo = semGrat ? base + (grat ? 'g' : '') : base
+    const titulo = LABELS[base] + (semGrat && grat ? ' c/ gratuidade' : '')
     const r = await apiAssinatura({
-      acao: 'criar',
-      tipo: 'procuracao',
-      modelo,
-      titulo: titulo.trim() || 'Procuração',
-      signatarios: [{ nome: nome.trim() || null, email: email.trim() || null }],
+      acao: 'criar', tipo: 'procuracao', modelo, titulo, processo: processo.trim() || null,
+      signatarios: [{ nome: nomeCli.trim() || null, email: emailCli.trim() }],
     })
     if (!r.ok) { setMsg({ texto: r.erro || 'Não foi possível criar.', ok: false }); setBusy(false); return }
     const sig = r.signatarios[0]
     const link = window.location.origin + '/assinar?d=' + r.doc_id + '&s=' + sig.token
-    setResultado({ link, nome: nome.trim(), email: email.trim(), titulo: titulo.trim() || 'Procuração' })
-    if (email.trim()) {
-      setMsg({ texto: 'Documento criado. Enviando o e-mail…', ok: true })
-      const ok = await enviarEmail(link, email.trim(), nome.trim(), titulo.trim() || 'Procuração')
-      setMsg(ok
-        ? { texto: '✓ Procuração criada e e-mail enviado para ' + email.trim() + '.', ok: true }
-        : { texto: 'Procuração criada, mas o e-mail falhou — use os botões abaixo (Copiar/WhatsApp/Reenviar).', ok: false })
-    } else {
-      setMsg({ texto: '✓ Procuração criada! Envie o link ao cliente pelos botões abaixo.', ok: true })
-    }
+    setResultado({ link, titulo, sig_id: sig.id })
+    setMsg(null)
+    setEmailDest(emailCli.trim()); setEmailRow(false)
+    setHist(h => [{ titulo, link }, ...h])
+    // envio automático por e-mail
+    const res = await enviarEmailFn(link, emailCli.trim(), nomeCli.trim(), titulo)
+    setMsgEnvio(res
+      ? { texto: 'Link criado e e-mail enviado para ' + emailCli.trim() + '.', ok: true }
+      : { texto: 'Link criado, mas o e-mail não saiu agora. Use Copiar ou WhatsApp, ou o botão E-mail para reenviar.', ok: false })
     setBusy(false)
   }
 
-  async function enviarEmail(link, to, nomeSig, tituloDoc) {
+  async function enviarEmailFn(link, to, nome, titulo) {
     try {
-      const r = await signSb.functions.invoke('enviar-email', { body: { to, nome: nomeSig || '', titulo: tituloDoc, link } })
+      const r = await signSb.functions.invoke('enviar-email', { body: { to, nome: nome || '', titulo, link } })
       return !(r.error || (r.data && r.data.ok === false))
     } catch { return false }
   }
 
+  function copiar() { navigator.clipboard.writeText(resultado.link); setMsgEnvio({ texto: 'Link copiado!', ok: true }) }
+  function whats() {
+    const texto = 'Olá! Segue o link para assinar sua ' + resultado.titulo + ': ' + resultado.link
+    const num = telefone.replace(/\D/g, '')
+    window.open('https://wa.me/' + (num ? (num.length <= 11 ? '55' + num : num) : '') + '?text=' + encodeURIComponent(texto), '_blank')
+  }
+  async function reenviar() {
+    const to = emailDest.trim()
+    if (!emailValido(to)) { setMsgEnvio({ texto: 'Digite um e-mail válido do cliente.', ok: false }); return }
+    setMsgEnvio({ texto: 'Enviando…', ok: true })
+    // salva/corrige o e-mail no registro do signatário (para os lembretes funcionarem)
+    if (resultado.sig_id) { try { await apiAssinatura({ acao: 'email', sig_id: resultado.sig_id, email: to }) } catch { /* segue */ } }
+    const ok = await enviarEmailFn(resultado.link, to, '', resultado.titulo)
+    setMsgEnvio(ok ? { texto: 'E-mail enviado para ' + to + '.', ok: true } : { texto: 'Não foi possível enviar o e-mail agora. Use Copiar ou WhatsApp.', ok: false })
+  }
+
+  const Msg = ({ m }) => m ? (
+    <div style={{
+      fontSize: 13, marginTop: 12, padding: '10px 12px', borderRadius: 8,
+      background: m.ok ? '#eaf6ef' : '#fdecea', color: m.ok ? '#1f7a44' : '#b3261e',
+      border: '1px solid ' + (m.ok ? '#a9d7bd' : '#f2b8b3'),
+    }}>{m.texto}</div>
+  ) : null
+
+  const btnAct = { flex: 1, minWidth: 120, border: 'none', borderRadius: 8, padding: 11, fontSize: 14, fontWeight: 600, cursor: 'pointer' }
+
   return (
-    <div style={{ maxWidth: 760, margin: '0 auto', padding: 22 }}>
-      <div style={{ background: '#fff', border: '1px solid #d9dde3', borderRadius: 12, padding: 22 }}>
-        <div style={{ fontSize: 12, color: '#b8912f', fontWeight: 700, textTransform: 'uppercase', letterSpacing: .5 }}>Nova procuração</div>
-        <h2 style={{ margin: '4px 0 4px', fontSize: 17, color: NAVY }}>Gerar link de assinatura</h2>
-        <p style={{ fontSize: 13, color: '#5b6673', margin: '0 0 8px' }}>
-          O cliente abre o link, completa os próprios dados (CPF, endereço…) e assina online.
-          A cópia assinada vai por e-mail para ele e para o escritório.
-        </p>
+    <div style={{ maxWidth: 640, margin: '0 auto', padding: 24 }}>
+      <div style={{ background: '#fff', border: '1px solid #d9dde3', borderRadius: 12, padding: 22, marginBottom: 20 }}>
+        <h2 style={{ margin: '0 0 4px', fontSize: 16, color: NAVY }}>Nova procuração</h2>
+        <p style={{ fontSize: 13, color: '#5b6673', margin: '0 0 14px' }}>Escolha o tipo e gere o link. O cliente preenche os dados e assina.</p>
 
-        <label style={estRotulo}>Modelo da procuração *</label>
-        <select value={modelo} onChange={e => setModelo(e.target.value)} style={estCampo}>
-          {MODELOS.map(([v, r]) => <option key={v} value={v}>{r}</option>)}
+        <label style={estRotulo}>Tipo de procuração</label>
+        <select value={base} onChange={e => mudarTipo(e.target.value)} style={estCampo}>
+          {TIPOS.map(([v, r]) => <option key={v} value={v}>{r}</option>)}
         </select>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, fontWeight: 500, fontSize: 14, color: '#1c2733' }}>
+          <input type="checkbox" checked={grat} disabled={regra.travada} onChange={e => setGrat(e.target.checked)} style={{ width: 'auto' }} />
+          Incluir requerimento de gratuidade da justiça
+        </label>
 
+        <label style={estRotulo}>E-mail do cliente <span style={{ color: '#b3261e' }}>*</span></label>
+        <input value={emailCli} onChange={e => setEmailCli(e.target.value)} type="email" placeholder="e-mail de quem vai assinar" style={estCampo} />
+        <label style={estRotulo}>Nome do cliente (opcional)</label>
+        <input value={nomeCli} onChange={e => setNomeCli(e.target.value)} placeholder="nome de quem vai assinar" style={estCampo} />
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           <div>
-            <label style={estRotulo}>Nome do cliente (opcional)</label>
-            <input value={nome} onChange={e => setNome(e.target.value)} placeholder="ex.: Maria da Silva" style={estCampo} />
-          </div>
-          <div>
-            <label style={estRotulo}>E-mail do cliente (opcional)</label>
-            <input value={email} onChange={e => setEmail(e.target.value)} type="email" placeholder="para enviar o link automaticamente" style={estCampo} />
-          </div>
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <div>
-            <label style={estRotulo}>WhatsApp do cliente (opcional)</label>
+            <label style={estRotulo}>WhatsApp (opcional)</label>
             <input value={telefone} onChange={e => setTelefone(e.target.value)} placeholder="(83) 90000-0000" style={estCampo} />
           </div>
           <div>
@@ -118,46 +151,52 @@ export default function GerarProcuracao() {
             <input value={processo} onChange={e => setProcesso(e.target.value)} placeholder="número do processo" style={estCampo} />
           </div>
         </div>
-        <label style={estRotulo}>Título do documento</label>
-        <input value={titulo} onChange={e => { setTitulo(e.target.value); setTituloManual(true) }} style={estCampo} />
 
         <button onClick={gerar} disabled={busy} style={{
-          marginTop: 16, padding: '11px 20px', background: busy ? '#a9b3c1' : NAVY, color: '#fff',
-          border: 0, borderRadius: 8, fontWeight: 700, fontSize: 14, cursor: busy ? 'default' : 'pointer',
-        }}>{busy ? 'Gerando…' : 'Gerar procuração'}</button>
-
-        {msg && <div style={{
-          fontSize: 13, marginTop: 12, padding: '10px 12px', borderRadius: 8,
-          background: msg.ok ? '#eaf6ef' : '#fdecea', color: msg.ok ? '#1f7a44' : '#b3261e',
-          border: '1px solid ' + (msg.ok ? '#a9d7bd' : '#f2b8b3'),
-        }}>{msg.texto}</div>}
+          border: 'none', borderRadius: 8, padding: '12px 18px', fontSize: 15, fontWeight: 600,
+          cursor: busy ? 'not-allowed' : 'pointer', background: busy ? '#a9b3c1' : NAVY, color: '#fff', marginTop: 18, width: '100%',
+        }}>Gerar link e enviar por e-mail</button>
+        <Msg m={msg} />
 
         {resultado && (
-          <div style={{ background: '#f4f5f7', border: '1px solid #d9dde3', borderRadius: 8, padding: '12px 14px', marginTop: 14, fontSize: 13 }}>
-            <b>{resultado.nome || 'Cliente'}</b>{resultado.email ? <span style={{ color: '#5b6673' }}> · {resultado.email}</span> : null}
-            <div style={{ wordBreak: 'break-all', color: '#274b7d', fontSize: 12, margin: '6px 0' }}>{resultado.link}</div>
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              <button onClick={e => { navigator.clipboard.writeText(resultado.link); e.currentTarget.textContent = 'Copiado!' }}
-                style={{ border: 0, borderRadius: 6, padding: '7px 12px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer', background: '#e6e9ee', color: '#1c2733' }}>Copiar link</button>
-              <button onClick={() => {
-                const texto = 'Olá' + (resultado.nome ? ' ' + resultado.nome : '') + '! Segue o link para assinar: ' + resultado.titulo + ' — ' + resultado.link
-                const num = telefone.replace(/\D/g, '')
-                window.open('https://wa.me/' + (num ? (num.length <= 11 ? '55' + num : num) : '') + '?text=' + encodeURIComponent(texto), '_blank')
-              }} style={{ border: 0, borderRadius: 6, padding: '7px 12px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer', background: '#25d366', color: '#063d1e' }}>WhatsApp</button>
-              {resultado.email && <button onClick={async e => {
-                const b = e.currentTarget; b.disabled = true; b.textContent = 'Enviando…'
-                const ok = await enviarEmail(resultado.link, resultado.email, resultado.nome, resultado.titulo)
-                b.disabled = false; b.textContent = ok ? 'Reenviado ✓' : 'Falhou — tentar de novo'
-              }} style={{ border: 0, borderRadius: 6, padding: '7px 12px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer', background: NAVY, color: '#fff' }}>Reenviar e-mail</button>}
+          <div style={{ marginTop: 16 }}>
+            <label style={estRotulo}>Link para o cliente assinar</label>
+            <div style={{ background: '#f4f5f7', border: '1px solid #d9dde3', borderRadius: 8, padding: '10px 12px', fontSize: 12.5, wordBreak: 'break-all' }}>{resultado.link}</div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
+              <button style={{ ...btnAct, background: '#eef1f5', color: '#1c2733' }} onClick={copiar}>Copiar link</button>
+              <button style={{ ...btnAct, background: '#25d366', color: '#063d1e' }} onClick={whats}>WhatsApp</button>
+              <button style={{ ...btnAct, background: NAVY, color: '#fff' }} onClick={() => setEmailRow(v => !v)}>E-mail</button>
             </div>
+            {emailRow && (
+              <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                <input value={emailDest} onChange={e => setEmailDest(e.target.value)} type="email" placeholder="e-mail do cliente" style={{ ...estCampo, flex: 1 }} />
+                <button onClick={reenviar} style={{ border: 'none', borderRadius: 8, padding: '0 16px', background: NAVY, color: '#fff', fontWeight: 600, cursor: 'pointer' }}>Enviar</button>
+              </div>
+            )}
+            <Msg m={msgEnvio} />
           </div>
         )}
       </div>
 
-      <p style={{ fontSize: 12, color: '#697180', marginTop: 14 }}>
-        Acompanhe quem já assinou no <a href="/assinatura/painel" style={{ color: NAVY, fontWeight: 600 }}>Painel</a>.
-        Para contratos e outros PDFs, use <a href="/assinatura/avulso" style={{ color: NAVY, fontWeight: 600 }}>PDF avulso</a>.
-      </p>
+      <div style={{ background: '#fff', border: '1px solid #d9dde3', borderRadius: 12, padding: 22, marginBottom: 20 }}>
+        <h2 style={{ margin: '0 0 4px', fontSize: 16, color: NAVY }}>Acessar</h2>
+        <p style={{ fontSize: 13, color: '#5b6673', margin: '0 0 14px' }}>Veja as procurações enviadas ou suba um contrato/PDF para assinatura.</p>
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+          <a href="/assinatura/painel" style={{ flex: 1, minWidth: 200, textDecoration: 'none', textAlign: 'center', background: NAVY, color: '#fff', fontWeight: 600, padding: 16, borderRadius: 10 }}>📁 Procurações enviadas</a>
+          <a href="/assinatura/avulso" style={{ flex: 1, minWidth: 200, textDecoration: 'none', textAlign: 'center', background: '#1f7a44', color: '#fff', fontWeight: 600, padding: 16, borderRadius: 10 }}>📄 Subir contrato para assinatura</a>
+        </div>
+      </div>
+
+      {hist.length > 0 && (
+        <div style={{ background: '#fff', border: '1px solid #d9dde3', borderRadius: 12, padding: 22 }}>
+          <h2 style={{ margin: '0 0 8px', fontSize: 16, color: NAVY }}>Links gerados nesta sessão</h2>
+          {hist.map((h, i) => (
+            <div key={i} style={{ margin: '6px 0', fontSize: 12.5, color: '#5b6673' }}>
+              <b style={{ color: '#1c2733' }}>{h.titulo}</b> — <a href={h.link} target="_blank" style={{ color: '#274b7d' }}>abrir</a>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
