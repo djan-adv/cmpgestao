@@ -238,6 +238,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
           <div class="card" id="painel-prod"></div>
         </div>
       </div>
+      <div class="card" id="painel-varas" style="margin-top:4px"></div>
       <div id="painel-aud" style="display:none"></div>
     </section>
 
@@ -4563,7 +4564,8 @@ function go(s){
   try{ var _sub=document.getElementById('proc-subnav'); if(_sub) _sub.style.display=(['processos','inove','encerrados','james'].indexOf(s)>=0)?'block':'none'; }catch(e){}
   var st=document.getElementById("scr-title"); if(st) st.textContent=t[s]||"Painel";
   var sw=document.querySelector('#s-crm .switch'); if(sw) sw.style.display='none';
-  if(s==="painel")renderPainel(); if(s==="triagem")renderTriagem(); if(s==="processos")renderProc();
+  if(s==="painel"){renderPainel(); try{ if(typeof renderCoberturaVaras==='function') renderCoberturaVaras(); }catch(e){}}
+  if(s==="triagem")renderTriagem(); if(s==="processos")renderProc();
   if(s==="crm"){ if(typeof setCrmView==='function') setCrmView('captacao'); else renderCrm(); }
   if(s==="contatos"){ if(typeof setCrmView==='function') setCrmView('contatos'); else renderCrm(); }
   if(s==="etiquetas")renderEtiquetas(); if(s==="agenda")renderAgendaView(); if(s==="diligencias"){renderDiligencias(); try{ if(typeof renderVarasSemContato==='function') renderVarasSemContato(); }catch(e){}}
@@ -7047,6 +7049,36 @@ async function _registrarDiligencia(p, canalLabel, msg){
   }catch(e){ console.warn('registrar diligência:', e); }
 }
 function bvLine(numero){ var p=(DADOS.processos||[]).filter(function(x){return x.numero===numero;})[0]||{numero:numero}; return contatoBlocoHTML(p); }
+/* ===== Rodapé do Painel: cobertura de contatos das varas (números vivos do sistema) ===== */
+function renderCoberturaVaras(){
+  var el=document.getElementById('painel-varas'); if(!el) return;
+  var tot={}, com={}, semVara=0;
+  (DADOS.processos||[]).forEach(function(p){
+    if(!/^ativo/i.test(String(p.status||''))) return;
+    if(typeof isInove==='function'&&isInove(p)) return;
+    if(typeof _ehCasoProc==='function'&&_ehCasoProc(p)) return;
+    var fo=String(p.foro||p.orgao||'').trim();
+    if(!fo){ semVara++; return; }
+    var k=normOrg(fo); tot[k]=1;
+    var c=(typeof contatoDoProcesso==='function')?contatoDoProcesso(p):null;
+    if(c&&c.email) com[k]=1;
+  });
+  var nTot=Object.keys(tot).length, nCom=0; Object.keys(tot).forEach(function(k){ if(com[k]) nCom++; });
+  var nFalta=nTot-nCom, pct=nTot?Math.round(nCom/nTot*100):0;
+  /* dados ainda carregando: tenta de novo em alguns segundos */
+  if(nTot===0 && !(DADOS.processos||[]).length){ el.innerHTML='<div class="note">Calculando cobertura das varas…</div>'; setTimeout(renderCoberturaVaras, 3000); return; }
+  function tile(num,lbl,cor,click){ return '<div '+(click?('onclick="'+click+'" style="cursor:pointer"'):'')+'><div style="font-size:21px;font-weight:800;color:'+cor+';line-height:1.1">'+num+'</div><div style="font-size:11px;color:var(--muted)">'+lbl+'</div></div>'; }
+  el.innerHTML='<p class="sectlabel" style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">Cobertura de contatos das varas'+
+      '<a onclick="go(\'diligencias\')" style="cursor:pointer;color:var(--navy);text-transform:none;letter-spacing:0;font-weight:600;font-size:12px">ver e cadastrar as que faltam &rarr;</a></p>'+
+    '<div style="display:flex;gap:26px;flex-wrap:wrap;align-items:flex-end">'+
+      tile(nTot,'varas distintas (ativos)','var(--navy)')+
+      tile(nCom,'com e-mail cadastrado ('+pct+'%)','#127a53')+
+      tile(nFalta,'sem e-mail — prioridade p/ diligências','#b8912e','go(\'diligencias\')')+
+      tile(semVara,'processos sem vara identificada','#b5342b')+
+      '<div style="flex:1;min-width:180px;padding-bottom:6px"><div style="background:#eef1f6;border-radius:6px;height:10px;overflow:hidden"><div style="width:'+pct+'%;height:100%;background:#127a53"></div></div>'+
+      '<div class="note" style="font-size:10.5px;margin-top:3px">quanto mais verde, mais varas alcançáveis por e-mail nas diligências</div></div>'+
+    '</div>';
+}
 /* ===== Varas SEM contato de e-mail (foco: envio de diligências aos cartórios) =====
    Agrupa os processos ativos por vara e lista as varas em que contatoDoProcesso()
    não devolve e-mail (nem banco, nem carga TJPB). Ordena pelas com mais processos. */
