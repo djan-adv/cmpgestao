@@ -6369,7 +6369,11 @@ async function enviarAgoraAtualizacao(){
     var r=await fetch('/api/enviar-email',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({para:email,assunto:assunto,corpo:corpo,numero:numero})});
     var j=await r.json().catch(function(){return {};});
     if(!r.ok||j.erro){ alert('Não enviou: '+(j.erro||('HTTP '+r.status))+'\n\nSe o envio pelo servidor ainda não foi ativado, use "Abrir no Gmail" por enquanto.'); return; }
-    alert('E-mail enviado de '+(j.de||'contato@cmpadvogados.com.br')+' para '+email+'.'+(j.copiado_enviados===false?('\n\n⚠ Não foi possível salvar a cópia em Enviados ('+(j.copia_motivo||'')+'). O e-mail FOI enviado.'):('\n✓ Cópia salva em Enviados'+(j.copia_pasta?(' (pasta: '+j.copia_pasta+')'):'')+'.')));
+    var _cs=j.copiado_enviados;
+    var _msgCopia = (_cs===true) ? ('\n✓ Cópia salva em Enviados'+(j.copia_pasta?(' (pasta: '+j.copia_pasta+')'):'')+'.')
+      : (_cs===false) ? ('\n\n⚠ Não foi possível salvar a cópia em Enviados ('+(j.copia_motivo||'')+'). O e-mail FOI enviado.')
+      : '\n\n⚠ O e-mail FOI enviado, mas o SERVIDOR ainda não foi recompilado para salvar em Enviados (falta rodar "npm run build" no VPS).';
+    alert('E-mail enviado de '+(j.de||'contato@cmpadvogados.com.br')+' para '+email+'.'+_msgCopia);
     await registrarEnvioAtualizacao(true);
     fecharAtualizar();
   }catch(e){ alert('Erro ao enviar: '+(e&&e.message||e)); }
