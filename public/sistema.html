@@ -4877,21 +4877,10 @@ async function carregarDocs(numero, sub, escopo){
       var lbl=document.createElement('span'); lbl.className='note'; lbl.textContent='  /'+sub; left.appendChild(lbl);
     }
     var rightO=document.createElement('div'); rightO.style.cssText='font-size:11px;color:#8a8f98;white-space:nowrap';
-    rightO.innerHTML='ordenar:'+_sortBtnHTML('az','A-Z')+_sortBtnHTML('za','Z-A')+_sortBtnHTML('recent','recentes')+_sortBtnHTML('old','antigos')+_sortBtnHTML('manual','⇅ manual');
+    var temItens=itens.some(function(x){return x.nome!=='Lixeira';});
+    rightO.innerHTML=((!naLix&&temItens)?'<a href="#" onclick="limparTodosDocs(window.__docCtx.numero,\''+escopo+'\');return false" style="color:#b5342b;text-decoration:none;margin-right:12px" title="Apagar TODOS os documentos do processo — vão para a Lixeira e podem ser recuperados por 30 dias">🗑 apagar todos</a>':'')+
+      'ordenar:'+_sortBtnHTML('az','A-Z')+_sortBtnHTML('za','Z-A')+_sortBtnHTML('recent','recentes')+_sortBtnHTML('old','antigos')+_sortBtnHTML('manual','⇅ manual');
     bar.appendChild(left); bar.appendChild(rightO); el.appendChild(bar);
-    /* "Limpar tudo" só em processos ENCERRADOS */
-    var _encProc=(typeof atual!=='undefined' && atual && /encerr/i.test(atual.status||''));
-    if(!sub && !naLix && _encProc){
-      var nonLix=itens.filter(function(x){return x.nome!=='Lixeira';});
-      if(nonLix.length){
-        var clr=document.createElement('div'); clr.style.cssText='margin:0 0 7px;text-align:right';
-        var cb=document.createElement('a'); cb.href='#'; cb.textContent='🗑 Limpar tudo';
-        cb.title='Processo arquivado: enviar todos os documentos para a Lixeira';
-        cb.style.cssText='font-size:12px;color:#b5342b;cursor:pointer';
-        cb.onclick=function(ev){ev.preventDefault(); limparTodosDocs(numero, escopo);};
-        clr.appendChild(cb); el.appendChild(clr);
-      }
-    }
     if(!itens.length){ var n=document.createElement('div'); n.className='note'; n.textContent='Nenhum documento nesta pasta ainda.'; el.appendChild(n); return; }
     var escBaseRel=_docDir(escopo,''); /* raiz do escopo (‘’ ou ‘_OUTRA_PARTE’) para "mover p/ principal" */
     var isManual=(sort==='manual');
@@ -5334,14 +5323,20 @@ async function limparTodosDocs(numero, escopo){
   var base=_docDir(escopo,''); var dir=(dig+(base?('/'+base):'')).replace(/\/+$/,'');
   var r=await fetch('/api/docs?dir='+encodeURIComponent(dir),{headers:{Authorization:'Bearer '+tok}});
   var j=await r.json(); var itens=((j&&j.itens)||[]).filter(function(x){ return x.nome!=='Lixeira' && x.nome!=='_OUTRA_PARTE'; });
-  if(!itens.length){ alert('Não há documentos para limpar aqui.'); return; }
-  if(!confirm('Enviar TODOS os '+itens.length+' item(ns) desta pasta para a Lixeira?\n\nFicam guardados 30 dias e podem ser restaurados. Use para desfazer um envio em massa que caiu no processo errado.')) return;
+  if(!itens.length){ alert('Não há documentos para apagar aqui.'); return; }
+  /* conta os ARQUIVOS de verdade (recursivo) para o aviso; se não der, usa os itens */
+  var qtdArq=null;
+  try{ var rc=await fetch('/api/docs?censo='+encodeURIComponent(dig),{headers:{Authorization:'Bearer '+tok}}); var jc=await rc.json(); if(rc.ok&&jc&&jc.counts&&jc.counts[dig]!=null) qtdArq=jc.counts[dig]; }catch(e){}
+  var qtdTxt=(qtdArq!=null&&qtdArq>0)?(qtdArq+' arquivo(s)'):(itens.length+' item(ns)');
+  /* dois avisos, para evitar apagar sem querer */
+  if(!confirm('⚠ Apagar TODOS os documentos deste processo?\n\nSão '+qtdTxt+'. Eles vão para a Lixeira e podem ser recuperados por 30 dias.')) return;
+  if(!confirm('⚠ CONFIRMAÇÃO FINAL\n\nTem certeza que quer apagar '+qtdTxt+' deste processo?\n(recuperáveis por 30 dias na Lixeira)')) return;
   var ok=0, fail=0;
   for(var i=0;i<itens.length;i++){
     var rel=_docDir(escopo, itens[i].nome);
     try{ var rr=await fetch('/api/docs',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({op:'trash',path:dig+'/'+rel})}); if(rr.ok) ok++; else fail++; }catch(e){ fail++; }
   }
-  alert('Limpeza concluída: '+ok+' enviado(s) para a Lixeira'+(fail?(' · '+fail+' falha(s)'):'')+'.');
+  alert('✓ '+((qtdArq!=null&&qtdArq>0&&!fail)?(qtdArq+' arquivo(s)'):(ok+' item(ns)'))+' apagado(s) — movidos para a Lixeira.'+(fail?('\n⚠ '+fail+' falha(s).'):'')+'\n\nVocê pode recuperá-los pela Lixeira por 30 dias.');
   carregarDocs(numero, '', escopo);
 }
 async function restaurarDoc(dig, rel, numero, sub, escopo){
