@@ -1283,7 +1283,7 @@ function abrir(i){
     '<button class="btn sm ghost" style="margin-left:6px;font-size:11px;padding:4px 9px;vertical-align:top" onclick="puxarNomeCliente()" title="Lê a procuração (ou a petição inicial) e sugere o nome completo do cliente, incluindo o casal">👤 Puxar nome</button>'+
     '<button class="btn sm ghost" style="margin-left:6px;font-size:11px;padding:4px 9px;vertical-align:top" onclick="inverterPolos()" title="Trocar cliente ↔ oponente (o cliente fica sempre à esquerda)">⇄ inverter polos</button>'+
     ((!p.oponente||!String(p.oponente).trim())?'<button class="btn sm ghost" style="margin-left:6px;font-size:11px;padding:4px 9px;vertical-align:top" onclick="sugerirPartes()" title="Ler o histórico do processo e sugerir os nomes das partes que estão faltando">✨ sugerir partes pelo histórico</button>':'')+'</div>'+
-    '<div class="subhead" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap"><span>Processo nº <span onclick="copiarNumero(this,\''+p.numero+'\')" style="cursor:pointer;border-bottom:1px dotted var(--muted)" title="Clique para copiar o número">'+p.numero+'</span></span>'+
+    '<div class="subhead" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">'+_numFichaHTML(p)+
     (typeof JALINE!=='undefined'&&JALINE[String(p.numero||'').replace(/\D/g,'')]?'<span class="pill" style="background:var(--gold);color:#fff" title="Pasta de Jaline — honorários exclusivos Djan e Jaline">Jaline</span>':'')+
     '<span id="proc-vinculados" style="display:inline-flex;gap:6px;flex-wrap:wrap;align-items:center"></span></div>'+
     '<div id="ctl-chips" style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center"></div>'+
@@ -3932,6 +3932,40 @@ function _casoCtrlHTML(p){
     return ' <button class="btn sm ghost" style="font-size:11px;padding:3px 9px;border-color:#c9bfe0;color:#5b4a8a" onclick="vincularCasoDjen(\''+n+'\')" title="Este caso não é monitorado pelo DJEn. Ao vincular, ele passa a receber publicações e os dados são atualizados.">caso · vincular ao DJEn</button>';
   }
   return ' <button class="btn sm ghost" style="font-size:11px;padding:3px 9px" onclick="marcarComoCaso(\''+n+'\')" title="Marcar como caso administrativo (não vinculado ao DJEn)">marcar como caso</button>';
+}
+/* cabeçalho da ficha: número normal (copiável) quando há CNJ; se NÃO há número,
+   mostra campo em branco + botão para transformar em processo e buscar no DJEN. */
+function _numFichaHTML(p){
+  var dig=String(p&&p.numero||'').replace(/\D/g,'');
+  if(dig.length===20){
+    return '<span>Processo nº <span onclick="copiarNumero(this,\''+p.numero+'\')" style="cursor:pointer;border-bottom:1px dotted var(--muted)" title="Clique para copiar o número">'+esc(p.numero)+'</span></span>';
+  }
+  return '<span style="display:inline-flex;align-items:center;gap:7px;flex-wrap:wrap">Processo nº '+
+    '<input id="caso-num" placeholder="0000000-00.0000.0.00.0000" value="" inputmode="numeric" style="font-size:13px;padding:3px 8px;border:1px solid var(--line);border-radius:6px;width:210px" '+
+      'onkeydown="if(event.key===\'Enter\'){event.preventDefault();transformarEmProcesso();}">'+
+    '<button id="btn-transf-proc" class="btn sm gold" style="font-size:11px;padding:4px 10px" onclick="transformarEmProcesso()" title="Salvar o número no padrão CNJ e buscar as movimentações no DJEN">⇅ Transformar em processo</button>'+
+    '</span>';
+}
+/* pega o número digitado, grava no processo e dispara a busca no DJEN */
+async function transformarEmProcesso(){
+  if(typeof atual==='undefined' || !atual) return;
+  var inp=document.getElementById('caso-num'); var dig=String((inp&&inp.value)||'').replace(/\D/g,'');
+  if(dig.length!==20){ alert('Digite o número do processo no padrão CNJ (20 dígitos):\n0000000-00.0000.0.00.0000'); if(inp) inp.focus(); return; }
+  var numFmt=dig.replace(/^(\d{7})(\d{2})(\d{4})(\d)(\d{2})(\d{4})$/,'$1-$2.$3.$4.$5.$6');
+  var jaExiste=(DADOS.processos||[]).find(function(x){ return x!==atual && String(x.numero||'').replace(/\D/g,'')===dig; });
+  if(jaExiste && !confirm('Já existe um processo com esse número na lista. Transformar mesmo assim?')) return;
+  var btn=document.getElementById('btn-transf-proc'); if(btn){ btn.disabled=true; btn.textContent='transformando…'; }
+  var antigo=atual.numero;
+  atual.numero=numFmt; atual.ehCaso=false; if(atual.fonte==='caso') atual.fonte='manual';
+  try{ if(typeof desmarcaCasoLocal==='function') desmarcaCasoLocal(antigo); }catch(e){}
+  try{
+    var sb=window.__sb;
+    if(sb&&atual._id){ var r=await sb.from('processos').update({numero:numFmt, fonte:(atual.fonte||'manual')}).eq('id',atual._id);
+      if(r&&r.error){ alert('Não foi possível salvar o número: '+r.error.message); atual.numero=antigo; if(btn){btn.disabled=false;btn.textContent='⇅ Transformar em processo';} return; } }
+  }catch(e){ alert('Erro ao salvar: '+(e&&e.message||e)); atual.numero=antigo; if(btn){btn.disabled=false;btn.textContent='⇅ Transformar em processo';} return; }
+  /* reabre a ficha já como processo (número copiável) e puxa o DJEN */
+  var i=(DADOS.processos||[]).indexOf(atual); if(i>=0) abrir(i);
+  try{ if(typeof atualizarHistorico==='function') await atualizarHistorico(); }catch(e){}
 }
 function origemFiltroOk(p){
   var f=(document.getElementById('filtroOrigem')||{}).value||'';
