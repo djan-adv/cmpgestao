@@ -746,8 +746,25 @@ async function renderPublicarResumo(){
   if(br) br.style.display='none'; /* rejeição agora é por item */
   try{
     var sb=window.__sb; if(!sb){ el.innerHTML='<div class="note">Sessão não encontrada.</div>'; return; }
+    /* O QUE este Publicar vai colocar no ar (commits pendentes no GitHub) */
+    var novHtml='';
+    try{
+      var s0=await sb.auth.getSession(); var jwt0=(s0&&s0.data&&s0.data.session&&s0.data.session.access_token)||'';
+      var rn=await fetch('/api/deploy?novidades=1',{headers:{Authorization:'Bearer '+jwt0},cache:'no-store'});
+      var jn=await rn.json().catch(function(){return {};});
+      if(rn.ok && jn && Array.isArray(jn.pendentes)){
+        if(jn.pendentes.length){
+          novHtml='<div style="border:1px solid #e7d9ae;background:#fdf9ec;border-radius:9px;padding:10px 12px;margin:0 0 10px">'+
+            '<div style="font-weight:700;color:#8a5a00;font-size:13px;margin-bottom:5px">⬆ O que este Publicar vai colocar no ar ('+jn.pendentes.length+' alteração(ões)):</div>'+
+            jn.pendentes.map(function(cml){ return '<div style="font-size:12.5px;padding:2px 0;color:#4b5563">• '+esc(cml.titulo||'')+'</div>'; }).join('')+
+            '<div class="note" style="font-size:11px;margin-top:5px">Se algo aí não deve entrar, NÃO publique — me avise para eu reverter antes.</div></div>';
+        } else {
+          novHtml='<div class="note" style="padding:8px 10px;background:#eef7f1;border-radius:8px;color:#127a53;margin-bottom:10px">✓ O servidor já está na versão mais recente — nada novo para publicar.</div>';
+        }
+      }
+    }catch(e){}
     var r=await sb.from('changelog').select('*').in('status',['pendente','reformular']).order('criado_em',{ascending:true}).limit(200);
-    if(r&&r.error){ el.innerHTML='<div class="note">Não foi possível ler as novidades.</div>'; return; }
+    if(r&&r.error){ el.innerHTML=novHtml+'<div class="note">Não foi possível ler as novidades.</div>'; return; }
     var itens=(r&&r.data)||[];
     var pend=itens.filter(function(c){return c.status==='pendente';});
     var refm=itens.filter(function(c){return c.status==='reformular';});
@@ -755,7 +772,7 @@ async function renderPublicarResumo(){
     if(bp) bp.disabled=false;  /* publicar no servidor sempre disponível (independe das aprovações) */
     var html='';
     if(!pend.length && !refm.length){
-      el.innerHTML='<div class="note" style="padding:8px 10px;background:#eef4fb;border-radius:8px;color:#22405f">Nenhuma alteração pendente — tudo decidido.</div>';
+      el.innerHTML=novHtml+'<div class="note" style="padding:8px 10px;background:#eef4fb;border-radius:8px;color:#22405f">Nenhuma alteração pendente de decisão.</div>';
       return;
     }
     if(pend.length){
@@ -785,7 +802,7 @@ async function renderPublicarResumo(){
         '</div>';
       }).join('');
     }
-    el.innerHTML=html;
+    el.innerHTML=novHtml+html;
   }catch(e){ el.innerHTML='<div class="note">Erro ao ler novidades: '+esc(e&&e.message||e)+'</div>'; }
 }
 async function clAprovarItem(id){

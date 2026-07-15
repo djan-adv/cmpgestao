@@ -27,15 +27,25 @@ const DEPLOY_ALLOW = ['djan.adv@gmail.com']
 // pm2 restart) e registra o estado em .deploy-build.state (building/done/error).
 // Roda destacado para sobreviver ao restart do próprio processo da API.
 function iniciarBuild(needInstall) {
-  const inst = needInstall ? 'npm install --no-audit --no-fund' : 'true'
+  // nice -n 19 + memória limitada: o build roda "de mansinho" para NÃO derrubar o app
+  // que está no ar (em VPS pequena, um build guloso pode causar OOM e matar o processo).
+  const inst = needInstall ? 'nice -n 19 npm install --no-audit --no-fund' : 'true'
+  const RESTART = '(pm2 restart cmpgestao || npx pm2 restart cmpgestao || /usr/bin/pm2 restart cmpgestao)'
   const cmd =
     'echo building > ' + JSON.stringify(STATE_FILE) + '; ' +
-    '{ ' + inst + ' && npm run build; } > ' + JSON.stringify(LOG_FILE) + ' 2>&1; ' +
-    'if [ $? -eq 0 ]; then echo done > ' + JSON.stringify(STATE_FILE) + '; ' +
-    '(pm2 restart cmpgestao || npx pm2 restart cmpgestao || /usr/bin/pm2 restart cmpgestao) >> ' + JSON.stringify(LOG_FILE) + ' 2>&1; ' +
-    'else echo error > ' + JSON.stringify(STATE_FILE) + '; fi'
+    'rm -rf .next.bak; cp -a .next .next.bak 2>/dev/null; ' +          // guarda o build que está no ar
+    '{ ' + inst + ' && nice -n 19 npm run build; } > ' + JSON.stringify(LOG_FILE) + ' 2>&1; ' +
+    'if [ $? -eq 0 ]; then ' +
+    '  rm -rf .next.bak; echo done > ' + JSON.stringify(STATE_FILE) + '; ' + RESTART + ' >> ' + JSON.stringify(LOG_FILE) + ' 2>&1; ' +
+    'else ' +
+    '  if [ -d .next.bak ]; then rm -rf .next; mv .next.bak .next; fi; ' + // build falhou: volta o anterior
+    '  echo error > ' + JSON.stringify(STATE_FILE) + '; ' + RESTART + ' >> ' + JSON.stringify(LOG_FILE) + ' 2>&1; ' +
+    'fi'
   try {
-    const child = spawn('/bin/sh', ['-c', cmd], { cwd: REPO_DIR, detached: true, stdio: 'ignore', env: process.env })
+    const child = spawn('/bin/sh', ['-c', cmd], {
+      cwd: REPO_DIR, detached: true, stdio: 'ignore',
+      env: { ...process.env, NODE_OPTIONS: '--max-old-space-size=1024', NEXT_TELEMETRY_DISABLED: '1' },
+    })
     child.unref()
     return true
   } catch (e) { return false }
@@ -123,6 +133,22 @@ export async function GET(request) {
     try { state = fs.readFileSync(STATE_FILE, 'utf8').trim() } catch (e) {}
     if (state === 'error') { try { saida = fs.readFileSync(LOG_FILE, 'utf8').slice(-1500) } catch (e) {} }
     return Response.json({ state, saida })
+  }
+  // novidades: o que o Publicar vai colocar no ar (commits entre a versão do servidor
+  // e o GitHub). Exige o coordenador autenticado, como o POST.
+  if (searchParams.get('novidades') !== null) {
+    const user = await usuario(request)
+    if (!user) return Response.json({ erro: 'não autenticado' }, { status: 401 })
+    const email = String((user.email || '')).toLowerCase()
+    if (!DEPLOY_ALLOW.map(e => e.toLowerCase()).includes(email)) return Response.json({ erro: 'sem permissão' }, { status: 403 })
+    await run('git fetch origin main 2>&1')
+    const cur = await run('git rev-parse --short HEAD')
+    const log = await run("git log --pretty=format:'%h|@|%s' HEAD..origin/main")
+    const pendentes = (log.stdout || '').split('\n').map(s => s.trim()).filter(Boolean).map(l => {
+      const i = l.indexOf('|@|')
+      return { hash: i > 0 ? l.slice(0, i) : '', titulo: i > 0 ? l.slice(i + 3) : l }
+    }).reverse() // mais antigo primeiro (ordem em que entram)
+    return Response.json({ atual: (cur.stdout || '').trim(), pendentes })
   }
   return Response.json({ info: 'Use POST autenticado para publicar. Rota de deploy do CMPGestão.' })
 }
