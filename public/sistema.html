@@ -4944,6 +4944,18 @@ function _brisasSet(){
   return window.__brisasSet;
 }
 function _syncMatchIdx(folderNome){
+  /* 0) pelo NÚMERO do processo no nome da pasta — decisivo quando o MESMO cliente tem
+     vários processos (ex.: "Sergio Assabbi 0811585-09.2018..."). Junta os dígitos do
+     nome; 20 dígitos = CNJ completo; 7+ dígitos = começo do número (tem que ser único). */
+  var fd=String(folderNome||'').replace(/\D/g,'');
+  if(fd.length>=7){
+    var candNum=[];
+    (DADOS.processos||[]).forEach(function(p,i){ if(/encerr/i.test(p.status||'')) return;
+      var nd=String(p.numero||'').replace(/\D/g,''); if(nd.length<16) return;
+      if(fd.length>=20 ? fd.indexOf(nd)>-1 : nd.indexOf(fd)===0) candNum.push(i);
+    });
+    if(candNum.length===1) return {idx:candNum[0],via:'número'};
+  }
   var q=normClienteNome(folderNome); if(!q) return {idx:-1,via:''};
   /* remove "ruído" do nome da pasta: anotações (ok, email), números e termos de status,
      que atrapalham o reconhecimento (ex.: "Sayonara 14664 ok email" -> "sayonara") */
@@ -4951,15 +4963,18 @@ function _syncMatchIdx(folderNome){
   var qtok=q.split(' ').filter(function(t){ return t.length>=3 && !STOP[t] && !/^\d+([.,]\d+)?$/.test(t); });
   if(!qtok.length) return {idx:-1,via:''};
   var qc=qtok.join(' ');   /* nome da pasta já limpo do ruído */
-  /* 1) pelo cliente (forte) */
-  var best=-1, bestScore=0;
+  /* 1) pelo cliente (forte). Se DOIS OU MAIS processos empatarem (mesmo cliente com
+     vários processos e pasta sem número), NÃO chuta: deixa para escolher manualmente. */
+  var best=-1, bestScore=0, empate=0;
   (DADOS.processos||[]).forEach(function(p,i){ if(/encerr/i.test(p.status||'')) return;
     var cn=normClienteNome(p.cliente); if(!cn) return; var sc=0;
     if(cn===qc) sc=100; else if(cn.indexOf(qc)===0 || qc.indexOf(cn)===0) sc=90;
     else { var all=qtok.every(function(t){ return cn.indexOf(t)>-1; }); if(all) sc=70+qtok.length; }
-    if(sc>bestScore){ bestScore=sc; best=i; }
+    if(sc>bestScore){ bestScore=sc; best=i; empate=1; }
+    else if(sc===bestScore && sc>0){ empate++; }
   });
-  if(bestScore>=72) return {idx:best,via:'cliente'};
+  if(bestScore>=72 && empate===1) return {idx:best,via:'cliente'};
+  if(bestScore>=72 && empate>1) return {idx:-1,via:''}; /* ambíguo: mesmo cliente, vários processos */
   /* 2) pelo histórico (casais) — o nome da pasta pode ser o cônjuge citado nos autos.
      Procura primeiro no conjunto do réu comum (mais seguro), depois em todos. */
   var hay=_syncHaystacks(); var min=Math.max(1,Math.ceil(qtok.length*0.6));
