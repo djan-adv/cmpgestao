@@ -336,6 +336,8 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
       <div class="agtools">
         <div class="switch"><button id="crm-sw-c" class="on" onclick="setCrmView('contatos')">Contatos</button><button id="crm-sw-f" onclick="setCrmView('captacao')">Captação (funil)</button></div>
         <button class="btn sm" style="margin-left:auto" onclick="abrirNovaTarefa()">+ Nova tarefa</button>
+        <!-- Atalho para o Banco Cora: abre o app do banco em nova aba (só-front, sem integração ainda) -->
+        <button class="btn sm" style="margin-left:8px;background:#FE3E6D;border-color:#FE3E6D;color:#fff" onclick="abrirCora()" title="Abrir o Banco Cora em nova aba">&#9673; Cora</button>
       </div>
       <div id="crm-contatos">
         <div class="kpis" id="crm-kpis"></div>
@@ -1438,6 +1440,8 @@ function setCrmView(v){crmView=v;
   document.getElementById("crm-captacao").classList.toggle("hidden",v!=="captacao");
   renderCrm(); if(v==="captacao"){ try{ atualizaInboxBadge(); }catch(e){} }}
 function renderCrm(){ if(crmView==="captacao")renderCaptacao(); else renderContatos(); }
+/* Abre o Banco Cora em nova aba. Se o navegador já tiver sessão, cai logado; senão, no login. */
+function abrirCora(){ window.open('https://app.cora.com.br','_blank','noopener'); }
 function seedContatos(){ if(CONTATOS)return; syncContatosClientes(true); }
 function normClienteNome(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim(); }
 function splitCtlTokens(s){ return String(s||'').split(/[,;\n]+/).map(function(x){return x.trim();}).filter(Boolean); }
