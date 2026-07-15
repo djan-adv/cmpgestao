@@ -1158,13 +1158,13 @@ function renderMeuDia(){
   var html='<p class="sectlabel">Meu dia — hoje, atrasados e próximos 3 dias</p>';
   if(!itens.length){ html+='<p class="note" style="margin:0">Nada pendente por aqui.</p>'; }
   else{
-    html+=itens.slice(0,7).map(function(a){
+    window.__mdSnap=itens.slice(0,7); /* snapshot: os botões referenciam por AQUI (posição estável) */
+    html+=window.__mdSnap.map(function(a,gi){
       var d=new Date(a.data+"T00:00:00");
       var atras=d<hoje;
       var dia=String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0");
       var diaFull=dia+"/"+d.getFullYear();
       var tg=TAGS[a.tipo]||["TAREFA","background:var(--accentbg);color:var(--navy)"];
-      var gi=(AGENDA||[]).indexOf(a);
       var num=(a.p&&a.p.numero)||"";
       var temProc=num&&num!=='—';
       var numHtml=temProc
@@ -1191,7 +1191,25 @@ function renderMeuDia(){
   el.innerHTML=html;
 }
 /* ===== Ações rápidas do "Meu dia": concluir / editar / reagendar / excluir ===== */
-function _mdItem(gi){ return (AGENDA||[])[gi]||null; }
+/* resolve o item pelo SNAPSHOT do render e re-localiza na AGENDA atual (o índice da
+   AGENDA muda quando ela recarrega — era por isso que os botões "não funcionavam") */
+function _mdItem(gi){
+  var a=(window.__mdSnap||[])[gi]; if(!a) return null;
+  var cur=(AGENDA||[]).find(function(x){ return (a.id&&x.id===a.id) || (!a.id&&!x.id&&_agChave(x)===_agChave(a)); });
+  return cur||a;
+}
+/* persiste o "sumiço" de um item SEM id no banco (ex.: carga do Astrea) — senão ele
+   volta ao recarregar a página */
+async function _mdOcultarSemId(a){
+  if(!a || a.id) return;
+  try{
+    var sb=window.__sb; if(!sb) return;
+    var esc4=await _escBusca(); if(!esc4) return;
+    await sb.from('agenda_ocultos').upsert({escritorio_id:esc4,chave:_agChave(a)},{onConflict:'escritorio_id,chave'});
+    if(!window.__AGOCULT) window.__AGOCULT={};
+    window.__AGOCULT[_agChave(a)]=1;
+  }catch(e){}
+}
 /* EDITAR: abre a mesma janela de edição da agenda (título, data, hora, responsável, processo) */
 function mdEditar(gi){ var a=_mdItem(gi); if(!a) return; if(typeof abrirEventoAgenda==='function'){ window.__evVoltaMeuDia=true; abrirEventoAgenda(a); } }
 function _procIdPorNumero(num){ var d=String(num||'').replace(/\D/g,''); var p=(DADOS.processos||[]).find(function(x){return String(x.numero||'').replace(/\D/g,'')===d && d;}); return p?p._id:null; }
@@ -1212,6 +1230,7 @@ async function mdConcluir(gi){
     } else if(!pid){ alert('Este item não tem processo vinculado, então não há histórico onde registrar. Vou apenas concluí-lo (sair da lista).'); }
     /* remove o evento do banco (concluído sai da agenda) e da memória */
     if(sb && a.id){ await sb.from('agenda_eventos').delete().eq('id',a.id); }
+    await _mdOcultarSemId(a); /* sem id (carga Astrea): persiste o sumiço */
     var i=(AGENDA||[]).indexOf(a); if(i>=0) AGENDA.splice(i,1);
     if(window.__AGDB && a.id){ window.__AGDB=window.__AGDB.filter(function(x){return x.id!==a.id;}); }
     renderMeuDia(); if(typeof renderAudSemana==='function') renderAudSemana();
@@ -1244,6 +1263,7 @@ async function mdExcluir(gi){
   try{
     var sb=window.__sb;
     if(sb && a.id){ var r=await sb.from('agenda_eventos').delete().eq('id',a.id); if(r&&r.error){ alert('Não foi possível excluir: '+r.error.message); return; } }
+    await _mdOcultarSemId(a); /* sem id (carga Astrea): persiste o sumiço */
     var i=(AGENDA||[]).indexOf(a); if(i>=0) AGENDA.splice(i,1);
     if(window.__AGDB && a.id){ window.__AGDB=window.__AGDB.filter(function(x){return x.id!==a.id;}); }
     renderMeuDia(); if(typeof renderAudSemana==='function') renderAudSemana();
@@ -2203,12 +2223,16 @@ function setViewAg(v){VIEWAG=v;
   renderAgendaView();
 }
 function renderAgendaView(){ if(VIEWAG==="kanban")renderKanban(); else if(VIEWAG==="tarefas")renderTarefasView(); else renderAgViewInner(); }
+/* chave estável de um evento (para ocultar itens SEM id — ex.: carga do Astrea) */
+function _agChave(e){ return String(e.data||'')+'|'+String(e.hora||'')+'|'+String(e.tt||'').slice(0,80); }
 function initAgenda(){
   if(AGENDA)return;
   /* agenda real: carregada do banco (agenda_eventos) — sincronizada com o Google Calendar */
   AGENDA=(window.__AGDB||[]).slice();
   /* se o banco ainda não tem eventos, usa as audiências importadas do Astrea (embutidas) */
   if(AGENDA.length===0 && typeof ASTREA_AGENDA_SEED!=='undefined'){ AGENDA=ASTREA_AGENDA_SEED.slice(); }
+  /* remove os concluídos/excluídos persistidos (itens sem id no banco) */
+  if(window.__AGOCULT){ AGENDA=AGENDA.filter(function(e){ return !window.__AGOCULT[_agChave(e)]; }); }
 }
 var MESES=["janeiro","fevereiro","março","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"];
 function mudaMes(d){curM+=d;if(curM<0){curM=11;curY--;}if(curM>11){curM=0;curY++;}renderMes();}
@@ -3375,6 +3399,8 @@ function toggleConcluirTarefa(id){
       if(typeof go==='function') go(cur);
     }
     try{
+      /* itens da agenda concluídos/excluídos sem id no banco (carga Astrea) — ficam ocultos */
+      try{ var oc=await sb.from('agenda_ocultos').select('chave').limit(3000); if(!oc.error&&oc.data){ window.__AGOCULT={}; oc.data.forEach(function(x){ if(x&&x.chave) window.__AGOCULT[x.chave]=1; }); } }catch(eOc){}
       var ag=await sb.from('agenda_eventos').select('id,data,hora,tipo,titulo,resp,processo_numero').order('data',{ascending:true}).limit(2000);
       if(!ag.error&&ag.data){
         window.__AGDB=ag.data.map(function(e){return {id:e.id,data:String(e.data).slice(0,10),hora:e.hora||'09:00',tipo:e.tipo||'nt',tt:e.titulo,resp:e.resp||'',p:{numero:e.processo_numero||'—',cliente:''}};});
