@@ -449,6 +449,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
       <span class="note" id="dilig-count"></span>
     </div>
     <div style="overflow:auto"><table style="width:100%"><thead><tr><th style="width:40px">#</th><th>Cliente</th><th>Processo</th><th>Parado há</th><th></th></tr></thead><tbody id="dilig-body"></tbody></table></div><div id="dilig-pager" style="display:flex;gap:6px;justify-content:center;padding:10px;flex-wrap:wrap"></div>
+    <div class="card" id="dg-semcontato" style="margin-top:12px"><div class="note">Carregando varas sem contato…</div></div>
   </div>
   </div>
   <div id="dg-andamento" class="hidden">
@@ -1392,18 +1393,18 @@ function abrir(i){
     })()+
     /* linha "Valor da causa · Valor de condenação · Tribunal" removida a pedido — repetitiva (valor da causa já consta no topo da ficha) e alongava o painel */
     '</div>'+
-    /* grupo D descido do cabeçalho: vínculo, marcar como caso, Fase e processos vinculados */
-    '<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--line);display:flex;gap:8px 12px;flex-wrap:wrap;align-items:center">'+
+    /* linha única e compacta: status, responsável, vínculo, parado, caso/assessoria, fase, encerrar */
+    '<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line);display:flex;gap:6px 10px;flex-wrap:wrap;align-items:center">'+
         '<span class="b '+stCls(p.status)+'">'+esc(p.status||'—')+'</span>'+
-        '<span style="color:var(--muted);font-size:12.5px">Responsável: <b style="color:var(--ink);font-weight:600">'+resp+'</b></span>'+
+        '<span style="color:var(--muted);font-size:12.5px">Resp.: <b style="color:var(--ink);font-weight:600">'+resp+'</b></span>'+
         (function(){ var temOficial=(p.hist_full||[]).some(function(a){ return a && a.f && a.f!=='manual'; }); var vinc=!(_ehCasoProc(p)) && (temOficial || !!(p.foro||p.orgao)); return '<span style="display:inline-block;border-radius:20px;padding:2px 10px;font-size:11px;font-weight:600;'+(vinc?'background:#e5f4ed;color:#127a53">vinculado jus.br':'background:#fbeceb;color:#b5342b">não vinculado')+'</span>'; })()+
+        (function(){ if(/encerr/i.test(p.status||'')) return ''; var d=(typeof diasParadoOficial==='function')?diasParadoOficial(p):null; if(d==null) return ''; var cor=d>=90?'#b5342b':(d>=60?'#8a6d1a':'#5f6b7a'), bg=d>=90?'#fbeceb':(d>=60?'#fdf3e7':'#eef1f5'); return '<span style="display:inline-block;border-radius:20px;padding:2px 10px;font-size:11.5px;font-weight:700;background:'+bg+';color:'+cor+'" title="Dias desde a última movimentação do juízo/cartório — não conta petições/manifestações das partes nem o histórico manual">&#9201; parado há '+d+'d</span>'; })()+
         _casoCtrlHTML(p)+
         _faseCtrlHTML(p)+
         (ehJames(p)?'<button class="btn sm ghost" style="margin-left:auto;border-color:#c9bfe0;color:#5b4a8a" onclick="toggleSuspensoProc()" title="Suspender: tirar da lista principal e enviar para a pasta James Laurence">'+(isSuspenso(p)?'↩ tirar da suspensão':'⏸ Suspender')+'</button>':'')+
         '<button class="btn sm '+(__enc?'gold':'ghost')+'" style="'+(ehJames(p)?'margin-left:6px':'margin-left:auto')+'" onclick="encerrarProcesso()">'+(__enc?'Reativar':'Encerrar')+'</button>'+
     '</div>'+
-    '<div style="margin-top:8px;font-size:13px;border-top:1px solid #eef2f7;padding-top:8px">'+
-    (function(){ if(/encerr/i.test(p.status||'')) return ''; var d=(typeof diasParadoOficial==='function')?diasParadoOficial(p):null; if(d==null) return ''; var cor=d>=90?'#b5342b':(d>=60?'#8a6d1a':'#5f6b7a'), bg=d>=90?'#fbeceb':(d>=60?'#fdf3e7':'#eef1f5'); return '<div style="margin-bottom:8px"><span style="display:inline-block;border-radius:20px;padding:3px 12px;font-size:12px;font-weight:700;background:'+bg+';color:'+cor+'" title="Dias desde a última movimentação do juízo/cartório — não conta petições/manifestações das partes nem o histórico manual">&#9201; Parado há '+d+' dia'+(d===1?'':'s')+' sem movimentação do juízo</span></div>'; })()+
+    '<div style="margin-top:6px;font-size:13px;border-top:1px solid #eef2f7;padding-top:6px">'+
     bvLine(p.numero)+'</div></div>';
   /* card "Partes" removido — cliente principal e parte contrária já constam no cabeçalho */
   // observações (um único ponto de observação por processo, criável/editável — estilo Astrea)
@@ -4565,7 +4566,7 @@ function go(s){
   if(s==="painel")renderPainel(); if(s==="triagem")renderTriagem(); if(s==="processos")renderProc();
   if(s==="crm"){ if(typeof setCrmView==='function') setCrmView('captacao'); else renderCrm(); }
   if(s==="contatos"){ if(typeof setCrmView==='function') setCrmView('contatos'); else renderCrm(); }
-  if(s==="etiquetas")renderEtiquetas(); if(s==="agenda")renderAgendaView(); if(s==="diligencias")renderDiligencias();
+  if(s==="etiquetas")renderEtiquetas(); if(s==="agenda")renderAgendaView(); if(s==="diligencias"){renderDiligencias(); try{ if(typeof renderVarasSemContato==='function') renderVarasSemContato(); }catch(e){}}
   if(s==="financeiro" && typeof renderFinanceiro==='function')renderFinanceiro();
   if(s==="encerrados")renderEncerrados();
   if(s==="inove")renderInove();
@@ -6602,6 +6603,11 @@ async function desativarAcompanhamento(){
     <div id="atz-pedido-box" style="display:none"><label>Providência</label><br><select id="atz-pedido-tipo" onchange="_gerarRascunhoAtualizacao()" style="padding:6px;max-width:320px"><option value="grat">Documentos para gratuidade (comprovantes de renda)</option><option value="provas">Documentos/provas para instruir o pedido</option><option value="dados">Confirmar dados e endereço atualizados</option><option value="audiencia">Confirmar audiência e testemunhas</option><option value="livre">Outro (escrever no texto)</option></select></div>
     <div style="flex:1;min-width:220px"><label>E-mail da cliente (do cadastro)</label><input id="atz-email" type="email" placeholder="cliente@email.com" style="width:100%;box-sizing:border-box" /></div>
   </div>
+  <div id="atz-cc-box" style="display:none;margin-bottom:8px;font-size:13px;background:#f6f9fc;border:1px solid #dbe6f2;border-radius:8px;padding:8px 10px">
+    <label style="cursor:pointer;font-weight:600;color:#22405f"><input type="checkbox" id="atz-cc-on"> Enviar cópia do pedido para o e-mail do CLIENTE</label>
+    <input id="atz-cc-email" type="email" placeholder="email do cliente" style="width:260px;max-width:100%;margin-left:8px;box-sizing:border-box" />
+    <div class="note" style="font-size:11px;margin-top:3px">A vara verá o cliente em cópia (CC) — o cliente acompanha o pedido feito ao cartório.</div>
+  </div>
   <label>Assunto</label>
   <input id="atz-assunto" style="width:100%;box-sizing:border-box;margin-bottom:8px" />
   <label>Mensagem (revise e edite antes de enviar)</label>
@@ -6802,6 +6808,7 @@ function _atzSetVara(on){
   var t=document.getElementById('atz-titulo'); if(t) t.textContent=on?'E-mail para a vara / cartório':'Atualizar cliente por e-mail';
   ['atz-modo-row','atz-qtd-box'].forEach(function(id){ var e=document.getElementById(id); if(e) e.style.display=on?'none':''; });
   var pb=document.getElementById('atz-pedido-box'); if(pb && on) pb.style.display='none';
+  var cc=document.getElementById('atz-cc-box'); if(cc) cc.style.display=on?'':'none'; /* cópia ao cliente: só no modo vara */
 }
 /* abre o MESMO formulário do e-mail de cliente, mas para a VARA (texto pronto do balcão) */
 function abrirEmailVara(p, email, assunto, corpo){
@@ -6811,6 +6818,12 @@ function abrirEmailVara(p, email, assunto, corpo){
   document.getElementById('atz-email').value=email||'';
   document.getElementById('atz-assunto').value=assunto||'';
   document.getElementById('atz-corpo').value=corpo||'';
+  /* pré-preenche o e-mail do cliente (da ficha) para a cópia opcional */
+  try{
+    var emailCli=(String(p.ctl||'').split(/[,;\n]+/).map(function(s){return s.trim();}).filter(function(t){return /@/.test(t);})[0])||'';
+    var ce=document.getElementById('atz-cc-email'); if(ce) ce.value=emailCli;
+    var co=document.getElementById('atz-cc-on'); if(co) co.checked=false;
+  }catch(e){}
   document.getElementById('modal-atualizar').classList.remove('hidden');
 }
 async function abrirAtualizarCliente(numero){
@@ -6858,11 +6871,20 @@ async function enviarAgoraAtualizacao(){
   var assunto=(document.getElementById('atz-assunto').value||'').trim();
   var corpo=(document.getElementById('atz-corpo').value||'').trim();
   if(!corpo){ alert('Mensagem vazia.'); return; }
-  if(!confirm('Enviar agora para '+email+' pelo contato@cmpadvogados.com.br?')) return;
+  /* cópia visível (CC) ao cliente — só no modo vara, quando marcada */
+  var ccCli='';
+  try{
+    if(window.__atzCtx&&window.__atzCtx.vara){
+      var _on=document.getElementById('atz-cc-on'), _ce=document.getElementById('atz-cc-email');
+      if(_on&&_on.checked){ ccCli=String((_ce&&_ce.value)||'').trim();
+        if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(ccCli)){ alert('Marque a cópia ao cliente com um e-mail válido (ou desmarque a caixa).'); return; } }
+    }
+  }catch(e){}
+  if(!confirm('Enviar agora para '+email+(ccCli?('\ncom CÓPIA para o cliente: '+ccCli):'')+'\npelo contato@cmpadvogados.com.br?')) return;
   try{
     var tok=await docToken();
     var numero=(window.__atzCtx&&window.__atzCtx.p&&window.__atzCtx.p.numero)||'';
-    var r=await fetch('/api/enviar-email',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({para:email,assunto:assunto,corpo:corpo,numero:numero})});
+    var r=await fetch('/api/enviar-email',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({para:email,assunto:assunto,corpo:corpo,numero:numero,cc:(ccCli||undefined)})});
     var j=await r.json().catch(function(){return {};});
     if(!r.ok||j.erro){ alert('Não enviou: '+(j.erro||('HTTP '+r.status))+'\n\nSe o envio pelo servidor ainda não foi ativado, use "Abrir no Gmail" por enquanto.'); return; }
     var _cs=j.copiado_enviados;
@@ -6884,8 +6906,10 @@ async function registrarEnvioAtualizacao(silent){
   var ehVara=!!(ctx&&ctx.vara);
   var cab=ehVara?'Solicitação de andamento':((_atzModoAtual()==='pedido')?'Pedido de providência':'Atualização');
   /* registra a MENSAGEM enviada, com marca de envio manual pelo painel */
+  var ccReg=''; try{ if(ehVara){ var _o2=document.getElementById('atz-cc-on'), _e2=document.getElementById('atz-cc-email'); if(_o2&&_o2.checked&&_e2&&/@/.test(_e2.value)) ccReg=String(_e2.value).trim(); } }catch(e){}
   var texto='['+(ehVara?'E-mail à vara/cartório':'E-mail ao cliente')+' — '+cab+', enviado via painel em '+dbr+']\n'
     +'Para: '+(ehVara?'':((nomeCli?(nomeCli+' '):'')))+(email?('<'+email+'>'):'')+'\n'
+    +(ccReg?('Cópia (cliente): <'+ccReg+'>\n'):'')
     +(assunto?('Assunto: '+assunto+'\n'):'')
     +'\n'+corpo;
   var sb=window.__sb;
@@ -6956,6 +6980,11 @@ function contatoBlocoHTML(p){
   if(c){
     var ne=encodeURIComponent(p.numero);
     h+='<b>Balcão da vara</b>'+(c.orgao?(' — '+esc(c.orgao)):'')+':';
+    /* contatos EXPOSTOS (clique copia) — úteis para colar/copiar o cliente no e-mail */
+    var exp='';
+    if(c.email) exp+='<span onclick="copiarNumero(this,\''+esc(String(c.email)).replace(/'/g,'')+'\')" style="cursor:pointer;color:#185FA5;border-bottom:1px dotted #9fbadb" title="Clique para copiar o e-mail da vara">✉ '+esc(c.email)+'</span>';
+    if(c.whatsapp) exp+=(exp?' &nbsp;·&nbsp; ':'')+'<span onclick="copiarNumero(this,\''+esc(String(c.whatsapp)).replace(/'/g,'')+'\')" style="cursor:pointer;color:#127a53;border-bottom:1px dotted #9fd0b8" title="Clique para copiar o telefone/WhatsApp da vara">📱 '+esc(c.whatsapp)+'</span>';
+    if(exp) h+='<div style="margin-top:4px;font-size:12.5px">'+exp+'</div>';
     h+='<div style="margin-top:6px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">';
     h+='<select class="btn sm bv-mod" style="max-width:280px"><option value="concluso">Concluso — pedir andamento ao gabinete</option><option value="peticao">Petição pendente — pedir conclusão</option><option value="despacho">Despacho — pedir cumprimento</option><option value="geral">Andamento geral</option></select>';
     if(c.whatsapp) h+='<button class="btn sm" style="background:#128C7E;color:#fff" onclick="bvSend(\'wa\',\''+ne+'\',this)">WhatsApp</button>';
@@ -7018,6 +7047,40 @@ async function _registrarDiligencia(p, canalLabel, msg){
   }catch(e){ console.warn('registrar diligência:', e); }
 }
 function bvLine(numero){ var p=(DADOS.processos||[]).filter(function(x){return x.numero===numero;})[0]||{numero:numero}; return contatoBlocoHTML(p); }
+/* ===== Varas SEM contato de e-mail (foco: envio de diligências aos cartórios) =====
+   Agrupa os processos ativos por vara e lista as varas em que contatoDoProcesso()
+   não devolve e-mail (nem banco, nem carga TJPB). Ordena pelas com mais processos. */
+function renderVarasSemContato(){
+  var el=document.getElementById('dg-semcontato'); if(!el) return;
+  var grupos={}, semVara=0;
+  (DADOS.processos||[]).forEach(function(p){
+    if(!/^ativo/i.test(String(p.status||''))) return;
+    if(typeof isInove==='function'&&isInove(p)) return;
+    if(typeof _ehCasoProc==='function'&&_ehCasoProc(p)) return;
+    var fo=String(p.foro||p.orgao||'').trim();
+    if(!fo){ semVara++; return; }
+    var c=(typeof contatoDoProcesso==='function')?contatoDoProcesso(p):null;
+    if(c && c.email) return; /* vara coberta */
+    var k=normOrg(fo);
+    if(!grupos[k]) grupos[k]={foro:fo,procs:[],temParcial:!!c};
+    grupos[k].procs.push(p);
+  });
+  var lista=Object.keys(grupos).map(function(k){return grupos[k];}).sort(function(a,b){return b.procs.length-a.procs.length;});
+  var html='<p class="sectlabel" style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">Varas sem contato de e-mail ('+lista.length+')'+
+    '<span class="note" style="text-transform:none;letter-spacing:0;font-weight:400;font-size:11.5px">para as diligências saírem por e-mail — comece pelas varas com mais processos</span></p>';
+  if(!lista.length){ html+='<p class="note" style="margin:0">✓ Todas as varas dos processos ativos têm e-mail cadastrado.</p>'; }
+  else{
+    html+='<div style="max-height:420px;overflow:auto"><table style="width:100%;font-size:13px"><tbody>'+lista.slice(0,300).map(function(g){
+      var pnum=String(g.procs[0].numero||'').replace(/'/g,'');
+      return '<tr style="border-top:1px solid #eef2f7">'+
+        '<td style="padding:6px 4px">'+esc(g.foro)+(g.temParcial?' <span class="note" style="font-size:11px">(tem WhatsApp/link — falta o e-mail)</span>':'')+'</td>'+
+        '<td style="width:80px;text-align:center" class="note">'+g.procs.length+' proc.</td>'+
+        '<td style="width:110px;text-align:right"><button class="btn sm" style="font-size:11px" onclick="abrirContatoOrgao(\''+encodeURIComponent(pnum)+'\')">+ cadastrar</button></td></tr>';
+    }).join('')+'</tbody></table></div>';
+  }
+  if(semVara) html+='<p class="note" style="margin:8px 0 0">'+semVara+' processo(s) ativo(s) sem vara identificada — abra cada um e use "↻ Atualizar" (puxa a vara pelo jus.br).</p>';
+  el.innerHTML=html;
+}
 window.__coCtx=null;
 function abrirContatoOrgao(numEnc){
   var num=decodeURIComponent(numEnc); var p=(DADOS.processos||[]).filter(function(x){return x.numero===num;})[0]||{};
@@ -7037,7 +7100,9 @@ async function salvarContatoOrgao(){
   var row={escritorio_id:esc2, tribunal:ctx.tribunal, orgao:document.getElementById('co-orgao').value||null, email:document.getElementById('co-email').value||null, whatsapp:document.getElementById('co-whats').value||null, balcao_link:document.getElementById('co-link').value||null};
   var res = ctx.id ? await sb.from('contatos_orgao').update(row).eq('id',ctx.id) : await sb.from('contatos_orgao').insert(row);
   if(res.error){ alert('Erro ao salvar: '+res.error.message); return; }
-  await loadCO(true); fecharContatoOrgao(); refreshContato(); alert('Contato da vara salvo — vai aparecer em todos os processos desta vara.');
+  await loadCO(true); fecharContatoOrgao(); refreshContato();
+  try{ if(typeof renderVarasSemContato==='function') renderVarasSemContato(); }catch(e){}
+  alert('Contato da vara salvo — vai aparecer em todos os processos desta vara.');
 }
 function refreshContato(){
   var md=document.getElementById('modal-dilig');

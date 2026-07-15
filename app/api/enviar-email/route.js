@@ -96,7 +96,10 @@ export async function POST(request) {
   const assunto = String(body.assunto || '').trim() || 'Atualização do seu processo'
   const corpo = String(body.corpo || '')
   const numero = String(body.numero || '').replace(/\D/g, '')
+  // cópia VISÍVEL (CC) opcional — ex.: cliente copiado no pedido enviado à vara
+  const cc = String(body.cc || '').trim()
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(para)) return Response.json({ erro: 'e-mail do destinatário inválido' }, { status: 400 })
+  if (cc && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(cc)) return Response.json({ erro: 'e-mail da cópia (cc) inválido' }, { status: 400 })
   if (!corpo.trim()) return Response.json({ erro: 'corpo vazio' }, { status: 400 })
 
   // logo embutido via CID (não depende de link externo)
@@ -137,6 +140,7 @@ export async function POST(request) {
     references: raiz,
     inReplyTo: raiz,
   }
+  if (cc) dados.cc = cc
 
   // monta a mensagem UMA vez (raw MIME) para enviar E salvar em Enviados de forma idêntica
   let raw
@@ -155,7 +159,8 @@ export async function POST(request) {
     // configurável por EMAIL_COPIA no .env.local; vazio ('') desliga.
     const copiaPara = process.env.EMAIL_COPIA !== undefined ? String(process.env.EMAIL_COPIA).trim() : 'djan.adv@gmail.com'
     const destinos = [para]
-    if (copiaPara && /@/.test(copiaPara) && copiaPara.toLowerCase() !== para.toLowerCase()) destinos.push(copiaPara)
+    if (cc && cc.toLowerCase() !== para.toLowerCase()) destinos.push(cc)
+    if (copiaPara && /@/.test(copiaPara) && !destinos.some(d => d.toLowerCase() === copiaPara.toLowerCase())) destinos.push(copiaPara)
     const info = await transporter.sendMail({ envelope: { from: smtpUser, to: destinos }, raw })
     const copia = await salvarEnviados(raw)   // grava em "Enviados" (best-effort)
     return Response.json({ ok: true, de: smtpUser, id: (info && info.messageId) || messageId, copiado_enviados: copia.ok, copia_pasta: copia.pasta, copia_motivo: copia.ok ? undefined : copia.motivo })
