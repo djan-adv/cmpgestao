@@ -2312,9 +2312,10 @@ function renderMes(){
   var first=new Date(curY,curM,1),start=first.getDay(),dim=new Date(curY,curM+1,0).getDate();
   for(var i=0;i<start;i++){var o=document.createElement("div");o.className="day out";cal.appendChild(o);}
   var mm=String(curM+1).padStart(2,"0");
+  var _h=new Date(), hojeIso=_h.getFullYear()+"-"+String(_h.getMonth()+1).padStart(2,"0")+"-"+String(_h.getDate()).padStart(2,"0");
   for(var d=1;d<=dim;d++){
     var iso=curY+"-"+mm+"-"+String(d).padStart(2,"0");
-    var cell=document.createElement("div");cell.className="day"+(iso==="2026-07-02"?" today":"");
+    var cell=document.createElement("div");cell.className="day"+(iso===hojeIso?" today":"");
     cell.innerHTML='<div class="dn">'+d+'</div>';
     /* ponto 8: na agenda só entram audiências e reuniões (tipo 'az'); prazos/tarefas vivem no Kanban */
     eventosDoDia(iso).forEach(function(e){
