@@ -1229,7 +1229,7 @@ async function mdConcluir(gi){
       try{ if(typeof atual!=='undefined' && atual && atual._id===pid){ atual.hist_full=atual.hist_full||[]; atual.hist_full.unshift({id:w.data&&w.data.id,data:iso+'T00:00:00.000Z',texto:texto,f:'manual'}); if(typeof renderHistorico==='function') renderHistorico(); } }catch(eH){}
     } else if(!pid){ alert('Este item não tem processo vinculado, então não há histórico onde registrar. Vou apenas concluí-lo (sair da lista).'); }
     /* remove o evento do banco (concluído sai da agenda) e da memória */
-    if(sb && a.id){ await sb.from('agenda_eventos').delete().eq('id',a.id); }
+    if(sb && a.id){ var dl=await sb.from('agenda_eventos').delete().eq('id',a.id).select('id'); if(dl&&!dl.error&&(!dl.data||!dl.data.length)){ console.warn('agenda: delete não afetou linhas (id '+a.id+')'); } }
     await _mdOcultarSemId(a); /* sem id (carga Astrea): persiste o sumiço */
     var i=(AGENDA||[]).indexOf(a); if(i>=0) AGENDA.splice(i,1);
     if(window.__AGDB && a.id){ window.__AGDB=window.__AGDB.filter(function(x){return x.id!==a.id;}); }
@@ -1262,7 +1262,7 @@ async function mdExcluir(gi){
   if(!confirm('Excluir definitivamente "'+(a.tt||'')+'"?\n\nEsta ação NÃO pode ser desfeita.')) return;
   try{
     var sb=window.__sb;
-    if(sb && a.id){ var r=await sb.from('agenda_eventos').delete().eq('id',a.id); if(r&&r.error){ alert('Não foi possível excluir: '+r.error.message); return; } }
+    if(sb && a.id){ var r=await sb.from('agenda_eventos').delete().eq('id',a.id).select('id'); if(r&&r.error){ alert('Não foi possível excluir: '+r.error.message); return; } if(r&&(!r.data||!r.data.length)){ alert('O banco não confirmou a exclusão (permissão). Me avise se este aviso continuar.'); return; } }
     await _mdOcultarSemId(a); /* sem id (carga Astrea): persiste o sumiço */
     var i=(AGENDA||[]).indexOf(a); if(i>=0) AGENDA.splice(i,1);
     if(window.__AGDB && a.id){ window.__AGDB=window.__AGDB.filter(function(x){return x.id!==a.id;}); }
