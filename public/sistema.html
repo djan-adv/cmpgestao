@@ -538,6 +538,16 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
     <div class="foot"><button class="btn ghost" onclick="fecharNovaCobranca()">Cancelar</button><button class="btn" id="cob-btn" style="background:#FE3E6D;border-color:#FE3E6D" onclick="emitirCobranca()">Emitir cobrança</button><span id="cob-msg" class="note" style="margin-left:10px;align-self:center"></span></div>
   </div>
 </div>
+<div id="modal-nf" class="overlay hidden">
+  <div class="modal">
+    <h2>Emitir NFS-e — Prefeitura de João Pessoa</h2>
+    <p class="note" style="margin-top:0">Pagamento confirmado. Copie os dados abaixo, emita a nota no portal da prefeitura (seu login/senha) e registre aqui o número — a pendência sai da lista. <b>Quando tivermos o certificado digital (e-CNPJ A1), esta emissão passa a ser automática.</b></p>
+    <div id="nf-dados" style="background:#f7f9fc;border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:10px"></div>
+    <a class="btn sm ghost" href="https://nfse.joaopessoa.pb.gov.br" target="_blank" rel="noopener">↗ Abrir portal da NFS-e de João Pessoa</a>
+    <label style="margin-top:12px">Número da NFS-e emitida</label><input id="nf-numero" placeholder="Ex.: 2026000123">
+    <div class="foot"><button class="btn ghost" onclick="fecharNf()">Cancelar</button><button class="btn ghost" style="color:#8a5a00" onclick="dispensarNf()" title="Este recebimento não terá nota fiscal">Dispensar NF</button><button class="btn" style="background:#0F6E56;border-color:#0F6E56" onclick="salvarNf()">✓ Registrar nota emitida</button></div>
+  </div>
+</div>
 <div id="modal-partes" class="overlay hidden">
   <div class="modal">
     <h2>Sugestão de partes pelo histórico</h2>
@@ -7367,9 +7377,11 @@ function finRenderTabela(){
   /* KPIs: a receber (abertas) e recebido (pagas) */
   var totAb=abertas.reduce(function(s,x){return s+(parseInt(x.valor_centavos,10)||0);},0);
   var totPg=pagas.reduce(function(s,x){return s+(parseInt(x.valor_pago_centavos||x.valor_centavos,10)||0);},0);
+  var nfPend=pagas.filter(function(x){return x.nf_status==='pendente';}).length;
   var k=document.getElementById('fin-kpis');
   if(k) k.innerHTML='<div class="kpi"><div class="n">'+finReais(totAb)+'</div><div class="l">A receber ('+abertas.length+')</div></div>'+
-                    '<div class="kpi"><div class="n">'+finReais(totPg)+'</div><div class="l">Recebido ('+pagas.length+')</div></div>';
+                    '<div class="kpi"><div class="n">'+finReais(totPg)+'</div><div class="l">Recebido ('+pagas.length+')</div></div>'+
+                    '<div class="kpi"><div class="n" style="color:'+(nfPend?'#8a5a00':'#0F6E56')+'">'+nfPend+'</div><div class="l">NFs a emitir</div></div>';
   var lista=(FIN_VIEW==='pagas')?pagas:abertas;
   if(!lista.length){ body.innerHTML='<tr><td colspan="8" class="note">'+(FIN_VIEW==='pagas'?'Nenhum pagamento recebido ainda.':'Nenhuma cobrança em aberto. Clique em “Nova cobrança (Cora)”.')+'</td></tr>'; return; }
   body.innerHTML=lista.map(function(x){
@@ -7381,14 +7393,14 @@ function finRenderTabela(){
     if(x.pix_emv) pagar+='<button class="btn sm ghost" onclick="finCopiarPix(this,\''+encodeURIComponent(x.pix_emv)+'\')">Copiar PIX</button>';
     if(!pagar) pagar='<span class="note">—</span>';
     var badge=(x.status==='paga')?'<span style="color:#0F6E56;font-weight:700">✓ paga</span>':(x.status==='cancelada'?'<span class="note">cancelada</span>':'<span style="color:#185FA5;font-weight:700">em aberto</span>');
-    var nf=(x.nf_status==='emitida')?('NF '+(x.nf_numero||'')):(x.status==='paga'?'<span style="color:#8a5a00">NF pendente</span>':'—');
+    var nf=(x.nf_status==='emitida')?('NF '+finEsc(x.nf_numero||'')):(x.nf_status==='dispensada')?'<span class="note" style="margin:0">sem nota</span>':(x.status==='paga'?'<button class="btn sm gold" style="font-size:11px;padding:4px 10px" onclick="abrirNf(\''+x.id+'\')">Emitir NF</button>':'—');
     return '<tr><td>'+finEsc(cli)+'</td><td>'+finEsc(x.descricao||'')+'</td><td>'+finReais(x.valor_centavos)+'</td><td>'+venc+'</td><td>'+badge+'</td><td>'+pago+'</td><td>'+pagar+'</td><td>'+nf+'</td></tr>';
   }).join('');
 }
 
-/* nomes dos clientes (busca sob demanda no Supabase e cacheia) */
+/* clientes (nome + CPF/CNPJ, para a tabela e para a NFS-e) — cache local */
 var FIN_CLIENTES=null;
-function finNomeCliente(id){ if(!id) return '—'; if(FIN_CLIENTES&&FIN_CLIENTES[id]) return FIN_CLIENTES[id]; return '(cliente)'; }
+function finNomeCliente(id){ if(!id) return '—'; var c=FIN_CLIENTES&&FIN_CLIENTES[id]; return c?c.nome:'(cliente)'; }
 function finEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
 async function finCarregarClientes(){
@@ -7396,7 +7408,7 @@ async function finCarregarClientes(){
   try{
     var r=await window.__sb.from('contatos').select('id,nome,cpf_cnpj').order('nome');
     var rows=(r&&r.data)||[];
-    FIN_CLIENTES={}; rows.forEach(function(c){ FIN_CLIENTES[c.id]=c.nome; });
+    FIN_CLIENTES={}; rows.forEach(function(c){ FIN_CLIENTES[c.id]={nome:c.nome,doc:c.cpf_cnpj||''}; });
     if(sel){
       sel.innerHTML='<option value="">Selecione o cliente…</option>'+rows.map(function(c){
         var doc=String(c.cpf_cnpj||'').replace(/\D/g,''); var falta=(doc.length!==11&&doc.length!==14)?' (sem CPF/CNPJ)':'';
@@ -7441,6 +7453,36 @@ async function emitirCobranca(){
   btn.disabled=false; btn.textContent=txt;
 }
 
+/* ---- NFS-e (Fase 2a): fila de notas dos pagamentos recebidos ----
+   Emissão hoje é manual no portal da prefeitura (login/senha); o sistema entrega
+   os dados prontos e guarda o número. Com o e-CNPJ A1 vira automática. */
+var _nfAtual=null;
+function abrirNf(id){
+  var x=FIN_ROWS.find(function(r){return r.id===id;}); if(!x) return; _nfAtual=x;
+  var c=(FIN_CLIENTES&&FIN_CLIENTES[x.contato_id])||{};
+  function linha(l,v){ if(!v) return ''; return '<div style="display:flex;gap:8px;align-items:center;margin:4px 0;font-size:13px"><b style="min-width:100px">'+l+'</b><span style="flex:1">'+finEsc(v)+'</span><button class="btn sm ghost" style="font-size:11px;padding:3px 9px" onclick="finCopiar(this,\''+encodeURIComponent(v)+'\')">copiar</button></div>'; }
+  document.getElementById('nf-dados').innerHTML=
+    linha('Tomador',c.nome||'')+linha('CPF/CNPJ',c.doc||'')+linha('Descrição',x.descricao||'')+
+    linha('Valor',finReais(x.valor_pago_centavos||x.valor_centavos))+
+    linha('Pago em',x.pago_em?new Date(x.pago_em).toLocaleDateString('pt-BR'):'');
+  document.getElementById('nf-numero').value=x.nf_numero||'';
+  document.getElementById('modal-nf').classList.remove('hidden');
+}
+function fecharNf(){ document.getElementById('modal-nf').classList.add('hidden'); _nfAtual=null; }
+function finCopiar(el,enc){ var v=decodeURIComponent(enc); try{ navigator.clipboard.writeText(v); var t=el.textContent; el.textContent='copiado!'; setTimeout(function(){el.textContent=t;},1200); }catch(e){ prompt('Copie:',v); } }
+async function salvarNf(){
+  if(!_nfAtual) return; var num=(document.getElementById('nf-numero').value||'').trim();
+  if(!num){ alert('Informe o número da NFS-e emitida no portal.'); return; }
+  var r=await window.__sb.from('cora_cobrancas').update({nf_status:'emitida',nf_numero:num,atualizado_em:new Date().toISOString()}).eq('id',_nfAtual.id).select('id');
+  if(r&&r.error){ alert('Não foi possível salvar: '+r.error.message); return; }
+  fecharNf(); renderFinanceiro();
+}
+async function dispensarNf(){
+  if(!_nfAtual) return; if(!confirm('Marcar este recebimento como SEM emissão de nota fiscal?')) return;
+  var r=await window.__sb.from('cora_cobrancas').update({nf_status:'dispensada',atualizado_em:new Date().toISOString()}).eq('id',_nfAtual.id).select('id');
+  if(r&&r.error){ alert('Não foi possível: '+r.error.message); return; }
+  fecharNf(); renderFinanceiro();
+}
 /* Registra no Cora o webhook de pagamento (um clique; idempotente) */
 async function ativarBaixaAutomatica(btn){
   btn.disabled=true; var t=btn.textContent; btn.textContent='Ativando…';
