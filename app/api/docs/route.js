@@ -56,10 +56,34 @@ function seguro(rel) {
   return limpo
 }
 
+// conta os arquivos de um processo (recursivo), ignorando a Lixeira e metadados
+function contaArquivos(dir, prof) {
+  if (prof > 6) return 0
+  let n = 0
+  let itens
+  try { itens = fs.readdirSync(dir, { withFileTypes: true }) } catch (e) { return 0 }
+  for (const d of itens) {
+    if (d.name === TRASH || d.name === '.meta.json' || d.name === ORDEM) continue
+    if (d.isDirectory()) n += contaArquivos(path.join(dir, d.name), prof + 1)
+    else n++
+  }
+  return n
+}
+
 export async function GET(request) {
   const user = await usuario(request)
   if (!user) return Response.json({ erro: 'não autenticado' }, { status: 401 })
   const { searchParams } = new URL(request.url)
+
+  // censo: ?censo=<digitos,digitos,...> -> { counts: { digitos: qtdArquivos } }
+  // (usado para apontar processos SEM documentos no servidor)
+  const censo = searchParams.get('censo')
+  if (censo) {
+    const nums = [...new Set(String(censo).split(',').map(s => s.replace(/\D/g, '')).filter(s => s.length >= 16))].slice(0, 500)
+    const counts = {}
+    for (const dig of nums) counts[dig] = contaArquivos(path.join(ROOT, dig), 0)
+    return Response.json({ counts })
+  }
 
   const file = searchParams.get('file')
   if (file) {
