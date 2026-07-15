@@ -7353,6 +7353,7 @@ async function renderFinanceiro(){
     var j=await r.json();
     FIN_ROWS=(j&&j.cobrancas)||[];
   }catch(e){ FIN_ROWS=[]; }
+  if(!FIN_CLIENTES){ try{ await finCarregarClientes(); }catch(e){} }
   finRenderTabela();
 }
 
