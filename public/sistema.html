@@ -820,13 +820,36 @@ async function publicarAtualizacao(){
     var j={}; try{ j=await r.json(); }catch(e){}
     if(r.ok && j.ok){
       /* NÃO marca em massa: cada alteração é aprovada/rejeitada individualmente. */
-      if(j.jaAtualizado){ if(st){ st.style.color='#0F6E56'; st.textContent='Já estava na versão mais recente.'; } renderPublicarResumo(); }
-      else{ if(st){ st.style.color='#0F6E56'; st.textContent='Publicado! ('+(j.de||'')+' → '+(j.para||'')+'). Recarregando…'; } setTimeout(function(){ location.reload(true); }, 1400); }
+      if(j.jaAtualizado){ if(st){ st.style.color='#0F6E56'; st.textContent='Já estava na versão mais recente.'; } renderPublicarResumo(); btn.disabled=false; btn.textContent=txt0; return; }
+      if(j.build==='iniciado'){
+        /* mudança de backend: o servidor está recompilando (1–2 min). Acompanha o status. */
+        if(st){ st.style.color='#8a5a00'; st.textContent='Publicado ('+(j.de||'')+' → '+(j.para||'')+'). 🛠️ Recompilando o servidor… pode levar 1–2 min. Não feche.'; }
+        btn.textContent='Recompilando…';
+        await _aguardarBuild(st);
+        return;
+      }
+      /* só arquivos estáticos: restart rápido */
+      if(st){ st.style.color='#0F6E56'; st.textContent='Publicado! ('+(j.de||'')+' → '+(j.para||'')+'). Recarregando…'; }
+      setTimeout(function(){ location.reload(true); }, 1600);
     } else {
       if(st){ st.style.color='#b5342b'; st.textContent='Falha ao publicar: '+((j&&(j.erro||j.saida))||('HTTP '+r.status)); }
+      btn.disabled=false; btn.textContent=txt0;
     }
-  }catch(e){ if(st){ st.style.color='#b5342b'; st.textContent='Erro: '+(e&&e.message||e); } }
-  btn.disabled=false; btn.textContent=txt0;
+  }catch(e){ if(st){ st.style.color='#b5342b'; st.textContent='Erro: '+(e&&e.message||e); } btn.disabled=false; btn.textContent=txt0; }
+}
+/* acompanha a recompilação do servidor (build) até done/error, com timeout de ~4 min */
+async function _aguardarBuild(st){
+  var btn=document.getElementById('btn-publicar');
+  var fim=Date.now()+240000;
+  while(Date.now()<fim){
+    await new Promise(function(res){ setTimeout(res, 4000); });
+    var estado='';
+    try{ var r=await fetch('/api/deploy?status=1',{cache:'no-store'}); var j=await r.json(); estado=(j&&j.state)||''; if(estado==='error'){ if(st){ st.style.color='#b5342b'; st.textContent='⚠ Falha ao recompilar. '+((j.saida||'').slice(-300)); } if(btn){ btn.disabled=false; btn.textContent='↑ Publicar atualização agora'; } return; } }
+    catch(e){ /* durante o restart o endpoint fica indisponível por alguns segundos — normal */ }
+    if(estado==='done'){ if(st){ st.style.color='#0F6E56'; st.textContent='✅ Servidor recompilado e no ar! Recarregando…'; } setTimeout(function(){ location.reload(true); }, 1800); return; }
+  }
+  if(st){ st.style.color='#8a5a00'; st.textContent='O build está demorando mais que o normal. Aguarde ~1 min e recarregue a página manualmente.'; }
+  if(btn){ btn.disabled=false; btn.textContent='↑ Publicar atualização agora'; }
 }
 function rejeitarAtualizacao(){ /* substituído por rejeição item a item */ }
 function renderAcessos(){

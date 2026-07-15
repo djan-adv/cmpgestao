@@ -6,3 +6,5 @@ node_modules/
 *.save
 *.bak
 .env.local.save
+.deploy-build.state
+.deploy-build.log
