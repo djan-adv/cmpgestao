@@ -61,7 +61,9 @@ export async function POST(request) {
     return Response.json({ erro: 'O cliente precisa de CPF (11 dígitos) ou CNPJ (14 dígitos) cadastrado para emitir a cobrança.' }, { status: 400 })
   }
 
-  const code = 'CMP-' + crypto.randomUUID()
+  // o header Idempotency-Key do Cora exige um UUID puro; o code é nossa referência interna
+  const idem = crypto.randomUUID()
+  const code = 'CMP-' + idem
   const invoiceBody = {
     code,
     customer: {
@@ -76,7 +78,7 @@ export async function POST(request) {
 
   let r
   try {
-    r = await coraApi('POST', '/v2/invoices', invoiceBody, { 'Idempotency-Key': code })
+    r = await coraApi('POST', '/v2/invoices', invoiceBody, { 'Idempotency-Key': idem })
   } catch (e) {
     return Response.json({ erro: 'Erro ao falar com o Cora: ' + ((e && e.message) || e) }, { status: 502 })
   }
