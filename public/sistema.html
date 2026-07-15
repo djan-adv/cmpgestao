@@ -6195,24 +6195,39 @@ function _resumeParaCliente(texto, maxLen){
 }
 /* limpeza leve para o NOME do movimento (não passa pelo extrator de ato) */
 function _limpaNome(s, maxLen){ s=String(s||'').replace(/\s+/g,' ').trim(); maxLen=maxLen||240; if(s.length>maxLen) s=s.slice(0,maxLen).replace(/\s+\S*$/,'')+'…'; return s; }
-/* monta 1 linha por movimento: o QUE aconteceu (rótulo, classificado pelo ATO) + o teor
-   traduzido em poucas palavras, sem repetir movimentos. */
+/* o nome do movimento acrescenta algo específico (ex.: "de execução / cumprimento") ou é só
+   ruído genérico ("Petição", "Movimento processual", "[1º Grau] Petição")? */
+function _nomeAcrescenta(nm){
+  var resto=String(nm||'').toLowerCase()
+    .replace(/\[?\d+[ºo°]?\s*grau\]?/g,'')
+    .replace(/junta[çd][ãa]?o?\s*(de)?/g,'')
+    .replace(/peti[çc][ãa]o|manifesta[çc][ãa]o|documento|movimenta[çc][ãa]o|movimento|processual|andamento|expediente|autos/g,'')
+    .replace(/\bde\b|\bda\b|\bdo\b/g,'')
+    .replace(/[^a-zà-ÿ]/gi,'').trim();
+  return resto.length>=4;
+}
+/* monta a lista para o cliente: UMA linha por (data + tipo de evento) — o mesmo ato
+   NÃO se repete, mesmo vindo em vários códigos do DataJud. Guarda o teor mais
+   informativo do grupo e classifica pelo ATO (não pelo cabeçalho). */
 function _linhasAtualizacao(p, n){
-  var movsAll=_movsOficiais(p,60), pubs=pubsDoProcesso(p.numero||''), linhas=[], vistos={}, primeiroAto='';
-  for(var i=0;i<movsAll.length && linhas.length<n;i++){
+  var movsAll=_movsOficiais(p,80), pubs=pubsDoProcesso(p.numero||''), grupos=[], idx={}, primeiroAto='';
+  for(var i=0;i<movsAll.length;i++){
     var m=movsAll[i], d=_atzDataBR(m.data);
     var r=_resumeParaCliente(_teorDaData(pubs, m.data)||m.texto||'', 340);
-    if(i===0) primeiroAto=r.ato;
+    if(i===0) primeiroAto=r.ato; else if(!primeiroAto && r.ato) primeiroAto=r.ato;
     var baseLabel=r.ato||_nomeMov(m.texto);          /* classifica pelo ATO, não pelo cabeçalho */
     var label=explicaParaCliente(baseLabel);
     var detalhe=r.cli;
-    if(!detalhe){ var nm=_nomeMov(m.texto); if(nm && nm.length>12 && nm.length<120 && !/tribunal|poder judici|comarca|cep:\s*\d|cart[óo]rio/i.test(nm) && nm.toLowerCase()!==label.toLowerCase()) detalhe=_limpaNome(nm,240); }
-    var chave=(d||'')+'|'+label.toLowerCase()+'|'+detalhe.slice(0,70).toLowerCase();
-    if(vistos[chave]) continue; vistos[chave]=true;
-    var linha='• '+(d?(d+' — '):'')+label;
-    if(detalhe && detalhe.toLowerCase()!==label.toLowerCase()) linha+='\n   ↳ '+detalhe;
-    linhas.push(linha);
+    if(!detalhe){ var nm=_nomeMov(m.texto); if(nm && nm.length>12 && nm.length<120 && !/tribunal|poder judici|comarca|cep:\s*\d|cart[óo]rio/i.test(nm) && nm.toLowerCase()!==label.toLowerCase() && _nomeAcrescenta(nm)) detalhe=_limpaNome(nm,240); }
+    var chave=(d||'')+'|'+label.toLowerCase();       /* 1 linha por DATA+TIPO: mesmo ato não repete */
+    if(idx[chave]==null){ idx[chave]=grupos.length; grupos.push({d:d,label:label,detalhe:detalhe||''}); }
+    else { var g=grupos[idx[chave]]; if(detalhe && detalhe.length>(g.detalhe||'').length) g.detalhe=detalhe; }
   }
+  var linhas=grupos.slice(0,n).map(function(g){
+    var linha='• '+(g.d?(g.d+' — '):'')+g.label;
+    if(g.detalhe && g.detalhe.toLowerCase()!==g.label.toLowerCase()) linha+='\n   ↳ '+g.detalhe;
+    return linha;
+  });
   return { linhas: linhas, primeiroAto: primeiroAto, primeiro: movsAll[0] };
 }
 /* descreve, para o cliente, O QUE aconteceu (status objetivo, em português simples) */
