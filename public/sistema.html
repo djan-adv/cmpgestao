@@ -361,7 +361,8 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
       <!-- Financeiro (Fase 1 - Cora): cobranças boleto+PIX e recebimentos por cliente -->
       <div class="agtools">
         <div class="switch"><button id="fin-sw-a" class="on" onclick="setFinView('abertas')">Em aberto</button><button id="fin-sw-p" onclick="setFinView('pagas')">Recebidas</button></div>
-        <button class="btn sm" style="margin-left:auto;background:#FE3E6D;border-color:#FE3E6D;color:#fff" onclick="abrirNovaCobranca()">&#9673; Nova cobrança (Cora)</button>
+        <button class="btn sm ghost" style="margin-left:auto" onclick="ativarBaixaAutomatica(this)" title="Registra no Cora o aviso automático de pagamento: quando o cliente pagar, a cobrança é baixada sozinha">⚡ Ativar baixa automática</button>
+        <button class="btn sm" style="background:#FE3E6D;border-color:#FE3E6D;color:#fff" onclick="abrirNovaCobranca()">&#9673; Nova cobrança (Cora)</button>
       </div>
       <div class="kpis" id="fin-kpis"></div>
       <div class="card"><table><thead><tr><th>Cliente</th><th>Descrição</th><th>Valor</th><th>Vencimento</th><th>Status</th><th>Pago em</th><th>Boleto/PIX</th><th>NF</th></tr></thead><tbody id="fin-body"></tbody></table></div>
@@ -7440,6 +7441,18 @@ async function emitirCobranca(){
   btn.disabled=false; btn.textContent=txt;
 }
 
+/* Registra no Cora o webhook de pagamento (um clique; idempotente) */
+async function ativarBaixaAutomatica(btn){
+  btn.disabled=true; var t=btn.textContent; btn.textContent='Ativando…';
+  try{
+    var tok=await finToken();
+    var r=await fetch('/api/cora/webhook-setup',{method:'POST',headers:{Authorization:'Bearer '+tok}});
+    var j={}; try{ j=await r.json(); }catch(e){}
+    if(r.ok&&j.ok){ btn.textContent=j.jaCadastrado?'✓ Baixa automática já estava ativa':'✓ Baixa automática ativada'; return; }
+    alert('Não foi possível ativar: '+((j&&j.erro)||('HTTP '+r.status)));
+  }catch(e){ alert('Erro de rede: '+((e&&e.message)||e)); }
+  btn.disabled=false; btn.textContent=t;
+}
 function finCopiarPix(el,enc){
   var emv=decodeURIComponent(enc);
   try{ navigator.clipboard.writeText(emv); var t=el.textContent; el.textContent='Copiado!'; setTimeout(function(){el.textContent=t;},1500); }
