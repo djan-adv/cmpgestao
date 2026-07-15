@@ -1,9 +1,11 @@
-// jus.br / PDPJ — importar a LINHA DE MOVIMENTOS do processo (todos os graus).
+// jus.br / PDPJ — importar a LINHA DE MOVIMENTOS do processo (todos os graus) e
+// preencher os dados da ficha (classe, assunto, vara, distribuição).
 //   POST /api/jusbr/movimentos   (Authorization: Bearer <jwt do Supabase>)
-//   body: { numero: "0812803-38.2019.8.15.2001" }
-// O DJEN só traz publicações/intimações; movimentos internos como "Conclusos para
-// despacho" só existem na consulta do PDPJ. Aqui puxamos os movimentos de TODAS as
-// tramitações (1º/2º/3º grau) e gravamos os novos via robot_add_andamento (dedup por texto).
+//   body: { numero: "0812803-38.2019.8.15.2001", debug?: true }
+// O DJEN só traz publicações; movimentos internos ("Conclusos para despacho",
+// "Juntada de Petição") só existem na consulta do PDPJ. Aqui varremos o JSON de forma
+// robusta (sem depender do nome exato do campo) e gravamos os novos via
+// robot_add_andamento (dedup por texto). Também atualizamos os dados do processo.
 
 import { createClient } from '@supabase/supabase-js'
 
@@ -39,42 +41,58 @@ async function tokenValido(sb) {
   return { token: row.token }
 }
 
-// junta as tramitações que vierem no JSON, em qualquer um dos formatos conhecidos
-function coletaTramitacoes(proc) {
-  const t = []
-  if (!proc) return t
-  if (Array.isArray(proc.tramitacoes)) t.push(...proc.tramitacoes)
-  if (proc.tramitacaoAtual) t.push(proc.tramitacaoAtual)
-  // fallback: o próprio objeto pode já ser uma tramitação (com movimentos direto)
-  if (proc.movimentos || proc.movimento) t.push(proc)
-  return t
+// ——— varredura robusta: acha arrays de "movimentos" sem saber o nome do campo ———
+function pareceMov(o) {
+  if (!o || typeof o !== 'object' || Array.isArray(o)) return false
+  const keys = Object.keys(o).map(k => k.toLowerCase())
+  const temData = keys.some(k => /data|datahora|dtmov|dt_mov|date|dtdispon/.test(k))
+  const temTexto = keys.some(k => /descri|nome|movimento|complement|titulo|texto|tipo/.test(k))
+  return temData && temTexto
 }
-function grauLabel(tr) {
-  const g = tr && (tr.grau || tr.grauProcesso || tr.instancia)
-  if (g == null) return ''
-  const s = String(g)
-  if (/^\d+$/.test(s)) return s + 'º Grau'
-  return s
+function coletaArraysMov(node, out, prof) {
+  if (prof > 7 || !node || typeof node !== 'object') return
+  if (Array.isArray(node)) {
+    const bons = node.filter(pareceMov).length
+    if (node.length && bons >= Math.max(1, Math.floor(node.length * 0.5))) out.push(node)
+    for (const x of node) coletaArraysMov(x, out, prof + 1)
+    return
+  }
+  for (const k of Object.keys(node)) coletaArraysMov(node[k], out, prof + 1)
 }
-// extrai {data, texto} de um movimento em vários formatos possíveis do PDPJ
-function normMov(m, grau) {
-  if (!m) return null
-  const dataRaw = m.dataHora || m.data || m.dataHoraMovimento || m.dataMovimento || (m.movimento && m.movimento.dataHora) || null
+function pega(o, res) {
+  for (const cam of res) {
+    const partes = cam.split('.')
+    let v = o
+    for (const p of partes) { v = v && v[p] }
+    if (v != null && v !== '') return v
+  }
+  return null
+}
+function normMov(m) {
+  if (!m || typeof m !== 'object') return null
+  const dataRaw = pega(m, ['dataHora', 'data', 'dataHoraMovimento', 'dataMovimento', 'dtMovimento', 'dataDistribuicao', 'movimento.dataHora'])
   const data = dataRaw ? String(dataRaw).slice(0, 10) : null
-  let desc = m.descricao || m.nome || m.complemento
-    || (m.movimentoNacional && (m.movimentoNacional.descricao || m.movimentoNacional.nome))
-    || (m.movimento && (m.movimento.descricao || m.movimento.nome))
-    || ''
-  // complementos tabelados (ex.: motivo/《tipo》) agregam contexto ao movimento
-  const comp = m.complementosTabelados || m.complementos || null
+  let desc = pega(m, ['descricao', 'nome', 'complemento', 'titulo', 'texto',
+    'movimentoNacional.descricao', 'movimentoNacional.nome', 'movimento.descricao', 'movimento.nome', 'tipoMovimento.descricao'])
+  desc = String(desc || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+  // complementos tabelados agregam contexto (ex.: motivo)
+  const comp = m.complementosTabelados || m.complementos
   if (Array.isArray(comp) && comp.length) {
-    const extra = comp.map(c => (c && (c.descricao || c.nome || c.valor))).filter(Boolean).join('; ')
+    const extra = comp.map(c => c && (c.descricao || c.nome || c.valor)).filter(Boolean).join('; ')
     if (extra) desc = desc ? (desc + ' — ' + extra) : extra
   }
-  desc = String(desc || '').replace(/\s+/g, ' ').trim()
   if (!desc) return null
-  const prefixo = grau ? ('[' + grau + '] ') : ''
-  return { data, texto: prefixo + desc }
+  return { data, texto: desc }
+}
+// dados da ficha a partir do JSON do PDPJ
+function extraiMeta(proc) {
+  const t = (proc && (proc.tramitacaoAtual || (Array.isArray(proc.tramitacoes) && proc.tramitacoes[0]))) || {}
+  return {
+    classe: pega(proc, ['classe.descricao', 'classeProcessual.descricao', 'classeJudicial.descricao']) || pega(t, ['classe.descricao', 'classeProcessual.descricao']) || null,
+    assunto: pega(proc, ['assunto.descricao', 'assuntoPrincipal.descricao']) || (Array.isArray(proc && proc.assuntos) && proc.assuntos[0] && (proc.assuntos[0].descricao || proc.assuntos[0].nome)) || pega(t, ['assunto.descricao']) || (Array.isArray(t.assuntos) && t.assuntos[0] && (t.assuntos[0].descricao || t.assuntos[0].nome)) || null,
+    orgao: pega(proc, ['orgaoJulgador.nome', 'orgaoJulgador.descricao']) || pega(t, ['orgaoJulgador.nome', 'orgaoJulgador.descricao']) || null,
+    distribuido: pega(proc, ['dataAjuizamento', 'dataDistribuicao', 'distribuicao.data']) || pega(t, ['dataDistribuicao', 'dataAjuizamento']) || null,
+  }
 }
 
 export async function POST(request) {
@@ -104,23 +122,37 @@ export async function POST(request) {
   if (!resp.ok) return Response.json({ erro: 'PDPJ recusou (HTTP ' + resp.status + ')' }, { status: 502 })
 
   const proc = Array.isArray(data && data.content) ? data.content[0] : (Array.isArray(data) ? data[0] : data)
-  const tramitacoes = coletaTramitacoes(proc)
 
-  // reúne os movimentos de todos os graus, deduplicando pelo texto+data já nesta rodada
+  // acha o maior array que pareça ser a lista de movimentos
+  const arrays = []
+  coletaArraysMov(proc, arrays, 0)
+  arrays.sort((a, b) => b.length - a.length)
+  const lista = arrays[0] || []
   const movs = []
   const vistos = new Set()
-  for (const tr of tramitacoes) {
-    const grau = grauLabel(tr)
-    const lista = (tr && (tr.movimentos || tr.movimento)) || []
-    for (const m of (Array.isArray(lista) ? lista : [])) {
-      const n = normMov(m, grau)
-      if (!n) continue
-      const k = (n.data || '') + '|' + n.texto
-      if (vistos.has(k)) continue
-      vistos.add(k)
-      movs.push(n)
-    }
+  for (const m of lista) {
+    const n = normMov(m)
+    if (!n) continue
+    const k = (n.data || '') + '|' + n.texto.toLowerCase()
+    if (vistos.has(k)) continue
+    vistos.add(k)
+    movs.push(n)
   }
+
+  // atualiza os dados da ficha (classe/assunto/vara/distribuição) — faz o selo virar "vinculado"
+  const meta = extraiMeta(proc)
+  let fichaAtualizada = false
+  try {
+    const patch = {}
+    if (meta.classe) patch.classe = String(meta.classe).slice(0, 200)
+    if (meta.assunto) patch.assunto = String(meta.assunto).slice(0, 200)
+    if (meta.orgao) { patch.orgao = String(meta.orgao).slice(0, 200); patch.foro = String(meta.orgao).slice(0, 200) }
+    if (meta.distribuido) { const d = String(meta.distribuido).slice(0, 10); if (/^\d{4}-\d{2}-\d{2}$/.test(d)) patch.distribuido_em = d }
+    if (Object.keys(patch).length) {
+      const upd = await sb.from('processos').update(patch).eq('numero_digitos', numero).select('id')
+      if (!upd.error && upd.data && upd.data.length) fichaAtualizada = true
+    }
+  } catch (e) { /* não bloqueia a importação de movimentos */ }
 
   let inseridos = 0, jaTinha = 0, semProcesso = 0, erros = 0
   for (const mv of movs) {
@@ -131,5 +163,14 @@ export async function POST(request) {
     else semProcesso++
   }
 
-  return Response.json({ ok: true, numero, graus: tramitacoes.length, movimentos: movs.length, novos: inseridos, jaTinha, semProcesso, erros })
+  const out = { ok: true, numero, movimentos: movs.length, novos: inseridos, jaTinha, semProcesso, erros, ficha_atualizada: fichaAtualizada, meta }
+  if (body.debug) {
+    out.diag = {
+      topKeys: proc && typeof proc === 'object' ? Object.keys(proc).slice(0, 40) : [],
+      tramitacaoAtualKeys: proc && proc.tramitacaoAtual ? Object.keys(proc.tramitacaoAtual).slice(0, 40) : [],
+      arraysEncontrados: arrays.map(a => a.length),
+      amostraMov: lista.slice(0, 2),
+    }
+  }
+  return Response.json(out)
 }

@@ -2862,7 +2862,7 @@ async function atualizarHistorico(){
   if(typeof atual==='undefined' || !atual || !atual.numero) return;
   var btn=document.getElementById('btn-atu-hist'); var t0=btn?btn.textContent:'';
   if(btn){ btn.disabled=true; btn.textContent='atualizando…'; }
-  var djenNovos=0, mvNovos=0, notas='';
+  var djenNovos=0, mvNovos=0, notas='', jbMeta=null, fichaUpd=false;
   try{
     var jwt=await jusbrJwt();
     /* 1) DJEN — publicações/intimações (por número) */
@@ -2878,17 +2878,26 @@ async function atualizarHistorico(){
       var d2=await respJson(r2);
       if(d2 && d2.__naoJson){ notas+='\n• Movimentos do jus.br: função ainda não publicada no servidor (falta o build).'; }
       else if(!r2.ok){ notas+='\n• Movimentos do jus.br não vieram: '+((d2&&d2.erro)||('HTTP '+r2.status))+((d2&&(d2.motivo==='sem_token'||d2.motivo==='expirado'))?' — abra o jus.br logado para sincronizar.':''); }
-      else { mvNovos=d2.novos||0; }
+      else { mvNovos=d2.novos||0; jbMeta=d2.meta||null; if(d2.ficha_atualizada) fichaUpd=true; }
     }catch(e){ notas+='\n• Movimentos do jus.br: '+(e&&e.message||e); }
+    /* aplica os dados vindos do jus.br na ficha em memória (classe/assunto/vara/distribuição) */
+    if(jbMeta){
+      if(jbMeta.classe) atual.classe=jbMeta.classe;
+      if(jbMeta.assunto) atual.tipo=jbMeta.assunto;
+      if(jbMeta.orgao){ atual.foro=jbMeta.orgao; atual.orgao=jbMeta.orgao; }
+      if(jbMeta.distribuido && /^\d{4}-\d{2}-\d{2}/.test(String(jbMeta.distribuido))) atual.distribuido_em=String(jbMeta.distribuido).slice(0,10);
+    }
     /* recarrega o histórico do banco se entrou algo novo */
     var tot=djenNovos+mvNovos;
     if(tot>0 && atual._id){
       try{
         var q=await window.__sb.from('andamentos').select('id,data,texto,fonte').eq('processo_id',atual._id).order('data',{ascending:false});
-        if(q&&q.data){ atual.hist_full=q.data.map(function(a){return {id:a.id,data:(a.data?a.data+'T00:00:00.000Z':null),texto:a.texto,f:a.fonte||''};}); histShown=6; renderHistorico(); }
+        if(q&&q.data){ atual.hist_full=q.data.map(function(a){return {id:a.id,data:(a.data?a.data+'T00:00:00.000Z':null),texto:a.texto,f:a.fonte||''};}); histShown=6; }
       }catch(e){}
     }
-    alert((tot>0 ? (tot+' novo(s) andamento(s): '+djenNovos+' do DJEN + '+mvNovos+' dos movimentos do jus.br.') : 'Nenhum andamento novo.')+notas);
+    /* re-renderiza a ficha inteira (recalcula o selo "vinculado" e preenche os dados) */
+    if(tot>0 || fichaUpd){ var _i=DADOS.processos.indexOf(atual); if(_i>=0){ abrir(_i); } else { renderHistorico(); } }
+    alert((tot>0 ? (tot+' novo(s) andamento(s): '+djenNovos+' do DJEN + '+mvNovos+' dos movimentos do jus.br.') : 'Nenhum andamento novo.')+(fichaUpd?'\n✓ Dados do processo atualizados pelo jus.br (classe/assunto/vara).':'')+notas);
   }catch(e){ alert('Falha: '+(e&&e.message||e)); }
   if(btn){ btn.disabled=false; btn.textContent=t0; }
 }
