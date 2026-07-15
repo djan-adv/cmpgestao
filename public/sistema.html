@@ -6401,9 +6401,9 @@ async function desativarAcompanhamento(){
 </script>
 <!-- Atualizar cliente — Passo 1: monta e-mail com as últimas movimentações (revisar + enviar pelo seu Gmail) -->
 <div id="modal-atualizar" class="overlay hidden"><div class="modal" style="max-width:640px">
-  <h2>Atualizar cliente por e-mail</h2>
+  <h2 id="atz-titulo">Atualizar cliente por e-mail</h2>
   <div class="note" id="atz-proc" style="margin-bottom:8px"></div>
-  <div style="margin-bottom:8px;font-size:13px">
+  <div id="atz-modo-row" style="margin-bottom:8px;font-size:13px">
     <label style="margin-right:14px;cursor:pointer"><input type="radio" name="atz-modo" value="informar" checked onchange="_atzModo()"> Informar movimentação</label>
     <label style="cursor:pointer"><input type="radio" name="atz-modo" value="pedido" onchange="_atzModo()"> Pedir providência ao cliente</label>
   </div>
@@ -6607,10 +6607,27 @@ function _gerarRascunhoAtualizacao(){
   var el=document.getElementById('atz-corpo'); if(el) el.value=corpo;
   var as=document.getElementById('atz-assunto'); if(as) as.value=assunto;
 }
+/* liga/desliga o "modo vara" do modal (mesmo formulário, sem os controles de cliente) */
+function _atzSetVara(on){
+  var t=document.getElementById('atz-titulo'); if(t) t.textContent=on?'E-mail para a vara / cartório':'Atualizar cliente por e-mail';
+  ['atz-modo-row','atz-qtd-box'].forEach(function(id){ var e=document.getElementById(id); if(e) e.style.display=on?'none':''; });
+  var pb=document.getElementById('atz-pedido-box'); if(pb && on) pb.style.display='none';
+}
+/* abre o MESMO formulário do e-mail de cliente, mas para a VARA (texto pronto do balcão) */
+function abrirEmailVara(p, email, assunto, corpo){
+  window.__atzCtx={p:p, vara:true};
+  _atzSetVara(true);
+  document.getElementById('atz-proc').innerHTML='Processo nº <b>'+esc(p.numero)+'</b> — para a <b>vara/cartório</b>'+(email?(' <span class="note">('+esc(email)+')</span>'):'');
+  document.getElementById('atz-email').value=email||'';
+  document.getElementById('atz-assunto').value=assunto||'';
+  document.getElementById('atz-corpo').value=corpo||'';
+  document.getElementById('modal-atualizar').classList.remove('hidden');
+}
 async function abrirAtualizarCliente(numero){
   var p=(DADOS.processos||[]).filter(function(x){return x.numero===numero;})[0];
   if(!p){ p=(typeof atual!=='undefined'&&atual)||{numero:numero,hist_full:[]}; }
   window.__atzCtx={p:p};
+  _atzSetVara(false);
   document.getElementById('atz-proc').innerHTML='Processo nº <b>'+esc(numero)+'</b>'+(p.cliente?(' — '+esc(nomeBonito(p.cliente))):'');
   var q=document.getElementById('atz-qtd'); if(q) q.value='5';
   var mi=document.querySelector('input[name="atz-modo"][value="informar"]'); if(mi) mi.checked=true;
@@ -6674,10 +6691,11 @@ async function registrarEnvioAtualizacao(silent){
   var corpo=(document.getElementById('atz-corpo').value||'').trim();
   var nomeCli=(nomeBonito(p.cliente||'')||'').trim();
   var hoje=new Date().toISOString().slice(0,10), dbr=hoje.split('-').reverse().join('/');
-  var cab=(_atzModoAtual()==='pedido')?'Pedido de providência':'Atualização';
-  /* registra a MENSAGEM enviada, com nome do cliente titularizado e marca de envio manual pelo painel */
-  var texto='[E-mail ao cliente — '+cab+', enviado via painel (manual) em '+dbr+']\n'
-    +'Para: '+(nomeCli?(nomeCli+' '):'')+(email?('<'+email+'>'):'')+'\n'
+  var ehVara=!!(ctx&&ctx.vara);
+  var cab=ehVara?'Solicitação de andamento':((_atzModoAtual()==='pedido')?'Pedido de providência':'Atualização');
+  /* registra a MENSAGEM enviada, com marca de envio manual pelo painel */
+  var texto='['+(ehVara?'E-mail à vara/cartório':'E-mail ao cliente')+' — '+cab+', enviado via painel em '+dbr+']\n'
+    +'Para: '+(ehVara?'':((nomeCli?(nomeCli+' '):'')))+(email?('<'+email+'>'):'')+'\n'
     +(assunto?('Assunto: '+assunto+'\n'):'')
     +'\n'+corpo;
   var sb=window.__sb;
@@ -6685,6 +6703,8 @@ async function registrarEnvioAtualizacao(silent){
     if(sb && p._id){ var ins=await sb.from('andamentos').insert({processo_id:p._id,data:hoje,texto:texto,fonte:'manual'}).select('id').single(); if(ins&&ins.error) throw ins.error; }
     if(!p.hist_full) p.hist_full=[]; p.hist_full.unshift({id:null,data:hoje+'T00:00:00.000Z',texto:texto,f:'manual'});
     if(typeof renderHistorico==='function') renderHistorico();
+    /* vara: registra/atualiza a diligência (aparece em "Diligências em andamento") */
+    if(ehVara){ try{ await _registrarDiligencia(p,'email',corpo); }catch(e){} }
     if(!silent) alert('Envio registrado no histórico do processo.');
   }catch(e){ alert('Registrado na tela, mas houve erro ao gravar no banco: '+(e&&e.message||e)); }
 }
@@ -6778,7 +6798,12 @@ function bvSend(canal,numEnc,el){
   var msg=bvMsg(num,tipo);
   var enviado=false, canalLabel='';
   if(canal==='wa'&&c.whatsapp){ var d=String(c.whatsapp).replace(/\D/g,''); if(d.length<=11)d='55'+d; window.open('https://wa.me/'+d+'?text='+encodeURIComponent(msg),'_blank'); enviado=true; canalLabel='whatsapp'; }
-  else if(canal==='em'&&c.email){ window.open('https://mail.google.com/mail/?view=cm&fs=1&to='+encodeURIComponent(c.email)+'&su='+encodeURIComponent('Processo nº '+num+' — solicitação de andamento — CMP Advogados')+'&body='+encodeURIComponent(msg),'_blank'); enviado=true; canalLabel='email'; }
+  else if(canal==='em'&&c.email){
+    /* mesmo formulário do e-mail de cliente, com destinatário da vara e texto pronto.
+       A diligência é registrada no envio/registro (não na abertura). */
+    abrirEmailVara(p, c.email, 'Processo nº '+num+' — solicitação de andamento — CMP Advogados', msg);
+    return;
+  }
   else if(canal==='vid'&&c.balcao_link){ window.open(c.balcao_link,'_blank'); enviado=true; canalLabel='sala_virtual'; }
   if(enviado) _registrarDiligencia(p, canalLabel, msg);
 }

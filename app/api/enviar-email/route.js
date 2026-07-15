@@ -151,7 +151,12 @@ export async function POST(request) {
 
   const transporter = nodemailer.createTransport({ host, port, secure: port === 465, auth: { user: smtpUser, pass } })
   try {
-    const info = await transporter.sendMail({ envelope: { from: smtpUser, to: [para] }, raw })
+    // cópia oculta (BCC) de TODO envio para o e-mail pessoal do coordenador —
+    // configurável por EMAIL_COPIA no .env.local; vazio ('') desliga.
+    const copia = process.env.EMAIL_COPIA !== undefined ? String(process.env.EMAIL_COPIA).trim() : 'djan.adv@gmail.com'
+    const destinos = [para]
+    if (copia && /@/.test(copia) && copia.toLowerCase() !== para.toLowerCase()) destinos.push(copia)
+    const info = await transporter.sendMail({ envelope: { from: smtpUser, to: destinos }, raw })
     const copia = await salvarEnviados(raw)   // grava em "Enviados" (best-effort)
     return Response.json({ ok: true, de: smtpUser, id: (info && info.messageId) || messageId, copiado_enviados: copia.ok, copia_pasta: copia.pasta, copia_motivo: copia.ok ? undefined : copia.motivo })
   } catch (e) {
