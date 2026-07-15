@@ -85,6 +85,12 @@ export async function coraApi(method, path, body, extraHeaders) {
   return mtls(method, path, headers, body)
 }
 
+// status do Cora que significam "pago" (OPEN|PAID|CANCELLED|LATE|DRAFT|IN_PAYMENT)
+export function estaPago(status) {
+  const s = String(status || '').toUpperCase()
+  return s.includes('PAID') || s.includes('PAGA') || s.includes('PAGO') || s.includes('SETTLED') || s.includes('COMPENSAT')
+}
+
 // --- Supabase ---
 // cliente do usuário: respeita a RLS (escritorio_id = meu_escritorio()) via JWT
 export function sbUsuario(jwt) {

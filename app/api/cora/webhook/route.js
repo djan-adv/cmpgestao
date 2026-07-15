@@ -8,15 +8,10 @@
 // A atualização usa a chave de serviço (service role) porque o webhook chega
 // sem o JWT de um usuário.
 
-import { coraConfigurado, coraApi, sbAdmin } from '../lib.js'
+import { coraConfigurado, coraApi, sbAdmin, estaPago } from '../lib.js'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
-
-function estaPago(status) {
-  const s = String(status || '').toUpperCase()
-  return s.includes('PAID') || s.includes('PAGA') || s.includes('PAGO') || s.includes('SETTLED') || s.includes('COMPENSAT')
-}
 
 export async function POST(request) {
   const url = new URL(request.url)

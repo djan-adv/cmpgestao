@@ -9,6 +9,7 @@
 //
 // Restrito ao coordenador (mesmo padrão das rotas de deploy/acessos).
 
+import crypto from 'crypto'
 import { coraConfigurado, coraApi, usuarioDoToken } from '../lib.js'
 
 export const dynamic = 'force-dynamic'
@@ -60,17 +61,32 @@ export async function POST(request) {
   try {
     // já existe? (idempotência: não cadastrar a mesma URL duas vezes)
     const atual = await coraApi('GET', '/endpoints', null)
-    const jaTem = listaEndpoints(atual.json).find(e => e && e.url === hookUrl)
+    const jaTem = listaEndpoints(atual.json).find(e => e && String(e.url || '').indexOf(base + '/api/cora/webhook') === 0)
     if (jaTem) return Response.json({ ok: true, jaCadastrado: true, id: jaTem.id || null })
 
-    // cadastra o aviso de fatura paga
-    const r = await coraApi('POST', '/endpoints', { url: hookUrl, resource: 'invoice', trigger: 'paid' })
-    if (r.status < 200 || r.status >= 300) {
-      return Response.json({
-        erro: 'O Cora recusou o cadastro do webhook (' + r.status + '). Detalhe: ' + String(r.raw || '').slice(0, 400)
-      }, { status: 502 })
+    // cadastra o aviso de fatura paga. Todo POST do Cora exige Idempotency-Key (UUID);
+    // como a doc pública é fechada, tentamos os formatos de corpo conhecidos em ordem.
+    const formatos = [
+      { url: hookUrl, resource: 'invoice', trigger: 'paid' },
+      { url: hookUrl, resource: 'invoice', triggers: ['paid'] },
+      { url: hookUrl, trigger: 'invoice.paid' },
+      { url: hookUrl, events: ['invoice.paid'] }
+    ]
+    const tentativas = []
+    for (const body of formatos) {
+      const r = await coraApi('POST', '/endpoints', body, { 'Idempotency-Key': crypto.randomUUID() })
+      if (r.status >= 200 && r.status < 300) {
+        return Response.json({ ok: true, criado: true, id: (r.json && r.json.id) || null })
+      }
+      tentativas.push({ body, status: r.status, resposta: String(r.raw || '').slice(0, 300) })
+      // 401/403 = problema de credencial/permissão, não de formato: parar de tentar
+      if (r.status === 401 || r.status === 403) break
     }
-    return Response.json({ ok: true, criado: true, id: (r.json && r.json.id) || null })
+    return Response.json({
+      erro: 'O Cora recusou o cadastro do webhook em todos os formatos testados. Me envie este detalhe: ' + JSON.stringify(tentativas),
+      tentativas,
+      listaAtual: listaEndpoints(atual.json)
+    }, { status: 502 })
   } catch (e) {
     return Response.json({ erro: 'Erro ao falar com o Cora: ' + ((e && e.message) || e) }, { status: 502 })
   }
