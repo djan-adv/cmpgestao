@@ -2539,7 +2539,8 @@ async function salvarContato(){var c=window._cedit;var nome=_v("c-nome");if(!nom
   var sb=window.__sb;
   try{
     if(sb){
-      var reg={nome:nome, telefone:(obj.tel&&obj.tel!=='—')?obj.tel:null, email:(obj.email&&obj.email!=='—')?obj.email:null, origem:(obj.origem&&obj.origem!=='—')?obj.origem:null};
+      /* atenção: a tabela contatos NÃO tem coluna 'origem' — enviar quebrava TODO save */
+      var reg={nome:nome, tipo:obj.tipo||null, telefone:(obj.tel&&obj.tel!=='—')?obj.tel:null, email:(obj.email&&obj.email!=='—')?obj.email:null};
       var dbid=(c&&c.dbid)||null;
       if(dbid){ var up=await sb.from('contatos').update(reg).eq('id',dbid); if(up&&up.error) throw new Error(up.error.message); }
       else{
