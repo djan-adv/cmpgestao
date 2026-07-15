@@ -4076,7 +4076,41 @@ function _casoCtrlHTML(p){
   if(_ehCasoProc(p)){
     return ' <button class="btn sm ghost" style="font-size:11px;padding:3px 9px;border-color:#c9bfe0;color:#5b4a8a" onclick="vincularCasoDjen(\''+n+'\')" title="Este caso não é monitorado pelo DJEn. Ao vincular, ele passa a receber publicações e os dados são atualizados.">caso · vincular ao DJEn</button>';
   }
-  return ' <button class="btn sm ghost" style="font-size:11px;padding:3px 9px" onclick="marcarComoCaso(\''+n+'\')" title="Marcar como caso administrativo (não vinculado ao DJEn)">marcar como caso</button>';
+  return ' <button class="btn sm ghost" style="font-size:11px;padding:3px 9px" onclick="marcarComoCaso(\''+n+'\')" title="Marcar como caso administrativo (não vinculado ao DJEn)">marcar como caso</button>'+
+         ' <button class="btn sm ghost" style="font-size:11px;padding:3px 9px;border-color:#c9bfe0;color:#5b4a8a" onclick="virarAssessoria()" title="Transformar este processo em PASTA PRINCIPAL de assessoria: identificada pelo CNPJ/CPF do cliente; os documentos são movidos e ele sai do acompanhamento judicial">⇄ virar pasta de assessoria</button>';
+}
+/* transforma um PROCESSO em pasta principal de assessoria (caso): pede o CNPJ/CPF do
+   cliente, move a pasta de documentos do servidor para a nova identificação e marca
+   como caso. O histórico é preservado (fica no mesmo registro). */
+async function virarAssessoria(){
+  if(typeof atual==='undefined'||!atual) return;
+  var resp=prompt('Transformar em PASTA PRINCIPAL de assessoria (caso).\n\nInforme o CNPJ (14 dígitos) ou CPF (11 dígitos) do cliente — vira a identificação da pasta:','');
+  if(resp===null) return;
+  var dg=String(resp||'').replace(/\D/g,'');
+  if(dg.length!==14 && dg.length!==11){ alert('Informe um CNPJ (14 dígitos) ou um CPF (11 dígitos).'); return; }
+  var novo = dg.length===14 ? dg.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/,'$1.$2.$3/$4-$5') : dg.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/,'$1.$2.$3-$4');
+  var dup=(DADOS.processos||[]).find(function(x){ return x!==atual && String(x.numero||'').replace(/\D/g,'')===dg; });
+  if(dup && !confirm('Já existe um caso/processo identificado por '+novo+' ('+(dup.cliente||'')+').\nA pasta de documentos seria COMPARTILHADA. Continuar?')) return;
+  if(!confirm('Confirmar: "'+String(atual.cliente||'').slice(0,60)+'" vira PASTA DE ASSESSORIA identificada por '+novo+'.\n\n• sai do acompanhamento judicial (vira caso)\n• os documentos são movidos para a nova pasta\n• o histórico é mantido')) return;
+  var oldNum=atual.numero, oldKey=_docChaveProc(oldNum);
+  try{
+    var sb=window.__sb; if(!sb||!atual._id){ alert('Sessão/registro não encontrado.'); return; }
+    var r=await sb.from('processos').update({numero:novo, fonte:'caso'}).eq('id',atual._id);
+    if(r&&r.error){ alert('Não foi possível salvar: '+r.error.message); return; }
+    try{ await sb.from('anexos').update({processo_numero:novo}).eq('processo_numero',oldNum); }catch(e){}
+    /* move a pasta de documentos no servidor para a nova identificação */
+    if(oldKey && oldKey!==dg){
+      try{
+        var tok=await docToken();
+        var mv=await fetch('/api/docs',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({op:'rename',path:oldKey,nome:dg})});
+        if(!mv.ok && mv.status!==404){ var mj=await mv.json().catch(function(){return {};}); alert('Aviso: a pasta de documentos não foi movida ('+((mj&&mj.erro)||('HTTP '+mv.status))+').\nO caso foi convertido mesmo assim — me avise para mover os arquivos.'); }
+      }catch(e){}
+    }
+    atual.numero=novo; atual.ehCaso=true; atual.fonte='caso';
+    try{ if(typeof marcaCasoLocal==='function') marcaCasoLocal(novo); }catch(e){}
+    var i=(DADOS.processos||[]).indexOf(atual); if(i>=0) abrir(i);
+    alert('✓ Agora é uma pasta principal de assessoria (caso), identificada por '+novo+'.');
+  }catch(e){ alert('Erro: '+(e&&e.message||e)); }
 }
 /* cabeçalho da ficha: número normal (copiável) quando há CNJ; se NÃO há número,
    mostra campo em branco + botão para transformar em processo e buscar no DJEN. */
