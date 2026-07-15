@@ -2954,7 +2954,19 @@ async function jusbrBaixar(btn,uuid,href,nome){
     var r=await fetch('/api/jusbr/documento',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+jwt},body:JSON.stringify({numero:window.__jusbrNum,uuid:uuid,href:href,nome:nome})});
     var d=await respJson(r);
     if(d.__naoJson){ alert(_msgRotaFaltando()); btn.disabled=false; btn.textContent=t0; return; }
-    if(!r.ok){ alert('jus.br: '+((d&&d.erro)||'falha ao puxar')); btn.disabled=false; btn.textContent=t0; return; }
+    if(!r.ok){
+      /* alguns .html (expediente/despacho) o jus.br só entrega dentro do visor logado —
+         nesses, abrimos direto no jus.br, onde o conteúdo carrega de verdade. */
+      if(d && d.motivo==='visor'){
+        var _digs=String(window.__jusbrNum||'').replace(/\D/g,'');
+        var _numf=_digs.length===20?_digs.replace(/^(\d{7})(\d{2})(\d{4})(\d)(\d{2})(\d{4})$/,'$1-$2.$3.$4.$5.$6'):_digs;
+        if(confirm('Este documento ("'+nome+'") o jus.br só entrega dentro do visor logado — não dá para guardar no sistema.\n\nAbrir no jus.br agora para ler?')){
+          window.open('https://portaldeservicos.pdpj.jus.br/consulta/autosdigitais?processo='+encodeURIComponent(_numf),'_blank');
+        }
+        btn.disabled=false; btn.textContent=t0; return;
+      }
+      alert('jus.br: '+((d&&d.erro)||'falha ao puxar')); btn.disabled=false; btn.textContent=t0; return;
+    }
     var acao=btn.closest('.jusbr-acao');
     if(acao) acao.innerHTML='<a class="btn sm ghost" style="font-size:11px" href="#" onclick="jusbrAbrir(event,\''+d.id+'\',\''+esc(d.tipo||'')+'\')">📄 ver</a> <a class="btn sm ghost" style="font-size:11px;color:#b5342b" href="#" onclick="jusbrExcluir(event,\''+d.id+'\',this)">🗑</a>';
   }catch(e){ alert('Falha: '+(e&&e.message||e)); btn.disabled=false; btn.textContent=t0; }
