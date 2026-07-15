@@ -211,6 +211,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
       <a data-s="diligencias" onclick="go('diligencias')"><span class="ic">◔</span> Diligências</a>
       <a data-s="relatorio" onclick="go('relatorio')"><span class="ic">◫</span> Relatório mensal</a>
       <a data-s="crm" onclick="go('crm')"><span class="ic">▣</span> Comercial</a>
+      <a data-s="financeiro" onclick="go('financeiro')"><span class="ic">＄</span> Financeiro</a>
       <a data-s="contatos" onclick="go('contatos')"><span class="ic">☎</span> Contatos</a>
       <a data-s="etiquetas" onclick="go('etiquetas')"><span class="ic">⬤</span> Etiquetas</a>
       <a data-s="fases" onclick="go('fases')"><span class="ic">◑</span> Revisar fases</a>
@@ -354,6 +355,17 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
         <div id="cap-fechados" style="margin-bottom:14px"></div>
         <div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><p class="sectlabel" style="margin:0">Funil de captação (arraste os leads; clique para editar)</p><div><button class="btn sm" onclick="abrirInbox()">&#128229; Caixa de entrada <span id="inbox-badge" style="display:none;font-size:10px;font-weight:700;background:var(--gold);color:#fff;border-radius:10px;padding:0 6px;margin-left:2px"></span></button> <button class="btn sm" onclick="novoLead()">+ Novo lead</button> <button class="btn sm ghost" onclick="addEtapa()">+ Etapa</button></div></div><div class="kanwrap"><div class="kanban" id="funil"></div></div></div>
       </div>
+    </section>
+
+    <section id="s-financeiro" class="hidden">
+      <!-- Financeiro (Fase 1 - Cora): cobranças boleto+PIX e recebimentos por cliente -->
+      <div class="agtools">
+        <div class="switch"><button id="fin-sw-a" class="on" onclick="setFinView('abertas')">Em aberto</button><button id="fin-sw-p" onclick="setFinView('pagas')">Recebidas</button></div>
+        <button class="btn sm" style="margin-left:auto;background:#FE3E6D;border-color:#FE3E6D;color:#fff" onclick="abrirNovaCobranca()">&#9673; Nova cobrança (Cora)</button>
+      </div>
+      <div class="kpis" id="fin-kpis"></div>
+      <div class="card"><table><thead><tr><th>Cliente</th><th>Descrição</th><th>Valor</th><th>Vencimento</th><th>Status</th><th>Pago em</th><th>Boleto/PIX</th><th>NF</th></tr></thead><tbody id="fin-body"></tbody></table></div>
+      <p class="note" id="fin-nota" style="margin-top:8px"></p>
     </section>
 
     <section id="s-etiquetas" class="hidden">
@@ -508,6 +520,21 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
     <div id="t-files" style="font-size:13px"></div>
     <div class="flags" style="margin-top:6px"><label><input type="checkbox" id="t-hist"> Registrar também no histórico do processo</label></div>
     <div class="foot"><button class="btn ghost" onclick="fecharTarefa()">Cancelar</button><button class="btn" id="t-btn-concluir" style="display:none;background:#127a53" onclick="concluirTarefaModal()">✓ Concluir atividade</button><button class="btn" id="t-btn-salvar" onclick="salvarTarefa()">Criar e distribuir</button></div>
+  </div>
+</div>
+<div id="modal-cobranca" class="overlay hidden">
+  <div class="modal">
+    <h2>&#9673; Nova cobrança (Cora)</h2>
+    <p class="note" style="margin-top:0">Gera um boleto com PIX pelo Banco Cora. Quando o cliente pagar, a baixa é automática e o valor entra no financeiro dele.</p>
+    <label>Cliente</label>
+    <select id="cob-cliente"><option value="">Carregando clientes…</option></select>
+    <label style="margin-top:10px">Descrição da cobrança</label>
+    <input id="cob-desc" placeholder="Ex.: Honorários contratuais — parcela 1/3">
+    <div class="row2">
+      <div><label>Valor (R$)</label><input id="cob-valor" inputmode="decimal" placeholder="0,00"></div>
+      <div><label>Vencimento</label><input id="cob-venc" type="date" min="2000-01-01" max="2100-12-31"></div>
+    </div>
+    <div class="foot"><button class="btn ghost" onclick="fecharNovaCobranca()">Cancelar</button><button class="btn" id="cob-btn" style="background:#FE3E6D;border-color:#FE3E6D" onclick="emitirCobranca()">Emitir cobrança</button><span id="cob-msg" class="note" style="margin-left:10px;align-self:center"></span></div>
   </div>
 </div>
 <div id="modal-partes" class="overlay hidden">
@@ -4511,11 +4538,11 @@ function go(s){
 function go(s){
   try{ localStorage.setItem('cmp_secao', s); if(s!=='proc-det') localStorage.removeItem('cmp_proc'); }catch(e){}
   var showId=(s==='contatos')?'crm':s;
-  ["painel","triagem","agenda","processos","proc-det","crm","etiquetas","procedimentos","diligencias","relatorio","encerrados","inove","james","cadastros","fases","sugestoes"].forEach(function(id){var e=document.getElementById("s-"+id);if(e)e.classList.add("hidden")});
+  ["painel","triagem","agenda","processos","proc-det","crm","financeiro","etiquetas","procedimentos","diligencias","relatorio","encerrados","inove","james","cadastros","fases","sugestoes"].forEach(function(id){var e=document.getElementById("s-"+id);if(e)e.classList.add("hidden")});
   var sec=document.getElementById("s-"+showId); if(sec) sec.classList.remove("hidden");
   document.querySelectorAll("#nav a").forEach(function(a){a.classList.remove("active")});
   var link=document.querySelector('#nav a[data-s="'+s+'"]');if(link)link.classList.add("active");
-  var t={painel:"Painel",triagem:"Publicações",agenda:"Agenda — Kanban (etapas CMP)",processos:"Processos",crm:"Comercial",contatos:"Contatos",procedimentos:"Procedimentos CMP",etiquetas:"Etiquetas","proc-det":"Processo",diligencias:"Diligências",relatorio:"Relatório mensal para clientes",encerrados:"Processos encerrados",inove:"Processos Inove (terceiros)",james:"Processos contra James Laurence",cadastros:"Cadastros — Tribunais de Justiça",inovesol:"Solicitar novas funcionalidades",fases:"Revisar fases dos processos"};
+  var t={painel:"Painel",triagem:"Publicações",agenda:"Agenda — Kanban (etapas CMP)",processos:"Processos",crm:"Comercial",financeiro:"Financeiro — cobranças e recebimentos",contatos:"Contatos",procedimentos:"Procedimentos CMP",etiquetas:"Etiquetas","proc-det":"Processo",diligencias:"Diligências",relatorio:"Relatório mensal para clientes",encerrados:"Processos encerrados",inove:"Processos Inove (terceiros)",james:"Processos contra James Laurence",cadastros:"Cadastros — Tribunais de Justiça",inovesol:"Solicitar novas funcionalidades",fases:"Revisar fases dos processos"};
   /* sub-pastas de Processos (Inove/Encerrados/James): só aparecem na área de Processos */
   try{ var _sub=document.getElementById('proc-subnav'); if(_sub) _sub.style.display=(['processos','inove','encerrados','james'].indexOf(s)>=0)?'block':'none'; }catch(e){}
   var st=document.getElementById("scr-title"); if(st) st.textContent=t[s]||"Painel";
@@ -4524,6 +4551,7 @@ function go(s){
   if(s==="crm"){ if(typeof setCrmView==='function') setCrmView('captacao'); else renderCrm(); }
   if(s==="contatos"){ if(typeof setCrmView==='function') setCrmView('contatos'); else renderCrm(); }
   if(s==="etiquetas")renderEtiquetas(); if(s==="agenda")renderAgendaView(); if(s==="diligencias")renderDiligencias();
+  if(s==="financeiro" && typeof renderFinanceiro==='function')renderFinanceiro();
   if(s==="encerrados")renderEncerrados();
   if(s==="inove")renderInove();
   if(s==="james")renderJames();
@@ -7297,6 +7325,122 @@ function contatoDoProcesso(p){
     syncUser(); setTimeout(syncUser,1500); setInterval(syncUser,10000);
   }
 })();
+</script>
+<script>
+/* ===== Financeiro (Fase 1 - Cora): cobranças boleto+PIX e recebimentos ===== */
+var FIN_VIEW='abertas', FIN_ROWS=[];
+
+/* token do usuário (mesmo padrão das outras chamadas de API) */
+async function finToken(){ try{ var s=await window.__sb.auth.getSession(); return (s&&s.data&&s.data.session&&s.data.session.access_token)||''; }catch(e){ return ''; } }
+
+/* R$ a partir de centavos */
+function finReais(c){ var n=(parseInt(c,10)||0)/100; return n.toLocaleString('pt-BR',{style:'currency',currency:'BRL'}); }
+
+/* "1.234,56" | "1234,56" | "1234.56" -> centavos (inteiro) */
+function finCentavos(s){ s=String(s||'').trim().replace(/[^0-9.,]/g,''); if(s.indexOf(',')>-1){ s=s.replace(/\./g,'').replace(',','.'); } var n=parseFloat(s); if(isNaN(n)) return 0; return Math.round(n*100); }
+
+function setFinView(v){ FIN_VIEW=v;
+  var a=document.getElementById('fin-sw-a'), p=document.getElementById('fin-sw-p');
+  if(a)a.classList.toggle('on',v==='abertas'); if(p)p.classList.toggle('on',v==='pagas');
+  finRenderTabela();
+}
+
+async function renderFinanceiro(){
+  var body=document.getElementById('fin-body'); if(body) body.innerHTML='<tr><td colspan="8" class="note">Carregando…</td></tr>';
+  try{
+    var tok=await finToken();
+    var r=await fetch('/api/cora/cobrancas',{headers:{Authorization:'Bearer '+tok},cache:'no-store'});
+    var j=await r.json();
+    FIN_ROWS=(j&&j.cobrancas)||[];
+  }catch(e){ FIN_ROWS=[]; }
+  finRenderTabela();
+}
+
+function finRenderTabela(){
+  var body=document.getElementById('fin-body'); if(!body) return;
+  var abertas=FIN_ROWS.filter(function(x){return x.status==='aberta';});
+  var pagas=FIN_ROWS.filter(function(x){return x.status==='paga';});
+  /* KPIs: a receber (abertas) e recebido (pagas) */
+  var totAb=abertas.reduce(function(s,x){return s+(parseInt(x.valor_centavos,10)||0);},0);
+  var totPg=pagas.reduce(function(s,x){return s+(parseInt(x.valor_pago_centavos||x.valor_centavos,10)||0);},0);
+  var k=document.getElementById('fin-kpis');
+  if(k) k.innerHTML='<div class="kpi"><div class="n">'+finReais(totAb)+'</div><div class="l">A receber ('+abertas.length+')</div></div>'+
+                    '<div class="kpi"><div class="n">'+finReais(totPg)+'</div><div class="l">Recebido ('+pagas.length+')</div></div>';
+  var lista=(FIN_VIEW==='pagas')?pagas:abertas;
+  if(!lista.length){ body.innerHTML='<tr><td colspan="8" class="note">'+(FIN_VIEW==='pagas'?'Nenhum pagamento recebido ainda.':'Nenhuma cobrança em aberto. Clique em “Nova cobrança (Cora)”.')+'</td></tr>'; return; }
+  body.innerHTML=lista.map(function(x){
+    var venc=x.vencimento?String(x.vencimento).split('-').reverse().join('/'):'—';
+    var pago=x.pago_em?new Date(x.pago_em).toLocaleDateString('pt-BR'):'—';
+    var cli=finNomeCliente(x.contato_id);
+    var pagar='';
+    if(x.boleto_url) pagar+='<a class="btn sm ghost" href="'+x.boleto_url+'" target="_blank" rel="noopener">Boleto</a> ';
+    if(x.pix_emv) pagar+='<button class="btn sm ghost" onclick="finCopiarPix(this,\''+encodeURIComponent(x.pix_emv)+'\')">Copiar PIX</button>';
+    if(!pagar) pagar='<span class="note">—</span>';
+    var badge=(x.status==='paga')?'<span style="color:#0F6E56;font-weight:700">✓ paga</span>':(x.status==='cancelada'?'<span class="note">cancelada</span>':'<span style="color:#185FA5;font-weight:700">em aberto</span>');
+    var nf=(x.nf_status==='emitida')?('NF '+(x.nf_numero||'')):(x.status==='paga'?'<span style="color:#8a5a00">NF pendente</span>':'—');
+    return '<tr><td>'+finEsc(cli)+'</td><td>'+finEsc(x.descricao||'')+'</td><td>'+finReais(x.valor_centavos)+'</td><td>'+venc+'</td><td>'+badge+'</td><td>'+pago+'</td><td>'+pagar+'</td><td>'+nf+'</td></tr>';
+  }).join('');
+}
+
+/* nomes dos clientes (busca sob demanda no Supabase e cacheia) */
+var FIN_CLIENTES=null;
+function finNomeCliente(id){ if(!id) return '—'; if(FIN_CLIENTES&&FIN_CLIENTES[id]) return FIN_CLIENTES[id]; return '(cliente)'; }
+function finEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+async function finCarregarClientes(){
+  var sel=document.getElementById('cob-cliente');
+  try{
+    var r=await window.__sb.from('contatos').select('id,nome,cpf_cnpj').order('nome');
+    var rows=(r&&r.data)||[];
+    FIN_CLIENTES={}; rows.forEach(function(c){ FIN_CLIENTES[c.id]=c.nome; });
+    if(sel){
+      sel.innerHTML='<option value="">Selecione o cliente…</option>'+rows.map(function(c){
+        var doc=String(c.cpf_cnpj||'').replace(/\D/g,''); var falta=(doc.length!==11&&doc.length!==14)?' (sem CPF/CNPJ)':'';
+        return '<option value="'+c.id+'">'+finEsc(c.nome)+falta+'</option>';
+      }).join('');
+    }
+    /* re-render pra trocar "(cliente)" pelos nomes reais */
+    finRenderTabela();
+  }catch(e){ if(sel) sel.innerHTML='<option value="">Falha ao carregar clientes</option>'; }
+}
+
+function abrirNovaCobranca(){
+  document.getElementById('cob-desc').value='';
+  document.getElementById('cob-valor').value='';
+  document.getElementById('cob-venc').value='';
+  var m=document.getElementById('cob-msg'); if(m) m.textContent='';
+  document.getElementById('modal-cobranca').classList.remove('hidden');
+  finCarregarClientes();
+}
+function fecharNovaCobranca(){ document.getElementById('modal-cobranca').classList.add('hidden'); }
+
+async function emitirCobranca(){
+  var msg=document.getElementById('cob-msg'), btn=document.getElementById('cob-btn');
+  var contato_id=document.getElementById('cob-cliente').value;
+  var descricao=(document.getElementById('cob-desc').value||'').trim();
+  var vencimento=document.getElementById('cob-venc').value;
+  var centavos=finCentavos(document.getElementById('cob-valor').value);
+  if(!contato_id){ msg.textContent='Selecione o cliente.'; return; }
+  if(!descricao){ msg.textContent='Descreva a cobrança.'; return; }
+  if(!(centavos>0)){ msg.textContent='Informe um valor válido.'; return; }
+  if(!vencimento){ msg.textContent='Informe o vencimento.'; return; }
+  btn.disabled=true; var txt=btn.textContent; btn.textContent='Emitindo…'; msg.textContent='';
+  try{
+    var tok=await finToken();
+    var r=await fetch('/api/cora/cobrancas',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({contato_id:contato_id,descricao:descricao,valor_centavos:centavos,vencimento:vencimento})});
+    var j=await r.json();
+    if(!r.ok||!j.ok){ msg.textContent=(j&&j.erro)||('Falha ('+r.status+').'); btn.disabled=false; btn.textContent=txt; return; }
+    fecharNovaCobranca();
+    await renderFinanceiro();
+  }catch(e){ msg.textContent='Erro de rede. Tente de novo.'; }
+  btn.disabled=false; btn.textContent=txt;
+}
+
+function finCopiarPix(el,enc){
+  var emv=decodeURIComponent(enc);
+  try{ navigator.clipboard.writeText(emv); var t=el.textContent; el.textContent='Copiado!'; setTimeout(function(){el.textContent=t;},1500); }
+  catch(e){ prompt('Copie o código PIX:', emv); }
+}
 </script>
 </body>
 </html>
