@@ -1298,7 +1298,7 @@ function abrir(i){
   var __enc=/encerr/i.test(p.status||'');
   html+='<div class="card" style="position:relative">'+honQuadroHTML(p)+'<div class="parties" style="padding-right:0"><span style="display:inline-block;vertical-align:top;line-height:1.15"><span class="cli">'+nomeDisplay(p.cliente)+'</span><br><span class="tag-cli" style="margin:3px 0 0;font-size:9px;padding:1px 7px;display:inline-block">cliente principal</span></span>'+
     '<span class="vs" style="vertical-align:top">×</span><span style="display:inline-block;vertical-align:top;line-height:1.15"><span class="op">'+nomeDisplay(p.oponente||'—')+'</span><br><span style="font-size:9.5px;color:var(--muted);display:inline-block;margin-top:3px">parte contrária</span></span>'+
-    '<button class="btn sm ghost" style="margin-left:12px;font-size:11px;padding:4px 9px;vertical-align:top" onclick="editarCliente()" title="Editar o nome do cliente/autor — ex.: colocar o casal (Fulano e Fulana)">✎ editar autor</button>'+
+    '<button class="btn sm ghost" style="margin-left:12px;font-size:11px;padding:4px 9px;vertical-align:top" onclick="editarPartesContatos()" title="Editar as partes, o assunto e os contatos do processo — tudo num lugar só">✎ editar dados</button>'+
     '<button class="btn sm ghost" style="margin-left:6px;font-size:11px;padding:4px 9px;vertical-align:top" onclick="puxarNomeCliente()" title="Lê a procuração (ou a petição inicial) e sugere o nome completo do cliente, incluindo o casal">👤 Puxar nome</button>'+
     '<button class="btn sm ghost" style="margin-left:6px;font-size:11px;padding:4px 9px;vertical-align:top" onclick="inverterPolos()" title="Trocar cliente ↔ oponente (o cliente fica sempre à esquerda)">⇄ inverter polos</button>'+
     ((!p.oponente||!String(p.oponente).trim())?'<button class="btn sm ghost" style="margin-left:6px;font-size:11px;padding:4px 9px;vertical-align:top" onclick="sugerirPartes()" title="Ler o histórico do processo e sugerir os nomes das partes que estão faltando">✨ sugerir partes pelo histórico</button>':'')+'</div>'+
@@ -5390,12 +5390,7 @@ function renderCtlChips(){
   ed.textContent=toks.length?'+ inserir contatos':'+ telefones/e-mails do cliente';
   ed.onclick=editarCtl;
   el.appendChild(ed);
-  var ed2=document.createElement('button');
-  ed2.style.cssText='background:#fff;color:#697180;border:1px dashed #cdd4de;border-radius:16px;padding:4px 10px;font-size:12px;cursor:pointer';
-  ed2.textContent='✎ editar contatos';
-  ed2.title='Corrigir nomes das partes, telefones e e-mails';
-  ed2.onclick=editarPartesContatos;
-  el.appendChild(ed2);
+  /* o "✎ editar contatos" foi unificado no "✎ editar dados" do topo da ficha */
   var ed3=document.createElement('button');
   ed3.style.cssText='background:#eef4fb;color:#185FA5;border:1px solid #cfe0f2;border-radius:16px;padding:4px 10px;font-size:12px;cursor:pointer';
   ed3.textContent='🔎 Puxar contato do cliente';
@@ -5413,9 +5408,10 @@ function editarPartesContatos(){
   var bx=document.createElement('div');
   bx.style.cssText='background:#fff;border-radius:14px;padding:22px 24px;width:min(480px,92vw);max-height:88vh;overflow:auto;box-shadow:0 12px 40px rgba(0,0,0,.25);font-size:13px';
   function campo(lbl,val,id,ph){ return '<label style="display:block;margin-bottom:10px;font-weight:600;color:#3a4353">'+lbl+'<input id="'+id+'" value="'+String(val||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;')+'" placeholder="'+(ph||'')+'" style="display:block;width:100%;margin-top:4px;padding:8px 10px;border:1px solid #d6dce6;border-radius:8px;font-size:13px;font-weight:400;box-sizing:border-box"></label>'; }
-  bx.innerHTML='<p class="sectlabel" style="margin-top:0">Editar partes e contatos</p>'
+  bx.innerHTML='<p class="sectlabel" style="margin-top:0">Editar dados (partes, assunto e contatos)</p>'
     +campo('Cliente (parte principal)',atual.cliente,'edt-cli')
     +campo('Parte contrária',atual.oponente,'edt-op')
+    +campo('Assunto',atual.tipo,'edt-ass','ex.: Assessoria empresarial · Cobrança · Indenização')
     +'<div style="font-weight:600;color:#3a4353;margin:14px 0 6px">Contatos (telefone ou e-mail — deixe vazio para remover)</div>'
     +campo('Contato 1',toks[0]||'','edt-c1','telefone ou e-mail')
     +campo('Contato 2',toks[1]||'','edt-c2','telefone ou e-mail')
@@ -5431,16 +5427,20 @@ async function salvarPartesContatos(){
   if(!atual) return;
   var sb=window.__sb; if(!sb||!atual._id){ alert('Sessão não encontrada — recarregue a página.'); return; }
   var g=function(id){ var e=document.getElementById(id); return e?e.value.trim():''; };
-  var cli=g('edt-cli'), op=g('edt-op');
+  var cli=g('edt-cli'), op=g('edt-op'), ass=g('edt-ass');
   var toks=[g('edt-c1'),g('edt-c2'),g('edt-c3'),g('edt-c4')].filter(Boolean);
   var seen={}, unicos=[];
   toks.forEach(function(t){ var k=/@/.test(t)?t.toLowerCase():t.replace(/\D/g,''); if(!k)return; if(!seen[k]){seen[k]=1;unicos.push(t);} });
   var novoCtl=unicos.join(', ');
-  var w=await sb.from('processos').update({cliente_nome:cli||null,oponente:op||null,contatos_livres:novoCtl||null}).eq('id',atual._id);
+  /* .select('id') confirma que a linha foi mesmo gravada — sem isso o banco pode
+     responder "ok" com 0 linhas (permissão) e a edição "voltar sem editar" */
+  var w=await sb.from('processos').update({cliente_nome:cli||null,oponente:op||null,assunto:ass||null,contatos_livres:novoCtl||null}).eq('id',atual._id).select('id');
   if(w.error){ alert('Erro ao salvar: '+w.error.message); return; }
-  atual.cliente=cli; atual.oponente=op; atual.ctl=novoCtl;
+  if(!w.data||!w.data.length){ alert('Nada foi gravado (o banco não confirmou a alteração — possível problema de permissão). Recarregue a página e tente de novo; se repetir, me avise.'); return; }
+  atual.cliente=cli; atual.oponente=op; atual.tipo=ass; atual.ctl=novoCtl;
   var m=document.getElementById('edt-modal'); if(m) m.remove();
   var ix=DADOS.processos.indexOf(atual); if(ix>=0) abrir(ix);
+  try{ if(typeof renderProc==='function') renderProc(); }catch(e){}
 }
 async function editarCtl(){
   if(!atual) return;
