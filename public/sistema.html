@@ -211,6 +211,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
       <a data-s="diligencias" onclick="go('diligencias')"><span class="ic">◔</span> Diligências</a>
       <a data-s="relatorio" onclick="go('relatorio')"><span class="ic">◫</span> Relatório mensal</a>
       <a data-s="crm" onclick="go('crm')"><span class="ic">▣</span> Comercial</a>
+      <a onclick="window.open('/assinatura','_blank')" title="Assinador de documentos do escritório — procurações e contratos com assinatura eletrônica"><span class="ic">✍</span> Assinaturas</a>
       <a data-s="contatos" onclick="go('contatos')"><span class="ic">☎</span> Contatos</a>
       <a data-s="etiquetas" onclick="go('etiquetas')"><span class="ic">⬤</span> Etiquetas</a>
       <a data-s="fases" onclick="go('fases')"><span class="ic">◑</span> Revisar fases</a>
@@ -569,7 +570,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
   <div class="row2"><div><label>Telefone</label><input id="c-tel"></div><div><label>E-mail</label><input id="c-email"></div></div>
   <label>Etiquetas</label><div id="c-etq" style="display:flex;flex-wrap:wrap;gap:6px"></div>
   <label style="margin-top:10px">Comercial — jogar no funil de captação na etapa</label><div style="display:flex;gap:8px"><select id="c-etapa" style="flex:1"></select><button class="btn ghost" onclick="contatoParaFunil()">Adicionar ao funil</button></div>
-  <div class="foot"><button class="btn gold" onclick="novaTarefaContato()">Criar atividade de captação</button><button class="btn ghost" onclick="fecharContato()">Cancelar</button><button class="btn" onclick="salvarContato()">Salvar</button></div>
+  <div class="foot"><button class="btn gold" onclick="novaTarefaContato()">Criar atividade de captação</button><button class="btn ghost" onclick="assinaturaDoContato()" title="Gerar procuração para este contato assinar eletronicamente (abre o módulo Assinaturas já preenchido)">✍ Procuração</button><button class="btn ghost" onclick="fecharContato()">Cancelar</button><button class="btn" onclick="salvarContato()">Salvar</button></div>
 </div></div>
 <div id="modal-lead" class="overlay hidden"><div class="modal">
   <h2 id="ml-titulo">Lead</h2>
@@ -1307,7 +1308,7 @@ function abrir(i){
     '<span id="proc-vinculados" style="display:inline-flex;gap:6px;flex-wrap:wrap;align-items:center"></span></div>'+
     '<div id="ctl-chips" style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center"></div>'+
     ''+
-    '<div style="margin-top:10px"><button class="btn sm" onclick="novaTarefaDoProcesso()">+ Nova tarefa neste processo</button> <button class="btn sm cmp-only" style="background:#faf3ee;color:#D97757;border:1px solid #edd7c9;font-weight:700" onclick="agendarClaude()" title="Deixar mensagem para o cliente a qualquer hora — o Claude envia somente em horário comercial"><span style="font-size:13px">✳</span> Agendar com Claude</button> <button class="btn sm" style="background:#eef4fb;color:#185FA5;border:1px solid #cfe0f2;font-weight:700" onclick="abrirTribunal(\''+p.numero+'\')" title="Abrir o sistema do tribunal (PJe/e-SAJ/Projudi) no grau deste processo — o número é copiado para você colar na busca">&#9878; Abrir no tribunal</button> <button class="btn sm cmp-only" style="background:#eef7f1;color:#0F6E56;border:1px solid #cfe8db;font-weight:700" onclick="abrirAcompanhamento(\''+p.numero+'\')" title="Ativar aviso por e-mail à cliente quando houver movimentação oficial (sem expor o teor)">&#128231; Acompanhamento</button> <button class="btn sm cmp-only" style="background:#eaf4f4;color:#0b7285;border:1px solid #cfe6e6;font-weight:700" onclick="abrirAtualizarCliente(\''+p.numero+'\')" title="Montar um e-mail de atualização com as últimas movimentações, em linguagem simples, para revisar e enviar">&#9993; Atualizar cliente</button></div>'+
+    '<div style="margin-top:10px"><button class="btn sm" onclick="novaTarefaDoProcesso()">+ Nova tarefa neste processo</button> <button class="btn sm cmp-only" style="background:#faf3ee;color:#D97757;border:1px solid #edd7c9;font-weight:700" onclick="agendarClaude()" title="Deixar mensagem para o cliente a qualquer hora — o Claude envia somente em horário comercial"><span style="font-size:13px">✳</span> Agendar com Claude</button> <button class="btn sm" style="background:#eef4fb;color:#185FA5;border:1px solid #cfe0f2;font-weight:700" onclick="abrirTribunal(\''+p.numero+'\')" title="Abrir o sistema do tribunal (PJe/e-SAJ/Projudi) no grau deste processo — o número é copiado para você colar na busca">&#9878; Abrir no tribunal</button> <button class="btn sm cmp-only" style="background:#eef7f1;color:#0F6E56;border:1px solid #cfe8db;font-weight:700" onclick="abrirAcompanhamento(\''+p.numero+'\')" title="Ativar aviso por e-mail à cliente quando houver movimentação oficial (sem expor o teor)">&#128231; Acompanhamento</button> <button class="btn sm cmp-only" style="background:#eaf4f4;color:#0b7285;border:1px solid #cfe6e6;font-weight:700" onclick="abrirAtualizarCliente(\''+p.numero+'\')" title="Montar um e-mail de atualização com as últimas movimentações, em linguagem simples, para revisar e enviar">&#9993; Atualizar cliente</button> <button class="btn sm cmp-only" style="background:#f7f3e8;color:#8a6d00;border:1px solid #e8dcbb;font-weight:700" onclick="abrirAssinatura(\''+p.numero+'\')" title="Gerar procuração ou documento para assinatura eletrônica, já com o cliente deste processo no contexto">&#9997; Procuração</button></div>'+
     /* ponto 12: bloco de processos vinculados no canto inferior direito da aba (perto do botão Encerrar) */
     '<div id="proc-vinculados-rodape" style="position:absolute;bottom:12px;right:14px;max-width:60%;display:flex;gap:6px;flex-wrap:wrap;align-items:center;justify-content:flex-end;font-size:12px"></div>'+
     '</div>';
@@ -6377,6 +6378,24 @@ var TRIBSIS={
   trt15:{s:'PJe',g1:'https://pje.trt15.jus.br/primeirograu/login.seam',g2:'https://pje.trt15.jus.br/segundograu/login.seam',c:'https://pje.trt15.jus.br/consultaprocessual/'},
   trf5:{s:'PJe',g1:'https://pje1g.trf5.jus.br/pje/',p:'https://www.trf5.jus.br/index.php/pje'}
 };
+/* ===== Módulo Assinaturas (/assinatura) — assinador de documentos do escritório ===== */
+/* Abre o assinador já com o cliente do processo no contexto (nome + nº do processo). */
+function abrirAssinatura(num){
+  var digs=String(num||'').replace(/\D/g,'');
+  var p=(typeof atual!=='undefined'&&atual&&String(atual.numero||'').replace(/\D/g,'')===digs)?atual:(((typeof DADOS!=='undefined'&&DADOS.processos)||[]).filter(function(x){return String(x.numero||'').replace(/\D/g,'')===digs;})[0]||{});
+  var q=[];
+  if(p.cliente) q.push('nome='+encodeURIComponent(p.cliente));
+  if(num) q.push('processo='+encodeURIComponent(num));
+  window.open('/assinatura'+(q.length?('?'+q.join('&')):''),'_blank');
+}
+/* Abre o assinador com os dados do contato aberto no CRM (nome/e-mail/telefone). */
+function assinaturaDoContato(){
+  var q=[]; var n=_v('c-nome'), e=_v('c-email'), t=_v('c-tel');
+  if(n&&n!=='—') q.push('nome='+encodeURIComponent(n));
+  if(e&&e!=='—') q.push('email='+encodeURIComponent(e));
+  if(t&&t!=='—') q.push('tel='+encodeURIComponent(t));
+  window.open('/assinatura'+(q.length?('?'+q.join('&')):''),'_blank');
+}
 function abrirTribunal(numero){
   var digs=String(numero||'').replace(/\D/g,'');
   var p=((typeof DADOS!=='undefined'&&DADOS.processos)||[]).filter(function(x){return String(x.numero||'').replace(/\D/g,'')===digs;})[0]||{};
