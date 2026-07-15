@@ -1027,7 +1027,7 @@ async function cobrarDiligencia(num){
   if(!confirm('Reenviar a cobrança de andamento para a vara ('+c.email+'), pelo contato@?')) return;
   try{
     var tok=await docToken();
-    var r=await fetch('/api/enviar-email',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({para:c.email,assunto:'Processo nº '+num+' — reiteração de pedido de andamento — CMP Advogados',corpo:msg})});
+    var r=await fetch('/api/enviar-email',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({para:c.email,assunto:'Processo nº '+num+' — reiteração de pedido de andamento — CMP Advogados',corpo:msg,numero:num})});
     var j=await r.json().catch(function(){return {};});
     if(!r.ok||j.erro){ alert('Não enviou: '+(j.erro||('HTTP '+r.status))+'\n\nSe o envio pelo servidor não estiver ativo, use o botão "E-mail" na ficha do processo.'); return; }
     var sb=window.__sb; if(sb&&p._id){ await sb.from('diligencias').update({ultima_cobranca:new Date().toISOString(),canal:'email'}).eq('processo_id',p._id).neq('status','resolvida'); }
@@ -6365,10 +6365,11 @@ async function enviarAgoraAtualizacao(){
   if(!confirm('Enviar agora para '+email+' pelo contato@cmpadvogados.com.br?')) return;
   try{
     var tok=await docToken();
-    var r=await fetch('/api/enviar-email',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({para:email,assunto:assunto,corpo:corpo})});
+    var numero=(window.__atzCtx&&window.__atzCtx.p&&window.__atzCtx.p.numero)||'';
+    var r=await fetch('/api/enviar-email',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({para:email,assunto:assunto,corpo:corpo,numero:numero})});
     var j=await r.json().catch(function(){return {};});
     if(!r.ok||j.erro){ alert('Não enviou: '+(j.erro||('HTTP '+r.status))+'\n\nSe o envio pelo servidor ainda não foi ativado, use "Abrir no Gmail" por enquanto.'); return; }
-    alert('E-mail enviado de '+(j.de||'contato@cmpadvogados.com.br')+' para '+email+'.');
+    alert('E-mail enviado de '+(j.de||'contato@cmpadvogados.com.br')+' para '+email+'.'+(j.copiado_enviados===false?('\n\n⚠ Não foi possível salvar a cópia em Enviados ('+(j.copia_motivo||'')+'). O e-mail FOI enviado.'):'\n✓ Cópia salva em Enviados.'));
     await registrarEnvioAtualizacao(true);
     fecharAtualizar();
   }catch(e){ alert('Erro ao enviar: '+(e&&e.message||e)); }

@@ -11,11 +11,47 @@
 
 import { createClient } from '@supabase/supabase-js'
 import nodemailer from 'nodemailer'
+import { ImapFlow } from 'imapflow'
+import crypto from 'crypto'
 import fs from 'fs'
 import path from 'path'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
+
+// âncora de thread determinística: todos os e-mails do MESMO processo+cliente
+// compartilham a mesma raiz de References, então ficam agrupados como conversa no
+// webmail/Gmail (e as respostas do cliente entram na mesma cadeia).
+function raizThread(chave) {
+  const h = crypto.createHash('sha1').update(String(chave || '')).digest('hex').slice(0, 28)
+  return '<cmp-thread-' + h + '@cmpadvogados.com.br>'
+}
+
+// grava uma cópia do e-mail enviado na pasta "Enviados" (Sent) da caixa via IMAP.
+// Best-effort: se falhar, o envio já ocorreu — devolvemos o motivo para o painel.
+async function salvarEnviados(raw) {
+  const host = process.env.IMAP_HOST || (process.env.SMTP_HOST || '').replace(/^smtp\./i, 'imap.') || 'imap.hostinger.com'
+  const port = parseInt(process.env.IMAP_PORT || '993', 10)
+  const user = process.env.SMTP_USER, pass = process.env.SMTP_PASS
+  if (!host || !user || !pass) return { ok: false, motivo: 'IMAP não configurado' }
+  const client = new ImapFlow({ host, port, secure: port === 993, auth: { user, pass }, logger: false })
+  try {
+    await client.connect()
+    // descobre a pasta de enviados (special-use \Sent) com fallbacks comuns
+    let destino = 'INBOX.Sent'
+    try {
+      const lista = await client.list()
+      const esp = lista.find(m => (m.specialUse === '\\Sent') || /(^|[./])sent( items)?$/i.test(m.path) || /enviad/i.test(m.path))
+      if (esp && esp.path) destino = esp.path
+    } catch (e) {}
+    await client.append(destino, raw, ['\\Seen'])
+    return { ok: true, pasta: destino }
+  } catch (e) {
+    return { ok: false, motivo: (e && e.message) || String(e) }
+  } finally {
+    try { await client.logout() } catch (e) {}
+  }
+}
 
 async function usuario(request) {
   const auth = request.headers.get('authorization') || ''
@@ -47,6 +83,7 @@ export async function POST(request) {
   const para = String(body.para || '').trim()
   const assunto = String(body.assunto || '').trim() || 'Atualização do seu processo'
   const corpo = String(body.corpo || '')
+  const numero = String(body.numero || '').replace(/\D/g, '')
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(para)) return Response.json({ erro: 'e-mail do destinatário inválido' }, { status: 400 })
   if (!corpo.trim()) return Response.json({ erro: 'corpo vazio' }, { status: 400 })
 
@@ -74,17 +111,37 @@ export async function POST(request) {
     '</div>'
 
   const fromName = process.env.SMTP_FROM_NAME || 'Crispim Mendonça e Pinheiro Advogados'
+  // cabeçalhos de conversa: raiz por (processo|cliente) — agrupa envios e respostas
+  const raiz = raizThread((numero || 'sem-proc') + '|' + para.toLowerCase())
+  const messageId = '<' + crypto.randomUUID() + '@cmpadvogados.com.br>'
+  const dados = {
+    from: '"' + fromName + '" <' + smtpUser + '>',
+    to: para,
+    subject: assunto,
+    text: corpo,
+    html,
+    attachments,
+    messageId,
+    references: raiz,
+    inReplyTo: raiz,
+  }
+
+  // monta a mensagem UMA vez (raw MIME) para enviar E salvar em Enviados de forma idêntica
+  let raw
+  try {
+    const builder = nodemailer.createTransport({ streamTransport: true, buffer: true, newline: 'windows' })
+    const built = await builder.sendMail(dados)
+    raw = built && built.message
+    if (!raw) throw new Error('mensagem vazia')
+  } catch (e) {
+    return Response.json({ erro: 'falha ao montar a mensagem: ' + (e && e.message || e) }, { status: 500 })
+  }
+
   const transporter = nodemailer.createTransport({ host, port, secure: port === 465, auth: { user: smtpUser, pass } })
   try {
-    const info = await transporter.sendMail({
-      from: '"' + fromName + '" <' + smtpUser + '>',
-      to: para,
-      subject: assunto,
-      text: corpo,
-      html,
-      attachments,
-    })
-    return Response.json({ ok: true, de: smtpUser, id: info && info.messageId })
+    const info = await transporter.sendMail({ envelope: { from: smtpUser, to: [para] }, raw })
+    const copia = await salvarEnviados(raw)   // grava em "Enviados" (best-effort)
+    return Response.json({ ok: true, de: smtpUser, id: (info && info.messageId) || messageId, copiado_enviados: copia.ok, copia_motivo: copia.ok ? undefined : copia.motivo })
   } catch (e) {
     return Response.json({ erro: 'falha ao enviar: ' + (e && e.message || e) }, { status: 502 })
   }
