@@ -2465,7 +2465,7 @@ async function mesclarContatos(){
     if(c.email&&c.email!=='—'){ var m=db.find(function(x){return String(x.email||'').toLowerCase()===String(c.email).toLowerCase();}); if(m) return m.id; }
     var n=db.find(function(x){return normClienteNome(x.nome)===normClienteNome(c.nome);}); return n?n.id:null; }
   function _pick(f){ for(var i=0;i<sel.length;i++){ var v=sel[i][f]; if(v&&v!=='—') return v; } return null; }
-  if(!confirm('Mesclar em "'+prin.nome+'":\n • '+outros.map(function(c){return c.nome;}).join('\n • ')+'\n\nOs demais são apagados e e-mail/telefone/processos passam para "'+prin.nome+'". Continuar?')) return;
+  if(!confirm('Mesclar em "'+prin.nome+'":\n • '+outros.map(function(c){return c.nome;}).join('\n • ')+'\n\nOs demais são apagados, e-mail/telefone passam para "'+prin.nome+'" e os PROCESSOS dos nomes antigos são renomeados para o nome principal. Continuar?')) return;
   try{
     var esc=null; try{ var ug=await sb.auth.getUser(); var pf=await sb.from('usuarios').select('escritorio_id').eq('id',ug.data.user.id).single(); esc=pf&&pf.data&&pf.data.escritorio_id; }catch(e){}
     var prinDb=_dbRow(prin);
@@ -2473,10 +2473,23 @@ async function mesclarContatos(){
     if(esc) reg.escritorio_id=esc;
     if(!prinDb){ var ins=await sb.from('contatos').insert(reg).select('id').single(); if(ins.error) throw new Error(ins.error.message); prinDb=ins.data.id; }
     else { var up=await sb.from('contatos').update(reg).eq('id',prinDb); if(up.error) throw new Error(up.error.message); }
-    for(var k=0;k<outros.length;k++){ var d=_dbRow(outros[k]); if(d && d!==prinDb){ try{ await sb.from('processos').update({cliente_id:prinDb}).eq('cliente_id',d); }catch(e){} await sb.from('contatos').delete().eq('id',d); } }
+    var procsRenomeados=0;
+    for(var k=0;k<outros.length;k++){
+      var d=_dbRow(outros[k]); if(d && d!==prinDb){ try{ await sb.from('processos').update({cliente_id:prinDb}).eq('cliente_id',d); }catch(e){} await sb.from('contatos').delete().eq('id',d); }
+      /* ESSENCIAL: a lista de contatos é GERADA dos nomes dos processos. Se os processos
+         continuarem com o nome antigo (variação), a "duplicata" volta na recarga.
+         Então renomeia o cliente nos processos para o nome principal. */
+      var nkOld=normClienteNome(outros[k].nome);
+      if(nkOld && nkOld!==normClienteNome(prin.nome)){
+        var idsProc=[];
+        (DADOS.processos||[]).forEach(function(p){ if(normClienteNome(p.cliente)===nkOld){ p.cliente=prin.nome; if(p._id) idsProc.push(p._id); } });
+        if(idsProc.length){ var rn=await sb.from('processos').update({cliente_nome:prin.nome}).in('id',idsProc); if(rn&&rn.error) throw new Error('renomear processos: '+rn.error.message); procsRenomeados+=idsProc.length; }
+      }
+    }
     var ct=await sb.from('contatos').select('*').limit(5000); if(!ct.error) window.__CONTATOSDB=ct.data;
     CONTATOS=null; syncContatosClientes(true); renderContatos();
-    alert('Pronto! Contatos mesclados em "'+prin.nome+'".');
+    try{ if(typeof renderProc==='function') renderProc(); }catch(e){}
+    alert('Pronto! Contatos mesclados em "'+prin.nome+'".'+(procsRenomeados?('\n'+procsRenomeados+' processo(s) renomeado(s) para o nome principal.'):''));
   }catch(e){ alert('Erro ao mesclar: '+(e&&e.message||e)); }
 }
 function novoContato(){editarContato(null);}
@@ -2489,15 +2502,39 @@ function editarContato(id){seedContatos();var c=id?CONTATOS.find(function(x){ret
   document.getElementById("c-etapa").innerHTML=FUNIL.map(function(f){return '<option value="'+f.id+'">'+esc(f.nome)+'</option>';}).join("");
   document.getElementById("modal-contato").classList.remove("hidden");}
 function fecharContato(){document.getElementById("modal-contato").classList.add("hidden");}
-function salvarContato(){var c=window._cedit;var nome=_v("c-nome");if(!nome){alert("Informe o nome.");return;}
+async function salvarContato(){var c=window._cedit;var nome=_v("c-nome");if(!nome){alert("Informe o nome.");return;}
+  var nomeAntigo=(c&&c.id)?String(c.nome||''):'';
   var obj={nome:nome,tipo:_v("c-tipo"),tel:_v("c-tel")||"—",email:_v("c-email")||"—",origem:_v("c-origem")||"—",labels:(window._csel||[]).slice()};
   if(c.id){Object.assign(c,obj);}else{obj.id=cseq++;obj.proc=0;CONTATOS.push(obj);}
+  /* PERSISTE no banco — antes a edição ficava só na memória e "não salvava" */
+  var sb=window.__sb;
+  try{
+    if(sb){
+      var reg={nome:nome, telefone:(obj.tel&&obj.tel!=='—')?obj.tel:null, email:(obj.email&&obj.email!=='—')?obj.email:null, origem:(obj.origem&&obj.origem!=='—')?obj.origem:null};
+      var dbid=(c&&c.dbid)||null;
+      if(dbid){ var up=await sb.from('contatos').update(reg).eq('id',dbid); if(up&&up.error) throw new Error(up.error.message); }
+      else{
+        var esc=null; try{ var ug=await sb.auth.getUser(); var pf=await sb.from('usuarios').select('escritorio_id').eq('id',ug.data.user.id).single(); esc=pf&&pf.data&&pf.data.escritorio_id; }catch(e){}
+        if(esc) reg.escritorio_id=esc;
+        var ins=await sb.from('contatos').insert(reg).select('id').single(); if(ins&&ins.error) throw new Error(ins.error.message);
+        if(c.id) c.dbid=ins.data.id; else obj.dbid=ins.data.id;
+      }
+      /* nome mudou: renomeia o cliente nos PROCESSOS (a lista de contatos nasce de lá —
+         sem isso o nome antigo volta ao recarregar) */
+      var nkOld=normClienteNome(nomeAntigo), nkNew=normClienteNome(nome);
+      if(nomeAntigo && nkOld && nkOld!==nkNew){
+        var idsProc=[];
+        (DADOS.processos||[]).forEach(function(p){ if(normClienteNome(p.cliente)===nkOld){ p.cliente=nome; if(p._id) idsProc.push(p._id); } });
+        if(idsProc.length){ var rn=await sb.from('processos').update({cliente_nome:nome}).in('id',idsProc); if(rn&&rn.error) throw new Error('renomear processos: '+rn.error.message); }
+      }
+    }
+  }catch(e){ alert('Atenção: não foi possível gravar no banco ('+(e&&e.message||e)+'). A mudança pode se perder ao recarregar.'); }
   if(obj.tipo==='cliente'){
     var nk=normClienteNome(obj.nome);
     DADOS.processos.forEach(function(p){ if(normClienteNome(p.cliente)===nk) mergeContatoNoProcesso(p,obj.tel,obj.email); });
     if(typeof atual!=='undefined'&&atual&&normClienteNome(atual.cliente)===nk&&typeof renderCtlChips==='function') renderCtlChips();
   }
-  fecharContato();renderContatos();}
+  fecharContato();renderContatos(); try{ if(typeof renderProc==='function') renderProc(); }catch(e){}}
 function novoLead(){editarLead(null);}
 function editarLead(id){var l=id?LEADS.find(function(x){return x.id===id;}):{id:null,nome:"",canal:"Indicação",estagio:FUNIL[0].id,tel:"",email:"",valor:"",lemdata:"",lemtxt:""};window._ledit=l;
   document.getElementById("ml-titulo").textContent=id?"Editar lead":"Novo lead";
