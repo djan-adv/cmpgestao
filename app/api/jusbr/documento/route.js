@@ -85,13 +85,14 @@ export async function POST(request) {
   if (tipoFinal === 'application/pdf' && pareceHtml && !parecePdf) tipoFinal = 'text/html' // PDPJ mentiu: era HTML
   if (tipoFinal.indexOf('html') > -1 && parecePdf) tipoFinal = 'application/pdf'          // ...ou o contrário
 
-  // Se o PDPJ devolveu a CASCA do visor (HTML que carrega o PDF por JavaScript) em vez
-  // do arquivo em si, não adianta guardar: no nosso quadro ela fica presa em "Carregando"
-  // com as imagens quebradas. Detecta e avisa para abrir direto no jus.br.
+  // Só rejeita se for a CASCA do visor SPA (Angular/React) — HTML minúsculo cujo conteúdo
+  // é montado por JavaScript (fica preso em "Carregando" no nosso quadro). Os expedientes
+  // e decisões (Expediente.html/Decisão.html) são HTML de VERDADE, com o texto — esses
+  // guardamos e exibimos (a limpeza do HTML é feita ao servir o arquivo).
   if (tipoFinal.indexOf('html') > -1) {
     const amostra = buf.slice(0, 8000).toString('utf8').toLowerCase()
-    const ehCasca = buf.length < 90000 && /carregando|aguarde|carregar o documento|visualizador|<app-root|ng-version|id="root"|id="app"|window\.__/.test(amostra)
-    if (ehCasca) return Response.json({ erro: 'O jus.br devolveu a página do visor (carregamento), não o arquivo em si. Abra o documento direto no jus.br (botão "Abrir no tribunal") ou tente de novo em instantes.', motivo: 'visor' }, { status: 502 })
+    const ehCascaSpa = buf.length < 20000 && /<app-root|ng-version=|window\.__(nuxt|next)|<div id="root">\s*<\/div>|<div id="app">\s*<\/div>/.test(amostra)
+    if (ehCascaSpa) return Response.json({ erro: 'O jus.br devolveu a página do visor (carregamento), não o arquivo em si. Abra o documento direto no jus.br (botão "Abrir no tribunal") ou tente de novo em instantes.', motivo: 'visor' }, { status: 502 })
   }
 
   const { data: ins, error } = await sb.from('jusbr_arquivos').insert({

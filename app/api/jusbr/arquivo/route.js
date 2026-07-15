@@ -30,11 +30,22 @@ export async function GET(request) {
   const { data } = await sb.from('jusbr_arquivos').select('doc_nome,doc_tipo,conteudo_b64').eq('escritorio_id', ESCRITORIO_CMP).eq('id', id).maybeSingle()
   if (!data || !data.conteudo_b64) return Response.json({ erro: 'arquivo não encontrado (pode ter expirado)' }, { status: 404 })
 
-  const buf = Buffer.from(data.conteudo_b64, 'base64')
+  let buf = Buffer.from(data.conteudo_b64, 'base64')
   const tipo = data.doc_tipo || 'application/pdf'
   const ext = tipo.indexOf('html') > -1 ? '.html' : (tipo.indexOf('pdf') > -1 ? '.pdf' : '')
   const nome = (data.doc_nome || 'documento').replace(/[^\w.\- ]+/g, '_')
   const nomeFinal = /\.\w+$/.test(nome) ? nome : (nome + ext)
+  // HTML do jus.br (expediente/decisão): tira o <script> (que travava em "Carregando")
+  // e as <img> quebradas (logo/spinner), e aponta o <base> para o PDPJ. Assim o TEXTO
+  // da intimação/decisão aparece limpo, sem quadro quebrado. Só ao visualizar (inline).
+  if (!dl && tipo.indexOf('html') > -1) {
+    try {
+      let h = buf.toString('utf8')
+      h = h.replace(/<script[\s\S]*?<\/script>/gi, '').replace(/<img\b[^>]*>/gi, '')
+      if (!/<base\b/i.test(h)) h = h.replace(/<head([^>]*)>/i, '<head$1><base href="https://portaldeservicos.pdpj.jus.br/">')
+      buf = Buffer.from(h, 'utf8')
+    } catch (e) {}
+  }
   const disp = (dl ? 'attachment' : 'inline') + '; filename="' + nomeFinal + '"'
   return new Response(buf, {
     status: 200,
