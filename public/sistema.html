@@ -4018,17 +4018,42 @@ function _numFichaHTML(p){
   if(dig.length===20){
     return '<span>Processo nº <span onclick="copiarNumero(this,\''+p.numero+'\')" style="cursor:pointer;border-bottom:1px dotted var(--muted)" title="Clique para copiar o número">'+esc(p.numero)+'</span></span>';
   }
+  /* caso identificado pelo CNPJ do cliente (14 dígitos): mostra fixo, com opção de editar */
+  if(dig.length===14 && !window.__numEdit){
+    var cnpj=dig.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/,'$1.$2.$3/$4-$5');
+    return '<span>Caso (CNPJ) <span onclick="copiarNumero(this,\''+cnpj+'\')" style="cursor:pointer;border-bottom:1px dotted var(--muted)" title="Clique para copiar o CNPJ">'+cnpj+'</span>'+
+      ' <a style="cursor:pointer;color:#185FA5;font-size:11px" onclick="window.__numEdit=true;var i=(DADOS.processos||[]).indexOf(atual);if(i>=0)abrir(i)" title="Trocar a identificação (ex.: virou processo judicial — informe o nº CNJ)">✎ alterar</a></span>';
+  }
+  var atualVal=String(p&&p.numero||''); /* sempre pré-preenchido — não "apaga quando retorna" */
+  window.__numEdit=false;
   return '<span style="display:inline-flex;align-items:center;gap:7px;flex-wrap:wrap">Processo nº '+
-    '<input id="caso-num" placeholder="0000000-00.0000.0.00.0000" value="" inputmode="numeric" style="font-size:13px;padding:3px 8px;border:1px solid var(--line);border-radius:6px;width:210px" '+
-      'onkeydown="if(event.key===\'Enter\'){event.preventDefault();transformarEmProcesso();}">'+
-    '<button id="btn-transf-proc" class="btn sm gold" style="font-size:11px;padding:4px 10px" onclick="transformarEmProcesso()" title="Salvar o número no padrão CNJ e buscar as movimentações no DJEN">⇅ Transformar em processo</button>'+
+    '<input id="caso-num" placeholder="nº CNJ (processo) ou CNPJ (caso)" value="'+esc(atualVal)+'" inputmode="numeric" style="font-size:13px;padding:3px 8px;border:1px solid var(--line);border-radius:6px;width:210px" '+
+      'onkeydown="if(event.key===\'Enter\'){event.preventDefault();transformarEmProcesso();}" title="Processo judicial: nº CNJ (20 dígitos). Caso/assessoria sem processo: CNPJ do cliente (14 dígitos)">'+
+    '<button id="btn-transf-proc" class="btn sm gold" style="font-size:11px;padding:4px 10px" onclick="transformarEmProcesso()" title="nº CNJ: vira processo e busca as movimentações no DJEN. CNPJ: fica como identificação do caso (assessoria).">✓ Usar este número</button>'+
     '</span>';
 }
-/* pega o número digitado, grava no processo e dispara a busca no DJEN */
+/* pega o número digitado: CNJ (20 díg.) grava e busca no DJEN; CNPJ (14 díg.) vira a
+   identificação do CASO (assessoria — continua fora do DJEN). */
 async function transformarEmProcesso(){
   if(typeof atual==='undefined' || !atual) return;
   var inp=document.getElementById('caso-num'); var dig=String((inp&&inp.value)||'').replace(/\D/g,'');
-  if(dig.length!==20){ alert('Digite o número do processo no padrão CNJ (20 dígitos):\n0000000-00.0000.0.00.0000'); if(inp) inp.focus(); return; }
+  if(dig.length!==20 && dig.length!==14){ alert('Use um destes formatos:\n\n• Processo judicial — nº CNJ (20 dígitos):\n  0000000-00.0000.0.00.0000\n\n• Caso/assessoria — CNPJ do cliente (14 dígitos):\n  00.000.000/0000-00'); if(inp) inp.focus(); return; }
+  if(dig.length===14){
+    var cnpj=dig.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/,'$1.$2.$3/$4-$5');
+    var dup=(DADOS.processos||[]).find(function(x){ return x!==atual && String(x.numero||'').replace(/\D/g,'')===dig; });
+    if(dup && !confirm('Já existe outro caso/processo com esse CNPJ ('+(dup.cliente||'')+').\nA pasta de documentos seria COMPARTILHADA. Continuar?')) return;
+    var btnC=document.getElementById('btn-transf-proc'); if(btnC){ btnC.disabled=true; btnC.textContent='salvando…'; }
+    var antigoC=atual.numero;
+    atual.numero=cnpj; /* continua caso/assessoria */
+    try{
+      var sbC=window.__sb;
+      if(sbC&&atual._id){ var rC=await sbC.from('processos').update({numero:cnpj}).eq('id',atual._id);
+        if(rC&&rC.error){ alert('Não foi possível salvar: '+rC.error.message); atual.numero=antigoC; if(btnC){btnC.disabled=false;btnC.textContent='✓ Usar este número';} return; } }
+    }catch(e){ alert('Erro ao salvar: '+(e&&e.message||e)); atual.numero=antigoC; if(btnC){btnC.disabled=false;btnC.textContent='✓ Usar este número';} return; }
+    var iC=(DADOS.processos||[]).indexOf(atual); if(iC>=0) abrir(iC);
+    alert('✓ CNPJ salvo como identificação do caso.\nA pasta "Documentos do processo" passa a usar esse CNPJ.');
+    return;
+  }
   var numFmt=dig.replace(/^(\d{7})(\d{2})(\d{4})(\d)(\d{2})(\d{4})$/,'$1-$2.$3.$4.$5.$6');
   var jaExiste=(DADOS.processos||[]).find(function(x){ return x!==atual && String(x.numero||'').replace(/\D/g,'')===dig; });
   if(jaExiste && !confirm('Já existe um processo com esse número na lista. Transformar mesmo assim?')) return;
