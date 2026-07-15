@@ -4707,12 +4707,20 @@ async function salvarOrdemDocs(dig, dirRel, nomes, numero, sub, escopo){
   }catch(e){}
   carregarDocs(numero,sub,escopo);
 }
+/* chave da pasta de documentos no servidor: dígitos do número; casos/assessorias SEM
+   número usam uma pasta própria e estável pelo ID do caso ("caso-<uuid>"). */
+function _docChaveProc(numero){
+  var dig=String(numero||'').replace(/\D/g,'');
+  if(dig) return dig;
+  var id=(typeof atual!=='undefined'&&atual&&atual._id)?String(atual._id).replace(/[^a-zA-Z0-9-]/g,''):'';
+  return id?('caso-'+id):'';
+}
 async function carregarDocs(numero, sub, escopo){
   escopo=escopo||'proc'; var E=_docEsc(escopo);
   var el=document.getElementById(E.panel); if(!el) return;
-  var dig=String(numero||'').replace(/\D/g,'');
+  var dig=_docChaveProc(numero);
   window[E.subVar]=sub||''; window.__docCtx={numero:numero,sub:sub||'',escopo:escopo};
-  if(!dig){ el.innerHTML='<div class="note">Processo sem número.</div>'; return; }
+  if(!dig){ el.innerHTML='<div class="note">Salve o caso primeiro (sem identificação ainda).</div>'; return; }
   try{
     var tok=await docToken();
     var dir=dig+'/'+_docDir(escopo, sub); dir=dir.replace(/\/+$/,'');
@@ -4852,7 +4860,7 @@ async function enviarDocs(inp, escopo){
   if(!files.length||!atual) return;
   var sub=window[E.subVar]||'';
   try{
-    var dig=String(atual.numero||'').replace(/\D/g,''); if(!dig){ alert('Processo sem número.'); return; }
+    var dig=_docChaveProc(atual.numero); if(!dig){ alert('Salve o caso primeiro (sem identificação ainda).'); return; }
     if(/(^|\/)Lixeira$/.test(sub)){ alert('Não é possível enviar arquivos para a Lixeira.'); return; }
     var tok=await docToken();
     if(!tok){ alert('Sessão expirada — recarregue a página (F5) e tente de novo.'); return; }
@@ -4884,7 +4892,7 @@ async function enviarPasta(inp, escopo){
   if(!files.length||!atual) return;
   var sub=window[E.subVar]||'';
   try{
-    var dig=String(atual.numero||'').replace(/\D/g,''); if(!dig){ alert('Processo sem número.'); return; }
+    var dig=_docChaveProc(atual.numero); if(!dig){ alert('Salve o caso primeiro (sem identificação ainda).'); return; }
     if(/(^|\/)Lixeira$/.test(sub)){ alert('Não é possível enviar para a Lixeira.'); return; }
     var tok=await docToken();
     if(!tok){ alert('Sessão expirada — recarregue a página (F5) e tente de novo.'); return; }
@@ -5126,7 +5134,8 @@ async function syncEnviar(){
   var enviados=0, falhas=0, feito=0, nomesAt=0, erro1='';
   for(var a=0;a<alvos.length;a++){
     var g=alvos[a], p=DADOS.processos[g.idx], dig=String(p.numero||'').replace(/\D/g,'');
-    if(!dig){ falhas+=g.files.length; if(!erro1) erro1='processo "'+(p.cliente||'')+'" sem número CNJ (não dá para criar a pasta).'; continue; }
+    if(!dig && p._id) dig='caso-'+String(p._id).replace(/[^a-zA-Z0-9-]/g,''); /* assessoria/caso sem número: pasta própria por ID */
+    if(!dig){ falhas+=g.files.length; if(!erro1) erro1='caso "'+(p.cliente||'')+'" ainda não foi salvo no banco (sem ID) — abra e salve o caso primeiro.'; continue; }
     if(fixNome){ try{ if(await _syncCompletarAutor(p, g.folder)) nomesAt++; }catch(e){} }
     for(var i=0;i<g.files.length;i++){
       var item=g.files[i], f=item.f, inner=String(item.inner||f.name).replace(/^\/+/,'');
@@ -5172,7 +5181,7 @@ async function criarPastaDoc(escopo){
   var nome=prompt('Nome da nova pasta:'); if(!nome||!nome.trim()) return;
   nome=nome.trim().replace(/[\\/]+/g,'-'); /* evita criar hierarquia acidental pelo nome */
   var sub=window[E.subVar]||'';
-  var dig=String(atual.numero||'').replace(/\D/g,''); if(!dig){ alert('Processo sem número.'); return; }
+  var dig=_docChaveProc(atual.numero); if(!dig){ alert('Salve o caso primeiro (sem identificação ainda).'); return; }
   try{
     var tok=await docToken(); if(!tok){ alert('Sessão expirada — recarregue a página.'); return; }
     var relPath=dig+'/'+_docDir(escopo, sub)+'/'+nome;
@@ -5193,7 +5202,7 @@ async function lixeiraDoc(dig, rel, numero, sub, escopo){
 }
 /* limpar tudo: envia todos os itens (arquivos e pastas) do processo para a Lixeira */
 async function limparTodosDocs(numero, escopo){
-  escopo=escopo||'proc'; var dig=String(numero||'').replace(/\D/g,''); if(!dig) return;
+  escopo=escopo||'proc'; var dig=_docChaveProc(numero); if(!dig) return;
   var tok; try{ tok=await docToken(); }catch(e){}
   if(!tok){ alert('Sessão expirada — recarregue a página (F5).'); return; }
   var base=_docDir(escopo,''); var dir=(dig+(base?('/'+base):'')).replace(/\/+$/,'');
@@ -5385,7 +5394,7 @@ function _extrairNomesOutorgante(txt){
 /* lê procuração (ou petição inicial) e sugere o nome do cliente (inclui casal) para confirmação */
 async function puxarNomeCliente(){
   if(!atual){ return; }
-  var dig=String(atual.numero||'').replace(/\D/g,''); if(!dig){ alert('Processo sem número.'); return; }
+  var dig=_docChaveProc(atual.numero); if(!dig){ alert('Salve o caso primeiro (sem identificação ainda).'); return; }
   var ov=document.createElement('div'); ov.id='pcr-load';
   ov.style.cssText='position:fixed;inset:0;background:rgba(20,28,40,.35);z-index:100;display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px';
   ov.textContent='Procurando o nome do casal (histórico → procuração → petição)…'; document.body.appendChild(ov);
@@ -5446,8 +5455,8 @@ function _acharTelefones(w){
 }
 async function puxarContatoProcuracao(){
   if(!atual){ return; }
-  var dig=String(atual.numero||'').replace(/\D/g,'');
-  if(!dig){ alert('Processo sem número.'); return; }
+  var dig=_docChaveProc(atual.numero);
+  if(!dig){ alert('Salve o caso primeiro (sem identificação ainda).'); return; }
   var ov=document.createElement('div'); ov.id='pcr-load';
   ov.style.cssText='position:fixed;inset:0;background:rgba(20,28,40,.35);z-index:100;display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px';
   ov.textContent='Lendo os documentos do processo…'; document.body.appendChild(ov);
