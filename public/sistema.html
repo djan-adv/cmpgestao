@@ -5426,7 +5426,13 @@ function editarPartesContatos(){
 }
 async function salvarPartesContatos(){
   if(!atual) return;
-  var sb=window.__sb; if(!sb||!atual._id){ alert('Sessão não encontrada — recarregue a página.'); return; }
+  var sb=window.__sb; if(!sb){ alert('Sessão não encontrada — recarregue a página (F5).'); return; }
+  /* ficha aberta sem o ID interno (listas antigas/vinculados): resolve pelo número */
+  if(!atual._id){
+    try{ var q=await sb.from('processos').select('id').eq('numero',atual.numero).limit(1); if(q&&q.data&&q.data.length) atual._id=q.data[0].id; }catch(e){}
+    if(!atual._id){ try{ var dg=String(atual.numero||'').replace(/\D/g,''); if(dg.length>=14){ var q2=await sb.from('processos').select('id').eq('numero_digitos',dg).limit(1); if(q2&&q2.data&&q2.data.length) atual._id=q2.data[0].id; } }catch(e){} }
+    if(!atual._id){ alert('Não achei este registro no banco (sem ID). Recarregue a página (F5) e abra o processo de novo; se repetir, me avise informando o número.'); return; }
+  }
   var g=function(id){ var e=document.getElementById(id); return e?e.value.trim():''; };
   var cli=g('edt-cli'), op=g('edt-op'), ass=g('edt-ass');
   var toks=[g('edt-c1'),g('edt-c2'),g('edt-c3'),g('edt-c4')].filter(Boolean);
