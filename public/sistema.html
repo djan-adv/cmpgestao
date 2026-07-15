@@ -4048,7 +4048,11 @@ function origemProc(p){
     if(!isNaN(d) && (Date.now()-d.getTime())<=5*86400000) return 'atualizado';
   }
   var dig=String(p.numero||'').replace(/\D/g,'');
-  return (typeof ASTREA_SET!=='undefined'&&ASTREA_SET[dig])?'astrea':'djen';
+  var ehAstrea=(typeof ASTREA_SET!=='undefined'&&ASTREA_SET[dig]);
+  /* regra: se já capturou publicação do DJEN depois do cadastro, sai do "astrea"
+     e passa a contar como "djen" (o selo astrea é só para quem nunca atualizou) */
+  if(ehAstrea && (p.hist_full||[]).some(function(a){ return a && a.f==='djen'; })) ehAstrea=false;
+  return ehAstrea?'astrea':'djen';
 }
 function origemBtnHTML(p){
   var o=origemProc(p);
