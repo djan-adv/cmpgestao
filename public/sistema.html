@@ -2417,6 +2417,8 @@ function renderMes(){
 function irParaCaso(numero){var i=DADOS.processos.findIndex(function(p){return p.numero===numero});if(i>=0)abrir(i);else go("processos");}
 var TIPOCOR={audiencia:"az",reuniao:"az",manifestacao:"am",prazo:"vm",tarefa:"nt",diligencia:"nt",evento:"nt",comercial:"nt"};
 function _v(id){var e=document.getElementById(id);return e?(e.value||"").trim():"";}
+/* assinatura padrão do escritório; comunicações em nome do DJAN levam a OAB na linha abaixo */
+function _assinaturaCMP(nome){ nome=String(nome||'').trim(); var oab=/(^|\s)djan/i.test(nome)?'\nOAB/PB 5219-A':''; return 'Atenciosamente,\n'+nome+oab+'\nCrispim Mendonça e Pinheiro Advogados'; }
 function abrirNovaTarefa(proc){window._tarEditId=null;document.getElementById("modal-tarefa").classList.remove("hidden");if(proc){document.getElementById("t-proc").value=proc;} if(typeof onTipoTarefa==='function')onTipoTarefa();
   var _cb=document.getElementById('t-btn-concluir'); if(_cb) _cb.style.display='none';
   var _sb=document.getElementById('t-btn-salvar'); if(_sb) _sb.textContent='Criar e distribuir';}
@@ -4536,7 +4538,7 @@ function gerarDiligencia(pid,numEnc){
   window.__dilCtx={pid:pid,numero:num};
   var adv=(document.getElementById('who-name')||{}).textContent||'';
   document.getElementById('dil-canal').value='email';
-  document.getElementById('dil-msg').value='Prezados,\n\nSolicito informações sobre o andamento do processo nº '+num+' ('+(p.cliente||'')+'), que se encontra sem movimentação desde '+(p.data||'')+'. Peço, por gentileza, atualização quanto ao próximo ato processual.\n\nAtenciosamente,\n'+adv+'\nCrispim Mendonça e Pinheiro Advogados';
+  document.getElementById('dil-msg').value='Prezados,\n\nSolicito informações sobre o andamento do processo nº '+num+' ('+(p.cliente||'')+'), que se encontra sem movimentação desde '+(p.data||'')+'. Peço, por gentileza, atualização quanto ao próximo ato processual.\n\n'+_assinaturaCMP(adv);
   if(!pid){ /* sem id: ainda deixa gerar a mensagem, mas avisa ao salvar */ }
   document.getElementById('modal-dilig').classList.remove('hidden');
 }
@@ -6440,7 +6442,7 @@ function gerarDiligencia(pid,numEnc){
   window.__dilCtx={pid:pid,numero:num};
   var adv=(document.getElementById('who-name')||{}).textContent||'';
   document.getElementById('dil-canal').value='email';
-  document.getElementById('dil-msg').value='Prezados,\n\nSolicito informações sobre o andamento do processo nº '+num+' ('+(p.cliente||'')+'), que se encontra sem movimentação desde '+(p.data||'')+'. Peço, por gentileza, atualização quanto ao próximo ato processual.\n\nAtenciosamente,\n'+adv+'\nCrispim Mendonça e Pinheiro Advogados';
+  document.getElementById('dil-msg').value='Prezados,\n\nSolicito informações sobre o andamento do processo nº '+num+' ('+(p.cliente||'')+'), que se encontra sem movimentação desde '+(p.data||'')+'. Peço, por gentileza, atualização quanto ao próximo ato processual.\n\n'+_assinaturaCMP(adv);
   var bl=balcaoLink(num); var db=document.getElementById('dil-balcao');
   if(db){ db.innerHTML='<b>Balcão virtual</b> ('+(bl.trib?bl.trib.toUpperCase():'tribunal')+'): <a href="'+bl.url+'" target="_blank" rel="noopener" style="color:#185FA5">abrir</a>'+(bl.verificado?'':' <span style="color:#888">(via busca — link não catalogado ainda)</span>'); }
   document.getElementById('modal-dilig').classList.remove('hidden');
@@ -6797,7 +6799,7 @@ var _ATZ_PEDIDOS={
 function _gerarRascunhoAtualizacao(){
   var ctx=window.__atzCtx; if(!ctx) return; var p=ctx.p;
   var nome=(nomeBonito(p.cliente||'')||'').trim();
-  var assinatura='Atenciosamente,\n'+(((document.getElementById('who-name')||{}).textContent)||'')+'\nCrispim Mendonça e Pinheiro Advogados';
+  var assinatura=_assinaturaCMP(((document.getElementById('who-name')||{}).textContent)||'');
   var corpo, assunto;
   if(_atzModoAtual()==='pedido'){
     var tipo=(document.getElementById('atz-pedido-tipo')||{}).value||'grat';
@@ -7050,7 +7052,7 @@ function bvMsg(num,tipo){
   else if(tipo==='despacho') corpo='Há DESPACHO/DECISÃO pendente de cumprimento nos autos. Solicito, por gentileza, ao(à) Chefe de Cartório/Secretaria que providencie o CUMPRIMENTO do despacho pela serventia, dando prosseguimento ao feito.';
   else corpo='Solicito, por gentileza, informações sobre o andamento processual e a adoção das providências cabíveis para o regular prosseguimento do feito.';
   var partes=(p.cliente?p.cliente:'')+(p.oponente?(' × '+p.oponente):'');
-  return 'Prezado(a) Chefe de Cartório/Secretaria — '+vara+',\n\nProcesso nº '+num+(partes?(' ('+partes+')'):'')+'.\n\n'+corpo+'\n\nAtenciosamente,\nDjan Henrique Mendonça do Nascimento\nCrispim Mendonça e Pinheiro Advogados\nE-mail: djan.adv@gmail.com';
+  return 'Prezado(a) Chefe de Cartório/Secretaria — '+vara+',\n\nProcesso nº '+num+(partes?(' ('+partes+')'):'')+'.\n\n'+corpo+'\n\nAtenciosamente,\nDjan Henrique Mendonça do Nascimento\nOAB/PB 5219-A\nCrispim Mendonça e Pinheiro Advogados\nE-mail: djan.adv@gmail.com';
 }
 function bvSend(canal,numEnc,el){
   var num=decodeURIComponent(numEnc);
@@ -7237,7 +7239,7 @@ function gerarDiligencia(pid,numEnc){
   window.__dilCtx={pid:pid,numero:num};
   var adv=(document.getElementById('who-name')||{}).textContent||'';
   document.getElementById('dil-canal').value='email';
-  document.getElementById('dil-msg').value='Prezados,\n\nSolicito informações sobre o andamento do processo nº '+num+' ('+(p.cliente||'')+'), que se encontra sem movimentação desde '+(p.data||'')+'. Peço, por gentileza, atualização quanto ao próximo ato processual.\n\nAtenciosamente,\n'+adv+'\nCrispim Mendonça e Pinheiro Advogados';
+  document.getElementById('dil-msg').value='Prezados,\n\nSolicito informações sobre o andamento do processo nº '+num+' ('+(p.cliente||'')+'), que se encontra sem movimentação desde '+(p.data||'')+'. Peço, por gentileza, atualização quanto ao próximo ato processual.\n\n'+_assinaturaCMP(adv);
   var db=document.getElementById('dil-balcao'); if(db) db.innerHTML=contatoBlocoHTML(p);
   document.getElementById('modal-dilig').classList.remove('hidden');
 }
