@@ -1877,9 +1877,15 @@ function persisteTriada(t){
   try{ var sb=window.__sb; if(!sb||!t) return;
     var num=String(t.numero||'').replace(/\D/g,''); var dt=String(t.data||'').slice(0,10);
     if(!num||!dt) return;
-    /* marca todos os andamentos daquele processo naquela data como triados */
-    sb.from('processos').select('id').eq('numero',t.numero).single().then(function(r){
-      if(r&&r.data&&r.data.id){ sb.from('andamentos').update({triada:true}).eq('processo_id',r.data.id).eq('data',dt).then(function(){}); }
+    /* marca todos os andamentos daquele processo naquela data como triados.
+       Busca por numero_digitos (mais confiável que o número formatado) e AVISA
+       se a gravação falhar — antes falhava em silêncio e tudo voltava no F5. */
+    sb.from('processos').select('id').eq('numero_digitos',num).limit(1).then(function(r){
+      var pid=r&&r.data&&r.data[0]&&r.data[0].id;
+      if(!pid){ console.warn('persisteTriada: processo não encontrado para',t.numero); return; }
+      sb.from('andamentos').update({triada:true}).eq('processo_id',pid).eq('data',dt).select('id').then(function(w){
+        if(w&&w.error){ alert('Não consegui gravar a "ciência" no servidor: '+w.error.message+'\n(Sem isso a publicação volta para a fila ao recarregar.)'); }
+      });
     });
   }catch(e){ console.warn('persisteTriada:',e); }
 }
@@ -1955,7 +1961,7 @@ function renderTriagem(){
     tb.appendChild(tr);
   });
 }
-function reabrirTriagem(id){ var t=TRIAGEM.find(function(x){return x.id===id;}); if(t){ t.done=false; try{ var sb=window.__sb; if(sb){ sb.from('processos').select('id').eq('numero',t.numero).single().then(function(r){ if(r&&r.data&&r.data.id){ sb.from('andamentos').update({triada:false}).eq('processo_id',r.data.id).eq('data',String(t.data||'').slice(0,10)).then(function(){}); } }); } }catch(e){} renderTriagem(); } }
+function reabrirTriagem(id){ var t=TRIAGEM.find(function(x){return x.id===id;}); if(t){ t.done=false; try{ var sb=window.__sb; if(sb){ var numR=String(t.numero||'').replace(/\D/g,''); sb.from('processos').select('id').eq('numero_digitos',numR).limit(1).then(function(r){ var pid=r&&r.data&&r.data[0]&&r.data[0].id; if(pid){ sb.from('andamentos').update({triada:false}).eq('processo_id',pid).eq('data',String(t.data||'').slice(0,10)).then(function(){}); } }); } }catch(e){} renderTriagem(); } }
 function toggleTeor(id){var d=document.getElementById("teor-"+id);if(!d)return;d.style.display=(d.style.display==="none")?"block":"none";}
 function irParaProcesso(num){var dd=String(num).replace(/\D/g,"");var i=DADOS.processos.findIndex(function(p){return String(p.numero).replace(/\D/g,"")===dd;});if(i>=0){abrir(i);}else{alert("Este processo (nº "+num+") tem publicação capturada, mas não está na base de 480 processos importada do Astrea. No sistema real, todos os processos entram e o link abre a página completa.");}}
 /* se chegou uma publicação (DJEn) para o número de um CASO, ele deixa de ser "não
