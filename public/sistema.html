@@ -257,11 +257,11 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
 
     <section id="s-agenda" class="hidden">
       <div class="agtools">
-        <div class="switch"><button id="sw-ag" class="on" onclick="setViewAg('agenda')">Agenda (reuniões e audiências)</button><button id="sw-kan" onclick="setViewAg('kanban')">Kanban</button><button id="sw-tar" onclick="setViewAg('tarefas')">Agenda (prazos e tarefas)</button></div>
+        <div class="switch"><button id="sw-tar" class="on" onclick="setViewAg('tarefas')">Agenda (prazos e tarefas)</button><button id="sw-ag" onclick="setViewAg('agenda')">Agenda (reuniões e audiências)</button><button id="sw-kan" onclick="setViewAg('kanban')">Kanban</button></div>
         <button class="btn sm" style="margin-left:auto" onclick="abrirNovaTarefa()">+ Nova tarefa</button>
         <div class="legend"><span class="lg"><i class="dot az"></i>Audiência / Reunião</span><span class="lg"><i class="dot am"></i>Manifestação</span><span class="lg"><i class="dot vm"></i>Prazo importante</span></div>
       </div>
-      <div id="view-agenda"><div class="card">
+      <div id="view-agenda" class="hidden"><div class="card">
         <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
           <div class="switch"><button id="ag-mes" class="on" onclick="setAgView('mes')">Mês</button><button id="ag-sem" onclick="setAgView('semana')">Semana</button><button id="ag-dia" onclick="setAgView('dia')">Dia</button></div>
           <label style="margin:0;color:var(--muted);font-size:13px">Responsável:</label>
@@ -271,7 +271,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
         <div class="cal" id="cal"></div>
       </div></div>
       <div id="view-kanban" class="hidden"><p class="note" style="margin-bottom:10px">Etapas reais do CMP. Arraste os cards entre as colunas.</p><div class="kanwrap"><div class="kanban" id="kanban"></div></div></div>
-      <div id="view-tarefas" class="hidden"><div class="card">
+      <div id="view-tarefas"><div class="card">
         <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
           <div class="switch"><button id="tg-mes" class="on" onclick="setTarView('mes')">Mês</button><button id="tg-lista" onclick="setTarView('lista')">Lista</button></div>
           <label style="margin:0;color:var(--muted);font-size:13px">Responsável:</label>
@@ -518,8 +518,9 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
     <div class="row3" id="t-datas-row">
       <div><label>Data</label><input id="t-data" type="date" min="2000-01-01" max="2100-12-31" onchange="guardData(this)"></div>
       <div><label>Hora</label><input id="t-hora" type="time"></div>
-      <div><label>Prazo fatal</label><input id="t-prazo" type="date" min="2000-01-01" max="2100-12-31" onchange="guardData(this)"></div>
+      <div id="t-prazo-col"><label>Prazo fatal</label><input id="t-prazo" type="date" min="2000-01-01" max="2100-12-31" onchange="guardData(this)"></div>
     </div>
+    <a id="t-prazo-rev" onclick="revelarPrazoFatal()" style="display:none;cursor:pointer;color:var(--muted);font-size:12px;text-decoration:underline;margin:2px 0 8px">+ definir prazo fatal (opcional)</a>
     <div id="t-datas-auto" class="note" style="display:none;margin:2px 0 8px;font-size:12px"></div>
     <div class="flags"><label><input type="checkbox" id="t-agenda" checked> Mostrar na agenda</label><label><input type="checkbox" id="t-dia"> Dia inteiro</label><label><input type="checkbox" id="t-imp"> Importante</label><label><input type="checkbox" id="t-urg"> Urgente</label></div>
     <label style="margin-top:10px">Local</label><input id="t-local" placeholder="Local (audiência/evento)">
@@ -694,7 +695,7 @@ var USUARIOS_VISUAIS=[
 var USUARIO_ATUAL_VISUAL='djan';
 var __hoje0=new Date();
 var __ehCel=(typeof window!=='undefined' && window.innerWidth<=860);
-var KAN=null, atual=null, TRIAGEM=null, AGENDA=null, VIEWAG="agenda", curY=__hoje0.getFullYear(), curM=__hoje0.getMonth(), curD=__hoje0.getDate(), agView=(__ehCel?"dia":"mes"), triagemAtual=null, crmView="contatos", agResp="Todos", canalSel="Geral", mesSel="todos", histShown=10, PUBIDX=null;
+var KAN=null, atual=null, TRIAGEM=null, AGENDA=null, VIEWAG="tarefas", curY=__hoje0.getFullYear(), curM=__hoje0.getMonth(), curD=__hoje0.getDate(), agView=(__ehCel?"dia":"mes"), triagemAtual=null, crmView="contatos", agResp="Todos", canalSel="Geral", mesSel="todos", histShown=10, PUBIDX=null;
 
 function entrar(){
   var r=document.getElementById("roleSel").value, p=perfis[r];
@@ -2585,6 +2586,18 @@ function onTipoTarefa(){
   var row=document.getElementById('t-datas-row'), nota=document.getElementById('t-datas-auto');
   if(row) row.style.display=(tipo==='prazo')?'none':'';
   if(nota){ nota.style.display=(tipo==='prazo')?'block':'none'; if(tipo==='prazo') _notaDatasAuto(); }
+  /* prazo fatal SÓ existe para o tipo Prazo — tarefa comum usa a Data; quem quiser
+     define o fatal pelo link opcional (ou editando a tarefa depois) */
+  var colPz=document.getElementById('t-prazo-col'), revPz=document.getElementById('t-prazo-rev');
+  var comum=(tipo!=='prazo');
+  var temPz=!!((document.getElementById('t-prazo')||{}).value);
+  if(colPz) colPz.style.display=(comum&&!temPz)?'none':'';
+  if(revPz) revPz.style.display=(comum&&!temPz)?'inline-block':'none';
+}
+function revelarPrazoFatal(){
+  var colPz=document.getElementById('t-prazo-col'), revPz=document.getElementById('t-prazo-rev');
+  if(colPz) colPz.style.display='';
+  if(revPz) revPz.style.display='none';
 }
 /* volta N dias úteis a partir de uma data (para o alerta antecipado do prazo) */
 function _subDiasUteis(baseISO, n){
@@ -3577,11 +3590,39 @@ function renderTarefasMes(){
         cell.appendChild(sel);
       }
     } else {
-      dtasks.forEach(function(a){ var w=document.createElement('div'); w.innerHTML=_tarChipHTML(a); cell.appendChild(w.firstChild); });
+      dtasks.forEach(function(a){
+        var w=document.createElement('div'); w.innerHTML=_tarChipHTML(a);
+        var chip=w.firstChild;
+        /* arrastar para outro dia = remarcar automaticamente */
+        chip.setAttribute('draggable','true');
+        chip.addEventListener('dragstart',(function(idT){ return function(ev){ try{ ev.dataTransfer.setData('text/plain','tar:'+idT); ev.dataTransfer.effectAllowed='move'; }catch(eD){} }; })(a.id));
+        cell.appendChild(chip);
+      });
     }
-    (function(isoC){ cell.onclick=function(){ abrirTarDia(isoC); }; })(iso);
+    (function(isoC,cellC){
+      cellC.onclick=function(){ abrirTarDia(isoC); };
+      cellC.ondragover=function(ev){ ev.preventDefault(); ev.dataTransfer.dropEffect='move'; cellC.style.outline='2px dashed var(--gold)'; };
+      cellC.ondragleave=function(){ cellC.style.outline=''; };
+      cellC.ondrop=function(ev){ ev.preventDefault(); cellC.style.outline='';
+        var d0=''; try{ d0=ev.dataTransfer.getData('text/plain')||''; }catch(eG){}
+        var mI=d0.match(/^tar:(\d+)$/); if(!mI) return;
+        moverTarefaParaDia(parseInt(mI[1],10), isoC);
+      };
+    })(iso,cell);
     cal.appendChild(cell);
   }
+}
+/* remarca a tarefa arrastada: a data vai para o novo dia; se a data exibida era o
+   PRAZO FATAL, o prazo acompanha (arrastar = remarcar de verdade) */
+function moverTarefaParaDia(id,novoISO){
+  if(!KAN) initKanban();
+  var a=KAN.find(function(x){return x.id===id;}); if(!a) return;
+  var antigo=_tarISO(a); if(!antigo||antigo===novoISO) return;
+  if(a.prazo && String(a.prazo).slice(0,10)===antigo) a.prazo=novoISO;
+  a.data=novoISO;
+  persisteKanban(a);
+  renderTarefasView();
+  try{ if(typeof renderMeuDia==='function') renderMeuDia(); }catch(e){}
 }
 /* ===== Detalhe do dia (toque no dia abre a lista legível — resolve a visibilidade no celular) ===== */
 var _tarDiaISO=null;
