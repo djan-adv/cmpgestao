@@ -3007,6 +3007,9 @@ function renderHistorico(){
     var isMan=(mv.f==='manual')||/^\[Anotação/.test(String(mv.texto||''));
     var dt=mv.data?String(mv.data).slice(0,10).split("-").reverse().join("/"):"";
     var teor=null,best=99;for(var pi=0;pi<pubs.length;pi++){if(!pubs[pi].texto)continue;var df=Math.abs(dDiff((pubs[pi].data||"").slice(0,10),dt));if(df<=7&&df<best){best=df;teor=pubs[pi].texto;}}
+    /* o próprio andamento pode JÁ conter o inteiro teor (publicação DJEN gravada
+       no histórico) — nesse caso mostra "ver teor" direto, sem depender da lista global */
+    if(!teor && !isMan && !ehCaptura && String(mv.texto||'').length>180) teor=mv.texto;
     /* captura externa: mostra o próprio texto (com a transcrição da IA), sem a nota de "não está na captura pública" */
     var content=teor||(ehCaptura?(mv.texto||nome):("Registro do movimento: "+(mv.texto||nome)+"\n\n(O conteúdo detalhado deste andamento não está na captura pública. As publicações com o inteiro teor estão no bloco de publicações e marcadas em dourado.)"));
     /* captura: transcrição da IA (tudo depois do título) mostrada direto no histórico */
@@ -3498,8 +3501,11 @@ function toggleConcluirTarefa(id){
       /* triagem: TODAS as publicações recentes não tratadas (não só as de hoje).
          Amplia a janela para 90 dias de 'data' e remove o filtro de 'criado_em' de 24h. */
       var dmin=new Date(Date.now()-90*86400000).toISOString().slice(0,10);
-      var pr=await sb.from('andamentos').select('data,texto,criado_em,triada,processos(numero,cliente_nome,foro)').gte('data',dmin).order('data',{ascending:false}).limit(1000);
-      if(pr.error){ /* fallback: coluna 'triada' pode não existir ainda */ pr=await sb.from('andamentos').select('data,texto,criado_em,processos(numero,cliente_nome,foro)').gte('data',dmin).order('data',{ascending:false}).limit(1000); }
+      /* SÓ publicações do DJEN (que têm o teor) — sem o filtro, os milhares de
+         movimentos curtos do jus.br/datajud entopem o limite de 1000 e expulsam
+         as publicações: o histórico perde o "ver teor" e a triagem perde itens. */
+      var pr=await sb.from('andamentos').select('data,texto,criado_em,triada,processos(numero,cliente_nome,foro)').eq('fonte','djen').gte('data',dmin).order('data',{ascending:false}).limit(1000);
+      if(pr.error){ /* fallback: coluna 'triada' pode não existir ainda */ pr=await sb.from('andamentos').select('data,texto,criado_em,processos(numero,cliente_nome,foro)').eq('fonte','djen').gte('data',dmin).order('data',{ascending:false}).limit(1000); }
       if(!pr.error && pr.data && pr.data.length){
         var UFJ={'15':'PB','25':'SE','05':'BA','17':'PE','06':'CE','13':'MG','19':'RJ','26':'SP','16':'PR','20':'RN','02':'AL','10':'MA','24':'SC','09':'GO','04':'AM','08':'ES','12':'AC','23':'RR'};
         function tribDe(num){ var m=String(num||'').replace(/\D/g,''); if(m.length<16) return '';
