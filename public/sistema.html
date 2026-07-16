@@ -108,6 +108,10 @@
   .cev.az{background:#185FA5} .cev.am{background:#E0A800;color:#3a2b00} .cev.vm{background:#b5342b}
   input[type=checkbox]{width:auto}
   .overlay{position:fixed;inset:0;background:rgba(20,26,36,.5);display:flex;align-items:center;justify-content:center;padding:20px;z-index:60}
+  /* modo "pano de fundo": a ficha do processo fica visível e ROLÁVEL/clicável atrás,
+     e o formulário encosta à direita (usado ao agendar tarefa/audiência de um processo) */
+  .overlay.peek{pointer-events:none;background:rgba(20,26,36,.16);justify-content:flex-end;align-items:flex-start}
+  .overlay.peek .modal{pointer-events:auto;margin:8px 6px 0 0;box-shadow:0 16px 52px rgba(10,16,26,.42);border:1px solid var(--line)}
   .modal{background:#fff;border-radius:14px;padding:22px;max-width:520px;width:100%;max-height:88vh;overflow:auto}
   .modal h2{margin:0 0 12px;font-size:17px;color:var(--navy)}
   .modal .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
@@ -2495,7 +2499,14 @@ var TIPOCOR={audiencia:"az",reuniao:"az",manifestacao:"am",prazo:"vm",tarefa:"nt
 function _v(id){var e=document.getElementById(id);return e?(e.value||"").trim():"";}
 /* assinatura padrão do escritório; comunicações em nome do DJAN levam a OAB na linha abaixo */
 function _assinaturaCMP(nome){ nome=String(nome||'').trim(); var oab=/(^|\s)djan/i.test(nome)?'\nOAB/PB 5219-A':''; return 'Atenciosamente,\n'+nome+oab+'\nCrispim Mendonça e Pinheiro Advogados'; }
-function abrirNovaTarefa(proc){window._tarEditId=null;document.getElementById("modal-tarefa").classList.remove("hidden");if(proc){document.getElementById("t-proc").value=proc;} if(typeof onTipoTarefa==='function')onTipoTarefa();
+function abrirNovaTarefa(proc){window._tarEditId=null;
+  var ov=document.getElementById("modal-tarefa");
+  /* pano de fundo: abre a FICHA do processo atrás do formulário, com rolagem e
+     leitura livres — agendar olhando o processo evita erro de data */
+  var peek=false;
+  if(proc){ try{ var dgP=String(proc).replace(/\D/g,''); if(dgP.length>=11){ var ixP=DADOS.processos.findIndex(function(p){return String(p.numero||'').replace(/\D/g,'')===dgP;}); if(ixP>=0){ abrir(ixP); peek=true; } } }catch(ePk){} }
+  ov.classList.toggle('peek',peek);
+  ov.classList.remove("hidden");if(proc){document.getElementById("t-proc").value=proc;} if(typeof onTipoTarefa==='function')onTipoTarefa();
   var _cb=document.getElementById('t-btn-concluir'); if(_cb) _cb.style.display='none';
   var _sb=document.getElementById('t-btn-salvar'); if(_sb) _sb.textContent='Criar e distribuir';}
 function novaTarefaDoProcesso(){abrirNovaTarefa(atual?atual.numero:"");}
@@ -2590,6 +2601,33 @@ function salvarTarefa(){
   var _dia=document.getElementById("t-dia").checked;
   /* edição real: aberta a partir de uma atividade existente -> ATUALIZA (não duplica) */
   var _isEdit=!!(window._tarEditId && (KAN||[]).some(function(x){return x.id===window._tarEditId;}));
+  /* CONFLITO DE AGENDAMENTO (regra CMP): mesmo processo + mesmo dia de vencimento.
+     - tarefa/atividade × tarefa/atividade → alerta (audiência fica DE FORA: pode
+       haver tarefa no mesmo dia de audiência — raro, mas ocorre)
+     - audiência nova × audiência JÁ designada no processo → alerta
+     Opções: OK abre a existente para editar; Cancelar descarta o novo agendamento. */
+  if(!_isEdit && proc && proc!=='—'){
+    var digC=String(proc).replace(/\D/g,'');
+    if(tipo==='audiencia'){
+      var dAud=data||prazo;
+      var evConf=dAud?(window.__AGDB||[]).find(function(e){ return e && (e.tipo==='az'||/audi[êe]ncia/i.test(e.tt||'')) && e.data===dAud && String((e.p&&e.p.numero)||'').replace(/\D/g,'')===digC; }):null;
+      if(evConf){
+        if(confirm('⚠ JÁ EXISTE AUDIÊNCIA designada para este processo em '+evConf.data.split('-').reverse().join('/')+':\n\n«'+(evConf.tt||'')+'» às '+(evConf.hora||'')+'\n\nOK = abrir a audiência existente para editar\nCancelar = descartar este agendamento')){
+          fecharTarefa(); try{ abrirEventoAgenda(evConf); }catch(eC){ go('agenda'); }
+        }
+        return;
+      }
+    } else {
+      var vencN=prazo||data;
+      var tConf=vencN?(KAN||[]).find(function(t){ return t && t.id!==window._tarEditId && t.col!=='finalizado' && t.tipoForm!=='audiencia' && String(t.numero||'').replace(/\D/g,'')===digC && ((t.prazo||t.data)===vencN); }):null;
+      if(tConf){
+        if(confirm('⚠ JÁ EXISTE TAREFA/ATIVIDADE para este processo em '+vencN.split('-').reverse().join('/')+':\n\n«'+(tConf.titulo||'')+'» ('+(tConf.resp||'sem responsável')+')\n\nOK = abrir a tarefa existente para editar\nCancelar = descartar este novo agendamento')){
+          fecharTarefa(); try{ abrirTarefaKanban(tConf.id); }catch(eT){}
+        }
+        return;
+      }
+    }
+  }
   var _nova;
   if(_isEdit){
     _nova=KAN.find(function(x){return x.id===window._tarEditId;});
