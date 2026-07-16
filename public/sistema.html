@@ -1445,7 +1445,7 @@ function abrir(i){
   /* card "Partes" removido — cliente principal e parte contrária já constam no cabeçalho */
   // observações (um único ponto de observação por processo, criável/editável — estilo Astrea)
   html+='<div class="card" id="obs-card"><p class="sectlabel" style="display:flex;justify-content:space-between;align-items:center">Observações'+
-    '<span id="obs-acoes"></span></p><div id="obs-corpo"></div></div>';
+    '<span id="obs-acoes"></span></p><div id="obs-audiencia"></div><div id="obs-corpo"></div></div>';
   // histórico (termos oficiais)
   /* aba "Publicações com inteiro teor (DJEN)" removida a pedido — sem utilidade prática */
   html+='<div class="card"><p class="sectlabel" style="display:flex;justify-content:space-between;align-items:center">Histórico completo (termos oficiais)'+(p.hist_full&&p.hist_full.length?(' — '+p.hist_full.length+' andamentos'):'')+'<span style="display:flex;gap:6px"><button id="btn-atu-hist" class="btn sm" style="font-size:12px" onclick="atualizarHistorico()" title="Consulta o DJEN e traz os andamentos novos deste processo">↻ Atualizar</button><button class="btn sm ghost" style="font-size:12px" onclick="addHistManual()">+ histórico manual</button></span></p><ul class="timeline" id="det-hist"></ul><div id="det-hist-more" style="margin-top:8px"></div></div>';
@@ -3550,6 +3550,8 @@ function toggleConcluirTarefa(id){
         console.log('CMPGestao: '+window.__KANDB.length+' tarefas do Kanban carregadas do banco.');
       }
     }catch(eKt){ console.log('kanban: '+(eKt&&eKt.message||eKt)); }
+    /* audiências trabalhistas futuras já marcadas → garante a tarefa de ATA do dia seguinte */
+    try{ if(typeof varreAtasTrabalhistas==='function') varreAtasTrabalhistas(); }catch(eVa){}
     /* carrega os contatos importados (382) da tabela `contatos` do Supabase.
        Lê '*' para funcionar com as colunas do import (nome, telefones, emails, cpf_cnpj...). */
     try{
@@ -5987,6 +5989,118 @@ function renderObservacoes(){
   corpo.innerHTML= txt
     ? '<div style="white-space:pre-wrap;font-size:13.5px;color:var(--ink);line-height:1.55">'+esc(txt)+'</div>'
     : '<p class="note" style="margin:0">Nenhuma observação neste processo. Clique em "+ adicionar observação".</p>';
+  try{ renderAudienciaSugestao(); }catch(e){}
+}
+/* ===== Audiência detectada no histórico (só datas de HOJE em diante) =====
+   Lê o histórico à procura de "audiência ... dd/mm/aaaa"; audiência passada é
+   irrelevante e não aparece. A sugestão fica no quadro Observações, em destaque,
+   com botão para gravar na agenda (vira evento azul de audiência). */
+function _audienciasFuturasDoHist(p){
+  var hoje=new Date(); hoje.setHours(0,0,0,0);
+  var out={}, res=[];
+  ((p&&p.hist_full)||[]).forEach(function(mv){
+    var t=String((mv&&mv.texto)||''); if(!/audi[êe]ncia/i.test(t)) return;
+    var re=/audi[êe]ncia/gi, m;
+    while((m=re.exec(t))){
+      var jan=t.slice(Math.max(0,m.index-80), m.index+220); /* datas perto da palavra */
+      var reD=/(\d{1,2})[\/\.](\d{1,2})[\/\.](\d{4})/g, dm;
+      var hm=jan.match(/(\d{1,2}):(\d{2})/)||jan.match(/(\d{1,2})h(\d{2})?/i);
+      var hora=hm?(String(hm[1]).padStart(2,'0')+':'+String(hm[2]||'00').padStart(2,'0')):'';
+      var tipo=(jan.match(/audi[êe]ncia\s+(una|de instru[çc][ãa]o e julgamento|de instru[çc][ãa]o|de concilia[çc][ãa]o|inicial|de justifica[çc][ãa]o)/i)||[])[1]||'';
+      while((dm=reD.exec(jan))){ /* redesignações citam a data antiga E a nova: avalia TODAS, fica só o futuro */
+        var iso=dm[3]+'-'+String(dm[2]).padStart(2,'0')+'-'+String(dm[1]).padStart(2,'0');
+        var d=new Date(iso+'T00:00:00'); if(isNaN(d)||d<hoje) continue;
+        if(!out[iso]){ out[iso]=1; res.push({iso:iso, hora:hora, tipo:tipo?tipo.toLowerCase():''}); }
+      }
+    }
+  });
+  res.sort(function(a,b){return a.iso<b.iso?-1:1;});
+  return res;
+}
+function _hojeISO(){ var d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function _diaSeguinteISO(iso){ var d=new Date(iso+'T12:00:00'); d.setDate(d.getDate()+1); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function renderAudienciaSugestao(){
+  var el=document.getElementById('obs-audiencia'); if(!el||!atual){ if(el) el.innerHTML=''; return; }
+  var dig=String(atual.numero||'').replace(/\D/g,''), hoje=_hojeISO(), html='';
+  /* 1) audiências JÁ MARCADAS na agenda deste processo: card destacado até o dia
+     da audiência — some sozinho no dia seguinte */
+  var marcadas=(window.__AGDB||[]).filter(function(e){
+    return e && e.data>=hoje && String((e.p&&e.p.numero)||'').replace(/\D/g,'')===dig
+      && (e.tipo==='az'||/audi[êe]ncia/i.test(e.tt||''));
+  }).sort(function(a,b){return a.data<b.data?-1:1;});
+  var datasMarcadas={};
+  marcadas.slice(0,3).forEach(function(e){
+    datasMarcadas[e.data]=1;
+    var br=e.data.split('-').reverse().join('/');
+    html+='<div style="background:var(--dangerbg);border:1px solid #f0c8c4;border-radius:8px;padding:8px 11px;margin:0 0 10px;font-size:13px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">'
+      +'<b style="color:var(--danger);font-size:13.5px">📅 AUDIÊNCIA — '+esc(br)+(e.hora&&e.hora!=='Dia todo'?(' às '+esc(e.hora)):'')+'</b>'
+      +'<span class="note" style="margin:0">'+esc(e.tt||'')+'</span>'
+      +'<a onclick="go(\'agenda\')" style="cursor:pointer;color:#185FA5;font-size:11.5px">abrir agenda</a>'
+      +'</div>';
+  });
+  /* 2) audiências FUTURAS encontradas no histórico e ainda fora da agenda: sugerir gravar */
+  var auds=_audienciasFuturasDoHist(atual);
+  auds.slice(0,3).forEach(function(a){
+    if(datasMarcadas[a.iso]) return;
+    var jaAg=(window.__AGDB||[]).some(function(e){ return e && e.data===a.iso && String((e.p&&e.p.numero)||'').replace(/\D/g,'')===dig; });
+    if(jaAg) return;
+    var dispensada=false; try{ dispensada=!!localStorage.getItem('audSug:'+dig+':'+a.iso); }catch(e){}
+    if(dispensada) return;
+    var br=a.iso.split('-').reverse().join('/');
+    var rotulo='AUDIÊNCIA'+(a.tipo?(' '+a.tipo.toUpperCase()):'')+' — '+br+(a.hora?(' às '+a.hora):'');
+    html+='<div style="background:#fdf8ec;border:1px solid #e8dcbb;border-radius:8px;padding:8px 11px;margin:0 0 10px;font-size:13px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">'
+      +'<b style="color:#7b1e3a">📅 '+esc(rotulo)+'</b> <span class="note" style="margin:0">encontrada no histórico — ainda fora da agenda</span>'
+      +'<button class="btn sm gold" onclick="gravarAudienciaSug(\''+a.iso+'\',\''+(a.hora||'')+'\',\''+esc(a.tipo).replace(/'/g,'')+'\')">📌 Gravar audiência</button>'
+      +'<a onclick="dispensarAudienciaSug(\''+dig+'\',\''+a.iso+'\')" style="cursor:pointer;color:var(--muted);font-size:11.5px" title="Não sugerir mais esta data neste processo">ignorar</a>'
+      +'</div>';
+  });
+  el.innerHTML=html;
+}
+/* Trabalhista (TRT): audiência gera TAREFA AUTOMÁTICA de buscar a ATA no dia
+   seguinte — na ata ficam prazos e acordos, e o cliente recebe a ata/resumo. */
+function _ehTrabalhista(numero){ var t=tribunalAlias(numero); return !!(t&&/^trt/.test(t)); }
+function garanteTarefaAta(p,isoAudiencia){
+  try{
+    if(!p||!_ehTrabalhista(p.numero)) return;
+    var alvo=_diaSeguinteISO(isoAudiencia);
+    if(!KAN) initKanban();
+    var ja=(KAN||[]).some(function(t){ return t && String(t.numero||'')===String(p.numero||'') && /buscar.*ata/i.test(t.titulo||'') && (t.data===alvo||t.prazo===alvo); });
+    if(ja) return;
+    var nova={id:5000+(KAN?KAN.length:0),titulo:'Buscar e ler a ATA da audiência (prazos e acordos) — enviar ata/resumo ao cliente',cliente:(p.cliente||p.numero),numero:p.numero,col:'distribuir',resp:'',data:alvo,prazo:alvo,tipoForm:'prazo'};
+    KAN.push(nova); persisteKanban(nova);
+    console.log('CMPGestao: tarefa automática de ATA criada para '+p.numero+' em '+alvo+'.');
+  }catch(e){ console.warn('garanteTarefaAta:',e); }
+}
+/* varredura na abertura do sistema: toda audiência trabalhista futura já marcada
+   na agenda ganha (se ainda não tiver) a tarefa de ata do dia seguinte */
+function varreAtasTrabalhistas(){
+  try{
+    var hoje=_hojeISO();
+    (window.__AGDB||[]).forEach(function(e){
+      if(!e||e.data<hoje) return;
+      if(!(e.tipo==='az'||/audi[êe]ncia/i.test(e.tt||''))) return;
+      var dig=String((e.p&&e.p.numero)||'').replace(/\D/g,''); if(!dig) return;
+      var p=(DADOS.processos||[]).find(function(x){ return String(x.numero||'').replace(/\D/g,'')===dig; });
+      if(p) garanteTarefaAta(p,e.data);
+    });
+  }catch(e){ console.warn('varreAtasTrabalhistas:',e); }
+}
+function dispensarAudienciaSug(dig,iso){ try{ localStorage.setItem('audSug:'+dig+':'+iso,'1'); }catch(e){} renderAudienciaSugestao(); }
+async function gravarAudienciaSug(iso,hora,tipo){
+  if(!atual) return; var sb=window.__sb; if(!sb) return;
+  try{
+    var ug=await sb.auth.getUser(); var pf=await sb.from('usuarios').select('escritorio_id').eq('id',ug.data.user.id).single();
+    var esc3=pf.data&&pf.data.escritorio_id; if(!esc3){ alert('Escritório não encontrado.'); return; }
+    var tit='Audiência'+(tipo?(' '+tipo):'')+' — '+(atual.cliente||atual.numero);
+    var w=await sb.from('agenda_eventos').insert({escritorio_id:esc3,data:iso,hora:(hora||'09:00'),tipo:'az',titulo:tit,resp:'Djan',processo_numero:atual.numero,origem:'sistema'}).select('id').single();
+    if(w.error){ alert('Erro ao gravar: '+w.error.message); return; }
+    window.__AGDB=window.__AGDB||[]; window.__AGDB.push({id:w.data&&w.data.id,data:iso,hora:(hora||'09:00'),tipo:'az',tt:tit,resp:'Djan',p:{numero:atual.numero,cliente:atual.cliente||''}});
+    AGENDA=null; try{ initAgenda(); }catch(e){}
+    var avisoAta='';
+    if(_ehTrabalhista(atual.numero)){ garanteTarefaAta(atual,iso); avisoAta='\n+ tarefa automática criada: buscar a ATA no dia seguinte (trabalhista).'; }
+    renderAudienciaSugestao();
+    alert('✓ Audiência gravada na agenda: '+iso.split('-').reverse().join('/')+(hora?(' às '+hora):'')+'.'+avisoAta);
+  }catch(e){ alert('Erro: '+(e&&e.message||e)); }
 }
 function editarObservacoes(){
   var corpo=document.getElementById('obs-corpo'), acoes=document.getElementById('obs-acoes');
