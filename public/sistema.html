@@ -3607,9 +3607,25 @@ function toggleConcluirTarefa(id){
     try{
       /* itens da agenda concluídos/excluídos sem id no banco (carga Astrea) — ficam ocultos */
       try{ var oc=await sb.from('agenda_ocultos').select('chave').limit(3000); if(!oc.error&&oc.data){ window.__AGOCULT={}; oc.data.forEach(function(x){ if(x&&x.chave) window.__AGOCULT[x.chave]=1; }); } }catch(eOc){}
-      var ag=await sb.from('agenda_eventos').select('id,data,hora,tipo,titulo,resp,processo_numero,origem').order('data',{ascending:true}).limit(2000);
+      /* agenda SEM teto: o limite antigo (2000, data crescente) cortava os eventos
+         FUTUROS quando a tabela crescia — tarefas e audiências "sumiam" da tela.
+         Agora carrega tudo em blocos (keyset por id). */
+      var agRows=[], agLast=null;
+      for(;;){
+        var agQ=sb.from('agenda_eventos').select('id,data,hora,tipo,titulo,resp,processo_numero,origem').order('id',{ascending:true}).limit(1000);
+        if(agLast!==null) agQ=agQ.gt('id',agLast);
+        var agR=await agQ;
+        if(agR.error){ if(!agRows.length){ agRows=null; } break; }
+        var lote=agR.data||[]; if(!lote.length) break;
+        agRows=agRows.concat(lote); agLast=lote[lote.length-1].id;
+        if(lote.length<1000) break;
+      }
+      var ag={error:(agRows===null), data:agRows||[]};
       if(!ag.error&&ag.data){
         window.__AGDB=ag.data.map(function(e){return {id:e.id,data:String(e.data).slice(0,10),hora:e.hora||'09:00',tipo:e.tipo||'nt',tt:e.titulo,resp:e.resp||'',org:(e.origem||''),p:{numero:e.processo_numero||'—',cliente:''}};});
+        /* dedup de exibição: se houver cópias idênticas (mesmo processo+data+título),
+           mostra UMA — as cópias continuam no banco até a limpeza, mas não poluem */
+        (function(){ var seen={}; window.__AGDB=window.__AGDB.filter(function(e){ var k=e.data+'|'+(e.hora||'')+'|'+String(e.tt||'').slice(0,60)+'|'+String((e.p&&e.p.numero)||'').replace(/\D/g,''); if(seen[k]) return false; seen[k]=1; return true; }); })();
         AGENDA=null; initAgenda();
         /* CORREÇÃO: re-renderiza a agenda agora que os dados chegaram (evita ficar em branco até trocar de view) */
         try{ var __sec=(document.querySelector('#s-agenda') && !document.getElementById('s-agenda').classList.contains('hidden')); if(__sec && typeof renderAgendaView==='function') renderAgendaView(); }catch(eR){}
@@ -6179,6 +6195,11 @@ async function varreAudienciasAuto(){
     var criadas=0;
     for(var i=0;i<candidatos.length;i++){
       var c=candidatos[i];
+      /* conferência FINAL no banco (além da memória): nunca duplicar */
+      try{
+        var dupe=await sb.from('agenda_eventos').select('id').eq('data',c.a.iso).eq('processo_numero',c.p.numero).limit(1);
+        if(dupe&&dupe.data&&dupe.data.length){ garanteTarefaAta(c.p,c.a.iso); continue; }
+      }catch(eDp){}
       var tit='Audiência'+(c.a.tipo?(' '+c.a.tipo):'')+' — '+(c.p.cliente||c.p.numero);
       var w=await sb.from('agenda_eventos').insert({escritorio_id:escA2,data:c.a.iso,hora:(c.a.hora||'09:00'),tipo:'az',titulo:tit,resp:'Djan',processo_numero:c.p.numero,origem:'auto-sistema',descricao:'Agendado automaticamente pelo sistema — audiência encontrada no histórico do processo.'}).select('id').single();
       if(w&&!w.error){
