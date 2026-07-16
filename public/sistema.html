@@ -511,11 +511,12 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
       <div id="t-prazo-nota" class="note" style="margin:6px 0 0;font-size:11px">Conta em dias úteis a partir do 1º dia útil após a publicação, pulando fins de semana, feriados nacionais fixos e recesso forense (20/12–20/1). <b>Confira sempre</b> — não cobre Carnaval, Corpus Christi nem feriados estaduais/locais.</div>
     </div>
     <label>Tarefa (o que fazer)</label><input id="t-titulo" placeholder="Ex.: Protocolar cumprimento de sentença">
-    <div class="row3">
+    <div class="row3" id="t-datas-row">
       <div><label>Data</label><input id="t-data" type="date" min="2000-01-01" max="2100-12-31" onchange="guardData(this)"></div>
       <div><label>Hora</label><input id="t-hora" type="time"></div>
       <div><label>Prazo fatal</label><input id="t-prazo" type="date" min="2000-01-01" max="2100-12-31" onchange="guardData(this)"></div>
     </div>
+    <div id="t-datas-auto" class="note" style="display:none;margin:2px 0 8px;font-size:12px"></div>
     <div class="flags"><label><input type="checkbox" id="t-agenda" checked> Mostrar na agenda</label><label><input type="checkbox" id="t-dia"> Dia inteiro</label><label><input type="checkbox" id="t-imp"> Importante</label><label><input type="checkbox" id="t-urg"> Urgente</label></div>
     <label style="margin-top:10px">Local</label><input id="t-local" placeholder="Local (audiência/evento)">
     <label>Descrição</label><textarea id="t-desc" placeholder="Detalhes, @menção..."></textarea>
@@ -2505,6 +2506,27 @@ function onTipoTarefa(){
   var tipo=(document.getElementById('t-tipo')||{}).value;
   var box=document.getElementById('t-prazo-box'); if(!box) return;
   box.style.display=(tipo==='prazo')?'block':'none';
+  /* tipo PRAZO: a fileira Data/Hora/Prazo fatal é desnecessária — o cálculo já
+     preenche tudo (fatal calculado + alerta 2 dias úteis antes) */
+  var row=document.getElementById('t-datas-row'), nota=document.getElementById('t-datas-auto');
+  if(row) row.style.display=(tipo==='prazo')?'none':'';
+  if(nota){ nota.style.display=(tipo==='prazo')?'block':'none'; if(tipo==='prazo') _notaDatasAuto(); }
+}
+/* volta N dias úteis a partir de uma data (para o alerta antecipado do prazo) */
+function _subDiasUteis(baseISO, n){
+  if(!baseISO||!n) return baseISO||'';
+  var parts=String(baseISO).slice(0,10).split('-'); if(parts.length!==3) return '';
+  var d=new Date(+parts[0], +parts[1]-1, +parts[2]);
+  var contados=0, guard=0;
+  while(contados<n && guard<400){ d.setDate(d.getDate()-1); guard++; if(_ehDiaUtil(d)) contados++; }
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function _notaDatasAuto(){
+  var nota=document.getElementById('t-datas-auto'); if(!nota) return;
+  var fatal=(document.getElementById('t-prazo')||{}).value, data=(document.getElementById('t-data')||{}).value;
+  nota.innerHTML=fatal
+    ? '🔔 Agendado automaticamente: <b>prazo fatal '+fatal.split('-').reverse().join('/')+'</b> · alerta e entrada no Meu dia em <b>'+String(data||'').split('-').reverse().join('/')+'</b> (2 dias úteis antes).'
+    : 'Preencha a publicação e o prazo acima — o sistema calcula o prazo fatal e agenda o alerta 2 dias úteis antes, sem precisar digitar datas.';
 }
 /* é dia útil? (exclui sáb/dom, feriados nacionais fixos e recesso forense 20/12–20/1) */
 function _ehDiaUtil(d){
@@ -2536,12 +2558,14 @@ function calcPrazoFatal(){
   var out=document.getElementById('t-prazo-calc');
   var campoPrazo=document.getElementById('t-prazo');
   var campoData=document.getElementById('t-data');
-  if(!pub||!dias){ if(out)out.value=''; return; }
+  if(!pub||!dias){ if(out)out.value=''; if(typeof _notaDatasAuto==='function')_notaDatasAuto(); return; }
   var fatalISO=_somaDiasUteis(pub, dias);
   if(out) out.value=fatalISO?fatalISO.split('-').reverse().join('/'):'';
-  /* preenche automaticamente o campo Prazo fatal (e a data prevista, se vazia) */
+  /* preenche tudo automaticamente: prazo fatal calculado e data prevista/alerta
+     2 dias ÚTEIS antes do fatal — a fileira de datas fica dispensada no tipo Prazo */
   if(campoPrazo) campoPrazo.value=fatalISO;
-  if(campoData && !campoData.value) campoData.value=fatalISO;
+  if(campoData) campoData.value=_subDiasUteis(fatalISO,2)||fatalISO;
+  if(typeof _notaDatasAuto==='function')_notaDatasAuto();
 }
 /* ===== Trava anti-erro de digitação em datas (ex.: ano "20026") =====
    Aceita só AAAA-MM-DD com ano entre 2000 e 2100 e data real; senão devolve ''. */
