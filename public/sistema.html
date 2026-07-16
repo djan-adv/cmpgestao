@@ -1978,22 +1978,33 @@ function renderTriagem(){
   if(vazia){ vazia.style.display=lista.length?"none":"block"; vazia.textContent=(triagemAba==='tratadas')?'Nenhuma publicação tratada ainda.':'Fila vazia — tudo triado.'; }
   lista.slice(0,300).forEach(function(t){
     var sug=sugestaoTeor(t.texto||t.titulo); var pz=sug.prazo?(sug.prazo+" dias"):"agendar";
-    var teorHtml=t.texto?('<div style="background:var(--accentbg);border-left:3px solid var(--gold);padding:8px 10px;border-radius:0 6px 6px 0;margin:6px 0;color:var(--ink);white-space:normal"><b>Sugestão de tratamento (IA):</b> '+esc(sug.ativ)+' — <b>prazo sugerido: '+pz+'</b></div><div style="font-weight:600">Teor do despacho:</div><div style="white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;max-height:240px;overflow:auto">'+esc(t.texto)+'</div>'):'<div class="note">Sem teor disponível.</div>';
+    var teorHtml=t.texto?('<div style="background:var(--accentbg);border-left:3px solid var(--gold);padding:8px 10px;border-radius:0 6px 6px 0;margin:6px 0;color:var(--ink);white-space:normal"><b>Sugestão de tratamento (IA):</b> '+esc(sug.ativ)+' — <b>prazo sugerido: '+pz+'</b></div><div style="font-weight:600">Teor do despacho:</div><div style="white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;max-height:480px;overflow:auto;font-size:13.5px;line-height:1.55">'+esc(t.texto)+'</div>'):'<div class="note">Sem teor disponível.</div>';
     var tr=document.createElement("tr");
     tr.innerHTML='<td class="proc" data-label="Processo"><a onclick="irParaProcesso(\''+String(t.numero).replace(/'/g,"")+'\')" style="cursor:pointer;color:var(--navy);text-decoration:underline">'+esc(t.numero)+'</a>'+(t.tribunal?('<div class="note" style="margin:0">'+esc(t.tribunal)+' · '+esc(t.data||"")+'</div>'):'')+'</td><td data-label="Cliente">'+esc(t.cliente||"—")+'</td>'+
-      '<td data-label="Movimentação">'+esc(t.titulo)+' <a onclick="toggleTeor('+t.id+')" style="cursor:pointer;color:var(--muted);font-size:11px">(ver teor)</a>'+
-      /* prévia do teor do despacho: mais linhas visíveis (fonte 30% menor) para leitura/decisão sem abrir "ver teor" */
-      (t.texto?('<div class="mov-previa" style="font-size:70%;line-height:1.4;color:var(--ink);opacity:.82;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;margin-top:4px">'+esc(t.texto)+'</div>'):'')+
-      '<div class="teor" id="teor-'+t.id+'" style="display:none;font-size:12px;color:var(--muted);margin-top:6px">'+teorHtml+'</div></td>'+
+      '<td data-label="Movimentação">'+esc(t.titulo)+' <a onclick="toggleTeor('+t.id+')" style="cursor:pointer;background:var(--accentbg);color:#8a5a00;border:1px solid #e8dcbb;border-radius:12px;padding:1px 9px;font-size:11.5px;font-weight:700;white-space:nowrap">ver teor</a></td>'+
       '<td data-label="Sugestão">'+'<b>'+esc(sug.ativ)+'</b><div class="note" style="margin:0">prazo sugerido: '+pz+'</div></td>'+
       (t.done
         ? '<td data-label="Classificar"><span style="color:#0F6E56;font-weight:600;font-size:12px">✓ tratada</span> <button class="btn sm ghost" onclick="reabrirTriagem('+t.id+')" title="Voltar para a fila">reabrir</button></td>'
         : '<td data-label="Classificar"><button class="btn sm gold" onclick="acaoTriagem('+t.id+')">criar atividade &rarr;</button> <button class="btn sm ghost" onclick="cienciaTriagem('+t.id+')">ciência</button> <button class="btn sm ghost" style="color:#0b7285" onclick="abrirAtualizarCliente(\''+String(t.numero).replace(/'/g,"")+'\')" title="Comunicar a cliente por e-mail (informar a movimentação ou pedir uma providência)">&#9993; cliente</button></td>');
     tb.appendChild(tr);
+    /* prévia do teor em linha própria, LARGA (da coluna Movimentação até o fim) e
+       com letra legível — o "ver teor" expande o texto completo aqui embaixo */
+    if(t.texto){
+      var tr2=document.createElement("tr");
+      tr2.innerHTML='<td colspan="2" style="border-top:none;padding:0"></td>'+
+        '<td colspan="3" data-label="Teor" style="border-top:none;padding:0 10px 12px">'
+        +'<div class="mov-previa" style="font-size:13px;line-height:1.5;color:var(--ink);opacity:.88;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical;overflow:hidden">'+esc(t.texto)+'</div>'
+        +'<div class="teor" id="teor-'+t.id+'" style="display:none;font-size:13px;color:var(--ink);margin-top:6px">'+teorHtml+'</div></td>';
+      tb.appendChild(tr2);
+    } else {
+      var tr2b=document.createElement("tr");
+      tr2b.innerHTML='<td colspan="2" style="border-top:none;padding:0"></td><td colspan="3" style="border-top:none;padding:0 10px 8px"><div class="teor" id="teor-'+t.id+'" style="display:none;font-size:13px;color:var(--ink)">'+teorHtml+'</div></td>';
+      tb.appendChild(tr2b);
+    }
   });
 }
 function reabrirTriagem(id){ var t=TRIAGEM.find(function(x){return x.id===id;}); if(t){ t.done=false; try{ var sb=window.__sb; if(sb){ var numR=String(t.numero||'').replace(/\D/g,''); sb.from('processos').select('id').eq('numero_digitos',numR).limit(1).then(function(r){ var pid=r&&r.data&&r.data[0]&&r.data[0].id; if(pid){ sb.from('andamentos').update({triada:false}).eq('processo_id',pid).eq('data',String(t.data||'').slice(0,10)).then(function(){}); } }); } }catch(e){} renderTriagem(); } }
-function toggleTeor(id){var d=document.getElementById("teor-"+id);if(!d)return;d.style.display=(d.style.display==="none")?"block":"none";}
+function toggleTeor(id){var d=document.getElementById("teor-"+id);if(!d)return;var aberto=(d.style.display==="none");d.style.display=aberto?"block":"none";var prev=d.parentElement?d.parentElement.querySelector('.mov-previa'):null;if(prev)prev.style.display=aberto?"none":"-webkit-box";}
 function irParaProcesso(num){var dd=String(num).replace(/\D/g,"");var i=DADOS.processos.findIndex(function(p){return String(p.numero).replace(/\D/g,"")===dd;});if(i>=0){abrir(i);}else{alert("Este processo (nº "+num+") tem publicação capturada, mas não está na base de 480 processos importada do Astrea. No sistema real, todos os processos entram e o link abre a página completa.");}}
 /* se chegou uma publicação (DJEn) para o número de um CASO, ele deixa de ser "não
    vinculado": vira processo monitorado. Silencioso — só atualiza a marca. */
