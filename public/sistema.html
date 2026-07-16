@@ -6521,11 +6521,13 @@ function abrirTribunal(numero){
   window.open(url,'_blank','noopener');
 }
 </script>
-<div id="modal-contato" class="overlay hidden"><div class="modal" style="max-width:520px">
+<div id="modal-contato-orgao" class="overlay hidden"><div class="modal" style="max-width:520px">
   <h2>Contato da vara / órgão</h2>
+  <p class="note" style="margin:0 0 10px">Vale para <b>todos os processos desta vara</b> automaticamente.</p>
   <label>Órgão / vara</label><input id="co-orgao" style="width:100%;box-sizing:border-box;margin-bottom:8px" />
   <label>E-mail</label><input id="co-email" placeholder="secretaria@tjxx.jus.br" style="width:100%;box-sizing:border-box;margin-bottom:8px" />
-  <label>WhatsApp / telefone</label><input id="co-whats" placeholder="(83) 90000-0000" style="width:100%;box-sizing:border-box;margin-bottom:8px" />
+  <label>WhatsApp (o número que abre no botão verde)</label><input id="co-whats" placeholder="(83) 90000-0000" style="width:100%;box-sizing:border-box;margin-bottom:8px" />
+  <label>Outros telefones (separe por vírgula — ficam expostos na ficha)</label><input id="co-tels" placeholder="(83) 2108-4113, (83) 3690-1000" style="width:100%;box-sizing:border-box;margin-bottom:8px" />
   <label>Link do balcão virtual desta vara (opcional)</label><input id="co-link" style="width:100%;box-sizing:border-box;margin-bottom:8px" />
   <div style="margin-top:8px;display:flex;gap:8px"><button class="btn" onclick="salvarContatoOrgao()">Salvar</button><button class="btn ghost" onclick="fecharContatoOrgao()">Cancelar</button></div>
 </div></div>
@@ -6994,27 +6996,49 @@ function contatoDoProcesso(p){ if(!p) return null; var trib=tribunalAlias(p.nume
 }
 function contatoBlocoHTML(p){
   var bl=balcaoLink(p.numero); var trib=bl.trib?bl.trib.toUpperCase():'tribunal';
-  var h='<b>Balcão virtual</b> ('+trib+'): <a href="'+bl.url+'" target="_blank" rel="noopener" style="color:#185FA5">abrir</a>'+(bl.verificado?'':' <span style="color:#888">(via busca)</span>');
   var c=contatoDoProcesso(p);
-  h+='<div style="margin-top:6px">';
+  /* tudo EM LINHA (flex compacto): balcão + vara + contatos expostos + ações */
+  var h='<div style="display:flex;gap:4px 14px;flex-wrap:wrap;align-items:center">';
+  h+='<span style="white-space:nowrap"><b>Balcão virtual</b> ('+trib+'): <a href="'+bl.url+'" target="_blank" rel="noopener" style="color:#185FA5">abrir</a>'+(bl.verificado?'':' <span style="color:#888;font-size:11px">(via busca)</span>')+'</span>';
   if(c){
     var ne=encodeURIComponent(p.numero);
-    h+='<b>Balcão da vara</b>'+(c.orgao?(' — '+esc(c.orgao)):'')+':';
-    /* contatos EXPOSTOS (clique copia) — úteis para colar/copiar o cliente no e-mail */
-    var exp='';
-    if(c.email) exp+='<span onclick="copiarNumero(this,\''+esc(String(c.email)).replace(/'/g,'')+'\')" style="cursor:pointer;color:#185FA5;border-bottom:1px dotted #9fbadb" title="Clique para copiar o e-mail da vara">✉ '+esc(c.email)+'</span>';
-    if(c.whatsapp) exp+=(exp?' &nbsp;·&nbsp; ':'')+'<span onclick="copiarNumero(this,\''+esc(String(c.whatsapp)).replace(/'/g,'')+'\')" style="cursor:pointer;color:#127a53;border-bottom:1px dotted #9fd0b8" title="Clique para copiar o telefone/WhatsApp da vara">📱 '+esc(c.whatsapp)+'</span>';
-    if(exp) h+='<div style="margin-top:4px;font-size:12.5px">'+exp+'</div>';
-    h+='<div style="margin-top:6px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">';
-    h+='<select class="btn sm bv-mod" style="max-width:280px"><option value="concluso">Concluso — pedir andamento ao gabinete</option><option value="peticao">Petição pendente — pedir conclusão</option><option value="despacho">Despacho — pedir cumprimento</option><option value="geral">Andamento geral</option></select>';
+    h+='<span><b>Vara</b>'+(c.orgao?(' — '+esc(c.orgao)):'')+':</span>';
+    /* contatos expostos (clique copia); × remove com motivo (só os salvos no banco) */
+    function chip(icone,val,cor,corb,campo){
+      var x=(c.id?(' <a onclick="removerContatoVara(\''+c.id+'\',\''+campo+'\',\''+encodeURIComponent(val)+'\')" title="Remover este contato da vara (pergunta o motivo)" style="cursor:pointer;color:#b5342b;font-weight:700">×</a>'):'');
+      return '<span style="font-size:12.5px;white-space:nowrap"><span onclick="copiarNumero(this,\''+esc(String(val)).replace(/'/g,'')+'\')" style="cursor:pointer;color:'+cor+';border-bottom:1px dotted '+corb+'" title="Clique para copiar">'+icone+' '+esc(val)+'</span>'+x+'</span>';
+    }
+    if(c.email) h+=chip('✉',c.email,'#185FA5','#9fbadb','email');
+    if(c.whatsapp) h+=chip('📱',c.whatsapp,'#127a53','#9fd0b8','whatsapp');
+    String(c.telefones||'').split(/[,;|]+/).map(function(t){return t.trim();}).filter(Boolean).forEach(function(t){ h+=chip('☎',t,'#5f6b7a','#c3c9d4','telefones'); });
+    h+='<select class="btn sm bv-mod" style="max-width:250px"><option value="concluso">Concluso — pedir andamento ao gabinete</option><option value="peticao">Petição pendente — pedir conclusão</option><option value="despacho">Despacho — pedir cumprimento</option><option value="geral">Andamento geral</option></select>';
     if(c.whatsapp) h+='<button class="btn sm" style="background:#128C7E;color:#fff" onclick="bvSend(\'wa\',\''+ne+'\',this)">WhatsApp</button>';
     if(c.email) h+='<button class="btn sm" onclick="bvSend(\'em\',\''+ne+'\',this)">E-mail</button>';
     if(c.balcao_link) h+='<button class="btn sm gold" onclick="bvSend(\'vid\',\''+ne+'\',this)">Vídeo</button>';
-    h+='<a href="#" onclick="abrirContatoOrgao(\''+ne+'\');return false;" style="color:#888;font-size:11px">editar contato</a></div>';
+    h+='<a href="#" onclick="abrirContatoOrgao(\''+ne+'\');return false;" style="color:#888;font-size:11px">editar contato</a>';
   } else {
     h+='<a href="#" onclick="abrirContatoOrgao(\''+encodeURIComponent(p.numero)+'\');return false;" style="color:#185FA5">+ Salvar e-mail/WhatsApp desta vara</a> <span style="color:#888;font-size:11px">('+esc(p.foro||'órgão')+')</span>';
   }
   h+='</div>'; return h;
+}
+/* remove UM contato da vara (com motivo) e guarda a memória para avisar em recadastros */
+async function removerContatoVara(coId,campo,valEnc){
+  var val=decodeURIComponent(valEnc);
+  var op=window.prompt('Remover "'+val+'" do contato da vara?\n(vale para TODOS os processos desta vara)\n\nMotivo:\n 1 = o número/e-mail MUDOU\n 2 = desativado / não atende\n 3 = não era desta vara\n(ou escreva outro motivo)','2');
+  if(op===null) return;
+  var motivo=(op==='1')?'mudou':((op==='2')?'desativado/não atende':((op==='3')?'não era da vara':(String(op).trim()||'removido')));
+  try{
+    var sb=window.__sb; var row=(window.__CO||[]).find(function(x){return String(x.id)===String(coId);});
+    if(!sb||!row){ alert('Contato não encontrado — recarregue a página.'); return; }
+    var upd={};
+    if(campo==='telefones'){ var digs=val.replace(/\D/g,''); var rest=String(row.telefones||'').split(/[,;|]+/).map(function(t){return t.trim();}).filter(function(t){return t && t.replace(/\D/g,'')!==digs;}); upd.telefones=rest.join(', ')||null; }
+    else upd[campo]=null;
+    var r=await sb.from('contatos_orgao').update(upd).eq('id',coId).select('id');
+    if(r&&r.error){ alert('Erro ao remover: '+r.error.message); return; }
+    try{ var esc9=await _escBusca(); if(esc9){ await sb.from('contatos_orgao_removidos').insert({escritorio_id:esc9,tribunal:row.tribunal||null,orgao:row.orgao||null,valor:(/@/.test(val)?val.toLowerCase():val.replace(/\D/g,'')),motivo:motivo}); } }catch(e){}
+    await loadCO(true); refreshContato();
+    try{ if(typeof renderVarasSemContato==='function') renderVarasSemContato(); }catch(e){}
+  }catch(e){ alert('Erro: '+(e&&e.message||e)); }
 }
 function bvMsg(num,tipo){
   var p=(DADOS.processos||[]).filter(function(x){return x.numero===num;})[0]||{};
@@ -7139,15 +7163,29 @@ function abrirContatoOrgao(numEnc){
   document.getElementById('co-orgao').value=ex.orgao||p.foro||'';
   document.getElementById('co-email').value=ex.email||'';
   document.getElementById('co-whats').value=ex.whatsapp||'';
+  var _ct=document.getElementById('co-tels'); if(_ct) _ct.value=ex.telefones||'';
   document.getElementById('co-link').value=ex.balcao_link||'';
-  document.getElementById('modal-contato').classList.remove('hidden');
+  document.getElementById('modal-contato-orgao').classList.remove('hidden'); /* id próprio — antes colidia com o modal de contatos do CRM */
 }
-function fecharContatoOrgao(){ document.getElementById('modal-contato').classList.add('hidden'); }
+function fecharContatoOrgao(){ document.getElementById('modal-contato-orgao').classList.add('hidden'); }
 async function salvarContatoOrgao(){
   var ctx=window.__coCtx, sb=window.__sb; if(!sb||!ctx) return;
   var ug=await sb.auth.getUser(); var pf=await sb.from('usuarios').select('escritorio_id').eq('id',ug.data.user.id).single();
   var esc2=pf.data&&pf.data.escritorio_id; if(!esc2){ alert('Escritório não encontrado.'); return; }
-  var row={escritorio_id:esc2, tribunal:ctx.tribunal, orgao:document.getElementById('co-orgao').value||null, email:document.getElementById('co-email').value||null, whatsapp:document.getElementById('co-whats').value||null, balcao_link:document.getElementById('co-link').value||null};
+  var row={escritorio_id:esc2, tribunal:ctx.tribunal, orgao:document.getElementById('co-orgao').value||null, email:document.getElementById('co-email').value||null, whatsapp:document.getElementById('co-whats').value||null, telefones:((document.getElementById('co-tels')||{}).value||null), balcao_link:document.getElementById('co-link').value||null};
+  /* memória de removidos: avisa se algum contato sendo salvo já foi apagado antes */
+  try{
+    var vals=[]; if(row.email) vals.push(String(row.email).trim().toLowerCase());
+    if(row.whatsapp){ var dW=String(row.whatsapp).replace(/\D/g,''); if(dW) vals.push(dW); }
+    String(row.telefones||'').split(/[,;|]+/).forEach(function(t){ var d=t.replace(/\D/g,''); if(d) vals.push(d); });
+    if(vals.length){
+      var rv=await sb.from('contatos_orgao_removidos').select('valor,motivo,criado_em').in('valor',vals);
+      if(rv&&rv.data&&rv.data.length){
+        var avisos=rv.data.map(function(x){ return '• '+x.valor+' — removido em '+String(x.criado_em).slice(0,10).split('-').reverse().join('/')+' (motivo: '+(x.motivo||'?')+')'; }).join('\n');
+        if(!confirm('⚠ Atenção: contato(s) que você está salvando JÁ FORAM removidos antes:\n\n'+avisos+'\n\nSalvar mesmo assim?')) return;
+      }
+    }
+  }catch(e){}
   var res = ctx.id ? await sb.from('contatos_orgao').update(row).eq('id',ctx.id) : await sb.from('contatos_orgao').insert(row);
   if(res.error){ alert('Erro ao salvar: '+res.error.message); return; }
   await loadCO(true); fecharContatoOrgao(); refreshContato();
