@@ -3568,8 +3568,11 @@ function renderTarefasMes(){
     avisoHTML+='<div class="note" style="margin:0 0 8px">'+outroMes.length+' atividade(s) em outros meses — use ‹ anterior / próximo › ou a visão <a onclick="setTarView(\'lista\')" style="cursor:pointer;text-decoration:underline;color:var(--navy)">Lista</a> para ver todas.</div>';
   }
   cal.innerHTML='';
-  if(avisoHTML){ var av=document.createElement('div'); av.style.gridColumn='1 / -1'; av.innerHTML=avisoHTML; cal.style.gridTemplateColumns='repeat(7,1fr)'; cal.appendChild(av); }
-  else { cal.style.gridTemplateColumns='repeat(7,1fr)'; }
+  /* sábado/domingo quase nunca têm agendamento — colunas estreitas liberam espaço
+     para os dias úteis, e o sábado vira um resumo da semana */
+  var colunas=__ehCel?'repeat(7,1fr)':'0.5fr repeat(5,1fr) 0.5fr';
+  if(avisoHTML){ var av=document.createElement('div'); av.style.gridColumn='1 / -1'; av.innerHTML=avisoHTML; cal.style.gridTemplateColumns=colunas; cal.appendChild(av); }
+  else { cal.style.gridTemplateColumns=colunas; }
   ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'].forEach(function(d){var h=document.createElement('div');h.className='dow';h.textContent=d;cal.appendChild(h);});
   var first=new Date(tarY,tarM,1),start=first.getDay(),dim=new Date(tarY,tarM+1,0).getDate();
   for(var i=0;i<start;i++){var o=document.createElement('div');o.className='day out';cal.appendChild(o);}
@@ -3598,6 +3601,20 @@ function renderTarefasMes(){
         chip.addEventListener('dragstart',(function(idT){ return function(ev){ try{ ev.dataTransfer.setData('text/plain','tar:'+idT); ev.dataTransfer.effectAllowed='move'; }catch(eD){} }; })(a.id));
         cell.appendChild(chip);
       });
+      /* SÁBADO vazio = resumo da semana (pendentes e prazos fatais de dom a sáb) */
+      var dowC=new Date(iso+'T00:00:00').getDay();
+      if(!dtasks.length && dowC===6){
+        var iniD=new Date(iso+'T00:00:00'); iniD.setDate(iniD.getDate()-6);
+        var iniISO=iniD.getFullYear()+'-'+String(iniD.getMonth()+1).padStart(2,'0')+'-'+String(iniD.getDate()).padStart(2,'0');
+        var sem=lista.filter(function(a){var x=_tarISO(a);return x&&x>=iniISO&&x<=iso;});
+        var pend=sem.filter(function(a){return !_tarConcluida(a);}).length;
+        var fat=sem.filter(function(a){return a.prazo&&!_tarConcluida(a);}).length;
+        var inf=document.createElement('div');
+        inf.style.cssText='margin-top:4px;font-size:10.5px;line-height:1.5;color:var(--muted)';
+        inf.innerHTML='<div style="text-transform:uppercase;letter-spacing:.04em;font-size:9px;color:#9aa3b0">semana</div>'
+          +(sem.length? ('<b style="color:var(--navy)">'+pend+'</b> pendente'+(pend===1?'':'s')+(fat?('<br><b style="color:#b5342b">'+fat+'</b> fatal'+(fat===1?'':'is')):'')) : '<span style="color:#b9c0ca">livre</span>');
+        cell.appendChild(inf);
+      }
     }
     (function(isoC,cellC){
       cellC.onclick=function(){ abrirTarDia(isoC); };
