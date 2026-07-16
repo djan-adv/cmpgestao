@@ -1908,6 +1908,18 @@ function initTriagem(){
     TRIAGEM.push({id:id,numero:p.numero,cliente:p.cliente,titulo:p.ato,texto:p.texto,tribunal:p.tribunal,data:p.data,prazo:p.prazo,done:(p.triada===true)});
   });
   TRIAGEM.sort(function(a,b){var da=a.data||"",db=b.data||"";return da<db?1:(da>db?-1:0);});
+  /* regra CMP: na fila, UMA publicação por processo — a MAIS RECENTE. Se chegarem
+     duas não tratadas do mesmo processo, a anterior é considerada tratada
+     automaticamente (vai para a aba Tratadas e fica gravada no banco). */
+  (function(){
+    var vistos={};
+    TRIAGEM.forEach(function(t){ /* já ordenada da mais recente para a mais antiga */
+      if(t.done) return;
+      var k=String(t.numero||'').replace(/\D/g,'')||('s|'+String(t.titulo||'').slice(0,40));
+      if(!vistos[k]){ vistos[k]=1; return; }
+      t.done=true; persisteTriada(t);
+    });
+  })();
 }
 /* persiste "publicação tratada" no banco (coluna andamentos.triada). Silencioso se a coluna não existir. */
 function persisteTriada(t){
