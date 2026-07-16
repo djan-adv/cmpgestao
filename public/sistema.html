@@ -6956,6 +6956,7 @@ async function loadCO(force){ if(window.__CO && !force) return window.__CO; var 
 (function tryCO(){ if(window.__sb){ loadCO(); } else { setTimeout(tryCO,800); } })();
 /* normalização básica: minúsculas, sem acentos/ordinais, sem ruído de comarca comum */
 function normOrg(s){ var x=(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[ªº°]/g,'').replace(/[^a-z0-9 ]/g,' ');
+  x=x.replace(/\b(\d+)[ao]s?\b/g,'$1'); /* 2a/2ª/1o/1º → 2/1 (ordinal digitado de qualquer jeito) */
   x=x.replace(/\bde joao pessoa\b/g,' ').replace(/\bjoao pessoa\b/g,' ').replace(/\bda capital\b/g,' ').replace(/\bcapital\b/g,' ').replace(/\be de cabedelo\b/g,' ');
   x=x.replace(/\s+/g,' ').trim().replace(/\b(de|da|do)$/,'').trim(); return x; }
 /* normalização "forte": remove acentos, corta sufixos de fórum/seção e o nome da
@@ -6963,6 +6964,7 @@ function normOrg(s){ var x=(s||'').toLowerCase().normalize('NFD').replace(/[̀-�
    para casar o mesmo órgão apesar do ruído dos dados. */
 function normOrgForte(x){
   var s=String(x||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+  s=s.replace(/[ªº°]/g,'').replace(/\b(\d+)[ao]s?\b/g,'$1'); /* 2a/2ª/1o/1º → 2/1 */
   s=s.split(' - ')[0];
   s=s.replace(/\s+(joao pessoa|santa rita|cabedelo|campina grande|bayeux|patos|alhandra|caapora|solanea|teixeira|conde|salvador|aracaju|goiania|aparecida de goiania|curitiba|maceio|contagem|ilheus|formiga|paracuru|lauro de freitas|camacari|sao paulo|rio de janeiro|belo horizonte|regiao metropo).*$/,'');
   s=s.replace(/\bsecao [a-z]\b/g,'');
