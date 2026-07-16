@@ -2080,7 +2080,11 @@ function acaoTriagem(id){
     if(diasEl && sug.prazo && [5,8,10,15].indexOf(sug.prazo)>-1) diasEl.value=String(sug.prazo);
     if(typeof calcPrazoFatal==='function') calcPrazoFatal();
   } else if(sug.prazo){
-    var d=new Date(2026,6,2);d.setDate(d.getDate()+sug.prazo);var iso=d.toISOString().slice(0,10);document.getElementById("t-data").value=iso;document.getElementById("t-prazo").value=iso;
+    /* BUG corrigido: a base era uma data FIXA (02/07/2026) — tarefas nasciam com
+       prazo no passado. Agora conta a partir de HOJE. */
+    var d=new Date();d.setHours(0,0,0,0);d.setDate(d.getDate()+sug.prazo);
+    var iso=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+    document.getElementById("t-data").value=iso;document.getElementById("t-prazo").value=iso;
   }
 }
 function cienciaTriagem(id){var t=TRIAGEM.find(function(x){return x.id===id});if(t){_autoVincularSeCaso(t.numero);t.done=true;persisteTriada(t);}renderTriagem();}
@@ -2560,6 +2564,9 @@ function abrirNovaTarefa(proc){window._tarEditId=null;
   var peek=false;
   if(proc){ try{ var dgP=String(proc).replace(/\D/g,''); if(dgP.length>=11){ var ixP=DADOS.processos.findIndex(function(p){return String(p.numero||'').replace(/\D/g,'')===dgP;}); if(ixP>=0){ abrir(ixP); peek=true; } } }catch(ePk){} }
   ov.classList.toggle('peek',peek);
+  /* tarefa NOVA: limpa os campos da abertura anterior — valores "fantasma" de
+     data/prazo escondidos causavam agendamento errado */
+  ['t-titulo','t-data','t-hora','t-prazo','t-pub','t-prazo-dias','t-prazo-calc','t-desc','t-local'].forEach(function(cid){ var el=document.getElementById(cid); if(el) el.value=''; });
   /* botões de saída da publicação: só quando o formulário veio da triagem */
   var pa=document.getElementById('t-pub-acoes'); if(pa) pa.style.display=(typeof triagemAtual!=='undefined'&&triagemAtual!=null)?'block':'none';
   ov.classList.remove("hidden");if(proc){document.getElementById("t-proc").value=proc;} if(typeof onTipoTarefa==='function')onTipoTarefa();
@@ -2633,6 +2640,15 @@ function calcPrazoFatal(){
   if(campoPrazo) campoPrazo.value=fatalISO;
   if(campoData) campoData.value=_subDiasUteis(fatalISO,2)||fatalISO;
   if(typeof _notaDatasAuto==='function')_notaDatasAuto();
+  /* prazo calculado no PASSADO (publicação antiga): avisa em vermelho e reabre a
+     fileira de datas para ajuste manual — nunca gravar prazo vencido em silêncio */
+  try{
+    if(fatalISO && fatalISO<todayISO){
+      var rowP=document.getElementById('t-datas-row'); if(rowP) rowP.style.display='';
+      var notaP=document.getElementById('t-datas-auto');
+      if(notaP){ notaP.style.display='block'; notaP.innerHTML='<b style="color:#b3261e">⚠ O prazo calculado ('+fatalISO.split('-').reverse().join('/')+') JÁ PASSOU</b> — a publicação é antiga. Ajuste a Data e o Prazo fatal abaixo antes de salvar.'; }
+    }
+  }catch(eV){}
 }
 /* ===== Trava anti-erro de digitação em datas (ex.: ano "20026") =====
    Aceita só AAAA-MM-DD com ano entre 2000 e 2100 e data real; senão devolve ''. */
@@ -2653,6 +2669,11 @@ function salvarTarefa(){
      "some" da visão mês (que não mostra atividades sem data). */
   if(!data && !prazo){ data = todayISO; }
   var fromTri=triagemAtual;
+  /* trava: nunca criar tarefa com vencimento no PASSADO sem confirmação */
+  var vencChk=prazo||data;
+  if(vencChk && vencChk<todayISO){
+    if(!confirm('⚠ O vencimento desta tarefa ('+vencChk.split('-').reverse().join('/')+') JÁ PASSOU.\n\nSalvar mesmo assim?')) return;
+  }
   if(!KAN)initKanban();
   var _dia=document.getElementById("t-dia").checked;
   /* edição real: aberta a partir de uma atividade existente -> ATUALIZA (não duplica) */
@@ -6258,13 +6279,23 @@ function renderAudienciaSugestao(){
 /* Trabalhista (TRT): audiência gera TAREFA AUTOMÁTICA de buscar a ATA no dia
    seguinte — na ata ficam prazos e acordos, e o cliente recebe a ata/resumo. */
 function _ehTrabalhista(numero){ var t=tribunalAlias(numero); return !!(t&&/^trt/.test(t)); }
-function garanteTarefaAta(p,isoAudiencia){
+async function garanteTarefaAta(p,isoAudiencia){
   try{
     if(!p||!_ehTrabalhista(p.numero)) return;
     var alvo=_diaSeguinteISO(isoAudiencia);
+    /* trava de sessão: mesma chave nunca é processada duas vezes na mesma carga */
+    window.__ataFeitas=window.__ataFeitas||{};
+    var chave=String(p.numero||'')+'|'+alvo;
+    if(window.__ataFeitas[chave]) return; window.__ataFeitas[chave]=1;
     if(!KAN) initKanban();
     var ja=(KAN||[]).some(function(t){ return t && String(t.numero||'')===String(p.numero||'') && /buscar.*ata/i.test(t.titulo||'') && (t.data===alvo||t.prazo===alvo); });
     if(ja) return;
+    /* conferência no BANCO — a memória (KAN) pode ainda não ter carregado nesta
+       altura do boot; foi isso que gerou dezenas de duplicatas */
+    try{
+      var sbA3=window.__sb;
+      if(sbA3){ var qA=await sbA3.from('kanban_tarefas').select('id').eq('numero',p.numero).eq('data',alvo).ilike('titulo','%ata da audi%').limit(1); if(qA&&qA.data&&qA.data.length) return; }
+    }catch(eQ){}
     var nova={id:5000+(KAN?KAN.length:0),titulo:'Buscar e ler a ATA da audiência (prazos e acordos) — enviar ata/resumo ao cliente',cliente:(p.cliente||p.numero),numero:p.numero,col:'distribuir',resp:'',data:alvo,prazo:alvo,tipoForm:'prazo'};
     KAN.push(nova); persisteKanban(nova);
     console.log('CMPGestao: tarefa automática de ATA criada para '+p.numero+' em '+alvo+'.');
