@@ -1063,6 +1063,7 @@ function renderPainel(){
   var nb=document.getElementById("nav-badge-triagem");
   if(nb){ nb.textContent=pend||""; nb.style.display=pend?"inline-grid":"none"; }
   renderMeuDia();
+  try{ if(typeof renderAudSemana==='function') renderAudSemana(); }catch(eAu){}
   renderTriagemCard(pend);
   renderRecentes();
   renderProd();
@@ -1991,14 +1992,13 @@ function renderTriagem(){
        com letra legível — o "ver teor" expande o texto completo aqui embaixo */
     if(t.texto){
       var tr2=document.createElement("tr");
-      tr2.innerHTML='<td colspan="2" style="border-top:none;padding:0"></td>'+
-        '<td colspan="3" data-label="Teor" style="border-top:none;padding:0 10px 12px">'
-        +'<div class="mov-previa" style="font-size:13px;line-height:1.5;color:var(--ink);opacity:.88;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical;overflow:hidden">'+esc(t.texto)+'</div>'
+      tr2.innerHTML='<td colspan="5" data-label="Teor" style="border-top:none;padding:0 10px 14px">'
+        +'<div class="mov-previa" style="font-size:13px;line-height:1.5;color:var(--ink);opacity:.88;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical;overflow:hidden;background:#fafbfc;border-left:3px solid var(--line);border-radius:0 8px 8px 0;padding:8px 12px">'+esc(t.texto)+'</div>'
         +'<div class="teor" id="teor-'+t.id+'" style="display:none;font-size:13px;color:var(--ink);margin-top:6px">'+teorHtml+'</div></td>';
       tb.appendChild(tr2);
     } else {
       var tr2b=document.createElement("tr");
-      tr2b.innerHTML='<td colspan="2" style="border-top:none;padding:0"></td><td colspan="3" style="border-top:none;padding:0 10px 8px"><div class="teor" id="teor-'+t.id+'" style="display:none;font-size:13px;color:var(--ink)">'+teorHtml+'</div></td>';
+      tr2b.innerHTML='<td colspan="5" style="border-top:none;padding:0 10px 8px"><div class="teor" id="teor-'+t.id+'" style="display:none;font-size:13px;color:var(--ink)">'+teorHtml+'</div></td>';
       tb.appendChild(tr2b);
     }
   });
