@@ -6954,7 +6954,10 @@ async function registrarEnvioAtualizacao(silent){
 window.__CO=null;
 async function loadCO(force){ if(window.__CO && !force) return window.__CO; var sb=window.__sb; if(!sb){ window.__CO=[]; return window.__CO; } var r=await sb.from('contatos_orgao').select('*'); window.__CO=(r&&r.data)||[]; return window.__CO; }
 (function tryCO(){ if(window.__sb){ loadCO(); } else { setTimeout(tryCO,800); } })();
-function normOrg(x){ return String(x||'').toLowerCase().replace(/\s+/g,' ').trim(); }
+/* normalização básica: minúsculas, sem acentos/ordinais, sem ruído de comarca comum */
+function normOrg(s){ var x=(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[ªº°]/g,'').replace(/[^a-z0-9 ]/g,' ');
+  x=x.replace(/\bde joao pessoa\b/g,' ').replace(/\bjoao pessoa\b/g,' ').replace(/\bda capital\b/g,' ').replace(/\bcapital\b/g,' ').replace(/\be de cabedelo\b/g,' ');
+  x=x.replace(/\s+/g,' ').trim().replace(/\b(de|da|do)$/,'').trim(); return x; }
 /* normalização "forte": remove acentos, corta sufixos de fórum/seção e o nome da
    comarca que às vezes vem grudado no fim do foro (ex.: "...da Capital JOÃO PESSOA"),
    para casar o mesmo órgão apesar do ruído dos dados. */
@@ -7344,22 +7347,8 @@ function setDilView(v){
   if(ba) ba.classList.toggle('on', v==='andamento');
 }
 </script>
-<script>
-function normOrg(s){ var x=(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[ªº°]/g,'').replace(/[^a-z0-9 ]/g,' ');
-  x=x.replace(/\bde joao pessoa\b/g,' ').replace(/\bjoao pessoa\b/g,' ').replace(/\bda capital\b/g,' ').replace(/\bcapital\b/g,' ').replace(/\be de cabedelo\b/g,' ');
-  x=x.replace(/\s+/g,' ').trim().replace(/\b(de|da|do)$/,'').trim(); return x; }
-function contatoDoProcesso(p){
-  if(!window.__CO || !window.__CO.length) return null;
-  var trib=tribunalAlias(p.numero); var fn=normOrg(p.foro); if(!fn) return null;
-  var best=null;
-  window.__CO.forEach(function(c){
-    if(c.tribunal && trib && c.tribunal!==trib) return;
-    var cn=normOrg(c.orgao); if(!cn) return;
-    if(fn===cn || fn.indexOf(cn+' ')===0){ if(!best || cn.length>(best._cn||'').length){ c._cn=cn; best=c; } }
-  });
-  return best;
-}
-</script>
+<!-- (definições duplicadas de normOrg/contatoDoProcesso removidas — a versão única,
+     que casa por foro OU órgão, fica junto de contatoSeed/contatoBlocoHTML) -->
 <!-- ===== CMP v2: identidade + sidebar colapsável + mobile (07/2026) ===== -->
 <style id="cmp-v2">
   .side{transition:width .18s ease}
