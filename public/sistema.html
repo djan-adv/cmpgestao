@@ -1406,7 +1406,7 @@ function abrir(i){
       var parts=[];
       if(p.classe) parts.push(lab('Classe')+esc(p.classe));
       parts.push(lab('Assunto')+esc(p.tipo||'—'));
-      parts.push(lab('Vara de origem')+esc(p.foro||p.orgao||'—'));
+      parts.push(lab('Vara de origem')+esc(p.foro||p.orgao||'—')+' <a onclick="editarVaraProcesso()" title="Editar/definir a vara ou local deste processo" style="cursor:pointer;color:#185FA5;font-size:12px">✎</a>');
       parts.push(lab(dd.rot)+dd.val);
       return parts.join('<span style="color:var(--line);margin:0 6px">·</span>');
     })()+
@@ -7233,9 +7233,58 @@ async function salvarContatoOrgao(){
   }
   var res = alvoId ? await sb.from('contatos_orgao').update(row).eq('id',alvoId) : await sb.from('contatos_orgao').insert(row);
   if(res.error){ alert('Erro ao salvar: '+res.error.message); return; }
+  /* processo sem vara definida ("Vara de origem: —"): o órgão digitado aqui vira a
+     vara do processo — sem isso o contato salvo não teria como aparecer na ficha */
+  try{
+    var pAtu=(DADOS.processos||[]).filter(function(x){return x.numero===ctx.numero;})[0];
+    if(pAtu && row.orgao && !String(pAtu.foro||'').trim() && !String(pAtu.orgao||'').trim()){
+      pAtu.orgao=row.orgao;
+      var dig9=String(ctx.numero||'').replace(/\D/g,'');
+      if(pAtu._id) await sb.from('processos').update({orgao:row.orgao}).eq('id',pAtu._id);
+      else if(dig9) await sb.from('processos').update({orgao:row.orgao}).eq('numero_digitos',dig9);
+    }
+  }catch(e){}
   await loadCO(true); fecharContatoOrgao(); refreshContato();
   try{ if(typeof renderVarasSemContato==='function') renderVarasSemContato(); }catch(e){}
   alert('Contato da vara salvo — vai aparecer em todos os processos desta vara.');
+}
+/* ✎ da linha "Vara de origem": define/atualiza a vara/local do processo.
+   Sugere automaticamente a partir do HISTÓRICO e dos nomes dos DOCUMENTOS do
+   processo; o valor gravado é o que vincula o contato da vara (e-mail/WhatsApp). */
+function _achaVaraEmTexto(t){
+  t=String(t||'');
+  var m=t.match(/(\d{1,2}\s*[ªa°º]?\s*vara[^\n;,.()]{0,55})/i)
+     || t.match(/(vara\s+[uú]nica[^\n;,.()]{0,45})/i)
+     || t.match(/(\d{1,2}\s*[ºo°]?\s*juizado[^\n;,.()]{0,55})/i)
+     || t.match(/(juizado especial[^\n;,.()]{0,45})/i)
+     || t.match(/(n[uú]cleo de justi[çc]a[^\n;,.()]{0,45})/i);
+  return m ? m[1].replace(/\s+/g,' ').trim() : null;
+}
+async function editarVaraProcesso(){
+  if(typeof atual==='undefined'||!atual) return; var p=atual;
+  /* candidatos: histórico primeiro (mais confiável), depois nomes de arquivos */
+  var votos={};
+  function vota(v){ if(!v||v.length<6) return; var k=normOrg(v); if(!k) return; votos[k]=votos[k]||{n:0,txt:v}; votos[k].n++; }
+  (p.hist_full||[]).forEach(function(a){ vota(_achaVaraEmTexto(a&&a.texto)); });
+  try{
+    var dig=String(p.numero||'').replace(/\D/g,'');
+    if(dig && typeof _listarArquivosProc==='function'){ (await _listarArquivosProc(dig)).forEach(function(n){ vota(_achaVaraEmTexto(n)); }); }
+  }catch(e){}
+  var melhor=null; Object.keys(votos).forEach(function(k){ if(!melhor||votos[k].n>melhor.n) melhor=votos[k]; });
+  var sug=(melhor&&melhor.txt)||p.foro||p.orgao||'';
+  var v=window.prompt('Local/vara deste processo'+(melhor?' — sugerido pelo histórico/documentos':'')+':\n(é esse nome que liga o processo ao contato da vara — e-mail/WhatsApp)',sug);
+  if(v===null) return; v=v.replace(/\s+/g,' ').trim();
+  if(!v){ alert('Valor vazio — nada alterado.'); return; }
+  var sb=window.__sb, dig2=String(p.numero||'').replace(/\D/g,'');
+  var q=sb.from('processos').update({orgao:v, foro:v});
+  q = p._id ? q.eq('id',p._id) : q.eq('numero_digitos',dig2);
+  var r=await q.select('id');
+  if(r&&r.error){ alert('Erro ao gravar: '+r.error.message); return; }
+  if(!r||!r.data||!r.data.length){ alert('Nada foi gravado — recarregue a página e tente de novo.'); return; }
+  p.orgao=v; p.foro=v;
+  var i=DADOS.processos.indexOf(p); if(i>=0) abrir(i);
+  try{ if(typeof renderVarasSemContato==='function') renderVarasSemContato(); }catch(e){}
+  try{ if(typeof renderCoberturaVaras==='function') renderCoberturaVaras(); }catch(e){}
 }
 function refreshContato(){
   var md=document.getElementById('modal-dilig');
