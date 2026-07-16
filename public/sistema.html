@@ -335,7 +335,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
     </section>
 
     <section id="s-proc-det" class="hidden">
-      <span class="note" onclick="go('processos')" style="cursor:pointer;color:var(--navy)">← voltar aos processos</span>
+      <span class="note" id="btn-voltar-proc" onclick="voltarDoProcesso()" style="cursor:pointer;color:var(--navy)">← voltar aos processos</span>
       <div id="det-body"></div>
     </section>
 
@@ -1417,7 +1417,16 @@ function renderProc(){
 }
 function stCls(s){return /2º|superior/i.test(s||"")?"warn":"ok"}
 function kv(k,v){return '<div class="kv"><div class="k">'+k+'</div><div class="v">'+(v||'—')+'</div></div>';}
+/* o "← voltar" da ficha volta para a tela de ORIGEM (publicações, painel, agenda…) */
+function voltarDoProcesso(){ go(window.__voltarPara||'processos'); }
 function abrir(i){
+  /* guarda de onde a pessoa veio (se não veio de outra ficha) e ajusta o rótulo do voltar */
+  try{
+    var visSec=document.querySelector('section[id^="s-"]:not(.hidden)');
+    if(visSec && visSec.id!=='s-proc-det') window.__voltarPara=visSec.id.slice(2);
+    var rotV={triagem:'← voltar às publicações',painel:'← voltar ao painel',agenda:'← voltar à agenda',diligencias:'← voltar às diligências',crm:'← voltar ao comercial',processos:'← voltar aos processos'};
+    var bv=document.getElementById('btn-voltar-proc'); if(bv) bv.textContent=rotV[window.__voltarPara||'processos']||'← voltar';
+  }catch(eV){}
   atual=DADOS.processos[i]; var p=atual, resp="Djan Henrique";
   /* ficha aberta antes de os históricos de fundo chegarem: busca SÓ o histórico
      deste processo agora e re-renderiza quando ele descer (nada se perde) */
@@ -2726,6 +2735,15 @@ function salvarTarefa(){
   renderPainelTarefasEtiquetas();
   /* edição a partir do processo: atualiza os painéis e permanece na ficha (não pula p/ agenda) */
   if(_isEdit){ window._tarEditId=null; try{ if(typeof renderAtivProc==='function') renderAtivProc(); if(typeof renderHistorico==='function') renderHistorico(); if(typeof renderKanban==='function') renderKanban(); }catch(e){} return; }
+  /* criou com a FICHA do processo aberta ao fundo (ex.: veio da publicação):
+     PERMANECE no processo — só atualiza os painéis da ficha */
+  try{
+    var secP=document.getElementById('s-proc-det');
+    if(secP && !secP.classList.contains('hidden')){
+      try{ if(typeof renderAtivProc==='function') renderAtivProc(); if(typeof renderHistorico==='function') renderHistorico(); }catch(eR){}
+      return;
+    }
+  }catch(eS){}
   /* leva para a agenda CERTA: prazo/tarefa/diligência -> "Agenda (prazos e tarefas)"; audiência/reunião -> "Agenda (reuniões)".
      Assim a atividade recém-criada aparece na hora e não "some". */
   var _ehPrazoTarefa=(tipo==='prazo'||tipo==='tarefa'||tipo==='diligencia'||tipo==='manifestacao');
