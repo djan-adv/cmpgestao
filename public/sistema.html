@@ -233,13 +233,13 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
           <div class="card" id="painel-recentes"></div>
         </div>
         <div>
+          <div class="card" id="painel-aud"></div>
           <div class="card" id="painel-triagem"></div>
           <div class="card" id="painel-fases"></div>
           <div class="card" id="painel-prod"></div>
         </div>
       </div>
       <div class="card" id="painel-varas" style="margin-top:4px"></div>
-      <div id="painel-aud" style="display:none"></div>
     </section>
 
     <section id="s-triagem" class="hidden">
@@ -1333,26 +1333,52 @@ async function mdExcluir(gi){
     renderMeuDia(); if(typeof renderAudSemana==='function') renderAudSemana();
   }catch(e){ alert('Erro ao excluir: '+(e&&e.message||e)); }
 }
-function renderAudSemana(){
-  var el=document.getElementById("painel-aud"); if(!el) return;
+function _audsDaSemana(){
   initAgenda();
   var hoje=new Date(); hoje.setHours(0,0,0,0);
   var fim=new Date(hoje); fim.setDate(fim.getDate()+7);
-  var auds=(AGENDA||[]).filter(function(a){
-    if(a.tipo!=="az") return false;
+  return (AGENDA||[]).filter(function(a){
+    if(!(a.tipo==="az"||/audi[êe]ncia/i.test(a.tt||""))) return false;
     var d=new Date(a.data+"T00:00:00");
     return d>=hoje && d<fim;
-  }).sort(function(a,b){return (a.data+a.hora)<(b.data+b.hora)?-1:1;});
-  var html='<p class="sectlabel">Audiências da semana ('+auds.length+')</p>';
+  }).sort(function(a,b){return (a.data+(a.hora||""))<(b.data+(b.hora||""))?-1:1;});
+}
+function _audLinhaTxt(a){
+  var d=new Date(a.data+"T00:00:00");
+  var dia=["dom","seg","ter","qua","qui","sex","sáb"][d.getDay()]+" "+String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0");
+  var num=(a.p&&a.p.numero)||"";
+  var pr=(DADOS.processos||[]).find(function(x){return String(x.numero||'').replace(/\D/g,'')===String(num).replace(/\D/g,'');});
+  var cli=(pr&&pr.cliente)||((a.p&&a.p.cliente)||"");
+  return '• '+dia+(a.hora&&a.hora!=='Dia todo'?(' às '+a.hora):'')+' — '+(a.tt||'Audiência')+(cli?(' — '+cli):'')+(num&&num!=='—'?(' — proc. '+num):'')+(a.resp?(' — '+a.resp):'');
+}
+function copiarAudSemana(btn){
+  var auds=_audsDaSemana();
+  var txt='📅 *AUDIÊNCIAS DA SEMANA — CMP*\n'+auds.map(_audLinhaTxt).join('\n');
+  function ok(){ if(btn){ var t0=btn.textContent; btn.textContent='✓ copiado — cole no WhatsApp'; setTimeout(function(){ btn.textContent=t0; },2500);} }
+  try{ navigator.clipboard.writeText(txt).then(ok,function(){ _copiaFallback(txt); ok(); }); }
+  catch(e){ _copiaFallback(txt); ok(); }
+}
+function _copiaFallback(txt){ var ta=document.createElement('textarea'); ta.value=txt; document.body.appendChild(ta); ta.select(); try{ document.execCommand('copy'); }catch(e){} document.body.removeChild(ta); }
+function renderAudSemana(){
+  var el=document.getElementById("painel-aud"); if(!el) return;
+  var auds=_audsDaSemana();
+  var html='<p class="sectlabel" style="display:flex;justify-content:space-between;align-items:center;gap:8px">📅 Audiências da semana ('+auds.length+')'
+    +(auds.length?'<button class="btn sm" style="background:#128C7E;color:#fff;text-transform:none;letter-spacing:0" onclick="copiarAudSemana(this)" title="Copia a lista pronta para colar no WhatsApp">📋 copiar p/ WhatsApp</button>':'')+'</p>';
   if(!auds.length){ html+='<p class="note" style="margin:0">Nenhuma audiência nos próximos 7 dias.</p>'; }
   else{
-    html+=auds.slice(0,6).map(function(a){
+    html+=auds.slice(0,8).map(function(a){
       var d=new Date(a.data+"T00:00:00");
       var dia=["dom","seg","ter","qua","qui","sex","sáb"][d.getDay()]+" "+String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0");
+      var num=(a.p&&a.p.numero)||"";
+      /* selos: agendada automaticamente / conferida pelo histórico */
+      var selos='';
+      if(a.org==='auto-sistema') selos+=' <span style="font-size:10px;background:#eaf4f4;color:#0b7285;border-radius:10px;padding:1px 7px;font-weight:600;white-space:nowrap">agendada automaticamente pelo sistema</span>';
+      else { try{ var dig=String(num).replace(/\D/g,''); var pr2=(DADOS.processos||[]).find(function(x){return String(x.numero||'').replace(/\D/g,'')===dig;});
+        if(pr2 && _audienciasFuturasDoHist(pr2).some(function(h){return h.iso===a.data;})) selos+=' <span style="font-size:10px;background:#eaf7f1;color:#0F6E56;border-radius:10px;padding:1px 7px;font-weight:600;white-space:nowrap">✓ conferida pelo histórico</span>'; }catch(e){} }
       return '<div style="display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--accentbg)">'
         +'<span style="min-width:86px;font-weight:700;color:var(--navy);font-size:13px">'+dia+' '+(a.hora||"")+'</span>'
-        +'<div style="flex:1"><div style="font-weight:600;font-size:13.5px">'+esc(a.tt)+'</div>'
-        +'<div style="font-size:12px;color:var(--muted)">'+esc((a.p&&a.p.cliente)||"")+' · <span class="proc">'+esc((a.p&&a.p.numero)||"")+'</span></div></div>'
+        +'<div style="flex:1"><div style="font-weight:600;font-size:13.5px">'+esc(a.tt)+selos+'</div>'
+        +'<div style="font-size:12px;color:var(--muted)">'+esc((a.p&&a.p.cliente)||"")+' · <span class="proc" style="cursor:pointer" onclick="irParaProcesso(\''+String(num).replace(/'/g,"")+'\')">'+esc(num)+'</span></div></div>'
         +'<span style="font-size:11px;background:var(--accentbg);color:var(--navy);border-radius:12px;padding:2px 8px;font-weight:600;white-space:nowrap">'+esc(a.resp||"")+'</span></div>';
     }).join("");
   }
@@ -3495,6 +3521,8 @@ function toggleConcluirTarefa(id){
         DADOS.processos.forEach(function(p){ if(p._histOk) return; p.hist_full.sort(function(x,y){return (y.data||'').localeCompare(x.data||'');}); p._histOk=true; });
         window.__histCarga.done=true;
         console.log('CMPGestao: históricos carregados em segundo plano ('+tot+' andamentos).');
+        /* audiências futuras encontradas nos históricos → agenda (sem duplicar) */
+        try{ if(typeof varreAudienciasAuto==='function') await varreAudienciasAuto(); }catch(eAu){}
         /* re-renderiza o que depende de histórico e está visível agora */
         try{ if(typeof atual!=='undefined'&&atual){ var sec=document.getElementById('s-proc-det'); var ii=DADOS.processos.indexOf(atual); if(sec&&!sec.classList.contains('hidden')&&ii>=0) abrir(ii); } }catch(e){}
         try{ var sp=document.getElementById('s-painel'); if(sp&&!sp.classList.contains('hidden')&&typeof go==='function') go('painel'); }catch(e){}
@@ -3530,9 +3558,9 @@ function toggleConcluirTarefa(id){
     try{
       /* itens da agenda concluídos/excluídos sem id no banco (carga Astrea) — ficam ocultos */
       try{ var oc=await sb.from('agenda_ocultos').select('chave').limit(3000); if(!oc.error&&oc.data){ window.__AGOCULT={}; oc.data.forEach(function(x){ if(x&&x.chave) window.__AGOCULT[x.chave]=1; }); } }catch(eOc){}
-      var ag=await sb.from('agenda_eventos').select('id,data,hora,tipo,titulo,resp,processo_numero').order('data',{ascending:true}).limit(2000);
+      var ag=await sb.from('agenda_eventos').select('id,data,hora,tipo,titulo,resp,processo_numero,origem').order('data',{ascending:true}).limit(2000);
       if(!ag.error&&ag.data){
-        window.__AGDB=ag.data.map(function(e){return {id:e.id,data:String(e.data).slice(0,10),hora:e.hora||'09:00',tipo:e.tipo||'nt',tt:e.titulo,resp:e.resp||'',p:{numero:e.processo_numero||'—',cliente:''}};});
+        window.__AGDB=ag.data.map(function(e){return {id:e.id,data:String(e.data).slice(0,10),hora:e.hora||'09:00',tipo:e.tipo||'nt',tt:e.titulo,resp:e.resp||'',org:(e.origem||''),p:{numero:e.processo_numero||'—',cliente:''}};});
         AGENDA=null; initAgenda();
         /* CORREÇÃO: re-renderiza a agenda agora que os dados chegaram (evita ficar em branco até trocar de view) */
         try{ var __sec=(document.querySelector('#s-agenda') && !document.getElementById('s-agenda').classList.contains('hidden')); if(__sec && typeof renderAgendaView==='function') renderAgendaView(); }catch(eR){}
@@ -6022,6 +6050,7 @@ function _diaSeguinteISO(iso){ var d=new Date(iso+'T12:00:00'); d.setDate(d.getD
 function renderAudienciaSugestao(){
   var el=document.getElementById('obs-audiencia'); if(!el||!atual){ if(el) el.innerHTML=''; return; }
   var dig=String(atual.numero||'').replace(/\D/g,''), hoje=_hojeISO(), html='';
+  var auds=_audienciasFuturasDoHist(atual);
   /* 1) audiências JÁ MARCADAS na agenda deste processo: card destacado até o dia
      da audiência — some sozinho no dia seguinte */
   var marcadas=(window.__AGDB||[]).filter(function(e){
@@ -6032,14 +6061,16 @@ function renderAudienciaSugestao(){
   marcadas.slice(0,3).forEach(function(e){
     datasMarcadas[e.data]=1;
     var br=e.data.split('-').reverse().join('/');
+    var selo='';
+    if(e.org==='auto-sistema') selo='<span style="font-size:10px;background:#eaf4f4;color:#0b7285;border-radius:10px;padding:1px 7px;font-weight:600;white-space:nowrap">agendada automaticamente pelo sistema</span>';
+    else if(auds.some(function(h){return h.iso===e.data;})) selo='<span style="font-size:10px;background:#eaf7f1;color:#0F6E56;border-radius:10px;padding:1px 7px;font-weight:600;white-space:nowrap">✓ conferida pelo histórico</span>';
     html+='<div style="background:var(--dangerbg);border:1px solid #f0c8c4;border-radius:8px;padding:8px 11px;margin:0 0 10px;font-size:13px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">'
       +'<b style="color:var(--danger);font-size:13.5px">📅 AUDIÊNCIA — '+esc(br)+(e.hora&&e.hora!=='Dia todo'?(' às '+esc(e.hora)):'')+'</b>'
-      +'<span class="note" style="margin:0">'+esc(e.tt||'')+'</span>'
+      +'<span class="note" style="margin:0">'+esc(e.tt||'')+'</span>'+selo
       +'<a onclick="go(\'agenda\')" style="cursor:pointer;color:#185FA5;font-size:11.5px">abrir agenda</a>'
       +'</div>';
   });
   /* 2) audiências FUTURAS encontradas no histórico e ainda fora da agenda: sugerir gravar */
-  var auds=_audienciasFuturasDoHist(atual);
   auds.slice(0,3).forEach(function(a){
     if(datasMarcadas[a.iso]) return;
     var jaAg=(window.__AGDB||[]).some(function(e){ return e && e.data===a.iso && String((e.p&&e.p.numero)||'').replace(/\D/g,'')===dig; });
@@ -6070,6 +6101,49 @@ function garanteTarefaAta(p,isoAudiencia){
     KAN.push(nova); persisteKanban(nova);
     console.log('CMPGestao: tarefa automática de ATA criada para '+p.numero+' em '+alvo+'.');
   }catch(e){ console.warn('garanteTarefaAta:',e); }
+}
+/* AGENDAMENTO AUTOMÁTICO: audiência futura encontrada no histórico vai DIRETO
+   para a agenda, marcada como "agendada automaticamente pelo sistema".
+   ANTI-DUPLICATA: se o processo JÁ tem evento naquela data, NADA é inserido —
+   o card apenas mostra "✓ conferida pelo histórico". */
+async function varreAudienciasAuto(){
+  try{
+    if(window.__audSweep) return; window.__audSweep=1;
+    var sb=window.__sb; if(!sb) return;
+    window.__AGDB=window.__AGDB||[];
+    var candidatos=[];
+    (DADOS.processos||[]).forEach(function(p){
+      if(!p||/encerr/i.test(p.status||'')) return;
+      var dig=String(p.numero||'').replace(/\D/g,''); if(!dig) return;
+      _audienciasFuturasDoHist(p).forEach(function(a){
+        var ja=(window.__AGDB||[]).some(function(e){ return e && e.data===a.iso && String((e.p&&e.p.numero)||'').replace(/\D/g,'')===dig; });
+        if(ja){ garanteTarefaAta(p,a.iso); return; } /* já agendada: só confere, nunca duplica */
+        var ign=false; try{ ign=!!localStorage.getItem('audSug:'+dig+':'+a.iso); }catch(e){}
+        if(ign) return;
+        candidatos.push({p:p,a:a});
+      });
+    });
+    if(!candidatos.length) return;
+    candidatos=candidatos.slice(0,40); /* trava de segurança contra falso-positivo em massa */
+    var ug=await sb.auth.getUser(); var pf=await sb.from('usuarios').select('escritorio_id').eq('id',ug.data.user.id).single();
+    var escA2=pf.data&&pf.data.escritorio_id; if(!escA2) return;
+    var criadas=0;
+    for(var i=0;i<candidatos.length;i++){
+      var c=candidatos[i];
+      var tit='Audiência'+(c.a.tipo?(' '+c.a.tipo):'')+' — '+(c.p.cliente||c.p.numero);
+      var w=await sb.from('agenda_eventos').insert({escritorio_id:escA2,data:c.a.iso,hora:(c.a.hora||'09:00'),tipo:'az',titulo:tit,resp:'Djan',processo_numero:c.p.numero,origem:'auto-sistema',descricao:'Agendado automaticamente pelo sistema — audiência encontrada no histórico do processo.'}).select('id').single();
+      if(w&&!w.error){
+        criadas++;
+        window.__AGDB.push({id:w.data&&w.data.id,data:c.a.iso,hora:(c.a.hora||'09:00'),tipo:'az',tt:tit,resp:'Djan',org:'auto-sistema',p:{numero:c.p.numero,cliente:c.p.cliente||''}});
+        garanteTarefaAta(c.p,c.a.iso);
+      }
+    }
+    if(criadas){
+      AGENDA=null; try{ initAgenda(); }catch(e){}
+      try{ renderAudSemana(); }catch(e){}
+      console.log('CMPGestao: '+criadas+' audiência(s) agendada(s) automaticamente pelo histórico.');
+    }
+  }catch(e){ console.warn('varreAudienciasAuto:',e); }
 }
 /* varredura na abertura do sistema: toda audiência trabalhista futura já marcada
    na agenda ganha (se ainda não tiver) a tarefa de ata do dia seguinte */
