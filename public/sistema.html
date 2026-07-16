@@ -246,7 +246,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
       <p class="note" style="margin-bottom:10px">Regra CMP: cada publicação capturada é triada no mesmo dia — a maioria é <b>ciência</b> (arquiva) e a minoria é <b>ação</b> (vira card no Kanban, em "A distribuir"), com responsável e prazo. Eduarda ou Rita (uma faz, a outra cobre).</p>
       <div class="card"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><p class="sectlabel" style="margin:0">Fila de triagem — movimentações a classificar</p><div id="triagem-abas" class="switch"></div></div>
         <p class="note" style="margin:6px 0 10px">Mostra <b>todas</b> as publicações não tratadas (não só as de hoje). Ao "criar atividade" ou dar "ciência", a publicação vai para a aba <b>Tratadas</b>.</p>
-        <div style="overflow-x:auto;-webkit-overflow-scrolling:touch"><table class="tbl-triagem" style="table-layout:fixed;width:100%;min-width:760px"><thead><tr><th style="width:150px">Processo</th><th style="width:130px">Cliente</th><th style="width:auto">Movimentação</th><th style="width:210px">Sugestão (atividade · prazo)</th><th style="width:170px">Classificar</th></tr></thead><tbody id="triagem"></tbody></table></div>
+        <div id="triagem"></div>
         <p class="note" id="triagem-vazia" style="display:none">Fila vazia — tudo triado.</p>
       </div>
     </section>
@@ -1979,28 +1979,37 @@ function renderTriagem(){
   if(vazia){ vazia.style.display=lista.length?"none":"block"; vazia.textContent=(triagemAba==='tratadas')?'Nenhuma publicação tratada ainda.':'Fila vazia — tudo triado.'; }
   lista.slice(0,300).forEach(function(t){
     var sug=sugestaoTeor(t.texto||t.titulo); var pz=sug.prazo?(sug.prazo+" dias"):"agendar";
-    var teorHtml=t.texto?('<div style="background:var(--accentbg);border-left:3px solid var(--gold);padding:8px 10px;border-radius:0 6px 6px 0;margin:6px 0;color:var(--ink);white-space:normal"><b>Sugestão de tratamento (IA):</b> '+esc(sug.ativ)+' — <b>prazo sugerido: '+pz+'</b></div><div style="font-weight:600">Teor do despacho:</div><div style="white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;max-height:480px;overflow:auto;font-size:13.5px;line-height:1.55">'+esc(t.texto)+'</div>'):'<div class="note">Sem teor disponível.</div>';
-    var tr=document.createElement("tr");
-    tr.innerHTML='<td class="proc" data-label="Processo"><a onclick="irParaProcesso(\''+String(t.numero).replace(/'/g,"")+'\')" style="cursor:pointer;color:var(--navy);text-decoration:underline">'+esc(t.numero)+'</a>'+(t.tribunal?('<div class="note" style="margin:0">'+esc(t.tribunal)+' · '+esc(t.data||"")+'</div>'):'')+'</td><td data-label="Cliente">'+esc(t.cliente||"—")+'</td>'+
-      '<td data-label="Movimentação">'+esc(t.titulo)+' <a onclick="toggleTeor('+t.id+')" style="cursor:pointer;background:var(--accentbg);color:#8a5a00;border:1px solid #e8dcbb;border-radius:12px;padding:1px 9px;font-size:11.5px;font-weight:700;white-space:nowrap">ver teor</a></td>'+
-      '<td data-label="Sugestão">'+'<b>'+esc(sug.ativ)+'</b><div class="note" style="margin:0">prazo sugerido: '+pz+'</div></td>'+
-      (t.done
-        ? '<td data-label="Classificar"><span style="color:#0F6E56;font-weight:600;font-size:12px">✓ tratada</span> <button class="btn sm ghost" onclick="reabrirTriagem('+t.id+')" title="Voltar para a fila">reabrir</button></td>'
-        : '<td data-label="Classificar"><button class="btn sm gold" onclick="acaoTriagem('+t.id+')">criar atividade &rarr;</button> <button class="btn sm ghost" onclick="cienciaTriagem('+t.id+')">ciência</button> <button class="btn sm ghost" style="color:#0b7285" onclick="abrirAtualizarCliente(\''+String(t.numero).replace(/'/g,"")+'\')" title="Comunicar a cliente por e-mail (informar a movimentação ou pedir uma providência)">&#9993; cliente</button></td>');
-    tb.appendChild(tr);
-    /* prévia do teor em linha própria, LARGA (da coluna Movimentação até o fim) e
-       com letra legível — o "ver teor" expande o texto completo aqui embaixo */
-    if(t.texto){
-      var tr2=document.createElement("tr");
-      tr2.innerHTML='<td colspan="5" data-label="Teor" style="border-top:none;padding:0 10px 14px">'
-        +'<div class="mov-previa" style="font-size:13px;line-height:1.5;color:var(--ink);opacity:.88;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical;overflow:hidden;background:#fafbfc;border-left:3px solid var(--line);border-radius:0 8px 8px 0;padding:8px 12px">'+esc(t.texto)+'</div>'
-        +'<div class="teor" id="teor-'+t.id+'" style="display:none;font-size:13px;color:var(--ink);margin-top:6px">'+teorHtml+'</div></td>';
-      tb.appendChild(tr2);
-    } else {
-      var tr2b=document.createElement("tr");
-      tr2b.innerHTML='<td colspan="5" style="border-top:none;padding:0 10px 8px"><div class="teor" id="teor-'+t.id+'" style="display:none;font-size:13px;color:var(--ink)">'+teorHtml+'</div></td>';
-      tb.appendChild(tr2b);
-    }
+    var numSafe=String(t.numero).replace(/'/g,"");
+    /* partes: autor × réus (até 2 nomes + "e outros") — essencial para clientes com
+       muitos processos, que só se distinguem pela parte contrária */
+    var dig=String(t.numero||'').replace(/\D/g,'');
+    var pr=(DADOS.processos||[]).find(function(x){return String(x.numero||'').replace(/\D/g,'')===dig;});
+    var autor=(pr&&pr.cliente)||t.cliente||'—';
+    var reus=String((pr&&pr.oponente)||'').split(/[;|]+/).map(function(s){return s.trim();}).filter(Boolean);
+    var reuTxt=reus.slice(0,2).join(' e ')+(reus.length>2?(' e outros ('+(reus.length-2)+')'):'');
+    /* barra de decisão: aparece DENTRO do teor aberto — a classificação vem depois da leitura */
+    var barra=t.done
+      ? '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px"><span style="color:#0F6E56;font-weight:700;font-size:12.5px">✓ tratada</span><button class="btn sm ghost" onclick="reabrirTriagem('+t.id+')" title="Voltar para a fila">reabrir</button></div>'
+      : '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px"><button class="btn sm gold" onclick="acaoTriagem('+t.id+')">criar atividade &rarr;</button><button class="btn sm ghost" onclick="cienciaTriagem('+t.id+')">ciência (arquivar)</button><button class="btn sm ghost" style="color:#0b7285" onclick="abrirAtualizarCliente(\''+numSafe+'\')" title="Comunicar a cliente por e-mail">&#9993; cliente</button></div>';
+    var teorHtml=barra
+      +'<div style="background:var(--accentbg);border-left:3px solid var(--gold);padding:8px 10px;border-radius:0 6px 6px 0;margin:0 0 8px;color:var(--ink);white-space:normal"><b>✦ IA sugere:</b> '+esc(sug.ativ)+' · <b>prazo sugerido: '+pz+'</b></div>'
+      +(t.texto?('<div style="font-weight:600;margin-bottom:2px">Teor do despacho:</div><div style="white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;max-height:480px;overflow:auto;font-size:13.5px;line-height:1.55">'+esc(t.texto)+'</div>'):'<div class="note">Sem teor disponível.</div>');
+    var card=document.createElement("div");
+    card.style.cssText='border:1px solid var(--line);border-radius:10px;padding:10px 13px;margin-bottom:10px;background:#fff';
+    card.innerHTML=
+      /* topo: número do processo (acima) + tribunal/data + estado; partes logo abaixo */
+      '<div style="display:flex;justify-content:space-between;gap:10px;align-items:baseline;flex-wrap:wrap">'
+        +'<a class="proc" onclick="irParaProcesso(\''+numSafe+'\')" style="cursor:pointer;color:var(--navy);text-decoration:underline;font-weight:700">'+esc(t.numero)+'</a>'
+        +'<span class="note" style="margin:0">'+esc(t.tribunal||'')+(t.data?(' · '+esc(t.data)):'')+(t.done?' · <b style="color:#0F6E56">✓ tratada</b> <a onclick="reabrirTriagem('+t.id+')" style="cursor:pointer;color:var(--muted);text-decoration:underline">reabrir</a>':'')+'</span>'
+      +'</div>'
+      +'<div style="font-size:13px;margin:2px 0 7px"><b style="color:var(--navy)">'+esc(autor)+'</b>'+(reuTxt?(' <span style="color:var(--muted)">×</span> '+esc(reuTxt)):'')+'</div>'
+      /* movimentação + ver teor */
+      +'<div style="font-size:13.5px;font-weight:600;color:#185FA5">'+esc(t.titulo)+' <a onclick="toggleTeor('+t.id+')" style="cursor:pointer;background:var(--accentbg);color:#8a5a00;border:1px solid #e8dcbb;border-radius:12px;padding:1px 9px;font-size:11.5px;font-weight:700;white-space:nowrap">ver teor e classificar</a></div>'
+      /* prévia larga e legível */
+      +(t.texto?('<div class="mov-previa" style="font-size:13px;line-height:1.5;color:var(--ink);opacity:.88;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical;overflow:hidden;background:#fafbfc;border-left:3px solid var(--line);border-radius:0 8px 8px 0;padding:8px 12px;margin-top:7px">'+esc(t.texto)+'</div>'):'')
+      /* teor aberto: barra de decisão no TOPO + sugestão IA + texto completo */
+      +'<div class="teor" id="teor-'+t.id+'" style="display:none;font-size:13px;color:var(--ink);margin-top:8px;border-top:1px dashed var(--line);padding-top:10px">'+teorHtml+'</div>';
+    tb.appendChild(card);
   });
 }
 function reabrirTriagem(id){ var t=TRIAGEM.find(function(x){return x.id===id;}); if(t){ t.done=false; try{ var sb=window.__sb; if(sb){ var numR=String(t.numero||'').replace(/\D/g,''); sb.from('processos').select('id').eq('numero_digitos',numR).limit(1).then(function(r){ var pid=r&&r.data&&r.data[0]&&r.data[0].id; if(pid){ sb.from('andamentos').update({triada:false}).eq('processo_id',pid).eq('data',String(t.data||'').slice(0,10)).then(function(){}); } }); } }catch(e){} renderTriagem(); } }
