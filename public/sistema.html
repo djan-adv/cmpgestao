@@ -1424,7 +1424,9 @@ function abrir(i){
         '<button class="btn sm '+(__enc?'gold':'ghost')+'" style="'+(ehJames(p)?'margin-left:6px':'margin-left:auto')+'" onclick="encerrarProcesso()">'+(__enc?'Reativar':'Encerrar')+'</button>'+
     '</div>'+
     '<div style="margin-top:6px;font-size:13px;border-top:1px solid #eef2f7;padding-top:6px">'+
-    bvLine(p.numero)+'</div></div>';
+    bvLine(p.numero)+
+    '<div id="bv-pedido" class="note" style="font-size:11.5px;margin-top:4px"></div>'+
+    '</div></div>';
   /* card "Partes" removido — cliente principal e parte contrária já constam no cabeçalho */
   // observações (um único ponto de observação por processo, criável/editável — estilo Astrea)
   html+='<div class="card" id="obs-card"><p class="sectlabel" style="display:flex;justify-content:space-between;align-items:center">Observações'+
@@ -1465,6 +1467,7 @@ function abrir(i){
   document.getElementById("det-body").innerHTML=html;
   posicionarHonMobile();
   histShown=10; renderHistorico(); if(typeof loadAnexosProc==='function') loadAnexosProc(p.numero);
+  try{ if(typeof renderPedidoVara==='function') renderPedidoVara(); }catch(e){}
   if(typeof renderAtivProc==='function') renderAtivProc();
   renderDetEtq();
   renderObservacoes();
@@ -7072,6 +7075,24 @@ function bvSend(canal,numEnc,el){
   else if(canal==='vid'&&c.balcao_link){ window.open(c.balcao_link,'_blank'); enviado=true; canalLabel='sala_virtual'; }
   if(enviado) _registrarDiligencia(p, canalLabel, msg);
 }
+/* linha "* pedido de ... por ... em ..." na última linha do quadro Dados do processo
+   (informativo leve — não pesa o histórico) */
+async function renderPedidoVara(){
+  var el=document.getElementById('bv-pedido'); if(!el) return;
+  if(!atual||!atual._id){ el.innerHTML=''; return; }
+  try{
+    var sb=window.__sb; if(!sb) return;
+    var r=await sb.from('diligencias').select('canal,mensagem,ultima_cobranca,status').eq('processo_id',atual._id).order('ultima_cobranca',{ascending:false}).limit(1);
+    if(!r||r.error||!r.data||!r.data.length||!r.data[0].ultima_cobranca){ el.innerHTML=''; return; }
+    var d=r.data[0], t=String(d.mensagem||'');
+    var tipo=/CONCLUSOS/i.test(t)?'andamento ao gabinete (concluso)'
+      :(/promova a CONCLUS|PETI[ÇC][ÃA]O.{0,30}pendente/i.test(t)?'conclusão (petição pendente)'
+      :(/CUMPRIMENTO do despacho|DESPACHO\/DECIS/i.test(t)?'cumprimento de despacho':'andamento'));
+    var canal=(d.canal==='whatsapp')?'WhatsApp':((d.canal==='email')?'e-mail':(d.canal||'—'));
+    var dt=String(d.ultima_cobranca).slice(0,10).split('-').reverse().join('/');
+    el.innerHTML='<span style="color:#8a5a00;font-weight:700">*</span> pedido de <b>'+tipo+'</b> feito por <b>'+canal+'</b> em <b>'+dt+'</b>'+(d.status==='resolvida'?' <span style="color:#127a53">(resolvido)</span>':'');
+  }catch(e){ el.innerHTML=''; }
+}
 /* registra/atualiza a diligência ao enviar pela página do processo, para aparecer
    em "Diligências em andamento". Se já houver uma aberta para o processo, atualiza
    a data da cobrança; senão cria uma nova. */
@@ -7090,6 +7111,7 @@ async function _registrarDiligencia(p, canalLabel, msg){
     }
     try{ var sd=document.getElementById('s-diligencias'); if(sd && !sd.classList.contains('hidden') && typeof renderDiligencias==='function') renderDiligencias(); }catch(e){}
     try{ var sp=document.getElementById('s-painel'); if(sp && !sp.classList.contains('hidden') && typeof renderAlertasDiligencias==='function') renderAlertasDiligencias(); }catch(e){}
+    try{ if(typeof renderPedidoVara==='function') renderPedidoVara(); }catch(e){}
   }catch(e){ console.warn('registrar diligência:', e); }
 }
 function bvLine(numero){ var p=(DADOS.processos||[]).filter(function(x){return x.numero===numero;})[0]||{numero:numero}; return contatoBlocoHTML(p); }
