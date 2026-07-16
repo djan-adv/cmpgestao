@@ -1344,16 +1344,21 @@ function _audsDaSemana(){
   }).sort(function(a,b){return (a.data+(a.hora||""))<(b.data+(b.hora||""))?-1:1;});
 }
 function _audLinhaTxt(a){
+  /* formato WhatsApp: data em negrito numa linha, detalhes embaixo, linha em
+     branco entre audiências — sem tudo grudado */
   var d=new Date(a.data+"T00:00:00");
   var dia=["dom","seg","ter","qua","qui","sex","sáb"][d.getDay()]+" "+String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0");
   var num=(a.p&&a.p.numero)||"";
   var pr=(DADOS.processos||[]).find(function(x){return String(x.numero||'').replace(/\D/g,'')===String(num).replace(/\D/g,'');});
   var cli=(pr&&pr.cliente)||((a.p&&a.p.cliente)||"");
-  return '• '+dia+(a.hora&&a.hora!=='Dia todo'?(' às '+a.hora):'')+' — '+(a.tt||'Audiência')+(cli?(' — '+cli):'')+(num&&num!=='—'?(' — proc. '+num):'')+(a.resp?(' — '+a.resp):'');
+  var l1='📌 *'+dia+(a.hora&&a.hora!=='Dia todo'?(' às '+a.hora):'')+'*'+(a.resp?(' — '+a.resp):'');
+  var l2=(a.tt||'Audiência')+(cli&&(a.tt||'').toLowerCase().indexOf(cli.toLowerCase().slice(0,12))<0?(' — '+cli):'');
+  var l3=(num&&num!=='—')?('processo '+num):'';
+  return l1+'\n'+l2+(l3?('\n'+l3):'');
 }
 function copiarAudSemana(btn){
   var auds=_audsDaSemana();
-  var txt='📅 *AUDIÊNCIAS DA SEMANA — CMP*\n'+auds.map(_audLinhaTxt).join('\n');
+  var txt='📅 *AUDIÊNCIAS DA SEMANA — CMP*\n\n'+auds.map(_audLinhaTxt).join('\n\n');
   function ok(){ if(btn){ var t0=btn.textContent; btn.textContent='✓ copiado — cole no WhatsApp'; setTimeout(function(){ btn.textContent=t0; },2500);} }
   try{ navigator.clipboard.writeText(txt).then(ok,function(){ _copiaFallback(txt); ok(); }); }
   catch(e){ _copiaFallback(txt); ok(); }
