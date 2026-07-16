@@ -529,6 +529,11 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
     <input id="t-file" type="file" multiple style="display:none" onchange="tarefaAddFiles(event)">
     <div id="t-files" style="font-size:13px"></div>
     <div class="flags" style="margin-top:6px"><label><input type="checkbox" id="t-hist"> Registrar também no histórico do processo</label></div>
+    <div id="t-pub-acoes" style="display:none;border-top:1px dashed var(--line);margin-top:10px;padding-top:10px">
+      <div class="note" style="margin:0 0 6px">Sem tarefa? A publicação pode sair da fila mesmo assim:</div>
+      <button class="btn sm ghost" onclick="descartarPubModal()" title="Marca a publicação como tratada (ciência) — vai para a aba Tratadas">🗂 Descartar publicação (ciência)</button>
+      <button class="btn sm ghost" style="color:#0F6E56" onclick="historicoPubModal()" title="Registra a ciência no histórico do processo e arquiva a publicação">📝 Registrar ciência no histórico e arquivar</button>
+    </div>
     <div class="foot"><button class="btn ghost" onclick="fecharTarefa()">Cancelar</button><button class="btn" id="t-btn-concluir" style="display:none;background:#127a53" onclick="concluirTarefaModal()">✓ Concluir atividade</button><button class="btn" id="t-btn-salvar" onclick="salvarTarefa()">Criar e distribuir</button></div>
   </div>
 </div>
@@ -2016,12 +2021,15 @@ function renderTriagem(){
     card.innerHTML=
       /* topo: número do processo (acima) + tribunal/data + estado; partes logo abaixo */
       '<div style="display:flex;justify-content:space-between;gap:10px;align-items:baseline;flex-wrap:wrap">'
-        +'<a class="proc" onclick="irParaProcesso(\''+numSafe+'\')" style="cursor:pointer;color:var(--navy);text-decoration:underline;font-weight:700">'+esc(t.numero)+'</a>'
+        +'<span style="display:inline-flex;gap:10px;align-items:baseline;flex-wrap:wrap">'
+          +'<a class="proc" onclick="irParaProcesso(\''+numSafe+'\')" style="cursor:pointer;color:var(--navy);text-decoration:underline;font-weight:700" title="Abrir o processo">'+esc(t.numero)+'</a>'
+          +'<a onclick="toggleTeor('+t.id+')" style="cursor:pointer;background:var(--accentbg);color:#8a5a00;border:1px solid #e8dcbb;border-radius:12px;padding:1px 9px;font-size:11.5px;font-weight:700;white-space:nowrap" title="Ler o teor completo e classificar">ver teor e classificar</a>'
+        +'</span>'
         +'<span class="note" style="margin:0">'+esc(t.tribunal||'')+(t.data?(' · '+esc(t.data)):'')+(t.done?' · <b style="color:#0F6E56">✓ tratada</b> <a onclick="reabrirTriagem('+t.id+')" style="cursor:pointer;color:var(--muted);text-decoration:underline">reabrir</a>':'')+'</span>'
       +'</div>'
       +'<div style="font-size:13px;margin:2px 0 7px"><b style="color:var(--navy)">'+esc(autor)+'</b>'+(reuTxt?(' <span style="color:var(--muted)">×</span> '+esc(reuTxt)):'')+'</div>'
       /* movimentação + ver teor */
-      +'<div style="font-size:13.5px;font-weight:600;color:#185FA5">'+esc(t.titulo)+' <a onclick="toggleTeor('+t.id+')" style="cursor:pointer;background:var(--accentbg);color:#8a5a00;border:1px solid #e8dcbb;border-radius:12px;padding:1px 9px;font-size:11.5px;font-weight:700;white-space:nowrap">ver teor e classificar</a></div>'
+      +'<div style="font-size:13.5px;font-weight:600;color:#185FA5">'+esc(t.titulo)+'</div>'
       /* prévia larga e legível */
       +(t.texto?('<div class="mov-previa" style="font-size:13px;line-height:1.5;color:var(--ink);opacity:.88;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical;overflow:hidden;background:#fafbfc;border-left:3px solid var(--line);border-radius:0 8px 8px 0;padding:8px 12px;margin-top:7px">'+esc(t.texto)+'</div>'):'')
       /* teor aberto: barra de decisão no TOPO + sugestão IA + texto completo */
@@ -2067,6 +2075,31 @@ function acaoTriagem(id){
   }
 }
 function cienciaTriagem(id){var t=TRIAGEM.find(function(x){return x.id===id});if(t){_autoVincularSeCaso(t.numero);t.done=true;persisteTriada(t);}renderTriagem();}
+/* saídas rápidas da fila SEM criar tarefa — botões no rodapé do formulário quando
+   ele foi aberto a partir de uma publicação (cancelar deixava o item na fila) */
+function descartarPubModal(){
+  var id=triagemAtual;
+  var t=(id!=null)?TRIAGEM.find(function(x){return x.id===id;}):null;
+  if(t){ t.done=true; persisteTriada(t); }
+  fecharTarefa(); try{ renderTriagem(); }catch(e){}
+}
+async function historicoPubModal(){
+  var id=triagemAtual;
+  var t=(id!=null)?TRIAGEM.find(function(x){return x.id===id;}):null;
+  if(!t){ fecharTarefa(); return; }
+  try{
+    var sb=window.__sb, dig=String(t.numero||'').replace(/\D/g,'');
+    var pr=(DADOS.processos||[]).find(function(x){return String(x.numero||'').replace(/\D/g,'')===dig;});
+    var hj=new Date(); var iso=hj.getFullYear()+'-'+String(hj.getMonth()+1).padStart(2,'0')+'-'+String(hj.getDate()).padStart(2,'0');
+    var txt='[Ciência] Publicação de '+String(t.data||'').split('-').reverse().join('/')+' tratada sem tarefa — '+String(t.titulo||'').slice(0,140);
+    if(sb && pr && pr._id){
+      var w=await sb.from('andamentos').insert({processo_id:pr._id,data:iso,texto:txt,fonte:'manual'}).select('id').single();
+      if(!w.error){ pr.hist_full=pr.hist_full||[]; pr.hist_full.unshift({id:w.data&&w.data.id,data:iso+'T00:00:00.000Z',texto:txt,f:'manual'}); }
+    }
+  }catch(e){}
+  t.done=true; persisteTriada(t);
+  fecharTarefa(); try{ renderTriagem(); }catch(e){}
+}
 var LABELS=[];
 var ASSIGN={};
 function textColor(hex){var c=(hex||"#000").replace("#","");if(c.length===3)c=c.split("").map(function(x){return x+x}).join("");var r=parseInt(c.substr(0,2),16),g=parseInt(c.substr(2,2),16),b=parseInt(c.substr(4,2),16);return (0.299*r+0.587*g+0.114*b)>150?"#1e2733":"#fff";}
@@ -2518,6 +2551,8 @@ function abrirNovaTarefa(proc){window._tarEditId=null;
   var peek=false;
   if(proc){ try{ var dgP=String(proc).replace(/\D/g,''); if(dgP.length>=11){ var ixP=DADOS.processos.findIndex(function(p){return String(p.numero||'').replace(/\D/g,'')===dgP;}); if(ixP>=0){ abrir(ixP); peek=true; } } }catch(ePk){} }
   ov.classList.toggle('peek',peek);
+  /* botões de saída da publicação: só quando o formulário veio da triagem */
+  var pa=document.getElementById('t-pub-acoes'); if(pa) pa.style.display=(typeof triagemAtual!=='undefined'&&triagemAtual!=null)?'block':'none';
   ov.classList.remove("hidden");if(proc){document.getElementById("t-proc").value=proc;} if(typeof onTipoTarefa==='function')onTipoTarefa();
   var _cb=document.getElementById('t-btn-concluir'); if(_cb) _cb.style.display='none';
   var _sb=document.getElementById('t-btn-salvar'); if(_sb) _sb.textContent='Criar e distribuir';}
