@@ -17,11 +17,16 @@ import path from 'path'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
-const REPO_DIR = '/opt/cmpgestao'
+// Diretório e nome do processo pm2 desta instância (a instância de venda define
+// DEPLOY_DIR=/opt/gestao-venda e DEPLOY_PM2=gestao-venda no .env.local dela).
+const REPO_DIR = process.env.DEPLOY_DIR || '/opt/cmpgestao'
+const PM2_APP = process.env.DEPLOY_PM2 || 'cmpgestao'
 const STATE_FILE = path.join(REPO_DIR, '.deploy-build.state')
 const LOG_FILE = path.join(REPO_DIR, '.deploy-build.log')
-// e-mails autorizados a publicar (coordenador). Pode acrescentar outros depois.
-const DEPLOY_ALLOW = ['djan.adv@gmail.com']
+// e-mails autorizados a publicar (coordenador). Pode ampliar sem mexer no código:
+// DEPLOY_ALLOW=email1,email2 no .env.local (ex.: o login da instância de venda).
+const DEPLOY_ALLOW = (process.env.DEPLOY_ALLOW || 'djan.adv@gmail.com')
+  .split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
 
 // Recompila o servidor em segundo plano (npm install se preciso -> npm run build ->
 // pm2 restart) e registra o estado em .deploy-build.state (building/done/error).
@@ -30,7 +35,7 @@ function iniciarBuild(needInstall) {
   // nice -n 19 + memória limitada: o build roda "de mansinho" para NÃO derrubar o app
   // que está no ar (em VPS pequena, um build guloso pode causar OOM e matar o processo).
   const inst = needInstall ? 'nice -n 19 npm install --no-audit --no-fund' : 'true'
-  const RESTART = '(pm2 restart cmpgestao || npx pm2 restart cmpgestao || /usr/bin/pm2 restart cmpgestao)'
+  const RESTART = '(pm2 restart ' + PM2_APP + ' || npx pm2 restart ' + PM2_APP + ' || /usr/bin/pm2 restart ' + PM2_APP + ')'
   const cmd =
     'echo building > ' + JSON.stringify(STATE_FILE) + '; ' +
     'rm -rf .next.bak; cp -a .next .next.bak 2>/dev/null; ' +          // guarda o build que está no ar
@@ -108,7 +113,7 @@ export async function POST(request) {
       try {
         try { fs.writeFileSync(STATE_FILE, 'done') } catch (e) {}
         setTimeout(() => {
-          try { exec('pm2 restart cmpgestao || npx pm2 restart cmpgestao || /usr/bin/pm2 restart cmpgestao', { timeout: 20000 }, () => {}) } catch (e) {}
+          try { exec('pm2 restart ' + PM2_APP + ' || npx pm2 restart ' + PM2_APP + ' || /usr/bin/pm2 restart ' + PM2_APP, { timeout: 20000 }, () => {}) } catch (e) {}
         }, 1500)
       } catch (e) {}
       build = 'nao_necessario'

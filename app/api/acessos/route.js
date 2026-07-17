@@ -24,8 +24,11 @@ import { createClient } from '@supabase/supabase-js'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
 
-// e-mails autorizados a gerenciar acessos (coordenador).
-const ACESSOS_ALLOW = ['djan.adv@gmail.com']
+// e-mails sempre autorizados a gerenciar acessos (além deles, qualquer usuário com
+// papel de sócio/coordenador gerencia os acessos do PRÓPRIO escritório — multi-empresa).
+// Pode ampliar sem mexer no código: ACESSOS_ALLOW=email1,email2 no .env.local.
+const ACESSOS_ALLOW = (process.env.ACESSOS_ALLOW || 'djan.adv@gmail.com')
+  .split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
 
 const SB_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
 const ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -45,8 +48,15 @@ async function coordenador(request) {
   const user = (u && u.data && u.data.user) || null
   if (!user) return null
   const email = String(user.email || '').toLowerCase()
-  if (!ACESSOS_ALLOW.map(e => e.toLowerCase()).includes(email)) return null
-  return user
+  if (ACESSOS_ALLOW.includes(email)) return user
+  // multi-empresa: sócio/coordenador de qualquer escritório gerencia os próprios acessos
+  // (a rota já limita tudo ao escritório do solicitante)
+  try {
+    const { data } = await admin().from('usuarios').select('papel').eq('id', user.id).single()
+    const papel = String((data && data.papel) || '').toLowerCase()
+    if (papel === 'socio' || papel === 'sócio' || papel === 'coordenador') return user
+  } catch (e) {}
+  return null
 }
 
 // procura a conta pelo e-mail (varre as páginas de usuários — escritório pequeno)
@@ -119,6 +129,11 @@ export async function POST(request) {
       const existente = await acharPorEmail(sb, email)
       let uid, criado
       if (existente) {
+        // multi-empresa: não se altera (nem "puxa") conta que já pertence a outro escritório
+        const { data: donoAtual } = await sb.from('usuarios').select('escritorio_id').eq('id', existente.id).maybeSingle()
+        if (donoAtual && donoAtual.escritorio_id && donoAtual.escritorio_id !== esc) {
+          return Response.json({ erro: 'Este e-mail já é usado por uma conta de outro escritório.' }, { status: 403 })
+        }
         const { error } = await sb.auth.admin.updateUserById(existente.id, { password: senha, email_confirm: true })
         if (error) throw new Error(error.message)
         uid = existente.id; criado = false
@@ -136,7 +151,12 @@ export async function POST(request) {
     if (acao === 'desativar' || acao === 'ativar') {
       const u = await acharPorEmail(sb, email)
       if (!u) return Response.json({ erro: 'Conta não encontrada.' }, { status: 404 })
-      if (ACESSOS_ALLOW.map(e => e.toLowerCase()).includes(email)) {
+      // multi-empresa: só se mexe em contas do PRÓPRIO escritório
+      const { data: alvo } = await sb.from('usuarios').select('papel').eq('email', email).eq('escritorio_id', esc).maybeSingle()
+      if (!alvo) return Response.json({ erro: 'Esta conta não pertence ao seu escritório.' }, { status: 403 })
+      // protege o coordenador (lista fixa ou papel de sócio)
+      const papelAlvo = String(alvo.papel || '').toLowerCase()
+      if (ACESSOS_ALLOW.includes(email) || papelAlvo === 'socio' || papelAlvo === 'sócio' || papelAlvo === 'coordenador') {
         return Response.json({ erro: 'O acesso do coordenador não pode ser desativado.' }, { status: 400 })
       }
       const ban_duration = acao === 'desativar' ? '876000h' : 'none' // ~100 anos ou libera
