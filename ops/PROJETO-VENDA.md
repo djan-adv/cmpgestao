@@ -191,6 +191,27 @@ do DJEN). É argumento central de venda — concorrente cobra caro por isso.
 4. **Hostinger**: ligar 2FA na conta, senha única forte, e nunca guardar a
    senha no código/repos. API tokens só se automatizarmos a revenda.
 
+### Domínio do cliente em nome do Djan (cessão de uso / "comodato")
+
+Decisão (17/07/2026): **viável e aprovado como modelo do pacote.** O Djan
+registra o domínio do cliente no próprio CPF/CNPJ (~R$ 40/ano no Registro.br)
+e cede o uso enquanto durar a assinatura — retenção forte (site + e-mail do
+cliente dependem do pacote). Amarrações contratuais:
+
+1. Juridicamente, formatar como **cláusula de cessão de uso gratuita do
+   domínio, acessória ao contrato de serviço** (domínio é direito de uso, não
+   coisa — mais limpo que comodato em instrumento apartado).
+2. Cláusula expressa de que **o cliente autorizou/solicitou** o registro em
+   nome do fornecedor — desmonta alegação de má-fé numa eventual disputa
+   SACI-Adm (titular de marca INPI pode disputar domínio registrado de má-fé).
+3. **Opção de transferência ao cliente no encerramento, por valor fixo** —
+   evita fama de "sequestro de domínio" (fatal vendendo para advogados) e
+   ainda gera receita na saída; a fricção de migrar site/e-mail já retém.
+4. Usar **`.com.br`** para domínios cedidos; `.adv.br` é categoria restrita —
+   só quando o titular for o próprio advogado cliente.
+5. Item de tabela comercial: "domínio incluso" (do Djan, cedido) vs. "domínio
+   próprio do cliente" (transferência paga).
+
 ## 12. Riscos e lições (para não esquecer)
 
 - **LGPD/contrato**: dados processuais são sensíveis. Ter contrato de
