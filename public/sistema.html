@@ -368,7 +368,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
         <div class="kpis" id="cap-kpis"></div>
         <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:stretch"><div class="card" style="flex:1;min-width:300px"><p class="sectlabel">Panorama por canal — clique numa fatia/canal ou nos indicadores para ver quem</p><div id="cap-canais"></div><p class="note">O tráfego pago não converte no CMP; foque em indicação, Google Meu Negócio e conteúdo orgânico.</p></div><div class="card" style="flex:1;min-width:300px"><p class="sectlabel">Funil comercial — leads por etapa</p><div id="funil-dash" style="display:flex;gap:8px;flex-wrap:wrap"></div></div></div>
         <div id="cap-fechados" style="margin-bottom:14px"></div>
-        <div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><p class="sectlabel" style="margin:0">Funil de captação (arraste os leads; clique para editar)</p><div><button class="btn sm" onclick="abrirInbox()">&#128229; Caixa de entrada <span id="inbox-badge" style="display:none;font-size:10px;font-weight:700;background:var(--gold);color:#fff;border-radius:10px;padding:0 6px;margin-left:2px"></span></button> <button class="btn sm" onclick="novoLead()">+ Novo lead</button> <button class="btn sm ghost" onclick="addEtapa()">+ Etapa</button></div></div><div class="kanwrap"><div class="kanban" id="funil"></div></div></div>
+        <div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><p class="sectlabel" style="margin:0">Funil de captação (arraste os leads; clique para editar)</p><div><button class="btn sm" onclick="abrirInbox()">&#128229; Caixa de entrada <span id="inbox-badge" style="display:none;font-size:10px;font-weight:700;background:var(--gold);color:#fff;border-radius:10px;padding:0 6px;margin-left:2px"></span></button> <button class="btn sm" onclick="novoLead()">+ Novo lead</button> <button class="btn sm ghost" onclick="addEtapa()">+ Etapa</button> <button class="btn sm ghost" id="btn-merge-leads" onclick="abrirMesclaLeads()" style="display:none" title="Dois acessos podem ter criado cards do mesmo lead — junte-os mantendo os arquivos">⚭ Mesclar duplicados <span id="merge-leads-n" style="font-weight:700"></span></button></div></div><div class="kanwrap"><div class="kanban" id="funil"></div></div></div>
       </div>
     </section>
 
@@ -1803,6 +1803,7 @@ function renderCaptacao(){
     fu.appendChild(col);
   });
   renderFechados();
+  try{ atualizaMergeBadge(); }catch(e){}
 }
 function renderFechados(){
   var el=document.getElementById('cap-fechados'); if(!el) return;
@@ -3007,6 +3008,65 @@ async function syncLeadsDb(){
   }catch(e){ console.warn('syncLeadsDb:',e); }
 }
 async function apagarLeadDb(dbid){ if(!dbid) return; try{ var sb=window.__sb; if(sb) await sb.from('crm_leads').delete().eq('id',dbid); }catch(e){} }
+/* ===== Leads duplicados (2 acessos criando o mesmo lead) — identificar e mesclar ===== */
+function _telDig(t){ var d=String(t||'').replace(/\D/g,''); if(d.length>11) d=d.slice(-11); return d.length>=8?d:''; }
+function _grposLeadsDup(){
+  var ativos=(LEADS||[]).filter(function(l){ return l && l.nome && !/^Lead Exemplo/i.test(l.nome); });
+  var byKey={};
+  ativos.forEach(function(l){
+    /* mesma pessoa se: mesmo telefone, OU mesmo e-mail, OU mesmo nome normalizado */
+    var chaves=[]; var tel=_telDig(l.tel); if(tel) chaves.push('tel:'+tel);
+    var em=String(l.email||'').trim().toLowerCase(); if(em) chaves.push('em:'+em);
+    var nk=normClienteNome(l.nome); if(nk && nk.split(' ').length>=2) chaves.push('nm:'+nk);
+    l.__chaves=chaves;
+  });
+  /* união simples: agrupa por qualquer chave compartilhada */
+  var pai={}; function acha(k){ while(pai[k]&&pai[k]!==k){ k=pai[k]; } return k; }
+  ativos.forEach(function(l){ (l.__chaves||[]).forEach(function(k){ if(!(k in pai)) pai[k]=k; }); });
+  ativos.forEach(function(l){ var ks=l.__chaves||[]; for(var i=1;i<ks.length;i++){ pai[acha(ks[i])]=acha(ks[0]); } l.__raiz=(ks.length?acha(ks[0]):('id:'+l.id)); });
+  var g={}; ativos.forEach(function(l){ (g[l.__raiz]=g[l.__raiz]||[]).push(l); });
+  return Object.keys(g).map(function(k){return g[k];}).filter(function(arr){return arr.length>1;});
+}
+function _pontuaLead(l){ var n=0; ['nome','tel','email','canal','valor','acao','obs'].forEach(function(k){ if(l[k]&&String(l[k]).trim()) n++; }); n+=(l.arquivos&&l.arquivos.length?l.arquivos.length*2:0); n+=(l.labels&&l.labels.length?l.labels.length:0); return n; }
+function atualizaMergeBadge(){
+  try{ var g=_grposLeadsDup(); var b=document.getElementById('btn-merge-leads'), n=document.getElementById('merge-leads-n');
+    if(b){ if(g.length){ b.style.display=''; if(n)n.textContent='('+g.length+')'; } else b.style.display='none'; } }catch(e){}
+}
+function abrirMesclaLeads(){
+  var g=_grposLeadsDup();
+  var el=document.getElementById('merge-leads-body');
+  if(!g.length){ if(el)el.innerHTML='<div class="note">Nenhum lead duplicado encontrado.</div>'; }
+  else if(el){
+    el.innerHTML=g.map(function(arr,gi){
+      arr=arr.slice().sort(function(a,b){return _pontuaLead(b)-_pontuaLead(a);});
+      var linhas=arr.map(function(l,i){ var arq=(l.arquivos&&l.arquivos.length)?(' · 📎 '+l.arquivos.length):'';
+        return '<div style="font-size:12.5px;padding:2px 0;color:'+(i===0?'#0F6E56':'#5d6673')+'">'+(i===0?'★ ':'• ')+esc(primeiroUltimo(l.nome))+' <span class="note">'+esc(l.canal||'')+(l.tel?(' · '+esc(l.tel)):'')+(l.email?(' · '+esc(l.email)):'')+arq+'</span></div>'; }).join('');
+      return '<div style="border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:10px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:5px"><b>'+arr.length+' cards do mesmo lead</b><button class="btn sm gold" onclick="mesclarGrupoLeads('+gi+')">Mesclar (manter ★)</button></div>'+linhas+'<div class="note" style="margin-top:5px">O ★ é o card mais completo — os arquivos e dados dos demais são somados nele.</div></div>';
+    }).join('');
+  }
+  window.__mergeGrupos=g;
+  document.getElementById('modal-merge-leads').classList.remove('hidden');
+}
+function fecharMesclaLeads(){ document.getElementById('modal-merge-leads').classList.add('hidden'); }
+async function mesclarGrupoLeads(gi){
+  var g=window.__mergeGrupos; if(!g||!g[gi]) return;
+  var arr=g[gi].slice().sort(function(a,b){return _pontuaLead(b)-_pontuaLead(a);});
+  var base=arr[0], resto=arr.slice(1);
+  /* soma arquivos (união por path), completa campos vazios, junta observações */
+  base.arquivos=base.arquivos||[];
+  var vistos={}; base.arquivos.forEach(function(a){ if(a&&a.path) vistos[a.path]=1; });
+  resto.forEach(function(l){
+    (l.arquivos||[]).forEach(function(a){ if(a&&a.path&&!vistos[a.path]){ base.arquivos.push(a); vistos[a.path]=1; } });
+    ['tel','email','canal','valor','acao','lemdata','lemtxt'].forEach(function(k){ if((!base[k]||!String(base[k]).trim())&&l[k]) base[k]=l[k]; });
+    if(l.obs&&String(l.obs).trim()&&(base.obs||'').indexOf(String(l.obs).trim())<0){ base.obs=(base.obs?(base.obs+'\n— (mesclado) —\n'):'')+l.obs; }
+    if(l.labels&&l.labels.length){ base.labels=base.labels||[]; l.labels.forEach(function(x){ if(base.labels.indexOf(x)<0) base.labels.push(x); }); }
+  });
+  base.ultimaAtividade=new Date().toISOString();
+  /* remove os demais do banco e da lista */
+  for(var i=0;i<resto.length;i++){ var l=resto[i]; await apagarLeadDb(l.dbid); var ix=LEADS.findIndex(function(x){return x.id===l.id;}); if(ix>=0) LEADS.splice(ix,1); }
+  salvarLeadsLocal(); renderCaptacao(); abrirMesclaLeads();
+  alert('✓ '+(resto.length+1)+' cards mesclados em um — arquivos e dados preservados.');
+}
 try{ carregarLeadsLocal(); }catch(e){}
 try{ carregarFunilLocal(); }catch(e){}
 (function tryLeadsDb(){ if(window.__sb){ carregarLeadsDb(); } else { setTimeout(tryLeadsDb,800); } })();
@@ -4823,6 +4883,12 @@ function renderProc(){
   if(sel && typeof LABELS!=='undefined'){ if(sel.getAttribute('data-n')!==String(LABELS.length)){ var cur=sel.value; sel.innerHTML='<option value="">Todas as etiquetas</option>'+LABELS.map(function(l){return '<option value="'+l.id+'">'+esc(l.nome)+'</option>';}).join(""); sel.value=cur; sel.setAttribute('data-n',String(LABELS.length)); } }
 }
 </script>
+<div id="modal-merge-leads" class="overlay hidden"><div class="modal" style="max-width:620px">
+  <h2>⚭ Mesclar leads duplicados</h2>
+  <p class="note" style="margin-top:0">Quando dois acessos criam cards do mesmo lead (mesmo telefone, e-mail ou nome), junte-os aqui. O card mais completo (★) é mantido e recebe os arquivos e dados dos demais.</p>
+  <div id="merge-leads-body" style="max-height:60vh;overflow:auto"></div>
+  <div style="margin-top:12px;text-align:right"><button class="btn ghost" onclick="fecharMesclaLeads()">Fechar</button></div>
+</div></div>
 <div id="modal-config" class="overlay hidden"><div class="modal" style="max-width:640px">
   <h2>⚙ Configurações — Lotes / pastas do menu</h2>
   <p class="note" style="margin-top:0">Crie pastas (lotes) que aparecem no menu esquerdo, abaixo de Processos — como "Encerrados" ou "James Laurence". Mova processos em massa para um lote e eles saem da lista principal.</p>
@@ -8120,6 +8186,14 @@ function setDilView(v){
 <style id="cmp-v2">
   .side{transition:width .18s ease}
   .side .brand img{width:74px}
+  /* menu compacto: cabe sem barra de rolagem, sem nomes sobrepostos */
+  .nav a{padding:6px 12px!important;margin-bottom:1px!important;font-size:13.5px!important}
+  #proc-subnav a, #proc-subnav-lotes a{padding:4px 12px!important}
+  .nav .sec{padding:7px 12px 3px!important}
+  .side .brand .sys{margin:0 8px 8px!important}
+  /* esconde a barra de rolagem do menu (continua rolável em telas muito baixas) */
+  .side>#nav{scrollbar-width:none;-ms-overflow-style:none}
+  .side>#nav::-webkit-scrollbar{width:0;height:0;display:none}
   #side-toggle{position:absolute;top:14px;right:-13px;width:26px;height:26px;border-radius:50%;background:var(--gold);color:#fff;font-weight:800;font-size:13px;line-height:26px;text-align:center;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.25);z-index:5;user-select:none}
   .side{position:relative}
   body.mini .side{width:64px;padding:16px 8px}
