@@ -215,8 +215,8 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
         <a data-s="encerrados" onclick="go('encerrados')" style="padding-left:30px;opacity:.8;font-size:13px"><span class="ic">▤</span> Encerrados <span id="nav-n-enc" style="margin-left:auto;font-size:10.5px;background:var(--navy2);border-radius:10px;padding:1px 7px"></span></a>
         <a data-s="james" onclick="go('james')" style="padding-left:30px;opacity:.8;font-size:13px"><span class="ic">⏸</span> James Laurence <span id="nav-n-james" style="margin-left:auto;font-size:10.5px;background:var(--navy2);border-radius:10px;padding:1px 7px"></span></a>
       </div>
-      <!-- lotes personalizados: sempre visíveis abaixo de Processos -->
-      <div id="proc-subnav-lotes"></div>
+      <!-- lotes personalizados: só aparecem dentro da área de Processos (igual Inove/Encerrados/James) -->
+      <div id="proc-subnav-lotes" style="display:none"></div>
       <a data-s="diligencias" onclick="go('diligencias')"><span class="ic">◔</span> Diligências</a>
       <a data-s="relatorio" onclick="go('relatorio')"><span class="ic">◫</span> Relatório mensal</a>
       <a data-s="crm" onclick="go('crm')"><span class="ic">▣</span> Comercial</a>
@@ -5108,8 +5108,13 @@ function go(s){
   document.querySelectorAll("#nav a").forEach(function(a){a.classList.remove("active")});
   var link=document.querySelector('#nav a[data-s="'+s+'"]');if(link)link.classList.add("active");
   var t={painel:"Painel",triagem:"Publicações",agenda:"Agenda — Kanban (etapas CMP)",processos:"Processos",crm:"Comercial",financeiro:"Financeiro — cobranças e recebimentos",contatos:"Contatos",procedimentos:"Procedimentos CMP",etiquetas:"Etiquetas","proc-det":"Processo",diligencias:"Diligências",relatorio:"Relatório mensal para clientes",encerrados:"Processos encerrados",inove:"Processos Inove (terceiros)",james:"Processos contra James Laurence",cadastros:"Cadastros — Tribunais de Justiça",inovesol:"Solicitar novas funcionalidades",fases:"Revisar fases dos processos"};
-  /* sub-pastas de Processos (Inove/Encerrados/James): só aparecem na área de Processos */
-  try{ var _sub=document.getElementById('proc-subnav'); if(_sub) _sub.style.display=(['processos','inove','encerrados','james'].indexOf(s)>=0)?'block':'none'; }catch(e){}
+  /* sub-pastas de Processos (Inove/Encerrados/James/lotes personalizados): só
+     aparecem dentro da área de Processos (inclusive ao abrir um lote específico) */
+  try{
+    var _showSub=(['processos','inove','encerrados','james','lote'].indexOf(s)>=0);
+    var _sub=document.getElementById('proc-subnav'); if(_sub) _sub.style.display=_showSub?'block':'none';
+    var _subL=document.getElementById('proc-subnav-lotes'); if(_subL) _subL.style.display=_showSub?'block':'none';
+  }catch(e){}
   var st=document.getElementById("scr-title"); if(st) st.textContent=t[s]||"Painel";
   var sw=document.querySelector('#s-crm .switch'); if(sw) sw.style.display='none';
   if(s==="painel"){renderPainel(); try{ if(typeof renderCoberturaVaras==='function') renderCoberturaVaras(); }catch(e){}}
