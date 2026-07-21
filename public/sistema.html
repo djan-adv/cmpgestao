@@ -1001,7 +1001,7 @@ function go(s){
   if(s==="painel")renderPainel(); if(s==="triagem")renderTriagem(); if(s==="processos")renderProc(); if(s==="crm")renderCrm(); if(s==="etiquetas")renderEtiquetas(); if(s==="agenda")renderAgendaView();
   window.scrollTo(0,0);
 }
-var FASES_META=[["prot","Correção e Protocolo","#C9A227"],["post","Fase de Conhecimento","#185FA5"],["sane","Fase Saneadora","#0F6E56"],["instr","Fase Instrutória","#8a5a00"],["decis","Fase Decisória","#6d28a8"],["recur","Fase Recursal","#b5342b"],["exec","Fase de Cumprimento","#0e7490"]];
+var FASES_META=[["prot","Correção e Protocolo","#C9A227"],["post","Fase de Conhecimento","#185FA5"],["sane","Fase Saneadora","#0F6E56"],["instr","Fase Instrutória","#8a5a00"],["decis","Fase Decisória","#6d28a8"],["recur","Fase Recursal","#b5342b"],["exec","Fase de Cumprimento","#0e7490"],["alvara","Expedir Alvará","#127a53"]];
 function renderFasesPainel(){
   var cont=document.getElementById("painel-fases");if(!cont)return;
   var cnt={};DADOS.processos.forEach(function(p){var f=faseDoProc(p);cnt[f]=(cnt[f]||0)+1;});
@@ -2156,6 +2156,8 @@ function guessFase(p){
   if(/agravo de instrumento/.test(cls))return "decis";                              /* AI é fase decisória (interlocutória) */
   if(/apela[çc][ãa]o|recurso inominado|recurso especial|recurso extraordin[áa]rio|embargos infringentes/.test(cls))return "recur";
   if(/cumprimento de senten|cumprimento provis[óo]rio|cumprimento definitivo|execu[çc][ãa]o de t[íi]tulo|execu[çc][ãa]o fiscal/.test(cls))return "exec";
+  /* 0.5) EXPEDIR ALVARÁ — fase final: dinheiro disponível para levantamento */
+  if(/expedi[çc][ãa]o de alvar|expedir (o )?alvar|alvar[áa] (de levantamento|eletr[ôo]nico|judicial|expedido)|levantamento de valores|levantamento de dep[óo]sito|libera[çc][ãa]o de valores|transfer[êe]ncia dos valores|conta judicial.*levant/.test(t))return "alvara";
   /* 1) CUMPRIMENTO — cumprimento de sentença / execução / constrição patrimonial */
   if(/cumprimento de senten|cumprimento provis[óo]rio|cumprimento definitivo|execu[çc][ãa]o de t[íi]tulo|execu[çc][ãa]o fiscal|\bexecu[çc][ãa]o\b|\bpenhora|sisbajud|bacenjud|renajud|infojud|precat[óo]|requisi[çc][ãa]o de pequeno valor|\brpv\b|liquida[çc][ãa]o de senten|adjudica|arremata|leil[ãa]o|hasta p[úu]blica|bloqueio de valores|impugna[çc][ãa]o ao cumprimento/.test(t))return "exec";
   /* 2) RECURSAL — só APÓS sentença, subida ao 2º grau (não classificar por embargos de declaração isolado) */
