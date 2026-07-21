@@ -8748,6 +8748,41 @@ async function confirmarDepositoAlvara(numEnc){
   if(sb&&p._id){ var r=await sb.from('processos').update({alvara_valor_confirmado:valorNum,alvara_data_deposito:d}).eq('id',p._id).select('id'); if(r&&r.error){ alert('Erro ao salvar: '+r.error.message); return; } }
   p.alvara_valor_confirmado=valorNum; p.alvara_data_deposito=d;
   try{ renderAlvarasMes(); }catch(e){}
+  /* assim que o ESCRITÓRIO confirma que recebeu, avisamos o cliente para ele
+     também conferir a conta dele — com alerta de golpe — antes de emitir a NF */
+  var envio=await _avisarClienteAlvaraDepositado(p);
+  if(envio&&envio.ok) alert('Depósito confirmado. Avisamos o cliente por e-mail para conferir a conta (com alerta de golpe).');
+  else alert('Depósito confirmado.'+(envio&&envio.erro==='sem e-mail cadastrado'?' Não enviamos aviso ao cliente por falta de e-mail cadastrado.':(' Não foi possível avisar o cliente por e-mail: '+((envio&&envio.erro)||'erro desconhecido'))));
+}
+/* aviso ao cliente de que o alvará (a parte dele) provavelmente também já caiu
+   na conta — sempre com o alerta de golpe (o escritório nunca pede depósito/PIX
+   para "liberar" um alvará). Registra no histórico do processo. */
+async function _avisarClienteAlvaraDepositado(p){
+  try{
+    var email=_emailClienteDoProc(p); if(!email) return {ok:false,erro:'sem e-mail cadastrado'};
+    var primeiro=String(p.cliente||'').trim().split(/\s+/)[0]||'';
+    var venc=p.alvara_data_deposito?String(p.alvara_data_deposito).split('-').reverse().join('/'):'';
+    var corpo='Olá'+(primeiro?(', '+primeiro):'')+'!\n\n'
+      +'Temos uma boa notícia: conferimos que o alvará do seu processo nº '+p.numero+' foi depositado'+(venc?(' em '+venc):'')+', e já identificamos aqui o valor que cabe ao nosso escritório.\n\n'
+      +'Pedimos que você também acesse sua conta bancária e confirme se recebeu o valor que lhe cabe. Se ainda não tiver caído, aguarde alguns dias úteis (o prazo de compensação varia) e nos avise se persistir.\n\n'
+      +'⚠️ ATENÇÃO — GOLPES: nosso escritório NUNCA entra em contato pedindo depósito, PIX ou qualquer pagamento para "liberar" um alvará ou honorários. Se alguém se passar por nós pedindo transferência, NÃO envie dinheiro — é golpe. Em caso de dúvida, fale diretamente conosco pelos nossos canais oficiais de sempre.\n\n'
+      +'Qualquer dúvida, estamos à disposição.';
+    corpo+='\n\n'+_assinaturaCMP('Djan');
+    var assunto='Alvará depositado — processo nº '+p.numero;
+    var tok=await docToken();
+    var r=await fetch('/api/enviar-email',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({para:email,assunto:assunto,corpo:corpo,numero:p.numero})});
+    var j=await r.json().catch(function(){return {};});
+    if(!r.ok||j.erro) return {ok:false,erro:(j&&j.erro)||('HTTP '+r.status)};
+    try{
+      if(p._id){
+        var hoje=new Date().toISOString().slice(0,10);
+        var htxt='[Aviso ao cliente] Alvará depositado — comunicado enviado para '+email+' (com alerta de golpe), pedindo que confira o recebimento na conta dele.';
+        await window.__sb.from('andamentos').insert({processo_id:p._id,data:hoje,texto:htxt,fonte:'manual'});
+        if(p.hist_full){ p.hist_full.unshift({id:null,data:hoje+'T00:00:00.000Z',texto:htxt,f:'manual'}); }
+      }
+    }catch(e){}
+    return {ok:true};
+  }catch(e){ return {ok:false,erro:(e&&e.message)||String(e)}; }
 }
 /* metade de baixo: alvarás expedidos por mês (processos na fase "Expedir Alvará")
    — escritório e INOVE separados (Inove é cobrado à parte), com totalizadores.
