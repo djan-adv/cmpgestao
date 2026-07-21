@@ -3914,6 +3914,8 @@ function toggleConcluirTarefa(id){
     }catch(eKt){ console.log('kanban: '+(eKt&&eKt.message||eKt)); }
     /* audiências trabalhistas futuras já marcadas → garante a tarefa de ATA do dia seguinte */
     try{ if(typeof varreAtasTrabalhistas==='function') varreAtasTrabalhistas(); }catch(eVa){}
+    /* lembrete de véspera das audiências de amanhã (aviso ao cliente) */
+    try{ if(typeof varreAvisosVespera==='function') await varreAvisosVespera(); }catch(eVv){}
     /* lotes personalizados (pastas do menu esquerdo, geridas na engrenagem) */
     try{ var lt=await sb.from('lotes').select('id,nome,cor,ordem').order('ordem',{ascending:true}); if(!lt.error&&lt.data){ window.__LOTES=lt.data; if(typeof renderNavLotes==='function') renderNavLotes(); } }catch(eLt){}
     /* carrega os contatos importados (382) da tabela `contatos` do Supabase.
@@ -6790,6 +6792,8 @@ async function varreAudienciasAuto(){
         criadas++;
         window.__AGDB.push({id:w.data&&w.data.id,data:c.a.iso,hora:(c.a.hora||'09:00'),tipo:'az',tt:tit,resp:'Djan',org:'auto-sistema',p:{numero:c.p.numero,cliente:c.p.cliente||''}});
         garanteTarefaAta(c.p,c.a.iso);
+        /* aviso ao cliente NA DESIGNAÇÃO (quando entra na nossa agenda) */
+        try{ await avisoAudienciaCliente(c.p, c.a.iso, (c.a.hora||'09:00'), 'designacao'); }catch(eAv){}
       }
     }
     if(criadas){
@@ -6798,6 +6802,63 @@ async function varreAudienciasAuto(){
       console.log('CMPGestao: '+criadas+' audiência(s) agendada(s) automaticamente pelo histórico.');
     }
   }catch(e){ console.warn('varreAudienciasAuto:',e); }
+}
+/* ===== Aviso automático de audiência ao cliente (designação + véspera) =====
+   Um e-mail quando a audiência entra na nossa agenda e outro 1 dia antes.
+   Trava anti-duplicata na tabela avisos_audiencia (unique processo+data+tipo):
+   grava o marcador ANTES de enviar; se já existir, não reenvia. */
+function _emailClienteDoProc(p){
+  var s=String((p&&p.ctl)||''); var m=s.match(/[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}/);
+  return m?m[0]:'';
+}
+async function avisoAudienciaCliente(p, isoData, hora, tipo){
+  try{
+    if(!p || isInove(p)) return;
+    var sb=window.__sb; if(!sb) return;
+    var email=_emailClienteDoProc(p); if(!email) return;      /* sem e-mail do cliente, não envia */
+    var esc2=await _escBusca(); if(!esc2) return;
+    /* trava: tenta gravar o marcador primeiro; conflito = já avisado */
+    var mk=await sb.from('avisos_audiencia').insert({escritorio_id:esc2,processo_numero:p.numero,data_audiencia:isoData,tipo:tipo,email:email}).select('id').single();
+    if(mk.error){ return; }   /* unique violation → já enviado antes */
+    var dbr=String(isoData).split('-').reverse().join('/');
+    var horaTxt=(hora&&hora!=='Dia todo')?(' às '+hora):'';
+    var primeiro=(String(p.cliente||'').trim().split(/\s+/)[0]||'');
+    var corpo;
+    if(tipo==='vespera'){
+      corpo='Olá'+(primeiro?(', '+primeiro):'')+'!\n\nLembrete: sua audiência no processo nº '+p.numero+' é AMANHÃ, dia '+dbr+horaTxt+'.\n\nSe a sua presença for necessária, por favor confirme conosco. Em caso de dúvidas sobre local, formato (presencial ou por vídeo) ou documentos, estamos à disposição.';
+    } else {
+      corpo='Olá'+(primeiro?(', '+primeiro):'')+'!\n\nInformamos que foi designada uma audiência no seu processo nº '+p.numero+', marcada para o dia '+dbr+horaTxt+'.\n\nJá anotamos em nossa agenda e vamos acompanhar. Faremos um novo contato na véspera. Se precisarmos da sua presença ou de testemunhas, avisaremos com antecedência.';
+    }
+    corpo+='\n\n'+_assinaturaCMP('Djan');
+    var assunto=(tipo==='vespera')?('Lembrete: sua audiência é amanhã — processo '+p.numero):('Audiência designada no seu processo '+p.numero);
+    var tok=await docToken();
+    var r=await fetch('/api/enviar-email',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({para:email,assunto:assunto,corpo:corpo,numero:p.numero})});
+    var j=await r.json().catch(function(){return {};});
+    if(!r.ok||j.erro){
+      /* falhou o envio: remove o marcador para tentar de novo depois */
+      try{ await sb.from('avisos_audiencia').delete().eq('id',mk.data.id); }catch(e){}
+      console.warn('avisoAudienciaCliente:',(j&&j.erro)||('HTTP '+r.status)); return;
+    }
+    /* registra no histórico do processo */
+    try{ if(p._id){ var hoje=new Date().toISOString().slice(0,10);
+      var htxt='[Aviso ao cliente] '+(tipo==='vespera'?'Lembrete de véspera':'Comunicação de audiência designada')+' enviado para '+email+' — audiência em '+dbr+horaTxt+'.';
+      await sb.from('andamentos').insert({processo_id:p._id,data:hoje,texto:htxt,fonte:'manual'});
+      if(p.hist_full){ p.hist_full.unshift({id:null,data:hoje+'T00:00:00.000Z',texto:htxt,f:'manual'}); }
+    } }catch(e){}
+    console.log('CMPGestao: aviso de audiência ('+tipo+') enviado ao cliente '+email+' — proc '+p.numero+'.');
+  }catch(e){ console.warn('avisoAudienciaCliente:',e&&e.message||e); }
+}
+/* na abertura: envia o lembrete de VÉSPERA para audiências de AMANHÃ ainda não avisadas */
+async function varreAvisosVespera(){
+  try{
+    var d=new Date(); d.setDate(d.getDate()+1);
+    var amanha=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+    var evs=(window.__AGDB||[]).filter(function(e){ return e && e.data===amanha && (e.tipo==='az'||/audi[êe]ncia/i.test(e.tt||'')); });
+    for(var i=0;i<evs.length;i++){ var e=evs[i]; var dig=String((e.p&&e.p.numero)||'').replace(/\D/g,''); if(!dig) continue;
+      var p=(DADOS.processos||[]).find(function(x){ return String(x.numero||'').replace(/\D/g,'')===dig; });
+      if(p) await avisoAudienciaCliente(p, e.data, e.hora, 'vespera');
+    }
+  }catch(e){ console.warn('varreAvisosVespera:',e); }
 }
 /* varredura na abertura do sistema: toda audiência trabalhista futura já marcada
    na agenda ganha (se ainda não tiver) a tarefa de ata do dia seguinte */
@@ -6826,8 +6887,9 @@ async function gravarAudienciaSug(iso,hora,tipo){
     AGENDA=null; try{ initAgenda(); }catch(e){}
     var avisoAta='';
     if(_ehTrabalhista(atual.numero)){ garanteTarefaAta(atual,iso); avisoAta='\n+ tarefa automática criada: buscar a ATA no dia seguinte (trabalhista).'; }
+    var avC=''; try{ var em=_emailClienteDoProc(atual); if(em){ await avisoAudienciaCliente(atual, iso, (hora||'09:00'), 'designacao'); avC='\n+ aviso enviado ao cliente ('+em+').'; } }catch(e){}
     renderAudienciaSugestao();
-    alert('✓ Audiência gravada na agenda: '+iso.split('-').reverse().join('/')+(hora?(' às '+hora):'')+'.'+avisoAta);
+    alert('✓ Audiência gravada na agenda: '+iso.split('-').reverse().join('/')+(hora?(' às '+hora):'')+'.'+avisoAta+avC);
   }catch(e){ alert('Erro: '+(e&&e.message||e)); }
 }
 function editarObservacoes(){
