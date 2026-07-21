@@ -8763,12 +8763,12 @@ async function _avisarClienteAlvaraDepositado(p){
     var primeiro=String(p.cliente||'').trim().split(/\s+/)[0]||'';
     var venc=p.alvara_data_deposito?String(p.alvara_data_deposito).split('-').reverse().join('/'):'';
     var corpo='Olá'+(primeiro?(', '+primeiro):'')+'!\n\n'
-      +'Temos uma boa notícia: conferimos que o alvará do seu processo nº '+p.numero+' foi depositado'+(venc?(' em '+venc):'')+', e já identificamos aqui o valor que cabe ao nosso escritório.\n\n'
-      +'Pedimos que você também acesse sua conta bancária e confirme se recebeu o valor que lhe cabe. Se ainda não tiver caído, aguarde alguns dias úteis (o prazo de compensação varia) e nos avise se persistir.\n\n'
+      +'Informamos que o processo nº '+p.numero+' foi concluído e os valores do alvará já foram pagos pelo Juízo. Nosso escritório já recebeu a parte que nos cabe'+(venc?(' em '+venc):'')+'.\n\n'
+      +'O juiz costuma fazer os pagamentos em depósitos separados — um para o escritório e outro para você —, por isso é provável que o valor que cabe a você também já esteja disponível em sua conta. Recomendamos que confira.\n\n'
       +'⚠️ ATENÇÃO — GOLPES: nosso escritório NUNCA entra em contato pedindo depósito, PIX ou qualquer pagamento para "liberar" um alvará ou honorários. Se alguém se passar por nós pedindo transferência, NÃO envie dinheiro — é golpe. Em caso de dúvida, fale diretamente conosco pelos nossos canais oficiais de sempre.\n\n'
       +'Qualquer dúvida, estamos à disposição.';
     corpo+='\n\n'+_assinaturaCMP('Djan');
-    var assunto='Alvará depositado — processo nº '+p.numero;
+    var assunto='Alvará pago — processo nº '+p.numero;
     var tok=await docToken();
     var r=await fetch('/api/enviar-email',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({para:email,assunto:assunto,corpo:corpo,numero:p.numero})});
     var j=await r.json().catch(function(){return {};});
