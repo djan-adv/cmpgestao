@@ -115,26 +115,37 @@ export async function POST(request) {
   }
 
   const modelo = carregaModelo()
-  const instr =
+  // bloco FIXO (persona + Manual de Padrão CMP + formato de saída) — idêntico em toda
+  // chamada, então vai no `system` com cache_control: a IA reaproveita o cache em vez
+  // de reprocessar as ~8 mil palavras do Manual a cada minuta.
+  const SISTEMA_BASE =
     'Você é o(a) redator(a) de peças do escritório Crispim, Mendonça e Pinheiro (CMP). Redija uma MINUTA (rascunho para revisão do advogado) da peça solicitada, seguindo RIGOROSAMENTE o "Manual de Padrão CMP" abaixo: método IRAC em prosa (sem rótulos visíveis), estrutura de seções, endereçamento no padrão do escritório ("AO JUÍZO DE DIREITO DA/DO ..."), fecho "Nestes termos, / Pede deferimento." e dupla subscrição (Djan Henrique Mendonça do Nascimento — OAB/PB 5.219-A e Jader Gabriel Pinheiro — OAB/PB 33.567).\n\n' +
     'REGRAS CRÍTICAS (do Manual): NUNCA invente dados (CPF, CNPJ, valores, nº de processo, endereços) — use [A PREENCHER]; números calculados/inferidos marque [CONFIRMAR]; NUNCA cite jurisprudência de memória — se não puder verificar, use [JURISPRUDÊNCIA A CONFIRMAR: tese]; baseie-se SOMENTE no histórico e nos documentos anexados; sinalize riscos/prazos, mas a decisão estratégica é do advogado.\n\n' +
     (modelo ? ('===== MANUAL DE PADRÃO CMP (siga fielmente) =====\n' + modelo + '\n===== FIM DO MANUAL =====\n\n') : '') +
+    'FORMATO DE SAÍDA: escreva a PEÇA COMPLETA no padrão CMP, começando DIRETO pela peça (sem comentários antes). Ao final, em uma NOVA seção iniciada EXATAMENTE pela linha "===RELATORIO DE TESES===", escreva o Relatório de Teses (fora da peça), conforme o Manual (tese adotada e por quê, subsidiárias, alternativas descartadas, status da jurisprudência, pendências [A PREENCHER]/[CONFIRMAR]). Não escreva nada após o relatório.'
+  // bloco VARIÁVEL (dados do processo/pedido/histórico) — sempre depois do breakpoint
+  const pedidoTexto =
     'DADOS DO PROCESSO — nº ' + (proc.numero || '') + ' | Cliente: ' + (proc.cliente_nome || '') + ' | Parte contrária: ' + (proc.oponente || '') + ' | Classe/Assunto: ' + ((proc.classe || '') + ' ' + (proc.assunto || '')).trim() + ' | Órgão: ' + (proc.orgao || '') + '.\n\n' +
     'PEDIDO DO ADVOGADO: ' + instrucao + '\n\n' +
     'HISTÓRICO RECENTE (mais novo primeiro):\n' + (histTxt || '(sem histórico)') + '\n\n' +
-    (usados ? ('Documentos anexados (PDF do processo): ' + nomesUsados.join('; ') + '.\n\n') : 'Nenhum PDF localizado na pasta do processo — redija com base no histórico e marque [A PREENCHER]/[VERIFICAR] onde faltar documento.\n\n') +
-    'SAÍDA: escreva a PEÇA COMPLETA no padrão CMP, começando DIRETO pela peça (sem comentários antes). Ao final, em uma NOVA seção iniciada EXATAMENTE pela linha "===RELATORIO DE TESES===", escreva o Relatório de Teses (fora da peça), conforme o Manual (tese adotada e por quê, subsidiárias, alternativas descartadas, status da jurisprudência, pendências [A PREENCHER]/[CONFIRMAR]). Não escreva nada após o relatório.'
-  content.push({ type: 'text', text: instr })
+    (usados ? ('Documentos anexados (PDF do processo): ' + nomesUsados.join('; ') + '.') : 'Nenhum PDF localizado na pasta do processo — redija com base no histórico e marque [A PREENCHER]/[VERIFICAR] onde faltar documento.')
+  content.push({ type: 'text', text: pedidoTexto })
 
   let data
   try {
     const r = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: 'claude-sonnet-5', max_tokens: 16000, messages: [{ role: 'user', content }] }),
+      body: JSON.stringify({
+        model: 'claude-sonnet-5',
+        max_tokens: 16000,
+        system: [{ type: 'text', text: SISTEMA_BASE, cache_control: { type: 'ephemeral' } }],
+        messages: [{ role: 'user', content }],
+      }),
     })
     data = await r.json()
     if (!r.ok) return Response.json({ erro: 'IA: ' + ((data && data.error && data.error.message) || r.status) }, { status: 502 })
+    try { console.log('[peticao] cache usage:', JSON.stringify(data.usage || {})) } catch (e) {}
   } catch (e) { return Response.json({ erro: 'IA indisponível: ' + (e.message || e) }, { status: 502 }) }
 
   let texto = ''

@@ -54,10 +54,11 @@ export async function POST(request) {
     } catch (e) { /* ignora arquivo problemático */ }
   }
 
-  const instr =
-    'Você extrai dados de um possível cliente (lead) de um escritório de advocacia, a partir de prints/mensagens.\n' +
-    'Mensagem digitada pelo lead: ' + (b.mensagem || '(vazia)') + '\n' +
-    'Nome já informado: ' + (b.nome || '(vazio)') + ' · Telefone já informado: ' + (b.telefone || '(vazio)') + '\n\n' +
+  // bloco FIXO (mesmas regras em toda chamada) — vai no `system` com cache_control.
+  // OBS: bloco curto, abaixo do mínimo cacheável da Anthropic (~1024 tokens) — o
+  // cache_control não custa nada e já deixa pronto pra quando o texto crescer.
+  const SISTEMA_LEAD =
+    'Você extrai dados de um possível cliente (lead) de um escritório de advocacia, a partir de prints/mensagens.\n\n' +
     'Responda SOMENTE com um JSON válido, sem nenhum texto fora dele, exatamente neste formato:\n' +
     '{"card":{"nome":"","telefone":"","assunto":"","observacao":""},"memoria":{"historia":"","contexto":"","partes":"","valores":"","prazos":"","detalhes":""}}\n\n' +
     'REGRAS OBRIGATÓRIAS:\n' +
@@ -66,9 +67,15 @@ export async function POST(request) {
     '- card.observacao = 1 a 2 frases objetivas.\n' +
     '- memoria = TODO o contexto e a história detalhada, para uso interno futuro (montar ficha/histórico).\n' +
     '- telefone: só os dígitos que realmente aparecem.'
-  content.push({ type: 'text', text: instr })
+  // bloco VARIÁVEL (dados deste lead) — sempre depois do breakpoint
+  content.push({ type: 'text', text: 'Mensagem digitada pelo lead: ' + (b.mensagem || '(vazia)') + '\nNome já informado: ' + (b.nome || '(vazio)') + ' · Telefone já informado: ' + (b.telefone || '(vazio)') })
 
-  const payload = { model: 'claude-sonnet-5', max_tokens: 1500, messages: [{ role: 'user', content }] }
+  const payload = {
+    model: 'claude-sonnet-5',
+    max_tokens: 1500,
+    system: [{ type: 'text', text: SISTEMA_LEAD, cache_control: { type: 'ephemeral' } }],
+    messages: [{ role: 'user', content }],
+  }
 
   let data
   try {
@@ -79,6 +86,7 @@ export async function POST(request) {
     })
     data = await r.json()
     if (!r.ok) return Response.json({ erro: 'IA: ' + ((data && data.error && data.error.message) || r.status) }, { status: 502 })
+    try { console.log('[ler-lead] cache usage:', JSON.stringify(data.usage || {})) } catch (e) {}
   } catch (e) {
     return Response.json({ erro: 'IA indisponível: ' + (e.message || e) }, { status: 502 })
   }

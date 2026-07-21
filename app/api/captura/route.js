@@ -58,9 +58,12 @@ async function transcreveAnexos(decoded, contextoTexto) {
     else if (f.tipo === 'application/pdf' || /\.pdf$/i.test(f.nome)) content.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: f.b64 } })
   }
   if (!content.length) return { status: 'sem_midia', transcricao: '', telefones: [] }
-  const instr =
-    'Você recebe print(s) de conversa de WhatsApp / documento(s) que um cliente enviou a um advogado.\n' +
-    'Contexto digitado pelo advogado: ' + (contextoTexto || '(vazio)') + '\n\n' +
+  // bloco FIXO (mesmas regras em toda chamada) — vai no `system` com cache_control.
+  // OBS: este bloco é curto (bem abaixo do mínimo de ~1024 tokens que a Anthropic
+  // exige para efetivamente cachear) — o cache_control fica pronto para quando o
+  // texto crescer, mas hoje não gera economia real aqui (ao contrário do /api/peticao).
+  const SISTEMA_OCR =
+    'Você recebe print(s) de conversa de WhatsApp / documento(s) que um cliente enviou a um advogado.\n\n' +
     'Extraia APENAS o conteúdo útil (a mensagem / o pedido). DESCARTE tudo que for interface do app: ' +
     'nome no topo, "online", horários, ícones, botões (Ligar, Vídeo, Pix, Pesquisar, Câmera), status de bateria/sinal, "digitando…", "visto por último".\n\n' +
     'Responda SOMENTE com um JSON válido, sem nenhum texto fora dele, exatamente assim:\n' +
@@ -71,14 +74,21 @@ async function transcreveAnexos(decoded, contextoTexto) {
     '- assunto: resumo curto (poucas palavras) do que a pessoa quer/precisa. Ex.: "Quer contratar — cobrança".\n' +
     '- nome: nome da pessoa se aparecer claramente no print (ex.: no topo da conversa). Senão "".\n' +
     '- Nunca invente nome, telefone, valores ou datas.'
-  content.push({ type: 'text', text: instr })
+  // bloco VARIÁVEL (contexto digitado agora) — sempre depois do breakpoint
+  content.push({ type: 'text', text: 'Contexto digitado pelo advogado: ' + (contextoTexto || '(vazio)') })
   try {
     const r = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: 'claude-sonnet-5', max_tokens: 1500, messages: [{ role: 'user', content }] }),
+      body: JSON.stringify({
+        model: 'claude-sonnet-5',
+        max_tokens: 1500,
+        system: [{ type: 'text', text: SISTEMA_OCR, cache_control: { type: 'ephemeral' } }],
+        messages: [{ role: 'user', content }],
+      }),
     })
     const data = await r.json()
+    try { console.log('[captura] cache usage:', JSON.stringify(data.usage || {})) } catch (e) {}
     if (!r.ok) return { status: 'falhou', transcricao: '', telefones: [] }
     let txt = ''
     try { txt = (data.content || []).map((c) => c.text || '').join('\n') } catch (e) {}
