@@ -381,7 +381,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
         <button class="btn sm" style="background:#FE3E6D;border-color:#FE3E6D;color:#fff" onclick="abrirNovaCobranca()">&#9673; Nova cobrança (Cora)</button>
       </div>
       <div class="kpis" id="fin-kpis"></div>
-      <div class="card"><div style="max-height:46vh;overflow:auto"><table><thead><tr><th>Cliente</th><th>Descrição</th><th>Valor</th><th>Vencimento</th><th>Status</th><th>Pago em</th><th>Boleto/PIX</th><th>NF</th><th></th></tr></thead><tbody id="fin-body"></tbody></table></div></div>
+      <div class="card"><div style="max-height:46vh;overflow:auto"><table><thead><tr><th>Cliente</th><th>Descrição</th><th>Valor</th><th>Vencimento</th><th>Status</th><th>Pago em</th><th>Boleto/PIX</th><th>Reenviar</th><th>NF</th><th></th></tr></thead><tbody id="fin-body"></tbody></table></div></div>
       <p class="note" id="fin-nota" style="margin-top:8px"></p>
       <!-- metade de baixo: alvarás expedidos por mês -->
       <div class="card" id="fin-alvaras" style="margin-top:14px"></div>
@@ -555,7 +555,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
     <p class="note" style="margin-top:0">Gera um boleto com PIX pelo Banco Cora. Quando o cliente pagar, a baixa é automática e o valor entra no financeiro dele.</p>
     <label>Cliente</label>
     <select id="cob-cliente" onchange="cobClienteMudou()"><option value="">Carregando clientes…</option></select>
-    <div id="cob-novo-nome-box" style="display:none;margin-top:8px"><label>Nome do cliente novo</label><input id="cob-novo-nome" placeholder="Nome completo / razão social"></div>
+    <div id="cob-novo-nome-box" style="display:none;margin-top:8px"><label>Nome do cliente novo</label><input id="cob-novo-nome" placeholder="Nome completo / razão social"><label style="margin-top:8px">E-mail do cliente <span class="note" style="font-weight:400">— o boleto é enviado automaticamente para cá</span></label><input id="cob-novo-email" type="email" placeholder="cliente@email.com"></div>
     <div id="cob-doc-box" style="margin-top:8px"><label>CPF / CNPJ <span class="note" style="font-weight:400">— obrigatório para o boleto</span></label><input id="cob-doc" inputmode="numeric" placeholder="Só números"></div>
     <label style="margin-top:10px">Descrição da cobrança</label>
     <input id="cob-desc" placeholder="Ex.: Honorários contratuais — parcela 1/3">
@@ -7219,6 +7219,7 @@ function honQuadroHTML(p){
   }
   out+=div;
   out+=honRow(james?'Crédito':'Condenação',honFmtInput('valor_condenacao',p.valor_condenacao));
+  out+='<div style="margin-top:9px"><button class="btn sm" style="width:100%;background:#FE3E6D;border-color:#FE3E6D;color:#fff;font-weight:700" onclick="enviarBoletoDoProcesso()" title="Reenviar por e-mail o boleto que já está salvo na pasta Documentos > Boletos deste processo (útil quando está atrasado)">💳 Reenviar boleto</button></div>';
   out+='</div>';
   return out;
 }
@@ -8652,7 +8653,7 @@ function finRenderTabela(){
                     '<div class="kpi"><div class="n">'+finReais(totPg)+'</div><div class="l">Recebido ('+pagas.length+')</div></div>'+
                     '<div class="kpi"><div class="n" style="color:'+(nfPend?'#8a5a00':'#0F6E56')+'">'+nfPend+'</div><div class="l">NFs a emitir</div></div>';
   var lista=(FIN_VIEW==='pagas')?pagas:abertas;
-  if(!lista.length){ body.innerHTML='<tr><td colspan="9" class="note">'+(FIN_VIEW==='pagas'?'Nenhum pagamento recebido ainda.':'Nenhuma cobrança em aberto. Clique em “Nova cobrança (Cora)”.')+'</td></tr>'; }
+  if(!lista.length){ body.innerHTML='<tr><td colspan="10" class="note">'+(FIN_VIEW==='pagas'?'Nenhum pagamento recebido ainda.':'Nenhuma cobrança em aberto. Clique em “Nova cobrança (Cora)”.')+'</td></tr>'; }
   else body.innerHTML=lista.map(function(x){
     var venc=x.vencimento?String(x.vencimento).split('-').reverse().join('/'):'—';
     var pago=x.pago_em?new Date(x.pago_em).toLocaleDateString('pt-BR'):'—';
@@ -8661,13 +8662,14 @@ function finRenderTabela(){
     if(x.boleto_url) pagar+='<a class="btn sm ghost" href="'+x.boleto_url+'" target="_blank" rel="noopener">Boleto</a> ';
     if(x.pix_emv) pagar+='<button class="btn sm ghost" onclick="finCopiarPix(this,\''+encodeURIComponent(x.pix_emv)+'\')">Copiar PIX</button>';
     if(!pagar) pagar='<span class="note">—</span>';
+    var reenviarBtn=(x.boleto_url||x.pix_emv)?('<button class="btn sm" style="background:#FE3E6D;border-color:#FE3E6D;color:#fff;font-size:11px;padding:4px 10px" onclick="reenviarBoletoLinha(\''+x.id+'\')" title="Reenviar este boleto por e-mail ao cliente">reenviar</button>'):'<span class="note">—</span>';
     var badge=(x.status==='paga')?'<span style="color:#0F6E56;font-weight:700">✓ paga</span>':(x.status==='cancelada'?'<span class="note">cancelada</span>':'<span style="color:#185FA5;font-weight:700">em aberto</span>');
     var nf=(x.nf_status==='emitida')?('NF '+finEsc(x.nf_numero||'')):(x.nf_status==='dispensada')?'<span class="note" style="margin:0">sem nota</span>':(x.status==='paga'?'<button class="btn sm gold" style="font-size:11px;padding:4px 10px" onclick="abrirNf(\''+x.id+'\')">Emitir NF</button>':'—');
     /* ações: cancelar boleto (se em aberto) e apagar a linha */
     var acoes='';
     if(x.status==='aberta') acoes+='<a onclick="cancelarCobranca(\''+x.id+'\')" title="Cancelar o boleto no Cora" style="cursor:pointer;color:#b5342b;font-size:11.5px;margin-right:10px">cancelar</a>';
     acoes+='<a onclick="apagarCobranca(\''+x.id+'\')" title="Apagar esta linha do financeiro" style="cursor:pointer;color:#8a8f98;font-size:11.5px">🗑</a>';
-    return '<tr><td>'+finEsc(cli)+'</td><td>'+finEsc(x.descricao||'')+'</td><td>'+finReais(x.valor_centavos)+'</td><td>'+venc+'</td><td>'+badge+'</td><td>'+pago+'</td><td style="white-space:nowrap">'+pagar+'</td><td>'+nf+'</td><td style="white-space:nowrap">'+acoes+'</td></tr>';
+    return '<tr><td>'+finEsc(cli)+'</td><td>'+finEsc(x.descricao||'')+'</td><td>'+finReais(x.valor_centavos)+'</td><td>'+venc+'</td><td>'+badge+'</td><td>'+pago+'</td><td style="white-space:nowrap">'+pagar+'</td><td style="white-space:nowrap">'+reenviarBtn+'</td><td>'+nf+'</td><td style="white-space:nowrap">'+acoes+'</td></tr>';
   }).join('');
   try{ renderAlvarasMes(); }catch(e){}
 }
@@ -8768,9 +8770,9 @@ function finEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/<
 async function finCarregarClientes(){
   var sel=document.getElementById('cob-cliente');
   try{
-    var r=await window.__sb.from('contatos').select('id,nome,cpf_cnpj').order('nome');
+    var r=await window.__sb.from('contatos').select('id,nome,cpf_cnpj,email').order('nome');
     var rows=(r&&r.data)||[];
-    FIN_CLIENTES={}; rows.forEach(function(c){ FIN_CLIENTES[c.id]={nome:c.nome,doc:c.cpf_cnpj||''}; });
+    FIN_CLIENTES={}; rows.forEach(function(c){ FIN_CLIENTES[c.id]={nome:c.nome,doc:c.cpf_cnpj||'',email:c.email||''}; });
     window.__finCliDoc={};
     if(sel){
       sel.innerHTML='<option value="">Selecione o cliente…</option><option value="__novo">➕ Novo cliente (digitar CPF/CNPJ)</option>'+rows.map(function(c){
@@ -8786,7 +8788,7 @@ async function finCarregarClientes(){
 }
 
 function abrirNovaCobranca(){
-  ['cob-desc','cob-valor','cob-venc','cob-doc','cob-novo-nome','cob-proc'].forEach(function(id){var e=document.getElementById(id); if(e) e.value='';});
+  ['cob-desc','cob-valor','cob-venc','cob-doc','cob-novo-nome','cob-novo-email','cob-proc'].forEach(function(id){var e=document.getElementById(id); if(e) e.value='';});
   var m=document.getElementById('cob-msg'); if(m) m.textContent='';
   window.__cobProcSel=null;
   var dd=document.getElementById('cob-proc-drop'); if(dd){ dd.classList.remove('on'); dd.innerHTML=''; }
@@ -8849,6 +8851,7 @@ async function emitirCobranca(){
   var centavos=finCentavos(document.getElementById('cob-valor').value);
   var doc=((document.getElementById('cob-doc')||{}).value||'').replace(/\D/g,'');
   var novoNome=((document.getElementById('cob-novo-nome')||{}).value||'').trim();
+  var novoEmail=((document.getElementById('cob-novo-email')||{}).value||'').trim();
   var ehNovo=(contato_id==='__novo');
   if(!contato_id){ msg.textContent='Selecione o cliente (ou "Novo cliente").'; return; }
   if(ehNovo && !novoNome){ msg.textContent='Informe o nome do cliente novo.'; return; }
@@ -8862,7 +8865,7 @@ async function emitirCobranca(){
   try{
     var tok=await finToken();
     var payload={descricao:descricao,valor_centavos:centavos,vencimento:vencimento};
-    if(ehNovo){ payload.nome=novoNome; payload.cpf_cnpj=doc; }
+    if(ehNovo){ payload.nome=novoNome; payload.cpf_cnpj=doc; if(novoEmail) payload.email=novoEmail; }
     else { payload.contato_id=contato_id; if(doc.length===11||doc.length===14) payload.cpf_cnpj=doc; }
     var r=await fetch('/api/cora/cobrancas',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify(payload)});
     var j=await r.json();
@@ -8871,6 +8874,13 @@ async function emitirCobranca(){
        "Boletos" ali e guarda o link do boleto — funciona também em casos sem
        nº CNJ, identificados só por CNPJ/CPF (Valtex, FF Dourado, Conceito...) */
     if(window.__cobProcSel && j.cobranca){ try{ await vincularBoletoProcesso(window.__cobProcSel, j.cobranca, descricao); }catch(e){} }
+    /* boleto emitido: envia por e-mail ao cliente IMEDIATAMENTE (texto varia
+       conforme haja processo/caso vinculado ou não) */
+    try{
+      var destEmail=(window.__cobProcSel && _emailClienteDoProc(window.__cobProcSel)) || novoEmail || ((FIN_CLIENTES&&FIN_CLIENTES[contato_id]&&FIN_CLIENTES[contato_id].email)||'');
+      var nomeCli=ehNovo?novoNome:((FIN_CLIENTES&&FIN_CLIENTES[contato_id]&&FIN_CLIENTES[contato_id].nome)||'');
+      if(destEmail) await _enviarBoletoPorEmail(destEmail, j.cobranca, window.__cobProcSel, nomeCli);
+    }catch(e){ console.warn('envio automático do boleto:',e&&e.message||e); }
     fecharNovaCobranca();
     await renderFinanceiro();
   }catch(e){ msg.textContent='Erro de rede. Tente de novo.'; }
@@ -8891,6 +8901,93 @@ async function vincularBoletoProcesso(p, cob, descricao){
     await fetch('/api/docs',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({path:chave+'/Boletos/'+nome, b64:b64})});
     try{ delete window.__censoDoc[chave]; }catch(e){}
   }catch(e){ console.warn('vincularBoletoProcesso:',e&&e.message||e); }
+}
+/* texto de referência do boleto conforme o vínculo — nunca dá a entender que é
+   custo do processo em si: se há processo com CNJ, geralmente é honorário/
+   assessoria relacionada; se é caso sem CNJ (Valtex, FF Dourado...), é assessoria;
+   sem nenhum vínculo, são os serviços advocatícios contratados de modo geral. */
+function _refTextoBoleto(procVinc){
+  if(!procVinc) return 'referente aos serviços advocatícios contratados';
+  var ehCaso=(typeof _ehCasoProc==='function')&&_ehCasoProc(procVinc);
+  if(ehCaso) return 'referente à assessoria jurídica prestada';
+  return 'referente aos honorários advocatícios contratados, no âmbito do processo nº '+(procVinc.numero||'');
+}
+/* envia (ou reenvia) um boleto por e-mail ao cliente e registra no histórico do
+   processo/caso vinculado, quando houver. cob = {vencimento,valor_centavos,
+   descricao,boleto_url,linha_digitavel,pix_emv} */
+async function _enviarBoletoPorEmail(destEmail, cob, procVinc, nomeCliente){
+  destEmail=String(destEmail||'').trim();
+  if(!destEmail) return {ok:false,erro:'cliente sem e-mail cadastrado'};
+  try{
+    var primeiro=String(nomeCliente||(procVinc&&procVinc.cliente)||'').trim().split(/\s+/)[0]||'';
+    var ref=_refTextoBoleto(procVinc);
+    var venc=cob.vencimento?String(cob.vencimento).split('-').reverse().join('/'):'';
+    var valor='R$ '+((cob.valor_centavos||0)/100).toFixed(2).replace('.',',');
+    var corpo='Olá'+(primeiro?(', '+primeiro):'')+'!\n\nSegue o boleto '+ref+'.\n\n'
+      +(cob.descricao?('Descrição: '+cob.descricao+'\n'):'')+'Valor: '+valor+(venc?('\nVencimento: '+venc):'')+'\n\n'
+      +(cob.boleto_url?('Boleto (link): '+cob.boleto_url+'\n'):'')
+      +(cob.linha_digitavel?('Linha digitável: '+cob.linha_digitavel+'\n'):'')
+      +(cob.pix_emv?('PIX copia-e-cola:\n'+cob.pix_emv+'\n'):'')
+      +'\nQualquer dúvida, estamos à disposição.';
+    corpo+='\n\n'+_assinaturaCMP('Djan');
+    var assunto='Boleto para pagamento'+(venc?(' — vencimento '+venc):'');
+    var tok=await docToken();
+    var r=await fetch('/api/enviar-email',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({para:destEmail,assunto:assunto,corpo:corpo,numero:(procVinc&&procVinc.numero)||undefined})});
+    var j=await r.json().catch(function(){return {};});
+    if(!r.ok||j.erro) return {ok:false,erro:(j&&j.erro)||('HTTP '+r.status)};
+    try{
+      if(procVinc&&procVinc._id){
+        var hoje=new Date().toISOString().slice(0,10);
+        var htxt='[Boleto] Enviado por e-mail para '+destEmail+' — '+valor+(venc?(', vencimento '+venc):'')+'.';
+        await window.__sb.from('andamentos').insert({processo_id:procVinc._id,data:hoje,texto:htxt,fonte:'manual'});
+        if(procVinc.hist_full){ procVinc.hist_full.unshift({id:null,data:hoje+'T00:00:00.000Z',texto:htxt,f:'manual'}); }
+      }
+    }catch(e){}
+    return {ok:true};
+  }catch(e){ return {ok:false,erro:(e&&e.message)||String(e)}; }
+}
+/* botão "Reenviar boleto" na ficha do processo: procura o boleto mais recente já
+   salvo em Documentos > Boletos e reenvia por e-mail — NUNCA cria boleto novo
+   (para emitir um boleto, use o Financeiro). */
+async function enviarBoletoDoProcesso(){
+  if(typeof atual==='undefined'||!atual) return;
+  var chave=_docChaveProcObj(atual); if(!chave){ alert('Salve o processo/caso primeiro.'); return; }
+  var email=_emailClienteDoProc(atual);
+  if(!email){ alert('Não encontrei o e-mail do cliente neste processo (verifique o campo de contatos).'); return; }
+  try{
+    var tok=await docToken();
+    var r=await fetch('/api/docs?dir='+encodeURIComponent(chave+'/Boletos'),{headers:{Authorization:'Bearer '+tok}});
+    var j=await r.json();
+    var itens=((j&&j.itens)||[]).filter(function(x){ return x.tipo!=='pasta' && /^boleto-.*\.txt$/i.test(x.nome||''); });
+    if(!itens.length){ alert('Não há nenhum boleto salvo na pasta Documentos > Boletos deste processo. Emita um boleto pelo Financeiro primeiro.'); return; }
+    itens.sort(function(a,b){ return String(b.mod||'').localeCompare(String(a.mod||'')); });
+    var arq=itens[0];
+    var rf=await fetch('/api/docs?file='+encodeURIComponent(chave+'/Boletos/'+arq.nome),{headers:{Authorization:'Bearer '+tok}});
+    if(!rf.ok){ alert('Falha ao ler o boleto salvo.'); return; }
+    var texto=await rf.text();
+    var descricao=(texto.split('\n')[1]||'').trim();
+    function pega(rot){ var m=texto.match(new RegExp(rot+':\\s*(.+)')); return m?m[1].trim():''; }
+    var vencTxt=pega('Vencimento'), valorTxt=pega('Valor'), boletoUrl=pega('Boleto'), linhaDig=pega('Linha digitável'), pix=pega('PIX copia-e-cola');
+    var mV=vencTxt.match(/(\d{4}-\d{2}-\d{2})/); var vencIso=mV?mV[1]:'';
+    var centavos=finCentavos(valorTxt);
+    if(!confirm('Reenviar o boleto de '+(valorTxt||'valor não identificado')+(vencIso?(' (venc. '+vencIso.split('-').reverse().join('/')+')'):'')+' para '+email+'?')) return;
+    var cob={vencimento:vencIso,valor_centavos:centavos,descricao:descricao,boleto_url:boletoUrl,linha_digitavel:linhaDig,pix_emv:pix};
+    var res=await _enviarBoletoPorEmail(email, cob, atual);
+    alert(res&&res.ok?('Boleto reenviado para '+email+'.'):('Falha ao reenviar: '+((res&&res.erro)||'erro desconhecido')));
+  }catch(e){ alert('Erro ao reenviar boleto: '+((e&&e.message)||e)); }
+}
+/* botão "reenviar" na tabela do Financeiro: usa os dados já carregados da
+   cobrança (FIN_ROWS/FIN_CLIENTES), sem precisar ler a pasta de documentos. */
+async function reenviarBoletoLinha(id){
+  var x=(FIN_ROWS||[]).find(function(r){return r.id===id;}); if(!x) return;
+  var c=(FIN_CLIENTES&&FIN_CLIENTES[x.contato_id])||{};
+  var email=String(c.email||'').trim();
+  if(!email){ alert('Este cliente não tem e-mail cadastrado. Cadastre o e-mail no contato para poder reenviar.'); return; }
+  if(!(x.boleto_url||x.pix_emv)){ alert('Esta cobrança não tem boleto/PIX gerado.'); return; }
+  if(!confirm('Reenviar o boleto de '+finReais(x.valor_centavos)+' para '+email+'?')) return;
+  var cob={vencimento:x.vencimento,valor_centavos:x.valor_centavos,descricao:x.descricao,boleto_url:x.boleto_url,linha_digitavel:x.linha_digitavel,pix_emv:x.pix_emv};
+  var res=await _enviarBoletoPorEmail(email, cob, null, c.nome);
+  alert(res&&res.ok?('Boleto reenviado para '+email+'.'):('Falha ao reenviar: '+((res&&res.erro)||'erro desconhecido')));
 }
 
 /* ---- NFS-e (Fase 2a): fila de notas dos pagamentos recebidos ----
