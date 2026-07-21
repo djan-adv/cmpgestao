@@ -381,8 +381,10 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
         <button class="btn sm" style="background:#FE3E6D;border-color:#FE3E6D;color:#fff" onclick="abrirNovaCobranca()">&#9673; Nova cobrança (Cora)</button>
       </div>
       <div class="kpis" id="fin-kpis"></div>
-      <div class="card"><table><thead><tr><th>Cliente</th><th>Descrição</th><th>Valor</th><th>Vencimento</th><th>Status</th><th>Pago em</th><th>Boleto/PIX</th><th>NF</th></tr></thead><tbody id="fin-body"></tbody></table></div>
+      <div class="card"><div style="max-height:46vh;overflow:auto"><table><thead><tr><th>Cliente</th><th>Descrição</th><th>Valor</th><th>Vencimento</th><th>Status</th><th>Pago em</th><th>Boleto/PIX</th><th>NF</th><th></th></tr></thead><tbody id="fin-body"></tbody></table></div></div>
       <p class="note" id="fin-nota" style="margin-top:8px"></p>
+      <!-- metade de baixo: alvarás expedidos por mês -->
+      <div class="card" id="fin-alvaras" style="margin-top:14px"></div>
     </section>
 
     <section id="s-etiquetas" class="hidden">
@@ -8544,8 +8546,8 @@ function finRenderTabela(){
                     '<div class="kpi"><div class="n">'+finReais(totPg)+'</div><div class="l">Recebido ('+pagas.length+')</div></div>'+
                     '<div class="kpi"><div class="n" style="color:'+(nfPend?'#8a5a00':'#0F6E56')+'">'+nfPend+'</div><div class="l">NFs a emitir</div></div>';
   var lista=(FIN_VIEW==='pagas')?pagas:abertas;
-  if(!lista.length){ body.innerHTML='<tr><td colspan="8" class="note">'+(FIN_VIEW==='pagas'?'Nenhum pagamento recebido ainda.':'Nenhuma cobrança em aberto. Clique em “Nova cobrança (Cora)”.')+'</td></tr>'; return; }
-  body.innerHTML=lista.map(function(x){
+  if(!lista.length){ body.innerHTML='<tr><td colspan="9" class="note">'+(FIN_VIEW==='pagas'?'Nenhum pagamento recebido ainda.':'Nenhuma cobrança em aberto. Clique em “Nova cobrança (Cora)”.')+'</td></tr>'; }
+  else body.innerHTML=lista.map(function(x){
     var venc=x.vencimento?String(x.vencimento).split('-').reverse().join('/'):'—';
     var pago=x.pago_em?new Date(x.pago_em).toLocaleDateString('pt-BR'):'—';
     var cli=finNomeCliente(x.contato_id);
@@ -8555,8 +8557,52 @@ function finRenderTabela(){
     if(!pagar) pagar='<span class="note">—</span>';
     var badge=(x.status==='paga')?'<span style="color:#0F6E56;font-weight:700">✓ paga</span>':(x.status==='cancelada'?'<span class="note">cancelada</span>':'<span style="color:#185FA5;font-weight:700">em aberto</span>');
     var nf=(x.nf_status==='emitida')?('NF '+finEsc(x.nf_numero||'')):(x.nf_status==='dispensada')?'<span class="note" style="margin:0">sem nota</span>':(x.status==='paga'?'<button class="btn sm gold" style="font-size:11px;padding:4px 10px" onclick="abrirNf(\''+x.id+'\')">Emitir NF</button>':'—');
-    return '<tr><td>'+finEsc(cli)+'</td><td>'+finEsc(x.descricao||'')+'</td><td>'+finReais(x.valor_centavos)+'</td><td>'+venc+'</td><td>'+badge+'</td><td>'+pago+'</td><td>'+pagar+'</td><td>'+nf+'</td></tr>';
+    /* ações: cancelar boleto (se em aberto) e apagar a linha */
+    var acoes='';
+    if(x.status==='aberta') acoes+='<a onclick="cancelarCobranca(\''+x.id+'\')" title="Cancelar o boleto no Cora" style="cursor:pointer;color:#b5342b;font-size:11.5px;margin-right:10px">cancelar</a>';
+    acoes+='<a onclick="apagarCobranca(\''+x.id+'\')" title="Apagar esta linha do financeiro" style="cursor:pointer;color:#8a8f98;font-size:11.5px">🗑</a>';
+    return '<tr><td>'+finEsc(cli)+'</td><td>'+finEsc(x.descricao||'')+'</td><td>'+finReais(x.valor_centavos)+'</td><td>'+venc+'</td><td>'+badge+'</td><td>'+pago+'</td><td style="white-space:nowrap">'+pagar+'</td><td>'+nf+'</td><td style="white-space:nowrap">'+acoes+'</td></tr>';
   }).join('');
+  try{ renderAlvarasMes(); }catch(e){}
+}
+/* cancelar / apagar cobrança (Cora) */
+async function cancelarCobranca(id){
+  if(!confirm('Cancelar este boleto no Cora?\n\nO cliente não conseguirá mais pagar por ele.')) return;
+  try{ var tok=await finToken();
+    var r=await fetch('/api/cora/cobrancas',{method:'DELETE',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({id:id,acao:'cancelar'})});
+    var j=await r.json(); if(!r.ok||!j.ok){ alert((j&&j.erro)||'Falha ao cancelar.'); return; }
+    if(j.aviso) alert(j.aviso);
+    await renderFinanceiro();
+  }catch(e){ alert('Erro de rede.'); }
+}
+async function apagarCobranca(id){
+  if(!confirm('Apagar esta linha do financeiro?\n\n(Não desfaz o boleto no Cora — para isso use "cancelar". Só remove do sistema.)')) return;
+  try{ var tok=await finToken();
+    var r=await fetch('/api/cora/cobrancas',{method:'DELETE',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({id:id,acao:'apagar'})});
+    var j=await r.json(); if(!r.ok||!j.ok){ alert((j&&j.erro)||'Falha ao apagar.'); return; }
+    await renderFinanceiro();
+  }catch(e){ alert('Erro de rede.'); }
+}
+/* metade de baixo: alvarás expedidos por mês (processos na fase "Expedir Alvará") */
+function renderAlvarasMes(){
+  var el=document.getElementById('fin-alvaras'); if(!el) return;
+  var MES=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  var procs=(DADOS.processos||[]).filter(function(p){ try{ return faseDoProc(p)==='alvara'; }catch(e){ return false; } });
+  if(!procs.length){ el.innerHTML='<p class="sectlabel" style="margin:0 0 4px">Alvarás expedidos por mês</p><p class="note" style="margin:0">Nenhum processo na fase "Expedir Alvará" no momento. (Quando um processo entra nessa fase, aparece aqui, agrupado pelo mês da última movimentação.)</p>'; return; }
+  /* agrupa pelo mês da última movimentação (data mais recente do histórico oficial) */
+  function chave(p){ var d=null; (p.hist_full||[]).forEach(function(a){ if(a&&a.data&&(!d||a.data>d)) d=a.data; }); d=d||(p.data?p.data.split('/').reverse().join('-'):''); var m=/^(\d{4})-(\d{2})/.exec(String(d)); return m?m[1]+'-'+m[2]:'0000-00'; }
+  var g={}; procs.forEach(function(p){ (g[chave(p)]=g[chave(p)]||[]).push(p); });
+  var chaves=Object.keys(g).sort().reverse();
+  var html='<p class="sectlabel" style="margin:0 0 10px">Alvarás expedidos por mês <span class="note" style="font-weight:400">— '+procs.length+' processo'+(procs.length===1?'':'s')+' na fase de alvará</span></p>';
+  chaves.forEach(function(k){ var parts=k.split('-'); var mi=parseInt(parts[1],10)-1; var titulo=(mi>=0&&mi<12?MES[mi]:'Sem data')+(parts[0]!=='0000'?(' de '+parts[0]):'');
+    var arr=g[k];
+    html+='<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line);padding-bottom:5px;margin-bottom:6px"><b style="color:var(--navy)">'+esc(titulo)+'</b><span style="font-size:12px;font-weight:700;color:#127a53;background:#e5f4ed;border-radius:12px;padding:2px 10px">'+arr.length+' alvará'+(arr.length===1?'':'s')+'</span></div>';
+    html+=arr.map(function(p){ var i=DADOS.processos.indexOf(p);
+      return '<div style="display:flex;justify-content:space-between;gap:8px;font-size:12.5px;padding:3px 0;align-items:center"><span><a onclick="abrir('+i+')" style="cursor:pointer;color:var(--navy);text-decoration:underline">'+esc(resumo3(p.cliente))+'</a> <span class="note">· '+esc(p.numero)+'</span></span><span class="note" style="white-space:nowrap">'+esc(p.data||'')+'</span></div>';
+    }).join('');
+    html+='</div>';
+  });
+  el.innerHTML=html;
 }
 
 /* clientes (nome + CPF/CNPJ, para a tabela e para a NFS-e) — cache local */

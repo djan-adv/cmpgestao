@@ -147,3 +147,37 @@ export async function GET(request) {
   if (error) return Response.json({ erro: error.message }, { status: 500 })
   return Response.json({ ok: true, cobrancas: data || [] })
 }
+
+// DELETE /api/cora/cobrancas  body: { id, acao: 'cancelar' | 'apagar' }
+//   'cancelar' → tenta cancelar o boleto no Cora e marca status='cancelada'
+//   'apagar'   → remove a linha do financeiro (não desfaz no Cora)
+export async function DELETE(request) {
+  const { jwt, user } = await usuarioDoToken(request)
+  if (!user) return Response.json({ erro: 'Faça login.' }, { status: 401 })
+  let body = {}
+  try { body = await request.json() } catch (e) {}
+  const id = String(body.id || '').trim()
+  const acao = String(body.acao || 'cancelar')
+  if (!id) return Response.json({ erro: 'id da cobrança ausente.' }, { status: 400 })
+  const sb = sbUsuario(jwt)
+  const { data: c, error: eC } = await sb.from('cora_cobrancas').select('id,cora_invoice_id,status').eq('id', id).single()
+  if (eC || !c) return Response.json({ erro: 'Cobrança não encontrada.' }, { status: 404 })
+
+  if (acao === 'apagar') {
+    const { error } = await sb.from('cora_cobrancas').delete().eq('id', id)
+    if (error) return Response.json({ erro: error.message }, { status: 500 })
+    return Response.json({ ok: true, apagada: true })
+  }
+
+  // cancelar no Cora (best-effort — se a conta não estiver configurada, só marca aqui)
+  let coraMsg = ''
+  if (c.cora_invoice_id && coraConfigurado()) {
+    try {
+      const r = await coraApi('DELETE', '/v2/invoices/' + encodeURIComponent(c.cora_invoice_id))
+      if (!r || r.status < 200 || r.status >= 300) coraMsg = 'O Cora não confirmou o cancelamento (' + ((r && r.status) || '?') + '); a cobrança foi marcada como cancelada no sistema.'
+    } catch (e) { coraMsg = 'Não foi possível falar com o Cora (' + ((e && e.message) || e) + '); marcada como cancelada só no sistema.' }
+  }
+  const { error: eU } = await sb.from('cora_cobrancas').update({ status: 'cancelada', atualizado_em: new Date().toISOString() }).eq('id', id)
+  if (eU) return Response.json({ erro: eU.message }, { status: 500 })
+  return Response.json({ ok: true, cancelada: true, aviso: coraMsg || undefined })
+}
