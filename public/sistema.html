@@ -214,6 +214,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
         <a data-s="inove" onclick="go('inove')" style="padding-left:30px;opacity:.85;font-size:13px"><span class="ic">◈</span> Inove <span id="nav-n-inove" style="margin-left:auto;font-size:10.5px;background:var(--navy2);border-radius:10px;padding:1px 7px"></span></a>
         <a data-s="encerrados" onclick="go('encerrados')" style="padding-left:30px;opacity:.8;font-size:13px"><span class="ic">▤</span> Encerrados <span id="nav-n-enc" style="margin-left:auto;font-size:10.5px;background:var(--navy2);border-radius:10px;padding:1px 7px"></span></a>
         <a data-s="james" onclick="go('james')" style="padding-left:30px;opacity:.8;font-size:13px"><span class="ic">⏸</span> James Laurence <span id="nav-n-james" style="margin-left:auto;font-size:10.5px;background:var(--navy2);border-radius:10px;padding:1px 7px"></span></a>
+        <div id="proc-subnav-lotes"></div>
       </div>
       <a data-s="diligencias" onclick="go('diligencias')"><span class="ic">◔</span> Diligências</a>
       <a data-s="relatorio" onclick="go('relatorio')"><span class="ic">◫</span> Relatório mensal</a>
@@ -301,6 +302,12 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
       <input id="james-busca" oninput="renderJames()" placeholder="Buscar por cliente, número, oponente ou assunto…" style="margin-top:10px;width:100%;max-width:520px;padding:9px 12px;border:1px solid var(--line);border-radius:10px;font-size:14px;font-family:inherit">
       <table style="margin-top:10px"><thead><tr><th style="width:36%">Cliente</th><th style="width:150px">Processo</th><th style="width:22%">Assunto</th><th style="width:170px">Última movimentação</th><th>Status</th><th style="width:120px"></th></tr></thead><tbody id="james-body"></tbody></table>
       <p class="note" style="margin-top:8px">Processos com James Laurence no polo passivo, suspensos da lista principal. Para trazer um de volta, use "→ lista principal". Para suspender outro, abra o processo e use "Suspender".</p></div>
+    </section>
+    <section id="s-lote" class="hidden">
+      <div class="card"><p class="sectlabel" id="lote-title">Lote</p><span class="note" id="lote-count"></span>
+      <input id="lote-busca" oninput="renderLote()" placeholder="Buscar por cliente, número, oponente ou assunto…" style="margin-top:10px;width:100%;max-width:520px;padding:9px 12px;border:1px solid var(--line);border-radius:10px;font-size:14px;font-family:inherit">
+      <table style="margin-top:10px"><thead><tr><th style="width:34%">Cliente</th><th style="width:150px">Processo</th><th style="width:22%">Assunto</th><th style="width:170px">Última movimentação</th><th>Status</th><th style="width:120px"></th></tr></thead><tbody id="lote-body"></tbody></table>
+      <p class="note" style="margin-top:8px">Lote personalizado (criado em ⚙ Configurações). Para tirar um processo daqui, use "→ remover do lote".</p></div>
     </section>
     <section id="s-cadastros" class="hidden">
       <div class="card">
@@ -585,8 +592,8 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
 </div>
 <div id="modal-acessos" class="overlay hidden">
   <div class="modal" style="max-width:820px">
-    <h2>Acessos ao sistema</h2>
-    <p class="note" id="acessos-intro" style="margin-top:0">Cada pessoa usa o mesmo link e entra no próprio acesso. Cada um cadastra/altera apenas o seu e-mail e senha. O coordenador (Djan) gerencia todos.</p>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><h2 style="margin:0">Acessos ao sistema</h2><button class="btn sm ghost" onclick="abrirConfig()" title="Configurações — lotes/pastas do menu esquerdo" style="font-size:18px;padding:4px 10px">⚙</button></div>
+    <p class="note" id="acessos-intro" style="margin-top:6px">Cada pessoa usa o mesmo link e entra no próprio acesso. Cada um cadastra/altera apenas o seu e-mail e senha. O coordenador (Djan) gerencia todos.</p>
     <div id="acessos-body" class="acessos-list"></div>
     <div id="bloco-publicar" style="display:none;margin-top:14px;border-top:1px solid var(--line);padding-top:12px">
       <p class="sectlabel" style="margin:0 0 4px">Publicar atualização</p>
@@ -3727,8 +3734,8 @@ function toggleConcluirTarefa(id){
     /* PERFORMANCE: a lista carrega SEM os andamentos (que somam dezenas de MB) —
        os históricos descem logo depois, em segundo plano (carregarHistoricosFundo),
        e a ficha busca o histórico do processo na hora se for aberta antes disso. */
-    var selExt='id,numero,cliente_nome,oponente,assunto,classe,orgao,foro,status,valor_causa,distribuido_em,ultima_movimentacao,contatos_livres,hon_faturado,hon_afaturar,hon_pct_contratual,hon_pct_sucumbencia,hon_pct_execucao,hon_pct_ma_fe,hon_pro_labore,valor_condenacao,hon_val_contratual,hon_val_sucumbencia,hon_val_execucao,hon_modo,suspenso,vinculados,fora_inove,inove,fonte,fase,observacoes';
-    var selBas='id,numero,cliente_nome,oponente,assunto,classe,orgao,foro,status,valor_causa,distribuido_em,ultima_movimentacao,contatos_livres';
+    var selExt='id,numero,cliente_nome,oponente,assunto,classe,orgao,foro,status,valor_causa,distribuido_em,ultima_movimentacao,contatos_livres,hon_faturado,hon_afaturar,hon_pct_contratual,hon_pct_sucumbencia,hon_pct_execucao,hon_pct_ma_fe,hon_pro_labore,valor_condenacao,hon_val_contratual,hon_val_sucumbencia,hon_val_execucao,hon_modo,suspenso,vinculados,fora_inove,inove,fonte,fase,observacoes,lote_id';
+    var selBas='id,numero,cliente_nome,oponente,assunto,classe,orgao,foro,status,valor_causa,distribuido_em,ultima_movimentacao,contatos_livres,lote_id';
     var res=await sb.from('processos').select(selExt).order('ultima_movimentacao',{ascending:false,nullsFirst:false}).limit(3000);
     if(res.error){ res=await sb.from('processos').select(selBas).order('ultima_movimentacao',{ascending:false,nullsFirst:false}).limit(3000); }
     if(res.error) throw res.error;
@@ -3736,7 +3743,7 @@ function toggleConcluirTarefa(id){
     DADOS.processos=rows.map(function(p){
       var hf=[]; /* históricos chegam em segundo plano — ver carregarHistoricosFundo */
       var vinc=Array.isArray(p.vinculados)?p.vinculados:(p.vinculados?[].concat(p.vinculados):[]);
-      return {_id:p.id, cliente:p.cliente_nome||'', numero:p.numero, oponente:p.oponente||'', tipo:p.assunto||'', classe:p.classe||'', orgao:p.orgao||'', distribuido_em:(p.distribuido_em||null), foro:p.foro||'', status:p.status||'', data:fmtData(p.ultima_movimentacao), hist:'', causa:fmtCausa(p.valor_causa), hist_full:hf, ctl:p.contatos_livres||'', hon_faturado:(p.hon_faturado!=null?p.hon_faturado:0), hon_afaturar:(p.hon_afaturar!=null?p.hon_afaturar:0), hon_pct_contratual:(p.hon_pct_contratual!=null?p.hon_pct_contratual:null), hon_pct_sucumbencia:(p.hon_pct_sucumbencia!=null?p.hon_pct_sucumbencia:null), hon_pct_execucao:(p.hon_pct_execucao!=null?p.hon_pct_execucao:null), hon_pct_ma_fe:(p.hon_pct_ma_fe!=null?p.hon_pct_ma_fe:null), hon_pro_labore:(p.hon_pro_labore!=null?p.hon_pro_labore:0), valor_condenacao:(p.valor_condenacao!=null?p.valor_condenacao:0), hon_val_contratual:(p.hon_val_contratual!=null?p.hon_val_contratual:null), hon_val_sucumbencia:(p.hon_val_sucumbencia!=null?p.hon_val_sucumbencia:null), hon_val_execucao:(p.hon_val_execucao!=null?p.hon_val_execucao:null), hon_modo:(p.hon_modo||null), suspenso:(p.suspenso===true), vinculados:vinc, fora_inove:!!p.fora_inove, inove:(p.inove===true), fonte:p.fonte||'', ehCaso:(p.fonte==='caso'), fase_manual:(p.fase||''), observacoes:(p.observacoes||'')};
+      return {_id:p.id, cliente:p.cliente_nome||'', numero:p.numero, oponente:p.oponente||'', tipo:p.assunto||'', classe:p.classe||'', orgao:p.orgao||'', distribuido_em:(p.distribuido_em||null), foro:p.foro||'', status:p.status||'', data:fmtData(p.ultima_movimentacao), hist:'', causa:fmtCausa(p.valor_causa), hist_full:hf, ctl:p.contatos_livres||'', hon_faturado:(p.hon_faturado!=null?p.hon_faturado:0), hon_afaturar:(p.hon_afaturar!=null?p.hon_afaturar:0), hon_pct_contratual:(p.hon_pct_contratual!=null?p.hon_pct_contratual:null), hon_pct_sucumbencia:(p.hon_pct_sucumbencia!=null?p.hon_pct_sucumbencia:null), hon_pct_execucao:(p.hon_pct_execucao!=null?p.hon_pct_execucao:null), hon_pct_ma_fe:(p.hon_pct_ma_fe!=null?p.hon_pct_ma_fe:null), hon_pro_labore:(p.hon_pro_labore!=null?p.hon_pro_labore:0), valor_condenacao:(p.valor_condenacao!=null?p.valor_condenacao:0), hon_val_contratual:(p.hon_val_contratual!=null?p.hon_val_contratual:null), hon_val_sucumbencia:(p.hon_val_sucumbencia!=null?p.hon_val_sucumbencia:null), hon_val_execucao:(p.hon_val_execucao!=null?p.hon_val_execucao:null), hon_modo:(p.hon_modo||null), suspenso:(p.suspenso===true), vinculados:vinc, fora_inove:!!p.fora_inove, inove:(p.inove===true), fonte:p.fonte||'', ehCaso:(p.fonte==='caso'), fase_manual:(p.fase||''), observacoes:(p.observacoes||''), lote_id:(p.lote_id||null)};
     });
     if(DADOS.kpis){ DADOS.kpis.total=DADOS.processos.length; }
     /* mostra a tela JÁ — a lista não depende de históricos/triagem/agenda */
@@ -3840,6 +3847,8 @@ function toggleConcluirTarefa(id){
     }catch(eKt){ console.log('kanban: '+(eKt&&eKt.message||eKt)); }
     /* audiências trabalhistas futuras já marcadas → garante a tarefa de ATA do dia seguinte */
     try{ if(typeof varreAtasTrabalhistas==='function') varreAtasTrabalhistas(); }catch(eVa){}
+    /* lotes personalizados (pastas do menu esquerdo, geridas na engrenagem) */
+    try{ var lt=await sb.from('lotes').select('id,nome,cor,ordem').order('ordem',{ascending:true}); if(!lt.error&&lt.data){ window.__LOTES=lt.data; if(typeof renderNavLotes==='function') renderNavLotes(); } }catch(eLt){}
     /* carrega os contatos importados (382) da tabela `contatos` do Supabase.
        Lê '*' para funcionar com as colunas do import (nome, telefones, emails, cpf_cnpj...). */
     try{
@@ -3925,7 +3934,7 @@ function renderProc(){
     var okq=!q||(p.cliente+" "+p.numero+" "+p.oponente+" "+p.tipo).toLowerCase().indexOf(q)>-1;
     var oke=true;
     if(eq){ var ids=(typeof ASSIGN!=='undefined'&&ASSIGN[p.numero])||[]; oke=ids.indexOf(eq)>-1; }
-    return okq&&oke&&movFiltroOk(p)&&origemFiltroOk(p)&&!/encerr/i.test(p.status||'')&&!isInove(p)&&(!isSuspenso(p)||_buscaAtiva());
+    return okq&&oke&&movFiltroOk(p)&&origemFiltroOk(p)&&!/encerr/i.test(p.status||'')&&!isInove(p)&&!p.lote_id&&(!isSuspenso(p)||_buscaAtiva());
   });
   if(sm==='az') lista.sort(function(a,b){return (a.cliente||'').localeCompare(b.cliente||'','pt');});
   else if(sm==='data_desc') lista.sort(function(a,b){return diasMovOrd(a)-diasMovOrd(b);}); /* movimentação oficial mais recente primeiro */
@@ -3962,7 +3971,7 @@ function renderProc(){
   var lista=DADOS.processos.filter(function(p){
     var okq=!q||(p.cliente+" "+p.numero+" "+p.oponente+" "+p.tipo).toLowerCase().indexOf(q)>-1;
     var oke=true; if(eq){ var ids=(typeof ASSIGN!=='undefined'&&ASSIGN[p.numero])||[]; oke=ids.indexOf(eq)>-1; }
-    return okq&&oke&&movFiltroOk(p)&&origemFiltroOk(p)&&!/encerr/i.test(p.status||'')&&!isInove(p)&&(!isSuspenso(p)||_buscaAtiva());
+    return okq&&oke&&movFiltroOk(p)&&origemFiltroOk(p)&&!/encerr/i.test(p.status||'')&&!isInove(p)&&!p.lote_id&&(!isSuspenso(p)||_buscaAtiva());
   });
   if(sm==='az') lista.sort(function(a,b){var A=(a.cliente||'').trim(),B=(b.cliente||'').trim(); if(!A&&!B)return 0; if(!A)return 1; if(!B)return -1; return A.localeCompare(B,'pt');});
   else if(sm==='za') lista.sort(function(a,b){var A=(a.cliente||'').trim(),B=(b.cliente||'').trim(); if(!A&&!B)return 0; if(!A)return 1; if(!B)return -1; return B.localeCompare(A,'pt');});
@@ -4752,7 +4761,7 @@ function renderProc(){
   var lista=DADOS.processos.filter(function(p){
     var okq=!q||(p.cliente+" "+p.numero+" "+p.oponente+" "+p.tipo).toLowerCase().indexOf(q)>-1;
     var oke=true; if(eq){ var ids=(typeof ASSIGN!=='undefined'&&ASSIGN[p.numero])||[]; oke=ids.indexOf(eq)>-1; }
-    return okq&&oke&&movFiltroOk(p)&&origemFiltroOk(p)&&!/encerr/i.test(p.status||'')&&!isInove(p)&&(!isSuspenso(p)||_buscaAtiva());
+    return okq&&oke&&movFiltroOk(p)&&origemFiltroOk(p)&&!/encerr/i.test(p.status||'')&&!isInove(p)&&!p.lote_id&&(!isSuspenso(p)||_buscaAtiva());
   });
   /* ordenação por prazo fatal (coluna): mais próximo → distante, ou o inverso.
      Tem prioridade sobre a ordenação padrão quando escolhida. */
@@ -4811,6 +4820,30 @@ function renderProc(){
   if(sel && typeof LABELS!=='undefined'){ if(sel.getAttribute('data-n')!==String(LABELS.length)){ var cur=sel.value; sel.innerHTML='<option value="">Todas as etiquetas</option>'+LABELS.map(function(l){return '<option value="'+l.id+'">'+esc(l.nome)+'</option>';}).join(""); sel.value=cur; sel.setAttribute('data-n',String(LABELS.length)); } }
 }
 </script>
+<div id="modal-config" class="overlay hidden"><div class="modal" style="max-width:640px">
+  <h2>⚙ Configurações — Lotes / pastas do menu</h2>
+  <p class="note" style="margin-top:0">Crie pastas (lotes) que aparecem no menu esquerdo, abaixo de Processos — como "Encerrados" ou "James Laurence". Mova processos em massa para um lote e eles saem da lista principal.</p>
+  <div style="border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:12px">
+    <p class="sectlabel" style="margin:0 0 8px">Lotes existentes</p>
+    <div id="cfg-lotes"></div>
+    <div style="display:flex;gap:8px;margin-top:10px;align-items:center;flex-wrap:wrap">
+      <input id="cfg-novo-nome" placeholder="Nome do novo lote (ex.: PBPREV)" style="flex:1;min-width:180px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:14px">
+      <input id="cfg-novo-cor" type="color" value="#185FA5" title="Cor" style="width:40px;height:38px;border:1px solid var(--line);border-radius:8px;cursor:pointer">
+      <button class="btn sm gold" onclick="criarLote()">+ Criar lote</button>
+    </div>
+  </div>
+  <div style="border:1px solid var(--line);border-radius:10px;padding:12px">
+    <p class="sectlabel" style="margin:0 0 8px">Mover processos para um lote (em massa)</p>
+    <p class="note" style="margin:0 0 8px">Digite um filtro (cliente, número ou assunto), escolha o lote e mova todos os que casarem. Deixe o filtro vazio para remover — escolha "(tirar do lote)".</p>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <input id="cfg-mv-filtro" placeholder="Filtro (ex.: pbprev)" oninput="cfgPreverMover()" style="flex:1;min-width:160px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:14px">
+      <select id="cfg-mv-lote" style="padding:8px 10px;border:1px solid var(--line);border-radius:8px"></select>
+      <button class="btn sm" onclick="moverProcessosLote()">Mover</button>
+    </div>
+    <div id="cfg-mv-previa" class="note" style="margin-top:8px"></div>
+  </div>
+  <div style="margin-top:14px;text-align:right"><button class="btn ghost" onclick="fecharConfig()">Fechar</button></div>
+</div></div>
 <div id="modal-dilig" class="overlay hidden"><div class="modal" style="max-width:640px">
   <h2>Gerar diligência</h2>
   <label>Canal</label>
@@ -4984,7 +5017,7 @@ function go(s){
 function go(s){
   try{ localStorage.setItem('cmp_secao', s); if(s!=='proc-det') localStorage.removeItem('cmp_proc'); }catch(e){}
   var showId=(s==='contatos')?'crm':s;
-  ["painel","triagem","agenda","processos","proc-det","crm","financeiro","etiquetas","procedimentos","diligencias","relatorio","encerrados","inove","james","cadastros","fases","sugestoes"].forEach(function(id){var e=document.getElementById("s-"+id);if(e)e.classList.add("hidden")});
+  ["painel","triagem","agenda","processos","proc-det","crm","financeiro","etiquetas","procedimentos","diligencias","relatorio","encerrados","inove","james","cadastros","fases","sugestoes","lote"].forEach(function(id){var e=document.getElementById("s-"+id);if(e)e.classList.add("hidden")});
   var sec=document.getElementById("s-"+showId); if(sec) sec.classList.remove("hidden");
   document.querySelectorAll("#nav a").forEach(function(a){a.classList.remove("active")});
   var link=document.querySelector('#nav a[data-s="'+s+'"]');if(link)link.classList.add("active");
@@ -5006,7 +5039,95 @@ function go(s){
   if(s==="inovesol")renderInoveSol();
   if(s==="fases" && typeof renderFasesRevisao==='function')renderFasesRevisao();
   if(s==="sugestoes" && typeof renderSugestoes==='function'){ var _an=document.getElementById('sg-autor'); if(_an && !_an.value){ _an.value=((document.getElementById('who-name')||{}).textContent||'').trim(); } renderSugestoes(); }
+  if(s==="lote") renderLote();
+  try{ var _subL=document.getElementById('proc-subnav'); if(_subL && s==='lote') _subL.style.display='block'; }catch(e){}
   window.scrollTo(0,0);
+}
+/* ===== Lotes personalizados (pastas do menu esquerdo · engrenagem de config) ===== */
+window.__LOTES=window.__LOTES||[];
+function loteById(id){ return (window.__LOTES||[]).find(function(x){return String(x.id)===String(id);}); }
+function processosDoLote(id){ return (DADOS.processos||[]).filter(function(p){ return String(p.lote_id||'')===String(id); }); }
+function renderNavLotes(){
+  var host=document.getElementById('proc-subnav-lotes'); if(!host) return;
+  host.innerHTML=(window.__LOTES||[]).map(function(l){
+    var n=processosDoLote(l.id).length;
+    return '<a onclick="irParaLote(\''+l.id+'\')" style="padding-left:30px;opacity:.85;font-size:13px"><span class="ic" style="color:'+(l.cor||'#185FA5')+'">▣</span> '+esc(l.nome)+' <span style="margin-left:auto;font-size:10.5px;background:var(--navy2);border-radius:10px;padding:1px 7px">'+n+'</span></a>';
+  }).join('');
+}
+function irParaLote(id){ window.__loteAtual=id; go('lote'); }
+function renderLote(){
+  var l=loteById(window.__loteAtual); if(!l) return;
+  var tit=document.getElementById('lote-title'); if(tit) tit.innerHTML='<span style="color:'+(l.cor||'#185FA5')+'">▣</span> '+esc(l.nome);
+  var st=document.getElementById('scr-title'); if(st) st.textContent=esc(l.nome);
+  var q=((document.getElementById('lote-busca')||{}).value||'').toLowerCase();
+  var lista=processosDoLote(l.id).filter(function(p){ return !q||(p.cliente+' '+p.numero+' '+p.oponente+' '+p.tipo).toLowerCase().indexOf(q)>-1; });
+  var cc=document.getElementById('lote-count'); if(cc) cc.textContent=lista.length+' processo'+(lista.length===1?'':'s');
+  var b=document.getElementById('lote-body'); if(!b) return; b.innerHTML='';
+  lista.forEach(function(p){ var i=DADOS.processos.indexOf(p);
+    var um=(p.hist_full&&p.hist_full[0]&&p.hist_full[0].texto)||'';
+    var tr=document.createElement('tr'); tr.className='click'; tr.onclick=function(){abrir(i);};
+    tr.innerHTML='<td><b style="color:var(--navy)">'+esc(resumo3(p.cliente))+'</b><div style="font-size:12px;color:var(--muted)">× '+(esc(resumo3(p.oponente))||'—')+'</div></td><td class="proc">'+p.numero+'</td><td style="font-size:12px">'+esc((p.tipo||'').slice(0,80))+'</td><td style="font-size:12px">'+esc(um.slice(0,60))+'<div class="note" style="margin:0">'+esc(p.data||'')+'</div></td><td><span class="b '+stCls(p.status)+'">'+esc(p.status||'—')+'</span></td><td onclick="event.stopPropagation()"><button class="btn sm ghost" onclick="tirarDoLote(\''+String(p.numero).replace(/'/g,'')+'\')">→ remover do lote</button></td>';
+    b.appendChild(tr);
+  });
+}
+async function tirarDoLote(num){
+  var p=(DADOS.processos||[]).find(function(x){return x.numero===num;}); if(!p) return;
+  var sb=window.__sb; if(sb&&p._id){ var r=await sb.from('processos').update({lote_id:null}).eq('id',p._id).select('id'); if(r&&r.error){ alert('Erro: '+r.error.message); return; } }
+  p.lote_id=null; renderLote(); renderNavLotes(); try{ atualizaNavContagens(); }catch(e){}
+}
+function abrirConfig(){ document.getElementById('modal-config').classList.remove('hidden'); renderCfgLotes(); cfgPreverMover(); }
+function fecharConfig(){ document.getElementById('modal-config').classList.add('hidden'); }
+function renderCfgLotes(){
+  var host=document.getElementById('cfg-lotes');
+  if(host){ host.innerHTML=(window.__LOTES||[]).length? (window.__LOTES||[]).map(function(l){ var n=processosDoLote(l.id).length;
+    return '<div style="display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line)"><span style="width:12px;height:12px;border-radius:3px;background:'+(l.cor||'#185FA5')+';flex:0 0 auto"></span><b style="flex:1">'+esc(l.nome)+' <span class="note" style="font-weight:400">· '+n+' processo'+(n===1?'':'s')+'</span></b><a onclick="renomearLote(\''+l.id+'\')" style="cursor:pointer;color:#185FA5;font-size:12px">renomear</a><a onclick="excluirLote(\''+l.id+'\')" style="cursor:pointer;color:#b5342b;font-size:12px">excluir</a></div>';
+  }).join(''):'<div class="note">Nenhum lote criado ainda.</div>'; }
+  var selM=document.getElementById('cfg-mv-lote');
+  if(selM){ selM.innerHTML='<option value="__none">(tirar do lote)</option>'+(window.__LOTES||[]).map(function(l){return '<option value="'+l.id+'">'+esc(l.nome)+'</option>';}).join(''); }
+}
+async function criarLote(){
+  var nome=(document.getElementById('cfg-novo-nome').value||'').trim(); if(!nome){ alert('Informe o nome do lote.'); return; }
+  var cor=(document.getElementById('cfg-novo-cor').value||'#185FA5');
+  var sb=window.__sb; if(!sb) return;
+  try{ var ug=await sb.auth.getUser(); var pf=await sb.from('usuarios').select('escritorio_id').eq('id',ug.data.user.id).single(); var esc2=pf.data&&pf.data.escritorio_id; if(!esc2){ alert('Escritório não encontrado.'); return; }
+    var r=await sb.from('lotes').insert({escritorio_id:esc2,nome:nome,cor:cor,ordem:(window.__LOTES||[]).length}).select('id,nome,cor,ordem').single();
+    if(r.error){ alert('Erro: '+r.error.message); return; }
+    window.__LOTES=(window.__LOTES||[]).concat([r.data]);
+    document.getElementById('cfg-novo-nome').value='';
+    renderCfgLotes(); renderNavLotes();
+  }catch(e){ alert('Erro: '+(e&&e.message||e)); }
+}
+async function renomearLote(id){ var l=loteById(id); if(!l) return; var nv=prompt('Novo nome do lote:', l.nome); if(nv==null) return; nv=nv.trim(); if(!nv) return;
+  var sb=window.__sb; var r=await sb.from('lotes').update({nome:nv}).eq('id',id).select('id'); if(r&&r.error){ alert('Erro: '+r.error.message); return; }
+  l.nome=nv; renderCfgLotes(); renderNavLotes();
+}
+async function excluirLote(id){ var l=loteById(id); if(!l) return; var n=processosDoLote(id).length;
+  if(!confirm('Excluir o lote "'+l.nome+'"?'+(n?('\n\nOs '+n+' processos voltam para a lista principal (não são apagados).'):''))) return;
+  var sb=window.__sb;
+  try{ if(n){ await sb.from('processos').update({lote_id:null}).eq('lote_id',id); (DADOS.processos||[]).forEach(function(p){ if(String(p.lote_id||'')===String(id)) p.lote_id=null; }); }
+    var r=await sb.from('lotes').delete().eq('id',id).select('id'); if(r&&r.error){ alert('Erro: '+r.error.message); return; }
+    window.__LOTES=(window.__LOTES||[]).filter(function(x){return String(x.id)!==String(id);});
+    renderCfgLotes(); renderNavLotes(); try{ atualizaNavContagens(); }catch(e){}
+    if(window.__loteAtual===id) go('processos');
+  }catch(e){ alert('Erro: '+(e&&e.message||e)); }
+}
+function _cfgFiltrados(){ var q=((document.getElementById('cfg-mv-filtro')||{}).value||'').toLowerCase().trim();
+  if(!q) return [];
+  return (DADOS.processos||[]).filter(function(p){ return (p.cliente+' '+p.numero+' '+p.oponente+' '+p.tipo).toLowerCase().indexOf(q)>-1; });
+}
+function cfgPreverMover(){ var el=document.getElementById('cfg-mv-previa'); if(!el) return; var arr=_cfgFiltrados();
+  el.textContent=arr.length? (arr.length+' processo(s) casam com o filtro — serão movidos.') : 'Digite um filtro para ver quantos processos serão movidos.'; }
+async function moverProcessosLote(){
+  var arr=_cfgFiltrados(); if(!arr.length){ alert('Nenhum processo casa com o filtro.'); return; }
+  var loteId=(document.getElementById('cfg-mv-lote')||{}).value; var destino=(loteId==='__none')?null:loteId;
+  var l=destino?loteById(destino):null;
+  if(!confirm('Mover '+arr.length+' processo(s) '+(destino?('para o lote "'+(l&&l.nome)+'"'):'de volta à lista principal')+'?')) return;
+  var sb=window.__sb; var ids=arr.map(function(p){return p._id;}).filter(Boolean);
+  try{ if(ids.length){ var r=await sb.from('processos').update({lote_id:destino}).in('id',ids).select('id'); if(r&&r.error){ alert('Erro: '+r.error.message); return; } }
+    arr.forEach(function(p){ p.lote_id=destino; });
+    renderCfgLotes(); renderNavLotes(); try{ renderProc(); atualizaNavContagens(); }catch(e){}
+    alert('✓ '+arr.length+' processo(s) movido(s).');
+  }catch(e){ alert('Erro: '+(e&&e.message||e)); }
 }
 /* ===== Sugestões / melhorias (sócios sem Claude Code enviam daqui; eu leio no banco) ===== */
 async function enviarSugestao(){
