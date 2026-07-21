@@ -3805,7 +3805,7 @@ function toggleConcluirTarefa(id){
     /* PERFORMANCE: a lista carrega SEM os andamentos (que somam dezenas de MB) —
        os históricos descem logo depois, em segundo plano (carregarHistoricosFundo),
        e a ficha busca o histórico do processo na hora se for aberta antes disso. */
-    var selExt='id,numero,cliente_nome,oponente,assunto,classe,orgao,foro,status,valor_causa,distribuido_em,ultima_movimentacao,contatos_livres,hon_faturado,hon_afaturar,hon_pct_contratual,hon_pct_sucumbencia,hon_pct_execucao,hon_pct_ma_fe,hon_pro_labore,valor_condenacao,hon_val_contratual,hon_val_sucumbencia,hon_val_execucao,hon_modo,suspenso,vinculados,fora_inove,inove,fonte,fase,observacoes,lote_id,valor_alvara_escritorio';
+    var selExt='id,numero,cliente_nome,oponente,assunto,classe,orgao,foro,status,valor_causa,distribuido_em,ultima_movimentacao,contatos_livres,hon_faturado,hon_afaturar,hon_pct_contratual,hon_pct_sucumbencia,hon_pct_execucao,hon_pct_ma_fe,hon_pro_labore,valor_condenacao,hon_val_contratual,hon_val_sucumbencia,hon_val_execucao,hon_modo,suspenso,vinculados,fora_inove,inove,fonte,fase,observacoes,lote_id,valor_alvara_escritorio,alvara_valor_confirmado,alvara_data_deposito,alvara_nf_status,alvara_nf_numero';
     var selBas='id,numero,cliente_nome,oponente,assunto,classe,orgao,foro,status,valor_causa,distribuido_em,ultima_movimentacao,contatos_livres,lote_id';
     var res=await sb.from('processos').select(selExt).order('ultima_movimentacao',{ascending:false,nullsFirst:false}).limit(3000);
     if(res.error){ res=await sb.from('processos').select(selBas).order('ultima_movimentacao',{ascending:false,nullsFirst:false}).limit(3000); }
@@ -3814,7 +3814,7 @@ function toggleConcluirTarefa(id){
     DADOS.processos=rows.map(function(p){
       var hf=[]; /* históricos chegam em segundo plano — ver carregarHistoricosFundo */
       var vinc=Array.isArray(p.vinculados)?p.vinculados:(p.vinculados?[].concat(p.vinculados):[]);
-      return {_id:p.id, cliente:p.cliente_nome||'', numero:p.numero, oponente:p.oponente||'', tipo:p.assunto||'', classe:p.classe||'', orgao:p.orgao||'', distribuido_em:(p.distribuido_em||null), foro:p.foro||'', status:p.status||'', data:fmtData(p.ultima_movimentacao), hist:'', causa:fmtCausa(p.valor_causa), hist_full:hf, ctl:p.contatos_livres||'', hon_faturado:(p.hon_faturado!=null?p.hon_faturado:0), hon_afaturar:(p.hon_afaturar!=null?p.hon_afaturar:0), hon_pct_contratual:(p.hon_pct_contratual!=null?p.hon_pct_contratual:null), hon_pct_sucumbencia:(p.hon_pct_sucumbencia!=null?p.hon_pct_sucumbencia:null), hon_pct_execucao:(p.hon_pct_execucao!=null?p.hon_pct_execucao:null), hon_pct_ma_fe:(p.hon_pct_ma_fe!=null?p.hon_pct_ma_fe:null), hon_pro_labore:(p.hon_pro_labore!=null?p.hon_pro_labore:0), valor_condenacao:(p.valor_condenacao!=null?p.valor_condenacao:0), hon_val_contratual:(p.hon_val_contratual!=null?p.hon_val_contratual:null), hon_val_sucumbencia:(p.hon_val_sucumbencia!=null?p.hon_val_sucumbencia:null), hon_val_execucao:(p.hon_val_execucao!=null?p.hon_val_execucao:null), hon_modo:(p.hon_modo||null), suspenso:(p.suspenso===true), vinculados:vinc, fora_inove:!!p.fora_inove, inove:(p.inove===true), fonte:p.fonte||'', ehCaso:(p.fonte==='caso'), fase_manual:(p.fase||''), observacoes:(p.observacoes||''), lote_id:(p.lote_id||null), valor_alvara_escritorio:(p.valor_alvara_escritorio!=null?p.valor_alvara_escritorio:null)};
+      return {_id:p.id, cliente:p.cliente_nome||'', numero:p.numero, oponente:p.oponente||'', tipo:p.assunto||'', classe:p.classe||'', orgao:p.orgao||'', distribuido_em:(p.distribuido_em||null), foro:p.foro||'', status:p.status||'', data:fmtData(p.ultima_movimentacao), hist:'', causa:fmtCausa(p.valor_causa), hist_full:hf, ctl:p.contatos_livres||'', hon_faturado:(p.hon_faturado!=null?p.hon_faturado:0), hon_afaturar:(p.hon_afaturar!=null?p.hon_afaturar:0), hon_pct_contratual:(p.hon_pct_contratual!=null?p.hon_pct_contratual:null), hon_pct_sucumbencia:(p.hon_pct_sucumbencia!=null?p.hon_pct_sucumbencia:null), hon_pct_execucao:(p.hon_pct_execucao!=null?p.hon_pct_execucao:null), hon_pct_ma_fe:(p.hon_pct_ma_fe!=null?p.hon_pct_ma_fe:null), hon_pro_labore:(p.hon_pro_labore!=null?p.hon_pro_labore:0), valor_condenacao:(p.valor_condenacao!=null?p.valor_condenacao:0), hon_val_contratual:(p.hon_val_contratual!=null?p.hon_val_contratual:null), hon_val_sucumbencia:(p.hon_val_sucumbencia!=null?p.hon_val_sucumbencia:null), hon_val_execucao:(p.hon_val_execucao!=null?p.hon_val_execucao:null), hon_modo:(p.hon_modo||null), suspenso:(p.suspenso===true), vinculados:vinc, fora_inove:!!p.fora_inove, inove:(p.inove===true), fonte:p.fonte||'', ehCaso:(p.fonte==='caso'), fase_manual:(p.fase||''), observacoes:(p.observacoes||''), lote_id:(p.lote_id||null), valor_alvara_escritorio:(p.valor_alvara_escritorio!=null?p.valor_alvara_escritorio:null), alvara_valor_confirmado:(p.alvara_valor_confirmado!=null?p.alvara_valor_confirmado:null), alvara_data_deposito:(p.alvara_data_deposito||null), alvara_nf_status:(p.alvara_nf_status||null), alvara_nf_numero:(p.alvara_nf_numero||null)};
     });
     if(DADOS.kpis){ DADOS.kpis.total=DADOS.processos.length; }
     /* mostra a tela JÁ — a lista não depende de históricos/triagem/agenda */
@@ -8725,6 +8725,30 @@ async function definirValorAlvaraEscritorio(numEnc){
   p.valor_alvara_escritorio=novo;
   try{ renderAlvarasMes(); }catch(e){}
 }
+/* "Conferir depósito": registra a data e o valor final EXATO que caiu na conta
+   (conferido no extrato bancário) — separado do valor_alvara_escritorio (que é
+   a definição de honorários usada nos totais). Serve de base para emitir a NF. */
+async function confirmarDepositoAlvara(numEnc){
+  var num=decodeURIComponent(numEnc);
+  var p=(DADOS.processos||[]).find(function(x){return String(x.numero)===String(num);}); if(!p) return;
+  var info=_valorAlvaraInfo(p);
+  var preValor=(p.alvara_valor_confirmado!=null)?String(p.alvara_valor_confirmado).replace('.',','):(info.valor?String(info.valor).replace('.',','):'');
+  var v=window.prompt('Valor FINAL exato depositado (a parte do escritório), conferido no extrato bancário:', preValor);
+  if(v===null) return;
+  v=String(v).trim();
+  if(!v){ alert('Informe o valor depositado.'); return; }
+  var valorNum=parseFloat(v.replace(/\./g,'').replace(',','.'));
+  if(isNaN(valorNum)||valorNum<0){ alert('Valor inválido.'); return; }
+  var preData=p.alvara_data_deposito||_hojeISO();
+  var d=window.prompt('Data em que o valor caiu na conta (AAAA-MM-DD):', preData);
+  if(d===null) return;
+  d=String(d).trim();
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(d)){ alert('Data inválida — use o formato AAAA-MM-DD.'); return; }
+  var sb=window.__sb;
+  if(sb&&p._id){ var r=await sb.from('processos').update({alvara_valor_confirmado:valorNum,alvara_data_deposito:d}).eq('id',p._id).select('id'); if(r&&r.error){ alert('Erro ao salvar: '+r.error.message); return; } }
+  p.alvara_valor_confirmado=valorNum; p.alvara_data_deposito=d;
+  try{ renderAlvarasMes(); }catch(e){}
+}
 /* metade de baixo: alvarás expedidos por mês (processos na fase "Expedir Alvará")
    — escritório e INOVE separados (Inove é cobrado à parte), com totalizadores.
    Processos ENCERRADOS continuam aparecendo aqui (com selo) — tirá-los do painel
@@ -8755,7 +8779,14 @@ function _blocoAlvaras(titulo, procs, cor){
       if(info.definido){ valorHTML='<b style="color:'+cor+'">R$ '+_reaisNum(info.valor)+'</b>'; }
       else if(info.valor){ valorHTML='<span style="color:#b9c0ca" title="Sugestão automática do despacho — pode incluir a parte do cliente. Clique em ✎ para confirmar só a parte do escritório.">R$ '+_reaisNum(info.valor)+' (sugestão)</span>'; }
       else { valorHTML='<span style="color:#b9c0ca">—</span>'; }
-      return '<div style="display:flex;justify-content:space-between;gap:8px;font-size:12.5px;padding:3px 0;align-items:center"><span><a onclick="abrir('+i+')" style="cursor:pointer;color:var(--navy);text-decoration:underline">'+esc(resumo3(p.cliente))+'</a>'+encerradoTag+' <span class="note">· '+esc(p.numero)+' · '+esc(p.data||'')+'</span></span><span style="white-space:nowrap;display:flex;gap:6px;align-items:center">'+valorHTML+' <a onclick="definirValorAlvaraEscritorio(\''+ne+'\')" style="cursor:pointer;color:#185FA5;font-size:11px" title="Definir/editar o valor do escritório (honorários)">✎</a></span></div>';
+      var confOk=(p.alvara_valor_confirmado!=null && p.alvara_data_deposito);
+      var confBadge=confOk?('<span class="note" style="font-size:10px" title="Valor e data conferidos no extrato bancário, base para a NF">✓ R$ '+_reaisNum(p.alvara_valor_confirmado)+' em '+String(p.alvara_data_deposito).split('-').reverse().join('/')+'</span>'):'';
+      var nfBtn;
+      if(p.alvara_nf_status==='emitida') nfBtn='<span class="note" style="font-size:10px">NF '+esc(p.alvara_nf_numero||'')+'</span>';
+      else if(p.alvara_nf_status==='dispensada') nfBtn='<span class="note" style="font-size:10px">sem nota</span>';
+      else if(confOk) nfBtn='<button class="btn sm gold" style="font-size:10px;padding:2px 8px" onclick="abrirNfAlvara(\''+ne+'\')">Emitir NF</button>';
+      else nfBtn='<button class="btn sm ghost" style="font-size:10px;padding:2px 8px" onclick="confirmarDepositoAlvara(\''+ne+'\')" title="Confira aqui a data e o valor final exato que caiu na conta — vira a base para emitir a NF">Conferir depósito</button>';
+      return '<div style="display:flex;justify-content:space-between;gap:8px;font-size:12.5px;padding:3px 0;align-items:center"><span><a onclick="abrir('+i+')" style="cursor:pointer;color:var(--navy);text-decoration:underline">'+esc(resumo3(p.cliente))+'</a>'+encerradoTag+' <span class="note">· '+esc(p.numero)+' · '+esc(p.data||'')+'</span></span><span style="white-space:nowrap;display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end">'+valorHTML+' <a onclick="definirValorAlvaraEscritorio(\''+ne+'\')" style="cursor:pointer;color:#185FA5;font-size:11px" title="Definir/editar o valor do escritório (honorários)">✎</a>'+confBadge+nfBtn+'</span></div>';
     }).join('');
     html+='</div>';
   });
@@ -8995,7 +9026,7 @@ async function reenviarBoletoLinha(id){
    os dados prontos e guarda o número. Com o e-CNPJ A1 vira automática. */
 var _nfAtual=null;
 function abrirNf(id){
-  var x=FIN_ROWS.find(function(r){return r.id===id;}); if(!x) return; _nfAtual=x;
+  var x=FIN_ROWS.find(function(r){return r.id===id;}); if(!x) return; _nfAtual={tipo:'cobranca',id:x.id};
   var c=(FIN_CLIENTES&&FIN_CLIENTES[x.contato_id])||{};
   function linha(l,v){ if(!v) return ''; return '<div style="display:flex;gap:8px;align-items:center;margin:4px 0;font-size:13px"><b style="min-width:100px">'+l+'</b><span style="flex:1">'+finEsc(v)+'</span><button class="btn sm ghost" style="font-size:11px;padding:3px 9px" onclick="finCopiar(this,\''+encodeURIComponent(v)+'\')">copiar</button></div>'; }
   document.getElementById('nf-dados').innerHTML=
@@ -9005,17 +9036,49 @@ function abrirNf(id){
   document.getElementById('nf-numero').value=x.nf_numero||'';
   document.getElementById('modal-nf').classList.remove('hidden');
 }
+/* Emitir NF de um alvará (fase "Expedir Alvará") já conferido no extrato — mesmo
+   modal da NFS-e dos boletos pagos, mas guardando o resultado no PRÓPRIO
+   processo (alvara_nf_status/alvara_nf_numero), já que alvará é depósito
+   judicial e não tem cobrança do Cora associada. */
+function abrirNfAlvara(numEnc){
+  var num=decodeURIComponent(numEnc);
+  var p=(DADOS.processos||[]).find(function(x){return String(x.numero)===String(num);}); if(!p) return;
+  _nfAtual={tipo:'alvara',p:p};
+  function linha(l,v){ if(!v) return ''; return '<div style="display:flex;gap:8px;align-items:center;margin:4px 0;font-size:13px"><b style="min-width:100px">'+l+'</b><span style="flex:1">'+finEsc(v)+'</span><button class="btn sm ghost" style="font-size:11px;padding:3px 9px" onclick="finCopiar(this,\''+encodeURIComponent(v)+'\')">copiar</button></div>'; }
+  document.getElementById('nf-dados').innerHTML=
+    linha('Cliente',p.cliente||'')+linha('Processo',p.numero||'')+
+    linha('Valor depositado',finReais(Math.round((p.alvara_valor_confirmado||0)*100)))+
+    linha('Depositado em',p.alvara_data_deposito?String(p.alvara_data_deposito).split('-').reverse().join('/'):'');
+  document.getElementById('nf-numero').value=p.alvara_nf_numero||'';
+  document.getElementById('modal-nf').classList.remove('hidden');
+}
 function fecharNf(){ document.getElementById('modal-nf').classList.add('hidden'); _nfAtual=null; }
 function finCopiar(el,enc){ var v=decodeURIComponent(enc); try{ navigator.clipboard.writeText(v); var t=el.textContent; el.textContent='copiado!'; setTimeout(function(){el.textContent=t;},1200); }catch(e){ prompt('Copie:',v); } }
 async function salvarNf(){
   if(!_nfAtual) return; var num=(document.getElementById('nf-numero').value||'').trim();
   if(!num){ alert('Informe o número da NFS-e emitida no portal.'); return; }
+  if(_nfAtual.tipo==='alvara'){
+    var p=_nfAtual.p;
+    var r2=await window.__sb.from('processos').update({alvara_nf_status:'emitida',alvara_nf_numero:num}).eq('id',p._id).select('id');
+    if(r2&&r2.error){ alert('Não foi possível salvar: '+r2.error.message); return; }
+    p.alvara_nf_status='emitida'; p.alvara_nf_numero=num;
+    fecharNf(); try{ renderAlvarasMes(); }catch(e){}
+    return;
+  }
   var r=await window.__sb.from('cora_cobrancas').update({nf_status:'emitida',nf_numero:num,atualizado_em:new Date().toISOString()}).eq('id',_nfAtual.id).select('id');
   if(r&&r.error){ alert('Não foi possível salvar: '+r.error.message); return; }
   fecharNf(); renderFinanceiro();
 }
 async function dispensarNf(){
   if(!_nfAtual) return; if(!confirm('Marcar este recebimento como SEM emissão de nota fiscal?')) return;
+  if(_nfAtual.tipo==='alvara'){
+    var p=_nfAtual.p;
+    var r2=await window.__sb.from('processos').update({alvara_nf_status:'dispensada'}).eq('id',p._id).select('id');
+    if(r2&&r2.error){ alert('Não foi possível: '+r2.error.message); return; }
+    p.alvara_nf_status='dispensada';
+    fecharNf(); try{ renderAlvarasMes(); }catch(e){}
+    return;
+  }
   var r=await window.__sb.from('cora_cobrancas').update({nf_status:'dispensada',atualizado_em:new Date().toISOString()}).eq('id',_nfAtual.id).select('id');
   if(r&&r.error){ alert('Não foi possível: '+r.error.message); return; }
   fecharNf(); renderFinanceiro();
