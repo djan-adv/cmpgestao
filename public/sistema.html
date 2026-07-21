@@ -6258,6 +6258,18 @@ async function _acharProcuracao(dig){ return _acharDocRel(dig, /procura/i); }
 /* casal a partir do HISTÓRICO: procura "Cliente e sua esposa X" ou "A e B" (mesmo sobrenome) */
 function _casalOk(n){ var w=n.split(/\s+/).filter(Boolean), caps=w.filter(function(x){return /^[A-ZÀ-Ý]/.test(x);}); return w.length>=2 && caps.length>=2 && !/procura|outorg|comarca|tribunal|\bvara\b|estado|ju[íi]zo|reclama|requer|senten|ac[óo]rd|decis|minist[ée]rio|fazenda|uni[ãa]o|\bbanco\b|caixa/i.test(n); }
 function _compartSobren(a,b){ var aw=normClienteNome(a).split(' ').filter(function(x){return x.length>=4;}).slice(1), bw=normClienteNome(b).split(' ').filter(function(x){return x.length>=4;}).slice(1); return aw.some(function(x){return bw.indexOf(x)>-1;}); }
+/* acha um casal ("Fulano e sua esposa Beltrana", ou "A e B" com mesmo sobrenome)
+   dentro de um TEXTO qualquer — usado ao ler procuração/inicial/despacho/sentença */
+function _casalDoTexto(t, clienteRef){
+  t=String(t||'').replace(/\s+/g,' ');
+  var NM="[A-ZÀ-Ý][A-Za-zÀ-ÿ'’.\\-]+(?:\\s+(?:d[aeo]s?|[A-ZÀ-Ý][A-Za-zÀ-ÿ'’.\\-]*)){0,6}";
+  var re1=new RegExp('('+NM+')\\s+e\\s+(?:sua\\s+esposa|seu\\s+esposo|sua\\s+c[ôo]njuge|seu\\s+c[ôo]njuge|sua\\s+companheira|seu\\s+companheiro)\\s+('+NM+')','g');
+  var m;
+  while((m=re1.exec(t))){ var a=m[1].trim(), b=m[2].trim(); if(_casalOk(a)&&_casalOk(b)) return a+' e '+b; }
+  var re2=new RegExp('('+NM+')\\s+e\\s+('+NM+')','g');
+  while((m=re2.exec(t))){ var a2=m[1].trim(), b2=m[2].trim(); if(_casalOk(a2)&&_casalOk(b2)&&_compartSobren(a2,b2)) return a2+' e '+b2; }
+  return '';
+}
 function _casalHistorico(p){
   if(!p) return '';
   var t=(p.hist_full||[]).map(function(a){return (a&&a.texto)||'';}).join(' ');
@@ -6304,50 +6316,66 @@ async function atualizarDadosCliente(){
     var tok=await docToken();
     async function _lerDoc(rel){ if(!rel) return ''; var r=await fetch('/api/docs?file='+encodeURIComponent(dig+'/'+rel),{headers:{Authorization:'Bearer '+tok}}); if(!r.ok) return ''; var t=await _extrairTextoDoc(await r.arrayBuffer()); return (t&&t.replace(/\s/g,'').length>=20)?t:''; }
     function _uniq(a){ var s={},o=[]; a.forEach(function(x){ var k=String(x).toLowerCase(); if(x&&!s[k]){s[k]=1;o.push(x);} }); return o; }
-    /* extrai NOME + contatos de um texto de documento */
+    /* extrai NOMES individuais + contatos de um texto de documento */
+    function _pushNome(acc,n){ n=String(n||'').replace(/\s+/g,' ').trim(); if(n.split(' ').length<2) return; var k=normClienteNome(n); if(!acc._nk) acc._nk={}; if(!acc._nk[k]){ acc._nk[k]=1; acc.nomesInd.push(n); } }
     function _colher(txt, acc){
-      /* nome: janela do outorgante; se vazia, janela do cliente pelo nome atual */
-      var jw=_janelaOutorgante(txt); var janN=jw.janela;
-      var nomes=_extrairNomesOutorgante(janN);
-      if(!nomes.length){ janN=_janelaCliente(txt,(atual&&atual.cliente)||''); nomes=_extrairNomesOutorgante(janN); }
-      if(nomes.length){ var cp=nomes.slice(0,2).join(' e '); if(acc.nomes.indexOf(cp)<0) acc.nomes.push(cp); }
+      /* nomes: janela do outorgante E janela do cliente (guarda TODOS, não só o 1º) */
+      var jw=_janelaOutorgante(txt);
+      _extrairNomesOutorgante(jw.janela).forEach(function(n){ _pushNome(acc,n); });
+      _extrairNomesOutorgante(_janelaCliente(txt,(atual&&atual.cliente)||'')).forEach(function(n){ _pushNome(acc,n); });
+      /* também procura casal explícito ("Fulano e sua esposa Beltrana") no doc inteiro */
+      try{ var c2=_casalDoTexto(txt); if(c2){ c2.split(' e ').forEach(function(n){ _pushNome(acc,n); }); } }catch(e){}
       /* contatos: primeiro na janela do outorgante (cliente); se nada, no doc inteiro */
       var em=_acharEmails(jw.janela), tl=_acharTelefones(jw.janela);
       if(!em.length && !tl.length){ em=_acharEmails(txt); tl=_acharTelefones(txt); acc.doctodo=true; }
       acc.emails=acc.emails.concat(em); acc.tels=acc.tels.concat(tl);
     }
-    var acc={nomes:[], emails:[], tels:[], doctodo:false, fontes:[]};
-    /* histórico dá o nome do casal mesmo sem documento */
-    var ch=(typeof _casalHistorico==='function')?_casalHistorico(atual):''; if(ch && acc.nomes.indexOf(ch)<0){ acc.nomes.push(ch); }
+    var acc={nomes:[], nomesInd:[], emails:[], tels:[], doctodo:false, fontes:[]};
+    /* nome atual da ficha entra como base p/ montar o casal */
+    if(atual&&atual.cliente) _pushNome(acc, atual.cliente);
+    /* histórico (inclui teor de despachos/sentenças) */
+    var ch=(typeof _casalHistorico==='function')?_casalHistorico(atual):''; if(ch){ ch.split(' e ').forEach(function(n){ _pushNome(acc,n); }); }
+    /* já temos o casal? (2 nomes distintos compartilhando sobrenome) */
+    function _temCasal(){ for(var i=0;i<acc.nomesInd.length;i++){ for(var j=i+1;j<acc.nomesInd.length;j++){ if(_compartSobren(acc.nomesInd[i],acc.nomesInd[j])) return true; } } return false; }
     /* 1) procuração  2) petição inicial (nomes com número / "inicial") */
     var relP=await _acharDocRel(dig,/procura/i);
     if(relP){ var tP=await _lerDoc(relP); if(tP){ _colher(tP,acc); acc.fontes.push('procuração'); } }
     var relI=await _acharDocRel(dig,/inicial|peti[çc][aã]o/i);
     if(relI && relI!==relP){ var tI=await _lerDoc(relI); if(tI){ _colher(tI,acc); acc.fontes.push('petição inicial'); } }
-    /* 3) se ainda falta nome OU contato, varre os demais (Word primeiro) */
-    if(!acc.nomes.length || !acc.emails.length || !acc.tels.length){
+    /* 3) varre os demais (incl. despachos e sentenças) enquanto faltar casal OU contato */
+    if(!_temCasal() || !acc.emails.length || !acc.tels.length){
       try{
         var todos=await _listarArquivosProc(dig);
         var docs=todos.filter(function(rr){ return /\.(docx?|pdf|html?)$/i.test(rr) && rr!==relP && rr!==relI; });
-        docs.sort(function(a,b){ function sc(x){ return /procura/i.test(x)?0:(/inicial|peti[çc]/i.test(x)?1:(/\.docx?$/i.test(x)?2:3)); } return sc(a)-sc(b); });
-        for(var di=0; di<Math.min(docs.length,8); di++){
-          if(acc.nomes.length && acc.emails.length && acc.tels.length) break;
+        /* prioriza procuração/inicial, depois despacho/sentença, depois o resto */
+        docs.sort(function(a,b){ function sc(x){ return /procura/i.test(x)?0:(/inicial|peti[çc]/i.test(x)?1:(/despach|senten|decis|ac[óo]rd/i.test(x)?2:(/\.docx?$/i.test(x)?3:4))); } return sc(a)-sc(b); });
+        for(var di=0; di<Math.min(docs.length,10); di++){
+          if(_temCasal() && acc.emails.length && acc.tels.length) break;
           var tD=await _lerDoc(docs[di]); if(!tD) continue;
-          var antes=acc.nomes.length+acc.emails.length+acc.tels.length;
+          var antes=acc.nomesInd.length+acc.emails.length+acc.tels.length;
           _colher(tD,acc);
-          if(acc.nomes.length+acc.emails.length+acc.tels.length>antes) acc.fontes.push('doc "'+docs[di].split('/').pop()+'"');
+          if(acc.nomesInd.length+acc.emails.length+acc.tels.length>antes) acc.fontes.push('doc "'+docs[di].split('/').pop()+'"');
         }
       }catch(e){}
     }
     acc.emails=_uniq(acc.emails); acc.tels=_uniq(acc.tels);
-    if(!acc.nomes.length && !acc.emails.length && !acc.tels.length){
+    /* monta a sugestão de nome: se houver casal (2 nomes com mesmo sobrenome), junta */
+    var sugNome='', casal='';
+    var baseNk=normClienteNome((atual&&atual.cliente)||acc.nomesInd[0]||'');
+    var base=acc.nomesInd.find(function(n){return normClienteNome(n)===baseNk;})||acc.nomesInd[0]||'';
+    if(base){ var par=acc.nomesInd.find(function(n){ return normClienteNome(n)!==normClienteNome(base) && _compartSobren(base,n); });
+      if(par){ /* mais longo primeiro fica melhor, mas mantém a ordem base→cônjuge */ casal=base+' e '+par; sugNome=casal; }
+      else sugNome=base; }
+    if(!sugNome && ch) sugNome=ch;
+    if(!sugNome && !acc.emails.length && !acc.tels.length){
       alert('Não encontrei nome, e-mail nem telefone nos documentos deste processo.\n\n(Se os arquivos forem imagem escaneada, não há texto para extrair — use "✎ editar dados".)'); return;
     }
-    /* preenche o nome sugerido no formulário de partes (como o antigo "Puxar nome") */
-    if(acc.nomes.length){
+    /* preenche o nome sugerido no formulário de partes */
+    if(sugNome){
       if(typeof sugerirPartes==='function') try{ sugerirPartes(); }catch(e){}
-      var elc=document.getElementById('partes-cliente'); if(elc) elc.value=acc.nomes[0];
-      var intro=document.getElementById('partes-intro'); if(intro) intro.innerHTML='Sugestão de <b>nome do cliente</b> (via '+esc(acc.fontes[0]||'documentos')+'): <b>'+esc(acc.nomes[0])+'</b>. Confira/edite e salve.'+(acc.nomes.length>1?(' <span class="note">Outra opção: '+acc.nomes.slice(1).map(function(n){return esc(n);}).join(' · ')+'</span>'):'');
+      var elc=document.getElementById('partes-cliente'); if(elc) elc.value=sugNome;
+      var outras=acc.nomesInd.filter(function(n){ return sugNome.indexOf(n)<0; }).slice(0,3);
+      var intro=document.getElementById('partes-intro'); if(intro) intro.innerHTML='Sugestão de <b>nome do cliente</b>'+(casal?' <span style="color:#0F6E56;font-weight:700">(casal detectado)</span>':'')+' (via '+esc(acc.fontes[0]||'documentos')+'): <b>'+esc(sugNome)+'</b>. Confira/edite e salve.'+(outras.length?(' <span class="note">Outros nomes: '+outras.map(function(n){return esc(n);}).join(' · ')+'</span>'):'');
     }
     /* modal de contatos (e-mail/telefone) para adicionar ao processo */
     if(acc.emails.length || acc.tels.length){
