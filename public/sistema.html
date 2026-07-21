@@ -308,7 +308,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
       <div class="card"><p class="sectlabel" id="lote-title">Lote</p><span class="note" id="lote-count"></span>
       <input id="lote-busca" oninput="renderLote()" placeholder="Buscar por cliente, número, oponente ou assunto…" style="margin-top:10px;width:100%;max-width:520px;padding:9px 12px;border:1px solid var(--line);border-radius:10px;font-size:14px;font-family:inherit">
       <table style="margin-top:10px"><thead><tr><th style="width:34%">Cliente</th><th style="width:150px">Processo</th><th style="width:22%">Assunto</th><th style="width:170px">Última movimentação</th><th>Status</th><th style="width:120px"></th></tr></thead><tbody id="lote-body"></tbody></table>
-      <p class="note" style="margin-top:8px">Lote personalizado (criado em ⚙ Configurações). Para tirar um processo daqui, use "→ remover do lote".</p></div>
+      <p class="note" style="margin-top:8px">Lote personalizado (só uma visão para leitura — os processos continuam na lista principal e recebendo publicações). Para tirar um daqui, use "→ remover do lote".</p></div>
     </section>
     <section id="s-cadastros" class="hidden">
       <div class="card">
@@ -3997,7 +3997,7 @@ function renderProc(){
     var okq=!q||(p.cliente+" "+p.numero+" "+p.oponente+" "+p.tipo).toLowerCase().indexOf(q)>-1;
     var oke=true;
     if(eq){ var ids=(typeof ASSIGN!=='undefined'&&ASSIGN[p.numero])||[]; oke=ids.indexOf(eq)>-1; }
-    return okq&&oke&&movFiltroOk(p)&&origemFiltroOk(p)&&!/encerr/i.test(p.status||'')&&!isInove(p)&&!p.lote_id&&(!isSuspenso(p)||_buscaAtiva());
+    return okq&&oke&&movFiltroOk(p)&&origemFiltroOk(p)&&!/encerr/i.test(p.status||'')&&!isInove(p)&&(!isSuspenso(p)||_buscaAtiva());
   });
   if(sm==='az') lista.sort(function(a,b){return (a.cliente||'').localeCompare(b.cliente||'','pt');});
   else if(sm==='data_desc') lista.sort(function(a,b){return diasMovOrd(a)-diasMovOrd(b);}); /* movimentação oficial mais recente primeiro */
@@ -4034,7 +4034,7 @@ function renderProc(){
   var lista=DADOS.processos.filter(function(p){
     var okq=!q||(p.cliente+" "+p.numero+" "+p.oponente+" "+p.tipo).toLowerCase().indexOf(q)>-1;
     var oke=true; if(eq){ var ids=(typeof ASSIGN!=='undefined'&&ASSIGN[p.numero])||[]; oke=ids.indexOf(eq)>-1; }
-    return okq&&oke&&movFiltroOk(p)&&origemFiltroOk(p)&&!/encerr/i.test(p.status||'')&&!isInove(p)&&!p.lote_id&&(!isSuspenso(p)||_buscaAtiva());
+    return okq&&oke&&movFiltroOk(p)&&origemFiltroOk(p)&&!/encerr/i.test(p.status||'')&&!isInove(p)&&(!isSuspenso(p)||_buscaAtiva());
   });
   if(sm==='az') lista.sort(function(a,b){var A=(a.cliente||'').trim(),B=(b.cliente||'').trim(); if(!A&&!B)return 0; if(!A)return 1; if(!B)return -1; return A.localeCompare(B,'pt');});
   else if(sm==='za') lista.sort(function(a,b){var A=(a.cliente||'').trim(),B=(b.cliente||'').trim(); if(!A&&!B)return 0; if(!A)return 1; if(!B)return -1; return B.localeCompare(A,'pt');});
@@ -4647,7 +4647,30 @@ function _casoCtrlHTML(p){
     return ' <button class="btn sm ghost" style="font-size:11px;padding:3px 9px;border-color:#c9bfe0;color:#5b4a8a" onclick="vincularCasoDjen(\''+n+'\')" title="Este caso não é monitorado pelo DJEn. Ao vincular, ele passa a receber publicações e os dados são atualizados.">caso · vincular ao DJEn</button>';
   }
   return ' <button class="btn sm ghost" style="font-size:11px;padding:3px 9px" onclick="marcarComoCaso(\''+n+'\')" title="Marcar como caso administrativo (não vinculado ao DJEn)">marcar como caso</button>'+
-         ' <button class="btn sm ghost" style="font-size:11px;padding:3px 9px;border-color:#c9bfe0;color:#5b4a8a" onclick="virarAssessoria()" title="Transformar este processo em PASTA PRINCIPAL de assessoria: identificada pelo CNPJ/CPF do cliente; os documentos são movidos e ele sai do acompanhamento judicial">⇄ virar pasta de assessoria</button>';
+         ' <button class="btn sm ghost" style="font-size:11px;padding:3px 9px;border-color:#c9bfe0;color:#5b4a8a" onclick="virarAssessoria()" title="Transformar este processo em PASTA PRINCIPAL de assessoria: identificada pelo CNPJ/CPF do cliente; os documentos são movidos e ele sai do acompanhamento judicial">⇄ virar pasta de assessoria</button>'+
+         _loteCtrlHTML(p);
+}
+/* botão de lote na ficha: manda o processo para uma pasta-lote (ele CONTINUA na
+   lista principal — o lote é só uma visão para leitura). */
+function _loteCtrlHTML(p){
+  var lotes=window.__LOTES||[]; if(!lotes.length) return '';
+  var n=String(p.numero||'').replace(/'/g,"");
+  var atualL=p.lote_id?(loteById(p.lote_id)||null):null;
+  var opts='<option value="">'+(atualL?('📁 '+esc(atualL.nome)):'📁 enviar para lote…')+'</option>'
+    +lotes.map(function(l){ return '<option value="'+l.id+'"'+(String(p.lote_id||'')===String(l.id)?' selected':'')+'>'+esc(l.nome)+'</option>'; }).join('')
+    +(atualL?'<option value="__out">— tirar do lote —</option>':'');
+  return ' <select onchange="definirLoteProc(\''+n+'\',this.value)" title="Enviar este processo para uma pasta-lote (continua na lista principal)" style="font-size:11px;padding:3px 6px;border:1px solid var(--line);border-radius:8px;background:'+(atualL?(esc(atualL.cor||'#185FA5')):'#fff')+';color:'+(atualL?'#fff':'#5d6673')+'">'+opts+'</select>';
+}
+async function definirLoteProc(num, val){
+  if(val==='') return;
+  var p=(DADOS.processos||[]).find(function(x){return String(x.numero)===String(num);}); if(!p) return;
+  var destino=(val==='__out')?null:val;
+  var sb=window.__sb; if(sb&&p._id){ var r=await sb.from('processos').update({lote_id:destino}).eq('id',p._id).select('id'); if(r&&r.error){ alert('Erro: '+r.error.message); return; } }
+  p.lote_id=destino;
+  try{ if(typeof renderNavLotes==='function') renderNavLotes(); }catch(e){}
+  var l=destino?loteById(destino):null;
+  var i=DADOS.processos.indexOf(p); if(i>=0) abrir(i);
+  if(l) alert('✓ Enviado para o lote "'+l.nome+'". Continua também na lista principal.');
 }
 /* transforma um PROCESSO em pasta principal de assessoria (caso): pede o CNPJ/CPF do
    cliente, move a pasta de documentos do servidor para a nova identificação e marca
@@ -4824,7 +4847,7 @@ function renderProc(){
   var lista=DADOS.processos.filter(function(p){
     var okq=!q||(p.cliente+" "+p.numero+" "+p.oponente+" "+p.tipo).toLowerCase().indexOf(q)>-1;
     var oke=true; if(eq){ var ids=(typeof ASSIGN!=='undefined'&&ASSIGN[p.numero])||[]; oke=ids.indexOf(eq)>-1; }
-    return okq&&oke&&movFiltroOk(p)&&origemFiltroOk(p)&&!/encerr/i.test(p.status||'')&&!isInove(p)&&!p.lote_id&&(!isSuspenso(p)||_buscaAtiva());
+    return okq&&oke&&movFiltroOk(p)&&origemFiltroOk(p)&&!/encerr/i.test(p.status||'')&&!isInove(p)&&(!isSuspenso(p)||_buscaAtiva());
   });
   /* ordenação por prazo fatal (coluna): mais próximo → distante, ou o inverso.
      Tem prioridade sobre a ordenação padrão quando escolhida. */
@@ -4891,7 +4914,7 @@ function renderProc(){
 </div></div>
 <div id="modal-config" class="overlay hidden"><div class="modal" style="max-width:640px">
   <h2>⚙ Configurações — Lotes / pastas do menu</h2>
-  <p class="note" style="margin-top:0">Crie pastas (lotes) que aparecem no menu esquerdo, abaixo de Processos — como "Encerrados" ou "James Laurence". Mova processos em massa para um lote e eles saem da lista principal.</p>
+  <p class="note" style="margin-top:0">Crie pastas (lotes) que aparecem no menu esquerdo, abaixo de Processos — como "PBPREV". Servem só para <b>facilitar a leitura</b>: os processos continuam na lista principal e seguem recebendo publicações normalmente.</p>
   <div style="border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:12px">
     <p class="sectlabel" style="margin:0 0 8px">Lotes existentes</p>
     <div id="cfg-lotes"></div>
