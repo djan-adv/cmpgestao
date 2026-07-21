@@ -8662,26 +8662,44 @@ async function apagarCobranca(id){
     await renderFinanceiro();
   }catch(e){ alert('Erro de rede.'); }
 }
-/* metade de baixo: alvarás expedidos por mês (processos na fase "Expedir Alvará") */
+/* valor do alvará: tenta o "R$ ..." da movimentação de alvará/levantamento; se não
+   houver, usa o valor de condenação cadastrado. Retorna número em reais (0 se nada). */
+function _valorAlvara(p){
+  var arr=(p&&p.hist_full)||[];
+  for(var i=0;i<arr.length;i++){ var t=String((arr[i]&&arr[i].texto)||''); if(!/alvar|levantament|libera[çc][ãa]o de valores/i.test(t)) continue;
+    var m=t.match(/R\$\s?([\d.]{1,15},\d{2})/); if(m){ var n=parseFloat(m[1].replace(/\./g,'').replace(',','.')); if(!isNaN(n)&&n>0) return n; } }
+  var vc=parseFloat(p&&p.valor_condenacao); if(!isNaN(vc)&&vc>0) return vc;
+  return 0;
+}
+function _reaisNum(n){ return (n||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+/* metade de baixo: alvarás expedidos por mês (processos na fase "Expedir Alvará")
+   — escritório e INOVE separados (Inove é cobrado à parte), com totalizadores. */
 function renderAlvarasMes(){
   var el=document.getElementById('fin-alvaras'); if(!el) return;
+  var todos=(DADOS.processos||[]).filter(function(p){ try{ return faseDoProc(p)==='alvara'; }catch(e){ return false; } });
+  if(!todos.length){ el.innerHTML='<p class="sectlabel" style="margin:0 0 4px">Alvarás expedidos por mês</p><p class="note" style="margin:0">Nenhum processo na fase "Expedir Alvará" no momento. (Quando um processo entra nessa fase, aparece aqui, agrupado pelo mês da última movimentação.)</p>'; return; }
+  var doEscritorio=todos.filter(function(p){ return !isInove(p); });
+  var daInove=todos.filter(function(p){ return isInove(p); });
+  el.innerHTML=_blocoAlvaras('Alvarás expedidos por mês — escritório', doEscritorio, '#127a53')
+    + (daInove.length?('<div style="border-top:2px dashed var(--line);margin:16px 0 0;padding-top:14px">'+_blocoAlvaras('Alvarás — Inove (cobrança separada)', daInove, '#8a5a00')+'</div>'):'');
+}
+function _blocoAlvaras(titulo, procs, cor){
   var MES=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
-  var procs=(DADOS.processos||[]).filter(function(p){ try{ return faseDoProc(p)==='alvara'; }catch(e){ return false; } });
-  if(!procs.length){ el.innerHTML='<p class="sectlabel" style="margin:0 0 4px">Alvarás expedidos por mês</p><p class="note" style="margin:0">Nenhum processo na fase "Expedir Alvará" no momento. (Quando um processo entra nessa fase, aparece aqui, agrupado pelo mês da última movimentação.)</p>'; return; }
-  /* agrupa pelo mês da última movimentação (data mais recente do histórico oficial) */
+  if(!procs.length) return '<p class="sectlabel" style="margin:0 0 4px">'+esc(titulo)+'</p><p class="note" style="margin:0">Nenhum.</p>';
   function chave(p){ var d=null; (p.hist_full||[]).forEach(function(a){ if(a&&a.data&&(!d||a.data>d)) d=a.data; }); d=d||(p.data?p.data.split('/').reverse().join('-'):''); var m=/^(\d{4})-(\d{2})/.exec(String(d)); return m?m[1]+'-'+m[2]:'0000-00'; }
-  var g={}; procs.forEach(function(p){ (g[chave(p)]=g[chave(p)]||[]).push(p); });
+  var g={}, totGeral=0; procs.forEach(function(p){ (g[chave(p)]=g[chave(p)]||[]).push(p); totGeral+=_valorAlvara(p); });
   var chaves=Object.keys(g).sort().reverse();
-  var html='<p class="sectlabel" style="margin:0 0 10px">Alvarás expedidos por mês <span class="note" style="font-weight:400">— '+procs.length+' processo'+(procs.length===1?'':'s')+' na fase de alvará</span></p>';
-  chaves.forEach(function(k){ var parts=k.split('-'); var mi=parseInt(parts[1],10)-1; var titulo=(mi>=0&&mi<12?MES[mi]:'Sem data')+(parts[0]!=='0000'?(' de '+parts[0]):'');
-    var arr=g[k];
-    html+='<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line);padding-bottom:5px;margin-bottom:6px"><b style="color:var(--navy)">'+esc(titulo)+'</b><span style="font-size:12px;font-weight:700;color:#127a53;background:#e5f4ed;border-radius:12px;padding:2px 10px">'+arr.length+' alvará'+(arr.length===1?'':'s')+'</span></div>';
-    html+=arr.map(function(p){ var i=DADOS.processos.indexOf(p);
-      return '<div style="display:flex;justify-content:space-between;gap:8px;font-size:12.5px;padding:3px 0;align-items:center"><span><a onclick="abrir('+i+')" style="cursor:pointer;color:var(--navy);text-decoration:underline">'+esc(resumo3(p.cliente))+'</a> <span class="note">· '+esc(p.numero)+'</span></span><span class="note" style="white-space:nowrap">'+esc(p.data||'')+'</span></div>';
+  var html='<p class="sectlabel" style="margin:0 0 10px;display:flex;justify-content:space-between;align-items:baseline;gap:10px"><span>'+esc(titulo)+' <span class="note" style="font-weight:400">— '+procs.length+' processo'+(procs.length===1?'':'s')+'</span></span>'
+    +'<span style="color:'+cor+';font-weight:800;font-size:15px">Total: R$ '+_reaisNum(totGeral)+'</span></p>';
+  chaves.forEach(function(k){ var parts=k.split('-'); var mi=parseInt(parts[1],10)-1; var tt=(mi>=0&&mi<12?MES[mi]:'Sem data')+(parts[0]!=='0000'?(' de '+parts[0]):'');
+    var arr=g[k]; var subtot=arr.reduce(function(s,p){return s+_valorAlvara(p);},0);
+    html+='<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line);padding-bottom:5px;margin-bottom:6px"><b style="color:var(--navy)">'+esc(tt)+'</b><span style="display:flex;gap:8px;align-items:center"><span style="font-size:12px;font-weight:700;color:'+cor+'">R$ '+_reaisNum(subtot)+'</span><span style="font-size:12px;font-weight:700;color:#127a53;background:#e5f4ed;border-radius:12px;padding:2px 10px">'+arr.length+' alvará'+(arr.length===1?'':'s')+'</span></span></div>';
+    html+=arr.map(function(p){ var i=DADOS.processos.indexOf(p); var v=_valorAlvara(p);
+      return '<div style="display:flex;justify-content:space-between;gap:8px;font-size:12.5px;padding:3px 0;align-items:center"><span><a onclick="abrir('+i+')" style="cursor:pointer;color:var(--navy);text-decoration:underline">'+esc(resumo3(p.cliente))+'</a> <span class="note">· '+esc(p.numero)+' · '+esc(p.data||'')+'</span></span><span style="white-space:nowrap;font-weight:700;color:'+(v?cor:'#b9c0ca')+'">'+(v?('R$ '+_reaisNum(v)):'—')+'</span></div>';
     }).join('');
     html+='</div>';
   });
-  el.innerHTML=html;
+  return html;
 }
 
 /* clientes (nome + CPF/CNPJ, para a tabela e para a NFS-e) — cache local */
