@@ -1749,15 +1749,18 @@ function renderCaptacao(){
     col.ondrop=function(e){e.preventDefault();var id=+e.dataTransfer.getData("id");var l=LEADS.find(function(x){return x.id===id;});if(l){var eraGanho=(l.estagio==='ganho');l.estagio=c.id; if(c.id==='ganho'&&!l.dataFechamento) l.dataFechamento=hojeISO(); salvarLeadsLocal(); renderCaptacao(); if(c.id==='ganho'&&!eraGanho) fecharLeadEAbrirCaso(l);}};
     var mvL=(idx>0)?'<a onclick="moverEtapa('+idx+',-1)" style="cursor:pointer;color:var(--muted);text-decoration:none" title="mover para a esquerda">&#9664;</a> ':'';
     var mvR=(idx<FUNIL.length-1)?' <a onclick="moverEtapa('+idx+',1)" style="cursor:pointer;color:var(--muted);text-decoration:none" title="mover para a direita">&#9654;</a>':'';
+    /* colunas finais (Fechado/Perdido): cards PERMANECEM, porém compactos —
+       antes o card "sumia" ao fechar e a pessoa se perdia */
+    var compacto=(c.id==='ganho'||c.id==='perdido');
+    if(compacto) col.style.flex='0 0 190px';
     if(c.id==='ganho'){
       var hf=document.createElement("h3");hf.innerHTML=esc(c.nome)+' <span>'+itens.length+' '+mvL+mvR+'</span>';col.appendChild(hf);
-      var dz=document.createElement("div");dz.className="note";dz.style.cssText="padding:12px 8px;font-size:11.5px;line-height:1.45;text-align:center;color:var(--muted)";
-      dz.innerHTML='Arraste um lead para cá ao fechar o contrato.<br>Ele sai do quadro e entra em <b>Fechados por mês</b> (acima).';
-      col.appendChild(dz);fu.appendChild(col);return;
-    }
+      if(!itens.length){ var dz=document.createElement("div");dz.className="note";dz.style.cssText="padding:12px 8px;font-size:11px;line-height:1.4;text-align:center;color:var(--muted)";dz.innerHTML='Arraste um lead para cá ao fechar o contrato.';col.appendChild(dz); }
+    } else {
     var delEtapa=(c.id==='perdido')?'':' <a onclick="excluirEtapa('+idx+')" style="cursor:pointer;color:#b5342b;text-decoration:none" title="excluir etapa">&#128465;</a>';
     var h=document.createElement("h3");h.innerHTML=esc(c.nome)+' <span>'+itens.length+' '+mvL+'<a onclick="renameEtapa('+idx+')" style="cursor:pointer;text-decoration:none" title="renomear">&#9998;</a>'+delEtapa+mvR+'</span>';
     col.appendChild(h);
+    }
     if(idx>0 && c.id!=='perdido'){
       var jn=document.createElement("div"); jn.style.cssText="margin:-2px 0 7px";
       jn.innerHTML='<a onclick="toggleNivel('+idx+')" title="'+(c.juntar?'Separar: virar um andar próprio no gráfico do funil':'Juntar no mesmo andar do gráfico do funil que a etapa à esquerda')+'" style="cursor:pointer;text-decoration:none;font-size:10px;font-weight:700;padding:2px 7px;border-radius:9px;background:'+(c.juntar?'#e5f4ed':'#eef0f3')+';color:'+(c.juntar?'#0F6E56':'#8a8f98')+'">'+(c.juntar?'▣ mesmo andar':'▢ mesmo andar')+'</a>';
@@ -1770,6 +1773,15 @@ function renderCaptacao(){
       el.ondragover=function(e){e.preventDefault();};
       el.ondrop=(function(tid){return function(e){e.preventDefault();e.stopPropagation();moverLead(+e.dataTransfer.getData("id"),tid);};})(l.id);
       el.onclick=(function(id){return function(){editarLead(id);};})(l.id);
+      if(compacto){
+        /* card slim: só nome + valor/motivo + anexos — para não ocupar espaço nas
+           colunas finais, mas continuar visível e clicável */
+        el.style.padding='6px 9px';
+        var _dir=(c.id==='ganho')?((l.valorFechado||l.valor)?('R$ '+esc(l.valorFechado||l.valor)):'fechado'):(l.motivo?esc(l.motivo):'perdido');
+        var _corDir=(c.id==='ganho')?'#127a53':'#b5342b';
+        el.innerHTML='<div class="t" style="font-size:12.5px;display:flex;justify-content:space-between;gap:5px;align-items:center"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(primeiroUltimo(l.nome))+'</span><a title="Arquivos" onclick="abrirLeadArqs('+l.id+',event)" style="cursor:pointer;color:#185FA5;font-size:12px;flex:0 0 auto">&#128206;'+((l.arquivos&&l.arquivos.length)?l.arquivos.length:'')+'</a></div><div class="meta" style="font-size:10.5px;color:'+_corDir+';font-weight:600">'+_dir+'</div>';
+        col.appendChild(el); return;
+      }
       var lem=l.lemdata?('<div class="meta" style="color:var(--warn)">&#128276; '+l.lemdata+'</div>'):'';
       var _resumo=l.acao||l.lemtxt||(l.obs?String(l.obs).split('\n')[0].slice(0,90):'')||"—";
       var _telCard=l.tel?('<div class="meta" style="color:#127a53;font-weight:600">&#128222; '+esc(l.tel)+'</div>'):'';
@@ -4060,7 +4072,7 @@ function renderProc(){
 </div></div>
 <script>
 var cadTipo='processo';
-function abrirCadManual(){ cadTipo='processo'; setCadTipo('processo'); ['cm-numero','cm-casoid','cm-cliente','cm-oponente','cm-assunto','cm-foro','cm-causa','cm-obs','cm-peca-livre'].forEach(function(id){var e=document.getElementById(id);if(e)e.value='';}); var pe=document.getElementById('cm-peca'); if(pe) pe.selectedIndex=0;
+function abrirCadManual(){ cadTipo='processo'; window.__cadLead=null; setCadTipo('processo'); ['cm-numero','cm-casoid','cm-cliente','cm-oponente','cm-assunto','cm-foro','cm-causa','cm-obs','cm-peca-livre'].forEach(function(id){var e=document.getElementById(id);if(e)e.value='';}); var pe=document.getElementById('cm-peca'); if(pe) pe.selectedIndex=0;
   try{ seedContatos(); }catch(e){} window.__cmCliMatch=null; window.__fichaExtraida=null; window.__cmDocs=[]; cmClienteStatus(''); var dd=document.getElementById('cm-cli-drop'); if(dd){dd.classList.remove('on');dd.innerHTML='';}
   var fr=document.getElementById('cm-ficha-resumo'); if(fr){fr.style.display='none';fr.innerHTML='';} var fs=document.getElementById('cm-ficha-status'); if(fs) fs.textContent=''; var fl=document.getElementById('cm-ficha-lista'); if(fl){fl.style.display='none';fl.innerHTML='';}
   try{ cmPopularLeads(); }catch(e){} var _ls=document.getElementById('cm-lead-status'); if(_ls) _ls.textContent=''; var _ls2=document.getElementById('cm-lead'); if(_ls2) _ls2.value='';
@@ -4081,6 +4093,7 @@ function cmPopularLeads(){
 function cmPuxarLead(id){
   if(!id) return;
   var l=(typeof LEADS!=='undefined'?LEADS:[]).find(function(x){return String(x.id)===String(id);}); if(!l) return;
+  window.__cadLead=l; /* guarda o lead p/ transferir os arquivos ao processo criado */
   function setV(cid,val){ var e=document.getElementById(cid); if(e && val!=null && String(val)!=='') e.value=val; }
   setV('cm-cliente', l.nome);
   if(l.acao) setV('cm-assunto', l.acao);
@@ -4180,10 +4193,40 @@ async function salvarCadManual(){
   }
   DADOS.processos.unshift(novo);
   if(DADOS.kpis) DADOS.kpis.total=DADOS.processos.length;
+  /* leva os arquivos coletados no lead (bucket de leads) para a pasta do processo */
+  var _leadTransf=window.__cadLead;
+  if(_leadTransf && _leadTransf.arquivos && _leadTransf.arquivos.length){
+    transferirArqsLeadParaProc(_leadTransf, num).catch(function(){});
+  }
+  window.__cadLead=null;
   fecharCadManual();
   var idx=DADOS.processos.indexOf(novo);
   go('processos'); if(idx>=0) abrir(idx);
 }
+/* baixa cada arquivo do lead (Storage) e envia para a pasta de Documentos do
+   processo (VPS via /api/docs) — resolve o "cria o processo mas não sobe os PDFs". */
+async function transferirArqsLeadParaProc(l, numero){
+  try{
+    var sb=window.__sb; if(!sb) return;
+    var chave=(typeof _docChaveProc==='function')?_docChaveProc(numero):String(numero||'').replace(/\D/g,'');
+    if(!chave) return;
+    var tok=await docToken(); var ok=0;
+    for(var i=0;i<l.arquivos.length;i++){
+      var a=l.arquivos[i]; if(!a||!a.path) continue;
+      try{
+        var dl=await sb.storage.from(LEADS_BUCKET).download(a.path);
+        if(dl.error||!dl.data) continue;
+        var buf=await dl.data.arrayBuffer();
+        var b64=_ab2b64(buf);
+        var nome=(a.nome||a.path.split('/').pop()).replace(/[^\w.\-]+/g,'_');
+        var r=await fetch('/api/docs',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({path:chave+'/'+nome, b64:b64})});
+        if(r.ok) ok++;
+      }catch(e){}
+    }
+    if(ok){ try{ delete window.__censoDoc[String(numero||'').replace(/\D/g,'')]; }catch(e){} console.log('CMPGestao: '+ok+' arquivo(s) do lead enviados para a pasta do processo.'); }
+  }catch(e){ console.warn('transferirArqsLead:',e&&e.message||e); }
+}
+function _ab2b64(buf){ var bytes=new Uint8Array(buf), bin=''; var CH=0x8000; for(var i=0;i<bytes.length;i+=CH){ bin+=String.fromCharCode.apply(null, bytes.subarray(i,i+CH)); } return btoa(bin); }
 /* Fluxo "Cliente novo → Gerar caso": cria um caso (sem CNJ), vincula/cria o cliente
    e registra o pedido para o Claude (Cowork) elaborar a peça no padrão CMP. A ficha
    de atendimento e os documentos são anexados na pasta do caso já aberto. */
