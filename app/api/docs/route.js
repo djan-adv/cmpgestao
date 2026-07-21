@@ -70,6 +70,21 @@ function contaArquivos(dir, prof) {
   return n
 }
 
+// soma { arquivos, bytes } de um processo (recursivo) — para o selo de pasta/MB na lista
+function censoProc(dir, prof) {
+  if (prof > 6) return { n: 0, bytes: 0 }
+  let n = 0, bytes = 0
+  let itens
+  try { itens = fs.readdirSync(dir, { withFileTypes: true }) } catch (e) { return { n: 0, bytes: 0 } }
+  for (const d of itens) {
+    if (d.name === TRASH || d.name === '.meta.json' || d.name === ORDEM) continue
+    const full = path.join(dir, d.name)
+    if (d.isDirectory()) { const r = censoProc(full, prof + 1); n += r.n; bytes += r.bytes }
+    else { n++; try { bytes += fs.statSync(full).size } catch (e) {} }
+  }
+  return { n, bytes }
+}
+
 export async function GET(request) {
   const user = await usuario(request)
   if (!user) return Response.json({ erro: 'não autenticado' }, { status: 401 })
@@ -80,9 +95,9 @@ export async function GET(request) {
   const censo = searchParams.get('censo')
   if (censo) {
     const nums = [...new Set(String(censo).split(',').map(s => s.replace(/\D/g, '')).filter(s => s.length >= 16))].slice(0, 500)
-    const counts = {}
-    for (const dig of nums) counts[dig] = contaArquivos(path.join(ROOT, dig), 0)
-    return Response.json({ counts })
+    const counts = {}, bytes = {}
+    for (const dig of nums) { const r = censoProc(path.join(ROOT, dig), 0); counts[dig] = r.n; bytes[dig] = r.bytes }
+    return Response.json({ counts, bytes })
   }
 
   const file = searchParams.get('file')

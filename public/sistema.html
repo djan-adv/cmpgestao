@@ -334,7 +334,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
     </section>
     <section id="s-processos" class="hidden">
       <div class="searchbar"><input id="busca" placeholder="Buscar por cliente, número, oponente ou assunto..." oninput="renderProc()"><select id="ordena" onchange="renderProc()" class="btn sm sb-sel" style="margin-left:8px;max-width:120px"><option value="">Novos Protocolos</option><option value="az">Cliente (A→Z)</option><option value="za">Cliente (Z→A)</option><option value="data_desc">Movimentação mais recente</option><option value="parados">Parados (mov. mais antiga)</option><option value="valor">Valor da causa (maior→menor)</option></select><select id="filtroEtq" onchange="renderProc()" class="btn sm sb-sel" style="margin-left:8px;max-width:112px"><option value="">Todas as etiquetas</option></select><select id="porPagina" onchange="renderProc()" class="btn sm sb-sel" style="margin-left:8px;max-width:76px"><option value="20">20 por página</option><option value="40">40</option><option value="60">60</option><option value="80">80</option><option value="100">100</option><option value="todos" selected>Todos</option></select><span class="note" id="proc-count" style="align-self:center"></span><button id="btn-atu-todos" class="btn sm sb-btn" style="margin-left:auto" onclick="atualizarTodosProcessos()" title="Buscar no DJEN as publicações novas de TODOS os processos (últimos 7 dias, pelas OABs do escritório)">↻ Atualizar todos</button><button id="btn-censo-docs" class="btn sm sb-btn" style="margin-left:8px" onclick="verificarDocsFiltrados()" title="Verificar quais processos da lista filtrada estão SEM documentos no servidor (dica: digite um filtro na busca antes, ex.: pbprev)">📂 Sem docs?</button><button class="btn sm sb-btn" style="margin-left:8px" onclick="abrirNovaTarefa()">+ Nova tarefa</button><button class="btn sm gold sb-btn" style="margin-left:8px" onclick="abrirBusca()">+ Cadastrar por número <span style="font-weight:400;font-size:10px;opacity:.8">(pesquisa pelo djen)</span></button><button class="btn sm sb-btn" style="margin-left:8px;background:var(--navy);color:#fff;border-color:var(--navy)" onclick="abrirCadManual()">+ Cadastrar manual / caso</button><button class="btn sm sb-btn" style="margin-left:8px;background:#0F6E56;color:#fff;border-color:#0F6E56" onclick="abrirSyncPastas()" title="Enviar de uma vez uma pasta com vários processos — o sistema reconhece cada subpasta e manda para o processo certo">&#8645; Sincronizar pasta</button></div>
-      <div class="card"><table><thead><tr><th style="width:36%;cursor:pointer;user-select:none" onclick="ordenarCliente()" title="Clique para ordenar por cliente (A→Z / Z→A)">Cliente <span id="cli-sort-arrow" style="font-size:10px;color:var(--muted)"></span></th><th style="width:150px">Processo</th><th style="width:22%">Assunto</th><th style="width:175px"><select id="filtroMov" onchange="renderProc()" style="font-weight:700;font-size:12px;border:none;background:transparent;color:inherit;max-width:170px;cursor:pointer;padding:0"><option value="">Última movimentação</option><option value="Concluso c/petição posterior s/despacho">Concluso c/petição posterior s/despacho</option><option value="Concluso">Concluso</option><option value="Petição">Petição</option><option value="Despacho/Sentença">Despacho/Sentença</option><option value="Intimação">Intimação</option><option value="__sem">Sem classificação</option></select></th><th style="width:120px;cursor:pointer;user-select:none" onclick="ordenarParado()" title="Clique para ordenar por dias sem movimentação (maior ↔ menor)">Sem movimentação há <span id="par-sort-arrow" style="font-size:10px;color:var(--muted)"></span></th><th style="width:110px"><select id="filtroOrigem" onchange="renderProc()" style="font-weight:700;font-size:12px;border:none;background:transparent;color:inherit;max-width:105px;cursor:pointer;padding:0"><option value="">Status</option><option value="astrea">astrea</option><option value="djen">djen</option><option value="atualizado">atualizado</option></select></th><th style="width:130px"><select id="ordenaPrazo" onchange="setOrdenaPrazo(this.value)" style="font-weight:700;font-size:12px;border:none;background:transparent;color:inherit;max-width:125px;cursor:pointer;padding:0" title="Ordenar pela data do prazo fatal"><option value="">Prazo fatal</option><option value="prox">Mais próximo → distante</option><option value="dist">Mais distante → próximo</option></select></th></tr></thead><tbody id="proc-body"></tbody></table></div><div id="proc-pager" style="display:flex;gap:6px;align-items:center;justify-content:center;padding:14px;flex-wrap:wrap"></div>
+      <div class="card"><table><thead><tr><th style="width:26%;cursor:pointer;user-select:none" onclick="ordenarCliente()" title="Clique para ordenar por cliente (A→Z / Z→A)">Cliente <span id="cli-sort-arrow" style="font-size:10px;color:var(--muted)"></span></th><th style="width:150px">Processo</th><th style="width:22%">Assunto</th><th style="width:175px"><select id="filtroMov" onchange="renderProc()" style="font-weight:700;font-size:12px;border:none;background:transparent;color:inherit;max-width:170px;cursor:pointer;padding:0"><option value="">Última movimentação</option><option value="Concluso c/petição posterior s/despacho">Concluso c/petição posterior s/despacho</option><option value="Concluso">Concluso</option><option value="Petição">Petição</option><option value="Despacho/Sentença">Despacho/Sentença</option><option value="Intimação">Intimação</option><option value="__sem">Sem classificação</option></select></th><th style="width:120px;cursor:pointer;user-select:none" onclick="ordenarParado()" title="Clique para ordenar por dias sem movimentação (maior ↔ menor)">Sem movimentação há <span id="par-sort-arrow" style="font-size:10px;color:var(--muted)"></span></th><th style="width:110px"><select id="filtroOrigem" onchange="renderProc()" style="font-weight:700;font-size:12px;border:none;background:transparent;color:inherit;max-width:105px;cursor:pointer;padding:0"><option value="">Status</option><option value="astrea">astrea</option><option value="djen">djen</option><option value="atualizado">atualizado</option></select></th><th style="width:120px"><select id="ordenaPrazo" onchange="setOrdenaPrazo(this.value)" style="font-weight:700;font-size:12px;border:none;background:transparent;color:inherit;max-width:115px;cursor:pointer;padding:0" title="Ordenar pela data do prazo fatal"><option value="">Prazo fatal</option><option value="prox">Mais próximo → distante</option><option value="dist">Mais distante → próximo</option></select></th><th style="width:58px;text-align:center" title="Documentos no servidor (só visualização)">Docs</th></tr></thead><tbody id="proc-body"></tbody></table></div><div id="proc-pager" style="display:flex;gap:6px;align-items:center;justify-content:center;padding:14px;flex-wrap:wrap"></div>
     </section>
 
     <section id="s-proc-det" class="hidden">
@@ -346,8 +346,6 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
       <div class="agtools">
         <div class="switch"><button id="crm-sw-c" class="on" onclick="setCrmView('contatos')">Contatos</button><button id="crm-sw-f" onclick="setCrmView('captacao')">Captação (funil)</button></div>
         <button class="btn sm" style="margin-left:auto" onclick="abrirNovaTarefa()">+ Nova tarefa</button>
-        <!-- Atalho para o Banco Cora: abre o app do banco em nova aba (só-front, sem integração ainda) -->
-        <button class="btn sm" style="margin-left:8px;background:#FE3E6D;border-color:#FE3E6D;color:#fff" onclick="abrirCora()" title="Abrir o Banco Cora em nova aba">&#9673; Cora</button>
       </div>
       <div id="crm-contatos">
         <div class="kpis" id="crm-kpis"></div>
@@ -4674,6 +4672,29 @@ function _prazoAvisoHTML(prazoISO){
   return '<div style="font-size:9px;color:#7b1e3a;font-weight:600;line-height:1.1">'+txt+'</div>';
 }
 function setOrdenaPrazo(v){ window.__ordenaPrazo=v; renderProc(); }
+/* selo de pasta 📁 + MB por processo (só visualização): busca no servidor o censo
+   dos processos VISÍVEIS na página, em cache, sem travar a lista. */
+window.__censoDoc=window.__censoDoc||{};
+function _fmtMB(bytes){ if(!bytes) return '0'; var mb=bytes/1048576; if(mb>=100) return Math.round(mb)+' MB'; if(mb>=1) return mb.toFixed(1)+' MB'; var kb=bytes/1024; return Math.max(1,Math.round(kb))+' KB'; }
+function _pintaCenso(dig){ var el=document.getElementById('doc-'+dig); if(!el) return; var c=window.__censoDoc[dig]; if(!c) return;
+  if(c.n>0){ el.style.color='#C9A227'; el.innerHTML='📁<div class="note" style="margin:2px 0 0;font-size:10px;color:#8a6d1a;font-weight:700">'+_fmtMB(c.bytes)+'</div>'; }
+  else { el.style.color='#d3d8e0'; el.innerHTML='📂<div class="note" style="margin:2px 0 0;font-size:10px;color:#b9c0ca">vazio</div>'; }
+}
+async function carregarCensoVisivel(rows){
+  try{
+    var faltam=[]; (rows||[]).forEach(function(p){ var d=String(p.numero||'').replace(/\D/g,''); if(d.length>=16){ if(window.__censoDoc[d]) _pintaCenso(d); else faltam.push(d); } });
+    faltam=[...new Set(faltam)].slice(0,200); if(!faltam.length) return;
+    var tok=await docToken();
+    var r=await fetch('/api/docs?censo='+encodeURIComponent(faltam.join(',')),{headers:{Authorization:'Bearer '+tok}});
+    var j=await r.json().catch(function(){return {};});
+    if(!j||!j.counts) return; /* servidor antigo (sem bytes): ignora silenciosamente */
+    faltam.forEach(function(d){ window.__censoDoc[d]={n:(j.counts[d]||0), bytes:((j.bytes&&j.bytes[d])||0)}; _pintaCenso(d); });
+  }catch(e){}
+}
+/* etiquetas rápidas a partir da linha da lista: abre a ficha na seção de etiquetas */
+function etiquetarLinha(i){ var p=DADOS.processos[i]; if(!p) return; abrir(i);
+  setTimeout(function(){ var sec=document.getElementById('det-etq'); if(sec&&sec.scrollIntoView){ sec.scrollIntoView({behavior:'smooth',block:'center'}); var sel=document.getElementById('det-etq-sel'); if(sel) sel.focus(); } }, 350);
+}
 function renderProc(){
   var q=(document.getElementById("busca").value||"").toLowerCase();
   var sm=(document.getElementById("ordena")||{}).value||"";
@@ -4725,9 +4746,13 @@ function renderProc(){
     }else{
       pfHTML='<span class="note" style="margin:0">—</span>';
     }
-    tr.innerHTML='<td style="max-width:260px"><span style="font-weight:700;color:var(--navy)">'+esc(resumo3(p.cliente))+'</span><div style="font-size:12px;color:var(--muted);margin-top:2px">× '+(esc(resumo3(p.oponente))||'—')+'</div></td><td class="proc">'+p.numero+'</td><td style="font-size:12px">'+esc(p.tipo)+'<div style="margin-top:4px">'+etiquetasDoProc(p.numero)+'</div></td><td style="max-width:170px;white-space:normal" title="'+esc(um.slice(0,300))+'">'+(cm?'<span style="font-weight:600;color:var(--navy)">'+cm+'</span>':'<span style="font-size:12.5px">'+esc(um.slice(0,60))+'</span>')+'<div style="font-size:12px;color:var(--muted)">'+esc(p.data||'')+'</div></td><td style="text-align:center;white-space:nowrap">'+(function(){var d=(typeof diasParadoOficial==='function')?diasParadoOficial(p):null; if(d==null) return '<span class="note" style="margin:0">—</span>'; var c=d>=90?'#b5342b':(d>=60?'#8a6d1a':'#475569'); return '<span style="font-weight:700;color:'+c+'" title="Dias sem movimentação do juízo/cartório (não conta mov. das partes)">'+d+' dia'+(d===1?'':'s')+'</span>';})()+'</td><td><span class="b '+stCls(p.status)+'">'+esc(p.status||'—')+'</span><div style="margin-top:4px">'+origemBtnHTML(p)+'</div></td><td>'+pfHTML+'</td>';
+    var _clamp3='display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden';
+    var digD=String(p.numero||'').replace(/\D/g,'');
+    tr.innerHTML='<td style="max-width:220px"><div style="'+_clamp3+'"><span style="font-weight:700;color:var(--navy)">'+esc(resumo3(p.cliente))+'</span> <span style="font-size:12px;color:var(--muted)">× '+(esc(resumo3(p.oponente))||'—')+'</span></div></td><td class="proc">'+p.numero+'</td><td style="font-size:12px;max-width:220px"><div style="'+_clamp3+'">'+esc(p.tipo)+'</div><div style="margin-top:4px">'+etiquetasDoProc(p.numero)+'</div></td><td style="max-width:170px"><div style="'+_clamp3+'" title="'+esc(um.slice(0,300))+'">'+(cm?'<span style="font-weight:600;color:var(--navy)">'+cm+'</span>':'<span style="font-size:12.5px">'+esc(um.slice(0,120))+'</span>')+'</div><div style="font-size:12px;color:var(--muted)">'+esc(p.data||'')+'</div></td><td style="text-align:center;white-space:nowrap">'+(function(){var d=(typeof diasParadoOficial==='function')?diasParadoOficial(p):null; if(d==null) return '<span class="note" style="margin:0">—</span>'; var c=d>=90?'#b5342b':(d>=60?'#8a6d1a':'#475569'); return '<span style="font-weight:700;color:'+c+'" title="Dias sem movimentação do juízo/cartório (não conta mov. das partes)">'+d+' dia'+(d===1?'':'s')+'</span>';})()+'</td><td><span class="b '+stCls(p.status)+'">'+esc(p.status||'—')+'</span> <a onclick="event.stopPropagation();etiquetarLinha('+i+')" title="Etiquetas deste processo" style="cursor:pointer;color:#185FA5;font-size:12px">🏷</a><div style="margin-top:4px">'+origemBtnHTML(p)+'</div></td><td>'+pfHTML+'</td>'
+      +'<td style="text-align:center" onclick="event.stopPropagation()"><div id="doc-'+digD+'" title="Documentos no servidor" style="font-size:18px;line-height:1;color:#c3c9d4;cursor:default">📁<div class="note" style="margin:2px 0 0;font-size:10px">—</div></div></td>';
     b.appendChild(tr);
   });
+  carregarCensoVisivel(rows);
   var pager=document.getElementById("proc-pager");
   if(pager){
     var h='';
@@ -5815,13 +5840,26 @@ function renderCtlChips(){
   var el=document.getElementById('ctl-chips'); if(!el||!atual) return; el.innerHTML='';
   var toks=String(atual.ctl||'').split(/[,;\n]+/).map(function(s){return s.trim();}).filter(Boolean);
   toks.forEach(function(t){
-    var b=document.createElement('button');
-    b.style.cssText='border:none;border-radius:16px;padding:4px 11px;font-size:12px;cursor:pointer';
-    if(/@/.test(t)){ b.style.background='#e3edf7'; b.style.color='#185FA5'; b.textContent='✉ '+t;
-      b.onclick=function(){ window.open('https://mail.google.com/mail/?view=cm&fs=1&to='+encodeURIComponent(t),'_blank'); }; }
-    else { b.style.background='#e5f4ed'; b.style.color='#127a53'; b.textContent='📱 '+t;
-      b.onclick=function(){ var d=t.replace(/\D/g,''); if(d.length<=11)d='55'+d; window.open('https://wa.me/'+d,'_blank'); }; }
-    el.appendChild(b);
+    /* clicar no texto COPIA (igual ao número do processo); ícone ao lado ABRE
+       (✉ e-mail / 📲 WhatsApp) */
+    var wrap=document.createElement('span');
+    wrap.style.cssText='display:inline-flex;align-items:center;gap:4px;border-radius:16px;padding:3px 6px 3px 11px;font-size:12px';
+    var eMail=/@/.test(t);
+    wrap.style.background=eMail?'#e3edf7':'#e5f4ed';
+    var txt=document.createElement('span');
+    txt.style.cssText='cursor:pointer;color:'+(eMail?'#185FA5':'#127a53')+';border-bottom:1px dotted '+(eMail?'#9fbadb':'#9fd0b8');
+    txt.textContent=(eMail?'✉ ':'📞 ')+t;
+    txt.title='Clique para copiar';
+    txt.onclick=function(){ copiarNumero(this, t); };
+    wrap.appendChild(txt);
+    var act=document.createElement('a');
+    act.style.cssText='cursor:pointer;text-decoration:none;font-size:14px;line-height:1';
+    if(eMail){ act.textContent='↗'; act.title='Escrever e-mail'; act.style.color='#185FA5';
+      act.onclick=function(){ window.open('https://mail.google.com/mail/?view=cm&fs=1&to='+encodeURIComponent(t),'_blank'); }; }
+    else { act.textContent='📲'; act.title='Abrir no WhatsApp';
+      act.onclick=function(){ var d=t.replace(/\D/g,''); if(d.length<=11)d='55'+d; window.open('https://wa.me/'+d,'_blank'); }; }
+    wrap.appendChild(act);
+    el.appendChild(wrap);
   });
   var ed=document.createElement('button');
   ed.style.cssText='background:#f0f2f5;color:#697180;border:1px solid #e4e8ef;border-radius:16px;padding:4px 10px;font-size:12px;cursor:pointer';
