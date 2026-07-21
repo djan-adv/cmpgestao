@@ -563,7 +563,11 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
       <div><label>Valor (R$)</label><input id="cob-valor" inputmode="decimal" placeholder="0,00"></div>
       <div><label>Vencimento</label><input id="cob-venc" type="date" min="2000-01-01" max="2100-12-31"></div>
     </div>
-    <label style="margin-top:10px">Vincular a processo <span class="note" style="font-weight:400">— opcional (nº CNJ). Cria a pasta "Boletos" no processo.</span></label><input id="cob-proc" placeholder="Ex.: 0800000-00.2026.8.15.2001">
+    <label style="margin-top:10px">Vincular a processo ou pasta de assessoria <span class="note" style="font-weight:400">— opcional. Cria/usa a pasta "Boletos" lá (funciona também em casos sem nº CNJ, como Valtex, FF Dourado, Conceito — identificados só pelo CNPJ/CPF).</span></label>
+    <div style="position:relative">
+      <input id="cob-proc" placeholder="Nome do cliente, CNPJ/CPF do caso, ou nº do processo…" autocomplete="off" oninput="cobProcInput(this.value)" onblur="setTimeout(function(){var d=document.getElementById('cob-proc-drop');if(d)d.classList.remove('on');},150)">
+      <div id="cob-proc-drop" class="cm-drop"></div>
+    </div>
     <div class="foot"><button class="btn ghost" onclick="fecharNovaCobranca()">Cancelar</button><button class="btn" id="cob-btn" style="background:#FE3E6D;border-color:#FE3E6D" onclick="emitirCobranca()">Emitir cobrança</button><span id="cob-msg" class="note" style="margin-left:10px;align-self:center"></span></div>
   </div>
 </div>
@@ -8784,8 +8788,44 @@ async function finCarregarClientes(){
 function abrirNovaCobranca(){
   ['cob-desc','cob-valor','cob-venc','cob-doc','cob-novo-nome','cob-proc'].forEach(function(id){var e=document.getElementById(id); if(e) e.value='';});
   var m=document.getElementById('cob-msg'); if(m) m.textContent='';
+  window.__cobProcSel=null;
+  var dd=document.getElementById('cob-proc-drop'); if(dd){ dd.classList.remove('on'); dd.innerHTML=''; }
   document.getElementById('modal-cobranca').classList.remove('hidden');
   finCarregarClientes();
+}
+/* busca processo OU pasta de assessoria (caso sem CNJ, identificado só por
+   CNPJ/CPF — ex.: Valtex, FF Dourado, Conceito) para vincular o boleto */
+function cobProcInput(v){
+  window.__cobProcSel=null;
+  var dd=document.getElementById('cob-proc-drop'); if(!dd) return;
+  var q=String(v||'').trim().toLowerCase(); var qd=q.replace(/\D/g,'');
+  if(q.length<2){ dd.classList.remove('on'); dd.innerHTML=''; return; }
+  var lista=(DADOS.processos||[]).filter(function(p){
+    var alvo=(String(p.cliente||'')+' '+String(p.numero||'')+' '+String(p.oponente||'')).toLowerCase();
+    return alvo.indexOf(q)>-1 || (qd.length>=4 && String(p.numero||'').replace(/\D/g,'').indexOf(qd)>-1);
+  }).slice(0,12);
+  if(!lista.length){ dd.innerHTML='<div class="cm-item"><span class="note">Nada encontrado.</span></div>'; dd.classList.add('on'); return; }
+  dd.innerHTML=lista.map(function(p){
+    var i=DADOS.processos.indexOf(p);
+    var ehCaso=(typeof _ehCasoProc==='function')&&_ehCasoProc(p);
+    var rot=ehCaso?('Caso/assessoria — CNPJ/CPF '+esc(p.numero||'—')):esc(p.numero||'—');
+    return '<div class="cm-item" onclick="cobProcPick('+i+')"><b>'+esc(resumo3(p.cliente))+'</b><div class="cm-sub">'+rot+(p.tipo?(' · '+esc(p.tipo)):'')+'</div></div>';
+  }).join('');
+  dd.classList.add('on');
+}
+function cobProcPick(i){
+  var p=DADOS.processos[i]; if(!p) return;
+  window.__cobProcSel=p;
+  document.getElementById('cob-proc').value=(p.cliente||'')+(p.numero?(' — '+p.numero):'');
+  var dd=document.getElementById('cob-proc-drop'); if(dd){ dd.classList.remove('on'); dd.innerHTML=''; }
+}
+/* chave da pasta de Documentos de um processo/caso ESPECÍFICO (não depende da
+   ficha aberta em segundo plano — usa o próprio objeto escolhido no autocomplete) */
+function _docChaveProcObj(p){
+  if(!p) return '';
+  var dig=String(p.numero||'').replace(/\D/g,'');
+  if(dig) return dig;
+  return p._id?('caso-'+String(p._id).replace(/[^a-zA-Z0-9-]/g,'')):'';
 }
 function fecharNovaCobranca(){ document.getElementById('modal-cobranca').classList.add('hidden'); }
 /* mostra os campos certos conforme o cliente escolhido:
@@ -8827,18 +8867,21 @@ async function emitirCobranca(){
     var r=await fetch('/api/cora/cobrancas',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify(payload)});
     var j=await r.json();
     if(!r.ok||!j.ok){ msg.textContent=(j&&j.erro)||('Falha ('+r.status+').'); btn.disabled=false; btn.textContent=txt; return; }
-    /* vincular ao processo (opcional): cria a pasta "Boletos" e guarda o link do boleto */
-    var procVinc=((document.getElementById('cob-proc')||{}).value||'').replace(/\D/g,'');
-    if(procVinc.length>=16 && j.cobranca){ try{ await vincularBoletoProcesso(procVinc, j.cobranca, descricao); }catch(e){} }
+    /* vincular ao processo OU pasta de assessoria (opcional): cria a pasta
+       "Boletos" ali e guarda o link do boleto — funciona também em casos sem
+       nº CNJ, identificados só por CNPJ/CPF (Valtex, FF Dourado, Conceito...) */
+    if(window.__cobProcSel && j.cobranca){ try{ await vincularBoletoProcesso(window.__cobProcSel, j.cobranca, descricao); }catch(e){} }
     fecharNovaCobranca();
     await renderFinanceiro();
   }catch(e){ msg.textContent='Erro de rede. Tente de novo.'; }
   btn.disabled=false; btn.textContent=txt;
 }
-/* cria a pasta "Boletos" no processo e salva um atalho .txt com o link do boleto/PIX */
-async function vincularBoletoProcesso(dig, cob, descricao){
+/* cria a pasta "Boletos" no processo/caso e salva um atalho .txt com o link do
+   boleto/PIX. Aceita tanto processo com nº CNJ quanto pasta de assessoria (caso)
+   identificada só por CNPJ/CPF, ou sem nenhum número (usa o _id do caso). */
+async function vincularBoletoProcesso(p, cob, descricao){
   try{
-    var chave=(typeof _docChaveProc==='function')?_docChaveProc(dig):dig;
+    var chave=_docChaveProcObj(p); if(!chave) return;
     var tok=await docToken();
     await fetch('/api/docs',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({path:chave+'/Boletos', mkdir:true})});
     var conteudo='Boleto emitido pelo sistema\n'+(descricao||'')+'\nVencimento: '+(cob.vencimento||'')+'\nValor: R$ '+((cob.valor_centavos||0)/100).toFixed(2).replace('.',',')+'\n'
@@ -8846,7 +8889,7 @@ async function vincularBoletoProcesso(dig, cob, descricao){
     var nome='boleto-'+(cob.vencimento||'')+'-'+((cob.valor_centavos||0)/100).toFixed(0)+'.txt';
     var b64=btoa(unescape(encodeURIComponent(conteudo)));
     await fetch('/api/docs',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({path:chave+'/Boletos/'+nome, b64:b64})});
-    try{ delete window.__censoDoc[dig]; }catch(e){}
+    try{ delete window.__censoDoc[chave]; }catch(e){}
   }catch(e){ console.warn('vincularBoletoProcesso:',e&&e.message||e); }
 }
 
