@@ -551,13 +551,16 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
     <h2>&#9673; Nova cobrança (Cora)</h2>
     <p class="note" style="margin-top:0">Gera um boleto com PIX pelo Banco Cora. Quando o cliente pagar, a baixa é automática e o valor entra no financeiro dele.</p>
     <label>Cliente</label>
-    <select id="cob-cliente"><option value="">Carregando clientes…</option></select>
+    <select id="cob-cliente" onchange="cobClienteMudou()"><option value="">Carregando clientes…</option></select>
+    <div id="cob-novo-nome-box" style="display:none;margin-top:8px"><label>Nome do cliente novo</label><input id="cob-novo-nome" placeholder="Nome completo / razão social"></div>
+    <div id="cob-doc-box" style="margin-top:8px"><label>CPF / CNPJ <span class="note" style="font-weight:400">— obrigatório para o boleto</span></label><input id="cob-doc" inputmode="numeric" placeholder="Só números"></div>
     <label style="margin-top:10px">Descrição da cobrança</label>
     <input id="cob-desc" placeholder="Ex.: Honorários contratuais — parcela 1/3">
     <div class="row2">
       <div><label>Valor (R$)</label><input id="cob-valor" inputmode="decimal" placeholder="0,00"></div>
       <div><label>Vencimento</label><input id="cob-venc" type="date" min="2000-01-01" max="2100-12-31"></div>
     </div>
+    <label style="margin-top:10px">Vincular a processo <span class="note" style="font-weight:400">— opcional (nº CNJ). Cria a pasta "Boletos" no processo.</span></label><input id="cob-proc" placeholder="Ex.: 0800000-00.2026.8.15.2001">
     <div class="foot"><button class="btn ghost" onclick="fecharNovaCobranca()">Cancelar</button><button class="btn" id="cob-btn" style="background:#FE3E6D;border-color:#FE3E6D" onclick="emitirCobranca()">Emitir cobrança</button><span id="cob-msg" class="note" style="margin-left:10px;align-self:center"></span></div>
   </div>
 </div>
@@ -8377,34 +8380,53 @@ async function finCarregarClientes(){
     var r=await window.__sb.from('contatos').select('id,nome,cpf_cnpj').order('nome');
     var rows=(r&&r.data)||[];
     FIN_CLIENTES={}; rows.forEach(function(c){ FIN_CLIENTES[c.id]={nome:c.nome,doc:c.cpf_cnpj||''}; });
+    window.__finCliDoc={};
     if(sel){
-      sel.innerHTML='<option value="">Selecione o cliente…</option>'+rows.map(function(c){
+      sel.innerHTML='<option value="">Selecione o cliente…</option><option value="__novo">➕ Novo cliente (digitar CPF/CNPJ)</option>'+rows.map(function(c){
         var doc=String(c.cpf_cnpj||'').replace(/\D/g,''); var falta=(doc.length!==11&&doc.length!==14)?' (sem CPF/CNPJ)':'';
+        window.__finCliDoc[c.id]=doc;
         return '<option value="'+c.id+'">'+finEsc(c.nome)+falta+'</option>';
       }).join('');
     }
+    cobClienteMudou();
     /* re-render pra trocar "(cliente)" pelos nomes reais */
     finRenderTabela();
   }catch(e){ if(sel) sel.innerHTML='<option value="">Falha ao carregar clientes</option>'; }
 }
 
 function abrirNovaCobranca(){
-  document.getElementById('cob-desc').value='';
-  document.getElementById('cob-valor').value='';
-  document.getElementById('cob-venc').value='';
+  ['cob-desc','cob-valor','cob-venc','cob-doc','cob-novo-nome','cob-proc'].forEach(function(id){var e=document.getElementById(id); if(e) e.value='';});
   var m=document.getElementById('cob-msg'); if(m) m.textContent='';
   document.getElementById('modal-cobranca').classList.remove('hidden');
   finCarregarClientes();
 }
 function fecharNovaCobranca(){ document.getElementById('modal-cobranca').classList.add('hidden'); }
-
+/* mostra os campos certos conforme o cliente escolhido:
+   - "Novo cliente": pede Nome + CPF/CNPJ
+   - cliente da base SEM doc: pede o CPF/CNPJ para completar
+   - cliente da base COM doc: esconde o campo (já tem) */
+function cobClienteMudou(){
+  var v=(document.getElementById('cob-cliente')||{}).value||'';
+  var nomeBox=document.getElementById('cob-novo-nome-box'), docBox=document.getElementById('cob-doc-box');
+  if(v==='__novo'){ if(nomeBox)nomeBox.style.display='block'; if(docBox)docBox.style.display='block'; return; }
+  if(nomeBox)nomeBox.style.display='none';
+  var doc=(window.__finCliDoc&&window.__finCliDoc[v])||'';
+  var temDoc=(doc.length===11||doc.length===14);
+  if(docBox)docBox.style.display=(v&&temDoc)?'none':'block';
+}
 async function emitirCobranca(){
   var msg=document.getElementById('cob-msg'), btn=document.getElementById('cob-btn');
   var contato_id=document.getElementById('cob-cliente').value;
   var descricao=(document.getElementById('cob-desc').value||'').trim();
   var vencimento=document.getElementById('cob-venc').value;
   var centavos=finCentavos(document.getElementById('cob-valor').value);
-  if(!contato_id){ msg.textContent='Selecione o cliente.'; return; }
+  var doc=((document.getElementById('cob-doc')||{}).value||'').replace(/\D/g,'');
+  var novoNome=((document.getElementById('cob-novo-nome')||{}).value||'').trim();
+  var ehNovo=(contato_id==='__novo');
+  if(!contato_id){ msg.textContent='Selecione o cliente (ou "Novo cliente").'; return; }
+  if(ehNovo && !novoNome){ msg.textContent='Informe o nome do cliente novo.'; return; }
+  var docBoxVisivel=(document.getElementById('cob-doc-box')||{}).style.display!=='none';
+  if(docBoxVisivel && doc.length!==11 && doc.length!==14){ msg.textContent='Informe um CPF (11) ou CNPJ (14 dígitos).'; return; }
   if(!descricao){ msg.textContent='Descreva a cobrança.'; return; }
   if(!(centavos>0)){ msg.textContent='Informe um valor válido.'; return; }
   if(centavos<500){ msg.textContent='O Cora exige valor mínimo de R$ 5,00 por cobrança.'; return; }
@@ -8412,13 +8434,33 @@ async function emitirCobranca(){
   btn.disabled=true; var txt=btn.textContent; btn.textContent='Emitindo…'; msg.textContent='';
   try{
     var tok=await finToken();
-    var r=await fetch('/api/cora/cobrancas',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({contato_id:contato_id,descricao:descricao,valor_centavos:centavos,vencimento:vencimento})});
+    var payload={descricao:descricao,valor_centavos:centavos,vencimento:vencimento};
+    if(ehNovo){ payload.nome=novoNome; payload.cpf_cnpj=doc; }
+    else { payload.contato_id=contato_id; if(doc.length===11||doc.length===14) payload.cpf_cnpj=doc; }
+    var r=await fetch('/api/cora/cobrancas',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify(payload)});
     var j=await r.json();
     if(!r.ok||!j.ok){ msg.textContent=(j&&j.erro)||('Falha ('+r.status+').'); btn.disabled=false; btn.textContent=txt; return; }
+    /* vincular ao processo (opcional): cria a pasta "Boletos" e guarda o link do boleto */
+    var procVinc=((document.getElementById('cob-proc')||{}).value||'').replace(/\D/g,'');
+    if(procVinc.length>=16 && j.cobranca){ try{ await vincularBoletoProcesso(procVinc, j.cobranca, descricao); }catch(e){} }
     fecharNovaCobranca();
     await renderFinanceiro();
   }catch(e){ msg.textContent='Erro de rede. Tente de novo.'; }
   btn.disabled=false; btn.textContent=txt;
+}
+/* cria a pasta "Boletos" no processo e salva um atalho .txt com o link do boleto/PIX */
+async function vincularBoletoProcesso(dig, cob, descricao){
+  try{
+    var chave=(typeof _docChaveProc==='function')?_docChaveProc(dig):dig;
+    var tok=await docToken();
+    await fetch('/api/docs',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({path:chave+'/Boletos', mkdir:true})});
+    var conteudo='Boleto emitido pelo sistema\n'+(descricao||'')+'\nVencimento: '+(cob.vencimento||'')+'\nValor: R$ '+((cob.valor_centavos||0)/100).toFixed(2).replace('.',',')+'\n'
+      +(cob.boleto_url?('Boleto: '+cob.boleto_url+'\n'):'')+(cob.linha_digitavel?('Linha digitável: '+cob.linha_digitavel+'\n'):'')+(cob.pix_emv?('PIX copia-e-cola: '+cob.pix_emv+'\n'):'');
+    var nome='boleto-'+(cob.vencimento||'')+'-'+((cob.valor_centavos||0)/100).toFixed(0)+'.txt';
+    var b64=btoa(unescape(encodeURIComponent(conteudo)));
+    await fetch('/api/docs',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({path:chave+'/Boletos/'+nome, b64:b64})});
+    try{ delete window.__censoDoc[dig]; }catch(e){}
+  }catch(e){ console.warn('vincularBoletoProcesso:',e&&e.message||e); }
 }
 
 /* ---- NFS-e (Fase 2a): fila de notas dos pagamentos recebidos ----

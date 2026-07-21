@@ -44,11 +44,14 @@ export async function POST(request) {
 
   let body = {}
   try { body = await request.json() } catch (e) {}
-  const contato_id = String(body.contato_id || '').trim()
+  let contato_id = String(body.contato_id || '').trim()
   const descricao = String(body.descricao || '').trim()
   const vencimento = String(body.vencimento || '').trim()
   const centavos = parseInt(body.valor_centavos, 10)
-  if (!contato_id) return Response.json({ erro: 'Selecione o cliente.' }, { status: 400 })
+  // CPF/CNPJ digitado no formulário (permite emitir p/ cliente novo ou completar cadastro)
+  const docDigitado = soDigitos(body.cpf_cnpj)
+  const nomeDigitado = String(body.nome || '').trim()
+  const emailDigitado = String(body.email || '').trim()
   if (!descricao) return Response.json({ erro: 'Descreva a cobrança.' }, { status: 400 })
   if (!(centavos > 0)) return Response.json({ erro: 'Valor inválido.' }, { status: 400 })
   // o Cora rejeita amount < 500 (R$ 5,00) — validamos aqui com mensagem amigável
@@ -56,11 +59,33 @@ export async function POST(request) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(vencimento)) return Response.json({ erro: 'Vencimento inválido (use AAAA-MM-DD).' }, { status: 400 })
 
   const sb = sbUsuario(jwt)
-  const { data: c, error: eC } = await sb.from('contatos').select('id,nome,email,cpf_cnpj').eq('id', contato_id).single()
-  if (eC || !c) return Response.json({ erro: 'Cliente não encontrado.' }, { status: 404 })
-  const doc = soDigitos(c.cpf_cnpj)
+  let c = null
+  if (contato_id) {
+    const { data, error } = await sb.from('contatos').select('id,nome,email,cpf_cnpj').eq('id', contato_id).single()
+    if (error || !data) return Response.json({ erro: 'Cliente não encontrado.' }, { status: 404 })
+    c = data
+  }
+  // documento final: o do cadastro, ou o digitado agora
+  let doc = soDigitos(c && c.cpf_cnpj)
+  if (doc.length !== 11 && doc.length !== 14) doc = docDigitado
   if (doc.length !== 11 && doc.length !== 14) {
-    return Response.json({ erro: 'O cliente precisa de CPF (11 dígitos) ou CNPJ (14 dígitos) cadastrado para emitir a cobrança.' }, { status: 400 })
+    return Response.json({ erro: 'Informe um CPF (11 dígitos) ou CNPJ (14 dígitos) para emitir a cobrança.' }, { status: 400 })
+  }
+  // cliente NOVO (sem contato_id): cria o contato na hora com o que foi digitado —
+  // permite emitir boleto sem nenhum processo cadastrado
+  if (!c) {
+    if (!nomeDigitado) return Response.json({ erro: 'Informe o nome do cliente.' }, { status: 400 })
+    let esc = null
+    try { const pf = await sb.from('usuarios').select('escritorio_id').eq('id', user.id).single(); esc = pf && pf.data && pf.data.escritorio_id } catch (e) {}
+    const reg = { nome: nomeDigitado, cpf_cnpj: doc, origem: 'cobrança avulsa' }
+    if (emailDigitado) reg.email = emailDigitado
+    if (esc) reg.escritorio_id = esc
+    const ins = await sb.from('contatos').insert(reg).select('id,nome,email,cpf_cnpj').single()
+    if (ins.error) return Response.json({ erro: 'Falha ao criar o cliente: ' + ins.error.message }, { status: 500 })
+    c = ins.data; contato_id = c.id
+  } else if (soDigitos(c.cpf_cnpj).length !== 11 && soDigitos(c.cpf_cnpj).length !== 14 && (doc.length === 11 || doc.length === 14)) {
+    // contato existia sem doc: completa o cadastro com o CPF/CNPJ digitado
+    try { await sb.from('contatos').update({ cpf_cnpj: doc }).eq('id', contato_id) } catch (e) {}
   }
 
   // o header Idempotency-Key do Cora exige um UUID puro; o code é nossa referência interna
