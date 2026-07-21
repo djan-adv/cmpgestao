@@ -7646,6 +7646,9 @@ async function desativarAcompanhamento(){
   <input id="atz-assunto" style="width:100%;box-sizing:border-box;margin-bottom:8px" />
   <label>Mensagem (revise e edite antes de enviar)</label>
   <textarea id="atz-corpo" rows="12" style="width:100%;box-sizing:border-box;font-family:inherit;font-size:13px"></textarea>
+  <div id="atz-divulg-box" style="margin-top:8px;font-size:13px">
+    <label style="cursor:pointer"><input type="checkbox" id="atz-divulg-on" onchange="_atzAplicarDivulgacao()"> 📢 Anexar divulgação das áreas de atuação (opcional — não marque se não for um bom momento para o cliente)</label>
+  </div>
   <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
     <button class="btn" style="background:#0F6E56;color:#fff" onclick="enviarAgoraAtualizacao()" title="Envia direto pelo contato@cmpadvogados.com.br (requer o envio pelo servidor ativado)">Enviar agora (contato@)</button>
     <button class="btn ghost" onclick="abrirNoGmail()">Abrir no Gmail</button>
@@ -7836,6 +7839,17 @@ function _gerarRascunhoAtualizacao(){
   }
   var el=document.getElementById('atz-corpo'); if(el) el.value=corpo;
   var as=document.getElementById('atz-assunto'); if(as) as.value=assunto;
+  _atzAplicarDivulgacao();
+}
+/* divulgação das áreas de atuação: um P.S. opcional no fim do e-mail, ligado por
+   um checkbox — cada envio o advogado decide se é um bom momento pra incluir
+   (ex.: não marcar se o cliente estiver insatisfeito/mal humorado). */
+var _DIVULG_TXT='\n\n— — —\nPS: você sabia que também atuamos em Direito Imobiliário, Trabalhista, Tributário, Previdenciário e Empresarial? Conheça: https://gestao.cmpadvogados.com.br/areas-atuacao.html';
+function _atzAplicarDivulgacao(){
+  var chk=document.getElementById('atz-divulg-on'), el=document.getElementById('atz-corpo');
+  if(!chk||!el) return;
+  var semTexto=el.value.split(_DIVULG_TXT).join('');
+  el.value=chk.checked?(semTexto+_DIVULG_TXT):semTexto;
 }
 /* liga/desliga o "modo vara" do modal (mesmo formulário, sem os controles de cliente) */
 function _atzSetVara(on){
@@ -7843,6 +7857,8 @@ function _atzSetVara(on){
   ['atz-modo-row','atz-qtd-box'].forEach(function(id){ var e=document.getElementById(id); if(e) e.style.display=on?'none':''; });
   var pb=document.getElementById('atz-pedido-box'); if(pb && on) pb.style.display='none';
   var cc=document.getElementById('atz-cc-box'); if(cc) cc.style.display=on?'':'none'; /* cópia ao cliente: só no modo vara */
+  var dv=document.getElementById('atz-divulg-box'); if(dv) dv.style.display=on?'none':''; /* divulgação: nunca pra vara/cartório */
+  if(on){ var chk=document.getElementById('atz-divulg-on'); if(chk&&chk.checked){ chk.checked=false; _atzAplicarDivulgacao(); } }
 }
 /* abre o MESMO formulário do e-mail de cliente, mas para a VARA (texto pronto do balcão) */
 function abrirEmailVara(p, email, assunto, corpo){
@@ -7868,6 +7884,7 @@ async function abrirAtualizarCliente(numero){
   document.getElementById('atz-proc').innerHTML='Processo nº <b>'+esc(numero)+'</b>'+(p.cliente?(' — '+esc(nomeBonito(p.cliente))):'');
   var q=document.getElementById('atz-qtd'); if(q) q.value='5';
   var mi=document.querySelector('input[name="atz-modo"][value="informar"]'); if(mi) mi.checked=true;
+  var dvChk=document.getElementById('atz-divulg-on'); if(dvChk) dvChk.checked=false;
   /* e-mail: primeiro o da FICHA (contatos_livres, ex.: puxado da procuração); cadastro é reserva */
   var emailFicha=(String(p.ctl||'').split(/[,;\n]+/).map(function(s){return s.trim();}).filter(function(t){return /@/.test(t);})[0])||'';
   document.getElementById('atz-email').value=emailFicha;
