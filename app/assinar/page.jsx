@@ -130,7 +130,8 @@ export default function AssinarProcuracao() {
       if (error) { setGateMsg(error.message); return }
       if (!data || !data.length) { setGateMsg('Link inválido ou expirado.'); return }
       setDoc(data[0])
-      signSb.rpc('marcar_visto', { tok: p.s })
+      // (o .then é obrigatório: no supabase-js a chamada só dispara quando aguardada)
+      signSb.rpc('marcar_visto', { tok: p.s }).then(() => {})
     })
   }, [])
 
@@ -291,7 +292,8 @@ export default function AssinarProcuracao() {
 
   return (
     <div className="asn-root">
-      <style>{CSS}</style>
+      {/* dangerouslySetInnerHTML evita mismatch de hidratação (o SSR escapa as aspas do CSS) */}
+      <style dangerouslySetInnerHTML={{ __html: CSS }} />
       <link rel="preconnect" href="https://fonts.googleapis.com" />
       <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;600;700&family=Dancing+Script:wght@700&family=Great+Vibes&family=Sacramento&display=swap" rel="stylesheet" />
       <header className="asn-topo">

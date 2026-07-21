@@ -133,7 +133,8 @@ export default function AssinarDocumento() {
 
   return (
     <div className="asd-root">
-      <style>{CSS}</style>
+      {/* dangerouslySetInnerHTML evita mismatch de hidratação (o SSR escapa as aspas do CSS) */}
+      <style dangerouslySetInnerHTML={{ __html: CSS }} />
       <link rel="preconnect" href="https://fonts.googleapis.com" />
       <link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&family=Great+Vibes&family=Sacramento&display=swap" rel="stylesheet" />
       <header className="asd-topo">
