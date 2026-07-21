@@ -2176,14 +2176,13 @@ function _faseCtrlHTML(p){
   var atualF=faseDoProc(p); var manual=!!(p&&p.fase_manual); var chute=guessFase(p);
   var n=String(p.numero||'').replace(/'/g,"");
   var opts=FASES_META.map(function(f){ return '<option value="'+f[0]+'"'+(f[0]===atualF?' selected':'')+'>'+esc(f[1])+'</option>'; }).join('');
-  var badge='<span style="display:inline-block;border-radius:20px;padding:2px 10px;font-size:11px;font-weight:700;color:#fff;background:'+_corFase(atualF)+'">'+esc(_nomeFase(atualF))+'</span>';
-  var origem = manual
-    ? '<span class="note" style="margin:0;color:#0F6E56">✓ fase definida manualmente</span> <a onclick="limparFaseManual(\''+n+'\')" style="cursor:pointer;color:#185FA5;font-size:11px">(voltar ao automático)</a>'
-    : '<span class="note" style="margin:0">fase estimada automaticamente'+(chute!==atualF?'':'')+'</span>';
+  var cor=_corFase(atualF);
+  /* só o botão-drop, já na cor da fase (sem selo nem texto repetido). Ao escolher,
+     a fase é travada e o próprio select muda de cor. */
   return '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:12.5px">'+
-    '<span style="color:var(--muted)">Fase:</span> '+badge+
-    ' <select id="fase-sel" onchange="definirFaseManual(\''+n+'\', this.value)" style="width:auto;max-width:220px;font-size:12px;padding:3px 8px">'+opts+'</select> '+
-    origem+'</div>';
+    '<span style="color:var(--muted)">Fase:</span>'+
+    ' <select id="fase-sel" onchange="definirFaseManual(\''+n+'\', this.value)" title="'+(manual?'Fase definida manualmente':'Fase estimada automaticamente')+'" style="width:auto;max-width:230px;font-size:12.5px;font-weight:700;color:#fff;background:'+cor+';border:1px solid '+cor+';border-radius:16px;padding:4px 12px;cursor:pointer">'+opts+'</select>'+
+    (manual?' <a onclick="limparFaseManual(\''+n+'\')" style="cursor:pointer;color:#185FA5;font-size:11px" title="Voltar a estimar automaticamente">↺ auto</a>':'')+'</div>';
 }
 /* grava a fase manual no banco (coluna processos.fase) — passa a valer sobre o chute */
 function definirFaseManual(num, fid){
