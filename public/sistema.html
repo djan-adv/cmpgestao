@@ -1462,7 +1462,7 @@ function abrir(i){
   html+='<div class="card" style="position:relative">'+honQuadroHTML(p)+'<div class="parties" style="padding-right:0"><span style="display:inline-block;vertical-align:top;line-height:1.15"><span class="cli">'+nomeDisplay(p.cliente)+'</span><br><span class="tag-cli" style="margin:3px 0 0;font-size:9px;padding:1px 7px;display:inline-block">cliente principal</span></span>'+
     '<span class="vs" style="vertical-align:top">×</span><span style="display:inline-block;vertical-align:top;line-height:1.15"><span class="op">'+nomeDisplay(p.oponente||'—')+'</span><br><span style="font-size:9.5px;color:var(--muted);display:inline-block;margin-top:3px">parte contrária</span></span>'+
     '<button class="btn sm ghost" style="margin-left:12px;font-size:11px;padding:4px 9px;vertical-align:top" onclick="editarPartesContatos()" title="Editar as partes, o assunto e os contatos do processo — tudo num lugar só">✎ editar dados</button>'+
-    '<button class="btn sm ghost" style="margin-left:6px;font-size:11px;padding:4px 9px;vertical-align:top" onclick="puxarNomeCliente()" title="Lê a procuração (ou a petição inicial) e sugere o nome completo do cliente, incluindo o casal">👤 Puxar nome</button>'+
+    '<button class="btn sm ghost" style="margin-left:6px;font-size:11px;padding:4px 9px;vertical-align:top" onclick="atualizarDadosCliente()" title="Lê a procuração e a petição inicial (Word e PDF) e sugere o nome completo, o e-mail e o telefone do cliente">🔄 Atualizar dados do cliente</button>'+
     '<button class="btn sm ghost" style="margin-left:6px;font-size:11px;padding:4px 9px;vertical-align:top" onclick="inverterPolos()" title="Trocar cliente ↔ oponente (o cliente fica sempre à esquerda)">⇄ inverter polos</button>'+
     ((!p.oponente||!String(p.oponente).trim())?'<button class="btn sm ghost" style="margin-left:6px;font-size:11px;padding:4px 9px;vertical-align:top" onclick="sugerirPartes()" title="Ler o histórico do processo e sugerir os nomes das partes que estão faltando">✨ sugerir partes pelo histórico</button>':'')+'</div>'+
     '<div class="subhead" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">'+_numFichaHTML(p)+
@@ -6099,13 +6099,8 @@ function renderCtlChips(){
   ed.textContent=toks.length?'+ inserir contatos':'+ telefones/e-mails do cliente';
   ed.onclick=editarCtl;
   el.appendChild(ed);
-  /* o "✎ editar contatos" foi unificado no "✎ editar dados" do topo da ficha */
-  var ed3=document.createElement('button');
-  ed3.style.cssText='background:#eef4fb;color:#185FA5;border:1px solid #cfe0f2;border-radius:16px;padding:4px 10px;font-size:12px;cursor:pointer';
-  ed3.textContent='🔎 Puxar contato do cliente';
-  ed3.title='Lê a procuração e, se faltar, a petição inicial (PDF) do processo e sugere e-mail/telefone do cliente';
-  ed3.onclick=puxarContatoProcuracao;
-  el.appendChild(ed3);
+  /* "Puxar nome" e "Puxar contato" foram unificados no botão "🔄 Atualizar dados
+     do cliente" do topo da ficha (lê nome + e-mail + telefone dos documentos) */
 }
 /* edição completa em janela: todos os campos visíveis, edita-se o que quiser */
 function editarPartesContatos(){
@@ -6295,6 +6290,74 @@ function _extrairNomesOutorgante(txt){
   return nomes;
 }
 /* lê procuração (ou petição inicial) e sugere o nome do cliente (inclui casal) para confirmação */
+/* ===== Atualizar dados do cliente (nome + e-mail + telefone numa passada só) =====
+   Une o antigo "Puxar nome" e "Puxar contato": lê procuração e petição inicial
+   (Word e PDF; nomes de arquivo podem começar com número ou ser só "inicial"),
+   varrendo os demais documentos se preciso. */
+async function atualizarDadosCliente(){
+  if(!atual){ return; }
+  var dig=_docChaveProc(atual.numero); if(!dig){ alert('Salve o caso primeiro (sem identificação ainda).'); return; }
+  var ov=document.createElement('div'); ov.id='pcr-load';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(20,28,40,.35);z-index:100;display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px';
+  ov.textContent='Lendo procuração e petição inicial (nome, e-mail e telefone)…'; document.body.appendChild(ov);
+  try{
+    var tok=await docToken();
+    async function _lerDoc(rel){ if(!rel) return ''; var r=await fetch('/api/docs?file='+encodeURIComponent(dig+'/'+rel),{headers:{Authorization:'Bearer '+tok}}); if(!r.ok) return ''; var t=await _extrairTextoDoc(await r.arrayBuffer()); return (t&&t.replace(/\s/g,'').length>=20)?t:''; }
+    function _uniq(a){ var s={},o=[]; a.forEach(function(x){ var k=String(x).toLowerCase(); if(x&&!s[k]){s[k]=1;o.push(x);} }); return o; }
+    /* extrai NOME + contatos de um texto de documento */
+    function _colher(txt, acc){
+      /* nome: janela do outorgante; se vazia, janela do cliente pelo nome atual */
+      var jw=_janelaOutorgante(txt); var janN=jw.janela;
+      var nomes=_extrairNomesOutorgante(janN);
+      if(!nomes.length){ janN=_janelaCliente(txt,(atual&&atual.cliente)||''); nomes=_extrairNomesOutorgante(janN); }
+      if(nomes.length){ var cp=nomes.slice(0,2).join(' e '); if(acc.nomes.indexOf(cp)<0) acc.nomes.push(cp); }
+      /* contatos: primeiro na janela do outorgante (cliente); se nada, no doc inteiro */
+      var em=_acharEmails(jw.janela), tl=_acharTelefones(jw.janela);
+      if(!em.length && !tl.length){ em=_acharEmails(txt); tl=_acharTelefones(txt); acc.doctodo=true; }
+      acc.emails=acc.emails.concat(em); acc.tels=acc.tels.concat(tl);
+    }
+    var acc={nomes:[], emails:[], tels:[], doctodo:false, fontes:[]};
+    /* histórico dá o nome do casal mesmo sem documento */
+    var ch=(typeof _casalHistorico==='function')?_casalHistorico(atual):''; if(ch && acc.nomes.indexOf(ch)<0){ acc.nomes.push(ch); }
+    /* 1) procuração  2) petição inicial (nomes com número / "inicial") */
+    var relP=await _acharDocRel(dig,/procura/i);
+    if(relP){ var tP=await _lerDoc(relP); if(tP){ _colher(tP,acc); acc.fontes.push('procuração'); } }
+    var relI=await _acharDocRel(dig,/inicial|peti[çc][aã]o/i);
+    if(relI && relI!==relP){ var tI=await _lerDoc(relI); if(tI){ _colher(tI,acc); acc.fontes.push('petição inicial'); } }
+    /* 3) se ainda falta nome OU contato, varre os demais (Word primeiro) */
+    if(!acc.nomes.length || !acc.emails.length || !acc.tels.length){
+      try{
+        var todos=await _listarArquivosProc(dig);
+        var docs=todos.filter(function(rr){ return /\.(docx?|pdf|html?)$/i.test(rr) && rr!==relP && rr!==relI; });
+        docs.sort(function(a,b){ function sc(x){ return /procura/i.test(x)?0:(/inicial|peti[çc]/i.test(x)?1:(/\.docx?$/i.test(x)?2:3)); } return sc(a)-sc(b); });
+        for(var di=0; di<Math.min(docs.length,8); di++){
+          if(acc.nomes.length && acc.emails.length && acc.tels.length) break;
+          var tD=await _lerDoc(docs[di]); if(!tD) continue;
+          var antes=acc.nomes.length+acc.emails.length+acc.tels.length;
+          _colher(tD,acc);
+          if(acc.nomes.length+acc.emails.length+acc.tels.length>antes) acc.fontes.push('doc "'+docs[di].split('/').pop()+'"');
+        }
+      }catch(e){}
+    }
+    acc.emails=_uniq(acc.emails); acc.tels=_uniq(acc.tels);
+    if(!acc.nomes.length && !acc.emails.length && !acc.tels.length){
+      alert('Não encontrei nome, e-mail nem telefone nos documentos deste processo.\n\n(Se os arquivos forem imagem escaneada, não há texto para extrair — use "✎ editar dados".)'); return;
+    }
+    /* preenche o nome sugerido no formulário de partes (como o antigo "Puxar nome") */
+    if(acc.nomes.length){
+      if(typeof sugerirPartes==='function') try{ sugerirPartes(); }catch(e){}
+      var elc=document.getElementById('partes-cliente'); if(elc) elc.value=acc.nomes[0];
+      var intro=document.getElementById('partes-intro'); if(intro) intro.innerHTML='Sugestão de <b>nome do cliente</b> (via '+esc(acc.fontes[0]||'documentos')+'): <b>'+esc(acc.nomes[0])+'</b>. Confira/edite e salve.'+(acc.nomes.length>1?(' <span class="note">Outra opção: '+acc.nomes.slice(1).map(function(n){return esc(n);}).join(' · ')+'</span>'):'');
+    }
+    /* modal de contatos (e-mail/telefone) para adicionar ao processo */
+    if(acc.emails.length || acc.tels.length){
+      _modalConfirmProcuracao(acc.fontes.join(' + ')||'documentos', acc.emails, acc.tels, !acc.doctodo);
+    } else if(acc.nomes.length){
+      alert('Nome sugerido preenchido acima. Não encontrei e-mail/telefone nos documentos — confira se a procuração tem a qualificação com contato.');
+    }
+  }catch(e){ alert('Erro ao ler os documentos: '+(e&&e.message||e)); }
+  finally{ var l=document.getElementById('pcr-load'); if(l) l.remove(); }
+}
 async function puxarNomeCliente(){
   if(!atual){ return; }
   var dig=_docChaveProc(atual.numero); if(!dig){ alert('Salve o caso primeiro (sem identificação ainda).'); return; }
