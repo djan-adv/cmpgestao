@@ -6688,8 +6688,21 @@ function _audienciasFuturasDoHist(p){
 }
 function _hojeISO(){ var d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 function _diaSeguinteISO(iso){ var d=new Date(iso+'T12:00:00'); d.setDate(d.getDate()+1); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+/* procura no histórico um LINK de sala virtual/videoconferência ligado à audiência
+   (Zoom, Google Meet, Teams, Webex, ou links de sala dos tribunais). */
+function _linkAudiencia(p){
+  var arr=(p&&p.hist_full)||[];
+  for(var i=0;i<arr.length;i++){ var t=String((arr[i]&&arr[i].texto)||'');
+    if(!/audi[êe]ncia|videoconfer|sala virtual|telepresen|link/i.test(t)) continue;
+    var m=t.match(/https?:\/\/[^\s"'<>)]+/i);
+    if(m){ var u=m[0].replace(/[.,;)]+$/,''); if(/zoom|meet\.google|teams\.microsoft|webex|whereby|jitsi|gov\.br|jus\.br|conferencia|sala|vc\.|videocon/i.test(u) || /audi[êe]ncia|videoconfer|sala virtual/i.test(t)) return u; }
+  }
+  return '';
+}
 function renderAudienciaSugestao(){
   var el=document.getElementById('obs-audiencia'); if(!el||!atual){ if(el) el.innerHTML=''; return; }
+  var _linkAud=_linkAudiencia(atual);
+  function _btnLink(){ return _linkAud?(' <a href="'+esc(_linkAud)+'" target="_blank" rel="noopener" style="background:#185FA5;color:#fff;border-radius:8px;padding:3px 10px;font-size:11.5px;font-weight:700;text-decoration:none;white-space:nowrap" title="Abrir a sala/link da audiência">🔗 abrir link da audiência</a>'):''; }
   var dig=String(atual.numero||'').replace(/\D/g,''), hoje=_hojeISO(), html='';
   var auds=_audienciasFuturasDoHist(atual);
   /* 1) audiências JÁ MARCADAS na agenda deste processo: card destacado até o dia
@@ -6709,6 +6722,7 @@ function renderAudienciaSugestao(){
       +'<b style="color:var(--danger);font-size:13.5px">📅 AUDIÊNCIA — '+esc(br)+(e.hora&&e.hora!=='Dia todo'?(' às '+esc(e.hora)):'')+'</b>'
       +'<span class="note" style="margin:0">'+esc(e.tt||'')+'</span>'+selo
       +'<a onclick="go(\'agenda\')" style="cursor:pointer;color:#185FA5;font-size:11.5px">abrir agenda</a>'
+      +_btnLink()
       +'</div>';
   });
   /* 2) audiências FUTURAS encontradas no histórico e ainda fora da agenda: sugerir gravar */
@@ -6723,6 +6737,7 @@ function renderAudienciaSugestao(){
     html+='<div style="background:#fdf8ec;border:1px solid #e8dcbb;border-radius:8px;padding:8px 11px;margin:0 0 10px;font-size:13px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">'
       +'<b style="color:#7b1e3a">📅 '+esc(rotulo)+'</b> <span class="note" style="margin:0">encontrada no histórico — ainda fora da agenda</span>'
       +'<button class="btn sm gold" onclick="gravarAudienciaSug(\''+a.iso+'\',\''+(a.hora||'')+'\',\''+esc(a.tipo).replace(/'/g,'')+'\')">📌 Gravar audiência</button>'
+      +_btnLink()
       +'<a onclick="dispensarAudienciaSug(\''+dig+'\',\''+a.iso+'\')" style="cursor:pointer;color:var(--muted);font-size:11.5px" title="Não sugerir mais esta data neste processo">ignorar</a>'
       +'</div>';
   });
@@ -6823,11 +6838,13 @@ async function avisoAudienciaCliente(p, isoData, hora, tipo){
     var dbr=String(isoData).split('-').reverse().join('/');
     var horaTxt=(hora&&hora!=='Dia todo')?(' às '+hora):'';
     var primeiro=(String(p.cliente||'').trim().split(/\s+/)[0]||'');
+    var link=(typeof _linkAudiencia==='function')?_linkAudiencia(p):'';
+    var linkTxt=link?('\n\nLink da audiência (sala virtual/videoconferência):\n'+link):'';
     var corpo;
     if(tipo==='vespera'){
-      corpo='Olá'+(primeiro?(', '+primeiro):'')+'!\n\nLembrete: sua audiência no processo nº '+p.numero+' é AMANHÃ, dia '+dbr+horaTxt+'.\n\nSe a sua presença for necessária, por favor confirme conosco. Em caso de dúvidas sobre local, formato (presencial ou por vídeo) ou documentos, estamos à disposição.';
+      corpo='Olá'+(primeiro?(', '+primeiro):'')+'!\n\nLembrete: sua audiência no processo nº '+p.numero+' é AMANHÃ, dia '+dbr+horaTxt+'.'+linkTxt+'\n\nSe a sua presença for necessária, por favor confirme conosco. Em caso de dúvidas sobre local, formato (presencial ou por vídeo) ou documentos, estamos à disposição.';
     } else {
-      corpo='Olá'+(primeiro?(', '+primeiro):'')+'!\n\nInformamos que foi designada uma audiência no seu processo nº '+p.numero+', marcada para o dia '+dbr+horaTxt+'.\n\nJá anotamos em nossa agenda e vamos acompanhar. Faremos um novo contato na véspera. Se precisarmos da sua presença ou de testemunhas, avisaremos com antecedência.';
+      corpo='Olá'+(primeiro?(', '+primeiro):'')+'!\n\nInformamos que foi designada uma audiência no seu processo nº '+p.numero+', marcada para o dia '+dbr+horaTxt+'.'+linkTxt+'\n\nJá anotamos em nossa agenda e vamos acompanhar. Faremos um novo contato na véspera. Se precisarmos da sua presença ou de testemunhas, avisaremos com antecedência.';
     }
     corpo+='\n\n'+_assinaturaCMP('Djan');
     var assunto=(tipo==='vespera')?('Lembrete: sua audiência é amanhã — processo '+p.numero):('Audiência designada no seu processo '+p.numero);
