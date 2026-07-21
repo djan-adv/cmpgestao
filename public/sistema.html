@@ -214,8 +214,9 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
         <a data-s="inove" onclick="go('inove')" style="padding-left:30px;opacity:.85;font-size:13px"><span class="ic">◈</span> Inove <span id="nav-n-inove" style="margin-left:auto;font-size:10.5px;background:var(--navy2);border-radius:10px;padding:1px 7px"></span></a>
         <a data-s="encerrados" onclick="go('encerrados')" style="padding-left:30px;opacity:.8;font-size:13px"><span class="ic">▤</span> Encerrados <span id="nav-n-enc" style="margin-left:auto;font-size:10.5px;background:var(--navy2);border-radius:10px;padding:1px 7px"></span></a>
         <a data-s="james" onclick="go('james')" style="padding-left:30px;opacity:.8;font-size:13px"><span class="ic">⏸</span> James Laurence <span id="nav-n-james" style="margin-left:auto;font-size:10.5px;background:var(--navy2);border-radius:10px;padding:1px 7px"></span></a>
-        <div id="proc-subnav-lotes"></div>
       </div>
+      <!-- lotes personalizados: sempre visíveis abaixo de Processos -->
+      <div id="proc-subnav-lotes"></div>
       <a data-s="diligencias" onclick="go('diligencias')"><span class="ic">◔</span> Diligências</a>
       <a data-s="relatorio" onclick="go('relatorio')"><span class="ic">◫</span> Relatório mensal</a>
       <a data-s="crm" onclick="go('crm')"><span class="ic">▣</span> Comercial</a>
@@ -5043,7 +5044,7 @@ function go(s){
   if(s==="fases" && typeof renderFasesRevisao==='function')renderFasesRevisao();
   if(s==="sugestoes" && typeof renderSugestoes==='function'){ var _an=document.getElementById('sg-autor'); if(_an && !_an.value){ _an.value=((document.getElementById('who-name')||{}).textContent||'').trim(); } renderSugestoes(); }
   if(s==="lote") renderLote();
-  try{ var _subL=document.getElementById('proc-subnav'); if(_subL && s==='lote') _subL.style.display='block'; }catch(e){}
+  try{ if(typeof renderNavLotes==='function') renderNavLotes(); }catch(e){}
   window.scrollTo(0,0);
 }
 /* ===== Lotes personalizados (pastas do menu esquerdo · engrenagem de config) ===== */
