@@ -8957,7 +8957,7 @@ function _blocoAlvaras(titulo, procs, cor, modo){
     else if(info.definido){ valorHTML='<span style="color:#8a6d1a;font-weight:700" title="Valor definido, mas o depósito ainda não foi conferido no extrato">R$ '+_reaisNum(info.valor)+' (previsto)</span>'; }
     else if(info.valor){ valorHTML='<span style="color:#b9c0ca" title="Sugestão automática do despacho — pode incluir a parte do cliente. Clique em ✎ para confirmar só a parte do escritório.">R$ '+_reaisNum(info.valor)+' (sugestão)</span>'; }
     else { valorHTML='<span style="color:#b9c0ca">—</span>'; }
-    var confBadge=confOk?('<span class="note" style="font-size:10px" title="Base para a NF">✓ conferido em '+String(p.alvara_data_deposito).split('-').reverse().join('/')+'</span>'):'';
+    var confBadge=confOk?('<a onclick="confirmarDepositoAlvara(\''+ne+'\')" class="note" style="font-size:10px;cursor:pointer;text-decoration:underline dotted" title="Clique para corrigir o valor/data conferidos (dispara novo aviso ao cliente)">✓ conferido em '+String(p.alvara_data_deposito).split('-').reverse().join('/')+'</a>'):'';
     var nfBtn;
     if(p.alvara_nf_status==='emitida') nfBtn='<span class="note" style="font-size:10px">NF '+esc(p.alvara_nf_numero||'')+'</span>';
     else if(p.alvara_nf_status==='dispensada') nfBtn='<span class="note" style="font-size:10px">sem nota</span>';
