@@ -1827,7 +1827,22 @@ function renderCaptacao(){
        antes o card "sumia" ao fechar e a pessoa se perdia */
     var compacto=(c.id==='ganho'||c.id==='perdido');
     if(compacto) col.style.flex='0 0 190px';
-    if(c.id==='ganho'){
+    /* Perdido fica ESCONDIDO num drop: só o cabeçalho com a contagem; clicar
+       expande/recolhe (o arrastar-para-cá funciona mesmo recolhido) */
+    var perdFechado=false;
+    if(c.id==='perdido'){
+      try{ perdFechado=(localStorage.getItem('cmpPerdidosAberto')!=='1'); }catch(e){ perdFechado=true; }
+      var hp=document.createElement("h3"); hp.style.cursor='pointer';
+      hp.title=perdFechado?'Clique para mostrar os perdidos':'Clique para esconder os perdidos';
+      hp.innerHTML=(perdFechado?'▸ ':'▾ ')+esc(c.nome)+' <span>'+itens.length+' '+mvL+mvR+'</span>';
+      hp.onclick=function(ev){ if(ev.target&&ev.target.tagName==='A') return; try{ localStorage.setItem('cmpPerdidosAberto',perdFechado?'1':'0'); }catch(e){} renderCaptacao(); };
+      col.appendChild(hp);
+      if(perdFechado){
+        if(itens.length){ var nz=document.createElement("div");nz.className="note";nz.style.cssText="padding:8px 6px;font-size:10.5px;text-align:center;color:var(--muted)";nz.textContent='clique no título para ver';col.appendChild(nz); }
+        fu.appendChild(col); return;
+      }
+    }
+    else if(c.id==='ganho'){
       var hf=document.createElement("h3");hf.innerHTML=esc(c.nome)+' <span>'+itens.length+' '+mvL+mvR+'</span>';col.appendChild(hf);
       if(!itens.length){ var dz=document.createElement("div");dz.className="note";dz.style.cssText="padding:12px 8px;font-size:11px;line-height:1.4;text-align:center;color:var(--muted)";dz.innerHTML='Arraste um lead para cá ao fechar o contrato.';col.appendChild(dz); }
     } else {
@@ -1853,7 +1868,7 @@ function renderCaptacao(){
         el.style.padding='6px 9px';
         var _dir=(c.id==='ganho')?((l.valorFechado||l.valor)?('R$ '+esc(l.valorFechado||l.valor)):'fechado'):(l.motivo?esc(l.motivo):'perdido');
         var _corDir=(c.id==='ganho')?'#127a53':'#b5342b';
-        el.innerHTML='<div class="t" style="font-size:12.5px;display:flex;justify-content:space-between;gap:5px;align-items:center"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(primeiroUltimo(l.nome))+'</span><a title="Arquivos" onclick="abrirLeadArqs('+l.id+',event)" style="cursor:pointer;color:#185FA5;font-size:12px;flex:0 0 auto">&#128206;'+((l.arquivos&&l.arquivos.length)?l.arquivos.length:'')+'</a></div><div class="meta" style="font-size:10.5px;color:'+_corDir+';font-weight:600">'+_dir+'</div>';
+        el.innerHTML='<div class="t" style="font-size:12.5px;display:flex;justify-content:space-between;gap:5px;align-items:center"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(primeiroUltimo(l.nome))+'</span><span style="display:inline-flex;gap:5px;align-items:center;flex:0 0 auto"><a title="Arquivos" onclick="abrirLeadArqs('+l.id+',event)" style="cursor:pointer;color:#185FA5;font-size:12px">&#128206;'+((l.arquivos&&l.arquivos.length)?l.arquivos.length:'')+'</a><a title="Apagar lead" onclick="excluirLead('+l.id+',event)" style="cursor:pointer;color:#b5342b;font-size:12px;opacity:.6">&#128465;</a></span></div><div class="meta" style="font-size:10.5px;color:'+_corDir+';font-weight:600">'+_dir+'</div>';
         col.appendChild(el); return;
       }
       var lem=l.lemdata?('<div class="meta" style="color:var(--warn)">&#128276; '+l.lemdata+'</div>'):'';
@@ -3051,12 +3066,16 @@ async function carregarLeadsDb(){
   try{
     var r=await sb.from('crm_leads').select('*').order('ordem',{ascending:true}).order('criado_em',{ascending:true});
     if(r.error){ console.warn('crm_leads load:',r.error.message); window.__leadsDbReady=true; return; }
-    var rows=r.data||[];
+    var rowsAll=r.data||[];
+    /* lápides (apagado_em) ficam FORA do funil e derrubam cópias locais antigas
+       — sem isso, apagar num aparelho fazia o card ressuscitar pelo outro */
+    var lapide={}; rowsAll.forEach(function(row){ if(row.apagado_em) lapide[row.id]=true; });
+    var rows=rowsAll.filter(function(row){ return !row.apagado_em; });
     var dbLeads=rows.map(function(row,i){ return rowToLead(row,i+1); });
     /* MESCLA (não apaga): banco + leads locais que ainda não têm correspondência no banco.
        Isso impede que um recarregamento apague cards que ainda não foram sincronizados. */
     var vistos={}; dbLeads.forEach(function(l){ if(l.dbid) vistos[l.dbid]=true; });
-    var locais=(LEADS||[]).filter(function(l){ return l && l.nome && !/^Lead Exemplo/i.test(l.nome) && (!l.dbid || !vistos[l.dbid]); });
+    var locais=(LEADS||[]).filter(function(l){ return l && l.nome && !/^Lead Exemplo/i.test(l.nome) && (!l.dbid || (!vistos[l.dbid] && !lapide[l.dbid])); });
     LEADS=dbLeads.concat(locais);
     /* card órfão (estágio de uma coluna que não existe mais) volta a aparecer no 1º card */
     try{ var st={}; (FUNIL||[]).forEach(function(f){ st[f.id]=true; }); LEADS.forEach(function(l){ if(l.estagio && !st[l.estagio]) l.estagio=(FUNIL&&FUNIL[0]?FUNIL[0].id:'novo'); }); }catch(e){}
@@ -3079,7 +3098,10 @@ async function syncLeadsDb(){
     if(up&&up.error){ console.warn('crm_leads upsert:',up.error.message); if(!window.__leadsErrShown){ window.__leadsErrShown=true; alert('Não consegui salvar os leads no banco:\n'+up.error.message); } }
   }catch(e){ console.warn('syncLeadsDb:',e); }
 }
-async function apagarLeadDb(dbid){ if(!dbid) return; try{ var sb=window.__sb; if(sb) await sb.from('crm_leads').delete().eq('id',dbid); }catch(e){} }
+/* apagar = marcar lápide (apagado_em), NUNCA delete físico: se outro dispositivo
+   tiver uma cópia antiga do lead no navegador, a lápide impede que ele o regrave
+   no banco (era isso que fazia cards apagados "ressuscitarem"). */
+async function apagarLeadDb(dbid){ if(!dbid) return; try{ var sb=window.__sb; if(sb) await sb.from('crm_leads').update({apagado_em:new Date().toISOString()}).eq('id',dbid); }catch(e){} }
 /* ===== Leads duplicados (2 acessos criando o mesmo lead) — identificar e mesclar ===== */
 function _telDig(t){ var d=String(t||'').replace(/\D/g,''); if(d.length>11) d=d.slice(-11); return d.length>=8?d:''; }
 function _grposLeadsDup(){
