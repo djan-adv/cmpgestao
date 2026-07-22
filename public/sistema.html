@@ -342,7 +342,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
     </section>
     <section id="s-processos" class="hidden">
       <div class="searchbar"><input id="busca" placeholder="Buscar por cliente, número, oponente ou assunto..." oninput="renderProc()"><select id="ordena" onchange="renderProc()" class="btn sm sb-sel" style="margin-left:8px;max-width:120px"><option value="">Novos Protocolos</option><option value="az">Cliente (A→Z)</option><option value="za">Cliente (Z→A)</option><option value="data_desc">Movimentação mais recente</option><option value="parados">Parados (mov. mais antiga)</option><option value="valor">Valor da causa (maior→menor)</option></select><select id="filtroEtq" onchange="renderProc()" class="btn sm sb-sel" style="margin-left:8px;max-width:112px"><option value="">Todas as etiquetas</option></select><select id="porPagina" onchange="renderProc()" class="btn sm sb-sel" style="margin-left:8px;max-width:76px"><option value="20">20 por página</option><option value="40">40</option><option value="60">60</option><option value="80">80</option><option value="100">100</option><option value="todos" selected>Todos</option></select><span class="note" id="proc-count" style="align-self:center"></span><button id="btn-atu-todos" class="btn sm sb-btn" style="margin-left:auto" onclick="atualizarTodosProcessos()" title="Buscar no DJEN as publicações novas de TODOS os processos (últimos 7 dias, pelas OABs do escritório)">↻ Atualizar todos</button><button class="btn sm gold sb-btn" style="margin-left:8px" onclick="abrirBusca()">+ Cadastrar por número <span style="font-weight:400;font-size:10px;opacity:.8">(pesquisa pelo djen)</span></button><button class="btn sm sb-btn" style="margin-left:8px;background:var(--navy);color:#fff;border-color:var(--navy)" onclick="abrirCadManual()">+ Cadastrar manual / caso</button><button class="btn sm sb-btn" style="margin-left:8px;background:#0F6E56;color:#fff;border-color:#0F6E56" onclick="abrirSyncPastas()" title="Enviar de uma vez uma pasta com vários processos — o sistema reconhece cada subpasta e manda para o processo certo">&#8645; Sincronizar pasta</button></div>
-      <div class="card"><table><thead><tr><th style="width:26%;cursor:pointer;user-select:none" onclick="ordenarCliente()" title="Clique para ordenar por cliente (A→Z / Z→A)">Cliente <span id="cli-sort-arrow" style="font-size:10px;color:var(--muted)"></span></th><th style="width:150px">Processo</th><th style="width:22%">Assunto</th><th style="width:170px;cursor:pointer;user-select:none" onclick="ordenarMov()" title="Clique para ordenar pela data da última movimentação (mais recente ↔ mais antiga)">Última movimentação <span id="mov-sort-arrow" style="font-size:10px;color:var(--muted)"></span></th><th style="width:96px;cursor:pointer;user-select:none" onclick="ordenarParado()" title="Clique para ordenar por tempo parado (mais ↔ menos)">Parado há <span id="par-sort-arrow" style="font-size:10px;color:var(--muted)"></span><div style="font-weight:400;font-size:.7em;color:var(--muted);opacity:.65;margin-top:1px;line-height:1">(dias)</div></th><th style="width:104px;cursor:pointer;user-select:none" onclick="toggleStatusFiltro()" title="Clique para alternar: todos → julgados → não julgados">Status <span id="st-filtro-lbl" style="font-size:10px;color:var(--muted);font-weight:400"></span></th><th style="width:110px;cursor:pointer;user-select:none" onclick="ordenarPrazoToggle()" title="Clique para ordenar pelo prazo fatal (mais próximo ↔ mais distante)">Prazo fatal <span id="prazo-sort-arrow" style="font-size:10px;color:var(--muted)"></span></th><th style="width:58px;text-align:center" title="Documentos no servidor (só visualização)">Docs</th></tr></thead><tbody id="proc-body"></tbody></table></div><div id="proc-pager" style="display:flex;gap:6px;align-items:center;justify-content:center;padding:14px;flex-wrap:wrap"></div>
+      <div class="card"><table><thead><tr><th style="width:26%;cursor:pointer;user-select:none" onclick="ordenarCliente()" title="Clique para ordenar por cliente (A→Z / Z→A)">Cliente <span id="cli-sort-arrow" style="font-size:10px;color:var(--muted)"></span></th><th style="width:150px">Processo</th><th style="width:22%">Assunto</th><th style="width:170px;cursor:pointer;user-select:none" onclick="ordenarMov()" title="Clique para ordenar pela data da última movimentação (mais recente ↔ mais antiga)">Última movimentação <span id="mov-sort-arrow" style="font-size:10px;color:var(--muted)"></span></th><th style="width:96px;cursor:pointer;user-select:none" onclick="ordenarParado()" title="Clique para ordenar por dias parado (mais ↔ menos)">Parado há <span id="par-sort-arrow" style="font-size:10px;color:var(--muted)"></span></th><th style="width:104px;cursor:pointer;user-select:none" onclick="toggleStatusFiltro()" title="Clique para alternar: todos → julgados → não julgados">Status <span id="st-filtro-lbl" style="font-size:10px;color:var(--muted);font-weight:400"></span></th><th style="width:110px;cursor:pointer;user-select:none" onclick="ordenarPrazoToggle()" title="Clique para ordenar pelo prazo fatal (mais próximo ↔ mais distante)">Prazo fatal <span id="prazo-sort-arrow" style="font-size:10px;color:var(--muted)"></span></th><th style="width:58px;text-align:center;cursor:pointer;user-select:none" onclick="ordenarDocs()" title="Clique para ordenar pelo tamanho dos documentos no servidor (maior ↔ menor)">Docs <span id="docs-sort-arrow" style="font-size:10px;color:var(--muted)"></span></th></tr></thead><tbody id="proc-body"></tbody></table></div><div id="proc-pager" style="display:flex;gap:6px;align-items:center;justify-content:center;padding:14px;flex-wrap:wrap"></div>
     </section>
 
     <section id="s-proc-det" class="hidden">
@@ -1105,28 +1105,36 @@ function renderPainel(){
 /* clique no cabeçalho "Cliente": alterna A→Z / Z→A (usa o mesmo controle "ordena" do topo) */
 function ordenarCliente(){
   var s=document.getElementById('ordena'); if(!s) return;
-  window.__ordenaPrazo=''; window.__procSortWho='cli';
+  window.__ordenaPrazo=''; window.__procDocSort=''; window.__procSortWho='cli';
   s.value=(s.value==='az')?'za':'az';
   renderProc();
 }
 /* cabeçalho "Última movimentação": alterna mais recente (data_desc) ↔ mais antiga (parados) */
 function ordenarMov(){
   var s=document.getElementById('ordena'); if(!s) return;
-  window.__ordenaPrazo=''; window.__procSortWho='mov';
+  window.__ordenaPrazo=''; window.__procDocSort=''; window.__procSortWho='mov';
   s.value=(s.value==='data_desc')?'parados':'data_desc';
   renderProc();
 }
 /* cabeçalho "Parado há": alterna mais parado (parados) ↔ menos parado (data_desc) */
 function ordenarParado(){
   var s=document.getElementById('ordena'); if(!s) return;
-  window.__ordenaPrazo=''; window.__procSortWho='par';
+  window.__ordenaPrazo=''; window.__procDocSort=''; window.__procSortWho='par';
   s.value=(s.value==='parados')?'data_desc':'parados';
   renderProc();
 }
 /* cabeçalho "Prazo fatal": alterna mais próximo ↔ mais distante */
 function ordenarPrazoToggle(){
-  window.__procSortWho='prazo';
+  window.__procSortWho='prazo'; window.__procDocSort='';
   window.__ordenaPrazo=(window.__ordenaPrazo==='prox')?'dist':'prox';
+  renderProc();
+}
+/* cabeçalho "Docs": alterna maior ↔ menor pelo tamanho no servidor. Como os
+   tamanhos chegam sob demanda, carrega o censo de TODA a lista filtrada e
+   re-renderiza quando terminar. */
+function ordenarDocs(){
+  window.__procSortWho='docs'; window.__ordenaPrazo='';
+  window.__procDocSort=(window.__procDocSort==='desc')?'asc':'desc';
   renderProc();
 }
 /* cabeçalho "Status": alterna todos → julgados → não julgados (sem dropdown) */
@@ -4843,6 +4851,25 @@ async function carregarCensoVisivel(rows){
     faltam.forEach(function(d){ window.__censoDoc[d]={n:(j.counts[d]||0), bytes:((j.bytes&&j.bytes[d])||0)}; _pintaCenso(d); });
   }catch(e){}
 }
+/* carrega o censo de TODA a lista filtrada (em lotes de 200) para permitir
+   ordenar a coluna Docs por tamanho — re-renderiza uma vez ao terminar. */
+async function carregarCensoParaOrdenar(digs){
+  if(window.__censoLoadingAll) return;
+  var faltam=[...new Set((digs||[]).filter(function(d){ return d.length>=16 && !window.__censoDoc[d]; }))];
+  if(!faltam.length) return;
+  window.__censoLoadingAll=true;
+  try{
+    var tok=await docToken();
+    for(var i=0;i<faltam.length;i+=200){
+      var lote=faltam.slice(i,i+200);
+      var r=await fetch('/api/docs?censo='+encodeURIComponent(lote.join(',')),{headers:{Authorization:'Bearer '+tok}});
+      var j=await r.json().catch(function(){return {};});
+      if(j&&j.counts){ lote.forEach(function(d){ window.__censoDoc[d]={n:(j.counts[d]||0), bytes:((j.bytes&&j.bytes[d])||0)}; }); }
+    }
+  }catch(e){}
+  window.__censoLoadingAll=false;
+  if(window.__procSortWho==='docs' && (window.__procDocSort==='desc'||window.__procDocSort==='asc')){ try{ renderProc(); }catch(e){} }
+}
 /* etiquetas rápidas a partir da linha da lista: abre a ficha na seção de etiquetas */
 function etiquetarLinha(i){ var p=DADOS.processos[i]; if(!p) return; abrir(i);
   setTimeout(function(){ var sec=document.getElementById('det-etq'); if(sec&&sec.scrollIntoView){ sec.scrollIntoView({behavior:'smooth',block:'center'}); var sel=document.getElementById('det-etq-sel'); if(sel) sel.focus(); } }, 350);
@@ -4860,10 +4887,11 @@ function renderProc(){
     _setA('mov-sort-arrow', _who==='mov'?(sm==='data_desc'?'▼':'▲'):'');
     _setA('par-sort-arrow', _who==='par'?(sm==='parados'?'▼':'▲'):'');
     _setA('prazo-sort-arrow', _who==='prazo'?(_opw==='prox'?'▲':'▼'):'');
+    _setA('docs-sort-arrow', _who==='docs'?((window.__procDocSort==='desc')?'▼':'▲'):'');
     var _stl=document.getElementById('st-filtro-lbl');
     if(_stl){ var _sf=window.__stFiltro||''; _stl.textContent=(_sf==='julgado')?'· julgados':((_sf==='naojulgado')?'· não julg.':''); }
   }catch(e){}
-  var sig=q+'|'+sm+'|'+eq+'|'+pp+'|'+((document.getElementById("filtroMov")||{}).value||'')+'|'+(window.__stFiltro||'')+'|'+(window.__ordenaPrazo||'');
+  var sig=q+'|'+sm+'|'+eq+'|'+pp+'|'+((document.getElementById("filtroMov")||{}).value||'')+'|'+(window.__stFiltro||'')+'|'+(window.__ordenaPrazo||'')+'|'+(window.__procDocSort||'');
   if(sig!==window.__procSig){ window.__procPage=1; window.__procSig=sig; }
   function pd(x){ if(!x) return 0; var m=String(x).split('/'); return m.length===3? parseInt(m[2]+m[1]+m[0],10):0; }
   function pv(x){ if(!x) return 0; return parseFloat(String(x).replace(/\./g,'').replace(',','.'))||0; }
@@ -4875,6 +4903,7 @@ function renderProc(){
   /* ordenação por prazo fatal (coluna): mais próximo → distante, ou o inverso.
      Tem prioridade sobre a ordenação padrão quando escolhida. */
   var op=window.__ordenaPrazo||'';
+  var ds=window.__procDocSort||'';
   if(op==='prox'||op==='dist'){
     lista.sort(function(a,b){
       var pa=_prazoFatalDoProc(a), pb=_prazoFatalDoProc(b);
@@ -4882,6 +4911,18 @@ function renderProc(){
       if(!pa&&!pb) return 0; if(!pa) return 1; if(!pb) return -1;
       return op==='prox' ? (pa<pb?-1:(pa>pb?1:0)) : (pa>pb?-1:(pa<pb?1:0));
     });
+  }
+  else if(ds==='desc'||ds==='asc'){
+    /* ordena pelo tamanho dos documentos (censo). Tamanho ainda desconhecido
+       vai para o FIM em ambas as direções; o censo da lista toda é carregado
+       em segundo plano (carregarCensoParaOrdenar) e re-renderiza ao concluir. */
+    function _db(p){ var c=window.__censoDoc[String(p.numero||'').replace(/\D/g,'')]; return c?(c.bytes||0):null; }
+    lista.sort(function(a,b){
+      var ba=_db(a), bb=_db(b);
+      if(ba==null&&bb==null) return 0; if(ba==null) return 1; if(bb==null) return -1;
+      return ds==='desc'?(bb-ba):(ba-bb);
+    });
+    try{ carregarCensoParaOrdenar(lista.map(function(p){return String(p.numero||'').replace(/\D/g,'');})); }catch(e){}
   }
   else if(sm==='az') lista.sort(function(a,b){var A=(a.cliente||'').trim(),B=(b.cliente||'').trim(); if(!A&&!B)return 0; if(!A)return 1; if(!B)return -1; return A.localeCompare(B,'pt');});
   else if(sm==='za') lista.sort(function(a,b){var A=(a.cliente||'').trim(),B=(b.cliente||'').trim(); if(!A&&!B)return 0; if(!A)return 1; if(!B)return -1; return B.localeCompare(A,'pt');});
