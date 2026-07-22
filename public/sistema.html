@@ -8762,6 +8762,7 @@ function setFinView(v){ FIN_VIEW=v;
   var a=document.getElementById('fin-sw-a'), p=document.getElementById('fin-sw-p');
   if(a)a.classList.toggle('on',v==='abertas'); if(p)p.classList.toggle('on',v==='pagas');
   finRenderTabela();
+  try{ renderAlvarasMes(); }catch(e){} /* o painel de alvarás segue a aba (a conferir × conferidos) */
 }
 
 async function renderFinanceiro(){
@@ -8933,14 +8934,17 @@ async function _avisarClienteAlvaraDepositado(p){
    escondia o alvará já conquistado e confundia os cálculos de honorários. */
 function renderAlvarasMes(){
   var el=document.getElementById('fin-alvaras'); if(!el) return;
+  /* o painel respeita a aba do Financeiro: "Em aberto" lista só os alvarás a
+     conferir; "Recebidas" lista só os já conferidos no extrato */
+  var modo=(typeof FIN_VIEW!=='undefined'&&FIN_VIEW==='pagas')?'recebidos':'abertos';
   var todos=(DADOS.processos||[]).filter(function(p){ try{ return faseDoProc(p)==='alvara'; }catch(e){ return false; } });
   if(!todos.length){ el.innerHTML='<p class="sectlabel" style="margin:0 0 4px">Alvarás expedidos por mês</p><p class="note" style="margin:0">Nenhum processo na fase "Expedir Alvará" no momento. (Quando um processo entra nessa fase, aparece aqui, agrupado pelo mês da última movimentação — inclusive se depois for encerrado.)</p>'; return; }
   var doEscritorio=todos.filter(function(p){ return !isInove(p); });
   var daInove=todos.filter(function(p){ return isInove(p); });
-  el.innerHTML=_blocoAlvaras('Alvarás expedidos por mês — escritório', doEscritorio, '#127a53')
-    + (daInove.length?('<div style="border-top:2px dashed var(--line);margin:16px 0 0;padding-top:14px">'+_blocoAlvaras('Alvarás — Inove (cobrança separada)', daInove, '#8a5a00')+'</div>'):'');
+  el.innerHTML=_blocoAlvaras('Alvarás expedidos por mês — escritório', doEscritorio, '#127a53', modo)
+    + (daInove.length?('<div style="border-top:2px dashed var(--line);margin:16px 0 0;padding-top:14px">'+_blocoAlvaras('Alvarás — Inove (cobrança separada)', daInove, '#8a5a00', modo)+'</div>'):'');
 }
-function _blocoAlvaras(titulo, procs, cor){
+function _blocoAlvaras(titulo, procs, cor, modo){
   var MES=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
   if(!procs.length) return '<p class="sectlabel" style="margin:0 0 4px">'+esc(titulo)+'</p><p class="note" style="margin:0">Nenhum.</p>';
   /* linha de um alvará (mesma renderização nas duas seções) */
@@ -8962,21 +8966,30 @@ function _blocoAlvaras(titulo, procs, cor){
     return '<div style="display:flex;justify-content:space-between;gap:8px;font-size:12.5px;padding:3px 0;align-items:center"><span><a onclick="abrir('+i+')" style="cursor:pointer;color:var(--navy);text-decoration:underline">'+esc(resumo3(p.cliente))+'</a>'+encerradoTag+' <span class="note">· '+esc(p.numero)+' · '+esc(p.data||'')+'</span></span><span style="white-space:nowrap;display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end">'+valorHTML+' <a onclick="definirValorAlvaraEscritorio(\''+ne+'\')" style="cursor:pointer;color:#185FA5;font-size:11px" title="Definir/editar o valor do escritório (honorários)">✎</a>'+confBadge+nfBtn+'</span></div>';
   }
   /* RECEBIDOS = só depois de "Conferir depósito" (valor + data anotados).
-     Os demais ficam em "Em aberto — a conferir", sem entrar no total recebido. */
+     Os demais são "em aberto". O `modo` (aba do Financeiro) decide qual grupo
+     aparece: aba Em aberto → só a conferir; aba Recebidas → só conferidos. */
   var recebidos=procs.filter(function(p){ return p.alvara_valor_confirmado!=null && p.alvara_data_deposito; });
   var emAberto=procs.filter(function(p){ return !(p.alvara_valor_confirmado!=null && p.alvara_data_deposito); });
   var totReceb=recebidos.reduce(function(s,p){ return s+(parseFloat(p.alvara_valor_confirmado)||0); },0);
-  var html='<p class="sectlabel" style="margin:0 0 10px;display:flex;justify-content:space-between;align-items:baseline;gap:10px"><span>'+esc(titulo)+' <span class="note" style="font-weight:400">— '+procs.length+' processo'+(procs.length===1?'':'s')+'</span></span>'
-    +'<span style="color:'+cor+';font-weight:800;font-size:15px">Recebido (conferido): R$ '+_reaisNum(totReceb)+'</span></p>';
-  /* --- Em aberto: expedidos aguardando conferência do depósito --- */
-  if(emAberto.length){
-    var totPrev=emAberto.reduce(function(s,p){var i2=_valorAlvaraInfo(p); return s+(i2.definido?i2.valor:0);},0);
-    html+='<div style="margin-bottom:14px;background:#fffdf4;border:1px solid #efe3bb;border-radius:10px;padding:8px 12px">'
-      +'<div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px dashed #efe3bb;padding-bottom:5px;margin-bottom:6px"><b style="color:#8a6d1a">Em aberto — aguardando conferir o depósito</b><span style="display:flex;gap:8px;align-items:center">'+(totPrev?('<span style="font-size:12px;font-weight:700;color:#8a6d1a">previsto: R$ '+_reaisNum(totPrev)+'</span>'):'')+'<span style="font-size:12px;font-weight:700;color:#8a6d1a;background:#f5ecce;border-radius:12px;padding:2px 10px">'+emAberto.length+' alvará'+(emAberto.length===1?'':'s')+'</span></span></div>'
-      +emAberto.map(linhaAlvara).join('')
-      +'</div>';
+  var totPrev=emAberto.reduce(function(s,p){var i2=_valorAlvaraInfo(p); return s+(i2.definido?i2.valor:0);},0);
+  var soRecebidos=(modo==='recebidos');
+  var nMostrados=soRecebidos?recebidos.length:emAberto.length;
+  var totTopo=soRecebidos?('Recebido (conferido): R$ '+_reaisNum(totReceb)):('Previsto (a conferir): R$ '+_reaisNum(totPrev));
+  var html='<p class="sectlabel" style="margin:0 0 10px;display:flex;justify-content:space-between;align-items:baseline;gap:10px"><span>'+esc(titulo)+' <span class="note" style="font-weight:400">— '+nMostrados+' processo'+(nMostrados===1?'':'s')+'</span></span>'
+    +'<span style="color:'+cor+';font-weight:800;font-size:15px">'+totTopo+'</span></p>';
+  if(!soRecebidos){
+    /* --- aba Em aberto: SÓ os expedidos aguardando conferência do depósito --- */
+    if(emAberto.length){
+      html+='<div style="margin-bottom:6px;background:#fffdf4;border:1px solid #efe3bb;border-radius:10px;padding:8px 12px">'
+        +'<div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px dashed #efe3bb;padding-bottom:5px;margin-bottom:6px"><b style="color:#8a6d1a">Em aberto — aguardando conferir o depósito</b><span style="display:flex;gap:8px;align-items:center">'+(totPrev?('<span style="font-size:12px;font-weight:700;color:#8a6d1a">previsto: R$ '+_reaisNum(totPrev)+'</span>'):'')+'<span style="font-size:12px;font-weight:700;color:#8a6d1a;background:#f5ecce;border-radius:12px;padding:2px 10px">'+emAberto.length+' alvará'+(emAberto.length===1?'':'s')+'</span></span></div>'
+        +emAberto.map(linhaAlvara).join('')
+        +'</div>';
+    } else {
+      html+='<p class="note" style="margin:0">Nenhum alvará aguardando conferência — os já conferidos estão na aba <b>Recebidas</b>.</p>';
+    }
+    return html;
   }
-  /* --- Recebidos: agrupados pelo MÊS DO DEPÓSITO conferido --- */
+  /* --- aba Recebidas: SÓ os conferidos, agrupados pelo MÊS DO DEPÓSITO --- */
   if(recebidos.length){
     var g={}; recebidos.forEach(function(p){ var m=/^(\d{4})-(\d{2})/.exec(String(p.alvara_data_deposito)); var k=m?(m[1]+'-'+m[2]):'0000-00'; (g[k]=g[k]||[]).push(p); });
     var chaves=Object.keys(g).sort().reverse();
@@ -8987,7 +9000,7 @@ function _blocoAlvaras(titulo, procs, cor){
       html+='</div>';
     });
   } else {
-    html+='<p class="note" style="margin:0">Nenhum alvará conferido ainda — use "Conferir depósito" quando o valor cair na conta; só então ele entra em Recebidos.</p>';
+    html+='<p class="note" style="margin:0">Nenhum alvará conferido ainda — use "Conferir depósito" (na aba Em aberto) quando o valor cair na conta; só então ele aparece aqui.</p>';
   }
   return html;
 }
