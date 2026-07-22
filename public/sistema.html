@@ -8867,6 +8867,13 @@ async function definirValorAlvaraEscritorio(numEnc){
 async function confirmarDepositoAlvara(numEnc){
   var num=decodeURIComponent(numEnc);
   var p=(DADOS.processos||[]).find(function(x){return String(x.numero)===String(num);}); if(!p) return;
+  /* trava de consciência: confirmar aqui DISPARA o e-mail de encerramento ao
+     cliente — só prossiga se o dinheiro JÁ CAIU na conta de verdade */
+  if(!confirm('⚠️ ATENÇÃO — confira antes de continuar!\n\n'
+    +'Ao confirmar o valor do alvará:\n'
+    +'• o cliente RECEBE NA HORA um e-mail avisando que o processo foi concluído e os valores pagos (com alerta de golpe);\n'
+    +'• o alvará entra em "Recebidos" e vira base para a emissão da NF — finalizando definitivamente o processo no Financeiro.\n\n'
+    +'Só continue se o valor JÁ CAIU DE VERDADE na conta do escritório (conferido no extrato bancário).\n\nO dinheiro já está na conta?')) return;
   var info=_valorAlvaraInfo(p);
   var preValor=(p.alvara_valor_confirmado!=null)?String(p.alvara_valor_confirmado).replace('.',','):(info.valor?String(info.valor).replace('.',','):'');
   var v=window.prompt('Valor FINAL exato depositado (a parte do escritório), conferido no extrato bancário:', preValor);
