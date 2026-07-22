@@ -146,6 +146,7 @@ export async function POST(request) {
         '<div style="font-size:12px;color:#8a8f98;margin-bottom:8px">Acompanhe o escritório:</div>' +
         '<a href="https://instagram.com/cmpadvs" style="display:inline-block;background:#2E3A4B;color:#fff;text-decoration:none;padding:8px 16px;border-radius:20px;font-size:13px;margin:2px 4px">Instagram @cmpadvs</a>' +
         '<a href="https://instagram.com/djan.adv" style="display:inline-block;background:#2E3A4B;color:#fff;text-decoration:none;padding:8px 16px;border-radius:20px;font-size:13px;margin:2px 4px">Instagram @djan.adv</a>' +
+        '<a href="https://gestao.cmpadvogados.com.br/areas-atuacao.html" style="display:inline-block;background:#C9A227;color:#fff;text-decoration:none;padding:8px 16px;border-radius:20px;font-size:13px;margin:2px 4px">Nosso site — áreas de atuação</a>' +
       '</div>' +
     '</div>'
 
