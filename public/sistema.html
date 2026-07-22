@@ -8933,31 +8933,52 @@ function renderAlvarasMes(){
 function _blocoAlvaras(titulo, procs, cor){
   var MES=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
   if(!procs.length) return '<p class="sectlabel" style="margin:0 0 4px">'+esc(titulo)+'</p><p class="note" style="margin:0">Nenhum.</p>';
-  function chave(p){ var d=null; (p.hist_full||[]).forEach(function(a){ if(a&&a.data&&(!d||a.data>d)) d=a.data; }); d=d||(p.data?p.data.split('/').reverse().join('-'):''); var m=/^(\d{4})-(\d{2})/.exec(String(d)); return m?m[1]+'-'+m[2]:'0000-00'; }
-  var g={}, totGeral=0; procs.forEach(function(p){ (g[chave(p)]=g[chave(p)]||[]).push(p); if(_valorAlvaraInfo(p).definido) totGeral+=_valorAlvaraInfo(p).valor; });
-  var chaves=Object.keys(g).sort().reverse();
+  /* linha de um alvará (mesma renderização nas duas seções) */
+  function linhaAlvara(p){
+    var i=DADOS.processos.indexOf(p); var info=_valorAlvaraInfo(p); var ne=encodeURIComponent(p.numero);
+    var encerradoTag=/encerr/i.test(p.status||'')?' <span style="font-size:9.5px;background:#eef0f3;color:#697180;border-radius:8px;padding:1px 6px;font-weight:700;vertical-align:middle">encerrado</span>':'';
+    var confOk=(p.alvara_valor_confirmado!=null && p.alvara_data_deposito);
+    var valorHTML;
+    if(confOk){ valorHTML='<b style="color:'+cor+'" title="Valor final conferido no extrato bancário">R$ '+_reaisNum(p.alvara_valor_confirmado)+'</b>'; }
+    else if(info.definido){ valorHTML='<span style="color:#8a6d1a;font-weight:700" title="Valor definido, mas o depósito ainda não foi conferido no extrato">R$ '+_reaisNum(info.valor)+' (previsto)</span>'; }
+    else if(info.valor){ valorHTML='<span style="color:#b9c0ca" title="Sugestão automática do despacho — pode incluir a parte do cliente. Clique em ✎ para confirmar só a parte do escritório.">R$ '+_reaisNum(info.valor)+' (sugestão)</span>'; }
+    else { valorHTML='<span style="color:#b9c0ca">—</span>'; }
+    var confBadge=confOk?('<span class="note" style="font-size:10px" title="Base para a NF">✓ conferido em '+String(p.alvara_data_deposito).split('-').reverse().join('/')+'</span>'):'';
+    var nfBtn;
+    if(p.alvara_nf_status==='emitida') nfBtn='<span class="note" style="font-size:10px">NF '+esc(p.alvara_nf_numero||'')+'</span>';
+    else if(p.alvara_nf_status==='dispensada') nfBtn='<span class="note" style="font-size:10px">sem nota</span>';
+    else if(confOk) nfBtn='<button class="btn sm gold" style="font-size:10px;padding:2px 8px" onclick="abrirNfAlvara(\''+ne+'\')">Emitir NF</button>';
+    else nfBtn='<button class="btn sm ghost" style="font-size:10px;padding:2px 8px" onclick="confirmarDepositoAlvara(\''+ne+'\')" title="Confira aqui a data e o valor final exato que caiu na conta — só depois disso o alvará entra em Recebidos">Conferir depósito</button>';
+    return '<div style="display:flex;justify-content:space-between;gap:8px;font-size:12.5px;padding:3px 0;align-items:center"><span><a onclick="abrir('+i+')" style="cursor:pointer;color:var(--navy);text-decoration:underline">'+esc(resumo3(p.cliente))+'</a>'+encerradoTag+' <span class="note">· '+esc(p.numero)+' · '+esc(p.data||'')+'</span></span><span style="white-space:nowrap;display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end">'+valorHTML+' <a onclick="definirValorAlvaraEscritorio(\''+ne+'\')" style="cursor:pointer;color:#185FA5;font-size:11px" title="Definir/editar o valor do escritório (honorários)">✎</a>'+confBadge+nfBtn+'</span></div>';
+  }
+  /* RECEBIDOS = só depois de "Conferir depósito" (valor + data anotados).
+     Os demais ficam em "Em aberto — a conferir", sem entrar no total recebido. */
+  var recebidos=procs.filter(function(p){ return p.alvara_valor_confirmado!=null && p.alvara_data_deposito; });
+  var emAberto=procs.filter(function(p){ return !(p.alvara_valor_confirmado!=null && p.alvara_data_deposito); });
+  var totReceb=recebidos.reduce(function(s,p){ return s+(parseFloat(p.alvara_valor_confirmado)||0); },0);
   var html='<p class="sectlabel" style="margin:0 0 10px;display:flex;justify-content:space-between;align-items:baseline;gap:10px"><span>'+esc(titulo)+' <span class="note" style="font-weight:400">— '+procs.length+' processo'+(procs.length===1?'':'s')+'</span></span>'
-    +'<span style="color:'+cor+';font-weight:800;font-size:15px">Total (escritório): R$ '+_reaisNum(totGeral)+'</span></p>';
-  chaves.forEach(function(k){ var parts=k.split('-'); var mi=parseInt(parts[1],10)-1; var tt=(mi>=0&&mi<12?MES[mi]:'Sem data')+(parts[0]!=='0000'?(' de '+parts[0]):'');
-    var arr=g[k]; var subtot=arr.reduce(function(s,p){var i=_valorAlvaraInfo(p); return s+(i.definido?i.valor:0);},0);
-    html+='<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line);padding-bottom:5px;margin-bottom:6px"><b style="color:var(--navy)">'+esc(tt)+'</b><span style="display:flex;gap:8px;align-items:center"><span style="font-size:12px;font-weight:700;color:'+cor+'">R$ '+_reaisNum(subtot)+'</span><span style="font-size:12px;font-weight:700;color:#127a53;background:#e5f4ed;border-radius:12px;padding:2px 10px">'+arr.length+' alvará'+(arr.length===1?'':'s')+'</span></span></div>';
-    html+=arr.map(function(p){ var i=DADOS.processos.indexOf(p); var info=_valorAlvaraInfo(p); var ne=encodeURIComponent(p.numero);
-      var encerradoTag=/encerr/i.test(p.status||'')?' <span style="font-size:9.5px;background:#eef0f3;color:#697180;border-radius:8px;padding:1px 6px;font-weight:700;vertical-align:middle">encerrado</span>':'';
-      var valorHTML;
-      if(info.definido){ valorHTML='<b style="color:'+cor+'">R$ '+_reaisNum(info.valor)+'</b>'; }
-      else if(info.valor){ valorHTML='<span style="color:#b9c0ca" title="Sugestão automática do despacho — pode incluir a parte do cliente. Clique em ✎ para confirmar só a parte do escritório.">R$ '+_reaisNum(info.valor)+' (sugestão)</span>'; }
-      else { valorHTML='<span style="color:#b9c0ca">—</span>'; }
-      var confOk=(p.alvara_valor_confirmado!=null && p.alvara_data_deposito);
-      var confBadge=confOk?('<span class="note" style="font-size:10px" title="Valor e data conferidos no extrato bancário, base para a NF">✓ R$ '+_reaisNum(p.alvara_valor_confirmado)+' em '+String(p.alvara_data_deposito).split('-').reverse().join('/')+'</span>'):'';
-      var nfBtn;
-      if(p.alvara_nf_status==='emitida') nfBtn='<span class="note" style="font-size:10px">NF '+esc(p.alvara_nf_numero||'')+'</span>';
-      else if(p.alvara_nf_status==='dispensada') nfBtn='<span class="note" style="font-size:10px">sem nota</span>';
-      else if(confOk) nfBtn='<button class="btn sm gold" style="font-size:10px;padding:2px 8px" onclick="abrirNfAlvara(\''+ne+'\')">Emitir NF</button>';
-      else nfBtn='<button class="btn sm ghost" style="font-size:10px;padding:2px 8px" onclick="confirmarDepositoAlvara(\''+ne+'\')" title="Confira aqui a data e o valor final exato que caiu na conta — vira a base para emitir a NF">Conferir depósito</button>';
-      return '<div style="display:flex;justify-content:space-between;gap:8px;font-size:12.5px;padding:3px 0;align-items:center"><span><a onclick="abrir('+i+')" style="cursor:pointer;color:var(--navy);text-decoration:underline">'+esc(resumo3(p.cliente))+'</a>'+encerradoTag+' <span class="note">· '+esc(p.numero)+' · '+esc(p.data||'')+'</span></span><span style="white-space:nowrap;display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end">'+valorHTML+' <a onclick="definirValorAlvaraEscritorio(\''+ne+'\')" style="cursor:pointer;color:#185FA5;font-size:11px" title="Definir/editar o valor do escritório (honorários)">✎</a>'+confBadge+nfBtn+'</span></div>';
-    }).join('');
-    html+='</div>';
-  });
+    +'<span style="color:'+cor+';font-weight:800;font-size:15px">Recebido (conferido): R$ '+_reaisNum(totReceb)+'</span></p>';
+  /* --- Em aberto: expedidos aguardando conferência do depósito --- */
+  if(emAberto.length){
+    var totPrev=emAberto.reduce(function(s,p){var i2=_valorAlvaraInfo(p); return s+(i2.definido?i2.valor:0);},0);
+    html+='<div style="margin-bottom:14px;background:#fffdf4;border:1px solid #efe3bb;border-radius:10px;padding:8px 12px">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px dashed #efe3bb;padding-bottom:5px;margin-bottom:6px"><b style="color:#8a6d1a">Em aberto — aguardando conferir o depósito</b><span style="display:flex;gap:8px;align-items:center">'+(totPrev?('<span style="font-size:12px;font-weight:700;color:#8a6d1a">previsto: R$ '+_reaisNum(totPrev)+'</span>'):'')+'<span style="font-size:12px;font-weight:700;color:#8a6d1a;background:#f5ecce;border-radius:12px;padding:2px 10px">'+emAberto.length+' alvará'+(emAberto.length===1?'':'s')+'</span></span></div>'
+      +emAberto.map(linhaAlvara).join('')
+      +'</div>';
+  }
+  /* --- Recebidos: agrupados pelo MÊS DO DEPÓSITO conferido --- */
+  if(recebidos.length){
+    var g={}; recebidos.forEach(function(p){ var m=/^(\d{4})-(\d{2})/.exec(String(p.alvara_data_deposito)); var k=m?(m[1]+'-'+m[2]):'0000-00'; (g[k]=g[k]||[]).push(p); });
+    var chaves=Object.keys(g).sort().reverse();
+    chaves.forEach(function(k){ var parts=k.split('-'); var mi=parseInt(parts[1],10)-1; var tt='Recebidos em '+(mi>=0&&mi<12?MES[mi]:'Sem data')+(parts[0]!=='0000'?(' de '+parts[0]):'');
+      var arr=g[k]; var subtot=arr.reduce(function(s,p){ return s+(parseFloat(p.alvara_valor_confirmado)||0); },0);
+      html+='<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line);padding-bottom:5px;margin-bottom:6px"><b style="color:var(--navy)">'+esc(tt)+'</b><span style="display:flex;gap:8px;align-items:center"><span style="font-size:12px;font-weight:700;color:'+cor+'">R$ '+_reaisNum(subtot)+'</span><span style="font-size:12px;font-weight:700;color:#127a53;background:#e5f4ed;border-radius:12px;padding:2px 10px">'+arr.length+' alvará'+(arr.length===1?'':'s')+'</span></span></div>';
+      html+=arr.map(linhaAlvara).join('');
+      html+='</div>';
+    });
+  } else {
+    html+='<p class="note" style="margin:0">Nenhum alvará conferido ainda — use "Conferir depósito" quando o valor cair na conta; só então ele entra em Recebidos.</p>';
+  }
   return html;
 }
 
