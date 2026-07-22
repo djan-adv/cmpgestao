@@ -4698,10 +4698,13 @@ function origemProc(p){
 }
 function origemBtnHTML(p){
   var o=origemProc(p);
-  var cor=o==='caso'?'background:#ece9f5;color:#5b4a8a'
-        :o==='astrea'?'background:#e3edf7;color:#185FA5'
-        :(o==='djen'?'background:#fdecd7;color:#b45f06':'background:#e5f4ed;color:#127a53');
-  return '<span style="'+cor+';border-radius:20px;padding:3px 10px;font-size:11px;font-weight:600;cursor:default;white-space:nowrap">'+o+'</span>';
+  /* assessorias/casos não precisam de selo de status (não são monitorados) */
+  if(o==='caso') return '';
+  /* NÃO vinculado ao DJEN (importado do Astrea, nenhuma publicação capturada):
+     círculo vermelho com traço branco */
+  if(o==='astrea') return '<span title="NÃO vinculado ao DJEN — nenhuma publicação capturada ainda (importado do Astrea)" style="display:inline-flex;width:15px;height:15px;border-radius:50%;background:#b5342b;align-items:center;justify-content:center;vertical-align:middle;cursor:default"><span style="width:8px;height:2.5px;background:#fff;border-radius:2px"></span></span>';
+  /* vinculado ao DJEN e atualizando automaticamente: visto verde-escuro cursivo */
+  return '<span title="Vinculado ao DJEN — atualizado automaticamente pelo robô de publicações" style="color:#0F6E56;font-size:15px;font-weight:800;font-style:italic;font-family:Georgia,\'Times New Roman\',serif;cursor:default;vertical-align:middle">✓</span>';
 }
 /* marca/vincula um caso a partir da ficha do processo */
 function marcarComoCaso(num){
