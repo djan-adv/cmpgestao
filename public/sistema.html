@@ -226,6 +226,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
       <a data-s="etiquetas" onclick="go('etiquetas')"><span class="ic">⬤</span> Etiquetas</a>
       <a data-s="fases" onclick="go('fases')"><span class="ic">◑</span> Revisar fases</a>
       <a data-s="procedimentos" onclick="go('procedimentos')"><span class="ic">☰</span> Procedimentos</a>
+      <a data-s="produtividade" class="cmp-only" onclick="go('produtividade')" title="Métricas de volume e esforço por pessoa, derivadas do log de eventos do sistema (sem vigilância de tela)"><span class="ic">📈</span> Produtividade</a>
       <a data-s="sugestoes" onclick="go('sugestoes')" style="margin-top:12px;color:#ffd98a"><span class="ic">💡</span> Sugestões / Melhorias</a>
     </nav>
   </aside>
@@ -422,6 +423,30 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
         <p class="note" style="margin:6px 0 4px">A coluna <b>Sugerida</b> é o palpite automático pelo histórico. Ajuste onde discordar e clique <b>Salvar</b> na linha — a fase escolhida fica <b>travada</b> (não muda mais sozinha). Use <b>Salvar todos os visíveis</b> para gravar em massa o que estiver na tela.</p>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:8px 0"><button class="btn sm gold" onclick="salvarFasesVisiveis()">Salvar todos os visíveis (travar a sugerida)</button><span id="fases-count" class="note" style="margin:0"></span></div>
         <div style="overflow:auto"><table style="width:100%;font-size:13px"><thead><tr><th style="text-align:left">Cliente</th><th style="text-align:left;width:170px">Processo</th><th style="text-align:left">Assunto</th><th style="text-align:left;width:150px">Último andamento</th><th style="text-align:left;width:150px">Fase atual</th><th style="width:180px">Definir</th><th style="width:70px"></th></tr></thead><tbody id="fases-body"></tbody></table></div>
+      </div>
+    </section>
+
+    <section id="s-produtividade" class="hidden">
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+          <p class="sectlabel" style="margin:0">Produtividade — volume e esforço por pessoa</p>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <select id="prd-periodo" class="btn sm" onchange="renderProdutividade()" style="max-width:150px"><option value="7">Últimos 7 dias</option><option value="30" selected>Últimos 30 dias</option><option value="90">Últimos 90 dias</option><option value="hoje">Hoje</option></select>
+            <select id="prd-user" class="btn sm" onchange="renderProdutividade()" style="max-width:180px"><option value="">Todas as pessoas</option></select>
+            <button class="btn sm ghost" onclick="exportarProdutividadeCSV()">⬇ Exportar CSV</button>
+          </div>
+        </div>
+        <p class="note" style="margin:6px 0 10px">Métricas derivadas do <b>log de eventos do sistema</b> (tarefas concluídas, boletos, e-mails, cadastros…) — sem vigilância de tela/mouse. Medem <b>volume e esforço</b>, não qualidade: use com revisão humana, nunca isoladamente para decisão disciplinar. O tempo ativo desconta pausas maiores que o limite configurado; pausa seguida de entrega conta como trabalho fora do sistema.</p>
+        <div id="prd-cards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px"></div>
+      </div>
+      <div class="card">
+        <p class="sectlabel">Auditoria de logins</p>
+        <p class="note" style="margin:0 0 8px">Todos os acessos do escritório, com o último login registrado no log de eventos. <b>Faltoso</b> = sem login há mais dias que o limite configurado. Ações de gestão de login (criar/desativar) também ficam auditadas no log.</p>
+        <div id="prd-logins"></div>
+      </div>
+      <div class="card">
+        <p class="sectlabel">Configurações do módulo</p>
+        <div id="prd-config" class="note">Carregando…</div>
       </div>
     </section>
 
@@ -2001,6 +2026,7 @@ function initTriagem(){
 }
 /* persiste "publicação tratada" no banco (coluna andamentos.triada). Silencioso se a coluna não existir. */
 function persisteTriada(t){
+  try{ if(typeof logEvent==='function'&&t) logEvent('publication_handled','processo',(t.numero||null),{data:(t.data||null)}); }catch(e){}
   try{ var sb=window.__sb; if(!sb||!t) return;
     var num=String(t.numero||'').replace(/\D/g,''); var dt=String(t.data||'').slice(0,10);
     if(!num||!dt) return;
@@ -2371,6 +2397,7 @@ function abrirTarefaKanban(id){
   _atualizaBotaoAbrirProcModal();
   /* modo edição: atualiza a MESMA atividade (não duplica) e mostra "Concluir" */
   window._tarEditId=id;
+  try{ if(typeof logEvent==='function') logEvent('task_opened','tarefa',(a.dbid||a.id),{titulo:(a.titulo||'').slice(0,140),numero:(a.numero||null)}); }catch(e){}
   var _cb=document.getElementById('t-btn-concluir'); if(_cb) _cb.style.display=(a.col==='finalizado'?'none':'');
   var _sb=document.getElementById('t-btn-salvar'); if(_sb) _sb.textContent='Salvar alterações';
 }
@@ -2437,6 +2464,11 @@ function concluirTarefaKanban(id){
   renderKanban();
   renderPainelTarefasEtiquetas();
   persisteKanban(a);
+  /* produtividade: registra a conclusão (audiência ganha evento próprio) */
+  try{ if(typeof logEvent==='function'){
+    var ehAud=/audi[êe]ncia/i.test((a.titulo||'')+' '+(a.tipoForm||a.tipo||''));
+    logEvent(ehAud?'hearing_completed':'task_completed','tarefa',(a.dbid||a.id),{titulo:(a.titulo||'').slice(0,140),tipo:(a.tipoForm||a.tipo||null),numero:(a.numero||null),resp:(a.resp||null)});
+  } }catch(e){}
 }
 function abrirProcessoDaTarefa(numero){
   if(!numero||numero==='—') return;
@@ -3983,6 +4015,7 @@ async function cadastrarPorNumero(){
   var ultmov=(ands[0]&&ands[0].data)? String(ands[0].data).slice(0,10): null;
   var ins=await sb.from('processos').insert({escritorio_id:esc,numero:num,classe:dj.classe||null,assunto:dj.assunto||null,orgao:dj.orgao||null,ultima_movimentacao:ultmov,fonte:(naoLocalizou?'manual':'datajud')}).select('id').single();
   if(ins.error){ alert('Erro ao salvar: '+ins.error.message); return; }
+  try{ if(typeof logEvent==='function') logEvent('case_registered','processo',num,{modo:(naoLocalizou?'manual':'datajud')}); }catch(eLg){}
   var pid=ins.data.id;
   var arows=ands.filter(function(a){return a.texto;}).map(function(a){return {processo_id:pid,data:(a.data?String(a.data).slice(0,10):null),texto:a.texto,fonte:'datajud'};});
   if(arows.length){ await sb.from('andamentos').insert(arows); }
@@ -4260,6 +4293,7 @@ async function salvarCadManual(){
   /* grava no banco (tolerante: se faltar coluna, mantém na tela) */
   try{ var sb=window.__sb; if(sb){ var ug=await sb.auth.getUser(); var pf=await sb.from('usuarios').select('escritorio_id').eq('id',ug.data.user.id).single(); var esc=pf&&pf.data&&pf.data.escritorio_id;
     if(esc){ var ins=await sb.from('processos').insert({escritorio_id:esc,numero:num,cliente_nome:cli||null,oponente:op||null,assunto:assunto||null,foro:foro||null,status:status,fonte:(ehCaso?'caso':'manual')}).select('id').single(); if(ins&&ins.data){ novo._id=ins.data.id;
+      try{ if(typeof logEvent==='function') logEvent('case_registered','processo',num,{modo:(ehCaso?'caso':'manual')}); }catch(eLg){}
       if(obs){ await sb.from('andamentos').insert({processo_id:ins.data.id,data:new Date().toISOString().slice(0,10),texto:'[Cadastro manual] '+obs,fonte:'manual'}); } } }
   } }catch(e){ console.warn('cadastro manual (banco):',e&&e.message||e); }
   /* Vincular a cliente da base OU criar contato novo */
@@ -4342,6 +4376,7 @@ async function gerarCasoNovoCliente(){
   /* grava no banco (tolerante) */
   try{ var sb=window.__sb; if(sb){ var ug=await sb.auth.getUser(); var pf=await sb.from('usuarios').select('escritorio_id').eq('id',ug.data.user.id).single(); var esc=pf&&pf.data&&pf.data.escritorio_id;
     if(esc){ var ins=await sb.from('processos').insert({escritorio_id:esc,numero:num,cliente_nome:cli||null,oponente:op||null,assunto:(assunto||peca)||null,status:'Administrativo',fonte:'caso'}).select('id').single(); if(ins&&ins.data){ novo._id=ins.data.id;
+      try{ if(typeof logEvent==='function') logEvent('case_registered','processo',num,{modo:'caso'}); }catch(eLg){}
       if(obs) await sb.from('andamentos').insert({processo_id:ins.data.id,data:isoDia,texto:'[Cadastro manual] '+obs,fonte:'manual'});
       await sb.from('andamentos').insert({processo_id:ins.data.id,data:isoDia,texto:pedido,fonte:'manual'}); } }
   } }catch(e){ console.warn('gerar caso (banco):',e&&e.message||e); }
@@ -4564,6 +4599,7 @@ async function _cadastrarProcItem(item, esc2){
   var ands=dj.andamentos||[]; var ultmov=(ands[0]&&ands[0].data)?String(ands[0].data).slice(0,10):null;
   var ins=await sb.from('processos').insert({escritorio_id:esc2,numero:n,classe:dj.classe||null,assunto:dj.assunto||null,orgao:dj.orgao||null,ultima_movimentacao:ultmov,fonte:(naoLoc?'manual':'datajud')}).select('id').single();
   if(ins.error) return false; var pid=ins.data.id;
+  try{ if(typeof logEvent==='function') logEvent('case_registered','processo',n,{modo:'lote'}); }catch(eLg){}
   var arows=ands.filter(function(a){return a.texto;}).map(function(a){return {processo_id:pid,data:(a.data?String(a.data).slice(0,10):null),texto:a.texto,fonte:'datajud'};});
   if(arows.length) await sb.from('andamentos').insert(arows);
   function fd(iso){ if(!iso) return ''; var p=String(iso).slice(0,10).split('-'); return p.length===3?(p[2]+'/'+p[1]+'/'+p[0]):''; }
@@ -5177,11 +5213,11 @@ function go(s){
 function go(s){
   try{ localStorage.setItem('cmp_secao', s); if(s!=='proc-det') localStorage.removeItem('cmp_proc'); }catch(e){}
   var showId=(s==='contatos')?'crm':s;
-  ["painel","triagem","agenda","processos","proc-det","crm","financeiro","etiquetas","procedimentos","diligencias","relatorio","encerrados","inove","james","cadastros","fases","sugestoes","lote"].forEach(function(id){var e=document.getElementById("s-"+id);if(e)e.classList.add("hidden")});
+  ["painel","triagem","agenda","processos","proc-det","crm","financeiro","etiquetas","procedimentos","diligencias","relatorio","encerrados","inove","james","cadastros","fases","sugestoes","lote","produtividade"].forEach(function(id){var e=document.getElementById("s-"+id);if(e)e.classList.add("hidden")});
   var sec=document.getElementById("s-"+showId); if(sec) sec.classList.remove("hidden");
   document.querySelectorAll("#nav a").forEach(function(a){a.classList.remove("active")});
   var link=document.querySelector('#nav a[data-s="'+s+'"]');if(link)link.classList.add("active");
-  var t={painel:"Painel",triagem:"Publicações",agenda:"Agenda — Kanban (etapas CMP)",processos:"Processos",crm:"Comercial",financeiro:"Financeiro — cobranças e recebimentos",contatos:"Contatos",procedimentos:"Procedimentos CMP",etiquetas:"Etiquetas","proc-det":"Processo",diligencias:"Diligências",relatorio:"Relatório mensal para clientes",encerrados:"Processos encerrados",inove:"Processos Inove (terceiros)",james:"Processos contra James Laurence",cadastros:"Cadastros — Tribunais de Justiça",inovesol:"Solicitar novas funcionalidades",fases:"Revisar fases dos processos"};
+  var t={painel:"Painel",triagem:"Publicações",agenda:"Agenda — Kanban (etapas CMP)",processos:"Processos",crm:"Comercial",financeiro:"Financeiro — cobranças e recebimentos",contatos:"Contatos",procedimentos:"Procedimentos CMP",etiquetas:"Etiquetas","proc-det":"Processo",diligencias:"Diligências",relatorio:"Relatório mensal para clientes",encerrados:"Processos encerrados",inove:"Processos Inove (terceiros)",james:"Processos contra James Laurence",cadastros:"Cadastros — Tribunais de Justiça",inovesol:"Solicitar novas funcionalidades",fases:"Revisar fases dos processos",produtividade:"Produtividade e auditoria de logins"};
   /* sub-pastas de Processos (Inove/Encerrados/James/lotes personalizados): só
      aparecem dentro da área de Processos (inclusive ao abrir um lote específico) */
   try{
@@ -5203,6 +5239,7 @@ function go(s){
   if(s==="cadastros")renderCadastros();
   if(s==="inovesol")renderInoveSol();
   if(s==="fases" && typeof renderFasesRevisao==='function')renderFasesRevisao();
+  if(s==="produtividade" && typeof renderProdutividade==='function')renderProdutividade();
   if(s==="sugestoes" && typeof renderSugestoes==='function'){ var _an=document.getElementById('sg-autor'); if(_an && !_an.value){ _an.value=((document.getElementById('who-name')||{}).textContent||'').trim(); } renderSugestoes(); }
   if(s==="lote") renderLote();
   try{ if(typeof renderNavLotes==='function') renderNavLotes(); }catch(e){}
@@ -6267,6 +6304,12 @@ async function salvarPartesContatos(){
   if(w.error){ alert('Erro ao salvar: '+w.error.message); return; }
   if(!w.data||!w.data.length){ alert('Nada foi gravado (o banco não confirmou a alteração — possível problema de permissão). Recarregue a página e tente de novo; se repetir, me avise.'); return; }
   atual.cliente=cli; atual.oponente=op; atual.tipo=ass; atual.ctl=novoCtl;
+  /* produtividade: ficha salva; se agora tem e-mail E telefone, conta como completada */
+  try{ if(typeof logEvent==='function'){
+    logEvent('record_saved','processo',atual.numero,{campos:'partes/contatos'});
+    var temMail=/@/.test(novoCtl), temTel=/\d{8,}/.test(novoCtl.replace(/[^\d,;]/g,''));
+    if(temMail&&temTel) logEvent('contact_completed','processo',atual.numero,null);
+  } }catch(e){}
   var m=document.getElementById('edt-modal'); if(m) m.remove();
   var ix=DADOS.processos.indexOf(atual); if(ix>=0) abrir(ix);
   try{ if(typeof renderProc==='function') renderProc(); }catch(e){}
@@ -6931,6 +6974,7 @@ async function avisoAudienciaCliente(p, isoData, hora, tipo){
       try{ await sb.from('avisos_audiencia').delete().eq('id',mk.data.id); }catch(e){}
       console.warn('avisoAudienciaCliente:',(j&&j.erro)||('HTTP '+r.status)); return;
     }
+    try{ if(typeof logEvent==='function') logEvent('email_sent','processo',p.numero,{para:email,tipo:'aviso_audiencia_'+tipo,automatico:true}); }catch(eLg){}
     /* registra no histórico do processo */
     try{ if(p._id){ var hoje=new Date().toISOString().slice(0,10);
       var htxt='[Aviso ao cliente] '+(tipo==='vespera'?'Lembrete de véspera':'Comunicação de audiência designada')+' enviado para '+email+' — audiência em '+dbr+horaTxt+'.';
@@ -7991,6 +8035,7 @@ async function enviarAgoraAtualizacao(){
       : (_cs===false) ? ('\n\n⚠ Não foi possível salvar a cópia em Enviados ('+(j.copia_motivo||'')+'). O e-mail FOI enviado.')
       : '\n\n⚠ O e-mail FOI enviado, mas o SERVIDOR ainda não foi recompilado para salvar em Enviados (falta rodar "npm run build" no VPS).';
     alert('E-mail enviado de '+(j.de||'contato@cmpadvogados.com.br')+' para '+email+'.'+_msgCopia);
+    try{ if(typeof logEvent==='function') logEvent('email_sent','processo',numero||null,{para:email,assunto:(assunto||'').slice(0,140)}); }catch(e){}
     await registrarEnvioAtualizacao(true);
     fecharAtualizar();
   }catch(e){ alert('Erro ao enviar: '+(e&&e.message||e)); }
@@ -8398,6 +8443,7 @@ function removerProcVinculado(n){
 /* ponto 12: persiste os vinculados no banco. Requer coluna processos.vinculados (jsonb ou text[]).
    Se a coluna não existir, o erro é silenciado e a vinculação continua válida na tela. */
 function persisteVinculados(){
+  try{ if(typeof logEvent==='function'&&atual) logEvent('case_linked','processo',atual.numero,{vinculados:(atual.vinculados||[]).length}); }catch(e){}
   try{ var sb=window.__sb; if(sb && atual && atual._id){ sb.from('processos').update({vinculados:(atual.vinculados||[])}).eq('id',atual._id).then(function(r){ if(r&&r.error){ console.warn('vinculados não persistidos (crie a coluna processos.vinculados):',r.error.message); } }); } }catch(e){ console.warn('persisteVinculados falhou:',e); }
 }
 function gerarDiligencia(pid,numEnc){
@@ -9005,6 +9051,7 @@ async function emitirCobranca(){
        "Boletos" ali e guarda o link do boleto — funciona também em casos sem
        nº CNJ, identificados só por CNPJ/CPF (Valtex, FF Dourado, Conceito...) */
     if(window.__cobProcSel && j.cobranca){ try{ await vincularBoletoProcesso(window.__cobProcSel, j.cobranca, descricao); }catch(e){} }
+    try{ if(typeof logEvent==='function'&&j.cobranca) logEvent('boleto_issued','cobranca',j.cobranca.id,{valor_centavos:centavos,vencimento:vencimento,vinculado:(window.__cobProcSel?String(window.__cobProcSel.numero||''):null)}); }catch(e){}
     /* boleto emitido: envia por e-mail ao cliente IMEDIATAMENTE (texto varia
        conforme haja processo/caso vinculado ou não) */
     try{
@@ -9066,6 +9113,7 @@ async function _enviarBoletoPorEmail(destEmail, cob, procVinc, nomeCliente){
     var r=await fetch('/api/enviar-email',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({para:destEmail,assunto:assunto,corpo:corpo,numero:(procVinc&&procVinc.numero)||undefined})});
     var j=await r.json().catch(function(){return {};});
     if(!r.ok||j.erro) return {ok:false,erro:(j&&j.erro)||('HTTP '+r.status)};
+    try{ if(typeof logEvent==='function') logEvent('boleto_sent','cobranca',null,{para:destEmail,valor_centavos:(cob.valor_centavos||0),numero:(procVinc&&procVinc.numero)||null}); }catch(e){}
     try{
       if(procVinc&&procVinc._id){
         var hoje=new Date().toISOString().slice(0,10);
@@ -9217,6 +9265,226 @@ function finCopiarPix(el,enc){
   var emv=decodeURIComponent(enc);
   try{ navigator.clipboard.writeText(emv); var t=el.textContent; el.textContent='Copiado!'; setTimeout(function(){el.textContent=t;},1500); }
   catch(e){ prompt('Copie o código PIX:', emv); }
+}
+</script>
+<script>
+/* ===== Módulo de Produtividade — log central de eventos (activity_events) =====
+   ADITIVO: nunca quebra o fluxo existente. Toda métrica (tempo ativo, pontos,
+   volume) deriva DESTE log — sem vigilância de mouse/tela/screenshot.
+   Eventos: login/logout, task_opened/task_completed, record_saved,
+   boleto_issued/boleto_sent, email_sent, case_registered, publication_handled,
+   hearing_completed... (ver tabela activity_events no banco). */
+window.__prodEsc=null; window.__prodUid=null;
+async function _prodIds(){
+  if(window.__prodEsc&&window.__prodUid) return true;
+  try{
+    var sb=window.__sb; if(!sb) return false;
+    var u=await sb.auth.getUser(); var uid=u&&u.data&&u.data.user&&u.data.user.id; if(!uid) return false;
+    window.__prodUid=uid;
+    if(!window.__prodEsc){ var pf=await sb.from('usuarios').select('escritorio_id').eq('id',uid).single(); window.__prodEsc=(pf&&pf.data&&pf.data.escritorio_id)||null; }
+    return !!(window.__prodEsc&&window.__prodUid);
+  }catch(e){ return false; }
+}
+/* fire-and-forget: registra o evento sem travar nem quebrar o fluxo chamador */
+function logEvent(tipo, entTipo, entId, meta){
+  try{
+    _prodIds().then(function(ok){
+      if(!ok) return;
+      var nome=((document.getElementById('who-name')||{}).textContent||'').trim();
+      return window.__sb.from('activity_events').insert({
+        escritorio_id:window.__prodEsc, user_id:window.__prodUid, user_nome:nome||null,
+        event_type:String(tipo||''), entity_type:entTipo||null,
+        entity_id:(entId!=null&&entId!=='')?String(entId):null, metadata:meta||null
+      });
+    }).then(function(r){ if(r&&r.error) console.warn('logEvent:',r.error.message); }).catch(function(){});
+  }catch(e){}
+}
+/* login: 1 evento por sessão do navegador (não a cada F5) */
+(function(){
+  var tenta=0;
+  var iv=setInterval(function(){
+    tenta++;
+    if(tenta>30){ clearInterval(iv); return; }
+    try{
+      if(!window.__sb) return;
+      window.__sb.auth.getSession().then(function(s){
+        var sess=s&&s.data&&s.data.session;
+        if(!sess) return;
+        clearInterval(iv);
+        try{
+          var marca='cmp_login_'+String(sess.access_token||'').slice(-16);
+          if(!sessionStorage.getItem(marca)){ sessionStorage.setItem(marca,'1'); logEvent('login','sessao',null,null); }
+        }catch(e){ logEvent('login','sessao',null,null); }
+      });
+    }catch(e){}
+  },1000);
+  /* logout aproximado: ao fechar/sair da aba (sendBeacon não disponível via SDK;
+     melhor esforço com o evento pagehide — a métrica de sessão usa IDLE_TIMEOUT
+     como corte, então o logout explícito é opcional) */
+  window.addEventListener('pagehide',function(){ try{ logEvent('logout','sessao',null,null); }catch(e){} });
+})();
+
+/* ===== Dashboard de Produtividade + Auditoria de logins ===== */
+var PRD_EVT=null, PRD_PESOS=null, PRD_CFG=null;
+function _prdCfg(chave,def){ var v=(PRD_CFG||{})[chave]; return (v==null||v==='')?def:v; }
+async function _prdCarrega(){
+  var sb=window.__sb; if(!sb) return;
+  var per=(document.getElementById('prd-periodo')||{}).value||'30';
+  var d0=new Date();
+  if(per==='hoje'){ d0.setHours(0,0,0,0); } else { d0=new Date(Date.now()-parseInt(per,10)*86400000); }
+  var rs=await Promise.all([
+    sb.from('activity_events').select('user_id,user_nome,event_type,entity_type,entity_id,occurred_at,metadata').gte('occurred_at',d0.toISOString()).order('occurred_at',{ascending:true}).limit(20000),
+    PRD_PESOS?null:sb.from('task_weights').select('tipo,rotulo,pontos'),
+    PRD_CFG?null:sb.from('produtividade_config').select('chave,valor')
+  ].filter(Boolean));
+  PRD_EVT=(rs[0]&&rs[0].data)||[];
+  var i=1;
+  if(!PRD_PESOS && rs[i]){ PRD_PESOS={}; ((rs[i].data)||[]).forEach(function(w){ PRD_PESOS[w.tipo]={rotulo:w.rotulo||w.tipo,pontos:parseFloat(w.pontos)||0}; }); i++; }
+  if(!PRD_CFG && rs[i]){ PRD_CFG={}; ((rs[i].data)||[]).forEach(function(c){ PRD_CFG[c.chave]=c.valor; }); }
+}
+/* pontos de uma tarefa concluída: casa o texto do título/tipo com os pesos configurados */
+function _prdPontosTarefa(ev){
+  var md=ev.metadata||{}; var txt=((md.titulo||'')+' '+(md.tipo||'')).toLowerCase();
+  if(/peti[çc][ãa]o inicial|inicial\b/.test(txt)) return (PRD_PESOS['peticao_inicial']||{}).pontos||0;
+  if(/contesta/.test(txt)) return (PRD_PESOS['contestacao']||{}).pontos||0;
+  if(/agravo/.test(txt)) return (PRD_PESOS['agravo']||{}).pontos||0;
+  if(/contrarraz/.test(txt)) return (PRD_PESOS['contrarrazoes']||{}).pontos||0;
+  if(/recurso|recorrer|embarg/.test(txt)) return (PRD_PESOS['recurso']||{}).pontos||0;
+  if(/c[áa]lculo/.test(txt)) return (PRD_PESOS['calculos']||{}).pontos||0;
+  if(/endere[çc]o|gratuidade/.test(txt)) return (PRD_PESOS['correcao_endereco_gratuidade']||{}).pontos||0;
+  return parseFloat(_prdCfg('peso_default','1'))||1;
+}
+/* tempo ativo derivado: soma janelas entre eventos consecutivos, descartando
+   pausas > IDLE_TIMEOUT — exceto pausa seguida de entrega (task_completed),
+   que conta como trabalho fora do sistema ("tempo em entregável"). */
+function _prdTempoAtivo(evs){
+  var idleMs=(parseFloat(_prdCfg('idle_timeout_min','5'))||5)*60000;
+  var ativo=0, entregavel=0;
+  for(var i=1;i<evs.length;i++){
+    var gap=new Date(evs[i].occurred_at)-new Date(evs[i-1].occurred_at);
+    if(gap<=0) continue;
+    if(gap<=idleMs) ativo+=gap;
+    else if(evs[i].event_type==='task_completed'||evs[i].event_type==='hearing_completed') entregavel+=gap;
+  }
+  return {ativo:ativo, entregavel:entregavel};
+}
+function _prdFmtMin(ms){ var m=Math.round(ms/60000); if(m<60) return m+' min'; return Math.floor(m/60)+'h'+String(m%60).padStart(2,'0'); }
+async function renderProdutividade(){
+  var cards=document.getElementById('prd-cards'); if(!cards) return;
+  cards.innerHTML='<div class="note">Carregando eventos…</div>';
+  try{ await _prdCarrega(); }catch(e){ cards.innerHTML='<div class="note">Falha ao carregar: '+String(e&&e.message||e)+'</div>'; return; }
+  var evs=PRD_EVT||[];
+  /* povoamento do filtro de pessoa */
+  var selU=document.getElementById('prd-user');
+  if(selU){ var nomes={}; evs.forEach(function(e){ if(e.user_id) nomes[e.user_id]=e.user_nome||e.user_id.slice(0,8); });
+    var cur=selU.value; selU.innerHTML='<option value="">Todas as pessoas</option>'+Object.keys(nomes).map(function(id){ return '<option value="'+id+'">'+finEsc(nomes[id])+'</option>'; }).join(''); selU.value=cur; }
+  var fu=(selU||{}).value||'';
+  if(fu) evs=evs.filter(function(e){ return e.user_id===fu; });
+  /* agrupa por pessoa */
+  var por={};
+  evs.forEach(function(e){ (por[e.user_id]=por[e.user_id]||{nome:(e.user_nome||'—'),evs:[]}).evs.push(e); if(e.user_nome) por[e.user_id].nome=e.user_nome; });
+  var html='';
+  Object.keys(por).forEach(function(uid){
+    var u=por[uid]; var c={}; var pontos=0; var boletosEmit=0, boletosEnv=0;
+    u.evs.forEach(function(e){ c[e.event_type]=(c[e.event_type]||0)+1;
+      if(e.event_type==='task_completed'||e.event_type==='hearing_completed') pontos+=_prdPontosTarefa(e);
+      if(e.event_type==='boleto_issued') boletosEmit++;
+      if(e.event_type==='boleto_sent') boletosEnv++;
+    });
+    var t=_prdTempoAtivo(u.evs);
+    function linha(l,v){ if(!v) return ''; return '<div style="display:flex;justify-content:space-between;font-size:12.5px;padding:2px 0"><span style="color:var(--muted)">'+l+'</span><b>'+v+'</b></div>'; }
+    html+='<div style="border:1px solid var(--line);border-radius:12px;padding:14px">'
+      +'<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px"><b style="color:var(--navy)">'+finEsc(u.nome)+'</b><span style="font-size:18px;font-weight:800;color:#127a53">'+(Math.round(pontos*10)/10)+' pts</span></div>'
+      +linha('Tempo ativo (no sistema)',_prdFmtMin(t.ativo))
+      +(t.entregavel?linha('Tempo em entregável (fora do sistema)',_prdFmtMin(t.entregavel)):'')
+      +linha('Tarefas concluídas',c.task_completed||0)
+      +linha('Audiências concluídas',c.hearing_completed||0)
+      +linha('Publicações tratadas',c.publication_handled||0)
+      +linha('E-mails enviados',c.email_sent||0)
+      +linha('Boletos emitidos',boletosEmit)
+      +linha('Boletos enviados ao cliente',boletosEnv)
+      +linha('Processos cadastrados',c.case_registered||0)
+      +linha('Processos vinculados',c.case_linked||0)
+      +linha('Fichas completadas (tel+e-mail)',c.contact_completed||0)
+      +linha('Registros salvos',c.record_saved||0)
+      +linha('Logins',c.login||0)
+      +'</div>';
+  });
+  cards.innerHTML=html||'<div class="note">Nenhum evento no período — o log começou a registrar agora; os números aparecem conforme a equipe usa o sistema.</div>';
+  renderAuditoriaLogins();
+  renderProdutividadeConfig();
+}
+/* §7 — auditoria de logins: todos os acessos, último login e faltosos */
+async function renderAuditoriaLogins(){
+  var el=document.getElementById('prd-logins'); if(!el) return;
+  try{
+    var sb=window.__sb;
+    var rs=await Promise.all([
+      sb.from('usuarios').select('id,nome,email,papel,criado_em'),
+      sb.from('activity_events').select('user_id,occurred_at').eq('event_type','login').order('occurred_at',{ascending:false}).limit(2000)
+    ]);
+    var users=(rs[0]&&rs[0].data)||[]; var logins=(rs[1]&&rs[1].data)||[];
+    var ultimo={}; logins.forEach(function(l){ if(!ultimo[l.user_id]) ultimo[l.user_id]=l.occurred_at; });
+    var faltosoDias=parseInt(_prdCfg('faltoso_dias','7'),10)||7;
+    var agora=Date.now();
+    el.innerHTML='<table style="width:100%;font-size:13px"><thead><tr><th style="text-align:left">Nome</th><th style="text-align:left">E-mail</th><th style="text-align:left">Papel</th><th style="text-align:left">Criado em</th><th style="text-align:left">Último login</th><th style="text-align:left">Situação</th></tr></thead><tbody>'
+      +users.map(function(u){
+        var ll=ultimo[u.id]; var dias=ll?Math.floor((agora-new Date(ll))/86400000):null;
+        var sit;
+        if(!ll) sit='<span style="color:#8a6d1a;font-weight:700">nunca logou (desde o início do log)</span>';
+        else if(dias>faltosoDias) sit='<span style="color:#b5342b;font-weight:700">faltoso — '+dias+' dias sem login</span>';
+        else sit='<span style="color:#127a53;font-weight:700">ativo</span>';
+        return '<tr><td>'+finEsc(u.nome||'—')+'</td><td>'+finEsc(u.email||'—')+'</td><td>'+finEsc(u.papel||'—')+'</td><td>'+(u.criado_em?new Date(u.criado_em).toLocaleDateString('pt-BR'):'—')+'</td><td>'+(ll?new Date(ll).toLocaleString('pt-BR'):'—')+'</td><td>'+sit+'</td></tr>';
+      }).join('')
+      +'</tbody></table>'
+      +'<p class="note" style="margin-top:8px">Para criar/gerenciar acessos use a tela <a onclick="abrirAcessos()" style="cursor:pointer;color:#185FA5;text-decoration:underline">Acessos</a> (botão do seu nome). O último login considera o log de eventos, que começou a registrar em jul/2026.</p>';
+  }catch(e){ el.innerHTML='<div class="note">Falha ao carregar: '+String(e&&e.message||e)+'</div>'; }
+}
+/* §8 — parâmetros configuráveis (edição inline, gravada no banco) */
+async function renderProdutividadeConfig(){
+  var el=document.getElementById('prd-config'); if(!el) return;
+  var rot={idle_timeout_min:'Pausa que corta o tempo ativo (minutos)',faltoso_dias:'Dias sem login para marcar como faltoso',peso_default:'Pontos para tarefa de tipo não listado',ranking_so_gestao:'Ranking visível só à gestão (true/false)',boleto_ok_regra:'Regra de "boleto enviado corretamente"'};
+  var html='<table style="width:100%;font-size:13px"><tbody>';
+  Object.keys(rot).forEach(function(k){
+    html+='<tr><td style="color:var(--muted);padding:4px 8px 4px 0">'+rot[k]+'</td><td style="padding:4px 0"><b>'+finEsc(_prdCfg(k,'—'))+'</b> <a onclick="editarPrdConfig(\''+k+'\')" style="cursor:pointer;color:#185FA5;font-size:12px">✎ editar</a></td></tr>';
+  });
+  html+='</tbody></table>';
+  html+='<p style="margin:10px 0 4px;font-weight:700;color:var(--navy);font-size:13px">Pesos por tipo de tarefa</p><table style="font-size:13px"><tbody>';
+  Object.keys(PRD_PESOS||{}).forEach(function(t){
+    html+='<tr><td style="color:var(--muted);padding:2px 12px 2px 0">'+finEsc(PRD_PESOS[t].rotulo)+'</td><td><b>'+PRD_PESOS[t].pontos+' pts</b> <a onclick="editarPrdPeso(\''+t+'\')" style="cursor:pointer;color:#185FA5;font-size:12px">✎</a></td></tr>';
+  });
+  html+='</tbody></table>';
+  el.innerHTML=html;
+}
+async function editarPrdConfig(chave){
+  var v=window.prompt('Novo valor para "'+chave+'":', _prdCfg(chave,''));
+  if(v===null) return; v=String(v).trim(); if(!v) return;
+  try{
+    var esc=window.__prodEsc||await (async function(){ await _prodIds(); return window.__prodEsc; })();
+    var r=await window.__sb.from('produtividade_config').upsert({escritorio_id:esc,chave:chave,valor:v});
+    if(r&&r.error){ alert('Erro: '+r.error.message); return; }
+    PRD_CFG[chave]=v; logEvent('config_changed','produtividade_config',chave,{valor:v});
+    renderProdutividade();
+  }catch(e){ alert('Erro: '+(e&&e.message||e)); }
+}
+async function editarPrdPeso(tipo){
+  var atual=(PRD_PESOS[tipo]||{}).pontos;
+  var v=window.prompt('Pontos para "'+((PRD_PESOS[tipo]||{}).rotulo||tipo)+'":', atual);
+  if(v===null) return; var n=parseFloat(String(v).replace(',','.')); if(isNaN(n)||n<0){ alert('Valor inválido.'); return; }
+  try{
+    var esc=window.__prodEsc||await (async function(){ await _prodIds(); return window.__prodEsc; })();
+    var r=await window.__sb.from('task_weights').update({pontos:n}).eq('escritorio_id',esc).eq('tipo',tipo);
+    if(r&&r.error){ alert('Erro: '+r.error.message); return; }
+    PRD_PESOS[tipo].pontos=n; logEvent('config_changed','task_weights',tipo,{pontos:n});
+    renderProdutividade();
+  }catch(e){ alert('Erro: '+(e&&e.message||e)); }
+}
+function exportarProdutividadeCSV(){
+  var evs=PRD_EVT||[]; if(!evs.length){ alert('Nada para exportar no período.'); return; }
+  var head='user_nome;event_type;entity_type;entity_id;occurred_at;metadata';
+  var rows=evs.map(function(e){ return [e.user_nome||'',e.event_type||'',e.entity_type||'',e.entity_id||'',e.occurred_at||'',JSON.stringify(e.metadata||{}).replace(/;/g,',')].join(';'); });
+  var blob=new Blob(['﻿'+head+'\n'+rows.join('\n')],{type:'text/csv;charset=utf-8'});
+  var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='produtividade-eventos.csv'; a.click();
 }
 </script>
 </body>
