@@ -9,3 +9,8 @@ node_modules/
 .deploy-build.state
 .deploy-build.log
 package-lock.json
+
+# Chaves/credenciais Claude (nunca commitar)
+.claude/settings.local.json
+.claude/.credentials.json
+cmp-api-key
