@@ -102,6 +102,30 @@ export async function POST(request) {
   if (cc && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(cc)) return Response.json({ erro: 'e-mail da cópia (cc) inválido' }, { status: 400 })
   if (!corpo.trim()) return Response.json({ erro: 'corpo vazio' }, { status: 400 })
 
+  // Trava anti-repetição: mesmo destinatário + mesmo processo + mesmo conteúdo
+  // NO MESMO DIA não reenvia (amanhã libera). Varas com vários processos recebem
+  // normalmente — o bloqueio é por processo (campo `numero`). Grava o marcador
+  // ANTES de enviar (unique no banco); se o envio falhar, remove para permitir
+  // nova tentativa. Se a infra do dedup falhar, o envio segue sem bloquear.
+  let dedupAdmin = null, dedupId = null
+  const svcKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (svcKey) {
+    try {
+      dedupAdmin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, svcKey, { auth: { persistSession: false } })
+      const hashConteudo = crypto.createHash('sha1').update(assunto + '\n' + corpo).digest('hex')
+      const ins = await dedupAdmin.from('emails_enviados_dedup').insert({ para: para.toLowerCase(), numero: numero || '', hash: hashConteudo }).select('id').single()
+      if (ins.error) {
+        if (String(ins.error.code) === '23505') {
+          return Response.json({
+            erro: 'BLOQUEADO — repetição: um e-mail com este mesmo conteúdo, para este destinatário e este processo, já foi enviado HOJE. Para não repetir, o reenvio libera amanhã; se for um aviso realmente novo, altere o texto.',
+            repetido: true,
+          }, { status: 409 })
+        }
+        // falha diferente no dedup (tabela ausente etc.): não bloqueia o envio
+      } else { dedupId = ins.data && ins.data.id }
+    } catch (e) { /* dedup indisponível: segue sem bloquear */ }
+  }
+
   // logo embutido via CID (não depende de link externo)
   const attachments = []
   let logoTag = ''
@@ -165,6 +189,8 @@ export async function POST(request) {
     const copia = await salvarEnviados(raw)   // grava em "Enviados" (best-effort)
     return Response.json({ ok: true, de: smtpUser, id: (info && info.messageId) || messageId, copiado_enviados: copia.ok, copia_pasta: copia.pasta, copia_motivo: copia.ok ? undefined : copia.motivo })
   } catch (e) {
+    // envio falhou: solta a trava anti-repetição para permitir tentar de novo hoje
+    if (dedupAdmin && dedupId) { try { await dedupAdmin.from('emails_enviados_dedup').delete().eq('id', dedupId) } catch (_) {} }
     return Response.json({ erro: 'falha ao enviar: ' + (e && e.message || e) }, { status: 502 })
   }
 }
