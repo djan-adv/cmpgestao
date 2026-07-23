@@ -64,6 +64,12 @@ export async function POST(request) {
     try { body = await request.json() } catch (e) { return j({ erro: 'json inválido' }, 400) }
     const token = String(body.token || '').trim()
     if (token.split('.').length !== 3) return j({ erro: 'token inválido (esperado um JWT do PDPJ)' }, 400)
+    // refresh_token + metadados OIDC (opcionais) — habilitam a renovação automática
+    const refresh = String(body.refresh_token || body.refresh || '').trim() || null
+    const clientId = String(body.client_id || '').trim()
+    const tokenUrl = String(body.token_url || '').trim()
+    let oidc = null
+    if (clientId || tokenUrl) { oidc = {}; if (clientId) oidc.client_id = clientId; if (tokenUrl) oidc.token_url = tokenUrl }
 
     const encKey = process.env.JUSBR_ENC_KEY
     if (!encKey) return j({ erro: 'servidor sem JUSBR_ENC_KEY (defina no .env.local)' }, 500)
@@ -71,9 +77,9 @@ export async function POST(request) {
 
     const expira = expDoJwt(token)
     const sb = admin()
-    const { error } = await sb.rpc('jusbr_set_token', { p_esc: ESCRITORIO_CMP, p_token: token, p_key: encKey, p_expira: expira, p_por: quem })
+    const { error } = await sb.rpc('jusbr_set_sessao', { p_esc: ESCRITORIO_CMP, p_token: token, p_refresh: refresh, p_key: encKey, p_expira: expira, p_por: quem, p_oidc: oidc })
     if (error) return j({ erro: 'falha ao salvar token: ' + error.message }, 500)
-    return j({ ok: true, expira })
+    return j({ ok: true, expira, refresh: !!refresh })
   } catch (e) {
     return j({ erro: 'erro no servidor: ' + String((e && e.message) || e) }, 500)
   }
@@ -84,7 +90,8 @@ export async function GET(request) {
   const user = await usuario(request)
   if (!user) return Response.json({ erro: 'não autenticado' }, { status: 401 })
   const sb = admin()
-  const { data } = await sb.from('jusbr_sessao').select('expira,atualizado_em,atualizado_por').eq('escritorio_id', ESCRITORIO_CMP).maybeSingle()
+  const { data } = await sb.from('jusbr_sessao').select('expira,atualizado_em,atualizado_por,refresh_cif,refresh_em').eq('escritorio_id', ESCRITORIO_CMP).maybeSingle()
   const valido = !!(data && data.expira && new Date(data.expira).getTime() > Date.now())
-  return Response.json({ ok: true, valido, expira: data && data.expira || null, atualizado_em: data && data.atualizado_em || null })
+  const autoRenova = !!(data && data.refresh_cif)
+  return Response.json({ ok: true, valido, auto_renova: autoRenova, expira: data && data.expira || null, atualizado_em: data && data.atualizado_em || null, refresh_em: data && data.refresh_em || null })
 }

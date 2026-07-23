@@ -5,6 +5,7 @@
 // marca quais já estão baixados no sistema.
 
 import { createClient } from '@supabase/supabase-js'
+import { getFreshToken } from '../lib.js'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -29,15 +30,8 @@ async function usuario(request) {
 function admin() {
   return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } })
 }
-async function tokenValido(sb) {
-  const encKey = process.env.JUSBR_ENC_KEY
-  if (!encKey) return { erro: 'sem_chave' }
-  const { data } = await sb.rpc('jusbr_get_token', { p_esc: ESCRITORIO_CMP, p_key: encKey })
-  const row = Array.isArray(data) ? data[0] : data
-  if (!row || !row.token) return { erro: 'sem_token' }
-  if (row.expira && new Date(row.expira).getTime() <= Date.now()) return { erro: 'expirado' }
-  return { token: row.token }
-}
+// usa a sessão com renovação automática (refresh_token) — ver ../lib.js
+async function tokenValido(sb) { return await getFreshToken(sb) }
 // normaliza um documento do JSON do PDPJ para o formato do app
 function normDoc(d) {
   const arq = d.arquivo || {}

@@ -4,6 +4,7 @@
 // Se já estiver baixado, devolve o existente. Guarda o PDF em base64 (jusbr_arquivos).
 
 import { createClient } from '@supabase/supabase-js'
+import { getFreshToken } from '../lib.js'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 45
@@ -47,13 +48,12 @@ export async function POST(request) {
   const { data: existente } = await sb.from('jusbr_arquivos').select('id,doc_nome,doc_tipo,tamanho,baixado_em').eq('escritorio_id', ESCRITORIO_CMP).eq('processo_numero', numero).eq('doc_uuid', uuid).maybeSingle()
   if (existente) return Response.json({ ok: true, id: existente.id, nome: existente.doc_nome, tipo: existente.doc_tipo, tamanho: existente.tamanho, ja_tinha: true })
 
-  // token (cifrado — decifra no servidor)
+  // token (com renovação automática via refresh_token — ver ../lib.js)
   const encKey = process.env.JUSBR_ENC_KEY
   if (!encKey) return Response.json({ erro: 'servidor sem JUSBR_ENC_KEY (chave de cifragem)' }, { status: 500 })
-  const { data: sessRows } = await sb.rpc('jusbr_get_token', { p_esc: ESCRITORIO_CMP, p_key: encKey })
-  const sess = Array.isArray(sessRows) ? sessRows[0] : sessRows
-  if (!sess || !sess.token) return Response.json({ erro: 'jus.br: sem token — sincronize a sessão', motivo: 'sem_token' }, { status: 409 })
-  if (sess.expira && new Date(sess.expira).getTime() <= Date.now()) return Response.json({ erro: 'jus.br: token expirado — sincronize novamente', motivo: 'expirado' }, { status: 409 })
+  const sess = await getFreshToken(sb)
+  if (sess.erro === 'sem_token' || sess.erro === 'sem_chave') return Response.json({ erro: 'jus.br: sem token — sincronize a sessão', motivo: 'sem_token' }, { status: 409 })
+  if (sess.erro) return Response.json({ erro: 'jus.br: token expirado — sincronize novamente', motivo: 'expirado' }, { status: 409 })
 
   // resolve a URL de download
   let href = String(body.href || '').trim()
