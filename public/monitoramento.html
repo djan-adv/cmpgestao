@@ -69,8 +69,14 @@
     <h1 id="proc-tit">Processos encontrados</h1>
     <p class="sub" id="proc-sub"></p>
     <div id="proc-lista"></div>
-    <div class="tot"><span>Total</span><span id="tot-valor">R$ 0,00</span></div>
-    <button class="btn gold" id="btn-contratar" onclick="contratar()">Contratar acompanhamento e gerar boleto</button>
+    <div class="tot"><span>Total (avulso, uma vez)</span><span id="tot-valor">R$ 0,00</span></div>
+    <button class="btn gold" id="btn-contratar" onclick="contratar()">Contratar avulso e gerar boleto</button>
+    <div style="text-align:center;margin:14px 0 4px;color:var(--muted);font-size:12px">— ou —</div>
+    <div style="background:#eef7f1;border:1px solid #bfe0cf;border-radius:12px;padding:14px">
+      <div style="font-weight:800;color:var(--ok);font-size:15px">Assinatura mensal <span id="assin-preco">R$ 19,90</span>/mês</div>
+      <p class="note" style="margin:6px 0 10px">Monitoramos <b>todos os processos no seu nome</b> e fazemos varreduras às <b>segundas e sextas</b> — você é avisado por e-mail sempre que surgir um processo novo. Cancele quando quiser (sem pagar, a emissão é suspensa).</p>
+      <button class="btn" id="btn-assinar" style="background:var(--ok)" onclick="assinar()">Assinar mensal e gerar 1º boleto</button>
+    </div>
     <div id="erro2" class="erro"></div>
     <div class="lgpd">🔒 <b>Uso pessoal (LGPD):</b> as informações do acompanhamento são de uso exclusivo do titular e não devem ser divulgadas ou repassadas a terceiros. Este acompanhamento atende a uma solicitação sua e não constitui oferta de serviços.</div>
   </div>
@@ -138,8 +144,22 @@ async function contratar(){
   b.disabled=false; b.textContent=t;
 }
 function copiarPix(){ try{ navigator.clipboard.writeText(window.__pix||''); alert('Código PIX copiado!'); }catch(e){ prompt('Copie o código PIX:', window.__pix||''); } }
+async function assinar(){
+  erro('erro2','');
+  var b=el('btn-assinar'); b.disabled=true; var t=b.textContent; b.textContent='Criando assinatura…';
+  try{
+    var r=await fetch('/api/monitoramento',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({acao:'assinar',doc:docDig(),nome:NOME,email:(el('email').value||'').trim()})});
+    var j=await r.json();
+    if(!r.ok){ erro('erro2',j.erro||'Falha ao criar a assinatura.'); b.disabled=false; b.textContent=t; return; }
+    el('pay-sub').innerHTML='Assinatura mensal criada (R$ '+((j.preco||1990)/100).toFixed(2).replace('.',',')+'/mês). Pague o 1º boleto para ativar. Nas próximas segundas e sextas fazemos a varredura e avisamos novos processos.';
+    if(j.boleto_url){ el('pay-link').href=j.boleto_url; el('pay-link').style.display=''; } else el('pay-link').style.display='none';
+    el('step-proc').classList.add('hide'); el('step-pay').classList.remove('hide');
+    window.scrollTo(0,0);
+  }catch(e){ erro('erro2','Erro de rede. Tente de novo.'); }
+  b.disabled=false; b.textContent=t;
+}
 /* preço vindo do servidor (pra bater com o total) — busca leve */
-fetch('/api/monitoramento',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({acao:'preco'})}).then(function(r){return r.json();}).then(function(j){ if(j&&j.preco){ window.__preco=j.preco; PRECO_TXT='R$ '+(j.preco/100).toFixed(2).replace('.',','); } }).catch(function(){});
+fetch('/api/monitoramento',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({acao:'preco'})}).then(function(r){return r.json();}).then(function(j){ if(j&&j.preco){ window.__preco=j.preco; PRECO_TXT='R$ '+(j.preco/100).toFixed(2).replace('.',','); } if(j&&j.assinatura){ var ap=document.getElementById('assin-preco'); if(ap) ap.textContent='R$ '+(j.assinatura/100).toFixed(2).replace('.',','); } }).catch(function(){});
 </script>
 </body>
 </html>

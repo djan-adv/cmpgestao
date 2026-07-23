@@ -88,6 +88,7 @@ async function pubsDoProcesso(numeroDig, dias) {
   } catch (e) { return [] }
 }
 function escH(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') }
+
 async function enviarExtrato(m) {
   const host = process.env.SMTP_HOST, port = parseInt(process.env.SMTP_PORT || '465', 10)
   const user = process.env.SMTP_USER, pass = process.env.SMTP_PASS
@@ -126,6 +127,27 @@ async function entregarPendentes(sb) {
   }
   return enviados
 }
+// emite um boleto/PIX no Cora e grava em cora_cobrancas. Retorna {cobrancaId, info} ou null.
+async function emitirCobrancaMonit(sb, { nome, doc, email, valor, descricao, code_prefix }) {
+  const idem = crypto.randomUUID(); const code = (code_prefix || 'MON') + '-' + idem
+  const venc = iso(new Date(Date.now() + 3 * 86400000))
+  const invoiceBody = {
+    code,
+    customer: { name: nome, email: email || undefined, document: { identity: doc, type: doc.length === 14 ? 'CNPJ' : 'CPF' } },
+    services: [{ name: 'Monitoramento processual', description: descricao, amount: valor }],
+    payment_terms: { due_date: venc },
+    payment_forms: ['BANK_SLIP', 'PIX']
+  }
+  let r
+  try { r = await coraApi('POST', '/v2/invoices', invoiceBody, { 'Idempotency-Key': idem }) } catch (e) { return null }
+  if (!r || r.status < 200 || r.status >= 300) return null
+  const info = extrairCora(r.json || {})
+  const cob = await sb.from('cora_cobrancas').insert({
+    escritorio_id: ESCRITORIO_CMP, descricao, valor_centavos: valor, vencimento: venc, status: 'aberta',
+    cora_invoice_id: info.invoice_id, cora_code: code, boleto_url: info.boleto_url, linha_digitavel: info.linha_digitavel, pix_emv: info.pix_emv
+  }).select('id').single()
+  return { cobrancaId: cob && cob.data && cob.data.id, info, venc }
+}
 function extrairCora(json) {
   const po = (json && (json.payment_options || json.payment_option)) || {}
   const bs = po.bank_slip || (json && json.bank_slip) || {}
@@ -146,7 +168,50 @@ export async function POST(request) {
 
   if (acao === 'preco') {
     const preco = parseInt(await cfg(sb, 'monit_preco_centavos', '1000'), 10) || 1000
-    return Response.json({ ok: true, preco })
+    const assinatura = parseInt(await cfg(sb, 'monit_assinatura_centavos', '1990'), 10) || 1990
+    return Response.json({ ok: true, preco, assinatura })
+  }
+
+  // ASSINATURA MENSAL: varre 2x/semana novos processos no nome do cliente.
+  // Cria a assinatura e emite o 1º boleto; o robô cuida da recorrência e da varredura.
+  if (acao === 'assinar') {
+    if (!coraConfigurado()) return Response.json({ erro: 'Pagamento indisponível no momento.' }, { status: 503 })
+    const doc = soDig(body.doc)
+    let nome = String(body.nome || '').trim()
+    const email = String(body.email || '').trim()
+    if (doc.length !== 11 && doc.length !== 14) return Response.json({ erro: 'CPF/CNPJ inválido.' }, { status: 400 })
+    if (!nome && doc.length === 14) nome = await nomeDoCnpj(doc)
+    if (!nome) return Response.json({ erro: 'Informe o nome.' }, { status: 400 })
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return Response.json({ erro: 'E-mail inválido.' }, { status: 400 })
+    // evita assinatura duplicada ativa para o mesmo doc
+    const dup = await sb.from('monit_assinaturas').select('id,status').eq('doc', doc).in('status', ['ativa', 'suspensa']).limit(1)
+    if (dup && dup.data && dup.data.length) return Response.json({ erro: 'Já existe uma assinatura para este CPF/CNPJ. Verifique seu e-mail ou fale com o escritório.' }, { status: 409 })
+
+    const preco = parseInt(await cfg(sb, 'monit_assinatura_centavos', '1990'), 10) || 1990
+    const emis = await emitirCobrancaMonit(sb, { nome, doc, email, valor: preco, descricao: 'Assinatura mensal de monitoramento processual — ' + nome, code_prefix: 'MASS' })
+    if (!emis) return Response.json({ erro: 'Falha ao gerar o boleto da assinatura.' }, { status: 502 })
+    // processos atuais entram como "já vistos" para só alertar os NOVOS depois
+    let vistos = []
+    try { vistos = (await buscaDjenPorNome(nome, 365)).map(p => p.numero) } catch (e) {}
+    const ins = await sb.from('monit_assinaturas').insert({
+      escritorio_id: ESCRITORIO_CMP, doc, nome, email, status: 'ativa', preco_centavos: preco,
+      proximo_boleto: iso(new Date()), cobranca_atual_id: emis.cobrancaId, processos_vistos: vistos
+    }).select('id').single()
+    // e-mail com o boleto da assinatura
+    try {
+      const host = process.env.SMTP_HOST, port = parseInt(process.env.SMTP_PORT || '465', 10), user = process.env.SMTP_USER, pass = process.env.SMTP_PASS
+      if (host && user && pass) {
+        const t = nodemailer.createTransport({ host, port, secure: port === 465, auth: { user, pass } })
+        const html = '<div style="font-family:Arial;font-size:14px;color:#1e2733;max-width:600px;margin:0 auto;padding:8px"><div style="border-top:3px solid #b8912e;padding:14px 6px">' +
+          '<h2 style="color:#2E3A4B;font-size:17px;margin:0 0 8px">Assinatura de monitoramento — bem-vindo(a)!</h2>' +
+          '<p>Olá, ' + escH((nome || '').split(' ')[0]) + '! Sua assinatura mensal de acompanhamento processual (R$ ' + (preco / 100).toFixed(2).replace('.', ',') + '/mês) foi criada. Fazemos varreduras às segundas e sextas e avisamos por e-mail quando surgir um novo processo no seu nome.</p>' +
+          (emis.info.boleto_url ? '<p><a href="' + emis.info.boleto_url + '" style="display:inline-block;background:#0F6E56;color:#fff;text-decoration:none;padding:11px 20px;border-radius:9px;font-weight:700">Pagar o boleto do mês</a></p>' : '') +
+          '<div style="background:#f3f7fb;border:1px solid #d9e6f2;border-radius:10px;padding:11px 13px;font-size:12px;color:#345">🔒 Uso pessoal (LGPD). O serviço fica ativo enquanto a assinatura estiver em dia; após 30 dias sem pagamento, a emissão é suspensa até nova contratação.</div>' +
+          '<p style="font-size:12px;color:#8a8f98;text-align:center;margin-top:12px">Crispim, Mendonça e Pinheiro Advogados</p></div></div>'
+        await t.sendMail({ from: '"Crispim, Mendonça e Pinheiro Advogados" <' + user + '>', to: email, subject: 'Assinatura de monitoramento criada — boleto do mês', html })
+      }
+    } catch (e) {}
+    return Response.json({ ok: true, assinatura_id: ins && ins.data && ins.data.id, boleto_url: emis.info.boleto_url, preco })
   }
 
   // entrega os extratos dos pedidos já pagos (chamado pelo webhook do Cora, pelo
