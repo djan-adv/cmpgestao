@@ -9740,7 +9740,7 @@ function logEvent(tipo, entTipo, entId, meta){
 })();
 
 /* ===== Dashboard de Produtividade + Auditoria de logins ===== */
-var PRD_EVT=null, PRD_PESOS=null, PRD_CFG=null;
+var PRD_EVT=null, PRD_PESOS=null, PRD_CFG=null, PRD_USERS=null;
 function _prdCfg(chave,def){ var v=(PRD_CFG||{})[chave]; return (v==null||v==='')?def:v; }
 async function _prdCarrega(){
   var sb=window.__sb; if(!sb) return;
@@ -9756,6 +9756,9 @@ async function _prdCarrega(){
   var i=1;
   if(!PRD_PESOS && rs[i]){ PRD_PESOS={}; ((rs[i].data)||[]).forEach(function(w){ PRD_PESOS[w.tipo]={rotulo:w.rotulo||w.tipo,pontos:parseFloat(w.pontos)||0}; }); i++; }
   if(!PRD_CFG && rs[i]){ PRD_CFG={}; ((rs[i].data)||[]).forEach(function(c){ PRD_CFG[c.chave]=c.valor; }); }
+  /* fonte da verdade dos nomes/pessoas: tabela usuarios (nome do evento é pouco confiável).
+     lista todos os cadastrados do escritório, ignorando a conta de demonstração. */
+  if(!PRD_USERS){ PRD_USERS={}; try{ var ru=await sb.from('usuarios').select('id,nome,email,papel'); ((ru&&ru.data)||[]).forEach(function(u){ if(/demonstra|demonstr/i.test(u.nome||'')||/\+/.test(u.email||'')) return; PRD_USERS[u.id]={nome:u.nome||'—',papel:u.papel||''}; }); }catch(e){} }
 }
 /* pontos de uma tarefa concluída: casa o texto do título/tipo com os pesos configurados */
 function _prdPontosTarefa(ev){
@@ -9791,13 +9794,15 @@ async function renderProdutividade(){
   var evs=PRD_EVT||[];
   /* povoamento do filtro de pessoa */
   var selU=document.getElementById('prd-user');
-  if(selU){ var nomes={}; evs.forEach(function(e){ if(e.user_id) nomes[e.user_id]=e.user_nome||e.user_id.slice(0,8); });
-    var cur=selU.value; selU.innerHTML='<option value="">Todas as pessoas</option>'+Object.keys(nomes).map(function(id){ return '<option value="'+id+'">'+finEsc(nomes[id])+'</option>'; }).join(''); selU.value=cur; }
+  if(selU){ var nomes={};
+    Object.keys(PRD_USERS||{}).forEach(function(id){ nomes[id]=PRD_USERS[id].nome; }); /* todos os cadastrados */
+    evs.forEach(function(e){ if(e.user_id && !nomes[e.user_id]) nomes[e.user_id]=e.user_nome||e.user_id.slice(0,8); }); /* + quem tem evento mas não está na lista */
+    var cur=selU.value; selU.innerHTML='<option value="">Todas as pessoas</option>'+Object.keys(nomes).sort(function(a,b){ return String(nomes[a]||'').localeCompare(String(nomes[b]||'')); }).map(function(id){ return '<option value="'+id+'">'+finEsc(nomes[id])+'</option>'; }).join(''); selU.value=cur; }
   var fu=(selU||{}).value||'';
   if(fu) evs=evs.filter(function(e){ return e.user_id===fu; });
   /* agrupa por pessoa */
   var por={};
-  evs.forEach(function(e){ (por[e.user_id]=por[e.user_id]||{nome:(e.user_nome||'—'),evs:[]}).evs.push(e); if(e.user_nome) por[e.user_id].nome=e.user_nome; });
+  evs.forEach(function(e){ var nm=(PRD_USERS&&PRD_USERS[e.user_id]&&PRD_USERS[e.user_id].nome)||e.user_nome||'—'; (por[e.user_id]=por[e.user_id]||{nome:nm,evs:[]}).evs.push(e); por[e.user_id].nome=nm; });
   var html='';
   Object.keys(por).forEach(function(uid){
     var u=por[uid]; var c={}; var pontos=0; var boletosEmit=0, boletosEnv=0;
