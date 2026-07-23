@@ -1082,7 +1082,7 @@ function drillFase(fid){
   document.getElementById("drill-body").innerHTML=arr.slice(0,300).map(function(p){
     var idx=DADOS.processos.indexOf(p);
     var jb=julgadoFid?' <span style="display:inline-block;background:#6d28a8;color:#fff;border-radius:10px;padding:1px 8px;font-size:10.5px;font-weight:700;vertical-align:middle">Julgado</span>':'';
-    return '<tr class="click" style="cursor:pointer" onclick="abrirDoDrill('+idx+')" title="Abrir a página do processo"><td>'+esc(p.cliente)+'</td><td class="proc">'+esc(p.numero)+'</td><td>'+esc(p.tipo)+'</td><td>'+esc(p.status||"—")+jb+'</td></tr>';
+    return '<tr class="click" style="cursor:pointer" onclick="abrirDoDrill('+idx+')" title="Abrir a página do processo"><td>'+esc(p.cliente)+'</td><td class="proc">'+esc(fmtCNJ(p.numero))+'</td><td>'+esc(p.tipo)+'</td><td>'+esc(p.status||"—")+jb+'</td></tr>';
   }).join("");
   document.getElementById("modal-drill").classList.remove("hidden");
 }
@@ -1295,7 +1295,7 @@ function renderRecentes(){
     var chip=parado?('<span class="b" style="background:var(--dangerbg);color:var(--danger);border:0">Parado '+dias+'d</span>')
       :(fase==="Execução"?'<span class="b ok" style="border:0">Execução</span>':'<span class="b" style="background:var(--accentbg);color:var(--navy);border:0">'+fase+'</span>');
     html+='<tr class="click" onclick="abrir('+i+')"><td><b>'+esc(p.cliente||"—")+'</b> <span style="color:var(--muted)">×</span> '+esc(p.oponente||"—")
-      +'<div class="proc" style="color:var(--muted)">'+esc(p.numero)+'</div></td>'
+      +'<div class="proc" style="color:var(--muted)">'+esc(fmtCNJ(p.numero))+'</div></td>'
       +'<td style="font-size:12.5px">'+esc(p.data||"—")+'</td><td>'+chip+'</td></tr>';
   });
   html+='</tbody></table>';
@@ -1347,8 +1347,8 @@ function renderMeuDia(){
       var num=(a.p&&a.p.numero)||"";
       var temProc=num&&num!=='—';
       var numHtml=temProc
-        ? '<span class="proc" onclick="event.stopPropagation();abrirProcessoDaTarefa(\''+String(num).replace(/'/g,"")+'\')" style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted" title="Abrir o processo">'+esc(num)+'</span>'
-        : '<span class="proc">'+esc(num)+'</span>';
+        ? '<span class="proc" onclick="event.stopPropagation();abrirProcessoDaTarefa(\''+String(num).replace(/'/g,"")+'\')" style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted" title="Abrir o processo">'+esc(fmtCNJ(num))+'</span>'
+        : '<span class="proc">'+esc(fmtCNJ(num))+'</span>';
       var prazo='<div style="font-size:11.5px;color:'+(atras?"var(--danger)":"var(--muted)")+';font-weight:'+(atras?"700":"400")+'">'+(atras?"⚠ Deveria ter sido feita em "+diaFull:diaFull)+(a.hora?(" · "+a.hora):"")+'</div>';
       var acoes='<div style="display:flex;gap:4px;align-items:center">'
         +'<button title="Concluir e registrar no histórico do processo" onclick="event.stopPropagation();mdConcluir('+gi+')" style="cursor:pointer;border:1px solid #cfe8db;background:#eef7f1;color:#0F6E56;border-radius:7px;padding:3px 7px;font-size:12px">✓</button>'
@@ -1498,7 +1498,7 @@ function renderAudSemana(){
       return '<div style="display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--accentbg)">'
         +'<span style="min-width:86px;font-weight:700;color:var(--navy);font-size:13px">'+dia+' '+(a.hora||"")+'</span>'
         +'<div style="flex:1"><div style="font-weight:600;font-size:13.5px">'+esc(a.tt)+selos+'</div>'
-        +'<div style="font-size:12px;color:var(--muted)">'+esc((a.p&&a.p.cliente)||"")+' · <span class="proc" style="cursor:pointer" onclick="irParaProcesso(\''+String(num).replace(/'/g,"")+'\')">'+esc(num)+'</span></div></div>'
+        +'<div style="font-size:12px;color:var(--muted)">'+esc((a.p&&a.p.cliente)||"")+' · <span class="proc" style="cursor:pointer" onclick="irParaProcesso(\''+String(num).replace(/'/g,"")+'\')">'+esc(fmtCNJ(num))+'</span></div></div>'
         +'<span style="font-size:11px;background:var(--accentbg);color:var(--navy);border-radius:12px;padding:2px 8px;font-weight:600;white-space:nowrap">'+esc(a.resp||"")+'</span></div>';
     }).join("");
   }
@@ -1515,11 +1515,12 @@ function renderProc(){
     var i=DADOS.processos.indexOf(p);
     var tr=document.createElement("tr");tr.className="click";tr.onclick=function(){abrir(i)};
     tr.innerHTML='<td><span style="font-weight:700;color:var(--navy)">'+esc(p.cliente)+'</span> <span style="color:var(--muted)">×</span> <span>'+esc(p.oponente||'—')+'</span>'+
-      '</td><td class="proc">'+p.numero+'</td><td>'+esc(p.tipo)+'<div style="margin-top:4px">'+etiquetasDoProc(p.numero)+'</div></td><td><span class="b '+stCls(p.status)+'">'+esc(p.status||'—')+'</span></td>';
+      '</td><td class="proc">'+fmtCNJ(p.numero)+'</td><td>'+esc(p.tipo)+'<div style="margin-top:4px">'+etiquetasDoProc(p.numero)+'</div></td><td><span class="b '+stCls(p.status)+'">'+esc(p.status||'—')+'</span></td>';
     b.appendChild(tr);
   });
 }
 function stCls(s){return /2º|superior/i.test(s||"")?"warn":"ok"}
+function fmtCNJ(n){var d=String(n==null?'':n).replace(/\D/g,'');if(d.length!==20)return n==null?'':String(n);return d.slice(0,7)+'-'+d.slice(7,9)+'.'+d.slice(9,13)+'.'+d.slice(13,14)+'.'+d.slice(14,16)+'.'+d.slice(16);}
 function kv(k,v){return '<div class="kv"><div class="k">'+k+'</div><div class="v">'+(v||'—')+'</div></div>';}
 /* o "← voltar" da ficha volta para a tela de ORIGEM (publicações, painel, agenda…) */
 function voltarDoProcesso(){ go(window.__voltarPara||'processos'); }
@@ -2217,7 +2218,7 @@ function renderTriagem(){
       /* topo: número do processo (acima) + tribunal/data + estado; partes logo abaixo */
       '<div style="display:flex;justify-content:space-between;gap:10px;align-items:baseline;flex-wrap:wrap">'
         +'<span style="display:inline-flex;gap:10px;align-items:baseline;flex-wrap:wrap">'
-          +'<a class="proc" onclick="irParaProcesso(\''+numSafe+'\')" style="cursor:pointer;color:var(--navy);text-decoration:underline;font-weight:700" title="Abrir o processo">'+esc(t.numero)+'</a>'
+          +'<a class="proc" onclick="irParaProcesso(\''+numSafe+'\')" style="cursor:pointer;color:var(--navy);text-decoration:underline;font-weight:700" title="Abrir o processo">'+esc(fmtCNJ(t.numero))+'</a>'
           +'<a onclick="toggleTeor('+t.id+')" style="cursor:pointer;background:var(--accentbg);color:#8a5a00;border:1px solid #e8dcbb;border-radius:12px;padding:1px 9px;font-size:11.5px;font-weight:700;white-space:nowrap" title="Ler o teor completo e classificar">ver teor e classificar</a>'
         +'</span>'
         +'<span class="note" style="margin:0">'+esc(t.tribunal||'')+(t.data?(' · '+esc(t.data)):'')+(t.done?' · <b style="color:#0F6E56">✓ tratada</b> <a onclick="reabrirTriagem('+t.id+')" style="cursor:pointer;color:var(--muted);text-decoration:underline">reabrir</a>':'')+'</span>'
@@ -2410,7 +2411,7 @@ function renderFasesRevisao(){
     var opts=FASES_META.map(function(f){ return '<option value="'+f[0]+'"'+(f[0]===atualF?' selected':'')+'>'+esc(f[1])+'</option>'; }).join('');
     return '<tr>'+
       '<td><a onclick="abrir('+idx+')" style="cursor:pointer;color:var(--navy);text-decoration:underline">'+esc(resumo3(p.cliente)||'—')+'</a></td>'+
-      '<td class="proc">'+esc(p.numero)+'</td>'+
+      '<td class="proc">'+esc(fmtCNJ(p.numero))+'</td>'+
       '<td style="font-size:12px">'+esc((p.tipo||'').slice(0,40))+'</td>'+
       '<td style="font-size:11px;color:var(--muted);max-width:150px;white-space:normal" title="'+esc(ult.slice(0,300))+'">'+esc(ult.replace(/\s+/g,' ').slice(0,55))+'</td>'+
       '<td>'+badge+'</td>'+
@@ -2592,7 +2593,7 @@ function renderPainelTarefasEtiquetas(){
       var datasHtml=datas.length?('<div style="font-size:12px;margin-bottom:6px">'+datas.join(' · ')+'</div>'):'';
       return '<div style="border:1px solid var(--line);border-radius:10px;padding:10px 11px;margin-bottom:8px">'
         +'<div style="font-weight:600;color:var(--navy);margin-bottom:3px">'+esc(a.titulo||'—')+'</div>'
-        +'<div style="font-size:12px;color:var(--muted);margin-bottom:6px">'+esc(a.cliente||'—')+' · <span class="proc">'+esc(a.numero||'—')+'</span></div>'
+        +'<div style="font-size:12px;color:var(--muted);margin-bottom:6px">'+esc(a.cliente||'—')+' · <span class="proc">'+esc(fmtCNJ(a.numero||'—'))+'</span></div>'
         +datasHtml
         +'<div style="display:flex;gap:6px;flex-wrap:wrap">'
         +'<button class="btn sm ghost" onclick="abrirTarefaKanban('+a.id+')">Abrir tarefa</button>'
@@ -4170,7 +4171,7 @@ function renderProc(){
   lista.slice(0,200).forEach(function(p){
     var i=DADOS.processos.indexOf(p);
     var tr=document.createElement("tr");tr.className="click";tr.onclick=function(){abrir(i)};
-    tr.innerHTML='<td><span style="font-weight:700;color:var(--navy)">'+esc(p.cliente)+'</span> <span style="color:var(--muted)">×</span> <span>'+esc(p.oponente||'—')+'</span></td><td class="proc">'+p.numero+'</td><td>'+esc(p.tipo)+'<div style="margin-top:4px">'+etiquetasDoProc(p.numero)+'</div></td><td><span class="b '+stCls(p.status)+'">'+esc(p.status||'—')+'</span></td>';
+    tr.innerHTML='<td><span style="font-weight:700;color:var(--navy)">'+esc(p.cliente)+'</span> <span style="color:var(--muted)">×</span> <span>'+esc(p.oponente||'—')+'</span></td><td class="proc">'+fmtCNJ(p.numero)+'</td><td>'+esc(p.tipo)+'<div style="margin-top:4px">'+etiquetasDoProc(p.numero)+'</div></td><td><span class="b '+stCls(p.status)+'">'+esc(p.status||'—')+'</span></td>';
     b.appendChild(tr);
   });
   var sel=document.getElementById("filtroEtq");
@@ -4212,7 +4213,7 @@ function renderProc(){
   rows.forEach(function(p){
     var i=DADOS.processos.indexOf(p);
     var tr=document.createElement("tr");tr.className="click";tr.onclick=function(){abrir(i)};
-    tr.innerHTML='<td><span style="font-weight:700;color:var(--navy)">'+esc(p.cliente)+'</span> <span style="color:var(--muted)">×</span> <span>'+esc(p.oponente||'—')+'</span></td><td class="proc">'+p.numero+'</td><td>'+esc(p.tipo)+'<div style="margin-top:4px">'+etiquetasDoProc(p.numero)+'</div></td><td><span class="b '+stCls(p.status)+'">'+esc(p.status||'—')+'</span></td>';
+    tr.innerHTML='<td><span style="font-weight:700;color:var(--navy)">'+esc(p.cliente)+'</span> <span style="color:var(--muted)">×</span> <span>'+esc(p.oponente||'—')+'</span></td><td class="proc">'+fmtCNJ(p.numero)+'</td><td>'+esc(p.tipo)+'<div style="margin-top:4px">'+etiquetasDoProc(p.numero)+'</div></td><td><span class="b '+stCls(p.status)+'">'+esc(p.status||'—')+'</span></td>';
     b.appendChild(tr);
   });
   var pager=document.getElementById("proc-pager");
@@ -4693,7 +4694,7 @@ async function buscarProcessos(){
        Com 1 processo não mostra caixinha (o botão "Cadastrar processo" já resolve). */
     var _selCell=jaTem?'<span class="note">já existe</span>':(single?'<span class="note">novo</span>':'<input type="checkbox" checked data-i="'+idx+'">');
     rows+='<tr><td>'+_selCell+'</td>'+
-      '<td class="proc">'+n+'</td>'+
+      '<td class="proc">'+fmtCNJ(n)+'</td>'+
       '<td>'+(ok?esc(((dj.classe||'')+' '+(dj.assunto||'')).trim()||'—'):'<span style="color:#b91c1c">'+esc(dj.erro||'sem dados na base pública — cadastrar manualmente')+'</span>')+'</td>'+
       '<td>'+esc(dj.orgao||'—')+'</td>'+
       '<td style="text-align:center">'+(ok?(dj.totalAndamentos||0):'—')+'</td></tr>';
@@ -5104,7 +5105,7 @@ function renderProc(){
        alvará) — mostra "Julgado" junto ao status, nessas 3 fases sempre */
     var _faseSt=faseDoProc(p);
     var julgadoBadge=(_faseSt==='recur'||_faseSt==='exec'||_faseSt==='alvara')?(' <span style="display:inline-block;background:#6d28a8;color:#fff;border-radius:10px;padding:1px 8px;font-size:10.5px;font-weight:700;vertical-align:middle" title="Já houve sentença/decisão de mérito — processo em fase recursal, de cumprimento ou de alvará">Julgado</span>'):'';
-    tr.innerHTML='<td style="max-width:220px"><div style="'+_clamp3+'"><span style="font-weight:700;color:var(--navy)">'+esc(resumo3(p.cliente))+'</span> <span style="font-size:12px;color:var(--muted)">× '+(esc(resumo3(p.oponente))||'—')+'</span></div></td><td class="proc">'+p.numero+'</td><td style="font-size:12px;max-width:220px"><div style="'+_clamp3+'">'+esc(p.tipo)+'</div><div style="margin-top:4px">'+etiquetasDoProc(p.numero)+'</div></td><td style="max-width:170px"><div style="'+_clamp3+'" title="'+esc(um.slice(0,300))+'">'+(cm?'<span style="font-weight:600;color:var(--navy)">'+cm+'</span>':'<span style="font-size:12.5px">'+esc(um.slice(0,120))+'</span>')+'</div><div style="font-size:12px;color:var(--muted)">'+esc(p.data||'')+'</div></td><td style="text-align:center;white-space:nowrap">'+(function(){var d=(typeof diasParadoOficial==='function')?diasParadoOficial(p):null; if(d==null) return '<span class="note" style="margin:0">—</span>'; var c=d>=90?'#b5342b':(d>=60?'#8a6d1a':'#475569'); return '<span style="font-weight:700;color:'+c+'" title="Dias sem movimentação do juízo/cartório (não conta mov. das partes)">'+d+' dia'+(d===1?'':'s')+'</span>';})()+'</td><td><span style="white-space:nowrap">'+origemBtnHTML(p)+' <span class="b '+stCls(p.status)+'" style="font-size:9.5px;padding:1px 6px">'+esc(p.status||'—')+'</span></span>'+julgadoBadge+' <a onclick="event.stopPropagation();etiquetarLinha('+i+')" title="Etiquetas deste processo" style="cursor:pointer;color:#185FA5;font-size:12px">🏷</a></td><td>'+pfHTML+'</td>'
+    tr.innerHTML='<td style="max-width:220px"><div style="'+_clamp3+'"><span style="font-weight:700;color:var(--navy)">'+esc(resumo3(p.cliente))+'</span> <span style="font-size:12px;color:var(--muted)">× '+(esc(resumo3(p.oponente))||'—')+'</span></div></td><td class="proc">'+fmtCNJ(p.numero)+'</td><td style="font-size:12px;max-width:220px"><div style="'+_clamp3+'">'+esc(p.tipo)+'</div><div style="margin-top:4px">'+etiquetasDoProc(p.numero)+'</div></td><td style="max-width:170px"><div style="'+_clamp3+'" title="'+esc(um.slice(0,300))+'">'+(cm?'<span style="font-weight:600;color:var(--navy)">'+cm+'</span>':'<span style="font-size:12.5px">'+esc(um.slice(0,120))+'</span>')+'</div><div style="font-size:12px;color:var(--muted)">'+esc(p.data||'')+'</div></td><td style="text-align:center;white-space:nowrap">'+(function(){var d=(typeof diasParadoOficial==='function')?diasParadoOficial(p):null; if(d==null) return '<span class="note" style="margin:0">—</span>'; var c=d>=90?'#b5342b':(d>=60?'#8a6d1a':'#475569'); return '<span style="font-weight:700;color:'+c+'" title="Dias sem movimentação do juízo/cartório (não conta mov. das partes)">'+d+' dia'+(d===1?'':'s')+'</span>';})()+'</td><td><span style="white-space:nowrap">'+origemBtnHTML(p)+' <span class="b '+stCls(p.status)+'" style="font-size:9.5px;padding:1px 6px">'+esc(p.status||'—')+'</span></span>'+julgadoBadge+' <a onclick="event.stopPropagation();etiquetarLinha('+i+')" title="Etiquetas deste processo" style="cursor:pointer;color:#185FA5;font-size:12px">🏷</a></td><td>'+pfHTML+'</td>'
       +'<td style="text-align:center" onclick="event.stopPropagation()"><div id="doc-'+digD+'" title="Documentos no servidor" style="font-size:18px;line-height:1;color:#c3c9d4;cursor:default">📁<div class="note" style="margin:2px 0 0;font-size:10px">—</div></div></td>';
     b.appendChild(tr);
   });
@@ -5265,7 +5266,7 @@ async function renderDiligencias(){
   if(b){ b.innerHTML=''; parados.slice(0,300).forEach(function(x,ix){
     var p=x.p; var tr=document.createElement('tr');
     var _cor=x.dias>=90?'#b5342b':(x.dias>=60?'#b8912e':'#475569');
-    tr.innerHTML='<td style="color:var(--muted);text-align:right">'+(ix+1)+'</td><td><b>'+esc(p.cliente||'—')+'</b></td><td class="proc">'+p.numero+'</td><td style="text-align:right;white-space:nowrap"><b style="color:'+_cor+'">'+x.dias+' dias</b><div class="note" style="margin:0;font-size:10px">sem mov. do juízo</div></td><td style="text-align:right"><button class="btn sm" onclick="gerarDiligencia(\''+(p._id||'')+'\',\''+encodeURIComponent(p.numero)+'\')">Gerar diligência</button></td>';
+    tr.innerHTML='<td style="color:var(--muted);text-align:right">'+(ix+1)+'</td><td><b>'+esc(p.cliente||'—')+'</b></td><td class="proc">'+fmtCNJ(p.numero)+'</td><td style="text-align:right;white-space:nowrap"><b style="color:'+_cor+'">'+x.dias+' dias</b><div class="note" style="margin:0;font-size:10px">sem mov. do juízo</div></td><td style="text-align:right"><button class="btn sm" onclick="gerarDiligencia(\''+(p._id||'')+'\',\''+encodeURIComponent(p.numero)+'\')">Gerar diligência</button></td>';
     b.appendChild(tr);
   }); }
   var el=document.getElementById('dilig-andamento'); if(!el) return;
@@ -5277,7 +5278,7 @@ async function renderDiligencias(){
   if(!ds.length){ el.innerHTML='<div class="note">Nenhuma diligência em andamento.</div>'; return; }
   el.innerHTML=ds.map(function(d){ var pr=d.processos||{};
     return '<div style="border:1px solid #e5e7eb;border-radius:8px;padding:10px;margin-bottom:8px">'+
-      '<div><b>'+esc(pr.cliente_nome||'—')+'</b> <span class="proc">'+esc(pr.numero||'')+'</span> · <span class="note">'+esc(d.canal||'')+' · '+esc(d.status||'')+'</span></div>'+
+      '<div><b>'+esc(pr.cliente_nome||'—')+'</b> <span class="proc">'+esc(fmtCNJ(pr.numero||''))+'</span> · <span class="note">'+esc(d.canal||'')+' · '+esc(d.status||'')+'</span></div>'+
       '<div style="font-size:13px;color:#475569;margin:6px 0;white-space:pre-wrap">'+esc(d.mensagem||'')+'</div>'+
       (d.retorno?'<div style="font-size:13px;color:#0f6e56">Retorno: '+esc(d.retorno)+'</div>':'')+
       '<div style="margin-top:6px;display:flex;gap:6px"><button class="btn sm ghost" onclick="dilRetorno(\''+d.id+'\')">Marcar retorno</button><button class="btn sm ghost" onclick="dilResolver(\''+d.id+'\')">Resolver</button></div></div>';
@@ -5383,7 +5384,7 @@ function renderLote(){
   lista.forEach(function(p){ var i=DADOS.processos.indexOf(p);
     var um=(p.hist_full&&p.hist_full[0]&&p.hist_full[0].texto)||'';
     var tr=document.createElement('tr'); tr.className='click'; tr.onclick=function(){abrir(i);};
-    tr.innerHTML='<td><b style="color:var(--navy)">'+esc(resumo3(p.cliente))+'</b><div style="font-size:12px;color:var(--muted)">× '+(esc(resumo3(p.oponente))||'—')+'</div></td><td class="proc">'+p.numero+'</td><td style="font-size:12px">'+esc((p.tipo||'').slice(0,80))+'</td><td style="font-size:12px">'+esc(um.slice(0,60))+'<div class="note" style="margin:0">'+esc(p.data||'')+'</div></td><td><span class="b '+stCls(p.status)+'">'+esc(p.status||'—')+'</span></td><td onclick="event.stopPropagation()"><button class="btn sm ghost" onclick="tirarDoLote(\''+String(p.numero).replace(/'/g,'')+'\')">→ remover do lote</button></td>';
+    tr.innerHTML='<td><b style="color:var(--navy)">'+esc(resumo3(p.cliente))+'</b><div style="font-size:12px;color:var(--muted)">× '+(esc(resumo3(p.oponente))||'—')+'</div></td><td class="proc">'+fmtCNJ(p.numero)+'</td><td style="font-size:12px">'+esc((p.tipo||'').slice(0,80))+'</td><td style="font-size:12px">'+esc(um.slice(0,60))+'<div class="note" style="margin:0">'+esc(p.data||'')+'</div></td><td><span class="b '+stCls(p.status)+'">'+esc(p.status||'—')+'</span></td><td onclick="event.stopPropagation()"><button class="btn sm ghost" onclick="tirarDoLote(\''+String(p.numero).replace(/'/g,'')+'\')">→ remover do lote</button></td>';
     b.appendChild(tr);
   });
 }
@@ -5535,7 +5536,7 @@ function renderInove(){
     var tr=document.createElement('tr'); tr.className='click'; tr.onclick=function(){abrir(i)};
     var um=(p.hist_full&&p.hist_full[0]&&p.hist_full[0].texto)||'';
     var cm=classHist(p);
-    tr.innerHTML='<td style="max-width:260px"><span style="font-weight:700;color:var(--navy)">'+esc(resumo3(p.cliente))+'</span><div style="font-size:12px;color:var(--muted);margin-top:2px">× '+(esc(resumo3(p.oponente))||'—')+'</div></td><td class="proc">'+p.numero+'</td><td style="font-size:12px">'+esc(p.tipo)+'</td><td style="max-width:170px;white-space:normal" title="'+esc(um.slice(0,300))+'">'+(cm?'<span style="font-weight:600;color:var(--navy)">'+cm+'</span>':'<span style="font-size:12.5px">'+esc(um.slice(0,60))+'</span>')+'<div style="font-size:12px;color:var(--muted)">'+esc(p.data||'')+'</div></td><td><span class="b '+stCls(p.status)+'">'+esc(p.status||'—')+'</span></td><td><button style="background:#f0f2f5;color:#697180;border:1px solid #e4e8ef;border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer" onclick="event.stopPropagation();abrirNovaTarefa(decodeURIComponent(\''+encodeURIComponent(p.numero)+'\'))">tarefa</button> <button style="background:#e5f4ed;color:#127a53;border:1px solid #b9e2ce;border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer" title="Tirar da Inove e mandar para a lista comum de processos" onclick="event.stopPropagation();moverParaListaComum(decodeURIComponent(\''+encodeURIComponent(p.numero)+'\'))">→ lista comum</button></td>';
+    tr.innerHTML='<td style="max-width:260px"><span style="font-weight:700;color:var(--navy)">'+esc(resumo3(p.cliente))+'</span><div style="font-size:12px;color:var(--muted);margin-top:2px">× '+(esc(resumo3(p.oponente))||'—')+'</div></td><td class="proc">'+fmtCNJ(p.numero)+'</td><td style="font-size:12px">'+esc(p.tipo)+'</td><td style="max-width:170px;white-space:normal" title="'+esc(um.slice(0,300))+'">'+(cm?'<span style="font-weight:600;color:var(--navy)">'+cm+'</span>':'<span style="font-size:12.5px">'+esc(um.slice(0,60))+'</span>')+'<div style="font-size:12px;color:var(--muted)">'+esc(p.data||'')+'</div></td><td><span class="b '+stCls(p.status)+'">'+esc(p.status||'—')+'</span></td><td><button style="background:#f0f2f5;color:#697180;border:1px solid #e4e8ef;border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer" onclick="event.stopPropagation();abrirNovaTarefa(decodeURIComponent(\''+encodeURIComponent(p.numero)+'\'))">tarefa</button> <button style="background:#e5f4ed;color:#127a53;border:1px solid #b9e2ce;border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer" title="Tirar da Inove e mandar para a lista comum de processos" onclick="event.stopPropagation();moverParaListaComum(decodeURIComponent(\''+encodeURIComponent(p.numero)+'\'))">→ lista comum</button></td>';
     b.appendChild(tr);
   });
 }
@@ -5549,7 +5550,7 @@ function renderEncerrados(){
     var tr=document.createElement('tr'); tr.className='click'; tr.onclick=function(){abrir(i)};
     var um=(p.hist_full&&p.hist_full[0]&&p.hist_full[0].texto)||'';
     var cm=classHist(p);
-    tr.innerHTML='<td style="max-width:260px"><span style="font-weight:700;color:var(--navy)">'+esc(resumo3(p.cliente))+'</span><div style="font-size:12px;color:var(--muted);margin-top:2px">× '+(esc(resumo3(p.oponente))||'—')+'</div></td><td class="proc">'+p.numero+'</td><td style="font-size:12px">'+esc(p.tipo)+'</td><td style="max-width:170px;white-space:normal" title="'+esc(um.slice(0,300))+'">'+(cm?'<span style="font-weight:600;color:var(--navy)">'+cm+'</span>':'<span style="font-size:12.5px">'+esc(um.slice(0,60))+'</span>')+'<div style="font-size:12px;color:var(--muted)">'+esc(p.data||'')+'</div></td><td><span class="b '+stCls(p.status)+'">'+esc(p.status||'—')+'</span><div style="margin-top:4px">'+origemBtnHTML(p)+'</div></td><td><button style="background:#f0f2f5;color:#697180;border:1px solid #e4e8ef;border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer" onclick="event.stopPropagation();abrirNovaTarefa(decodeURIComponent(\''+encodeURIComponent(p.numero)+'\'))">tarefa</button></td>';
+    tr.innerHTML='<td style="max-width:260px"><span style="font-weight:700;color:var(--navy)">'+esc(resumo3(p.cliente))+'</span><div style="font-size:12px;color:var(--muted);margin-top:2px">× '+(esc(resumo3(p.oponente))||'—')+'</div></td><td class="proc">'+fmtCNJ(p.numero)+'</td><td style="font-size:12px">'+esc(p.tipo)+'</td><td style="max-width:170px;white-space:normal" title="'+esc(um.slice(0,300))+'">'+(cm?'<span style="font-weight:600;color:var(--navy)">'+cm+'</span>':'<span style="font-size:12.5px">'+esc(um.slice(0,60))+'</span>')+'<div style="font-size:12px;color:var(--muted)">'+esc(p.data||'')+'</div></td><td><span class="b '+stCls(p.status)+'">'+esc(p.status||'—')+'</span><div style="margin-top:4px">'+origemBtnHTML(p)+'</div></td><td><button style="background:#f0f2f5;color:#697180;border:1px solid #e4e8ef;border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer" onclick="event.stopPropagation();abrirNovaTarefa(decodeURIComponent(\''+encodeURIComponent(p.numero)+'\'))">tarefa</button></td>';
     b.appendChild(tr);
   });
 }
@@ -5751,7 +5752,7 @@ function renderJames(){
     var tr=document.createElement('tr'); tr.className='click'; tr.onclick=function(){abrir(i)};
     var um=(p.hist_full&&p.hist_full[0]&&p.hist_full[0].texto)||'';
     var cm=classHist(p);
-    tr.innerHTML='<td style="max-width:260px"><span style="font-weight:700;color:var(--navy)">'+esc(resumo3(p.cliente))+'</span><div style="font-size:12px;color:var(--muted);margin-top:2px">× '+(esc(resumo3(p.oponente))||'—')+'</div></td><td class="proc">'+p.numero+'</td><td style="font-size:12px">'+esc(p.tipo)+'</td><td style="max-width:170px;white-space:normal" title="'+esc(um.slice(0,300))+'">'+(cm?'<span style="font-weight:600;color:var(--navy)">'+cm+'</span>':'<span style="font-size:12.5px">'+esc(um.slice(0,60))+'</span>')+'<div style="font-size:12px;color:var(--muted)">'+esc(p.data||'')+'</div></td><td><span class="b '+stCls(p.status)+'">'+esc(p.status||'—')+'</span></td><td><button style="background:#f0f2f5;color:#697180;border:1px solid #e4e8ef;border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer" onclick="event.stopPropagation();abrirNovaTarefa(decodeURIComponent(\''+encodeURIComponent(p.numero)+'\'))">tarefa</button> <button style="background:#e5f4ed;color:#127a53;border:1px solid #b9e2ce;border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer" title="Tirar da suspensão e voltar para a lista principal" onclick="event.stopPropagation();dessuspenderProc(decodeURIComponent(\''+encodeURIComponent(p.numero)+'\'))">→ lista principal</button></td>';
+    tr.innerHTML='<td style="max-width:260px"><span style="font-weight:700;color:var(--navy)">'+esc(resumo3(p.cliente))+'</span><div style="font-size:12px;color:var(--muted);margin-top:2px">× '+(esc(resumo3(p.oponente))||'—')+'</div></td><td class="proc">'+fmtCNJ(p.numero)+'</td><td style="font-size:12px">'+esc(p.tipo)+'</td><td style="max-width:170px;white-space:normal" title="'+esc(um.slice(0,300))+'">'+(cm?'<span style="font-weight:600;color:var(--navy)">'+cm+'</span>':'<span style="font-size:12.5px">'+esc(um.slice(0,60))+'</span>')+'<div style="font-size:12px;color:var(--muted)">'+esc(p.data||'')+'</div></td><td><span class="b '+stCls(p.status)+'">'+esc(p.status||'—')+'</span></td><td><button style="background:#f0f2f5;color:#697180;border:1px solid #e4e8ef;border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer" onclick="event.stopPropagation();abrirNovaTarefa(decodeURIComponent(\''+encodeURIComponent(p.numero)+'\'))">tarefa</button> <button style="background:#e5f4ed;color:#127a53;border:1px solid #b9e2ce;border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer" title="Tirar da suspensão e voltar para a lista principal" onclick="event.stopPropagation();dessuspenderProc(decodeURIComponent(\''+encodeURIComponent(p.numero)+'\'))">→ lista principal</button></td>';
     b.appendChild(tr);
   });
 }
@@ -7508,7 +7509,7 @@ async function renderDiligencias(){
     var tr=document.createElement('tr'); tr.className='click'; tr.onclick=function(){ abrir(i); };
     tr.innerHTML='<td style="color:var(--muted);text-align:right">'+(ix+1)+'</td>'+
       '<td><b style="color:var(--navy)">'+esc(p.cliente||'—')+'</b> <span style="color:var(--muted)">×</span> '+esc(p.oponente||'—')+'</td>'+
-      '<td class="proc">'+p.numero+'</td><td>'+x.dias+' dias</td>'+
+      '<td class="proc">'+fmtCNJ(p.numero)+'</td><td>'+x.dias+' dias</td>'+
       '<td style="text-align:right"><button class="btn sm" onclick="event.stopPropagation(); gerarDiligencia(\''+(p._id||'')+'\',\''+encodeURIComponent(p.numero)+'\')">Gerar diligência</button></td>';
     b.appendChild(tr);
   }); }
@@ -7521,7 +7522,7 @@ async function renderDiligencias(){
   if(!ds.length){ el.innerHTML='<div class="note">Nenhuma diligência em andamento.</div>'; return; }
   el.innerHTML=ds.map(function(d){ var pr=d.processos||{};
     return '<div style="border:1px solid #e5e7eb;border-radius:8px;padding:10px;margin-bottom:8px">'+
-      '<div><b>'+esc(pr.cliente_nome||'—')+'</b> <span class="proc">'+esc(pr.numero||'')+'</span> · <span class="note">'+esc(d.canal||'')+' · '+esc(d.status||'')+'</span></div>'+
+      '<div><b>'+esc(pr.cliente_nome||'—')+'</b> <span class="proc">'+esc(fmtCNJ(pr.numero||''))+'</span> · <span class="note">'+esc(d.canal||'')+' · '+esc(d.status||'')+'</span></div>'+
       '<div style="font-size:13px;color:#475569;margin:6px 0;white-space:pre-wrap">'+esc(d.mensagem||'')+'</div>'+
       (d.retorno?'<div style="font-size:13px;color:#0f6e56">Retorno: '+esc(d.retorno)+'</div>':'')+
       '<div style="margin-top:6px;display:flex;gap:6px"><button class="btn sm ghost" onclick="dilRetorno(\''+d.id+'\')">Marcar retorno</button><button class="btn sm ghost" onclick="dilResolver(\''+d.id+'\')">Resolver</button></div></div>';
@@ -8679,7 +8680,7 @@ async function renderDiligencias(){
     var tr=document.createElement('tr'); tr.className='click'; tr.onclick=function(){ abrir(i); };
     tr.innerHTML='<td style="color:var(--muted);text-align:right">'+(start+ix+1)+'</td>'+
       '<td><b style="color:var(--navy)">'+esc(p.cliente||'—')+'</b> <span style="color:var(--muted)">×</span> '+esc(p.oponente||'—')+'</td>'+
-      '<td class="proc">'+p.numero+'</td><td>'+x.dias+' dias</td>'+
+      '<td class="proc">'+fmtCNJ(p.numero)+'</td><td>'+x.dias+' dias</td>'+
       '<td style="text-align:right"><button class="btn sm" onclick="event.stopPropagation(); gerarDiligencia(\''+(p._id||'')+'\',\''+encodeURIComponent(p.numero)+'\')">Gerar diligência</button></td>';
     b.appendChild(tr);
   }); }
@@ -8700,7 +8701,7 @@ async function renderDiligencias(){
   if(r.error){ el.innerHTML='<div class="note">Nenhuma diligência em andamento.</div>'; return; }
   var ds=r.data||[]; if(!ds.length){ el.innerHTML='<div class="note">Nenhuma diligência em andamento.</div>'; return; }
   el.innerHTML=ds.map(function(d){ var pr=d.processos||{};
-    return '<div style="border:1px solid #e5e7eb;border-radius:8px;padding:10px;margin-bottom:8px"><div><b>'+esc(pr.cliente_nome||'—')+'</b> <span class="proc">'+esc(pr.numero||'')+'</span> · <span class="note">'+esc(d.canal||'')+' · '+esc(d.status||'')+'</span></div><div style="font-size:13px;color:#475569;margin:6px 0;white-space:pre-wrap">'+esc(d.mensagem||'')+'</div>'+(d.retorno?'<div style="font-size:13px;color:#0f6e56">Retorno: '+esc(d.retorno)+'</div>':'')+'<div style="margin-top:6px;display:flex;gap:6px"><button class="btn sm ghost" onclick="dilRetorno(\''+d.id+'\')">Marcar retorno</button><button class="btn sm ghost" onclick="dilResolver(\''+d.id+'\')">Resolver</button></div></div>';
+    return '<div style="border:1px solid #e5e7eb;border-radius:8px;padding:10px;margin-bottom:8px"><div><b>'+esc(pr.cliente_nome||'—')+'</b> <span class="proc">'+esc(fmtCNJ(pr.numero||''))+'</span> · <span class="note">'+esc(d.canal||'')+' · '+esc(d.status||'')+'</span></div><div style="font-size:13px;color:#475569;margin:6px 0;white-space:pre-wrap">'+esc(d.mensagem||'')+'</div>'+(d.retorno?'<div style="font-size:13px;color:#0f6e56">Retorno: '+esc(d.retorno)+'</div>':'')+'<div style="margin-top:6px;display:flex;gap:6px"><button class="btn sm ghost" onclick="dilRetorno(\''+d.id+'\')">Marcar retorno</button><button class="btn sm ghost" onclick="dilResolver(\''+d.id+'\')">Resolver</button></div></div>';
   }).join('');
 }
 </script>
@@ -9984,7 +9985,7 @@ async function monitTrazerAssessoria(id){
       try{
         var q=await window.__sb.from('processos').select('id').eq('numero_digitos',num.replace(/\D/g,'')).limit(1);
         if(q&&q.data&&q.data.length) continue; /* já existe */
-        var ins=await window.__sb.from('processos').insert({escritorio_id:esc,numero:num,cliente_nome:m.nome||null,assunto:'Monitoramento contratado',status:'Administrativo',fonte:'caso',contatos_livres:(m.email||null)}).select('id').single();
+        var ins=await window.__sb.from('processos').insert({escritorio_id:esc,numero:fmtCNJ(num),cliente_nome:m.nome||null,assunto:'Monitoramento contratado',status:'Administrativo',fonte:'caso',contatos_livres:(m.email||null)}).select('id').single();
         if(ins&&ins.data) criados++;
       }catch(e){}
     }
