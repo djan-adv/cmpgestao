@@ -1609,6 +1609,7 @@ function abrir(i){
     '</div>';
   document.getElementById("det-body").innerHTML=html;
   posicionarHonMobile();
+  try{ _preencheFaturadoAuto(); }catch(e){}
   histShown=10; renderHistorico(); if(typeof loadAnexosProc==='function') loadAnexosProc(p.numero);
   try{ if(typeof renderPedidoVara==='function') renderPedidoVara(); }catch(e){}
   if(typeof renderAtivProc==='function') renderAtivProc();
@@ -7337,9 +7338,23 @@ function honQuadroHTML(p){
   }
   out+=div;
   out+=honRow(james?'Crédito':'Condenação',honFmtInput('valor_condenacao',p.valor_condenacao));
-  out+='<div style="margin-top:9px"><button class="btn sm" style="width:100%;background:#FE3E6D;border-color:#FE3E6D;color:#fff;font-weight:700" onclick="enviarBoletoDoProcesso()" title="Reenviar por e-mail o boleto que já está salvo na pasta Documentos > Boletos deste processo (útil quando está atrasado)">💳 Reenviar boleto</button></div>';
+  /* Faturado = soma dos boletos emitidos guardados em Documentos > Boletos emitidos
+     (preenchido em segundo plano por _preencheFaturadoAuto após a ficha abrir) */
+  out+=honRow('Faturado','<b id="hon-faturado-auto" style="color:#0F6E56;font-size:11.5px" title="Soma automática dos boletos emitidos guardados em Documentos > Boletos emitidos">…</b>');
+  out+='<div style="margin-top:9px"><button class="btn sm" style="width:100%;background:#FE3E6D;border-color:#FE3E6D;color:#fff;font-weight:700" onclick="boletoDoProcesso()" title="Se já há boletos deste processo, reenvia o mais recente por e-mail; se não há, abre a criação de um novo boleto já vinculado a este processo">💳 Gerar boleto</button></div>';
   out+='</div>';
   return out;
+}
+/* soma dos boletos emitidos (pasta Documentos > Boletos emitidos) → campo Faturado */
+async function _preencheFaturadoAuto(){
+  var el=document.getElementById('hon-faturado-auto'); if(!el||typeof atual==='undefined'||!atual) return;
+  try{
+    var chave=_docChaveProcObj(atual); if(!chave){ el.textContent='—'; return; }
+    var bols=await _lerBoletosPasta(chave);
+    var tot=bols.reduce(function(s,b){ return s+(parseInt(b.valor_centavos,10)||0); },0);
+    el.textContent=bols.length?('R$ '+(tot/100).toFixed(2).replace('.',',')+' ('+bols.length+' boleto'+(bols.length===1?'':'s')+')'):'R$ 0,00';
+    el.title='Soma automática de '+bols.length+' boleto(s) emitido(s) e guardado(s) em Documentos > Boletos emitidos.';
+  }catch(e){ el.textContent='—'; }
 }
 /* No celular, o quadro de Honorários fica melhor abaixo do card "Dados do processo"
    (e acima do histórico), em vez de no topo da ficha. No desktop continua no canto
@@ -9167,18 +9182,68 @@ async function emitirCobranca(){
 /* cria a pasta "Boletos" no processo/caso e salva um atalho .txt com o link do
    boleto/PIX. Aceita tanto processo com nº CNJ quanto pasta de assessoria (caso)
    identificada só por CNPJ/CPF, ou sem nenhum número (usa o _id do caso). */
+var PASTA_BOLETOS='Boletos emitidos';
 async function vincularBoletoProcesso(p, cob, descricao){
   try{
     var chave=_docChaveProcObj(p); if(!chave) return;
     var tok=await docToken();
-    await fetch('/api/docs',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({path:chave+'/Boletos', mkdir:true})});
-    var conteudo='Boleto emitido pelo sistema\n'+(descricao||'')+'\nVencimento: '+(cob.vencimento||'')+'\nValor: R$ '+((cob.valor_centavos||0)/100).toFixed(2).replace('.',',')+'\n'
+    await fetch('/api/docs',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({path:chave+'/'+PASTA_BOLETOS, mkdir:true})});
+    var conteudo='Boleto emitido pelo sistema (segunda via)\n'+(descricao||'')+'\nVencimento: '+(cob.vencimento||'')+'\nValor: R$ '+((cob.valor_centavos||0)/100).toFixed(2).replace('.',',')+'\n'
       +(cob.boleto_url?('Boleto: '+cob.boleto_url+'\n'):'')+(cob.linha_digitavel?('Linha digitável: '+cob.linha_digitavel+'\n'):'')+(cob.pix_emv?('PIX copia-e-cola: '+cob.pix_emv+'\n'):'');
     var nome='boleto-'+(cob.vencimento||'')+'-'+((cob.valor_centavos||0)/100).toFixed(0)+'.txt';
     var b64=btoa(unescape(encodeURIComponent(conteudo)));
-    await fetch('/api/docs',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({path:chave+'/Boletos/'+nome, b64:b64})});
+    await fetch('/api/docs',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({path:chave+'/'+PASTA_BOLETOS+'/'+nome, b64:b64})});
     try{ delete window.__censoDoc[chave]; }catch(e){}
   }catch(e){ console.warn('vincularBoletoProcesso:',e&&e.message||e); }
+}
+/* lê os boletos emitidos de um processo (pasta nova "Boletos emitidos" e, por
+   compatibilidade, a antiga "Boletos"), parseando cada .txt para {valor, venc, url...} */
+async function _lerBoletosPasta(chave){
+  if(!chave) return [];
+  var tok=await docToken(); var out=[];
+  var pastas=[PASTA_BOLETOS,'Boletos'];
+  for(var pi=0;pi<pastas.length;pi++){
+    var pasta=pastas[pi];
+    try{
+      var r=await fetch('/api/docs?dir='+encodeURIComponent(chave+'/'+pasta),{headers:{Authorization:'Bearer '+tok}});
+      if(!r.ok) continue;
+      var j=await r.json();
+      var itens=((j&&j.itens)||[]).filter(function(x){ return x.tipo!=='pasta' && /^boleto-.*\.txt$/i.test(x.nome||''); });
+      for(var k=0;k<itens.length;k++){
+        try{
+          var it=itens[k];
+          var rf=await fetch('/api/docs?file='+encodeURIComponent(chave+'/'+pasta+'/'+it.nome),{headers:{Authorization:'Bearer '+tok}});
+          if(!rf.ok) continue;
+          var texto=await rf.text();
+          var pega=function(rot){ var m=texto.match(new RegExp(rot+':\\s*(.+)')); return m?m[1].trim():''; };
+          var mV=(pega('Vencimento')||'').match(/(\d{4}-\d{2}-\d{2})/);
+          out.push({pasta:pasta,nome:it.nome,mod:it.mod,descricao:(texto.split('\n')[1]||'').trim(),valor_centavos:finCentavos(pega('Valor')),vencimento:(mV?mV[1]:''),boleto_url:pega('Boleto'),linha_digitavel:pega('Linha digitável'),pix_emv:pega('PIX copia-e-cola')});
+        }catch(e){}
+      }
+      if(itens.length) break; /* achou na pasta nova → não precisa ler a antiga */
+    }catch(e){}
+  }
+  return out;
+}
+/* botão "Gerar boleto" da ficha: se já há boletos → reenvia o mais recente;
+   se não há → abre a criação de um novo boleto já vinculado a este processo. */
+async function boletoDoProcesso(){
+  if(typeof atual==='undefined'||!atual) return;
+  var chave=_docChaveProcObj(atual); if(!chave){ alert('Salve o processo/caso primeiro.'); return; }
+  var bols=[]; try{ bols=await _lerBoletosPasta(chave); }catch(e){}
+  if(bols.length){ enviarBoletoDoProcesso(); }
+  else { gerarBoletoNovoDoProcesso(); }
+}
+/* abre "Nova cobrança (Cora)" já vinculada a este processo/caso */
+function gerarBoletoNovoDoProcesso(){
+  if(typeof atual==='undefined'||!atual) return;
+  abrirNovaCobranca();
+  window.__cobProcSel=atual;
+  var e=document.getElementById('cob-proc'); if(e) e.value=(atual.cliente||'')+(atual.numero?(' — '+atual.numero):'');
+  var d=document.getElementById('cob-desc'); if(d&&!d.value) d.value='Honorários advocatícios';
+  var em=_emailClienteDoProc(atual);
+  var msg=document.getElementById('cob-msg');
+  if(msg) msg.textContent='Boleto será vinculado a este processo'+(em?(' e enviado para '+em):'')+'. Escolha o cliente no topo.';
 }
 /* texto de referência do boleto conforme o vínculo — nunca dá a entender que é
    custo do processo em si: se há processo com CNJ, geralmente é honorário/
@@ -9234,23 +9299,13 @@ async function enviarBoletoDoProcesso(){
   var email=_emailClienteDoProc(atual);
   if(!email){ alert('Não encontrei o e-mail do cliente neste processo (verifique o campo de contatos).'); return; }
   try{
-    var tok=await docToken();
-    var r=await fetch('/api/docs?dir='+encodeURIComponent(chave+'/Boletos'),{headers:{Authorization:'Bearer '+tok}});
-    var j=await r.json();
-    var itens=((j&&j.itens)||[]).filter(function(x){ return x.tipo!=='pasta' && /^boleto-.*\.txt$/i.test(x.nome||''); });
-    if(!itens.length){ alert('Não há nenhum boleto salvo na pasta Documentos > Boletos deste processo. Emita um boleto pelo Financeiro primeiro.'); return; }
-    itens.sort(function(a,b){ return String(b.mod||'').localeCompare(String(a.mod||'')); });
-    var arq=itens[0];
-    var rf=await fetch('/api/docs?file='+encodeURIComponent(chave+'/Boletos/'+arq.nome),{headers:{Authorization:'Bearer '+tok}});
-    if(!rf.ok){ alert('Falha ao ler o boleto salvo.'); return; }
-    var texto=await rf.text();
-    var descricao=(texto.split('\n')[1]||'').trim();
-    function pega(rot){ var m=texto.match(new RegExp(rot+':\\s*(.+)')); return m?m[1].trim():''; }
-    var vencTxt=pega('Vencimento'), valorTxt=pega('Valor'), boletoUrl=pega('Boleto'), linhaDig=pega('Linha digitável'), pix=pega('PIX copia-e-cola');
-    var mV=vencTxt.match(/(\d{4}-\d{2}-\d{2})/); var vencIso=mV?mV[1]:'';
-    var centavos=finCentavos(valorTxt);
-    if(!confirm('Reenviar o boleto de '+(valorTxt||'valor não identificado')+(vencIso?(' (venc. '+vencIso.split('-').reverse().join('/')+')'):'')+' para '+email+'?')) return;
-    var cob={vencimento:vencIso,valor_centavos:centavos,descricao:descricao,boleto_url:boletoUrl,linha_digitavel:linhaDig,pix_emv:pix};
+    var bols=await _lerBoletosPasta(chave);
+    if(!bols.length){ if(confirm('Não há boletos salvos neste processo. Deseja criar um novo boleto agora?')) gerarBoletoNovoDoProcesso(); return; }
+    bols.sort(function(a,b){ return String(b.mod||'').localeCompare(String(a.mod||'')); });
+    var cob=bols[0];
+    var valorTxt='R$ '+((cob.valor_centavos||0)/100).toFixed(2).replace('.',',');
+    var vencBR=cob.vencimento?cob.vencimento.split('-').reverse().join('/'):'';
+    if(!confirm('Reenviar o boleto de '+valorTxt+(vencBR?(' (venc. '+vencBR+')'):'')+' para '+email+'?')) return;
     var res=await _enviarBoletoPorEmail(email, cob, atual);
     alert(res&&res.ok?('Boleto reenviado para '+email+'.'):('Falha ao reenviar: '+((res&&res.erro)||'erro desconhecido')));
   }catch(e){ alert('Erro ao reenviar boleto: '+((e&&e.message)||e)); }
