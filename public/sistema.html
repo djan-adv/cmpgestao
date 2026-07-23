@@ -456,7 +456,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
       <div class="card">
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
           <p class="sectlabel" style="margin:0">Monitoramento — acompanhamentos solicitados pelo portal</p>
-          <a class="btn sm ghost" href="/monitoramento.html" target="_blank" rel="noopener">↗ abrir portal do cliente</a>
+          <span style="display:flex;gap:8px"><button class="btn sm" onclick="monitEntregar(this)" title="Enviar por e-mail os extratos dos pedidos já pagos que ainda não foram entregues">✉ Enviar extratos pagos</button><a class="btn sm ghost" href="/monitoramento.html" target="_blank" rel="noopener">↗ portal do cliente</a></span>
         </div>
         <p class="note" style="margin:6px 0 10px">Pedidos que os clientes fizeram em <b>/monitoramento.html</b> (produto de captação). Nada aqui entra na lista de Processos — só quando você clicar em <b>“Trazer como assessoria”</b>. Link para o cliente: <b>gestao.cmpadvogados.com.br/monitoramento.html</b></p>
         <div id="monit-body"><div class="note">Carregando…</div></div>
@@ -9906,6 +9906,18 @@ async function renderMonitoramento(){
       }).join('')
       +'</tbody></table></div>';
   }catch(e){ el.innerHTML='<div class="note">Falha ao carregar: '+String(e&&e.message||e)+'</div>'; }
+}
+/* dispara a entrega dos extratos dos pedidos já pagos (o webhook já faz isso
+   sozinho; este botão é pra forçar/entregar retroativos) */
+async function monitEntregar(btn){
+  btn.disabled=true; var t=btn.textContent; btn.textContent='Enviando…';
+  try{
+    var r=await fetch('/api/monitoramento',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({acao:'entregar'})});
+    var j=await r.json().catch(function(){return {};});
+    alert(r.ok?((j.enviados||0)+' extrato(s) enviado(s).'+((j.enviados===0)?' (Nenhum pedido pago pendente de entrega.)':'')):('Falha: '+((j&&j.erro)||('HTTP '+r.status))));
+    renderMonitoramento();
+  }catch(e){ alert('Erro de rede.'); }
+  btn.disabled=false; btn.textContent=t;
 }
 /* traz os processos de um pedido para a base como CASO de assessoria (aí sim
    entram na lista de Processos) */

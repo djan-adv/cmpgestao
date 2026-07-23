@@ -45,6 +45,8 @@ export async function POST(request) {
   const sb = sbAdmin()
   const { data, error } = await sb.from('cora_cobrancas').update(patch).eq('cora_invoice_id', invoiceId).select('id')
   if (error) return Response.json({ erro: error.message }, { status: 500 })
+  // se a cobrança paga for de um monitoramento, entrega o extrato por e-mail (fire-and-forget)
+  try { fetch(new URL('/api/monitoramento', request.url).toString(), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ acao: 'entregar' }) }).catch(() => {}) } catch (e) {}
   return Response.json({ ok: true, atualizadas: (data && data.length) || 0 })
 }
 

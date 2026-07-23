@@ -110,7 +110,7 @@ async function buscar(){
     el('proc-tit').textContent='Olá, '+(NOME.split(' ')[0]||'')+'!';
     el('proc-sub').innerHTML=ACHADOS.length?('Encontramos <b>'+ACHADOS.length+' processo(s)</b> com publicação recente em seu nome. Marque os que deseja acompanhar ('+PRECO_TXT+' cada).'):(j.aviso||'Nenhum processo com publicação recente.');
     el('proc-lista').innerHTML=ACHADOS.map(function(p,i){
-      return '<label class="proc" onclick="setTimeout(recalc,0)"><input type="checkbox" data-i="'+i+'" onchange="this.closest(\'.proc\').classList.toggle(\'on\',this.checked);recalc()"><span><span class="n">'+p.numero+'</span><span class="m">'+(p.tribunal||'')+(p.data?(' · '+String(p.data).split('-').reverse().join('/')):'')+'</span><span class="m">'+(p.resumo||'')+'…</span></span></label>';
+      return '<label class="proc" onclick="setTimeout(recalc,0)"><input type="checkbox" data-i="'+i+'" onchange="this.closest(\'.proc\').classList.toggle(\'on\',this.checked);recalc()"><span><span class="n">'+maskCNJ(p.numero)+'</span><span class="m" style="font-weight:600;color:#345">'+(p.tribunal||'')+(p.data?('  ·  '+String(p.data).split('-').reverse().join('/')):'')+'</span><span class="m">'+(p.resumo||'')+'…</span></span></label>';
     }).join('')||'<div class="note">—</div>';
     el('btn-contratar').style.display=ACHADOS.length?'':'none';
     el('step-dados').classList.add('hide'); el('step-proc').classList.remove('hide');
@@ -118,6 +118,7 @@ async function buscar(){
   }catch(e){ erro('erro1','Erro de rede. Tente de novo.'); }
   b.disabled=false; b.textContent=t;
 }
+function maskCNJ(dig){ var d=String(dig||'').replace(/\D/g,''); if(d.length!==20) return dig; return d.slice(0,7)+'-'+d.slice(7,9)+'.'+d.slice(9,13)+'.'+d.slice(13,14)+'.'+d.slice(14,16)+'.'+d.slice(16); }
 function selecionados(){ return [].slice.call(document.querySelectorAll('#proc-lista input:checked')).map(function(c){ return ACHADOS[+c.getAttribute('data-i')].numero; }); }
 function recalc(){ var n=selecionados().length; var v=n* (window.__preco||1990); el('tot-valor').textContent='R$ '+(v/100).toFixed(2).replace('.',','); }
 async function contratar(){

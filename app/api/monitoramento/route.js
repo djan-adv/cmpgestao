@@ -10,6 +10,7 @@
 // vem de produtividade_config (monit_preco_centavos).
 
 import crypto from 'crypto'
+import nodemailer from 'nodemailer'
 import { createClient } from '@supabase/supabase-js'
 import { coraConfigurado, coraApi } from '../cora/lib.js'
 
@@ -64,6 +65,67 @@ async function buscaDjenPorNome(nome, dias) {
   }
   return Object.values(por).sort((a, b) => String(b.data).localeCompare(String(a.data)))
 }
+// máscara CNJ NNNNNNN-DD.AAAA.J.TR.OOOO
+function maskCNJ(dig) {
+  const d = soDig(dig)
+  if (d.length !== 20) return dig
+  return d.slice(0, 7) + '-' + d.slice(7, 9) + '.' + d.slice(9, 13) + '.' + d.slice(13, 14) + '.' + d.slice(14, 16) + '.' + d.slice(16)
+}
+// publicações recentes de UM processo (por número) no DJEN
+async function pubsDoProcesso(numeroDig, dias) {
+  const fim = new Date(), ini = new Date(Date.now() - dias * 86400000)
+  const url = `${DJEN}?numeroProcesso=${soDig(numeroDig)}&dataDisponibilizacaoInicio=${iso(ini)}&dataDisponibilizacaoFim=${iso(fim)}&meio=D&pagina=1&itensPorPagina=50`
+  try {
+    const r = await fetch(url, { headers: { Accept: 'application/json', 'User-Agent': UA }, signal: AbortSignal.timeout(20000) })
+    if (!r.ok) return []
+    const d = await r.json().catch(() => ({}))
+    const lote = d.items || d.content || d.comunicacoes || []
+    return lote.map(p => ({
+      data: String(p.dataDisponibilizacao || p.data_disponibilizacao || '').slice(0, 10),
+      orgao: p.nomeOrgao || p.nome_orgao || '',
+      texto: String(p.texto || p.teor || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+    })).sort((a, b) => String(b.data).localeCompare(String(a.data)))
+  } catch (e) { return [] }
+}
+function escH(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') }
+async function enviarExtrato(m) {
+  const host = process.env.SMTP_HOST, port = parseInt(process.env.SMTP_PORT || '465', 10)
+  const user = process.env.SMTP_USER, pass = process.env.SMTP_PASS
+  if (!host || !user || !pass || !m.email) return { ok: false, motivo: 'SMTP/e-mail ausente' }
+  const nums = Array.isArray(m.numeros) ? m.numeros : []
+  let blocos = ''
+  for (const n of nums) {
+    const pubs = await pubsDoProcesso(n, 180)
+    const linhas = pubs.length
+      ? pubs.slice(0, 12).map(p => '<div style="padding:6px 0;border-top:1px dashed #e4e8ef"><b>' + (p.data ? p.data.split('-').reverse().join('/') : '') + '</b>' + (p.orgao ? ' — ' + escH(p.orgao) : '') + '<div style="font-size:12.5px;color:#445;margin-top:2px">' + escH(p.texto.slice(0, 400)) + '</div></div>').join('')
+      : '<div style="font-size:12.5px;color:#697180;padding:6px 0">Sem publicações novas nos últimos 6 meses para este processo.</div>'
+    blocos += '<div style="margin:0 0 16px"><div style="font-weight:800;color:#2E3A4B;font-size:14px;border-bottom:2px solid #C9A227;padding-bottom:3px;margin-bottom:4px">Processo ' + escH(maskCNJ(n)) + '</div>' + linhas + '</div>'
+  }
+  const html = '<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#1e2733;max-width:640px;margin:0 auto;padding:8px">' +
+    '<div style="border-top:3px solid #b8912e;padding:14px 6px"><h2 style="color:#2E3A4B;font-size:17px;margin:0 0 4px">Extrato de acompanhamento processual</h2>' +
+    '<p style="font-size:13px;color:#697180;margin:0 0 14px">Olá, ' + escH((m.nome || '').split(' ')[0] || '') + '! Conforme sua solicitação e após a confirmação do pagamento, segue o extrato das movimentações dos processos escolhidos.</p>' +
+    blocos +
+    '<div style="background:#f3f7fb;border:1px solid #d9e6f2;border-radius:10px;padding:11px 13px;font-size:12px;color:#345;margin-top:8px">🔒 <b>Uso pessoal (LGPD):</b> estas informações são de uso exclusivo do titular e não devem ser divulgadas ou repassadas a terceiros. Este acompanhamento atende a uma solicitação sua e não constitui oferta de serviços jurídicos.</div>' +
+    '<p style="font-size:12px;color:#8a8f98;text-align:center;margin-top:12px">Crispim, Mendonça e Pinheiro Advogados</p></div></div>'
+  try {
+    const t = nodemailer.createTransport({ host, port, secure: port === 465, auth: { user, pass } })
+    await t.sendMail({ from: '"Crispim, Mendonça e Pinheiro Advogados" <' + user + '>', to: m.email, subject: 'Seu extrato de acompanhamento processual — CMP Advogados', html })
+    return { ok: true }
+  } catch (e) { return { ok: false, motivo: (e && e.message) || String(e) } }
+}
+// entrega os extratos dos monitoramentos JÁ PAGOS e ainda não enviados
+async function entregarPendentes(sb) {
+  let enviados = 0
+  const { data: monits } = await sb.from('monitoramentos').select('*').eq('status', 'pendente').is('extrato_enviado_em', null).limit(50)
+  for (const m of (monits || [])) {
+    if (!m.cobranca_id) continue
+    const { data: cob } = await sb.from('cora_cobrancas').select('status').eq('id', m.cobranca_id).single()
+    if (!cob || cob.status !== 'paga') continue   // só entrega quando o boleto está pago
+    const r = await enviarExtrato(m)
+    if (r.ok) { await sb.from('monitoramentos').update({ status: 'pago', extrato_enviado_em: new Date().toISOString() }).eq('id', m.id); enviados++ }
+  }
+  return enviados
+}
 function extrairCora(json) {
   const po = (json && (json.payment_options || json.payment_option)) || {}
   const bs = po.bank_slip || (json && json.bank_slip) || {}
@@ -85,6 +147,13 @@ export async function POST(request) {
   if (acao === 'preco') {
     const preco = parseInt(await cfg(sb, 'monit_preco_centavos', '1000'), 10) || 1000
     return Response.json({ ok: true, preco })
+  }
+
+  // entrega os extratos dos pedidos já pagos (chamado pelo webhook do Cora, pelo
+  // botão do painel, ou pelo cron). Idempotente.
+  if (acao === 'entregar') {
+    const enviados = await entregarPendentes(sb)
+    return Response.json({ ok: true, enviados })
   }
 
   if (acao === 'buscar') {
