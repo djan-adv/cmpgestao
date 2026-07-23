@@ -1549,7 +1549,7 @@ function abrir(i){
     '<span id="proc-vinculados" style="display:inline-flex;gap:6px;flex-wrap:wrap;align-items:center"></span></div>'+
     '<div id="ctl-chips" style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center"></div>'+
     ''+
-    '<div style="margin-top:10px"><button class="btn sm" onclick="novaTarefaDoProcesso()">+ Nova tarefa</button> <button class="btn sm" style="background:#eef4fb;color:#185FA5;border:1px solid #cfe0f2;font-weight:700" onclick="abrirTribunal(\''+p.numero+'\')" title="Abrir o sistema do tribunal (PJe/e-SAJ/Projudi) no grau deste processo — o número é copiado para você colar na busca">&#9878; Abrir no tribunal</button> <button id="btn-atualizar-cli" class="btn sm cmp-only" style="background:#eaf4f4;color:#0b7285;border:1px solid #cfe6e6;font-weight:700" onclick="abrirAtualizarCliente(\''+p.numero+'\')" title="E-mail de atualização ao cliente — informar movimentação, pedir providência, ou ativar o acompanhamento semanal automático">&#9993; Atualizar cliente</button> <button class="btn sm cmp-only" style="background:#f7f3e8;color:#8a6d00;border:1px solid #e8dcbb;font-weight:700" onclick="abrirAssinatura(\''+p.numero+'\')" title="Gerar procuração ou documento para assinatura eletrônica, já com o cliente deste processo no contexto">&#9997; Procuração</button></div>'+
+    '<div style="margin-top:10px"><button class="btn sm" onclick="novaTarefaDoProcesso()">+ Nova tarefa</button> <button class="btn sm" style="background:#eef4fb;color:#185FA5;border:1px solid #cfe0f2;font-weight:700" onclick="abrirTribunal(\''+p.numero+'\')" title="Abrir o sistema do tribunal (PJe/e-SAJ/Projudi) no grau deste processo — o número é copiado para você colar na busca">&#9878; Abrir no tribunal</button> <button id="btn-atualizar-cli" class="btn sm cmp-only" style="background:#eaf4f4;color:#0b7285;border:1px solid #cfe6e6;font-weight:700" onclick="abrirAtualizarCliente(\''+p.numero+'\')" title="E-mail de atualização ao cliente — informar movimentação, pedir providência, ou ativar o acompanhamento semanal automático">&#9993; Atualizar cliente</button> <button class="btn sm cmp-only" style="background:#f7f3e8;color:#8a6d00;border:1px solid #e8dcbb;font-weight:700" onclick="abrirAssinatura(\''+p.numero+'\')" title="Gerar procuração ou documento para assinatura eletrônica, já com o cliente deste processo no contexto">&#9997; Procuração</button>'+((typeof _ehCasoProc==='function'&&_ehCasoProc(p))?' <button class="btn sm cmp-only" style="background:#f3eaf7;color:#6d28a8;border:1px solid #ddc9ea;font-weight:700" onclick="monitorarAcoesCliente()" title="Testar: buscar no DJEN ações NOVAS (últimos 3 meses) que citem o nome deste cliente — inclui trabalhista. Não busca por CNPJ (a API do CNJ não permite).">&#128269; Monitorar ações novas</button>':'')+'</div>'+
     /* ponto 12: bloco de processos vinculados no canto inferior direito da aba (perto do botão Encerrar) */
     '<div id="proc-vinculados-rodape" style="position:absolute;bottom:12px;right:14px;max-width:60%;display:flex;gap:6px;flex-wrap:wrap;align-items:center;justify-content:flex-end;font-size:12px"></div>'+
     '</div>';
@@ -1657,6 +1657,33 @@ function _marcaAcompNaFicha(numero, ativo){
     btn.innerHTML='&#9993; Atualizar cliente';
     btn.title='E-mail de atualização ao cliente — informar movimentação, pedir providência, ou ativar o acompanhamento semanal automático';
   }
+}
+/* TESTE: monitorar ações novas (últimos 3 meses) que citem o nome deste cliente
+   de assessoria no DJEN. Mostra uma faixa no topo da ficha, como os avisos. */
+async function monitorarAcoesCliente(){
+  if(typeof atual==='undefined'||!atual) return;
+  var nome=String(atual.cliente||'').split(/\s+e\s+|;|,/i)[0].trim()||String(atual.cliente||'').trim();
+  if(nome.length<4){ alert('Este cliente não tem nome suficiente para buscar. Preencha o nome na ficha.'); return; }
+  var host=document.getElementById('det-body'); if(!host) return;
+  var faixa=document.getElementById('monitor-faixa');
+  if(!faixa){ faixa=document.createElement('div'); faixa.id='monitor-faixa'; host.insertBefore(faixa, host.firstChild); }
+  faixa.style.cssText='background:#f6eefb;border:1px solid #ddc9ea;border-left:4px solid #6d28a8;border-radius:10px;padding:10px 12px;margin:0 0 12px;font-size:13px';
+  faixa.innerHTML='🔎 Buscando ações novas (últimos 3 meses) contra <b>'+esc(nome)+'</b> no DJEN…';
+  try{
+    var tok=await docToken();
+    var r=await fetch('/api/monitor-parte?nome='+encodeURIComponent(nome)+'&dias=90',{headers:{Authorization:'Bearer '+tok}});
+    var j=await r.json().catch(function(){return {};});
+    if(!r.ok||j.erro){ faixa.innerHTML='<b style="color:#b5342b">Falha:</b> '+esc((j&&j.erro)||('HTTP '+r.status))+' <a onclick="this.closest(\'div\').remove()" style="cursor:pointer;color:#6d28a8;float:right">✕</a>'; return; }
+    var novos=(j.achados||[]).filter(function(a){return a.novo;});
+    var cab='<div style="display:flex;justify-content:space-between;align-items:center"><b style="color:#6d28a8">🔎 Monitoramento — '+esc(nome)+'</b><a onclick="this.closest(\'div\').remove()" style="cursor:pointer;color:#6d28a8">✕</a></div>';
+    if(!(j.achados||[]).length){ faixa.innerHTML=cab+'<div class="note" style="margin:6px 0 0">'+esc(j.aviso||'Nenhuma publicação com este nome nos últimos 3 meses.')+'</div>'; return; }
+    faixa.innerHTML=cab
+      +'<div style="margin:6px 0 8px">'+j.total+' processo(s) com publicação no período · <b style="color:#6d28a8">'+novos.length+' novo(s)</b> (fora da nossa base)'+(j.trabalhistas?(' · '+j.trabalhistas+' trabalhista(s)'):'')+'</div>'
+      +'<div style="max-height:220px;overflow:auto">'+(j.achados||[]).map(function(a){
+        return '<div style="padding:5px 0;border-top:1px dashed #ddc9ea"><b>'+esc(a.numero.replace(/\D/g,''))+'</b> '+(a.novo?'<span style="font-size:10px;background:#6d28a8;color:#fff;border-radius:8px;padding:1px 7px;font-weight:700">NOVO</span>':'<span class="note" style="font-size:10px">já na base</span>')+' <span class="note">· '+esc(a.tribunal||'')+(a.data?(' · '+String(a.data).split('-').reverse().join('/')):'')+'</span><div class="note" style="margin:2px 0 0;font-size:11.5px">'+esc((a.texto||'').slice(0,160))+'…</div></div>';
+      }).join('')+'</div>'
+      +'<div class="note" style="margin-top:6px;font-size:11px">Busca por NOME (a API do CNJ não permite por CNPJ). Nome comum pode gerar falso-positivo; só aparecem processos com publicação no período.</div>';
+  }catch(e){ faixa.innerHTML='<b style="color:#b5342b">Erro de rede.</b> '+esc((e&&e.message)||e); }
 }
 function traduzir(){
   var t=(atual.hist||"").toLowerCase(), r;
