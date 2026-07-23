@@ -80,8 +80,8 @@
     <div class="big">🧾</div>
     <h1>Boleto gerado!</h1>
     <p class="sub" id="pay-sub"></p>
-    <a class="lk" id="pay-link" href="#" target="_blank" rel="noopener">Abrir boleto / PIX</a>
-    <div id="pay-pix" class="hide"><div class="note" style="margin-top:14px;font-weight:700">PIX copia-e-cola:</div><div class="pix" id="pix-code"></div><button class="btn" style="margin-top:8px" onclick="copiarPix()">Copiar código PIX</button></div>
+    <a class="lk" id="pay-link" href="#" target="_blank" rel="noopener">Abrir boleto para pagamento</a>
+    <p class="note" style="margin-top:10px">O boleto também traz um QR Code/PIX com o valor já preenchido — pague por ele para a confirmação ser automática.</p>
     <div class="lgpd" style="text-align:left">Assim que o pagamento for confirmado, você receberá por e-mail o extrato das movimentações dos processos escolhidos. 🔒 Informações de uso pessoal (LGPD) — não repassar a terceiros.</div>
   </div>
 
@@ -132,7 +132,6 @@ async function contratar(){
     if(!r.ok){ erro('erro2',j.erro||'Falha ao gerar o boleto.'); b.disabled=false; b.textContent=t; return; }
     el('pay-sub').innerHTML='Acompanhamento de <b>'+j.quantidade+' processo(s)</b> — total <b>R$ '+((j.total||0)/100).toFixed(2).replace('.',',')+'</b>. Vencimento '+(j.vencimento?String(j.vencimento).split('-').reverse().join('/'):'')+'.';
     if(j.boleto_url){ el('pay-link').href=j.boleto_url; el('pay-link').style.display=''; } else el('pay-link').style.display='none';
-    if(j.pix){ el('pay-pix').classList.remove('hide'); el('pix-code').textContent=j.pix; window.__pix=j.pix; }
     el('step-proc').classList.add('hide'); el('step-pay').classList.remove('hide');
     window.scrollTo(0,0);
   }catch(e){ erro('erro2','Erro de rede. Tente de novo.'); }
