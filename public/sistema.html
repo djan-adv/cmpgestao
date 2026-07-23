@@ -227,6 +227,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
       <a data-s="fases" onclick="go('fases')"><span class="ic">◑</span> Revisar fases</a>
       <a data-s="procedimentos" onclick="go('procedimentos')"><span class="ic">☰</span> Procedimentos</a>
       <a data-s="produtividade" class="cmp-only" onclick="go('produtividade')" title="Métricas de volume e esforço por pessoa, derivadas do log de eventos do sistema (sem vigilância de tela)"><span class="ic">📈</span> Produtividade</a>
+      <a data-s="monitoramento" class="cmp-only" onclick="go('monitoramento')" title="Pedidos de acompanhamento processual feitos pelo portal público (produto de captação)"><span class="ic">🛰</span> Monitoramento <span id="nav-n-monit" style="margin-left:auto;font-size:10.5px;background:var(--navy2);border-radius:10px;padding:1px 7px"></span></a>
       <a data-s="sugestoes" onclick="go('sugestoes')" style="margin-top:12px;color:#ffd98a"><span class="ic">💡</span> Sugestões / Melhorias</a>
     </nav>
   </aside>
@@ -448,6 +449,17 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
       <div class="card">
         <p class="sectlabel">Configurações do módulo</p>
         <div id="prd-config" class="note">Carregando…</div>
+      </div>
+    </section>
+
+    <section id="s-monitoramento" class="hidden">
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+          <p class="sectlabel" style="margin:0">Monitoramento — acompanhamentos solicitados pelo portal</p>
+          <a class="btn sm ghost" href="/monitoramento.html" target="_blank" rel="noopener">↗ abrir portal do cliente</a>
+        </div>
+        <p class="note" style="margin:6px 0 10px">Pedidos que os clientes fizeram em <b>/monitoramento.html</b> (produto de captação). Nada aqui entra na lista de Processos — só quando você clicar em <b>“Trazer como assessoria”</b>. Link para o cliente: <b>gestao.cmpadvogados.com.br/monitoramento.html</b></p>
+        <div id="monit-body"><div class="note">Carregando…</div></div>
       </div>
     </section>
 
@@ -5315,7 +5327,7 @@ function go(s){
 function go(s){
   try{ localStorage.setItem('cmp_secao', s); if(s!=='proc-det') localStorage.removeItem('cmp_proc'); }catch(e){}
   var showId=(s==='contatos')?'crm':s;
-  ["painel","triagem","agenda","processos","proc-det","crm","financeiro","etiquetas","procedimentos","diligencias","relatorio","encerrados","inove","james","cadastros","fases","sugestoes","lote","produtividade"].forEach(function(id){var e=document.getElementById("s-"+id);if(e)e.classList.add("hidden")});
+  ["painel","triagem","agenda","processos","proc-det","crm","financeiro","etiquetas","procedimentos","diligencias","relatorio","encerrados","inove","james","cadastros","fases","sugestoes","lote","produtividade","monitoramento"].forEach(function(id){var e=document.getElementById("s-"+id);if(e)e.classList.add("hidden")});
   var sec=document.getElementById("s-"+showId); if(sec) sec.classList.remove("hidden");
   document.querySelectorAll("#nav a").forEach(function(a){a.classList.remove("active")});
   var link=document.querySelector('#nav a[data-s="'+s+'"]');if(link)link.classList.add("active");
@@ -5342,6 +5354,7 @@ function go(s){
   if(s==="inovesol")renderInoveSol();
   if(s==="fases" && typeof renderFasesRevisao==='function')renderFasesRevisao();
   if(s==="produtividade" && typeof renderProdutividade==='function')renderProdutividade();
+  if(s==="monitoramento" && typeof renderMonitoramento==='function')renderMonitoramento();
   if(s==="sugestoes" && typeof renderSugestoes==='function'){ var _an=document.getElementById('sg-autor'); if(_an && !_an.value){ _an.value=((document.getElementById('who-name')||{}).textContent||'').trim(); } renderSugestoes(); }
   if(s==="lote") renderLote();
   try{ if(typeof renderNavLotes==='function') renderNavLotes(); }catch(e){}
@@ -9873,6 +9886,49 @@ async function editarPrdPeso(tipo){
     if(r&&r.error){ alert('Erro: '+r.error.message); return; }
     PRD_PESOS[tipo].pontos=n; logEvent('config_changed','task_weights',tipo,{pontos:n});
     renderProdutividade();
+  }catch(e){ alert('Erro: '+(e&&e.message||e)); }
+}
+/* ===== Painel Monitoramento (pedidos do portal público) ===== */
+async function renderMonitoramento(){
+  var el=document.getElementById('monit-body'); if(!el) return;
+  el.innerHTML='<div class="note">Carregando…</div>';
+  try{
+    var r=await window.__sb.from('monitoramentos').select('*').order('criado_em',{ascending:false}).limit(500);
+    var rows=(r&&r.data)||[];
+    var nb=document.getElementById('nav-n-monit'); if(nb) nb.textContent=rows.filter(function(x){return x.status==='pendente';}).length||'';
+    if(!rows.length){ el.innerHTML='<div class="note">Nenhum pedido ainda. Quando um cliente contratar em /monitoramento.html, aparece aqui.</div>'; return; }
+    el.innerHTML='<div style="overflow:auto"><table style="width:100%;font-size:13px"><thead><tr><th style="text-align:left">Cliente</th><th style="text-align:left">CPF/CNPJ</th><th style="text-align:left">E-mail</th><th style="text-align:left">Processos</th><th style="text-align:left">Valor</th><th style="text-align:left">Status</th><th style="text-align:left">Quando</th><th></th></tr></thead><tbody>'
+      +rows.map(function(m){
+        var nums=(Array.isArray(m.numeros)?m.numeros:[]);
+        var badge=(m.status==='pago')?'<span style="color:#0F6E56;font-weight:700">✓ pago</span>':(m.status==='cancelado'?'<span class="note">cancelado</span>':'<span style="color:#8a5a00;font-weight:700">aguardando pgto</span>');
+        var acao=m.virou_assessoria?'<span class="note">✓ na assessoria</span>':('<button class="btn sm gold" style="font-size:11px;padding:3px 9px" onclick="monitTrazerAssessoria(\''+m.id+'\')">Trazer como assessoria</button>');
+        return '<tr><td><b>'+finEsc(m.nome||'—')+'</b></td><td>'+finEsc(m.doc||'')+'</td><td>'+finEsc(m.email||'')+'</td><td title="'+finEsc(nums.join(', '))+'">'+nums.length+' proc.</td><td>'+finReais(m.valor_centavos)+'</td><td>'+badge+'</td><td class="note">'+(m.criado_em?new Date(m.criado_em).toLocaleDateString('pt-BR'):'')+'</td><td>'+acao+'</td></tr>';
+      }).join('')
+      +'</tbody></table></div>';
+  }catch(e){ el.innerHTML='<div class="note">Falha ao carregar: '+String(e&&e.message||e)+'</div>'; }
+}
+/* traz os processos de um pedido para a base como CASO de assessoria (aí sim
+   entram na lista de Processos) */
+async function monitTrazerAssessoria(id){
+  try{
+    var r=await window.__sb.from('monitoramentos').select('*').eq('id',id).single();
+    var m=r&&r.data; if(!m){ alert('Pedido não encontrado.'); return; }
+    var nums=Array.isArray(m.numeros)?m.numeros:[];
+    if(!confirm('Trazer '+nums.length+' processo(s) de '+(m.nome||'')+' para a base como assessoria?\n\nEles passam a aparecer na lista de Processos.')) return;
+    var esc=await _escBusca(); if(!esc){ alert('Escritório não identificado.'); return; }
+    var criados=0;
+    for(var i=0;i<nums.length;i++){
+      var num=String(nums[i]);
+      try{
+        var q=await window.__sb.from('processos').select('id').eq('numero_digitos',num.replace(/\D/g,'')).limit(1);
+        if(q&&q.data&&q.data.length) continue; /* já existe */
+        var ins=await window.__sb.from('processos').insert({escritorio_id:esc,numero:num,cliente_nome:m.nome||null,assunto:'Monitoramento contratado',status:'Administrativo',fonte:'caso',contatos_livres:(m.email||null)}).select('id').single();
+        if(ins&&ins.data) criados++;
+      }catch(e){}
+    }
+    await window.__sb.from('monitoramentos').update({virou_assessoria:true}).eq('id',id);
+    alert(criados+' processo(s) trazido(s) para a base como assessoria. Atualize a lista de Processos (recarregue).');
+    renderMonitoramento();
   }catch(e){ alert('Erro: '+(e&&e.message||e)); }
 }
 function exportarProdutividadeCSV(){
