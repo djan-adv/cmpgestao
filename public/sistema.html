@@ -7079,7 +7079,7 @@ async function avisoAudienciaCliente(p, isoData, hora, tipo){
     } else {
       corpo='Olá'+(primeiro?(', '+primeiro):'')+'!\n\nInformamos que foi designada uma audiência no seu processo nº '+p.numero+', marcada para o dia '+dbr+horaTxt+'.'+linkTxt+'\n\nJá anotamos em nossa agenda e vamos acompanhar. Faremos um novo contato na véspera. Se precisarmos da sua presença ou de testemunhas, avisaremos com antecedência.';
     }
-    corpo+='\n\n'+_assinaturaCMP('Djan');
+    corpo+='\n\n'+_assinaturaCMP('Djan')+(typeof _msgAcompProcCliente==='function'?_msgAcompProcCliente():'');
     var assunto=(tipo==='vespera')?('Lembrete: sua audiência é amanhã — processo '+p.numero):('Audiência designada no seu processo '+p.numero);
     var tok=await docToken();
     var r=await fetch('/api/enviar-email',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({para:email,assunto:assunto,corpo:corpo,numero:p.numero})});
@@ -8091,6 +8091,11 @@ var _ATZ_PEDIDOS={
   audiencia:'a confirmação da sua presença na audiência e os dados de contato das suas testemunhas',
   livre:'[descreva aqui o que a cliente deve providenciar]'
 };
+/* convite ao acompanhamento de processos — SÓ para clientes (nunca vara/cartório).
+   Como já é cliente, não há restrição de publicidade. */
+function _msgAcompProcCliente(){
+  return '\n\n— — —\nDica: você pode acompanhar seus processos a qualquer hora, ver as movimentações e receber avisos, pelo nosso painel:\nhttps://gestao.cmpadvogados.com.br/monitoramento.html';
+}
 function _gerarRascunhoAtualizacao(){
   var ctx=window.__atzCtx; if(!ctx) return; var p=ctx.p;
   var nome=(nomeBonito(p.cliente||'')||'').trim();
@@ -8103,7 +8108,7 @@ function _gerarRascunhoAtualizacao(){
       +'Sobre o seu processo nº '+p.numero+', precisamos da sua ajuda para dar andamento. Por gentileza, providencie:\n\n'
       +'• '+item+'\n\n'
       +'Assim que possível, envie por este e-mail ou pelo WhatsApp do escritório. Ficamos à disposição para esclarecer qualquer dúvida.\n\n'
-      +assinatura;
+      +assinatura+_msgAcompProcCliente();
     assunto='Providência no seu processo — [Ref: '+p.numero+']';
   } else {
     var n=parseInt((document.getElementById('atz-qtd')||{}).value,10)||5;
@@ -8116,7 +8121,7 @@ function _gerarRascunhoAtualizacao(){
       +(linhas.length?linhas.join('\n\n'):'• Sem movimentações oficiais recentes registradas.')+'\n\n'
       +(passos?('Resumo e próximos passos:\n'+passos+'\n\nNo momento, você não precisa tomar nenhuma providência — o escritório está cuidando de tudo e avisará caso seja necessário algo de sua parte.\n\n'):'')
       +'Seguimos acompanhando o processo e comunicaremos as próximas movimentações.\n\n'
-      +assinatura;
+      +assinatura+_msgAcompProcCliente();
     assunto='Atualização do seu processo — [Ref: '+p.numero+']';
   }
   var el=document.getElementById('atz-corpo'); if(el) el.value=corpo;
@@ -9109,7 +9114,7 @@ async function _avisarClienteAlvaraDepositado(p){
       +'⚠️ ATENÇÃO — GOLPES: nosso escritório NUNCA entra em contato pedindo depósito, PIX ou qualquer pagamento para "liberar" um alvará ou honorários. Se alguém se passar por nós pedindo transferência, NÃO envie dinheiro — é golpe. Em caso de dúvida, fale diretamente conosco pelos nossos canais oficiais de sempre.\n\n'
       +'Foi um prazer cuidar do seu caso até aqui! E se precisar de nós em outras situações, saiba que o escritório também atua em Direito Imobiliário (compra e venda, usucapião, regularização de imóveis) e Direito Trabalhista. Conheça nossas áreas de atuação:\nhttps://gestao.cmpadvogados.com.br/areas-atuacao.html\n\n'
       +'Qualquer dúvida, estamos à disposição.';
-    corpo+='\n\n'+_assinaturaCMP('Djan');
+    corpo+='\n\n'+_assinaturaCMP('Djan')+(typeof _msgAcompProcCliente==='function'?_msgAcompProcCliente():'');
     var assunto='Alvará pago — processo nº '+p.numero;
     var tok=await docToken();
     var r=await fetch('/api/enviar-email',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({para:email,assunto:assunto,corpo:corpo,numero:p.numero})});
