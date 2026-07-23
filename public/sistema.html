@@ -9895,9 +9895,58 @@ async function editarPrdPeso(tipo){
   }catch(e){ alert('Erro: '+(e&&e.message||e)); }
 }
 /* ===== Painel Monitoramento (pedidos do portal público) ===== */
+/* ===== Monitoramento de MARCAS no INPI (RPI) ===== */
+async function _renderInpiMarcas(anchor){
+  var host=anchor.parentNode; var box=document.getElementById('monit-inpi');
+  if(!box){ box=document.createElement('div'); box.id='monit-inpi'; box.style.marginBottom='16px'; host.insertBefore(box, anchor); }
+  var r=await window.__sb.from('inpi_marcas').select('*, processos(numero,cliente_nome)').order('criado_em',{ascending:false}).limit(200);
+  var ms=(r&&r.data)||[];
+  var linhas=ms.map(function(m){
+    var st=m.ativo?'<span style="color:#0F6E56;font-weight:700">ativo</span>':('<span style="color:#b5342b;font-weight:700" title="'+finEsc(m.suspenso_motivo||'')+'">suspenso</span>');
+    var pasta=(m.processos&&m.processos.cliente_nome)?finEsc(m.processos.cliente_nome):'<span class="note">sem pasta</span>';
+    var acao=m.ativo
+      ? '<a onclick="inpiToggleMarca(\''+m.id+'\',false)" style="cursor:pointer;color:#b5342b;font-size:11px" title="Suspender o monitoramento desta marca">⏸ suspender</a>'
+      : '<a onclick="inpiToggleMarca(\''+m.id+'\',true)" style="cursor:pointer;color:#0F6E56;font-size:11px" title="Reativar o monitoramento">▶ reativar</a>';
+    return '<tr><td class="proc">'+finEsc(m.numero)+'</td><td>'+finEsc(m.descricao||m.titular||'—')+'</td><td>'+pasta+'</td><td class="note" style="text-align:center">'+(m.ultima_rpi||'—')+'</td><td>'+st+'</td><td class="note">'+(m.ultima_varredura?new Date(m.ultima_varredura).toLocaleDateString('pt-BR'):'—')+'</td><td style="white-space:nowrap">'+acao+' · <a onclick="inpiRemoverMarca(\''+m.id+'\')" style="cursor:pointer;color:#8a8f98;font-size:11px" title="Remover da lista">✕</a></td></tr>';
+  }).join('');
+  box.innerHTML='<p class="sectlabel" style="margin:0 0 6px">🏛 Marcas no INPI (RPI) '+(ms.length?'('+ms.length+')':'')+' <button class="btn sm gold" style="font-size:11px;padding:3px 9px;margin-left:6px" onclick="inpiAddMarca()">➕ Marca INPI</button></p>'
+    +(ms.length?'<div style="overflow:auto"><table style="width:100%;font-size:13px"><thead><tr><th style="text-align:left">Nº INPI</th><th style="text-align:left">Marca</th><th style="text-align:left">Pasta</th><th>Últ. RPI</th><th style="text-align:left">Status</th><th style="text-align:left">Últ. varred.</th><th></th></tr></thead><tbody>'+linhas+'</tbody></table></div>'
+      :'<div class="note">Nenhuma marca cadastrada. Use ➕ para monitorar um processo do INPI pelo número (9 dígitos). A varredura roda semanalmente na RPI de Marcas e lança os despachos no histórico da pasta.</div>');
+}
+async function inpiAddMarca(){
+  var num=prompt('Número do processo INPI (9 dígitos):','');
+  if(!num) return; num=String(num).replace(/\D/g,'');
+  if(num.length<8||num.length>10){ alert('Número inválido — o processo de marca do INPI tem 9 dígitos.'); return; }
+  var desc=prompt('Descrição da marca (ex.: "Conceito Estofados — NCL 20"):','')||'';
+  var vinc=prompt('CNPJ ou nome do titular para vincular à PASTA (histórico). Deixe em branco para não vincular:','')||'';
+  try{
+    var esc=await _escBusca(); if(!esc){ alert('Escritório não identificado.'); return; }
+    var processo_id=null, titular=null;
+    if(vinc.trim()){
+      var dig=vinc.replace(/\D/g,'');
+      var qp=null;
+      if(dig.length>=11){ qp=await window.__sb.from('processos').select('id,cliente_nome').eq('escritorio_id',esc).eq('numero_digitos',dig).limit(1); }
+      if(!qp||!qp.data||!qp.data.length){ qp=await window.__sb.from('processos').select('id,cliente_nome').eq('escritorio_id',esc).ilike('cliente_nome','%'+vinc.trim()+'%').limit(1); }
+      if(qp&&qp.data&&qp.data.length){ processo_id=qp.data[0].id; titular=qp.data[0].cliente_nome; }
+      else if(!confirm('Nenhuma pasta encontrada para "'+vinc+'". Cadastrar a marca assim mesmo? (os despachos irão só por e-mail)')) return;
+    }
+    var ins=await window.__sb.from('inpi_marcas').insert({escritorio_id:esc,processo_id:processo_id,numero:num,descricao:desc,titular:titular}).select('id').single();
+    if(ins&&ins.error){ alert('Não foi possível salvar: '+ins.error.message); return; }
+    alert('Marca '+num+' cadastrada. O monitoramento roda na próxima RPI (terça).');
+    renderMonitoramento();
+  }catch(e){ alert('Erro: '+String(e&&e.message||e)); }
+}
+async function inpiToggleMarca(id,ativar){
+  try{ await window.__sb.from('inpi_marcas').update({ativo:!!ativar,suspenso_motivo:ativar?null:'suspenso manualmente'}).eq('id',id); renderMonitoramento(); }catch(e){ alert('Erro de rede.'); }
+}
+async function inpiRemoverMarca(id){
+  if(!confirm('Remover esta marca da lista de monitoramento?')) return;
+  try{ await window.__sb.from('inpi_marcas').delete().eq('id',id); renderMonitoramento(); }catch(e){ alert('Erro de rede.'); }
+}
 async function renderMonitoramento(){
   var el=document.getElementById('monit-body'); if(!el) return;
   el.innerHTML='<div class="note">Carregando…</div>';
+  try{ await _renderInpiMarcas(el); }catch(e){}
   try{
     var r=await window.__sb.from('monitoramentos').select('*').order('criado_em',{ascending:false}).limit(500);
     var rows=(r&&r.data)||[];
