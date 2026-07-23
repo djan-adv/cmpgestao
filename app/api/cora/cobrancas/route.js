@@ -52,6 +52,7 @@ export async function POST(request) {
   const docDigitado = soDigitos(body.cpf_cnpj)
   const nomeDigitado = String(body.nome || '').trim()
   const emailDigitado = String(body.email || '').trim()
+  const aceitaCartao = body.cartao === true || body.cartao === 'true'
   if (!descricao) return Response.json({ erro: 'Descreva a cobrança.' }, { status: 400 })
   if (!(centavos > 0)) return Response.json({ erro: 'Valor inválido.' }, { status: 400 })
   // o Cora rejeita amount < 500 (R$ 5,00) — validamos aqui com mensagem amigável
@@ -77,7 +78,8 @@ export async function POST(request) {
     if (!nomeDigitado) return Response.json({ erro: 'Informe o nome do cliente.' }, { status: 400 })
     let esc = null
     try { const pf = await sb.from('usuarios').select('escritorio_id').eq('id', user.id).single(); esc = pf && pf.data && pf.data.escritorio_id } catch (e) {}
-    const reg = { nome: nomeDigitado, cpf_cnpj: doc, origem: 'cobrança avulsa' }
+    // só colunas que existem em `contatos` (id, escritorio_id, nome, cpf_cnpj, telefone, email, tipo, criado_em)
+    const reg = { nome: nomeDigitado, cpf_cnpj: doc, tipo: 'cliente' }
     if (emailDigitado) reg.email = emailDigitado
     if (esc) reg.escritorio_id = esc
     const ins = await sb.from('contatos').insert(reg).select('id,nome,email,cpf_cnpj').single()
@@ -100,7 +102,8 @@ export async function POST(request) {
     },
     services: [{ name: descricao.slice(0, 60), description: descricao, amount: centavos }],
     payment_terms: { due_date: vencimento },
-    payment_forms: ['BANK_SLIP', 'PIX']
+    // boleto + PIX sempre; cartão (link) quando solicitado no formulário
+    payment_forms: aceitaCartao ? ['BANK_SLIP', 'PIX', 'CREDIT_CARD'] : ['BANK_SLIP', 'PIX']
   }
 
   let r

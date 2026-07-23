@@ -589,6 +589,10 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
       <div><label>Valor (R$)</label><input id="cob-valor" inputmode="decimal" placeholder="0,00"></div>
       <div><label>Vencimento</label><input id="cob-venc" type="date" min="2000-01-01" max="2100-12-31"></div>
     </div>
+    <div style="margin-top:8px;background:#f6f9fc;border:1px solid #dbe6f2;border-radius:8px;padding:8px 10px;font-size:13px">
+      <label style="cursor:pointer;font-weight:600;color:#22405f"><input type="checkbox" id="cob-cartao"> Aceitar também pagamento por CARTÃO (link do Cora)</label>
+      <div class="note" style="font-size:11px;margin-top:3px">Além de boleto e PIX, o cliente poderá pagar com cartão de crédito pelo link. As taxas do cartão seguem o contrato da sua conta Cora.</div>
+    </div>
     <label style="margin-top:10px">Vincular a processo ou pasta de assessoria <span class="note" style="font-weight:400">— opcional. Cria/usa a pasta "Boletos" lá (funciona também em casos sem nº CNJ, como Valtex, FF Dourado, Conceito — identificados só pelo CNPJ/CPF).</span></label>
     <div style="position:relative">
       <input id="cob-proc" placeholder="Nome do cliente, CNPJ/CPF do caso, ou nº do processo…" autocomplete="off" oninput="cobProcInput(this.value)" onblur="setTimeout(function(){var d=document.getElementById('cob-proc-drop');if(d)d.classList.remove('on');},150)">
@@ -9081,6 +9085,7 @@ async function finCarregarClientes(){
 
 function abrirNovaCobranca(){
   ['cob-desc','cob-valor','cob-venc','cob-doc','cob-novo-nome','cob-novo-email','cob-proc'].forEach(function(id){var e=document.getElementById(id); if(e) e.value='';});
+  var ck=document.getElementById('cob-cartao'); if(ck) ck.checked=false;
   var m=document.getElementById('cob-msg'); if(m) m.textContent='';
   window.__cobProcSel=null;
   var dd=document.getElementById('cob-proc-drop'); if(dd){ dd.classList.remove('on'); dd.innerHTML=''; }
@@ -9156,7 +9161,8 @@ async function emitirCobranca(){
   btn.disabled=true; var txt=btn.textContent; btn.textContent='Emitindo…'; msg.textContent='';
   try{
     var tok=await finToken();
-    var payload={descricao:descricao,valor_centavos:centavos,vencimento:vencimento};
+    var aceitaCartao=!!((document.getElementById('cob-cartao')||{}).checked);
+    var payload={descricao:descricao,valor_centavos:centavos,vencimento:vencimento,cartao:aceitaCartao};
     if(ehNovo){ payload.nome=novoNome; payload.cpf_cnpj=doc; if(novoEmail) payload.email=novoEmail; }
     else { payload.contato_id=contato_id; if(doc.length===11||doc.length===14) payload.cpf_cnpj=doc; }
     var r=await fetch('/api/cora/cobrancas',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify(payload)});
