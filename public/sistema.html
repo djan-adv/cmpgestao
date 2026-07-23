@@ -1549,7 +1549,7 @@ function abrir(i){
     '<span id="proc-vinculados" style="display:inline-flex;gap:6px;flex-wrap:wrap;align-items:center"></span></div>'+
     '<div id="ctl-chips" style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center"></div>'+
     ''+
-    '<div style="margin-top:10px"><button class="btn sm" onclick="novaTarefaDoProcesso()">+ Nova tarefa neste processo</button> <button class="btn sm" style="background:#eef4fb;color:#185FA5;border:1px solid #cfe0f2;font-weight:700" onclick="abrirTribunal(\''+p.numero+'\')" title="Abrir o sistema do tribunal (PJe/e-SAJ/Projudi) no grau deste processo — o número é copiado para você colar na busca">&#9878; Abrir no tribunal</button> <button id="btn-atualizar-cli" class="btn sm cmp-only" style="background:#eaf4f4;color:#0b7285;border:1px solid #cfe6e6;font-weight:700" onclick="abrirAtualizarCliente(\''+p.numero+'\')" title="E-mail de atualização ao cliente — informar movimentação, pedir providência, ou ativar o acompanhamento semanal automático">&#9993; Atualizar cliente</button> <button class="btn sm cmp-only" style="background:#f7f3e8;color:#8a6d00;border:1px solid #e8dcbb;font-weight:700" onclick="abrirAssinatura(\''+p.numero+'\')" title="Gerar procuração ou documento para assinatura eletrônica, já com o cliente deste processo no contexto">&#9997; Procuração</button></div>'+
+    '<div style="margin-top:10px"><button class="btn sm" onclick="novaTarefaDoProcesso()">+ Nova tarefa</button> <button class="btn sm" style="background:#eef4fb;color:#185FA5;border:1px solid #cfe0f2;font-weight:700" onclick="abrirTribunal(\''+p.numero+'\')" title="Abrir o sistema do tribunal (PJe/e-SAJ/Projudi) no grau deste processo — o número é copiado para você colar na busca">&#9878; Abrir no tribunal</button> <button id="btn-atualizar-cli" class="btn sm cmp-only" style="background:#eaf4f4;color:#0b7285;border:1px solid #cfe6e6;font-weight:700" onclick="abrirAtualizarCliente(\''+p.numero+'\')" title="E-mail de atualização ao cliente — informar movimentação, pedir providência, ou ativar o acompanhamento semanal automático">&#9993; Atualizar cliente</button> <button class="btn sm cmp-only" style="background:#f7f3e8;color:#8a6d00;border:1px solid #e8dcbb;font-weight:700" onclick="abrirAssinatura(\''+p.numero+'\')" title="Gerar procuração ou documento para assinatura eletrônica, já com o cliente deste processo no contexto">&#9997; Procuração</button></div>'+
     /* ponto 12: bloco de processos vinculados no canto inferior direito da aba (perto do botão Encerrar) */
     '<div id="proc-vinculados-rodape" style="position:absolute;bottom:12px;right:14px;max-width:60%;display:flex;gap:6px;flex-wrap:wrap;align-items:center;justify-content:flex-end;font-size:12px"></div>'+
     '</div>';
@@ -1649,9 +1649,11 @@ function _marcaAcompNaFicha(numero, ativo){
   /* só decora se ainda é o botão do processo aberto */
   if(typeof atual!=='undefined'&&atual&&String(atual.numero)!==String(numero)) return;
   if(ativo){
-    btn.innerHTML='&#9993; Atualizar cliente <span style="color:#0F6E56;font-style:italic;font-family:Georgia,serif;font-weight:800">✓</span> <span style="font-size:9.5px;background:#eaf5ef;color:#0F6E56;border-radius:8px;padding:1px 6px;font-weight:700">automatizado</span>';
+    btn.style.lineHeight='1.15'; btn.style.textAlign='center';
+    btn.innerHTML='<div>&#9993; Atualizar cliente <span style="color:#0F6E56;font-style:italic;font-family:Georgia,serif;font-weight:800">✓</span></div><div style="font-size:9.5px;color:#0F6E56;font-weight:700;letter-spacing:.02em">automatizado</div>';
     btn.title='Este cliente recebe atualização automática semanal quando há movimentação. Clique para gerenciar.';
   }else{
+    btn.style.lineHeight=''; btn.style.textAlign='';
     btn.innerHTML='&#9993; Atualizar cliente';
     btn.title='E-mail de atualização ao cliente — informar movimentação, pedir providência, ou ativar o acompanhamento semanal automático';
   }
@@ -7803,7 +7805,7 @@ async function desativarAcompanhamento(){
   <div id="atz-modo-row" style="margin-bottom:10px;display:flex;flex-wrap:wrap;gap:8px">
     <label style="display:inline-flex;align-items:center;gap:7px;cursor:pointer;margin:0;font-size:13.5px;font-weight:700;color:var(--navy);background:#f3f6fa;border:1px solid #dbe6f2;border-radius:20px;padding:6px 14px"><input type="radio" name="atz-modo" value="informar" checked onchange="_atzModo()" style="width:auto;margin:0"> Informar movimentação</label>
     <label style="display:inline-flex;align-items:center;gap:7px;cursor:pointer;margin:0;font-size:13.5px;font-weight:700;color:var(--navy);background:#f3f6fa;border:1px solid #dbe6f2;border-radius:20px;padding:6px 14px"><input type="radio" name="atz-modo" value="pedido" onchange="_atzModo()" style="width:auto;margin:0"> Pedir providência ao cliente</label>
-    <label style="display:inline-flex;align-items:center;gap:7px;cursor:pointer;margin:0;font-size:13.5px;font-weight:700;color:#0F6E56;background:#eaf5ef;border:1px solid #bfe0cf;border-radius:20px;padding:6px 14px"><input type="radio" name="atz-modo" value="acompanhar" onchange="_atzModo()" style="width:auto;margin:0"> ⟳ Acompanhar semanalmente (automático)</label>
+    <label style="display:inline-flex;align-items:center;gap:7px;cursor:pointer;margin:0;font-size:13.5px;font-weight:700;color:#0F6E56;background:#eaf5ef;border:1px solid #bfe0cf;border-radius:20px;padding:6px 14px" title="Independente das opções acima — pode marcar junto"><input type="checkbox" id="atz-acomp-on" onchange="_atzAcompToggle()" style="width:auto;margin:0"> ⟳ Acompanhar semanalmente (automático)</label>
   </div>
   <div id="atz-acomp-box" style="display:none;margin-bottom:8px;background:#eaf5ef;border:1px solid #bfe0cf;border-radius:10px;padding:12px 14px">
     <p style="margin:0 0 8px;font-size:13px;color:#0F6E56;font-weight:600">A cliente passa a receber, no máximo 1x por semana, um aviso automático quando houver movimentação oficial no processo — sem expor o teor. Ideal para clientes que pedem para "serem avisados sempre".</p>
@@ -7979,19 +7981,17 @@ function proximosPassosCliente(texto){
 function _atzModoAtual(){ var r=document.querySelector('input[name="atz-modo"]:checked'); return (r&&r.value)||'informar'; }
 function _atzModo(){
   var m=_atzModoAtual();
-  var ehAcomp=(m==='acompanhar');
   var qb=document.getElementById('atz-qtd-box'), pb=document.getElementById('atz-pedido-box');
-  if(qb) qb.style.display=(ehAcomp||m==='pedido')?'none':'';
-  if(pb) pb.style.display=(!ehAcomp&&m==='pedido')?'':'none';
-  /* modo acompanhar: esconde a composição do e-mail manual e mostra a caixa de acompanhamento */
-  var acBox=document.getElementById('atz-acomp-box'); if(acBox) acBox.style.display=ehAcomp?'block':'none';
-  ['atz-assunto','atz-corpo','atz-divulg-box'].forEach(function(id){ var e=document.getElementById(id); if(e) e.style.display=ehAcomp?'none':''; });
-  /* esconde os rótulos "Assunto"/"Mensagem" e a barra de botões de envio no modo acompanhar */
-  var envBar=document.getElementById('atz-envio-bar'); if(envBar) envBar.style.display=ehAcomp?'none':'';
-  var lblAss=document.getElementById('atz-lbl-assunto'), lblMsg=document.getElementById('atz-lbl-msg');
-  if(lblAss) lblAss.style.display=ehAcomp?'none':''; if(lblMsg) lblMsg.style.display=ehAcomp?'none':'';
-  if(ehAcomp){ _atzCarregaAcomp(); }
-  else _gerarRascunhoAtualizacao();
+  if(qb) qb.style.display=(m==='pedido')?'none':'';
+  if(pb) pb.style.display=(m==='pedido')?'':'none';
+  _gerarRascunhoAtualizacao();
+}
+/* acompanhamento semanal é INDEPENDENTE (checkbox): pode marcar junto com
+   informar/pedido. Marcar só mostra a caixa de ativar; não mexe no e-mail. */
+function _atzAcompToggle(){
+  var on=!!((document.getElementById('atz-acomp-on')||{}).checked);
+  var acBox=document.getElementById('atz-acomp-box'); if(acBox) acBox.style.display=on?'block':'none';
+  if(on) _atzCarregaAcomp();
 }
 /* carrega o estado atual do acompanhamento (assinaturas) para este processo */
 async function _atzCarregaAcomp(){
@@ -8119,6 +8119,8 @@ async function abrirAtualizarCliente(numero){
   var q=document.getElementById('atz-qtd'); if(q) q.value='5';
   var mi=document.querySelector('input[name="atz-modo"][value="informar"]'); if(mi) mi.checked=true;
   var dvChk=document.getElementById('atz-divulg-on'); if(dvChk) dvChk.checked=false;
+  var acChk=document.getElementById('atz-acomp-on'); if(acChk) acChk.checked=false;
+  _atzAcompToggle();
   /* e-mail: primeiro o da FICHA (contatos_livres, ex.: puxado da procuração); cadastro é reserva */
   var emailFicha=(String(p.ctl||'').split(/[,;\n]+/).map(function(s){return s.trim();}).filter(function(t){return /@/.test(t);})[0])||'';
   document.getElementById('atz-email').value=emailFicha;
@@ -8126,9 +8128,11 @@ async function abrirAtualizarCliente(numero){
   _atzModo();
   try{
     var sb=window.__sb; if(!sb) return;
-    if(!(document.getElementById('atz-email').value||'').trim()){
-      var r=await sb.from('assinaturas').select('destino').eq('processo_numero',numero).eq('canal','email').eq('ativo',true).order('criado_em',{ascending:false}).limit(1);
-      if(r&&r.data&&r.data.length){ document.getElementById('atz-email').value=r.data[0].destino||''; }
+    var r=await sb.from('assinaturas').select('destino,ativo').eq('processo_numero',numero).eq('canal','email').eq('ativo',true).order('criado_em',{ascending:false}).limit(1);
+    if(r&&r.data&&r.data.length){
+      if(!(document.getElementById('atz-email').value||'').trim()) document.getElementById('atz-email').value=r.data[0].destino||'';
+      /* já tem acompanhamento ativo: reflete no checkbox e abre a caixa */
+      if(acChk){ acChk.checked=true; _atzAcompToggle(); }
     }
   }catch(e){ console.warn('atz email:',e); }
 }
