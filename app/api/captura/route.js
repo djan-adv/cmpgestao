@@ -185,6 +185,8 @@ export async function POST(request) {
       ordem: Date.now(),
     }).select('id').single()
     if (ins.error) return Response.json({ erro: 'não foi possível criar o lead: ' + ins.error.message }, { status: 500 })
+    // avisa Jader imediatamente do novo lead (fire-and-forget; NÃO REMOVER)
+    try { fetch(new URL('/api/notificar-jader?lead=' + (ins.data && ins.data.id), request.url).toString(), { cache: 'no-store' }).catch(() => {}) } catch (e) {}
     return Response.json({ ok: true, acao: 'lead', lead_id: ins.data && ins.data.id, telefone: (tel || telOcr || ''), anexos: arquivos.length, transcricao: !!ocr.transcricao, ocr_status: ocr.status })
   }
 

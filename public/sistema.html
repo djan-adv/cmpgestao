@@ -1889,7 +1889,7 @@ function renderCaptacao(){
     itens.sort(function(a,b){return (PRANK[a.prioridade]||1)-(PRANK[b.prioridade]||1);});
     var col=document.createElement("div");col.className="col";
     col.ondragover=function(e){e.preventDefault();};
-    col.ondrop=function(e){e.preventDefault();var id=+e.dataTransfer.getData("id");var l=LEADS.find(function(x){return x.id===id;});if(l){var eraGanho=(l.estagio==='ganho');l.estagio=c.id; if(c.id==='ganho'&&!l.dataFechamento) l.dataFechamento=hojeISO(); salvarLeadsLocal(); renderCaptacao(); if(c.id==='ganho'&&!eraGanho) fecharLeadEAbrirCaso(l);}};
+    col.ondrop=function(e){e.preventDefault();var id=+e.dataTransfer.getData("id");var l=LEADS.find(function(x){return x.id===id;});if(l){_leadAck(l);var eraGanho=(l.estagio==='ganho');l.estagio=c.id; if(c.id==='ganho'&&!l.dataFechamento) l.dataFechamento=hojeISO(); salvarLeadsLocal(); renderCaptacao(); if(c.id==='ganho'&&!eraGanho) fecharLeadEAbrirCaso(l);}};
     var mvL=(idx>0)?'<a onclick="moverEtapa('+idx+',-1)" style="cursor:pointer;color:var(--muted);text-decoration:none" title="mover para a esquerda">&#9664;</a> ':'';
     var mvR=(idx<FUNIL.length-1)?' <a onclick="moverEtapa('+idx+',1)" style="cursor:pointer;color:var(--muted);text-decoration:none" title="mover para a direita">&#9654;</a>':'';
     /* colunas finais (Fechado/Perdido): cards PERMANECEM, porém compactos —
@@ -2005,7 +2005,7 @@ function moverEtapa(idx,dir){
 /* marca/desmarca a etapa como "mesmo andar" da anterior — no gráfico as duas dividem a faixa */
 function toggleNivel(idx){ var f=FUNIL[idx]; if(!f) return; f.juntar=!f.juntar; salvarFunilLocal(); renderCaptacao(); }
 function primeiroUltimo(n){var p=String(n||"").trim().split(/\s+/);if(p.length<=1)return p[0]||"";return p[0]+" "+p[p.length-1];}
-function moverLead(dragId,targetId){var di=LEADS.findIndex(function(x){return x.id===dragId;});var t=LEADS.find(function(x){return x.id===targetId;});if(di<0||!t||dragId===targetId)return;var d=LEADS[di];var eraGanho=(d.estagio==='ganho');d.estagio=t.estagio; if(t.estagio==='ganho'&&!d.dataFechamento) d.dataFechamento=hojeISO(); LEADS.splice(di,1);var ti=LEADS.findIndex(function(x){return x.id===targetId;});LEADS.splice(ti,0,d);salvarLeadsLocal();renderCaptacao(); if(t.estagio==='ganho'&&!eraGanho) fecharLeadEAbrirCaso(d);}
+function moverLead(dragId,targetId){var di=LEADS.findIndex(function(x){return x.id===dragId;});var t=LEADS.find(function(x){return x.id===targetId;});if(di<0||!t||dragId===targetId)return;var d=LEADS[di];_leadAck(d);var eraGanho=(d.estagio==='ganho');d.estagio=t.estagio; if(t.estagio==='ganho'&&!d.dataFechamento) d.dataFechamento=hojeISO(); LEADS.splice(di,1);var ti=LEADS.findIndex(function(x){return x.id===targetId;});LEADS.splice(ti,0,d);salvarLeadsLocal();renderCaptacao(); if(t.estagio==='ganho'&&!eraGanho) fecharLeadEAbrirCaso(d);}
 /* ao FECHAR um lead (arrastar para "Fechado"), abre o cadastro de caso já preenchido com o lead */
 function fecharLeadEAbrirCaso(l){
   if(!l||typeof abrirCadManual!=='function') return;
@@ -3092,7 +3092,12 @@ async function salvarContato(){var c=window._cedit;var nome=_v("c-nome");if(!nom
   }
   fecharContato();renderContatos(); try{ if(typeof renderProc==='function') renderProc(); }catch(e){}}
 function novoLead(){editarLead(null);}
-function editarLead(id){var l=id?LEADS.find(function(x){return x.id===id;}):{id:null,nome:"",canal:"Indicação",estagio:FUNIL[0].id,tel:"",email:"",valor:"",lemdata:"",lemtxt:""};window._ledit=l;
+/* Notificações Jader — NÃO REMOVER. Ao abrir/mover/editar um lead, marca como
+   "atendido" (notif_ack=true) para parar os lembretes de 30 min. */
+function _leadAck(l){ try{ if(l&&l.dbid&&!l._acked){ l._acked=true; window.__sb.from('crm_leads').update({notif_ack:true}).eq('id',l.dbid).then(function(){},function(){}); } }catch(e){} }
+/* dispara a varredura no servidor (aviso imediato de novos leads a Jader) */
+function _notifJaderSweep(){ try{ fetch('/api/notificar-jader',{cache:'no-store'}).then(function(){},function(){}); }catch(e){} }
+function editarLead(id){ if(id){ var _l0=LEADS.find(function(x){return x.id===id;}); if(_l0) _leadAck(_l0); } var l=id?LEADS.find(function(x){return x.id===id;}):{id:null,nome:"",canal:"Indicação",estagio:FUNIL[0].id,tel:"",email:"",valor:"",lemdata:"",lemtxt:""};window._ledit=l;
   document.getElementById("ml-titulo").textContent=id?"Editar lead":"Novo lead";
   document.getElementById("l-estagio").innerHTML=FUNIL.map(function(f){return '<option value="'+f.id+'">'+esc(f.nome)+'</option>';}).join("");
   document.getElementById("l-nome").value=l.nome||""; document.getElementById("l-canal").value=l.canal||"Indicação";
@@ -3114,8 +3119,11 @@ function salvarLead(){var l=window._ledit;var nome=_v("l-nome");if(!nome){alert(
   /* data de fechamento (para tempo de conversão): grava quando vira "ganho" */
   var jaFech=(l&&l.dataFechamento)||'';
   if(estagio==='ganho'){ obj.dataFechamento=jaFech||hojeISO(); } else { obj.dataFechamento=jaFech; }
+  var _ehNovoLead=!l.id;
   if(l.id){Object.assign(l,obj);}else{obj.id=lseq++;LEADS.push(obj);}
   salvarLeadsLocal();
+  /* lead novo criado à mão: sobe pro banco e avisa Jader imediatamente */
+  if(_ehNovoLead && estagio==='novo'){ try{ if(typeof syncLeadsDb==='function'){ syncLeadsDb().then(function(){ setTimeout(_notifJaderSweep,800); }); } else setTimeout(_notifJaderSweep,1200); }catch(e){} }
   fecharLead();renderCaptacao();}
 function hojeISO(){ var d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 /* tempo de conversão em dias (entrada → fechamento) */
