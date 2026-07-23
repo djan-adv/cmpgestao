@@ -9389,7 +9389,44 @@ function gerarBoletoNovoDoProcesso(){
   var em=_emailClienteDoProc(atual);
   var msg=document.getElementById('cob-msg');
   if(msg) msg.textContent='Boleto será vinculado a este processo'+(em?(' e enviado para '+em):'')+'. Escolha o cliente no topo.';
+  /* sugere o CPF da procuração (ou da petição inicial) para o campo CPF/CNPJ */
+  (function(pAlvo){
+    setTimeout(async function(){
+      try{
+        var docEl=document.getElementById('cob-doc'); if(!docEl) return;
+        if(String(docEl.value||'').replace(/\D/g,'').length>=11) return;
+        if(msg) msg.textContent='Procurando o CPF na procuração / petição inicial…';
+        var cpf=await _cpfDoProcesso(pAlvo);
+        if(!docEl){ return; }
+        if(cpf && String(docEl.value||'').replace(/\D/g,'').length<11){
+          docEl.value=cpf;
+          if(msg) msg.textContent='CPF sugerido da procuração/inicial: '+cpf+' — confira antes de emitir.';
+        } else if(!cpf && msg){ msg.textContent='Não localizei o CPF na procuração nem na petição inicial — digite manualmente.'; }
+      }catch(e){}
+    },300);
+  })(atual);
 }
+/* extrai o CPF do cliente lendo a procuração; se não achar, a petição inicial.
+   Prioriza o CPF que aparece perto do nome do cliente/outorgante. */
+async function _cpfDoProcesso(p){
+  try{
+    var dig=_docChaveProcObj(p); if(!dig) return '';
+    var tok=await docToken();
+    async function ler(rel){ if(!rel) return ''; try{ var r=await fetch('/api/docs?file='+encodeURIComponent(dig+'/'+rel),{headers:{Authorization:'Bearer '+tok}}); if(!r.ok) return ''; return await _extrairTextoDoc(await r.arrayBuffer()); }catch(e){ return ''; } }
+    function achaCPF(txt){
+      if(!txt) return '';
+      try{ var jc=_janelaCliente(txt,(p&&p.cliente)||''); var c1=_acharCPF(jc); if(_cpfValido(c1)) return c1; }catch(e){}
+      try{ var jo=_janelaOutorgante(txt); if(jo&&jo.janela){ var c2=_acharCPF(jo.janela); if(_cpfValido(c2)) return c2; } }catch(e){}
+      var c3=_acharCPF(txt); return _cpfValido(c3)?c3:'';
+    }
+    var relP=await _acharDocRel(dig,/procura/i);
+    if(relP){ var cP=achaCPF(await ler(relP)); if(cP) return cP; }
+    var relI=await _acharDocRel(dig,/inicial|peti[çc][aã]o/i);
+    if(relI&&relI!==relP){ var cI=achaCPF(await ler(relI)); if(cI) return cI; }
+    return '';
+  }catch(e){ return ''; }
+}
+function _cpfValido(c){ var d=String(c||'').replace(/\D/g,''); return d.length===11; }
 /* texto de referência do boleto conforme o vínculo — nunca dá a entender que é
    custo do processo em si: se há processo com CNJ, geralmente é honorário/
    assessoria relacionada; se é caso sem CNJ (Valtex, FF Dourado...), é assessoria;
