@@ -377,6 +377,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
       <!-- Financeiro (Fase 1 - Cora): cobranças boleto+PIX e recebimentos por cliente -->
       <div class="agtools">
         <div class="switch"><button id="fin-sw-a" class="on" onclick="setFinView('abertas')">Em aberto</button><button id="fin-sw-p" onclick="setFinView('pagas')">Recebidas</button></div>
+        <span id="fin-mes-box" style="display:none;margin-left:10px"><select id="fin-mes" class="btn sm" onchange="setFinMes(this.value)" title="Mostrar só o que foi EFETIVAMENTE recebido (boletos pagos + alvarás conferidos) no mês escolhido"><option value="todos">Todos os meses</option></select></span>
         <button class="btn sm ghost" style="margin-left:auto" onclick="conferirPagamentos(this)" title="Pergunta ao Cora, agora, o status das cobranças em aberto e baixa as que já foram pagas">↻ Conferir pagamentos</button>
         <button class="btn sm ghost" onclick="ativarBaixaAutomatica(this)" title="Registra no Cora o aviso automático de pagamento: quando o cliente pagar, a cobrança é baixada sozinha">⚡ Ativar baixa automática</button>
         <button class="btn sm" style="background:#FE3E6D;border-color:#FE3E6D;color:#fff" onclick="abrirNovaCobranca()">&#9673; Nova cobrança (Cora)</button>
@@ -8747,7 +8748,13 @@ function setDilView(v){
 </script>
 <script>
 /* ===== Financeiro (Fase 1 - Cora): cobranças boleto+PIX e recebimentos ===== */
-var FIN_VIEW='abertas', FIN_ROWS=[];
+var FIN_VIEW='abertas', FIN_ROWS=[], FIN_MES='todos';
+/* alvarás com depósito conferido (qualquer bloco — escritório e Inove) */
+function _alvarasConferidos(){
+  return (DADOS.processos||[]).filter(function(p){ try{ return faseDoProc(p)==='alvara' && p.alvara_valor_confirmado!=null && p.alvara_data_deposito; }catch(e){ return false; } });
+}
+function _mesDeISO(s){ var m=/^(\d{4})-(\d{2})/.exec(String(s||'')); return m?(m[1]+'-'+m[2]):''; }
+function setFinMes(v){ FIN_MES=v||'todos'; finRenderTabela(); }
 
 /* token do usuário (mesmo padrão das outras chamadas de API) */
 async function finToken(){ try{ var s=await window.__sb.auth.getSession(); return (s&&s.data&&s.data.session&&s.data.session.access_token)||''; }catch(e){ return ''; } }
@@ -8761,8 +8768,9 @@ function finCentavos(s){ s=String(s||'').trim().replace(/[^0-9.,]/g,''); if(s.in
 function setFinView(v){ FIN_VIEW=v;
   var a=document.getElementById('fin-sw-a'), p=document.getElementById('fin-sw-p');
   if(a)a.classList.toggle('on',v==='abertas'); if(p)p.classList.toggle('on',v==='pagas');
+  /* filtro de mês: só na aba Recebidas (a aba Em aberto não muda em nada) */
+  var mb=document.getElementById('fin-mes-box'); if(mb) mb.style.display=(v==='pagas')?'':'none';
   finRenderTabela();
-  try{ renderAlvarasMes(); }catch(e){} /* o painel de alvarás segue a aba (a conferir × conferidos) */
 }
 
 async function renderFinanceiro(){
@@ -8780,14 +8788,35 @@ async function renderFinanceiro(){
 function finRenderTabela(){
   var body=document.getElementById('fin-body'); if(!body) return;
   var abertas=FIN_ROWS.filter(function(x){return x.status==='aberta';});
-  var pagas=FIN_ROWS.filter(function(x){return x.status==='paga';});
-  /* KPIs: a receber (abertas) e recebido (pagas) */
+  var pagasAll=FIN_ROWS.filter(function(x){return x.status==='paga';});
+  var alvConfAll=_alvarasConferidos();
+  /* preenche o seletor de mês (aba Recebidas) com os meses que têm recebimento */
+  var selM=document.getElementById('fin-mes');
+  if(selM){
+    var meses={};
+    pagasAll.forEach(function(x){ var m=_mesDeISO(x.pago_em); if(m) meses[m]=1; });
+    alvConfAll.forEach(function(p){ var m=_mesDeISO(p.alvara_data_deposito); if(m) meses[m]=1; });
+    var MESN=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+    var ordenados=Object.keys(meses).sort().reverse();
+    var opts='<option value="todos">Todos os meses</option>'+ordenados.map(function(m){ var pt=m.split('-'); var mi=parseInt(pt[1],10)-1; return '<option value="'+m+'">'+(MESN[mi]||pt[1])+'/'+pt[0]+'</option>'; }).join('');
+    if(selM.getAttribute('data-opts')!==opts){ selM.innerHTML=opts; selM.setAttribute('data-opts',opts); }
+    if(FIN_MES!=='todos' && !meses[FIN_MES]) FIN_MES='todos';
+    selM.value=FIN_MES;
+  }
+  /* filtro de mês vale SÓ para a aba Recebidas (a aba Em aberto fica intocada) */
+  var filtraMes=(FIN_VIEW==='pagas' && FIN_MES!=='todos');
+  var pagas=filtraMes?pagasAll.filter(function(x){ return _mesDeISO(x.pago_em)===FIN_MES; }):pagasAll;
+  var alvConf=filtraMes?alvConfAll.filter(function(p){ return _mesDeISO(p.alvara_data_deposito)===FIN_MES; }):alvConfAll;
+  /* KPIs: a receber (abertas, sempre geral) e recebido = BOLETOS pagos + ALVARÁS
+     conferidos, num totalizador único (segue o mês escolhido na aba Recebidas) */
   var totAb=abertas.reduce(function(s,x){return s+(parseInt(x.valor_centavos,10)||0);},0);
-  var totPg=pagas.reduce(function(s,x){return s+(parseInt(x.valor_pago_centavos||x.valor_centavos,10)||0);},0);
-  var nfPend=pagas.filter(function(x){return x.nf_status==='pendente';}).length;
+  var totPgBol=pagas.reduce(function(s,x){return s+(parseInt(x.valor_pago_centavos||x.valor_centavos,10)||0);},0);
+  var totPgAlv=alvConf.reduce(function(s,p){return s+Math.round((parseFloat(p.alvara_valor_confirmado)||0)*100);},0);
+  var nfPend=pagasAll.filter(function(x){return x.nf_status==='pendente';}).length;
+  var mesLbl=filtraMes?(' em '+FIN_MES.split('-').reverse().join('/')):'';
   var k=document.getElementById('fin-kpis');
   if(k) k.innerHTML='<div class="kpi"><div class="n">'+finReais(totAb)+'</div><div class="l">A receber ('+abertas.length+')</div></div>'+
-                    '<div class="kpi"><div class="n">'+finReais(totPg)+'</div><div class="l">Recebido ('+pagas.length+')</div></div>'+
+                    '<div class="kpi"><div class="n">'+finReais(totPgBol+totPgAlv)+'</div><div class="l">Recebido'+mesLbl+' — boletos '+finReais(totPgBol)+' ('+pagas.length+') + alvarás '+finReais(totPgAlv)+' ('+alvConf.length+')</div></div>'+
                     '<div class="kpi"><div class="n" style="color:'+(nfPend?'#8a5a00':'#0F6E56')+'">'+nfPend+'</div><div class="l">NFs a emitir</div></div>';
   var lista=(FIN_VIEW==='pagas')?pagas:abertas;
   if(!lista.length){ body.innerHTML='<tr><td colspan="10" class="note">'+(FIN_VIEW==='pagas'?'Nenhum pagamento recebido ainda.':'Nenhuma cobrança em aberto. Clique em “Nova cobrança (Cora)”.')+'</td></tr>'; }
@@ -8939,6 +8968,10 @@ function renderAlvarasMes(){
      conferir; "Recebidas" lista só os já conferidos no extrato */
   var modo=(typeof FIN_VIEW!=='undefined'&&FIN_VIEW==='pagas')?'recebidos':'abertos';
   var todos=(DADOS.processos||[]).filter(function(p){ try{ return faseDoProc(p)==='alvara'; }catch(e){ return false; } });
+  /* aba Recebidas com mês escolhido: só os alvarás conferidos NAQUELE mês */
+  if(modo==='recebidos' && typeof FIN_MES!=='undefined' && FIN_MES!=='todos'){
+    todos=todos.filter(function(p){ return !(p.alvara_valor_confirmado!=null&&p.alvara_data_deposito) || _mesDeISO(p.alvara_data_deposito)===FIN_MES; });
+  }
   if(!todos.length){ el.innerHTML='<p class="sectlabel" style="margin:0 0 4px">Alvarás expedidos por mês</p><p class="note" style="margin:0">Nenhum processo na fase "Expedir Alvará" no momento. (Quando um processo entra nessa fase, aparece aqui, agrupado pelo mês da última movimentação — inclusive se depois for encerrado.)</p>'; return; }
   var doEscritorio=todos.filter(function(p){ return !isInove(p); });
   var daInove=todos.filter(function(p){ return isInove(p); });
