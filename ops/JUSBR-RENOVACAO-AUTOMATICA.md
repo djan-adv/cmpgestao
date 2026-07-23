@@ -42,6 +42,27 @@ deve bater. Se `?forcar=1&debug=1` acusar `client_id`/endpoint errado, me mande 
 `detalhe` — os valores capturados ficam em `jusbr_sessao.oidc` e ajusto os
 padrões em `app/api/jusbr/lib.js` (`TOKEN_URL_PADRAO`, `CLIENT_ID_PADRAO`).
 
+## Robô que puxa os documentos sozinho (3 últimos por dia)
+
+Para cada processo **ativo** que teve **movimentação nova**, baixa os **3
+documentos mais recentes** que ainda não estão no sistema — 1x/dia, usando o
+token mantido pela renovação. Assim os autos chegam sem ninguém pedir.
+
+Ativar no crontab (roda 6h30, depois da varredura do DJEN das 5h):
+
+```bash
+(crontab -l 2>/dev/null; \
+ echo '30 6 * * * curl -s "http://127.0.0.1:3000/api/jusbr/puxar-docs" >/dev/null 2>&1') | crontab -
+```
+
+Testar:
+- Um processo só: `curl "http://127.0.0.1:3000/api/jusbr/puxar-docs?numero=08128033820198152001&debug=1"`
+- Rotina do dia: `curl "http://127.0.0.1:3000/api/jusbr/puxar-docs"` → `{ ok, processos, baixados, pulados }`
+
+Tetos (padrão): `?dias=2` (janela de movimentação), `?porproc=3` (docs por
+processo), `?max=120` (total por rodada) — evitam estourar banco/tempo. Os
+arquivos ficam no sistema por 30 dias (limpeza automática), como já era.
+
 ## Limite honesto
 
 A renovação vale enquanto a **sessão do gov.br** permitir (o refresh também tem
