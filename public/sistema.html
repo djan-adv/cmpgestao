@@ -4336,7 +4336,7 @@ async function salvarCadManual(){
     } else {
       /* cliente novo → cria contato (aba Contatos) e persiste no banco */
       try{ var sb2=window.__sb; if(sb2){ var esc3=null; try{ var ug2=await sb2.auth.getUser(); var pf2=await sb2.from('usuarios').select('escritorio_id').eq('id',ug2.data.user.id).single(); esc3=pf2&&pf2.data&&pf2.data.escritorio_id; }catch(e){}
-        var regc={nome:cli,origem:'cadastro de processo'}; if(esc3) regc.escritorio_id=esc3;
+        var regc={nome:cli,tipo:'cliente'}; if(esc3) regc.escritorio_id=esc3;
         await sb2.from('contatos').insert(regc);
         window.__CONTATOSDB=(window.__CONTATOSDB||[]); window.__CONTATOSDB.push({nome:cli,origem:'cadastro de processo'});
       } }catch(e){ console.warn('criar contato:',e&&e.message||e); }
@@ -4421,8 +4421,8 @@ async function gerarCasoNovoCliente(){
   }
   else { try{ mergeContatoNoProcesso(novo,feTel,feMail); }catch(e){}
     try{ var sb2=window.__sb; if(sb2){ var esc3=null; try{ var ug2=await sb2.auth.getUser(); var pf2=await sb2.from('usuarios').select('escritorio_id').eq('id',ug2.data.user.id).single(); esc3=pf2&&pf2.data&&pf2.data.escritorio_id; }catch(e){}
-      var regc={nome:cli,origem:'cliente novo'}; if(feMail) regc.email=feMail; if(feTel) regc.telefone=feTel; if(esc3) regc.escritorio_id=esc3; await sb2.from('contatos').insert(regc);
-      window.__CONTATOSDB=(window.__CONTATOSDB||[]); window.__CONTATOSDB.push({nome:cli,email:feMail,telefone:feTel,origem:'cliente novo'});
+      var regc={nome:cli,tipo:'cliente'}; if(feMail) regc.email=feMail; if(feTel) regc.telefone=feTel; if(esc3) regc.escritorio_id=esc3; await sb2.from('contatos').insert(regc);
+      window.__CONTATOSDB=(window.__CONTATOSDB||[]); window.__CONTATOSDB.push({nome:cli,email:feMail,telefone:feTel});
     } }catch(e){ console.warn('criar contato:',e&&e.message||e); } }
   CONTATOS=null;
   DADOS.processos.unshift(novo);
