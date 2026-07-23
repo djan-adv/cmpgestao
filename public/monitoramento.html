@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" type="image/png" sizes="64x64" href="/favicon-cmp.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="robots" content="noindex">
+<title>Acompanhamento processual — Crispim, Mendonça e Pinheiro Advogados</title>
+<style>
+  :root{--navy:#2E3A4B;--gold:#C9A227;--muted:#697180;--line:#e4e8ef;--bg:#eef1f6;--ok:#0F6E56}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:'Segoe UI',system-ui,-apple-system,Arial,sans-serif;background:var(--bg);color:#1e2733}
+  .wrap{max-width:680px;margin:0 auto;padding:24px 16px 60px}
+  header{display:flex;align-items:center;gap:12px;margin-bottom:18px}
+  header img{height:44px}
+  header .nm{font-size:14px;font-weight:800;color:var(--navy);line-height:1.2}
+  header .nm span{display:block;font-size:11px;font-weight:400;color:var(--muted)}
+  .card{background:#fff;border-radius:16px;box-shadow:0 8px 26px rgba(20,28,40,.08);padding:22px 20px;margin-bottom:16px}
+  h1{font-size:21px;color:var(--navy);margin:0 0 6px}
+  .sub{font-size:13.5px;color:var(--muted);margin:0 0 16px;line-height:1.5}
+  label{display:block;font-size:12.5px;font-weight:700;color:#3a4353;margin:12px 0 4px}
+  input{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:9px;font-size:15px}
+  button.btn{width:100%;margin-top:16px;padding:13px;border:none;border-radius:10px;background:var(--navy);color:#fff;font-size:15px;font-weight:700;cursor:pointer}
+  button.btn.gold{background:var(--gold);color:#2b2205}
+  button.btn:disabled{opacity:.6}
+  .erro{background:#fbeceb;color:#b5342b;border-radius:9px;padding:10px 12px;font-size:13px;margin-top:12px;display:none}
+  .proc{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:11px;padding:11px 12px;margin-bottom:9px;cursor:pointer}
+  .proc.on{border-color:var(--gold);background:#fdfaf0}
+  .proc input{width:auto;margin-top:3px}
+  .proc .n{font-weight:700;color:var(--navy);font-size:14px}
+  .proc .m{font-size:12px;color:var(--muted);margin-top:3px}
+  .tot{display:flex;justify-content:space-between;align-items:center;font-size:15px;font-weight:800;color:var(--navy);border-top:1px solid var(--line);padding-top:12px;margin-top:8px}
+  .lgpd{background:#f3f7fb;border:1px solid #d9e6f2;border-radius:10px;padding:11px 13px;font-size:12px;color:#345;line-height:1.5;margin-top:14px}
+  .box-pay{text-align:center}
+  .box-pay .big{font-size:40px}
+  a.lk{display:inline-block;margin-top:10px;padding:12px 20px;background:var(--ok);color:#fff;border-radius:10px;text-decoration:none;font-weight:700}
+  .pix{word-break:break-all;background:#f6f9fc;border:1px solid var(--line);border-radius:8px;padding:9px;font-size:12px;margin-top:10px}
+  .note{font-size:12px;color:var(--muted)}
+  .hide{display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <img src="/logo_cmp_full.png" alt="CMP Advogados">
+    <div class="nm">Crispim, Mendonça e Pinheiro Advogados<span>Acompanhamento processual</span></div>
+  </header>
+
+  <!-- Passo 1: dados -->
+  <div class="card" id="step-dados">
+    <h1>Acompanhe seus processos</h1>
+    <p class="sub"><b>Atendendo à sua solicitação</b>, informe seus dados para consultarmos as publicações oficiais em seu nome. Você escolhe quais processos deseja acompanhar.</p>
+    <label>CPF ou CNPJ</label>
+    <input id="doc" inputmode="numeric" placeholder="Só números" oninput="docMudou()">
+    <div id="nome-box" class="hide">
+      <label>Nome completo / Razão social</label>
+      <input id="nome" placeholder="Como consta no processo">
+    </div>
+    <label>Seu e-mail</label>
+    <input id="email" type="email" placeholder="voce@email.com">
+    <button class="btn" id="btn-buscar" onclick="buscar()">Consultar meus processos</button>
+    <div id="erro1" class="erro"></div>
+    <div class="note" style="margin-top:12px">A consulta é gratuita. Você só paga se escolher acompanhar algum processo.</div>
+  </div>
+
+  <!-- Passo 2: seleção -->
+  <div class="card hide" id="step-proc">
+    <h1 id="proc-tit">Processos encontrados</h1>
+    <p class="sub" id="proc-sub"></p>
+    <div id="proc-lista"></div>
+    <div class="tot"><span>Total</span><span id="tot-valor">R$ 0,00</span></div>
+    <button class="btn gold" id="btn-contratar" onclick="contratar()">Contratar acompanhamento e gerar boleto</button>
+    <div id="erro2" class="erro"></div>
+    <div class="lgpd">🔒 <b>Uso pessoal (LGPD):</b> as informações do acompanhamento são de uso exclusivo do titular e não devem ser divulgadas ou repassadas a terceiros. Este acompanhamento atende a uma solicitação sua e não constitui oferta de serviços.</div>
+  </div>
+
+  <!-- Passo 3: pagamento -->
+  <div class="card hide box-pay" id="step-pay">
+    <div class="big">🧾</div>
+    <h1>Boleto gerado!</h1>
+    <p class="sub" id="pay-sub"></p>
+    <a class="lk" id="pay-link" href="#" target="_blank" rel="noopener">Abrir boleto / PIX</a>
+    <div id="pay-pix" class="hide"><div class="note" style="margin-top:14px;font-weight:700">PIX copia-e-cola:</div><div class="pix" id="pix-code"></div><button class="btn" style="margin-top:8px" onclick="copiarPix()">Copiar código PIX</button></div>
+    <div class="lgpd" style="text-align:left">Assim que o pagamento for confirmado, você receberá por e-mail o extrato das movimentações dos processos escolhidos. 🔒 Informações de uso pessoal (LGPD) — não repassar a terceiros.</div>
+  </div>
+
+  <p class="note" style="text-align:center">Crispim, Mendonça e Pinheiro Advogados — conteúdo informativo, sob solicitação do titular.</p>
+</div>
+
+<script>
+var ACHADOS=[], NOME='', PRECO_TXT='R$ 19,90';
+function el(id){return document.getElementById(id);}
+function erro(id,m){ var e=el(id); e.textContent=m; e.style.display=m?'block':'none'; }
+function docDig(){ return (el('doc').value||'').replace(/\D/g,''); }
+function docMudou(){ var d=docDig(); el('nome-box').classList.toggle('hide', d.length===14); }
+async function buscar(){
+  erro('erro1','');
+  var d=docDig(), email=(el('email').value||'').trim();
+  if(d.length!==11 && d.length!==14){ erro('erro1','Informe um CPF (11) ou CNPJ (14 dígitos).'); return; }
+  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ erro('erro1','Informe um e-mail válido.'); return; }
+  var nome=(el('nome').value||'').trim();
+  var b=el('btn-buscar'); b.disabled=true; var t=b.textContent; b.textContent='Consultando…';
+  try{
+    var r=await fetch('/api/monitoramento',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({acao:'buscar',doc:d,nome:nome})});
+    var j=await r.json();
+    if(!r.ok){ erro('erro1',j.erro||'Falha na consulta.'); b.disabled=false; b.textContent=t; return; }
+    if(j.precisaNome){ el('nome-box').classList.remove('hide'); erro('erro1','Digite seu nome completo (como consta no processo) e consulte novamente.'); b.disabled=false; b.textContent=t; return; }
+    NOME=j.nome||nome; ACHADOS=j.processos||[];
+    el('proc-tit').textContent='Olá, '+(NOME.split(' ')[0]||'')+'!';
+    el('proc-sub').innerHTML=ACHADOS.length?('Encontramos <b>'+ACHADOS.length+' processo(s)</b> com publicação recente em seu nome. Marque os que deseja acompanhar ('+PRECO_TXT+' cada).'):(j.aviso||'Nenhum processo com publicação recente.');
+    el('proc-lista').innerHTML=ACHADOS.map(function(p,i){
+      return '<label class="proc" onclick="setTimeout(recalc,0)"><input type="checkbox" data-i="'+i+'" onchange="this.closest(\'.proc\').classList.toggle(\'on\',this.checked);recalc()"><span><span class="n">'+p.numero+'</span><span class="m">'+(p.tribunal||'')+(p.data?(' · '+String(p.data).split('-').reverse().join('/')):'')+'</span><span class="m">'+(p.resumo||'')+'…</span></span></label>';
+    }).join('')||'<div class="note">—</div>';
+    el('btn-contratar').style.display=ACHADOS.length?'':'none';
+    el('step-dados').classList.add('hide'); el('step-proc').classList.remove('hide');
+    recalc();
+  }catch(e){ erro('erro1','Erro de rede. Tente de novo.'); }
+  b.disabled=false; b.textContent=t;
+}
+function selecionados(){ return [].slice.call(document.querySelectorAll('#proc-lista input:checked')).map(function(c){ return ACHADOS[+c.getAttribute('data-i')].numero; }); }
+function recalc(){ var n=selecionados().length; var v=n* (window.__preco||1990); el('tot-valor').textContent='R$ '+(v/100).toFixed(2).replace('.',','); }
+async function contratar(){
+  erro('erro2','');
+  var nums=selecionados();
+  if(!nums.length){ erro('erro2','Marque ao menos um processo.'); return; }
+  var b=el('btn-contratar'); b.disabled=true; var t=b.textContent; b.textContent='Gerando boleto…';
+  try{
+    var r=await fetch('/api/monitoramento',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({acao:'contratar',doc:docDig(),nome:NOME,email:(el('email').value||'').trim(),numeros:nums})});
+    var j=await r.json();
+    if(!r.ok){ erro('erro2',j.erro||'Falha ao gerar o boleto.'); b.disabled=false; b.textContent=t; return; }
+    el('pay-sub').innerHTML='Acompanhamento de <b>'+j.quantidade+' processo(s)</b> — total <b>R$ '+((j.total||0)/100).toFixed(2).replace('.',',')+'</b>. Vencimento '+(j.vencimento?String(j.vencimento).split('-').reverse().join('/'):'')+'.';
+    if(j.boleto_url){ el('pay-link').href=j.boleto_url; el('pay-link').style.display=''; } else el('pay-link').style.display='none';
+    if(j.pix){ el('pay-pix').classList.remove('hide'); el('pix-code').textContent=j.pix; window.__pix=j.pix; }
+    el('step-proc').classList.add('hide'); el('step-pay').classList.remove('hide');
+    window.scrollTo(0,0);
+  }catch(e){ erro('erro2','Erro de rede. Tente de novo.'); }
+  b.disabled=false; b.textContent=t;
+}
+function copiarPix(){ try{ navigator.clipboard.writeText(window.__pix||''); alert('Código PIX copiado!'); }catch(e){ prompt('Copie o código PIX:', window.__pix||''); } }
+/* preço vindo do servidor (pra bater com o total) — busca leve */
+fetch('/api/monitoramento',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({acao:'preco'})}).then(function(r){return r.json();}).then(function(j){ if(j&&j.preco){ window.__preco=j.preco; PRECO_TXT='R$ '+(j.preco/100).toFixed(2).replace('.',','); } }).catch(function(){});
+</script>
+</body>
+</html>
