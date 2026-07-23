@@ -9903,10 +9903,22 @@ async function renderMonitoramento(){
         var badge=(m.status==='pago')?'<span style="color:#0F6E56;font-weight:700">✓ pago</span>':(m.status==='cancelado'?'<span class="note">cancelado</span>':'<span style="color:#8a5a00;font-weight:700">aguardando pgto</span>');
         var acao=m.virou_assessoria?'<span class="note">✓ na assessoria</span>':('<button class="btn sm gold" style="font-size:11px;padding:3px 9px" onclick="monitTrazerAssessoria(\''+m.id+'\')">Trazer como assessoria</button>');
         var diag=m.cobranca_id?(' <a onclick="diagPix(\''+m.cobranca_id+'\')" style="cursor:pointer;color:#185FA5;font-size:11px" title="Diagnosticar a fatura no Cora (status e PIX)">🔧</a>'):'';
-        return '<tr><td><b>'+finEsc(m.nome||'—')+'</b></td><td>'+finEsc(m.doc||'')+'</td><td>'+finEsc(m.email||'')+'</td><td title="'+finEsc(nums.join(', '))+'">'+nums.length+' proc.</td><td>'+finReais(m.valor_centavos)+'</td><td>'+badge+'</td><td class="note">'+(m.criado_em?new Date(m.criado_em).toLocaleDateString('pt-BR'):'')+'</td><td>'+acao+diag+'</td></tr>';
+        var mkpago=(m.status!=='pago')?(' <a onclick="monitMarcarPago(\''+m.id+'\')" style="cursor:pointer;color:#0F6E56;font-size:11px" title="Marcar como pago e enviar o extrato agora (teste ou quando o Cora demora)">✓ pago+extrato</a>'):'';
+        return '<tr><td><b>'+finEsc(m.nome||'—')+'</b></td><td>'+finEsc(m.doc||'')+'</td><td>'+finEsc(m.email||'')+'</td><td title="'+finEsc(nums.join(', '))+'">'+nums.length+' proc.</td><td>'+finReais(m.valor_centavos)+'</td><td>'+badge+'</td><td class="note">'+(m.criado_em?new Date(m.criado_em).toLocaleDateString('pt-BR'):'')+'</td><td style="white-space:nowrap">'+acao+diag+mkpago+'</td></tr>';
       }).join('')
       +'</tbody></table></div>';
   }catch(e){ el.innerHTML='<div class="note">Falha ao carregar: '+String(e&&e.message||e)+'</div>'; }
+}
+/* marca um pedido como pago e envia o extrato na hora (teste / Cora lento) */
+async function monitMarcarPago(monitId){
+  if(!confirm('Marcar este pedido como PAGO e enviar o extrato por e-mail agora?')) return;
+  try{
+    var tok=await finToken();
+    var r=await fetch('/api/monitoramento',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({acao:'marcar_pago',monit_id:monitId})});
+    var j=await r.json().catch(function(){return {};});
+    alert(r.ok?('Extrato enviado para '+(j.para||'cliente')+'.'):('Falha: '+((j&&j.erro)||('HTTP '+r.status))));
+    renderMonitoramento();
+  }catch(e){ alert('Erro de rede.'); }
 }
 /* diagnóstico da fatura no Cora (status + estrutura do PIX) */
 async function diagPix(cobrancaId){

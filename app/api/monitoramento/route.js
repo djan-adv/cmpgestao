@@ -156,6 +156,23 @@ export async function POST(request) {
     return Response.json({ ok: true, enviados })
   }
 
+  // marca um pedido como pago manualmente e ENVIA o extrato na hora. Exige login
+  // (só o escritório). Útil para teste ou quando o Cora demora a confirmar.
+  if (acao === 'marcar_pago') {
+    const jwt = (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '')
+    let user = null
+    try { const a = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY); const u = await a.auth.getUser(jwt); user = u && u.data && u.data.user } catch (e) {}
+    if (!user) return Response.json({ erro: 'Faça login.' }, { status: 401 })
+    const monitId = String(body.monit_id || '').trim()
+    const { data: m } = await sb.from('monitoramentos').select('*').eq('id', monitId).single()
+    if (!m) return Response.json({ erro: 'pedido não encontrado' }, { status: 404 })
+    if (m.cobranca_id) await sb.from('cora_cobrancas').update({ status: 'paga', pago_em: new Date().toISOString(), atualizado_em: new Date().toISOString() }).eq('id', m.cobranca_id)
+    const r = await enviarExtrato(m)
+    if (!r.ok) return Response.json({ erro: 'Marcado pago, mas o e-mail falhou: ' + (r.motivo || '') }, { status: 502 })
+    await sb.from('monitoramentos').update({ status: 'pago', extrato_enviado_em: new Date().toISOString() }).eq('id', monitId)
+    return Response.json({ ok: true, enviado: true, para: m.email })
+  }
+
   if (acao === 'buscar') {
     const doc = soDig(body.doc)
     if (doc.length !== 11 && doc.length !== 14) return Response.json({ erro: 'Informe um CPF (11) ou CNPJ (14 dígitos).' }, { status: 400 })
