@@ -757,9 +757,9 @@ var COLS=[["distribuir","A distribuir"],["producao","Produção"],["revisao","Em
 var perfis={socio:{nome:"Djan Mendonça",pill:"socio",label:"sócio"},adv:{nome:"Maria Rita Caldas",pill:"adv",label:"advogado"},est:{nome:"Estagiário(a)",pill:"est",label:"estagiário"},inove:{nome:"Portal do Perito",pill:"adv",label:"perito"}};
 var USUARIOS_VISUAIS=[
   {id:'djan',nome:'Djan Mendonça',perfil:'socio',email:'',senha:'',ativo:true},
-  {id:'jader',nome:'Jader Gabriel Pinheiro',perfil:'adv',email:'',senha:'',ativo:true},
-  {id:'eduarda',nome:'Maria Eduarda',perfil:'adv',email:'',senha:'',ativo:true},
-  {id:'rita',nome:'Maria Rita Caldas',perfil:'adv',email:'',senha:'',ativo:true},
+  {id:'jader',nome:'Jader Gabriel Pinheiro',perfil:'socio',email:'',senha:'',ativo:true},
+  {id:'eduarda',nome:'Maria Eduarda Crispim',perfil:'socio',email:'',senha:'',ativo:true},
+  {id:'rita',nome:'Maria Rita Caldas',perfil:'socio',email:'',senha:'',ativo:true},
   {id:'est1',nome:'Estagiário 1',perfil:'est',email:'',senha:'',ativo:true},
   {id:'est2',nome:'Estagiário 2',perfil:'est',email:'',senha:'',ativo:true}
 ];
@@ -1005,7 +1005,7 @@ async function gerarConvite(idVisual){
   var u=(USUARIOS_VISUAIS||[]).find(function(x){return x.id===idVisual;}); if(!u) return;
   try{
     var s=await window.__sb.auth.getSession(); var jwt=(s&&s.data&&s.data.session&&s.data.session.access_token)||'';
-    var r=await fetch('/api/convite',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+jwt},body:JSON.stringify({acao:'criar',nome_sugerido:u.nome,papel:'membro'})});
+    var r=await fetch('/api/convite',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+jwt},body:JSON.stringify({acao:'criar',nome_sugerido:u.nome,papel:(u.perfil==='socio'?'socio':'membro')})});
     var j=await r.json().catch(function(){return {};});
     if(!r.ok||!j.token){ alert('Não foi possível gerar o link: '+((j&&j.erro)||('HTTP '+r.status))+'\n\n(se o sistema acabou de ser atualizado, aguarde o build do Publicar terminar)'); return; }
     var link=location.origin+'/convite.html?t='+j.token;
@@ -1035,7 +1035,7 @@ function renderAcessos(){
       if(u.id!=='djan') acoes+='<button class="btn sm ghost" onclick="trocarNomeVisual(\''+u.id+'\')">Renomear</button>';
     }
     if(ehCoord && u.id!=='djan'){
-      acoes+='<button class="btn sm" style="background:#128C7E;color:#fff;border-color:#128C7E" onclick="gerarConvite(\''+u.id+'\')" title="Gera um link pessoal para mandar pelo WhatsApp: a pessoa abre, confere o nome, informa o e-mail e cria a própria senha">🔗 Link de convite</button>';
+      if(!u.senha) acoes+='<button class="btn sm" style="background:#128C7E;color:#fff;border-color:#128C7E" onclick="gerarConvite(\''+u.id+'\')" title="Gera um link pessoal para mandar pelo WhatsApp: a pessoa abre, confere o nome, informa o e-mail e cria a própria senha">🔗 Link de convite</button>';
       acoes+='<button class="btn sm ghost" onclick="toggleAtivoAcesso(\''+u.id+'\')">'+(ativo?'Desativar':'Ativar')+'</button>';
     }
     acoes = acoes ? ('<div style="display:flex;gap:5px;justify-content:flex-end;flex-wrap:nowrap">'+acoes+'</div>') : '<span class="note" style="margin:0">—</span>';
