@@ -53,6 +53,7 @@ export async function POST(request) {
   const nomeDigitado = String(body.nome || '').trim()
   const emailDigitado = String(body.email || '').trim()
   const aceitaCartao = body.cartao === true || body.cartao === 'true'
+  const processoNumero = String(body.processo_numero || '').trim()
   if (!descricao) return Response.json({ erro: 'Descreva a cobrança.' }, { status: 400 })
   if (!(centavos > 0)) return Response.json({ erro: 'Valor inválido.' }, { status: 400 })
   // o Cora rejeita amount < 500 (R$ 5,00) — validamos aqui com mensagem amigável
@@ -131,6 +132,7 @@ export async function POST(request) {
     linha_digitavel: info.linha_digitavel,
     pix_emv: info.pix_emv
   }
+  if (processoNumero) linha.processo_numero = processoNumero
   const { data: nova, error: eI } = await sb.from('cora_cobrancas').insert(linha).select().single()
   if (eI) return Response.json({ erro: 'Cobrança emitida no Cora, mas falhou ao salvar: ' + eI.message, cora: info }, { status: 500 })
   return Response.json({ ok: true, cobranca: nova })

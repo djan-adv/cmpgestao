@@ -601,6 +601,17 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
     <div class="foot"><button class="btn ghost" onclick="fecharNovaCobranca()">Cancelar</button><button class="btn" id="cob-btn" style="background:#FE3E6D;border-color:#FE3E6D" onclick="emitirCobranca()">Emitir cobrança</button><span id="cob-msg" class="note" style="margin-left:10px;align-self:center"></span></div>
   </div>
 </div>
+<div id="modal-boletos-proc" class="overlay hidden">
+  <div class="modal" style="max-width:720px">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+      <h2 style="margin:0">&#128179; Boletos do processo</h2>
+      <button class="btn sm" style="background:#FE3E6D;border-color:#FE3E6D;color:#fff;font-weight:700" onclick="gerarBoletoNovoDoProcesso()">+ Gerar novo boleto</button>
+    </div>
+    <p class="note" id="bp-sub" style="margin:6px 0 10px"></p>
+    <div id="bp-lista" style="max-height:56vh;overflow:auto"></div>
+    <div class="foot"><button class="btn ghost" onclick="document.getElementById('modal-boletos-proc').classList.add('hidden')">Fechar</button></div>
+  </div>
+</div>
 <div id="modal-nf" class="overlay hidden">
   <div class="modal">
     <h2>Emitir NFS-e — Prefeitura de João Pessoa</h2>
@@ -7349,15 +7360,16 @@ function honQuadroHTML(p){
   out+='</div>';
   return out;
 }
-/* soma dos boletos emitidos (pasta Documentos > Boletos emitidos) → campo Faturado */
+/* Faturado = soma dos boletos deste processo (fonte: cora_cobrancas, exclui os
+   cancelados). Apagar/cancelar no Financeiro reflete aqui automaticamente. */
 async function _preencheFaturadoAuto(){
   var el=document.getElementById('hon-faturado-auto'); if(!el||typeof atual==='undefined'||!atual) return;
   try{
-    var chave=_docChaveProcObj(atual); if(!chave){ el.textContent='—'; return; }
-    var bols=await _lerBoletosPasta(chave);
+    var bols=(await _boletosDoProcesso(atual)).filter(function(x){ return x.status!=='cancelada'; });
     var tot=bols.reduce(function(s,b){ return s+(parseInt(b.valor_centavos,10)||0); },0);
-    el.textContent=bols.length?('R$ '+(tot/100).toFixed(2).replace('.',',')+' ('+bols.length+' boleto'+(bols.length===1?'':'s')+')'):'R$ 0,00';
-    el.title='Soma automática de '+bols.length+' boleto(s) emitido(s) e guardado(s) em Documentos > Boletos emitidos.';
+    var pagos=bols.filter(function(x){return x.status==='paga';}).length;
+    el.textContent=bols.length?('R$ '+(tot/100).toFixed(2).replace('.',',')+' ('+bols.length+' boleto'+(bols.length===1?'':'s')+(pagos?(', '+pagos+' pago'+(pagos===1?'':'s')):'')+')'):'R$ 0,00';
+    el.title='Soma dos boletos emitidos para este processo (aba Financeiro). Cancelados não contam.';
   }catch(e){ el.textContent='—'; }
 }
 /* No celular, o quadro de Honorários fica melhor abaixo do card "Dados do processo"
@@ -9163,6 +9175,7 @@ async function emitirCobranca(){
     var tok=await finToken();
     var aceitaCartao=!!((document.getElementById('cob-cartao')||{}).checked);
     var payload={descricao:descricao,valor_centavos:centavos,vencimento:vencimento,cartao:aceitaCartao};
+    if(window.__cobProcSel&&window.__cobProcSel.numero) payload.processo_numero=String(window.__cobProcSel.numero);
     if(ehNovo){ payload.nome=novoNome; payload.cpf_cnpj=doc; if(novoEmail) payload.email=novoEmail; }
     else { payload.contato_id=contato_id; if(doc.length===11||doc.length===14) payload.cpf_cnpj=doc; }
     var r=await fetch('/api/cora/cobrancas',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify(payload)});
@@ -9231,18 +9244,55 @@ async function _lerBoletosPasta(chave){
   }
   return out;
 }
-/* botão "Gerar boleto" da ficha: se já há boletos → reenvia o mais recente;
-   se não há → abre a criação de um novo boleto já vinculado a este processo. */
+/* boletos (cobranças Cora) vinculados a ESTE processo — fonte: cora_cobrancas.
+   O vínculo é por processo_numero (dígitos), então funciona para processo e caso. */
+async function _boletosDoProcesso(p){
+  if(!p) return [];
+  var dig=String(p.numero||'').replace(/\D/g,'');
+  try{
+    var tok=await finToken();
+    var r=await fetch('/api/cora/cobrancas',{headers:{Authorization:'Bearer '+tok},cache:'no-store'});
+    var j=await r.json(); var todas=(j&&j.cobrancas)||[];
+    return todas.filter(function(c){ var cn=String(c.processo_numero||'').replace(/\D/g,''); return cn && (cn===dig || (dig&&cn.indexOf(dig)>-1) || (cn&&String(dig).indexOf(cn)>-1)); });
+  }catch(e){ return []; }
+}
+/* botão "Gerar boleto" da ficha: abre a lista de boletos deste processo (com
+   status pago/em aberto e reenvio por linha) + botão para gerar um novo. */
 async function boletoDoProcesso(){
   if(typeof atual==='undefined'||!atual) return;
-  var chave=_docChaveProcObj(atual); if(!chave){ alert('Salve o processo/caso primeiro.'); return; }
-  var bols=[]; try{ bols=await _lerBoletosPasta(chave); }catch(e){}
-  if(bols.length){ enviarBoletoDoProcesso(); }
-  else { gerarBoletoNovoDoProcesso(); }
+  var sub=document.getElementById('bp-sub'), lista=document.getElementById('bp-lista');
+  if(sub) sub.textContent='Carregando boletos…'; if(lista) lista.innerHTML='';
+  document.getElementById('modal-boletos-proc').classList.remove('hidden');
+  var bols=await _boletosDoProcesso(atual);
+  window.__bpRows=bols;
+  var email=_emailClienteDoProc(atual);
+  if(sub) sub.innerHTML='Processo/caso <b>'+esc(atual.numero||'')+'</b>'+(email?(' · cliente: '+esc(email)):' · (sem e-mail do cliente cadastrado)');
+  if(!lista) return;
+  if(!bols.length){ lista.innerHTML='<div class="note" style="padding:14px 4px">Nenhum boleto vinculado a este processo ainda. Clique em <b>+ Gerar novo boleto</b> para criar o primeiro.</div>'; return; }
+  bols.sort(function(a,b){ return String(b.criado_em||'').localeCompare(String(a.criado_em||'')); });
+  lista.innerHTML='<table style="width:100%;font-size:13px"><thead><tr><th style="text-align:left">Descrição</th><th style="text-align:left">Valor</th><th style="text-align:left">Vencimento</th><th style="text-align:left">Status</th><th></th></tr></thead><tbody>'
+    +bols.map(function(x){
+      var venc=x.vencimento?String(x.vencimento).split('-').reverse().join('/'):'—';
+      var badge=(x.status==='paga')?'<span style="color:#0F6E56;font-weight:700">✓ paga</span>':(x.status==='cancelada'?'<span class="note">cancelada</span>':'<span style="color:#185FA5;font-weight:700">em aberto</span>');
+      var reenv=(x.status!=='cancelada'&&(x.boleto_url||x.pix_emv))?('<button class="btn sm" style="background:#FE3E6D;border-color:#FE3E6D;color:#fff;font-size:11px;padding:3px 10px" onclick="bpReenviar(\''+x.id+'\')">reenviar</button>'):'<span class="note">—</span>';
+      return '<tr><td>'+finEsc(x.descricao||'')+'</td><td>'+finReais(x.valor_centavos)+'</td><td>'+venc+'</td><td>'+badge+'</td><td style="text-align:right">'+reenv+'</td></tr>';
+    }).join('')
+    +'</tbody></table><p class="note" style="margin-top:8px">Para <b>apagar</b> um boleto, use a aba <b>Financeiro</b> (apagar lá remove de todas as seções).</p>';
+}
+/* reenviar um boleto específico da lista da ficha, por e-mail ao cliente */
+async function bpReenviar(id){
+  var x=(window.__bpRows||[]).find(function(r){return r.id===id;}); if(!x) return;
+  var email=_emailClienteDoProc(atual);
+  if(!email){ alert('Este processo não tem e-mail de cliente cadastrado.'); return; }
+  if(!confirm('Reenviar o boleto de '+finReais(x.valor_centavos)+' para '+email+'?')) return;
+  var cob={vencimento:x.vencimento,valor_centavos:x.valor_centavos,descricao:x.descricao,boleto_url:x.boleto_url,linha_digitavel:x.linha_digitavel,pix_emv:x.pix_emv};
+  var res=await _enviarBoletoPorEmail(email, cob, atual);
+  alert(res&&res.ok?('Boleto reenviado para '+email+'.'):('Falha ao reenviar: '+((res&&res.erro)||'erro desconhecido')));
 }
 /* abre "Nova cobrança (Cora)" já vinculada a este processo/caso */
 function gerarBoletoNovoDoProcesso(){
   if(typeof atual==='undefined'||!atual) return;
+  var mb=document.getElementById('modal-boletos-proc'); if(mb) mb.classList.add('hidden');
   abrirNovaCobranca();
   window.__cobProcSel=atual;
   var e=document.getElementById('cob-proc'); if(e) e.value=(atual.cliente||'')+(atual.numero?(' — '+atual.numero):'');
