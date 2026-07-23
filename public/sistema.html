@@ -9902,10 +9902,29 @@ async function renderMonitoramento(){
         var nums=(Array.isArray(m.numeros)?m.numeros:[]);
         var badge=(m.status==='pago')?'<span style="color:#0F6E56;font-weight:700">✓ pago</span>':(m.status==='cancelado'?'<span class="note">cancelado</span>':'<span style="color:#8a5a00;font-weight:700">aguardando pgto</span>');
         var acao=m.virou_assessoria?'<span class="note">✓ na assessoria</span>':('<button class="btn sm gold" style="font-size:11px;padding:3px 9px" onclick="monitTrazerAssessoria(\''+m.id+'\')">Trazer como assessoria</button>');
-        return '<tr><td><b>'+finEsc(m.nome||'—')+'</b></td><td>'+finEsc(m.doc||'')+'</td><td>'+finEsc(m.email||'')+'</td><td title="'+finEsc(nums.join(', '))+'">'+nums.length+' proc.</td><td>'+finReais(m.valor_centavos)+'</td><td>'+badge+'</td><td class="note">'+(m.criado_em?new Date(m.criado_em).toLocaleDateString('pt-BR'):'')+'</td><td>'+acao+'</td></tr>';
+        var diag=m.cobranca_id?(' <a onclick="diagPix(\''+m.cobranca_id+'\')" style="cursor:pointer;color:#185FA5;font-size:11px" title="Diagnosticar a fatura no Cora (status e PIX)">🔧</a>'):'';
+        return '<tr><td><b>'+finEsc(m.nome||'—')+'</b></td><td>'+finEsc(m.doc||'')+'</td><td>'+finEsc(m.email||'')+'</td><td title="'+finEsc(nums.join(', '))+'">'+nums.length+' proc.</td><td>'+finReais(m.valor_centavos)+'</td><td>'+badge+'</td><td class="note">'+(m.criado_em?new Date(m.criado_em).toLocaleDateString('pt-BR'):'')+'</td><td>'+acao+diag+'</td></tr>';
       }).join('')
       +'</tbody></table></div>';
   }catch(e){ el.innerHTML='<div class="note">Falha ao carregar: '+String(e&&e.message||e)+'</div>'; }
+}
+/* diagnóstico da fatura no Cora (status + estrutura do PIX) */
+async function diagPix(cobrancaId){
+  try{
+    var tok=await finToken();
+    var r=await fetch('/api/cora/invoice-debug?cobranca='+encodeURIComponent(cobrancaId),{headers:{Authorization:'Bearer '+tok}});
+    var j=await r.json();
+    if(!r.ok){ alert('Falha: '+((j&&j.erro)||('HTTP '+r.status))); return; }
+    alert('DIAGNÓSTICO DA FATURA (Cora)\n\n'
+      +'Status no Cora: '+(j.status_cora||'—')+'\n'
+      +'Tem payment_options: '+j.tem_payment_options+'\n'
+      +'Campos do PIX: '+((j.pix_campos||[]).join(', ')||'—')+'\n'
+      +'PIX tem valor embutido: '+j.pix_tem_valor_no_emv+'\n'
+      +'Amostra do PIX: '+(j.pix_emv_amostra||'—')+'\n'
+      +'Campos do boleto: '+((j.bank_slip_campos||[]).join(', ')||'—')+'\n'
+      +'Chaves da fatura: '+((j.invoice_top_keys||[]).join(', '))+'\n\n'
+      +'Copie este texto e me mande.');
+  }catch(e){ alert('Erro: '+(e&&e.message||e)); }
 }
 /* dispara a entrega dos extratos dos pedidos já pagos (o webhook já faz isso
    sozinho; este botão é pra forçar/entregar retroativos) */
