@@ -77,6 +77,26 @@ export async function POST(request) {
   // permite emitir boleto sem nenhum processo cadastrado
   if (!c) {
     if (!nomeDigitado) return Response.json({ erro: 'Informe o nome do cliente.' }, { status: 400 })
+    // ANTES de criar: tenta reaproveitar um contato existente (evita duplicar).
+    // 1º pelo CPF/CNPJ; 2º pelo nome (normalizado, mesmo escritório).
+    try {
+      let achado = null
+      const byDoc = await sb.from('contatos').select('id,nome,email,cpf_cnpj').eq('cpf_cnpj', doc).limit(1)
+      if (byDoc && byDoc.data && byDoc.data.length) achado = byDoc.data[0]
+      if (!achado) {
+        const byName = await sb.from('contatos').select('id,nome,email,cpf_cnpj').ilike('nome', nomeDigitado).limit(1)
+        if (byName && byName.data && byName.data.length) achado = byName.data[0]
+      }
+      if (achado) {
+        c = achado; contato_id = c.id
+        const upd = {}
+        if (soDigitos(c.cpf_cnpj).length !== 11 && soDigitos(c.cpf_cnpj).length !== 14) upd.cpf_cnpj = doc
+        if (!c.email && emailDigitado) upd.email = emailDigitado
+        if (Object.keys(upd).length) { try { await sb.from('contatos').update(upd).eq('id', contato_id) } catch (e) {}; c = { ...c, ...upd } }
+      }
+    } catch (e) {}
+  }
+  if (!c) {
     let esc = null
     try { const pf = await sb.from('usuarios').select('escritorio_id').eq('id', user.id).single(); esc = pf && pf.data && pf.data.escritorio_id } catch (e) {}
     // só colunas que existem em `contatos` (id, escritorio_id, nome, cpf_cnpj, telefone, email, tipo, criado_em)

@@ -9386,31 +9386,46 @@ function gerarBoletoNovoDoProcesso(){
   window.__cobProcSel=atual;
   var e=document.getElementById('cob-proc'); if(e) e.value=(atual.cliente||'')+(atual.numero?(' — '+atual.numero):'');
   var d=document.getElementById('cob-desc'); if(d&&!d.value) d.value='Honorários advocatícios';
-  var em=_emailClienteDoProc(atual);
+  /* abre em modo "Novo cliente" já preenchido a partir da ficha — tudo editável:
+     - Nome: 1º autor quando casal/vários (o boleto sai em um CPF só)
+     - E-mail: o do processo   - Vencimento: hoje (editável)
+     - CPF: buscado nos documentos (procuração → inicial → demais) */
+  var sel=document.getElementById('cob-cliente');
   var msg=document.getElementById('cob-msg');
-  if(msg) msg.textContent='Boleto será vinculado a este processo'+(em?(' e enviado para '+em):'')+'. Escolha o cliente no topo.';
-  /* sugere o CPF da procuração (ou da petição inicial) para o campo CPF/CNPJ */
+  var em=_emailClienteDoProc(atual);
+  var primeiroAutor=String(atual.cliente||'').split(/\s+e\s+|;|,/i)[0].trim()||String(atual.cliente||'').trim();
+  var _setNovo=function(){
+    if(sel){ sel.value='__novo'; cobClienteMudou(); }
+    var nomeEl=document.getElementById('cob-novo-nome'); if(nomeEl) nomeEl.value=primeiroAutor;
+    var mailEl=document.getElementById('cob-novo-email'); if(mailEl&&em) mailEl.value=em;
+    var vEl=document.getElementById('cob-venc'); if(vEl&&!vEl.value) vEl.value=_hojeISO();
+  };
+  _setNovo();
+  /* finCarregarClientes é assíncrono e reescreve o <select>; reaplica depois */
+  setTimeout(_setNovo, 500);
+  if(msg) msg.textContent='Confira/edite os dados abaixo'+(em?(' — boleto será enviado para '+em):'')+'. Buscando o CPF nos documentos…';
   (function(pAlvo){
     setTimeout(async function(){
       try{
         var docEl=document.getElementById('cob-doc'); if(!docEl) return;
         if(String(docEl.value||'').replace(/\D/g,'').length>=11) return;
-        if(msg) msg.textContent='Procurando o CPF na procuração / petição inicial…';
-        var cpf=await _cpfDoProcesso(pAlvo);
-        if(!docEl){ return; }
+        var res=await _cpfDoProcesso(pAlvo); var cpf=res&&res.cpf;
+        docEl=document.getElementById('cob-doc'); if(!docEl) return;
         if(cpf && String(docEl.value||'').replace(/\D/g,'').length<11){
           docEl.value=cpf;
-          if(msg) msg.textContent='CPF sugerido da procuração/inicial: '+cpf+' — confira antes de emitir.';
-        } else if(!cpf && msg){ msg.textContent='Não localizei o CPF na procuração nem na petição inicial — digite manualmente.'; }
+          if(msg) msg.textContent='CPF sugerido (da '+(res.fonte||'documento')+'): '+cpf+' — confira o nome, e-mail e vencimento antes de emitir.';
+        } else if(!cpf && msg){ msg.textContent='Não localizei o CPF nos documentos — digite manualmente. (Dica: PDF escaneado não é lido; junte a procuração em PDF pesquisável.)'; }
       }catch(e){}
     },300);
   })(atual);
 }
-/* extrai o CPF do cliente lendo a procuração; se não achar, a petição inicial.
-   Prioriza o CPF que aparece perto do nome do cliente/outorgante. */
+/* extrai o CPF do cliente lendo os documentos do processo. Varre em ordem de
+   prioridade: procuração → petição inicial/ação → 1º documento → demais PDFs.
+   Prioriza o CPF que aparece perto do nome do cliente/outorgante. Retorna
+   {cpf, fonte} (fonte = nome do documento onde achou), ou {cpf:''}. */
 async function _cpfDoProcesso(p){
   try{
-    var dig=_docChaveProcObj(p); if(!dig) return '';
+    var dig=_docChaveProcObj(p); if(!dig) return {cpf:'',fonte:''};
     var tok=await docToken();
     async function ler(rel){ if(!rel) return ''; try{ var r=await fetch('/api/docs?file='+encodeURIComponent(dig+'/'+rel),{headers:{Authorization:'Bearer '+tok}}); if(!r.ok) return ''; return await _extrairTextoDoc(await r.arrayBuffer()); }catch(e){ return ''; } }
     function achaCPF(txt){
@@ -9419,12 +9434,21 @@ async function _cpfDoProcesso(p){
       try{ var jo=_janelaOutorgante(txt); if(jo&&jo.janela){ var c2=_acharCPF(jo.janela); if(_cpfValido(c2)) return c2; } }catch(e){}
       var c3=_acharCPF(txt); return _cpfValido(c3)?c3:'';
     }
-    var relP=await _acharDocRel(dig,/procura/i);
-    if(relP){ var cP=achaCPF(await ler(relP)); if(cP) return cP; }
-    var relI=await _acharDocRel(dig,/inicial|peti[çc][aã]o/i);
-    if(relI&&relI!==relP){ var cI=achaCPF(await ler(relI)); if(cI) return cI; }
-    return '';
-  }catch(e){ return ''; }
+    function rotuloFonte(nome){ if(/procura/i.test(nome)) return 'procuração'; if(/inicial|peti[çc]|a[çc][aã]o/i.test(nome)) return 'petição inicial'; return nome.split('/').pop(); }
+    var todos=[]; try{ todos=await _listarArquivosProc(dig); }catch(e){}
+    var docs=todos.filter(function(rr){ return /\.(pdf|docx?|html?)$/i.test(rr) && !/Boletos/i.test(rr); });
+    /* prioridade: procuração(0) → inicial/ação/petição(1) → nº baixo no nome(2) → resto(3) */
+    docs.sort(function(a,b){
+      function sc(x){ var n=x.split('/').pop(); if(/procura/i.test(n)) return 0; if(/inicial|peti[çc]|a[çc][aã]o/i.test(n)) return 1; if(/^\s*0*1\b|^\s*0*[1-3][.\-) ]/.test(n)) return 2; return 3; }
+      return sc(a)-sc(b);
+    });
+    for(var i=0;i<Math.min(docs.length,10);i++){
+      var t=await ler(docs[i]); if(!t) continue;
+      var cpf=achaCPF(t);
+      if(cpf) return {cpf:cpf, fonte:rotuloFonte(docs[i])};
+    }
+    return {cpf:'',fonte:''};
+  }catch(e){ return {cpf:'',fonte:''}; }
 }
 function _cpfValido(c){ var d=String(c||'').replace(/\D/g,''); return d.length===11; }
 /* texto de referência do boleto conforme o vínculo — nunca dá a entender que é
