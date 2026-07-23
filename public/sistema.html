@@ -436,6 +436,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
             <select id="prd-periodo" class="btn sm" onchange="renderProdutividade()" style="max-width:150px"><option value="7">Últimos 7 dias</option><option value="30" selected>Últimos 30 dias</option><option value="90">Últimos 90 dias</option><option value="hoje">Hoje</option></select>
             <select id="prd-user" class="btn sm" onchange="renderProdutividade()" style="max-width:180px"><option value="">Todas as pessoas</option></select>
             <button class="btn sm ghost" onclick="exportarProdutividadeCSV()">⬇ Exportar CSV</button>
+            <button class="btn sm ghost" id="prd-cfg-toggle" onclick="_prdToggleConfig()" title="Configurações do módulo (pesos, tempo ocioso, faltoso)" style="font-size:16px;line-height:1;padding:5px 9px">⚙</button>
           </div>
         </div>
         <p class="note" style="margin:6px 0 10px">Métricas derivadas do <b>log de eventos do sistema</b> (tarefas concluídas, boletos, e-mails, cadastros…) — sem vigilância de tela/mouse. Medem <b>volume e esforço</b>, não qualidade: use com revisão humana, nunca isoladamente para decisão disciplinar. O tempo ativo desconta pausas maiores que o limite configurado; pausa seguida de entrega conta como trabalho fora do sistema.</p>
@@ -446,8 +447,11 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
         <p class="note" style="margin:0 0 8px">Todos os acessos do escritório, com o último login registrado no log de eventos. <b>Faltoso</b> = sem login há mais dias que o limite configurado. Ações de gestão de login (criar/desativar) também ficam auditadas no log.</p>
         <div id="prd-logins"></div>
       </div>
-      <div class="card">
-        <p class="sectlabel">Configurações do módulo</p>
+      <div class="card hidden" id="prd-config-box">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <p class="sectlabel" style="margin:0">⚙ Configurações do módulo</p>
+          <button class="btn sm ghost" onclick="_prdToggleConfig()" title="Fechar">✕</button>
+        </div>
         <div id="prd-config" class="note">Carregando…</div>
       </div>
     </section>
@@ -9787,6 +9791,13 @@ function _prdTempoAtivo(evs){
   return {ativo:ativo, entregavel:entregavel};
 }
 function _prdFmtMin(ms){ var m=Math.round(ms/60000); if(m<60) return m+' min'; return Math.floor(m/60)+'h'+String(m%60).padStart(2,'0'); }
+function _prdToggleConfig(){
+  var box=document.getElementById('prd-config-box'); if(!box) return;
+  var abrir=box.classList.contains('hidden');
+  box.classList.toggle('hidden');
+  var g=document.getElementById('prd-cfg-toggle'); if(g) g.classList.toggle('active',abrir);
+  if(abrir){ try{ renderProdutividadeConfig(); }catch(e){} box.scrollIntoView({behavior:'smooth',block:'nearest'}); }
+}
 async function renderProdutividade(){
   var cards=document.getElementById('prd-cards'); if(!cards) return;
   cards.innerHTML='<div class="note">Carregando eventos…</div>';
