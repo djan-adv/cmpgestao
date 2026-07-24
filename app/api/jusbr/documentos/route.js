@@ -79,6 +79,13 @@ export async function POST(request) {
   const cand = (proc && (proc.documentos || (proc.tramitacaoAtual && proc.tramitacaoAtual.documentos))) || (data && data.documentos) || []
   docs = (Array.isArray(cand) ? cand : []).map(normDoc).filter(d => d.uuid || d.href)
 
+  // diagnóstico: mostra os campos CRUS dos primeiros documentos (para achar o
+  // campo certo de id/hrefBinario do PDPJ)
+  if (body.debug) {
+    const cru = (Array.isArray(cand) ? cand : []).slice(0, 3)
+    return Response.json({ ok: true, debug: true, total: docs.length, amostra_crua: cru, normalizados: docs.slice(0, 3) })
+  }
+
   // marca os que já estão baixados no sistema
   const { data: jaTem } = await sb.from('jusbr_arquivos').select('doc_uuid,id').eq('escritorio_id', ESCRITORIO_CMP).eq('processo_numero', numero)
   const baixados = {}

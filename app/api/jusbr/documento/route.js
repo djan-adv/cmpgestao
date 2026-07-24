@@ -74,6 +74,18 @@ export async function POST(request) {
     if (h.indexOf('%pdf') === 0) return false
     return /<app-root|ng-version=|<div id="root">\s*<\/div>|<div id="app">\s*<\/div>|portal de servi|<base href|carregando\.\.\./.test(h)
   }
+  // aceita SÓ arquivo de verdade (PDF/imagem/octet ou HTML com conteúdo);
+  // rejeita envelope JSON de erro (ex.: {"code":400,...}) e casca do visor
+  function ehArquivoReal(b, ct, nm) {
+    if (!b || !b.length) return false
+    const h = b.slice(0, 64).toString('utf8').toLowerCase().trim()
+    if (h.indexOf('%pdf') === 0) return true
+    if (/pdf|octet-stream|^image\/|msword|officedocument|zip/.test(ct)) return true
+    if (/json/.test(ct) || h.startsWith('{') || h.startsWith('[')) return false // erro do PDPJ
+    if (ehShell(b)) return false
+    if ((/html/.test(ct) || /\.html?$/i.test(nm)) && b.length >= 1500) return true // decisão/expediente real
+    return b.length >= 1500
+  }
 
   let escolhido = null
   const tentativas = []
@@ -81,20 +93,20 @@ export async function POST(request) {
     let r
     try {
       r = await fetch(u, { headers: { ...PDPJ_HEADERS, Accept: 'application/pdf,application/octet-stream,text/html;q=0.8,*/*;q=0.5', Authorization: 'Bearer ' + sess.token }, signal: AbortSignal.timeout(40000) })
-    } catch (e) { tentativas.push({ url: u, erro: String((e && e.message) || e) }); continue }
+    } catch (e) { tentativas.push({ url: u.replace(PDPJ, ''), erro: String((e && e.message) || e) }); continue }
     if (r.status === 401) return Response.json({ erro: 'jus.br: token inválido/expirado — sincronize novamente', motivo: 'expirado' }, { status: 409 })
     const b = Buffer.from(await r.arrayBuffer())
     const ct = String(r.headers.get('content-type') || '').split(';')[0].trim()
-    const shell = ehShell(b)
-    tentativas.push({ url: u.replace(PDPJ, ''), status: r.status, content_type: ct, bytes: b.length, shell, head: b.slice(0, 90).toString('utf8').replace(/\s+/g, ' ').trim() })
-    if (r.ok && b.length && !shell) { escolhido = { resp: r, buf: b }; break }
+    const real = r.ok && ehArquivoReal(b, ct, nome)
+    tentativas.push({ url: u.replace(PDPJ, ''), status: r.status, content_type: ct, bytes: b.length, ok: real, head: b.slice(0, 90).toString('utf8').replace(/\s+/g, ' ').trim() })
+    if (real) { escolhido = { resp: r, buf: b }; break }
   }
 
   if (debug) return Response.json({ debug: true, numero, uuid, nome, tentativas })
 
   if (!escolhido) {
-    const diag = tentativas.map(t => (t.status || 'x') + '·' + (t.content_type || t.erro || '?') + '·' + (t.bytes || 0) + 'b').join('  |  ')
-    return Response.json({ erro: 'O jus.br devolveu a página do visor, não o arquivo. Para .html (decisões/expedientes), leia pelo botão "Abrir no jus.br". [diag: ' + diag + ']', motivo: 'visor', diag: tentativas }, { status: 502 })
+    const diag = tentativas.map(t => (t.url ? t.url.split('/').slice(-1)[0] : '') + ' → ' + (t.status || 'x') + '·' + (t.content_type || t.erro || '?') + '·' + (t.bytes || 0) + 'b' + (t.head ? (' · ' + t.head.slice(0, 60)) : '')).join('   ||   ')
+    return Response.json({ erro: 'O jus.br não devolveu o arquivo (só a casca do visor ou um erro). Para .html (decisões/expedientes), leia pelo botão "Abrir no jus.br". [diag: ' + diag + ']', motivo: 'visor', diag: tentativas }, { status: 502 })
   }
 
   const resp = escolhido.resp
