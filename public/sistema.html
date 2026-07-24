@@ -552,6 +552,14 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
     <div class="foot" style="justify-content:flex-start"><button class="btn" style="background:#0F6E56;border-color:#0F6E56" onclick="enviarSugestao()">Enviar sugestão</button><span id="sg-msg" class="note" style="margin-left:10px;align-self:center"></span></div>
   </div>
   <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+      <h3 style="margin:0">🚫 Testes já descartados</h3>
+      <button class="btn sm ghost" onclick="toggleDescartados(this)">ver</button>
+    </div>
+    <p class="note" style="margin:6px 0 0">Antes de sugerir, confira o que já testamos e <b>não seguiu</b> — com o motivo. Se ainda quiser tentar, tudo bem sugerir; só já ciente do histórico.</p>
+    <div id="descartados-lista" style="display:none;margin-top:10px"></div>
+  </div>
+  <div class="card">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
       <h3 style="margin:0">Sugestões e histórico de alterações</h3>
       <select id="sg-filtro" onchange="renderSugestoes()" class="btn sm"><option value="">Todas</option><option value="nova">Novas</option><option value="em_analise">Em análise</option><option value="feita">Feitas</option><option value="descartada">Descartadas</option></select>
@@ -5678,6 +5686,32 @@ async function moverProcessosLote(){
   }catch(e){ alert('Erro: '+(e&&e.message||e)); }
 }
 /* ===== Sugestões / melhorias (sócios sem Claude Code enviam daqui; eu leio no banco) ===== */
+/* lista de testes já descartados (referência para o escritório) */
+var _DESCARTADOS=[
+  {t:'Buscar processos por CPF/CNPJ na base do CNJ (DJEN)', m:'A API pública do CNJ só aceita nome da parte, não CPF/CNPJ.', a:'Monitoramento por nome do cliente.'},
+  {t:'Renovação 100% automática do jus.br (com tudo fechado)', m:'O gov.br guarda o código de renovação num cookie protegido que o navegador não deixa o sistema ler.', a:'Manter a sessão do PDPJ ativa (certificado) + um clique renova.'},
+  {t:'Login por senha no gov.br (PDPJ)', m:'Deu falhas e instabilidade nos testes.', a:'Login por certificado digital (mais estável).'},
+  {t:'Baixar a íntegra dos autos pelo recurso nativo do PDPJ', m:'Essa API do PDPJ não oferece o "baixar autos" único (como o PJe).', a:'Pacote próprio: baixa as peças escolhidas em um .zip.'},
+  {t:'PIX avulso "copia e cola" no Monitoramento', m:'O PIX do Cora é dinâmico (valor no link, não embutido) e confundia o cliente.', a:'Página de boleto/PIX oficiais.'},
+  {t:'Cartão de crédito pela API do Cora', m:'A conta não está habilitada para cartão via integração (recusa técnica).', a:'Boleto + PIX.'},
+  {t:'Monitorar marcas do INPI pelo DJEN', m:'Marcas saem na RPI (Revista da Propriedade Industrial), não no Diário da Justiça.', a:'Monitor próprio da RPI, por número.'},
+  {t:'Abrir documentos do jus.br pelo identificador inicial', m:'O portal devolvia a "casca" do visor, não o arquivo.', a:'Endereço correto identificado; documentos abrem/baixam normal.'}
+];
+function toggleDescartados(btn){
+  var el=document.getElementById('descartados-lista'); if(!el) return;
+  var abrir=(el.style.display==='none');
+  if(abrir && !el.innerHTML){
+    el.innerHTML=_DESCARTADOS.map(function(d,i){
+      return '<div style="border-left:3px solid #b5342b;padding:4px 0 4px 10px;margin-bottom:9px">'
+        +'<div style="font-weight:700;color:var(--navy);font-size:13.5px">'+(i+1)+'. '+esc(d.t)+'</div>'
+        +'<div style="font-size:12.5px;color:#5b6572;margin-top:2px"><b>Por quê:</b> '+esc(d.m)+'</div>'
+        +'<div style="font-size:12.5px;color:#30563E;margin-top:1px"><b>No lugar:</b> '+esc(d.a)+'</div>'
+      +'</div>';
+    }).join('')+'<p class="note" style="margin:4px 0 0">Estes descartes foram por limitação técnica de terceiros (CNJ, gov.br, Cora, INPI, PDPJ), não por falha do sistema.</p>';
+  }
+  el.style.display=abrir?'block':'none';
+  if(btn) btn.textContent=abrir?'ocultar':'ver';
+}
 async function enviarSugestao(){
   var texto=(document.getElementById('sg-texto').value||'').trim();
   if(!texto){ alert('Escreva a sugestão.'); return; }
