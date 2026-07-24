@@ -234,7 +234,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
   </aside>
   <main class="main">
     <div class="topbar"><h1 id="scr-title">Painel</h1>
-      <div class="who">Logado: <b id="who-name">Djan Mendonça</b> <span id="who-pill" class="pill socio">sócio</span> <button id="btn-cfg-proc" class="btn sm ghost cmp-only" onclick="abrirConfig()" title="Configurações — lotes/pastas do menu" style="display:none;font-size:15px;line-height:1;padding:3px 9px;margin-left:8px">⚙</button></div></div>
+      <div class="who">Logado: <b id="who-name">Djan Mendonça</b> <span id="who-pill" class="pill socio">sócio</span> <button id="btn-cfg-proc" class="btn sm ghost cmp-only" onclick="abrirConfig()" title="Configurações — lotes/pastas do menu" style="display:none;font-size:15px;line-height:1;padding:3px 9px;margin-left:8px">⚙</button> <button class="btn sm ghost" onclick="sairSistema()" title="Sair do sistema (encerra a sessão)" style="font-size:12px;margin-left:8px">Sair</button></div></div>
 
     <section id="s-painel">
       <div id="painel-hello"></div>
@@ -807,6 +807,14 @@ function _bloquearAcessoDuplo(ondeStr){
     try{ if(window.__sessaoGuard) clearInterval(window.__sessaoGuard); }catch(e){}
     try{ window.__sb.auth.signOut(); }catch(e){}
   }catch(e){}
+}
+async function sairSistema(){
+  if(!confirm('Sair do sistema?')) return;
+  try{ if(window.__sessaoGuard) clearInterval(window.__sessaoGuard); }catch(e){}
+  try{ var ug=await window.__sb.auth.getUser(); var uid=ug&&ug.data&&ug.data.user&&ug.data.user.id; if(uid) await window.__sb.from('sessao_unica').delete().eq('user_id',uid); }catch(e){}
+  try{ if(typeof logEvent==='function') logEvent('logout','sessao',null,null); }catch(e){}
+  try{ await window.__sb.auth.signOut(); }catch(e){}
+  location.replace('/');
 }
 function entrar(){
   var r=document.getElementById("roleSel").value, p=perfis[r];
