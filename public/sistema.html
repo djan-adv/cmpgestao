@@ -797,11 +797,12 @@ var KAN=null, atual=null, TRIAGEM=null, AGENDA=null, VIEWAG="tarefas", curY=__ho
 /* acesso único por login: o login mais recente assume; os anteriores são
    deslogados. Força cada sócio a ter o próprio acesso. Falha aberta (erro de
    rede não bloqueia ninguém). */
-function _bloquearAcessoDuplo(){
+function _bloquearAcessoDuplo(ondeStr){
   try{ if(document.getElementById('acesso-duplo')) return;
+    var onde=ondeStr?('<div style="margin:10px 0;padding:8px 10px;background:#f3f7fb;border:1px solid #d9e6f2;border-radius:9px;font-size:13px;color:#345">Sessão ativa em: <b>'+esc(String(ondeStr))+'</b></div>'):'';
     var ov=document.createElement('div'); ov.id='acesso-duplo';
     ov.style.cssText='position:fixed;inset:0;background:rgba(20,28,40,.93);z-index:100000;display:flex;align-items:center;justify-content:center;padding:24px';
-    ov.innerHTML='<div style="background:#fff;border-radius:16px;max-width:440px;padding:26px;text-align:center;font-family:system-ui"><div style="font-size:40px">🔒</div><h2 style="color:#2E3A4B;margin:8px 0 4px">Acesso aberto em outro lugar</h2><p style="color:#5b6572;font-size:14px;line-height:1.55">Este login foi usado agora em outro dispositivo ou navegador. Por segurança, cada pessoa deve usar o <b>seu próprio acesso</b>.</p><p style="color:#5b6572;font-size:13px;line-height:1.5">Se este é você, feche a outra janela. Se você é sócio(a) e ainda usa o login de outra pessoa, peça o <b>seu acesso</b> ao coordenador.</p><button onclick="location.replace(\'/\')" style="margin-top:12px;background:#0F6E56;color:#fff;border:0;border-radius:10px;padding:11px 22px;font-weight:700;cursor:pointer">Sair</button></div>';
+    ov.innerHTML='<div style="background:#fff;border-radius:16px;max-width:440px;padding:26px;text-align:center;font-family:system-ui"><div style="font-size:40px">🔒</div><h2 style="color:#2E3A4B;margin:8px 0 4px">Acesso aberto em outro lugar</h2><p style="color:#5b6572;font-size:14px;line-height:1.55">Este login já está em uso em outro dispositivo. Por segurança, cada pessoa deve usar o <b>seu próprio acesso</b>.</p>'+onde+'<p style="color:#5b6572;font-size:13px;line-height:1.5">Se este é você, feche a outra janela. Se você é sócio(a) e ainda usa o login de outra pessoa, peça o <b>seu acesso</b> ao coordenador.</p><button onclick="location.replace(\'/\')" style="margin-top:12px;background:#0F6E56;color:#fff;border:0;border-radius:10px;padding:11px 22px;font-weight:700;cursor:pointer">Sair</button></div>';
     document.body.appendChild(ov);
     try{ if(window.__sessaoGuard) clearInterval(window.__sessaoGuard); }catch(e){}
     try{ window.__sb.auth.signOut(); }catch(e){}
@@ -4021,19 +4022,24 @@ function toggleConcluirTarefa(id){
     var _dev=null; try{ _dev=localStorage.getItem('cmp_dev_id'); }catch(e){}
     if(!_dev){ _dev='dev_'+Math.random().toString(36).slice(2)+Date.now().toString(36); try{ localStorage.setItem('cmp_dev_id',_dev); }catch(e){} }
     window.__devId=_dev;
-    var _disp=((navigator.platform||'')+' · '+(navigator.userAgent||'')).slice(0,80);
+    /* nome amigável DESTE computador (o navegador não lê o nome real da máquina/
+       certificado — segurança). Pergunta 1x e guarda. */
+    var _nome=null; try{ _nome=localStorage.getItem('cmp_dev_nome'); }catch(e){}
+    if(_nome==null){ try{ _nome=window.prompt('Dê um nome a ESTE computador (para identificar a sessão). Ex.: PC Djan — escritório','')||''; }catch(e){ _nome=''; } try{ localStorage.setItem('cmp_dev_nome',_nome); }catch(e){} }
+    var _uaCurto=(/edg/i.test(navigator.userAgent)?'Edge':/chrome/i.test(navigator.userAgent)?'Chrome':/firefox/i.test(navigator.userAgent)?'Firefox':/safari/i.test(navigator.userAgent)?'Safari':'navegador')+' · '+(navigator.platform||'');
+    var _disp=(_nome?(_nome+' ('+_uaCurto+')'):_uaCurto).slice(0,80);
     var FRESH_MS=90000;
     async function _hb(){ try{ await sb.from('sessao_unica').upsert({user_id:_uid,dispositivo_id:_dev,dispositivo:_disp,atualizado_em:new Date().toISOString()},{onConflict:'user_id'}); }catch(e){} }
-    var _cur=await sb.from('sessao_unica').select('dispositivo_id,atualizado_em').eq('user_id',_uid).maybeSingle();
+    var _cur=await sb.from('sessao_unica').select('dispositivo_id,dispositivo,atualizado_em').eq('user_id',_uid).maybeSingle();
     if(_cur&&!_cur.error&&_cur.data&&_cur.data.dispositivo_id&&_cur.data.dispositivo_id!==_dev){
       var _idade=Date.now()-new Date(_cur.data.atualizado_em||0).getTime();
-      if(_idade<FRESH_MS){ _bloquearAcessoDuplo(); return; } /* incumbente vivo → bloqueia este novo */
+      if(_idade<FRESH_MS){ _bloquearAcessoDuplo(_cur.data.dispositivo); return; } /* incumbente vivo → bloqueia este novo */
     }
     await _hb(); /* reivindica e passa a ser o incumbente */
     window.__sessaoGuard=setInterval(async function(){
       try{
-        var rr=await sb.from('sessao_unica').select('dispositivo_id').eq('user_id',_uid).maybeSingle();
-        if(rr&&!rr.error&&rr.data&&rr.data.dispositivo_id&&rr.data.dispositivo_id!==window.__devId){ _bloquearAcessoDuplo(); return; }
+        var rr=await sb.from('sessao_unica').select('dispositivo_id,dispositivo').eq('user_id',_uid).maybeSingle();
+        if(rr&&!rr.error&&rr.data&&rr.data.dispositivo_id&&rr.data.dispositivo_id!==window.__devId){ _bloquearAcessoDuplo(rr.data.dispositivo); return; }
         _hb();
       }catch(e){}
     },30000);
