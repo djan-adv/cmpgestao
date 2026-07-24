@@ -794,6 +794,19 @@ var __hoje0=new Date();
 var __ehCel=(typeof window!=='undefined' && window.innerWidth<=860);
 var KAN=null, atual=null, TRIAGEM=null, AGENDA=null, VIEWAG="tarefas", curY=__hoje0.getFullYear(), curM=__hoje0.getMonth(), curD=__hoje0.getDate(), agView=(__ehCel?"dia":"mes"), triagemAtual=null, crmView="contatos", agResp="Todos", canalSel="Geral", mesSel="todos", histShown=10, PUBIDX=null;
 
+/* acesso único por login: o login mais recente assume; os anteriores são
+   deslogados. Força cada sócio a ter o próprio acesso. Falha aberta (erro de
+   rede não bloqueia ninguém). */
+function _bloquearAcessoDuplo(){
+  try{ if(document.getElementById('acesso-duplo')) return;
+    var ov=document.createElement('div'); ov.id='acesso-duplo';
+    ov.style.cssText='position:fixed;inset:0;background:rgba(20,28,40,.93);z-index:100000;display:flex;align-items:center;justify-content:center;padding:24px';
+    ov.innerHTML='<div style="background:#fff;border-radius:16px;max-width:440px;padding:26px;text-align:center;font-family:system-ui"><div style="font-size:40px">🔒</div><h2 style="color:#2E3A4B;margin:8px 0 4px">Acesso aberto em outro lugar</h2><p style="color:#5b6572;font-size:14px;line-height:1.55">Este login foi usado agora em outro dispositivo ou navegador. Por segurança, cada pessoa deve usar o <b>seu próprio acesso</b>.</p><p style="color:#5b6572;font-size:13px;line-height:1.5">Se este é você, feche a outra janela. Se você é sócio(a) e ainda usa o login de outra pessoa, peça o <b>seu acesso</b> ao coordenador.</p><button onclick="location.replace(\'/\')" style="margin-top:12px;background:#0F6E56;color:#fff;border:0;border-radius:10px;padding:11px 22px;font-weight:700;cursor:pointer">Sair</button></div>';
+    document.body.appendChild(ov);
+    try{ if(window.__sessaoGuard) clearInterval(window.__sessaoGuard); }catch(e){}
+    try{ window.__sb.auth.signOut(); }catch(e){}
+  }catch(e){}
+}
 function entrar(){
   var r=document.getElementById("roleSel").value, p=perfis[r];
   document.getElementById("who-name").textContent=p.nome;
@@ -3998,6 +4011,20 @@ function toggleConcluirTarefa(id){
   var g=await sb.auth.getSession();
   if(!g.data||!g.data.session){ document.documentElement.removeAttribute('data-boot'); location.replace('/'); return; }
   try{ if(document.getElementById('app').classList.contains('hidden') && typeof entrar==='function'){ entrar(); } }catch(e){}
+  /* acesso único: este login assume a sessão; sessões anteriores são deslogadas */
+  try{
+    var _uid=g.data.session.user.id;
+    var _mySid=Math.random().toString(36).slice(2)+Date.now().toString(36);
+    window.__mySid=_mySid;
+    var _disp=((navigator.platform||'')+' · '+(navigator.userAgent||'')).slice(0,80);
+    await sb.from('sessao_unica').upsert({user_id:_uid,session_id:_mySid,dispositivo:_disp,atualizado_em:new Date().toISOString()},{onConflict:'user_id'});
+    window.__sessaoGuard=setInterval(async function(){
+      try{
+        var rr=await sb.from('sessao_unica').select('session_id').eq('user_id',_uid).maybeSingle();
+        if(rr&&!rr.error&&rr.data&&rr.data.session_id&&rr.data.session_id!==window.__mySid){ _bloquearAcessoDuplo(); }
+      }catch(e){}
+    },45000);
+  }catch(e){}
   function fmtData(iso){ if(!iso) return ''; var p=String(iso).slice(0,10).split('-'); return p.length===3?(p[2]+'/'+p[1]+'/'+p[0]):''; }
   function fmtCausa(v){ if(v==null||v==='') return '0,00'; var n=Number(v); if(isNaN(n)) return '0,00'; return n.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
   try{
