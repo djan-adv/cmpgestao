@@ -55,45 +55,60 @@ export async function POST(request) {
   if (sess.erro === 'sem_token' || sess.erro === 'sem_chave') return Response.json({ erro: 'jus.br: sem token — sincronize a sessão', motivo: 'sem_token' }, { status: 409 })
   if (sess.erro) return Response.json({ erro: 'jus.br: token expirado — sincronize novamente', motivo: 'expirado' }, { status: 409 })
 
-  // resolve a URL de download
-  let href = String(body.href || '').trim()
-  let url
-  if (/^https?:\/\//i.test(href)) url = href
-  else if (href.startsWith('/')) url = PDPJ + href
-  else url = `${PDPJ}/api/v2/processos/${numero}/documentos/${uuid}/binario`
+  // candidatos de URL de download: o hrefBinario do PDPJ + variantes conhecidas
+  const hrefRaw = String(body.href || '').trim()
+  const cands = []
+  if (/^https?:\/\//i.test(hrefRaw)) cands.push(hrefRaw)
+  else if (hrefRaw.startsWith('/')) cands.push(PDPJ + hrefRaw)
+  cands.push(`${PDPJ}/api/v2/processos/${numero}/documentos/${uuid}/binario`)
+  cands.push(`${PDPJ}/api/v2/processos/${numero}/documentos/${uuid}/conteudo`)
+  cands.push(`${PDPJ}/api/v2/processos/${numero}/documentos/${uuid}/texto`)
+  cands.push(`${PDPJ}/api/v2/processos/${numero}/documentos/${uuid}`)
+  const urls = cands.filter((u, i) => u && cands.indexOf(u) === i)
+  const debug = new URL(request.url).searchParams.get('debug') != null || body.debug === true
 
-  let resp
-  try {
-    resp = await fetch(url, { headers: { ...PDPJ_HEADERS, Authorization: 'Bearer ' + sess.token }, signal: AbortSignal.timeout(40000) })
-  } catch (e) {
-    return Response.json({ erro: 'falha ao baixar do PDPJ: ' + (e && e.message || e) }, { status: 502 })
+  // "casca do visor": HTML pequeno da SPA (sem o conteúdo, montado por JS)
+  function ehShell(b) {
+    if (!b || b.length >= 40000) return false
+    const h = b.slice(0, 8000).toString('utf8').toLowerCase()
+    if (h.indexOf('%pdf') === 0) return false
+    return /<app-root|ng-version=|<div id="root">\s*<\/div>|<div id="app">\s*<\/div>|portal de servi|<base href|carregando\.\.\./.test(h)
   }
-  if (resp.status === 401) return Response.json({ erro: 'jus.br: token inválido/expirado — sincronize novamente', motivo: 'expirado' }, { status: 409 })
-  if (!resp.ok) return Response.json({ erro: 'PDPJ recusou o download (HTTP ' + resp.status + ')' }, { status: 502 })
 
-  const buf = Buffer.from(await resp.arrayBuffer())
-  if (!buf.length) return Response.json({ erro: 'documento vazio' }, { status: 502 })
+  let escolhido = null
+  const tentativas = []
+  for (const u of urls) {
+    let r
+    try {
+      r = await fetch(u, { headers: { ...PDPJ_HEADERS, Accept: 'application/pdf,application/octet-stream,text/html;q=0.8,*/*;q=0.5', Authorization: 'Bearer ' + sess.token }, signal: AbortSignal.timeout(40000) })
+    } catch (e) { tentativas.push({ url: u, erro: String((e && e.message) || e) }); continue }
+    if (r.status === 401) return Response.json({ erro: 'jus.br: token inválido/expirado — sincronize novamente', motivo: 'expirado' }, { status: 409 })
+    const b = Buffer.from(await r.arrayBuffer())
+    const ct = String(r.headers.get('content-type') || '').split(';')[0].trim()
+    const shell = ehShell(b)
+    tentativas.push({ url: u.replace(PDPJ, ''), status: r.status, content_type: ct, bytes: b.length, shell, head: b.slice(0, 90).toString('utf8').replace(/\s+/g, ' ').trim() })
+    if (r.ok && b.length && !shell) { escolhido = { resp: r, buf: b }; break }
+  }
+
+  if (debug) return Response.json({ debug: true, numero, uuid, nome, tentativas })
+
+  if (!escolhido) {
+    const diag = tentativas.map(t => (t.status || 'x') + '·' + (t.content_type || t.erro || '?') + '·' + (t.bytes || 0) + 'b').join('  |  ')
+    return Response.json({ erro: 'O jus.br devolveu a página do visor, não o arquivo. Para .html (decisões/expedientes), leia pelo botão "Abrir no jus.br". [diag: ' + diag + ']', motivo: 'visor', diag: tentativas }, { status: 502 })
+  }
+
+  const resp = escolhido.resp
+  const buf = escolhido.buf
   if (buf.length > MAX_BYTES) return Response.json({ erro: 'arquivo grande demais (>25MB) para guardar no sistema' }, { status: 413 })
 
-  // detecta o tipo REAL (PDPJ às vezes não rotula ou rotula errado o HTML):
-  // resposta > body.tipo > extensão do nome > sniff do conteúdo.
+  // detecta o tipo REAL (PDPJ às vezes não rotula ou rotula errado)
   let tipoFinal = String(resp.headers.get('content-type') || body.tipo || '').split(';')[0].trim().toLowerCase()
   const head = buf.slice(0, 256).toString('utf8').trim().toLowerCase()
   const parecePdf = head.startsWith('%pdf')
   const pareceHtml = /\.html?$/i.test(nome) || head.startsWith('<!doctype html') || head.startsWith('<html') || (head.startsWith('<') && head.indexOf('<body') > -1)
   if (!tipoFinal || tipoFinal === 'application/octet-stream') tipoFinal = parecePdf ? 'application/pdf' : (pareceHtml ? 'text/html' : 'application/pdf')
-  if (tipoFinal === 'application/pdf' && pareceHtml && !parecePdf) tipoFinal = 'text/html' // PDPJ mentiu: era HTML
-  if (tipoFinal.indexOf('html') > -1 && parecePdf) tipoFinal = 'application/pdf'          // ...ou o contrário
-
-  // Só rejeita se for a CASCA do visor SPA (Angular/React) — HTML minúsculo cujo conteúdo
-  // é montado por JavaScript (fica preso em "Carregando" no nosso quadro). Os expedientes
-  // e decisões (Expediente.html/Decisão.html) são HTML de VERDADE, com o texto — esses
-  // guardamos e exibimos (a limpeza do HTML é feita ao servir o arquivo).
-  if (tipoFinal.indexOf('html') > -1) {
-    const amostra = buf.slice(0, 8000).toString('utf8').toLowerCase()
-    const ehCascaSpa = buf.length < 20000 && /<app-root|ng-version=|window\.__(nuxt|next)|<div id="root">\s*<\/div>|<div id="app">\s*<\/div>/.test(amostra)
-    if (ehCascaSpa) return Response.json({ erro: 'O jus.br devolveu a página do visor (carregamento), não o arquivo em si. Abra o documento direto no jus.br (botão "Abrir no tribunal") ou tente de novo em instantes.', motivo: 'visor' }, { status: 502 })
-  }
+  if (tipoFinal === 'application/pdf' && pareceHtml && !parecePdf) tipoFinal = 'text/html'
+  if (tipoFinal.indexOf('html') > -1 && parecePdf) tipoFinal = 'application/pdf'
 
   // procuração e petição inicial são leves e sempre úteis: guardamos PERMANENTE
   const ehLeve = /procura[çc][aã]o|peti[çc][aã]o\s+inicial|\binicial\b/i.test(String(nome || ''))
