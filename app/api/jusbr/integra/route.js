@@ -71,6 +71,9 @@ export async function GET(request) {
   const { searchParams } = new URL(request.url)
   const numero = soDig(searchParams.get('numero'))
   const jwt = searchParams.get('jwt') || (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '')
+  // seleção opcional: se vier ?uuids=a,b,c baixa só esses; senão, todos (íntegra)
+  const uuidsSel = (searchParams.get('uuids') || '').split(',').map(s => s.trim()).filter(Boolean)
+  const uuidSet = uuidsSel.length ? new Set(uuidsSel) : null
   if (numero.length < 16) return Response.json({ erro: 'número inválido' }, { status: 400 })
   const user = await usuario(jwt)
   if (!user) return Response.json({ erro: 'não autenticado' }, { status: 401 })
@@ -97,7 +100,10 @@ export async function GET(request) {
   for (const d of docs) {
     if (total >= MAX_TOTAL) { pulados++; continue }
     const arq = d.arquivo || {}
-    const url = abs(d.hrefBinario || arq.hrefBinario)
+    const hb = d.hrefBinario || arq.hrefBinario
+    // filtro de seleção: pula o que não foi marcado
+    if (uuidSet) { const du = ((String(hb || '').match(/documentos\/([^/]+)\//) || [])[1]) || ''; if (!uuidSet.has(du)) continue }
+    const url = abs(hb)
     if (!url) { pulados++; continue }
     let rb
     try { rb = await fetch(url, { headers: { ...PDPJ_HEADERS, Accept: 'application/pdf,application/octet-stream,text/html;q=0.8,*/*;q=0.5', Authorization: 'Bearer ' + token }, signal: AbortSignal.timeout(40000) }) }

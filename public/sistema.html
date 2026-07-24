@@ -3688,7 +3688,16 @@ function jusbrItemHtml(doc){
   var acao= doc.baixado_id
     ? '<a class="btn sm ghost" style="font-size:11px" href="#" onclick="jusbrAbrir(event,\''+doc.baixado_id+'\',\''+esc(doc.tipo||'')+'\',\''+esc(nomeJs)+'\')">📄 ver</a> <a class="btn sm ghost" style="font-size:11px;color:#b5342b" href="#" onclick="jusbrExcluir(event,\''+doc.baixado_id+'\',this)">🗑</a>'
     : '<button class="btn sm" style="font-size:11px" onclick="jusbrBaixar(this,\''+esc(doc.uuid||'')+'\',\''+esc(doc.href||'')+'\',\''+esc(nomeJs)+'\',\''+esc(doc.hrefTexto||'')+'\')">⬇ puxar</button>';
-  return '<div class="jusbr-item" data-uuid="'+esc(doc.uuid||'')+'" style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #eee"><div style="font-size:13px"><span style="color:#888">'+dt+'</span> '+esc(doc.nome||'documento')+'</div><div class="jusbr-acao" style="white-space:nowrap">'+acao+'</div></div>';
+  var chk=doc.baixado_id?'':'<input type="checkbox" class="jbr-sel" value="'+esc(doc.uuid||'')+'" title="Marcar para baixar" style="cursor:pointer">';
+  return '<div class="jusbr-item" data-uuid="'+esc(doc.uuid||'')+'" style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #eee"><label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;flex:1">'+chk+'<span><span style="color:#888">'+dt+'</span> '+esc(doc.nome||'documento')+'</span></label><div class="jusbr-acao" style="white-space:nowrap">'+acao+'</div></div>';
+}
+/* baixa (num zip) só os documentos MARCADOS — direto para Downloads, sem gravar */
+async function jusbrBaixarSelecionados(numero){
+  var sels=[].slice.call(document.querySelectorAll('#jusbr-lista .jbr-sel:checked')).map(function(c){return c.value;}).filter(Boolean);
+  if(!sels.length){ alert('Marque as caixinhas dos documentos que quer baixar.'); return; }
+  var jwt=await jusbrJwt(); if(!jwt){ alert('Sessão expirada — recarregue.'); return; }
+  var url='/api/jusbr/integra?numero='+encodeURIComponent(String(numero).replace(/\D/g,''))+'&uuids='+encodeURIComponent(sels.join(','))+'&jwt='+encodeURIComponent(jwt);
+  window.open(url,'_blank');
 }
 async function jusbrCarregar(numero){
   var st=document.getElementById('jusbr-status'), lista=document.getElementById('jusbr-lista');
@@ -3701,7 +3710,7 @@ async function jusbrCarregar(numero){
     if(d.__naoJson){ st.textContent='Função ainda não publicada no servidor (falta o deploy com npm run build).'; return; }
     if(!r.ok){ st.innerHTML=jusbrMsgErro(d); return; }
     if(!d.documentos||!d.documentos.length){ st.textContent='Nenhum documento retornado pelo jus.br.'; return; }
-    st.textContent=d.total+' documento(s) — clique em "puxar" no que quiser ver:';
+    st.innerHTML=d.total+' documento(s) — marque as caixinhas e clique em <b>Baixar selecionados</b> (vai pra Downloads), ou "puxar" pra ver aqui. <button class="btn sm" style="font-size:11px;background:#0F6E56;color:#fff;margin-left:6px" onclick="jusbrBaixarSelecionados(\''+esc(numero)+'\')">⬇ Baixar selecionados</button>';
     if(lista)lista.innerHTML=d.documentos.map(jusbrItemHtml).join('');
   }catch(e){ st.textContent='Falha: '+(e&&e.message||e); }
 }
