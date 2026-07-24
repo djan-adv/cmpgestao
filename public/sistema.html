@@ -1541,10 +1541,10 @@ function abrir(i){
      deste processo agora e re-renderiza quando ele descer (nada se perde) */
   if(p && p._id && !p._histOk && !p._histLoading && window.__sb){
     p._histLoading=true;
-    window.__sb.from('andamentos').select('id,data,texto,fonte').eq('processo_id',p._id).order('data',{ascending:false}).limit(3000).then(function(r){
+    window.__sb.from('andamentos').select('id,data,texto,fonte,providencia').eq('processo_id',p._id).order('data',{ascending:false}).limit(3000).then(function(r){
       p._histLoading=false;
       if(r && !r.error && r.data){
-        p.hist_full=r.data.map(function(a){return {id:a.id, data:(a.data? a.data+'T00:00:00.000Z':null), texto:a.texto, f:a.fonte||''};});
+        p.hist_full=r.data.map(function(a){return {id:a.id, data:(a.data? a.data+'T00:00:00.000Z':null), texto:a.texto, f:a.fonte||'', pr:(a.providencia===true)};});
         p._histOk=true;
         var ii=DADOS.processos.indexOf(p);
         var sec=document.getElementById('s-proc-det');
@@ -2951,7 +2951,7 @@ function salvarTarefa(){
           if(d && d.__naoJson){ alert(_msgRotaFaltando()); return; }
           if(!r.ok){ alert('Tarefa criada, mas não foi possível registrar no histórico/anexar: '+((d&&d.erro)||'erro')); return; }
           if(typeof atual!=='undefined' && atual && atual._id && _pid===atual._id){
-            try{ var q=await window.__sb.from('andamentos').select('id,data,texto,fonte').eq('processo_id',atual._id).order('data',{ascending:false}); if(q&&q.data){ atual.hist_full=q.data.map(function(a){return {id:a.id,data:(a.data?a.data+'T00:00:00.000Z':null),texto:a.texto,f:a.fonte||''};}); } }catch(e){}
+            try{ var q=await window.__sb.from('andamentos').select('id,data,texto,fonte,providencia').eq('processo_id',atual._id).order('data',{ascending:false}); if(q&&q.data){ atual.hist_full=q.data.map(function(a){return {id:a.id,data:(a.data?a.data+'T00:00:00.000Z':null),texto:a.texto,f:a.fonte||'',pr:(a.providencia===true)};}); } }catch(e){}
             if(typeof loadAnexosProc==='function') loadAnexosProc(atual.numero);
           }
         }catch(e){ alert('Tarefa criada, mas falhou ao registrar no histórico/anexar: '+(e&&e.message||e)); }
@@ -3504,13 +3504,13 @@ function renderHistorico(){
     /* captura: transcrição da IA (tudo depois do título) mostrada direto no histórico */
     var captInline=ehCaptura?String(mv.texto||"").split("\n").slice(1).join("\n").trim():"";
     var label=teor?"ver teor":((ehCaptura&&captInline)?"":"ver registro");var cor=teor?"var(--gold)":"var(--muted)";
-    li.innerHTML='<div class="dt" style="font-size:11px;color:var(--muted)">'+dt+' · <span style="color:'+(isMan?'#7b1e3a':cl[1])+';font-weight:600">'+(isMan?'Histórico manual (interno — não enviar ao cliente)':cl[0])+'</span></div>'
+    li.innerHTML='<div class="dt" style="font-size:11px;color:var(--muted)">'+dt+' · <span style="color:'+(isMan?'#7b1e3a':cl[1])+';font-weight:600">'+(isMan?'Histórico manual (interno — não enviar ao cliente)':cl[0])+'</span>'+(mv.pr?' · <span style="color:#0b7285;font-weight:700" title="Entra no resumo dos e-mails de atualização ao cliente">★ providência do escritório</span>':'')+'</div>'
       +'<div'+(isMan?' style="color:#7b1e3a;font-weight:600"':'')+'>'+esc(nome)+(label?(' <span style="color:'+cor+';font-size:11px">('+label+')</span>'):'')+'</div>'
       +(captInline?('<div style="font-size:13px;color:#374151;margin-top:4px;white-space:pre-wrap;max-height:280px;overflow:auto;background:#f4f7f5;border-radius:8px;padding:8px 10px">'+esc(captInline)+'</div>'):'')
       +anexosHtml(mv.id)
       +((/^\[MINUTA/.test(String(mv.texto||'')) && mv.id)?('<div style="margin-top:5px">'+(/APROVADA/.test(mv.texto)?'<span style="font-size:11px;color:#127a53;font-weight:700">✓ aprovada — cópia em Documentos do processo</span>':'<button class="btn sm" style="font-size:11px;background:#127a53" onclick="aprovarMinuta(event,'+mv.id+')">✔ Aprovar (copiar p/ Documentos do processo)</button>')+'</div>'):'')
       +'<div class="hist-det" style="display:none;font-size:13px;color:var(--muted);margin-top:4px;white-space:pre-wrap;max-height:260px;overflow:auto"></div>'
-      +(isMan?'<div class="hist-act" style="display:none;margin-top:6px"><button class="btn sm ghost" style="font-size:11px" onclick="editarHistManual(event,'+atual.hist_full.indexOf(mv)+')">✎ editar</button> <button class="btn sm ghost" style="font-size:11px;color:#b5342b" onclick="excluirHistManual(event,'+atual.hist_full.indexOf(mv)+')">🗑 excluir</button></div>':'');
+      +'<div class="hist-act" style="display:none;margin-top:6px">'+(isMan?('<button class="btn sm ghost" style="font-size:11px" onclick="editarHistManual(event,'+atual.hist_full.indexOf(mv)+')">✎ editar</button> <button class="btn sm ghost" style="font-size:11px;color:#b5342b" onclick="excluirHistManual(event,'+atual.hist_full.indexOf(mv)+')">🗑 excluir</button> '):'')+'<button class="btn sm ghost" style="font-size:11px;color:'+(mv.pr?'#0b7285':'#697180')+'" onclick="_togglePro(event,'+atual.hist_full.indexOf(mv)+')" title="Marcar como providência adotada pelo escritório — passa a constar no resumo dos e-mails de atualização ao cliente">'+(mv.pr?'★ providência (remover)':'☆ marcar providência do escritório')+'</button></div>';
     (function(cont){li.onclick=function(){var d=li.querySelector(".hist-det");var a=li.querySelector(".hist-act");if(d.style.display==="none"){d.textContent=cont;d.style.display="block";if(a)a.style.display="block";}else{d.style.display="none";if(a)a.style.display="none";}};})(content);
     ul.appendChild(li);
   })(arr[k]);}
@@ -3538,6 +3538,29 @@ async function excluirHistManual(ev,hix){
   if(w.error){ alert('Erro ao excluir: '+w.error.message); return; }
   if(!w.data||!w.data.length){ alert('O banco não permitiu a exclusão (permissão RLS). Avise o Claude para ajustar.'); return; }
   atual.hist_full.splice(hix,1); renderHistorico();
+}
+/* marca/desmarca um andamento como "providência adotada pelo escritório" —
+   entra no resumo dos e-mails de atualização ao cliente (contrapõe o susto do
+   "decorrido o prazo de" que o cliente vê no JusBrasil). */
+async function _togglePro(ev,hix){
+  if(ev)ev.stopPropagation();
+  var mv=atual&&atual.hist_full&&atual.hist_full[hix]; if(!mv) return;
+  if(!mv.id){ alert('Registro recém-criado — dê F5 e tente novamente.'); return; }
+  var novo=!mv.pr;
+  var w=await window.__sb.from('andamentos').update({providencia:novo}).eq('id',mv.id).select('id');
+  if(w.error){ alert('Erro ao marcar: '+w.error.message); return; }
+  if(!w.data||!w.data.length){ alert('O banco não permitiu a alteração (RLS). Avise o Claude.'); return; }
+  mv.pr=novo; renderHistorico();
+}
+/* últimas providências do escritório (marcadas), da mais recente p/ a mais antiga */
+function _providenciasDoEscritorio(p,n){
+  var arr=(p&&p.hist_full)?p.hist_full.filter(function(a){return a&&a.pr;}):[];
+  arr.sort(function(a,b){return String(b.data||'').localeCompare(String(a.data||''));});
+  return arr.slice(0,n||6).map(function(a){
+    var dt=a.data?String(a.data).slice(0,10).split('-').reverse().join('/'):'';
+    var txt=String(a.texto||'').replace(/\s+/g,' ').trim(); if(txt.length>140) txt=txt.slice(0,140)+'…';
+    return '• '+(dt?dt+' — ':'')+txt;
+  });
 }
 function verMaisHist(){histShown=99999;renderHistorico();}
 
@@ -3580,8 +3603,8 @@ async function atualizarHistorico(){
     var tot=djenNovos+mvNovos;
     if(tot>0 && atual._id){
       try{
-        var q=await window.__sb.from('andamentos').select('id,data,texto,fonte').eq('processo_id',atual._id).order('data',{ascending:false});
-        if(q&&q.data){ atual.hist_full=q.data.map(function(a){return {id:a.id,data:(a.data?a.data+'T00:00:00.000Z':null),texto:a.texto,f:a.fonte||''};}); histShown=6; }
+        var q=await window.__sb.from('andamentos').select('id,data,texto,fonte,providencia').eq('processo_id',atual._id).order('data',{ascending:false});
+        if(q&&q.data){ atual.hist_full=q.data.map(function(a){return {id:a.id,data:(a.data?a.data+'T00:00:00.000Z':null),texto:a.texto,f:a.fonte||'',pr:(a.providencia===true)};}); histShown=6; }
       }catch(e){}
     }
     /* re-renderiza a ficha inteira (recalcula o selo "vinculado" e preenche os dados) */
@@ -3988,12 +4011,12 @@ function toggleConcluirTarefa(id){
         var byId={}; DADOS.processos.forEach(function(p){ if(p._id) byId[p._id]=p; });
         var last=null, tot=0;
         for(;;){
-          var q=sb.from('andamentos').select('id,processo_id,data,texto,fonte').order('id',{ascending:true}).limit(5000);
+          var q=sb.from('andamentos').select('id,processo_id,data,texto,fonte,providencia').order('id',{ascending:true}).limit(5000);
           if(last!==null) q=q.gt('id',last);
-          var r=await q; if(r.error) throw r.error;
+          var r=await q; if(r.error){ if(/providencia/.test(r.error.message||'')){ q=sb.from('andamentos').select('id,processo_id,data,texto,fonte').order('id',{ascending:true}).limit(5000); if(last!==null) q=q.gt('id',last); r=await q; } if(r.error) throw r.error; }
           var rows=r.data||[]; if(!rows.length) break;
           rows.forEach(function(a){ var p=byId[a.processo_id]; if(!p||p._histOk) return; /* _histOk: ficha já buscou o histórico completo direto */
-            p.hist_full.push({id:a.id, data:(a.data? a.data+'T00:00:00.000Z':null), texto:a.texto, f:a.fonte||''}); });
+            p.hist_full.push({id:a.id, data:(a.data? a.data+'T00:00:00.000Z':null), texto:a.texto, f:a.fonte||'', pr:(a.providencia===true)}); });
           tot+=rows.length; last=rows[rows.length-1].id;
         }
         DADOS.processos.forEach(function(p){ if(p._histOk) return; p.hist_full.sort(function(x,y){return (y.data||'').localeCompare(x.data||'');}); p._histOk=true; });
@@ -6375,8 +6398,47 @@ function renderCtlChips(){
   ed.textContent=toks.length?'+ inserir contatos':'+ telefones/e-mails do cliente';
   ed.onclick=editarCtl;
   el.appendChild(ed);
+  /* sem contato na ficha? se o MESMO cliente tem contato em outro processo,
+     oferece puxar (homônimo é raríssimo aqui) — 1 clique, pede confirmação */
+  if(!toks.length && atual.cliente){
+    var achados=_contatosDeOutrosProcessos(atual.cliente);
+    if(achados.length){
+      var pull=document.createElement('button');
+      pull.style.cssText='background:#eaf4f4;color:#0b7285;border:1px solid #cfe6e6;border-radius:16px;padding:4px 10px;font-size:12px;cursor:pointer;font-weight:700';
+      pull.textContent='📥 puxar contato do cliente (em outros processos)';
+      pull.title='Copiar telefone/e-mail que já constam em outros processos do mesmo cliente';
+      pull.onclick=_puxarContatoDoCliente;
+      el.appendChild(pull);
+    }
+  }
   /* "Puxar nome" e "Puxar contato" foram unificados no botão "🔄 Atualizar dados
      do cliente" do topo da ficha (lê nome + e-mail + telefone dos documentos) */
+}
+/* contatos (tel/e-mail) que já constam em OUTROS processos do mesmo cliente */
+function _contatosDeOutrosProcessos(nome){
+  var alvo=(typeof normClienteNome==='function')?normClienteNome(nome||''):String(nome||'').toLowerCase().trim();
+  if(!alvo) return [];
+  var set={}, out=[];
+  (DADOS.processos||[]).forEach(function(p){
+    if(!p || p===atual) return;
+    var n=(typeof normClienteNome==='function')?normClienteNome(p.cliente||''):String(p.cliente||'').toLowerCase().trim();
+    if(n!==alvo) return;
+    String(p.ctl||'').split(/[,;\n]+/).map(function(s){return s.trim();}).filter(Boolean).forEach(function(t){
+      var k=t.toLowerCase().replace(/\s+/g,''); if(!set[k]){ set[k]=1; out.push(t); }
+    });
+  });
+  return out;
+}
+async function _puxarContatoDoCliente(){
+  if(!atual) return;
+  var achados=_contatosDeOutrosProcessos(atual.cliente);
+  if(!achados.length){ alert('Não encontrei telefone/e-mail em outros processos deste cliente.'); return; }
+  if(!confirm('Usar estes contatos de outros processos de '+(atual.cliente||'')+'?\n\n'+achados.join('\n'))) return;
+  var atuais=String(atual.ctl||'').split(/[,;\n]+/).map(function(s){return s.trim();}).filter(Boolean);
+  var seen={}, fin=[]; atuais.concat(achados).forEach(function(t){ var k=t.toLowerCase().replace(/\s+/g,''); if(!seen[k]){ seen[k]=1; fin.push(t); } });
+  var novo=fin.join(', ');
+  try{ if(window.__sb && atual._id){ var w=await window.__sb.from('processos').update({contatos_livres:novo}).eq('id',atual._id); if(w&&w.error){ alert('Erro ao salvar: '+w.error.message); return; } } }catch(e){ alert('Erro de rede.'); return; }
+  atual.ctl=novo; renderCtlChips();
 }
 /* edição completa em janela: todos os campos visíveis, edita-se o que quiser */
 function editarPartesContatos(){
@@ -8121,9 +8183,12 @@ function _gerarRascunhoAtualizacao(){
     var linhas=res.linhas;
     var basePassos=res.primeiroAto||(res.primeiro&&res.primeiro.texto)||'';
     var passos=basePassos?proximosPassosCliente(basePassos):'';
+    var provs=(typeof _providenciasDoEscritorio==='function')?_providenciasDoEscritorio(p,6):[];
+    var blocoProv=provs.length?('Providências já adotadas pelo escritório:\n'+provs.join('\n')+'\n\n'):'';
     corpo='Prezado(a)'+(nome?(' '+nome):' cliente')+',\n\n'
       +'Segue a atualização do seu processo nº '+p.numero+':\n\n'
       +(linhas.length?linhas.join('\n\n'):'• Sem movimentações oficiais recentes registradas.')+'\n\n'
+      +blocoProv
       +(passos?('Resumo e próximos passos:\n'+passos+'\n\nNo momento, você não precisa tomar nenhuma providência — o escritório está cuidando de tudo e avisará caso seja necessário algo de sua parte.\n\n'):'')
       +'Seguimos acompanhando o processo e comunicaremos as próximas movimentações.\n\n'
       +assinatura+_msgAcompProcCliente();

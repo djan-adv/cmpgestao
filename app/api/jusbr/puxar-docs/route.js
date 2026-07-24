@@ -21,6 +21,9 @@ const PDPJ_HEADERS = {
 }
 const MAX_BYTES = 25 * 1024 * 1024
 const soDig = (s) => String(s || '').replace(/\D/g, '')
+// procuração e petição inicial são leves e sempre úteis: guardamos PERMANENTE
+// (expira_em = null → a limpeza de 30 dias não apaga).
+function ehDocLeve(nome) { return /procura[çc][aã]o|peti[çc][aã]o\s+inicial|\binicial\b/i.test(String(nome || '')) }
 
 function normDoc(d) {
   const arq = (d && d.arquivo) || {}
@@ -130,14 +133,56 @@ export async function GET(request) {
       if (total >= maxTotal) break
       const r = await baixarDoc(token, numero, d)
       if (r.erro) { rel.pulados++; if (r.erro === 'expirado') { rel.detalhe.push({ numero, erro: 'expirado' }); total = maxTotal; break } continue }
-      const ins = await sb.from('jusbr_arquivos').insert({
+      const linha = {
         escritorio_id: ESCRITORIO_CMP, processo_numero: numero, doc_uuid: d.uuid,
         doc_nome: d.nome, doc_tipo: r.tipo, tamanho: r.buf.length,
         conteudo_b64: r.buf.toString('base64'), baixado_por: 'robo',
-      }).select('id').single()
+      }
+      if (ehDocLeve(d.nome)) linha.expira_em = null // procuração/inicial: permanente
+      const ins = await sb.from('jusbr_arquivos').insert(linha).select('id').single()
       if (!ins.error) { baix++; total++; rel.baixados++ }
     }
     if (debug || baix) rel.detalhe.push({ numero, docs: lst.docs.length, novos: novos.length, baixados: baix })
+  }
+
+  // ——— passo B: processos ATIVOS ainda SEM nenhum documento no sistema ———
+  // preenche aos poucos (só a inicial/procuração + 1), sem estourar a rodada.
+  if (!soNumero && total < maxTotal) {
+    const { data: comArq } = await sb.from('jusbr_arquivos').select('processo_numero').eq('escritorio_id', ESCRITORIO_CMP)
+    const jaTemAlgum = new Set((comArq || []).map(r => r.processo_numero))
+    const { data: ativos } = await sb.from('processos')
+      .select('numero,numero_digitos,status,suspenso')
+      .eq('escritorio_id', ESCRITORIO_CMP)
+      .or('suspenso.is.null,suspenso.eq.false')
+      .order('ultima_movimentacao', { ascending: false, nullsFirst: false })
+      .limit(400)
+    let vazios = (ativos || [])
+      .filter(p => soDig(p.numero_digitos || p.numero).length === 20 && !/encerrad|arquivad|baixad/i.test(p.status || ''))
+      .filter(p => !jaTemAlgum.has(soDig(p.numero_digitos || p.numero)))
+    const LIMITE_VAZIOS = 15 // por rodada (por partes, dia após dia)
+    let feitos = 0
+    for (const p of vazios) {
+      if (total >= maxTotal || feitos >= LIMITE_VAZIOS) break
+      const numero = soDig(p.numero_digitos || p.numero)
+      const lst = await listarDocs(token, numero)
+      if (lst.erro) { if (lst.erro === 'expirado') break; continue }
+      // os primeiros documentos (inicial, procuração, docs pessoais) = ordem crescente de data
+      const primeiros = lst.docs.slice().sort((a, b) => String(a.data || '').localeCompare(String(b.data || ''))).slice(0, porProc)
+      let baix = 0
+      for (const d of primeiros) {
+        if (total >= maxTotal) break
+        if (!d.uuid) continue
+        const r = await baixarDoc(token, numero, d)
+        if (r.erro) { rel.pulados++; if (r.erro === 'expirado') { total = maxTotal; break } continue }
+        const linha = { escritorio_id: ESCRITORIO_CMP, processo_numero: numero, doc_uuid: d.uuid, doc_nome: d.nome, doc_tipo: r.tipo, tamanho: r.buf.length, conteudo_b64: r.buf.toString('base64'), baixado_por: 'robo' }
+        if (ehDocLeve(d.nome)) linha.expira_em = null
+        const ins = await sb.from('jusbr_arquivos').insert(linha).select('id').single()
+        if (!ins.error) { baix++; total++; rel.baixados++ }
+      }
+      feitos++
+      if (debug || baix) rel.detalhe.push({ numero, vazio: true, docs: lst.docs.length, baixados: baix })
+    }
+    rel.vazios_processados = feitos
   }
 
   return Response.json(rel)

@@ -95,11 +95,15 @@ export async function POST(request) {
     if (ehCascaSpa) return Response.json({ erro: 'O jus.br devolveu a página do visor (carregamento), não o arquivo em si. Abra o documento direto no jus.br (botão "Abrir no tribunal") ou tente de novo em instantes.', motivo: 'visor' }, { status: 502 })
   }
 
-  const { data: ins, error } = await sb.from('jusbr_arquivos').insert({
+  // procuração e petição inicial são leves e sempre úteis: guardamos PERMANENTE
+  const ehLeve = /procura[çc][aã]o|peti[çc][aã]o\s+inicial|\binicial\b/i.test(String(nome || ''))
+  const linhaArq = {
     escritorio_id: ESCRITORIO_CMP, processo_numero: numero, doc_uuid: uuid,
     doc_nome: nome, doc_tipo: tipoFinal, tamanho: buf.length,
     conteudo_b64: buf.toString('base64'), baixado_por: String(user.email || ''),
-  }).select('id,doc_nome,doc_tipo,tamanho').single()
+  }
+  if (ehLeve) linhaArq.expira_em = null
+  const { data: ins, error } = await sb.from('jusbr_arquivos').insert(linhaArq).select('id,doc_nome,doc_tipo,tamanho').single()
   if (error) return Response.json({ erro: 'falha ao guardar: ' + error.message }, { status: 500 })
 
   return Response.json({ ok: true, id: ins.id, nome: ins.doc_nome, tipo: ins.doc_tipo, tamanho: ins.tamanho })
