@@ -27,14 +27,15 @@ function ehDocLeve(nome) { return /procura[çc][aã]o|peti[çc][aã]o\s+inicial|
 
 function normDoc(d) {
   const arq = (d && d.arquivo) || {}
-  const uuid = d.idorigem || d.uuid || d.id || arq.idorigem || arq.uuid || null
-  let href = d.hrefBinario || d.href || (arq && arq.href) || null
+  const hrefBin = d.hrefBinario || (arq && arq.hrefBinario) || null
+  // uuid CERTO = o do hrefBinario (idCodex do doc), não o idOrigem
+  const uuid = (hrefBin && (hrefBin.match(/documentos\/([^/]+)\/(?:binario|texto)/) || [])[1]) || d.idOrigem || d.id || null
   return {
     uuid: uuid ? String(uuid) : null,
     nome: d.nome || d.descricao || arq.nome || 'documento',
-    tipo: (arq.tipo) || d.tipoConteudo || 'application/pdf',
+    tipo: (arq && arq.tipo) || d.tipoConteudo || 'application/pdf',
     data: d.dataHoraJuntada || d.data || d.dataHora || null,
-    href: href,
+    href: hrefBin,
   }
 }
 
@@ -55,31 +56,35 @@ async function listarDocs(token, numero) {
   return { docs }
 }
 
+function absPDPJ(h) {
+  h = String(h || '').trim()
+  if (!h) return null
+  if (/^https?:\/\//i.test(h)) return h
+  if (h.startsWith('/api/')) return PDPJ + h
+  if (h.startsWith('/')) return PDPJ + '/api/v2' + h
+  return PDPJ + '/api/v2/' + h
+}
 async function baixarDoc(token, numero, doc) {
-  let url = String(doc.href || '').trim()
-  if (/^https?:\/\//i.test(url)) { /* absoluta */ }
-  else if (url.startsWith('/')) url = PDPJ + url
-  else url = `${PDPJ}/api/v2/processos/${numero}/documentos/${doc.uuid}/binario`
+  const url = absPDPJ(doc.href) || `${PDPJ}/api/v2/processos/${numero}/documentos/${doc.uuid}/binario`
   let resp
-  try { resp = await fetch(url, { headers: { ...PDPJ_HEADERS, Authorization: 'Bearer ' + token }, signal: AbortSignal.timeout(40000) }) }
+  try { resp = await fetch(url, { headers: { ...PDPJ_HEADERS, Accept: 'application/pdf,application/octet-stream,text/html;q=0.8,*/*;q=0.5', Authorization: 'Bearer ' + token }, signal: AbortSignal.timeout(40000) }) }
   catch (e) { return { erro: 'rede' } }
   if (resp.status === 401) return { erro: 'expirado' }
   if (!resp.ok) return { erro: 'HTTP ' + resp.status }
   const buf = Buffer.from(await resp.arrayBuffer())
   if (!buf.length) return { erro: 'vazio' }
   if (buf.length > MAX_BYTES) return { erro: 'grande' }
-  const head = buf.slice(0, 256).toString('utf8').trim().toLowerCase()
+  const ct = String(resp.headers.get('content-type') || '').split(';')[0].trim().toLowerCase()
+  const head = buf.slice(0, 64).toString('utf8').trim().toLowerCase()
+  // rejeita envelope JSON de erro e a casca do app Angular
+  if (/json/.test(ct) || head.startsWith('{') || head.startsWith('[')) return { erro: 'json' }
+  if (/<app-root|ng-version=/.test(buf.slice(0, 6000).toString('utf8').toLowerCase())) return { erro: 'visor' }
   const parecePdf = head.startsWith('%pdf')
-  const pareceHtml = /\.html?$/i.test(doc.nome) || head.startsWith('<!doctype html') || head.startsWith('<html') || (head.startsWith('<') && head.indexOf('<body') > -1)
-  let tipo = String(resp.headers.get('content-type') || doc.tipo || '').split(';')[0].trim().toLowerCase()
+  const pareceHtml = /\.html?$/i.test(doc.nome) || head.startsWith('<!doctype html') || head.startsWith('<html') || head.startsWith('<')
+  let tipo = ct
   if (!tipo || tipo === 'application/octet-stream') tipo = parecePdf ? 'application/pdf' : (pareceHtml ? 'text/html' : 'application/pdf')
   if (tipo === 'application/pdf' && pareceHtml && !parecePdf) tipo = 'text/html'
   if (tipo.indexOf('html') > -1 && parecePdf) tipo = 'application/pdf'
-  // descarta a casca do visor SPA (HTML pequeno montado por JS)
-  if (tipo.indexOf('html') > -1) {
-    const amostra = buf.slice(0, 8000).toString('utf8').toLowerCase()
-    if (buf.length < 20000 && /<app-root|ng-version=|<div id="root">\s*<\/div>|<div id="app">\s*<\/div>/.test(amostra)) return { erro: 'visor' }
-  }
   return { buf, tipo }
 }
 
@@ -138,7 +143,7 @@ export async function GET(request) {
         doc_nome: d.nome, doc_tipo: r.tipo, tamanho: r.buf.length,
         conteudo_b64: r.buf.toString('base64'), baixado_por: 'robo',
       }
-      if (ehDocLeve(d.nome)) linha.expira_em = null // procuração/inicial: permanente
+      if (ehDocLeve(d.nome)) linha.expira_em = '2999-12-31T00:00:00.000Z' // permanente (coluna NOT NULL)
       const ins = await sb.from('jusbr_arquivos').insert(linha).select('id').single()
       if (!ins.error) { baix++; total++; rel.baixados++ }
     }
@@ -175,7 +180,7 @@ export async function GET(request) {
         const r = await baixarDoc(token, numero, d)
         if (r.erro) { rel.pulados++; if (r.erro === 'expirado') { total = maxTotal; break } continue }
         const linha = { escritorio_id: ESCRITORIO_CMP, processo_numero: numero, doc_uuid: d.uuid, doc_nome: d.nome, doc_tipo: r.tipo, tamanho: r.buf.length, conteudo_b64: r.buf.toString('base64'), baixado_por: 'robo' }
-        if (ehDocLeve(d.nome)) linha.expira_em = null
+        if (ehDocLeve(d.nome)) linha.expira_em = '2999-12-31T00:00:00.000Z' // permanente (coluna NOT NULL)
         const ins = await sb.from('jusbr_arquivos').insert(linha).select('id').single()
         if (!ins.error) { baix++; total++; rel.baixados++ }
       }

@@ -135,7 +135,7 @@ export async function POST(request) {
     doc_nome: nome, doc_tipo: tipoFinal, tamanho: buf.length,
     conteudo_b64: buf.toString('base64'), baixado_por: String(user.email || ''),
   }
-  if (ehLeve) linhaArq.expira_em = null
+  if (ehLeve) linhaArq.expira_em = '2999-12-31T00:00:00.000Z' // permanente (coluna é NOT NULL)
   const { data: ins, error } = await sb.from('jusbr_arquivos').insert(linhaArq).select('id,doc_nome,doc_tipo,tamanho').single()
   if (error) return Response.json({ erro: 'falha ao guardar: ' + error.message }, { status: 500 })
 
