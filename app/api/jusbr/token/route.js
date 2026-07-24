@@ -99,6 +99,39 @@ export async function POST(request) {
 
 // GET: status da sessão (sem devolver o token)
 export async function GET(request) {
+  const { searchParams } = new URL(request.url)
+  // ——— modo RELAY POR NAVEGAÇÃO (plano B do userscript) ———
+  // O portal do PDPJ tem CSP que bloqueia fetch externo, e o GM pode estar sem
+  // permissão. Nesses casos o userscript abre esta URL numa aba oculta: aqui
+  // gravamos o token e devolvemos uma página que se fecha sozinha.
+  const tParam = searchParams.get('t') || ''
+  if (tParam) {
+    const fecha = (msg) => new Response(
+      '<!doctype html><meta charset="utf-8"><title>CMPGestão</title>' +
+      '<body style="font:13px system-ui;padding:14px;color:#1e2733">' + msg +
+      '<script>setTimeout(function(){window.close()},1200)</script></body>',
+      { headers: { 'Content-Type': 'text/html; charset=utf-8', 'Access-Control-Allow-Origin': '*' } }
+    )
+    try {
+      const s = searchParams.get('s') || ''
+      if (!s) return fecha('segredo ausente.')
+      if (tParam.split('.').length !== 3) return fecha('token inválido.')
+      if (!process.env.JUSBR_ENC_KEY || !process.env.SUPABASE_SERVICE_ROLE_KEY) return fecha('servidor sem chaves.')
+      const sbA = admin()
+      let segOk = (process.env.JUSBR_RELAY_SECRET || '') === s
+      if (!segOk) {
+        const { data } = await sbA.from('produtividade_config').select('valor').eq('escritorio_id', ESCRITORIO_CMP).eq('chave', 'jusbr_relay_secret').maybeSingle()
+        segOk = !!(data && data.valor && data.valor === s)
+      }
+      if (!segOk) return fecha('segredo incorreto.')
+      const rParam = searchParams.get('r') || null
+      const expira = expDoJwt(tParam)
+      const { error } = await sbA.rpc('jusbr_set_sessao', { p_esc: ESCRITORIO_CMP, p_token: tParam, p_refresh: rParam, p_key: process.env.JUSBR_ENC_KEY, p_expira: expira, p_por: 'relay-nav', p_oidc: null })
+      if (error) return fecha('falha ao salvar: ' + error.message)
+      return fecha('✓ jus.br sincronizado. Pode fechar.')
+    } catch (e) { return fecha('erro: ' + String((e && e.message) || e)) }
+  }
+
   const user = await usuario(request)
   if (!user) return Response.json({ erro: 'não autenticado' }, { status: 401 })
   const sb = admin()
