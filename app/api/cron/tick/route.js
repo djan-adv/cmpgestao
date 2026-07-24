@@ -48,10 +48,12 @@ function jobDevido(job, execRow, bt) {
   return false
 }
 
-async function rodar(job, origin, sb) {
+const BASE_LOCAL = 'http://127.0.0.1:' + (process.env.PORT || 3000)
+
+async function rodar(job, sb) {
   let ok = false, resumo = ''
   try {
-    const r = await fetch(origin + job.url, { cache: 'no-store', signal: AbortSignal.timeout(55000) })
+    const r = await fetch(BASE_LOCAL + job.url, { cache: 'no-store', signal: AbortSignal.timeout(55000) })
     ok = r.ok
     const t = await r.text()
     resumo = ('HTTP ' + r.status + ' ' + t).slice(0, 400)
@@ -62,7 +64,7 @@ async function rodar(job, origin, sb) {
 
 export async function GET(request) {
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) return Response.json({ erro: 'falta service key' }, { status: 500 })
-  const { searchParams, origin } = new URL(request.url)
+  const { searchParams } = new URL(request.url)
   const sb = admin()
 
   // status para o painel
@@ -87,7 +89,7 @@ export async function GET(request) {
   if (forcar) {
     const job = JOBS.find(j => j.nome === forcar)
     if (!job) return Response.json({ erro: 'robô desconhecido' }, { status: 404 })
-    const res = await rodar(job, origin, sb)
+    const res = await rodar(job, sb)
     return Response.json({ ok: true, forcado: true, resultado: res })
   }
 
@@ -98,7 +100,7 @@ export async function GET(request) {
   const rodados = []
   for (const job of JOBS) {
     if (jobDevido(job, mapa[job.nome], bt)) {
-      rodados.push(await rodar(job, origin, sb))
+      rodados.push(await rodar(job, sb))
     }
   }
   return Response.json({ ok: true, agora_brasilia: bt, rodados })
