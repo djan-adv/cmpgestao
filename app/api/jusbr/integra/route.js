@@ -74,6 +74,8 @@ export async function GET(request) {
   // seleção opcional: se vier ?uuids=a,b,c baixa só esses; senão, todos (íntegra)
   const uuidsSel = (searchParams.get('uuids') || '').split(',').map(s => s.trim()).filter(Boolean)
   const uuidSet = uuidsSel.length ? new Set(uuidsSel) : null
+  // zip (padrão) | pdf (tudo num PDF só) | solto (um arquivo, com o nome original)
+  const formato = (searchParams.get('formato') || 'zip').toLowerCase()
   if (numero.length < 16) return Response.json({ erro: 'número inválido' }, { status: 400 })
   const user = await usuario(jwt)
   if (!user) return Response.json({ erro: 'não autenticado' }, { status: 401 })
@@ -123,8 +125,81 @@ export async function GET(request) {
     total += buf.length
   }
   if (!files.length) return Response.json({ erro: 'não foi possível baixar nenhuma peça' }, { status: 502 })
-  if (pulados) files.push({ name: '_AVISO.txt', data: Buffer.from('Íntegra parcial: ' + pulados + ' peça(s) não puderam ser incluídas (tamanho/limite/formato). Baixe-as individualmente pela ficha se necessário.', 'utf8') })
 
+  // ——— formato SOLTO: devolve UM arquivo só, com o nome original ———
+  if (formato === 'solto') {
+    const f = files[0]
+    const ehPdf = f.data.slice(0, 5).toString('utf8').toLowerCase().startsWith('%pdf')
+    return new Response(f.data, {
+      headers: {
+        'Content-Type': ehPdf ? 'application/pdf' : (/\.html?$/i.test(f.name) ? 'text/html; charset=utf-8' : 'application/octet-stream'),
+        'Content-Disposition': 'attachment; filename="' + f.name.replace(/"/g, '') + '"',
+      },
+    })
+  }
+
+  // ——— formato PDF ÚNICO: junta tudo num só PDF ———
+  if (formato === 'pdf') {
+    try {
+      const { PDFDocument, StandardFonts } = await import('pdf-lib')
+      const out = await PDFDocument.create()
+      const fonte = await out.embedFont(StandardFonts.Helvetica)
+      const negrito = await out.embedFont(StandardFonts.HelveticaBold)
+      const lat1 = (s) => String(s == null ? '' : s)
+        .replace(/[‘’]/g, "'").replace(/[“”]/g, '"')
+        .replace(/[–—−]/g, '-').replace(/ /g, ' ')
+        .replace(/[^\x00-\xFF]/g, '?')
+      let juntados = 0, falhos = 0
+      for (const f of files) {
+        const ehPdf = f.data.slice(0, 5).toString('utf8').toLowerCase().startsWith('%pdf')
+        if (ehPdf) {
+          try {
+            const src = await PDFDocument.load(f.data, { ignoreEncryption: true })
+            const pgs = await out.copyPages(src, src.getPageIndices())
+            pgs.forEach((p) => out.addPage(p))
+            juntados++
+          } catch (e) { falhos++ }
+        } else {
+          // HTML/texto: vira páginas de texto (mantém a peça no documento final)
+          try {
+            const txt = f.data.toString('utf8')
+              .replace(/<style[\s\S]*?<\/style>/gi, ' ').replace(/<script[\s\S]*?<\/script>/gi, ' ')
+              .replace(/<br\s*\/?>/gi, '\n').replace(/<\/p>/gi, '\n\n').replace(/<[^>]+>/g, ' ')
+              .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+              .replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+              .replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim()
+            const linhas = []
+            lat1(txt).split('\n').forEach((ln) => {
+              while (ln.length > 96) { let c = ln.lastIndexOf(' ', 96); if (c < 40) c = 96; linhas.push(ln.slice(0, c)); ln = ln.slice(c).replace(/^ /, '') }
+              linhas.push(ln)
+            })
+            let pg = out.addPage([595, 842]); let y = 800
+            pg.drawText(lat1(f.name).slice(0, 90), { x: 45, y: y, size: 11, font: negrito }); y -= 22
+            for (const ln of linhas) {
+              if (y < 45) { pg = out.addPage([595, 842]); y = 800 }
+              pg.drawText(ln, { x: 45, y: y, size: 9.5, font: fonte }); y -= 13
+            }
+            juntados++
+          } catch (e) { falhos++ }
+        }
+      }
+      if (!out.getPageCount()) return Response.json({ erro: 'não foi possível montar o PDF' }, { status: 502 })
+      const bytes = Buffer.from(await out.save())
+      return new Response(bytes, {
+        headers: {
+          'Content-Type': 'application/pdf',
+          'Content-Disposition': 'attachment; filename="' + numero + '-autos.pdf"',
+          'Content-Length': String(bytes.length),
+          'X-CMP-Pecas': String(juntados) + '/' + String(files.length) + (falhos ? (' (' + falhos + ' falharam)') : ''),
+        },
+      })
+    } catch (e) {
+      return Response.json({ erro: 'PDF único indisponível: ' + String((e && e.message) || e) + ' — use o .zip' }, { status: 502 })
+    }
+  }
+
+  // ——— formato ZIP (padrão) ———
+  if (pulados) files.push({ name: '_AVISO.txt', data: Buffer.from('Íntegra parcial: ' + pulados + ' peça(s) não puderam ser incluídas (tamanho/limite/formato). Baixe-as individualmente pela ficha se necessário.', 'utf8') })
   const zbuf = zip(files)
   return new Response(zbuf, {
     headers: {
