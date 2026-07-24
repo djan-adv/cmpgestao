@@ -29,12 +29,15 @@ export async function garantirSegredo(sb) {
   return seg
 }
 
+// v3 — PROATIVO: além de interceptar a rede, varre o armazenamento a cada minuto,
+// reenvia o token periodicamente e mostra um SELO na tela do jus.br com o estado
+// da sincronização (para o advogado ver na hora se está funcionando).
 function scriptTexto(segredo, endpoint) {
   return `// ==UserScript==
 // @name         CMPGestão — Sincronizar token jus.br (PDPJ)
 // @namespace    cmpadvogados.com.br
-// @version      2.1
-// @description  Captura o Bearer e o refresh_token da sessão do PDPJ e envia ao CMPGestão (renovação automática). Segredo já embutido.
+// @version      3.0
+// @description  Mantém o CMPGestão sincronizado com a sua sessão do jus.br. Mostra um selo na tela com o estado. Segredo já embutido.
 // @match        https://portaldeservicos.pdpj.jus.br/*
 // @match        https://sso.cloud.pje.jus.br/*
 // @run-at       document-start
@@ -45,45 +48,63 @@ function scriptTexto(segredo, endpoint) {
   'use strict';
   var RELAY_SECRET = '${segredo}';
   var ENDPOINT = '${endpoint}';
-  var ultimoEnvio = 0, ultimoToken = '', ultimoRefresh = '';
-  function enviar(payload) {
-    if (!payload || !payload.token || payload.token.split('.').length !== 3) return;
+
+  var ultimoToken = '', ultimoEnvioMs = 0, ultimoOkMs = 0, ultimaOrigem = '', ultimoErro = '';
+  var REENVIO_MS = 8 * 60 * 1000;   // reenvia o mesmo token no máximo a cada 8 min
+
+  function ehJwt(t) { return typeof t === 'string' && t.split('.').length === 3 && t.length > 60; }
+
+  function enviar(payload, origem) {
+    if (!payload || !ehJwt(payload.token)) return;
     var agora = Date.now();
-    var ganhouRefresh = payload.refresh_token && payload.refresh_token !== ultimoRefresh;
-    if (payload.token === ultimoToken && !ganhouRefresh && (agora - ultimoEnvio) < 5 * 60 * 1000) return;
-    ultimoToken = payload.token; ultimoEnvio = agora;
-    if (payload.refresh_token) ultimoRefresh = payload.refresh_token;
+    var mudou = payload.token !== ultimoToken;
+    if (!mudou && (agora - ultimoEnvioMs) < REENVIO_MS) return;
+    ultimoToken = payload.token; ultimoEnvioMs = agora; ultimaOrigem = origem || '';
+    function ok() { ultimoOkMs = Date.now(); ultimoErro = ''; selo(); }
+    function falhou(e) { ultimoErro = String(e || 'falha'); selo(); }
     try {
-      GM_xmlhttpRequest({ method: 'POST', url: ENDPOINT, headers: { 'Content-Type': 'application/json', 'x-jusbr-relay': RELAY_SECRET }, data: JSON.stringify(payload), onload: function () {}, onerror: function () {} });
+      GM_xmlhttpRequest({
+        method: 'POST', url: ENDPOINT,
+        headers: { 'Content-Type': 'application/json', 'x-jusbr-relay': RELAY_SECRET },
+        data: JSON.stringify(payload),
+        onload: function (r) { if (r && r.status >= 200 && r.status < 300) ok(); else falhou('HTTP ' + (r && r.status)); },
+        onerror: function () { falhou('rede'); }
+      });
     } catch (e) {
-      try { fetch(ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-jusbr-relay': RELAY_SECRET }, body: JSON.stringify(payload) }); } catch (e2) {}
+      try {
+        fetch(ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-jusbr-relay': RELAY_SECRET }, body: JSON.stringify(payload) })
+          .then(function (r) { if (r.ok) ok(); else falhou('HTTP ' + r.status); })
+          .catch(function () { falhou('rede'); });
+      } catch (e2) { falhou('sem permissão'); }
     }
   }
+
+  // ---------- 1) interceptação de rede ----------
   function ehEndpointToken(url) { return /\\/protocol\\/openid-connect\\/token(\\?|$)/i.test(String(url || '')); }
-  function lerForm(body) {
-    var out = {};
+  function clientIdDe(body) {
     try {
       var s = null;
       if (typeof body === 'string') s = body;
       else if (body instanceof URLSearchParams) s = body.toString();
       else if (body && typeof body.toString === 'function') s = body.toString();
-      if (s && /=/.test(s)) { var p = new URLSearchParams(s); if (p.get('client_id')) out.client_id = p.get('client_id'); }
+      if (s && s.indexOf('=') > -1) { var p = new URLSearchParams(s); return p.get('client_id') || null; }
     } catch (e) {}
-    return out;
+    return null;
   }
-  function daRespostaToken(url, reqBody, jsonTxt) {
+  function daRespostaToken(url, reqBody, txt) {
     try {
-      var j = JSON.parse(jsonTxt);
+      var j = JSON.parse(txt);
       if (!j || !j.access_token) return;
       var pl = { token: j.access_token, token_url: String(url).split('?')[0] };
       if (j.refresh_token) pl.refresh_token = j.refresh_token;
-      var f = lerForm(reqBody); if (f.client_id) pl.client_id = f.client_id;
-      enviar(pl);
+      var cid = clientIdDe(reqBody); if (cid) pl.client_id = cid;
+      enviar(pl, 'login/refresh');
     } catch (e) {}
   }
-  function pegarBearer(h) {
+  function bearerDe(h) {
     try {
-      if (!h) return null; var v = null;
+      if (!h) return null;
+      var v = null;
       if (typeof h.get === 'function') v = h.get('Authorization') || h.get('authorization');
       else if (typeof h === 'object') v = h.Authorization || h.authorization;
       if (v && /^Bearer\\s+/i.test(v)) return v.replace(/^Bearer\\s+/i, '').trim();
@@ -93,39 +114,98 @@ function scriptTexto(segredo, endpoint) {
   var of = window.fetch;
   window.fetch = function (input, init) {
     var url = (input && input.url) || input;
-    try { var t = pegarBearer(init && init.headers) || pegarBearer(input && input.headers); if (t) enviar({ token: t }); } catch (e) {}
+    try { var t = bearerDe(init && init.headers) || bearerDe(input && input.headers); if (t) enviar({ token: t }, 'rede'); } catch (e) {}
     var p = of.apply(this, arguments);
-    try { if (ehEndpointToken(url)) { var reqBody = init && init.body; p.then(function (resp) { try { resp.clone().text().then(function (txt) { daRespostaToken(url, reqBody, txt); }); } catch (e) {} }); } } catch (e) {}
+    try {
+      if (ehEndpointToken(url)) {
+        var rb = init && init.body;
+        p.then(function (resp) { try { resp.clone().text().then(function (tx) { daRespostaToken(url, rb, tx); }); } catch (e) {} });
+      }
+    } catch (e) {}
     return p;
   };
   var oOpen = XMLHttpRequest.prototype.open, oSend = XMLHttpRequest.prototype.send, oSet = XMLHttpRequest.prototype.setRequestHeader;
   XMLHttpRequest.prototype.open = function (m, u) { try { this.__cmpUrl = u; } catch (e) {} return oOpen.apply(this, arguments); };
-  XMLHttpRequest.prototype.setRequestHeader = function (k, v) { try { if (/^authorization$/i.test(k) && /^Bearer\\s+/i.test(v)) enviar({ token: v.replace(/^Bearer\\s+/i, '').trim() }); } catch (e) {} return oSet.apply(this, arguments); };
+  XMLHttpRequest.prototype.setRequestHeader = function (k, v) {
+    try { if (/^authorization$/i.test(k) && /^Bearer\\s+/i.test(v)) enviar({ token: v.replace(/^Bearer\\s+/i, '').trim() }, 'rede'); } catch (e) {}
+    return oSet.apply(this, arguments);
+  };
   XMLHttpRequest.prototype.send = function (body) {
-    try { if (ehEndpointToken(this.__cmpUrl)) { var self = this, reqBody = body; this.addEventListener('load', function () { try { if (self.status >= 200 && self.status < 300) daRespostaToken(self.__cmpUrl, reqBody, self.responseText); } catch (e) {} }); } } catch (e) {}
+    try {
+      if (ehEndpointToken(this.__cmpUrl)) {
+        var self = this, rb = body;
+        this.addEventListener('load', function () { try { if (self.status >= 200 && self.status < 300) daRespostaToken(self.__cmpUrl, rb, self.responseText); } catch (e) {} });
+      }
+    } catch (e) {}
     return oSend.apply(this, arguments);
   };
-  // varre o armazenamento do portal (localStorage/sessionStorage): apps Angular/
-  // Keycloak guardam access_token + refresh_token ali — pega o refresh mesmo sem clique.
+
+  // ---------- 2) varredura profunda do armazenamento ----------
+  function achaTokens(obj, saida, prof) {
+    if (!obj || prof > 4) return;
+    if (typeof obj === 'string') { if (ehJwt(obj) && !saida.token) saida.token = obj; return; }
+    if (typeof obj !== 'object') return;
+    for (var k in obj) {
+      try {
+        var v = obj[k];
+        if (typeof v === 'string') {
+          if (/access[_-]?token|^token$|id[_-]?token/i.test(k) && ehJwt(v)) saida.token = saida.token || v;
+          else if (/refresh[_-]?token/i.test(k) && v.length > 20) saida.refresh_token = saida.refresh_token || v;
+          else if (ehJwt(v) && !saida.token) saida.token = v;
+        } else if (v && typeof v === 'object') achaTokens(v, saida, prof + 1);
+      } catch (e) {}
+    }
+  }
   function varrerStorage() {
+    var achado = {};
     try {
       [window.localStorage, window.sessionStorage].forEach(function (st) {
-        if (!st) return;
-        try { var at = st.getItem('access_token'), rt = st.getItem('refresh_token'); if (at && at.split('.').length === 3) { var pl = { token: at }; if (rt) pl.refresh_token = rt; enviar(pl); } } catch (e) {}
+        if (!st || achado.token) return;
         for (var i = 0; i < st.length; i++) {
           try {
-            var v = st.getItem(st.key(i));
-            if (v && v.indexOf('refresh_token') > -1 && v.indexOf('access_token') > -1) {
-              var o = JSON.parse(v);
-              if (o && o.access_token && String(o.access_token).split('.').length === 3) { var pl2 = { token: o.access_token }; if (o.refresh_token) pl2.refresh_token = o.refresh_token; enviar(pl2); }
+            var chave = st.key(i), val = st.getItem(chave);
+            if (!val) continue;
+            if (ehJwt(val) && /token/i.test(chave)) { achado.token = achado.token || val; continue; }
+            if (val.indexOf('token') > -1 && (val.charAt(0) === '{' || val.charAt(0) === '[')) {
+              var o = null; try { o = JSON.parse(val); } catch (e) {}
+              if (o) achaTokens(o, achado, 0);
             }
           } catch (e) {}
         }
       });
     } catch (e) {}
+    if (achado.token) { var pl = { token: achado.token }; if (achado.refresh_token) pl.refresh_token = achado.refresh_token; enviar(pl, 'armazenamento'); return true; }
+    return false;
   }
-  setTimeout(varrerStorage, 4000);
-  setInterval(varrerStorage, 90000);
+
+  // ---------- 3) selo visível na tela do jus.br ----------
+  var elSelo = null;
+  function hhmm(ms) { if (!ms) return '—'; var d = new Date(ms); return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2); }
+  function selo() {
+    try {
+      if (!document.body) return;
+      if (!elSelo) {
+        elSelo = document.createElement('div');
+        elSelo.style.cssText = 'position:fixed;right:14px;bottom:14px;z-index:2147483647;background:#fff;border:1px solid #d7dde5;border-radius:10px;box-shadow:0 4px 14px rgba(0,0,0,.14);padding:8px 11px;font:12px system-ui,Arial;color:#1e2733;max-width:260px';
+        elSelo.addEventListener('click', function (ev) { if (ev.target && ev.target.getAttribute('data-cmp') === 'sync') { varrerStorage(); selo(); } });
+        document.body.appendChild(elSelo);
+      }
+      var estado, cor;
+      if (ultimoErro) { estado = 'erro: ' + ultimoErro; cor = '#b5342b'; }
+      else if (ultimoOkMs) { estado = 'sincronizado ' + hhmm(ultimoOkMs); cor = '#0F6E56'; }
+      else { estado = 'aguardando token…'; cor = '#8a5a00'; }
+      elSelo.innerHTML = '<div style="font-weight:700;color:#2E3A4B;margin-bottom:2px">CMPGestão</div>'
+        + '<div style="color:' + cor + ';font-weight:600">' + estado + '</div>'
+        + (ultimaOrigem ? '<div style="color:#697180;font-size:11px">via ' + ultimaOrigem + '</div>' : '')
+        + '<div style="margin-top:5px"><button data-cmp="sync" style="cursor:pointer;border:1px solid #cfe0f2;background:#eef4fb;color:#185FA5;border-radius:7px;padding:3px 8px;font-size:11px">sincronizar agora</button></div>';
+    } catch (e) {}
+  }
+
+  // ---------- 4) marcha: varre já, depois a cada minuto ----------
+  function ciclo() { varrerStorage(); selo(); }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { setTimeout(ciclo, 2500); });
+  else setTimeout(ciclo, 2500);
+  setInterval(ciclo, 60000);
 })();
 `
 }
