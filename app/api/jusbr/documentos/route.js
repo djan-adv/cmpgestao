@@ -86,7 +86,10 @@ export async function POST(request) {
   // campo certo de id/hrefBinario do PDPJ)
   if (body.debug) {
     const cru = (Array.isArray(cand) ? cand : []).slice(0, 3)
-    return Response.json({ ok: true, debug: true, total: docs.length, amostra_crua: cru, normalizados: docs.slice(0, 3) })
+    const procKeys = (proc && typeof proc === 'object') ? Object.keys(proc) : []
+    const procHrefs = {}
+    if (proc) for (const k of procKeys) { if (/href|integra|íntegra|download|autos|url|link|pdf|zip/i.test(k)) { try { procHrefs[k] = typeof proc[k] === 'object' ? JSON.stringify(proc[k]).slice(0, 200) : proc[k] } catch (e) {} } }
+    return Response.json({ ok: true, debug: true, total: docs.length, processo_campos: procKeys, processo_hrefs: procHrefs, amostra_crua: cru })
   }
 
   // marca os que já estão baixados no sistema
