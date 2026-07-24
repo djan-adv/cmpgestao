@@ -55,36 +55,42 @@ export async function POST(request) {
   if (sess.erro === 'sem_token' || sess.erro === 'sem_chave') return Response.json({ erro: 'jus.br: sem token — sincronize a sessão', motivo: 'sem_token' }, { status: 409 })
   if (sess.erro) return Response.json({ erro: 'jus.br: token expirado — sincronize novamente', motivo: 'expirado' }, { status: 409 })
 
-  // candidatos de URL de download: o hrefBinario do PDPJ + variantes conhecidas
-  const hrefRaw = String(body.href || '').trim()
+  // resolve href relativo do PDPJ: hrefBinario/hrefTexto vêm como /processos/...
+  // e precisam do prefixo /api/v2 (senão o servidor devolve a casca do app).
+  function abs(h) {
+    h = String(h || '').trim()
+    if (!h) return null
+    if (/^https?:\/\//i.test(h)) return h
+    if (h.startsWith('/api/')) return PDPJ + h
+    if (h.startsWith('/')) return PDPJ + '/api/v2' + h
+    return PDPJ + '/api/v2/' + h
+  }
+  // candidatos, em ordem: hrefBinario (o real) → hrefTexto (p/ HTML) → construídos
   const cands = []
-  if (/^https?:\/\//i.test(hrefRaw)) cands.push(hrefRaw)
-  else if (hrefRaw.startsWith('/')) cands.push(PDPJ + hrefRaw)
+  const hb = abs(body.href)
+  const ht = abs(body.hrefTexto)
+  if (hb) cands.push(hb)
+  if (ht) cands.push(ht)
   cands.push(`${PDPJ}/api/v2/processos/${numero}/documentos/${uuid}/binario`)
-  cands.push(`${PDPJ}/api/v2/processos/${numero}/documentos/${uuid}/conteudo`)
   cands.push(`${PDPJ}/api/v2/processos/${numero}/documentos/${uuid}/texto`)
-  cands.push(`${PDPJ}/api/v2/processos/${numero}/documentos/${uuid}`)
   const urls = cands.filter((u, i) => u && cands.indexOf(u) === i)
   const debug = new URL(request.url).searchParams.get('debug') != null || body.debug === true
 
-  // "casca do visor": HTML pequeno da SPA (sem o conteúdo, montado por JS)
+  // "casca do visor": a index.html do app Angular (tem <app-root>/ng-version)
   function ehShell(b) {
-    if (!b || b.length >= 40000) return false
-    const h = b.slice(0, 8000).toString('utf8').toLowerCase()
-    if (h.indexOf('%pdf') === 0) return false
-    return /<app-root|ng-version=|<div id="root">\s*<\/div>|<div id="app">\s*<\/div>|portal de servi|<base href|carregando\.\.\./.test(h)
+    const h = b.slice(0, 6000).toString('utf8').toLowerCase()
+    return /<app-root|ng-version=/.test(h)
   }
-  // aceita SÓ arquivo de verdade (PDF/imagem/octet ou HTML com conteúdo);
-  // rejeita envelope JSON de erro (ex.: {"code":400,...}) e casca do visor
+  // aceita SÓ arquivo de verdade; rejeita envelope JSON de erro e a casca do app
   function ehArquivoReal(b, ct, nm) {
     if (!b || !b.length) return false
     const h = b.slice(0, 64).toString('utf8').toLowerCase().trim()
     if (h.indexOf('%pdf') === 0) return true
-    if (/pdf|octet-stream|^image\/|msword|officedocument|zip/.test(ct)) return true
+    if (/pdf|octet-stream|^image\/|msword|officedocument|zip|rtf/.test(ct)) return true
     if (/json/.test(ct) || h.startsWith('{') || h.startsWith('[')) return false // erro do PDPJ
     if (ehShell(b)) return false
-    if ((/html/.test(ct) || /\.html?$/i.test(nm)) && b.length >= 1500) return true // decisão/expediente real
-    return b.length >= 1500
+    if (/html|text\//.test(ct) || /\.html?$/i.test(nm)) return true // decisão/expediente real (mesmo curto)
+    return b.length >= 400
   }
 
   let escolhido = null

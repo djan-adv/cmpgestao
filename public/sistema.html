@@ -3677,7 +3677,7 @@ function jusbrItemHtml(doc){
   var nomeJs=String(doc.nome||'documento').replace(/['"\\]/g,' ');
   var acao= doc.baixado_id
     ? '<a class="btn sm ghost" style="font-size:11px" href="#" onclick="jusbrAbrir(event,\''+doc.baixado_id+'\',\''+esc(doc.tipo||'')+'\')">📄 ver</a> <a class="btn sm ghost" style="font-size:11px;color:#b5342b" href="#" onclick="jusbrExcluir(event,\''+doc.baixado_id+'\',this)">🗑</a>'
-    : '<button class="btn sm" style="font-size:11px" onclick="jusbrBaixar(this,\''+esc(doc.uuid||'')+'\',\''+esc(doc.href||'')+'\',\''+esc(nomeJs)+'\')">⬇ puxar</button>';
+    : '<button class="btn sm" style="font-size:11px" onclick="jusbrBaixar(this,\''+esc(doc.uuid||'')+'\',\''+esc(doc.href||'')+'\',\''+esc(nomeJs)+'\',\''+esc(doc.hrefTexto||'')+'\')">⬇ puxar</button>';
   return '<div class="jusbr-item" data-uuid="'+esc(doc.uuid||'')+'" style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #eee"><div style="font-size:13px"><span style="color:#888">'+dt+'</span> '+esc(doc.nome||'documento')+'</div><div class="jusbr-acao" style="white-space:nowrap">'+acao+'</div></div>';
 }
 async function jusbrCarregar(numero){
@@ -3709,11 +3709,11 @@ async function jusbrDiag(numero){
     try{ ov.querySelector('textarea').select(); }catch(e){}
   }catch(e){ alert('Falha no diag: '+(e&&e.message||e)); }
 }
-async function jusbrBaixar(btn,uuid,href,nome){
+async function jusbrBaixar(btn,uuid,href,nome,hrefTexto){
   btn.disabled=true; var t0=btn.textContent; btn.textContent='baixando…';
   var jwt=await jusbrJwt();
   try{
-    var r=await fetch('/api/jusbr/documento',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+jwt},body:JSON.stringify({numero:window.__jusbrNum,uuid:uuid,href:href,nome:nome})});
+    var r=await fetch('/api/jusbr/documento',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+jwt},body:JSON.stringify({numero:window.__jusbrNum,uuid:uuid,href:href,nome:nome,hrefTexto:(hrefTexto||'')})});
     var d=await respJson(r);
     if(d.__naoJson){ alert(_msgRotaFaltando()); btn.disabled=false; btn.textContent=t0; return; }
     if(!r.ok){

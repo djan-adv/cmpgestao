@@ -35,15 +35,18 @@ async function tokenValido(sb) { return await getFreshToken(sb) }
 // normaliza um documento do JSON do PDPJ para o formato do app
 function normDoc(d) {
   const arq = d.arquivo || {}
-  const href = d.hrefBinario || (arq && arq.hrefBinario) || null
-  const uuid = d.idOrigem || d.id || d.idCodex || (href && (href.match(/documentos\/([^/]+)\/binario/) || [])[1]) || null
+  const hrefBin = d.hrefBinario || (arq && arq.hrefBinario) || null
+  const hrefTxt = d.hrefTexto || (arq && arq.hrefTexto) || null
+  // o uuid CERTO para o binário é o do hrefBinario (idCodex do documento), NÃO o idOrigem
+  const uuid = (hrefBin && (hrefBin.match(/documentos\/([^/]+)\/(?:binario|texto)/) || [])[1]) || d.idOrigem || d.id || d.idCodex || null
   return {
     uuid: uuid ? String(uuid) : null,
     nome: d.nome || d.descricao || arq.nome || 'documento',
-    tipo: (arq.tipo) || d.tipoConteudo || 'application/pdf',
+    tipo: (arq && arq.tipo) || d.tipoConteudo || 'application/pdf',
     data: d.dataHoraJuntada || d.data || d.dataHora || null,
     seq: d.sequencia || d.numeroDocumento || null,
-    href: href,
+    href: hrefBin,
+    hrefTexto: hrefTxt,
   }
 }
 
