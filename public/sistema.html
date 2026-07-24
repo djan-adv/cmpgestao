@@ -1654,7 +1654,7 @@ function abrir(i){
     '<span id="obs-acoes"></span></p><div id="obs-audiencia"></div><div id="obs-corpo"></div></div>';
   // histórico (termos oficiais)
   /* aba "Publicações com inteiro teor (DJEN)" removida a pedido — sem utilidade prática */
-  html+='<div class="card"><p class="sectlabel" style="display:flex;justify-content:space-between;align-items:center">Histórico completo (termos oficiais)'+(p.hist_full&&p.hist_full.length?(' — '+p.hist_full.length+' andamentos'):'')+'<span style="display:flex;gap:6px"><button id="btn-atu-hist" class="btn sm" style="font-size:12px" onclick="atualizarHistorico()" title="Consulta o DJEN e traz os andamentos novos deste processo">↻ Atualizar</button><button class="btn sm ghost" style="font-size:12px" onclick="addHistManual()">+ histórico manual</button></span></p><ul class="timeline" id="det-hist"></ul><div id="det-hist-more" style="margin-top:8px"></div></div>';
+  html+='<div class="card"><p class="sectlabel" style="display:flex;justify-content:space-between;align-items:center">Histórico completo (termos oficiais)'+(p.hist_full&&p.hist_full.length?(' — '+p.hist_full.length+' andamentos'):'')+'<span style="display:flex;gap:6px"><button class="btn sm ghost" style="font-size:12px" onclick="addHistManual()">+ histórico manual</button></span></p><ul class="timeline" id="det-hist"></ul><div id="det-hist-more" style="margin-top:8px"></div></div>';
   // documentos do jus.br (PDPJ) — puxa sob demanda a peça escolhida (some após 30 dias)
   html+='<div class="card cmp-only" id="jusbr-card"><p class="sectlabel" style="display:flex;justify-content:space-between;align-items:center">Documentos do jus.br <button class="btn sm" style="font-size:12px" onclick="jusbrCarregar(\''+esc(p.numero)+'\')">Carregar documentos</button> <button class="btn sm" style="font-size:12px;background:#0F6E56;color:#fff" title="Baixar todas as peças do processo (íntegra) para a sua pasta de Downloads — não guarda no sistema" onclick="jusbrBaixarIntegra(\''+esc(p.numero)+'\')">⬇ Baixar íntegra</button> <button class="btn sm ghost" style="font-size:11px" title="Diagnóstico técnico dos documentos (para o Claude)" onclick="jusbrDiag(\''+esc(p.numero)+'\')">🔎 diag</button></p><div id="jusbr-status" class="note" style="margin-bottom:6px">Lista as peças do processo no jus.br. O arquivo escolhido é baixado sob demanda e removido do sistema após 30 dias (o original fica no tribunal).</div><div id="jusbr-lista"></div></div>';
   // IA
@@ -8747,7 +8747,7 @@ function renderVarasSemContato(){
         '<td style="width:110px;text-align:right"><button class="btn sm" style="font-size:11px" onclick="abrirContatoOrgao(\''+encodeURIComponent(pnum)+'\')">+ cadastrar</button></td></tr>';
     }).join('')+'</tbody></table></div>';
   }
-  if(semVara) html+='<p class="note" style="margin:8px 0 0">'+semVara+' processo(s) ativo(s) sem vara identificada — abra cada um e use "↻ Atualizar" (puxa a vara pelo jus.br).</p>';
+  if(semVara) html+='<p class="note" style="margin:8px 0 0">'+semVara+' processo(s) ativo(s) sem vara identificada — a varredura diária do DJEN/jus.br preenche automaticamente.</p>';
   el.innerHTML=html;
 }
 window.__coCtx=null;
