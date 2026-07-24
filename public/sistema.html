@@ -3722,7 +3722,9 @@ async function jusbrBaixar(btn,uuid,href,nome){
       if(d && d.motivo==='visor'){
         var _digs=String(window.__jusbrNum||'').replace(/\D/g,'');
         var _numf=_digs.length===20?_digs.replace(/^(\d{7})(\d{2})(\d{4})(\d)(\d{2})(\d{4})$/,'$1-$2.$3.$4.$5.$6'):_digs;
-        if(confirm('Este documento ("'+nome+'") o jus.br só entrega dentro do visor logado — não dá para guardar no sistema.\n\nAbrir no jus.br agora para ler?')){
+        try{ if(d.diag){ console.log('JUSBR DIAG',nome,d.diag); } }catch(e){}
+        var _dg=(d&&d.erro&&d.erro.indexOf('[diag:')>-1)?('\n\n'+d.erro.slice(d.erro.indexOf('[diag:'))):'';
+        if(confirm('Este documento ("'+nome+'") o jus.br só entrega dentro do visor logado — não dá para guardar no sistema.'+_dg+'\n\nAbrir no jus.br agora para ler?')){
           window.open('https://portaldeservicos.pdpj.jus.br/consulta/autosdigitais?processo='+encodeURIComponent(_numf),'_blank');
         }
         btn.disabled=false; btn.textContent=t0; return;
