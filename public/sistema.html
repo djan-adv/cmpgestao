@@ -3676,7 +3676,7 @@ function jusbrItemHtml(doc){
   var dt=doc.data?String(doc.data).slice(0,10).split('-').reverse().join('/'):'';
   var nomeJs=String(doc.nome||'documento').replace(/['"\\]/g,' ');
   var acao= doc.baixado_id
-    ? '<a class="btn sm ghost" style="font-size:11px" href="#" onclick="jusbrAbrir(event,\''+doc.baixado_id+'\',\''+esc(doc.tipo||'')+'\')">📄 ver</a> <a class="btn sm ghost" style="font-size:11px;color:#b5342b" href="#" onclick="jusbrExcluir(event,\''+doc.baixado_id+'\',this)">🗑</a>'
+    ? '<a class="btn sm ghost" style="font-size:11px" href="#" onclick="jusbrAbrir(event,\''+doc.baixado_id+'\',\''+esc(doc.tipo||'')+'\',\''+esc(nomeJs)+'\')">📄 ver</a> <a class="btn sm ghost" style="font-size:11px;color:#b5342b" href="#" onclick="jusbrExcluir(event,\''+doc.baixado_id+'\',this)">🗑</a>'
     : '<button class="btn sm" style="font-size:11px" onclick="jusbrBaixar(this,\''+esc(doc.uuid||'')+'\',\''+esc(doc.href||'')+'\',\''+esc(nomeJs)+'\',\''+esc(doc.hrefTexto||'')+'\')">⬇ puxar</button>';
   return '<div class="jusbr-item" data-uuid="'+esc(doc.uuid||'')+'" style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #eee"><div style="font-size:13px"><span style="color:#888">'+dt+'</span> '+esc(doc.nome||'documento')+'</div><div class="jusbr-acao" style="white-space:nowrap">'+acao+'</div></div>';
 }
@@ -3732,24 +3732,92 @@ async function jusbrBaixar(btn,uuid,href,nome,hrefTexto){
       alert('jus.br: '+((d&&d.erro)||'falha ao puxar')); btn.disabled=false; btn.textContent=t0; return;
     }
     var acao=btn.closest('.jusbr-acao');
-    if(acao) acao.innerHTML='<a class="btn sm ghost" style="font-size:11px" href="#" onclick="jusbrAbrir(event,\''+d.id+'\',\''+esc(d.tipo||'')+'\')">📄 ver</a> <a class="btn sm ghost" style="font-size:11px;color:#b5342b" href="#" onclick="jusbrExcluir(event,\''+d.id+'\',this)">🗑</a>';
+    var _nmJs=esc(String(nome||'documento').replace(/['"\\]/g,' '));
+    if(acao) acao.innerHTML='<a class="btn sm ghost" style="font-size:11px" href="#" onclick="jusbrAbrir(event,\''+d.id+'\',\''+esc(d.tipo||'')+'\',\''+_nmJs+'\')">📄 ver</a> <a class="btn sm ghost" style="font-size:11px;color:#b5342b" href="#" onclick="jusbrExcluir(event,\''+d.id+'\',this)">🗑</a>';
   }catch(e){ alert('Falha: '+(e&&e.message||e)); btn.disabled=false; btn.textContent=t0; }
 }
-async function jusbrAbrir(ev,id,tipo){ if(ev)ev.preventDefault(); var jwt=await jusbrJwt();
+async function jusbrAbrir(ev,id,tipo,nome){ if(ev)ev.preventDefault(); var jwt=await jusbrJwt();
   var url='/api/jusbr/arquivo?id='+encodeURIComponent(id)+'&jwt='+encodeURIComponent(jwt);
-  if(tipo && /html/i.test(tipo)){ jusbrViewer(url); }   /* HTML (sentenças/despachos) em iframe */
+  if(tipo && /html/i.test(tipo)){ jusbrViewer(url,nome); }   /* HTML (sentenças/despachos) em iframe */
   else { window.open(url,'_blank'); }                   /* PDF: comportamento atual (nova aba) */
 }
 /* visualizador inline (iframe) para documentos HTML — leve, sem nada no servidor */
-function jusbrViewer(url){
+function jusbrViewer(url,nome){
+  window.__jbvNome=nome||'Documento';
   var ov=document.getElementById('jusbr-viewer');
-  if(!ov){ ov=document.createElement('div'); ov.id='jusbr-viewer';
-    ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99999;display:flex;flex-direction:column;padding:20px';
-    ov.innerHTML='<div style="display:flex;justify-content:flex-end;margin-bottom:8px"><button class="btn sm" onclick="var v=document.getElementById(\'jusbr-viewer\');if(v)v.remove()">✕ Fechar</button></div><iframe id="jusbr-viewer-frame" style="flex:1;width:100%;border:0;background:#fff;border-radius:8px"></iframe>';
-    ov.onclick=function(e){ if(e.target===ov) ov.remove(); };
-    document.body.appendChild(ov);
-  }
+  if(ov) ov.remove();
+  ov=document.createElement('div'); ov.id='jusbr-viewer';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99999;display:flex;flex-direction:column;padding:20px';
+  ov.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">'
+    +'<div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn sm" style="background:#0F6E56;color:#fff" onclick="_jbvParaHistorico(this)" title="Copiar o inteiro teor deste documento para o histórico do processo">📌 Incluir no histórico (inteiro teor)</button>'
+    +'<button class="btn sm" style="background:#185FA5;color:#fff" onclick="_jbvSalvarPasta(this)" title="Salvar uma cópia na pasta &quot;Sentenças e Acórdãos&quot; do processo">📁 Salvar em Sentenças e Acórdãos</button></div>'
+    +'<button class="btn sm" onclick="var v=document.getElementById(\'jusbr-viewer\');if(v)v.remove()">✕ Fechar</button></div>'
+    +'<iframe id="jusbr-viewer-frame" style="flex:1;width:100%;border:0;background:#fff;border-radius:8px"></iframe>';
+  ov.onclick=function(e){ if(e.target===ov) ov.remove(); };
+  document.body.appendChild(ov);
   document.getElementById('jusbr-viewer-frame').src=url;
+}
+/* texto (inteiro teor) do documento aberto no visor */
+function _jbvTeor(){
+  var fr=document.getElementById('jusbr-viewer-frame');
+  try{ return (fr&&fr.contentDocument&&fr.contentDocument.body&&fr.contentDocument.body.innerText||'').replace(/\n{3,}/g,'\n\n').trim(); }catch(e){ return ''; }
+}
+async function _jbvParaHistorico(btn){
+  if(!atual||!atual._id){ alert('Abra o documento pela ficha do processo.'); return; }
+  var teor=_jbvTeor();
+  if(!teor||teor.length<20){ alert('Aguarde o documento terminar de carregar e clique de novo.'); return; }
+  var nome=window.__jbvNome||'Documento';
+  var texto='[Inteiro teor — '+nome+']\n\n'+teor;
+  if(btn){ btn.disabled=true; btn.textContent='incluindo…'; }
+  var iso=new Date().toISOString().slice(0,10);
+  try{
+    var w=await window.__sb.from('andamentos').insert({processo_id:atual._id,data:iso,texto:texto,fonte:'jusbr'}).select('id').single();
+    if(w.error){ alert('Erro ao gravar: '+w.error.message); if(btn){btn.disabled=false;btn.textContent='📌 Incluir no histórico (inteiro teor)';} return; }
+    atual.hist_full=atual.hist_full||[]; atual.hist_full.unshift({id:w.data&&w.data.id,data:iso+'T00:00:00.000Z',texto:texto,f:'jusbr',pr:false});
+    if(typeof renderHistorico==='function') renderHistorico();
+    if(btn){ btn.textContent='✓ incluído no histórico'; }
+  }catch(e){ alert('Erro: '+(e&&e.message||e)); if(btn){btn.disabled=false;btn.textContent='📌 Incluir no histórico (inteiro teor)';} }
+}
+/* gera um PDF simples (texto) do inteiro teor — sem dependência no servidor */
+function _pdfDeTextoB64(titulo, corpo){
+  function lat1(s){ return String(s==null?'':s).replace(/[\u2018\u2019]/g,"'").replace(/[\u201C\u201D]/g,'"').replace(/[\u2013\u2014\u2212]/g,'-').replace(/\u00a0/g,' ').replace(/[^\x00-\xFF]/g,'?'); }
+  function escpdf(s){ return lat1(s).replace(/\\/g,'\\\\').replace(/\(/g,'\\(').replace(/\)/g,'\\)').replace(/[\r\n]+/g,' '); }
+  var raw=(String(titulo||'')+'\n\n'+String(corpo||'')).split('\n'); var maxc=98, linhas=[];
+  raw.forEach(function(ln){ ln=lat1(ln).replace(/\t/g,'    '); while(ln.length>maxc){ var cut=ln.lastIndexOf(' ',maxc); if(cut<40)cut=maxc; linhas.push(ln.slice(0,cut)); ln=ln.slice(cut).replace(/^ /,''); } linhas.push(ln); });
+  var perPage=54, pages=[]; for(var i=0;i<linhas.length;i+=perPage) pages.push(linhas.slice(i,i+perPage)); if(!pages.length)pages.push(['']);
+  var N=pages.length, kids=[]; for(var k=0;k<N;k++) kids.push((5+k*2)+' 0 R');
+  var objText=[]; objText[1]='<< /Type /Catalog /Pages 2 0 R >>';
+  objText[2]='<< /Type /Pages /Count '+N+' /Kids ['+kids.join(' ')+'] >>';
+  objText[3]='<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>';
+  for(var p=0;p<N;p++){ var contentObj=4+p*2, pageObj=5+p*2; var body='BT /F1 10 Tf 13 TL 50 792 Td\n';
+    pages[p].forEach(function(ln){ body+='('+escpdf(ln)+') Tj T*\n'; }); body+='ET';
+    objText[contentObj]='<< /Length '+body.length+' >>\nstream\n'+body+'\nendstream';
+    objText[pageObj]='<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents '+contentObj+' 0 R >>'; }
+  var total=3+N*2, out='%PDF-1.4\n', offsets=[];
+  for(var o=1;o<=total;o++){ offsets[o]=out.length; out+=o+' 0 obj\n'+objText[o]+'\nendobj\n'; }
+  var xrefPos=out.length; out+='xref\n0 '+(total+1)+'\n0000000000 65535 f \n';
+  for(var o2=1;o2<=total;o2++) out+=('0000000000'+offsets[o2]).slice(-10)+' 00000 n \n';
+  out+='trailer\n<< /Size '+(total+1)+' /Root 1 0 R >>\nstartxref\n'+xrefPos+'\n%%EOF';
+  var bin=''; for(var b=0;b<out.length;b++) bin+=String.fromCharCode(out.charCodeAt(b)&0xff);
+  return btoa(bin);
+}
+async function _jbvSalvarPasta(btn){
+  if(!atual||!atual._id){ alert('Abra o documento pela ficha do processo.'); return; }
+  if(typeof _docChaveProc!=='function'||typeof _docDir!=='function'||typeof docToken!=='function'){ alert('Módulo de documentos indisponível.'); return; }
+  var dig=_docChaveProc(atual.numero); if(!dig){ alert('Salve o caso primeiro.'); return; }
+  var teor=_jbvTeor(); if(!teor||teor.length<20){ alert('Aguarde o documento carregar e clique de novo.'); return; }
+  var nome=(window.__jbvNome||'Documento').replace(/\.html?$/i,'').replace(/[\\/:*?"<>|]+/g,'-').slice(0,120);
+  if(btn){ btn.disabled=true; btn.textContent='salvando…'; }
+  try{
+    var tok=await docToken(); if(!tok){ alert('Sessão expirada — recarregue.'); if(btn){btn.disabled=false;btn.textContent='📁 Salvar em Sentenças e Acórdãos';} return; }
+    var baseDir=dig+'/'+_docDir('proc','')+'/Sentenças e Acórdãos';
+    try{ await fetch('/api/docs',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({path:baseDir,mkdir:true})}); }catch(e){}
+    var b64=_pdfDeTextoB64(window.__jbvNome||'Documento', teor);
+    var rr=await fetch('/api/docs',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({path:baseDir+'/'+nome+'.pdf',b64:b64})});
+    if(!rr.ok){ var ej=await rr.json().catch(function(){return {};}); alert('Não foi possível salvar (HTTP '+rr.status+(ej.erro?': '+ej.erro:'')+').'); if(btn){btn.disabled=false;btn.textContent='📁 Salvar em Sentenças e Acórdãos';} return; }
+    if(btn){ btn.textContent='✓ salvo em Sentenças e Acórdãos'; }
+    try{ if(typeof carregarDocs==='function') carregarDocs(atual.numero,'','proc'); }catch(e){}
+  }catch(e){ alert('Erro: '+(e&&e.message||e)); if(btn){btn.disabled=false;btn.textContent='📁 Salvar em Sentenças e Acórdãos';} }
 }
 /* ===== Anexos da captura rápida (exibidos no histórico) ===== */
 window.__anexosMap=window.__anexosMap||{};
