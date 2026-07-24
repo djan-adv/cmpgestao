@@ -33,97 +33,69 @@ export async function garantirSegredo(sb) {
 // reenvia o token periodicamente e mostra um SELO na tela do jus.br com o estado
 // da sincronização (para o advogado ver na hora se está funcionando).
 function scriptTexto(segredo, endpoint) {
+  const host = new URL(endpoint).host
   return `// ==UserScript==
 // @name         CMPGestão — Sincronizar token jus.br (PDPJ)
 // @namespace    cmpadvogados.com.br
-// @version      3.2
-// @description  Mantém o CMPGestão sincronizado com a sua sessão do jus.br. Envia por fetch (CORS) e só usa GM como reserva. Mostra um selo na tela com o estado.
+// @version      4.0
+// @description  Ponte entre a sua sessão do jus.br e o CMPGestão. A aba do jus.br guarda o token no cofre do Tampermonkey; a aba do CMPGestão o envia (mesma origem, sem bloqueios). Selo na tela mostra o estado.
 // @match        https://portaldeservicos.pdpj.jus.br/*
 // @match        https://sso.cloud.pje.jus.br/*
+// @match        https://${host}/*
 // @run-at       document-start
+// @grant        GM_setValue
+// @grant        GM_getValue
 // @grant        GM_xmlhttpRequest
-// @grant        GM_openInTab
-// @connect      ${new URL(endpoint).host}
+// @connect      ${host}
 // ==/UserScript==
 (function () {
   'use strict';
   var RELAY_SECRET = '${segredo}';
   var ENDPOINT = '${endpoint}';
+  var HOST_GESTAO = '${host}';
+  var NO_GESTAO = (location.host === HOST_GESTAO);
+  var CHAVE = 'cmp_jusbr_token';
 
-  var ultimoToken = '', ultimoEnvioMs = 0, ultimoOkMs = 0, ultimaOrigem = '', ultimoErro = '';
-  var REENVIO_MS = 8 * 60 * 1000;   // reenvia o mesmo token no máximo a cada 8 min
-
+  var estado = '', cor = '#8a5a00', origem = '', quandoOk = 0;
   function ehJwt(t) { return typeof t === 'string' && t.split('.').length === 3 && t.length > 60; }
+  function hhmm(ms) { if (!ms) return '—'; var d = new Date(ms); return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2); }
 
-  function enviar(payload, origem) {
+  // ---------------- LADO A: dentro do jus.br — capturar e GUARDAR ----------------
+  function guardar(payload, de) {
     if (!payload || !ehJwt(payload.token)) return;
-    var agora = Date.now();
-    var mudou = payload.token !== ultimoToken;
-    if (!mudou && (agora - ultimoEnvioMs) < REENVIO_MS) return;
-    ultimoToken = payload.token; ultimoEnvioMs = agora; ultimaOrigem = origem || '';
-    function ok() { ultimoOkMs = Date.now(); ultimoErro = ''; selo(); }
-    function falhou(e) { ultimoErro = String(e || 'falha'); selo(); }
-    var corpo = JSON.stringify(payload);
-    var cab = { 'Content-Type': 'application/json', 'x-jusbr-relay': RELAY_SECRET };
-    // 1ª tentativa: fetch normal (o endpoint libera CORS) — não depende de
-    // permissão do Tampermonkey, que é onde costuma travar.
-    var viaFetch = null;
-    try { viaFetch = of.call(window, ENDPOINT, { method: 'POST', headers: cab, body: corpo, mode: 'cors', credentials: 'omit' }); } catch (e) { viaFetch = null; }
-    if (viaFetch && viaFetch.then) {
-      viaFetch.then(function (r) {
-        if (r && r.ok) { ok(); return; }
-        if (r) { falhou('HTTP ' + r.status); return; }
-        viaGM();
-      }).catch(function () { viaGM(); });
-    } else { viaGM(); }
-    // 2ª tentativa: GM_xmlhttpRequest (ignora CORS, mas pede permissão)
-    function viaGM() {
-      try {
-        GM_xmlhttpRequest({
-          method: 'POST', url: ENDPOINT, headers: cab, data: corpo,
-          onload: function (r) { if (r && r.status >= 200 && r.status < 300) ok(); else viaNavegacao('HTTP ' + (r && r.status)); },
-          onerror: function () { viaNavegacao('GM bloqueado'); }
-        });
-      } catch (e) { viaNavegacao('sem GM'); }
-    }
-    // 3ª tentativa (à prova de bloqueio): abre uma aba oculta no nosso domínio,
-    // que grava o token e se fecha sozinha. Não depende de CORS/CSP nem de
-    // permissão de conexão do Tampermonkey.
-    function viaNavegacao(motivo) {
-      var u = ENDPOINT + '?t=' + encodeURIComponent(payload.token) + '&s=' + encodeURIComponent(RELAY_SECRET) + (payload.refresh_token ? ('&r=' + encodeURIComponent(payload.refresh_token)) : '');
-      try {
-        GM_openInTab(u, { active: false, insert: true, setParent: true });
-        ultimoOkMs = Date.now(); ultimoErro = ''; ultimaOrigem = ultimaOrigem + ' (aba)'; selo();
-        return;
-      } catch (e) {}
-      try {
-        var w = window.open(u, '_blank');
-        if (w) { ultimoOkMs = Date.now(); ultimoErro = ''; selo(); return; }
-      } catch (e) {}
-      falhou(motivo || 'bloqueado');
-    }
+    var atual = '';
+    try { atual = GM_getValue(CHAVE, ''); } catch (e) {}
+    try {
+      var ja = atual ? JSON.parse(atual) : null;
+      if (ja && ja.token === payload.token) return;   // já guardado
+    } catch (e) {}
+    payload.ts = Date.now();
+    try { GM_setValue(CHAVE, JSON.stringify(payload)); } catch (e) { return; }
+    quandoOk = Date.now(); origem = de || ''; estado = 'token capturado ' + hhmm(quandoOk); cor = '#0F6E56';
+    selo();
+    enviarDireto(payload);   // tenta enviar já (se o portal permitir)
+  }
+  // tentativa direta (pode ser barrada pelo CSP do portal — tudo bem, o CMPGestão envia)
+  function enviarDireto(payload) {
+    try {
+      GM_xmlhttpRequest({
+        method: 'POST', url: ENDPOINT,
+        headers: { 'Content-Type': 'application/json', 'x-jusbr-relay': RELAY_SECRET },
+        data: JSON.stringify({ token: payload.token, refresh_token: payload.refresh_token || undefined }),
+        onload: function (r) { if (r && r.status >= 200 && r.status < 300) { estado = 'sincronizado ' + hhmm(Date.now()); cor = '#0F6E56'; selo(); } },
+        onerror: function () {}
+      });
+    } catch (e) {}
   }
 
-  // ---------- 1) interceptação de rede ----------
-  function ehEndpointToken(url) { return /\\/protocol\\/openid-connect\\/token(\\?|$)/i.test(String(url || '')); }
-  function clientIdDe(body) {
-    try {
-      var s = null;
-      if (typeof body === 'string') s = body;
-      else if (body instanceof URLSearchParams) s = body.toString();
-      else if (body && typeof body.toString === 'function') s = body.toString();
-      if (s && s.indexOf('=') > -1) { var p = new URLSearchParams(s); return p.get('client_id') || null; }
-    } catch (e) {}
-    return null;
-  }
-  function daRespostaToken(url, reqBody, txt) {
+  function ehEndpointToken(u) { return /\\/protocol\\/openid-connect\\/token(\\?|$)/i.test(String(u || '')); }
+  function daRespostaToken(txt) {
     try {
       var j = JSON.parse(txt);
       if (!j || !j.access_token) return;
-      var pl = { token: j.access_token, token_url: String(url).split('?')[0] };
+      var pl = { token: j.access_token };
       if (j.refresh_token) pl.refresh_token = j.refresh_token;
-      var cid = clientIdDe(reqBody); if (cid) pl.client_id = cid;
-      enviar(pl, 'login/refresh');
+      guardar(pl, 'login');
     } catch (e) {}
   }
   function bearerDe(h) {
@@ -136,45 +108,13 @@ function scriptTexto(segredo, endpoint) {
     } catch (e) {}
     return null;
   }
-  var of = window.fetch;
-  window.fetch = function (input, init) {
-    var url = (input && input.url) || input;
-    try { var t = bearerDe(init && init.headers) || bearerDe(input && input.headers); if (t) enviar({ token: t }, 'rede'); } catch (e) {}
-    var p = of.apply(this, arguments);
-    try {
-      if (ehEndpointToken(url)) {
-        var rb = init && init.body;
-        p.then(function (resp) { try { resp.clone().text().then(function (tx) { daRespostaToken(url, rb, tx); }); } catch (e) {} });
-      }
-    } catch (e) {}
-    return p;
-  };
-  var oOpen = XMLHttpRequest.prototype.open, oSend = XMLHttpRequest.prototype.send, oSet = XMLHttpRequest.prototype.setRequestHeader;
-  XMLHttpRequest.prototype.open = function (m, u) { try { this.__cmpUrl = u; } catch (e) {} return oOpen.apply(this, arguments); };
-  XMLHttpRequest.prototype.setRequestHeader = function (k, v) {
-    try { if (/^authorization$/i.test(k) && /^Bearer\\s+/i.test(v)) enviar({ token: v.replace(/^Bearer\\s+/i, '').trim() }, 'rede'); } catch (e) {}
-    return oSet.apply(this, arguments);
-  };
-  XMLHttpRequest.prototype.send = function (body) {
-    try {
-      if (ehEndpointToken(this.__cmpUrl)) {
-        var self = this, rb = body;
-        this.addEventListener('load', function () { try { if (self.status >= 200 && self.status < 300) daRespostaToken(self.__cmpUrl, rb, self.responseText); } catch (e) {} });
-      }
-    } catch (e) {}
-    return oSend.apply(this, arguments);
-  };
-
-  // ---------- 2) varredura profunda do armazenamento ----------
-  function achaTokens(obj, saida, prof) {
-    if (!obj || prof > 4) return;
-    if (typeof obj === 'string') { if (ehJwt(obj) && !saida.token) saida.token = obj; return; }
-    if (typeof obj !== 'object') return;
-    for (var k in obj) {
+  function achaTokens(o, saida, prof) {
+    if (!o || prof > 4 || typeof o !== 'object') return;
+    for (var k in o) {
       try {
-        var v = obj[k];
+        var v = o[k];
         if (typeof v === 'string') {
-          if (/access[_-]?token|^token$|id[_-]?token/i.test(k) && ehJwt(v)) saida.token = saida.token || v;
+          if (/access[_-]?token|^token$/i.test(k) && ehJwt(v)) saida.token = saida.token || v;
           else if (/refresh[_-]?token/i.test(k) && v.length > 20) saida.refresh_token = saida.refresh_token || v;
           else if (ehJwt(v) && !saida.token) saida.token = v;
         } else if (v && typeof v === 'object') achaTokens(v, saida, prof + 1);
@@ -199,38 +139,82 @@ function scriptTexto(segredo, endpoint) {
         }
       });
     } catch (e) {}
-    if (achado.token) { var pl = { token: achado.token }; if (achado.refresh_token) pl.refresh_token = achado.refresh_token; enviar(pl, 'armazenamento'); return true; }
+    if (achado.token) { guardar(achado, 'armazenamento'); return true; }
     return false;
   }
 
-  // ---------- 3) selo visível na tela do jus.br ----------
-  var elSelo = null;
-  function hhmm(ms) { if (!ms) return '—'; var d = new Date(ms); return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2); }
+  if (!NO_GESTAO) {
+    var of = window.fetch;
+    window.fetch = function (input, init) {
+      var url = (input && input.url) || input;
+      try { var t = bearerDe(init && init.headers) || bearerDe(input && input.headers); if (t) guardar({ token: t }, 'rede'); } catch (e) {}
+      var p = of.apply(this, arguments);
+      try { if (ehEndpointToken(url)) p.then(function (r) { try { r.clone().text().then(daRespostaToken); } catch (e) {} }); } catch (e) {}
+      return p;
+    };
+    var oOpen = XMLHttpRequest.prototype.open, oSend = XMLHttpRequest.prototype.send, oSet = XMLHttpRequest.prototype.setRequestHeader;
+    XMLHttpRequest.prototype.open = function (m, u) { try { this.__u = u; } catch (e) {} return oOpen.apply(this, arguments); };
+    XMLHttpRequest.prototype.setRequestHeader = function (k, v) {
+      try { if (/^authorization$/i.test(k) && /^Bearer\\s+/i.test(v)) guardar({ token: v.replace(/^Bearer\\s+/i, '').trim() }, 'rede'); } catch (e) {}
+      return oSet.apply(this, arguments);
+    };
+    XMLHttpRequest.prototype.send = function (b) {
+      try {
+        if (ehEndpointToken(this.__u)) { var s = this; s.addEventListener('load', function () { try { if (s.status >= 200 && s.status < 300) daRespostaToken(s.responseText); } catch (e) {} }); }
+      } catch (e) {}
+      return oSend.apply(this, arguments);
+    };
+    estado = 'aguardando token…';
+    setTimeout(function () { varrerStorage(); selo(); }, 2500);
+    setInterval(function () { varrerStorage(); selo(); }, 60000);
+  }
+
+  // ------------- LADO B: dentro do CMPGestão — LER do cofre e ENVIAR -------------
+  // Aqui é o nosso próprio site: fetch de mesma origem, sem CORS/CSP/permissão.
+  var ultimoEnviado = '';
+  function empurrar() {
+    var raw = '';
+    try { raw = GM_getValue(CHAVE, ''); } catch (e) { return; }
+    if (!raw) { estado = 'sem token do jus.br — abra o portal'; cor = '#8a5a00'; selo(); return; }
+    var o = null; try { o = JSON.parse(raw); } catch (e) { return; }
+    if (!o || !ehJwt(o.token)) return;
+    if (o.token === ultimoEnviado) { return; }
+    var corpo = JSON.stringify({ token: o.token, refresh_token: o.refresh_token || undefined });
+    fetch('/api/jusbr/token', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-jusbr-relay': RELAY_SECRET }, body: corpo })
+      .then(function (r) {
+        if (r.ok) { ultimoEnviado = o.token; quandoOk = Date.now(); estado = 'sincronizado ' + hhmm(quandoOk); cor = '#0F6E56'; origem = 'cofre'; }
+        else { estado = 'erro HTTP ' + r.status; cor = '#b5342b'; }
+        selo();
+      })
+      .catch(function () { estado = 'falha de rede'; cor = '#b5342b'; selo(); });
+  }
+  if (NO_GESTAO) {
+    estado = 'verificando…';
+    setTimeout(function () { empurrar(); }, 3000);
+    setInterval(empurrar, 45000);
+  }
+
+  // ---------------------------- selo visível ----------------------------
+  var el = null;
   function selo() {
     try {
       if (!document.body) return;
-      if (!elSelo) {
-        elSelo = document.createElement('div');
-        elSelo.style.cssText = 'position:fixed;right:14px;bottom:14px;z-index:2147483647;background:#fff;border:1px solid #d7dde5;border-radius:10px;box-shadow:0 4px 14px rgba(0,0,0,.14);padding:8px 11px;font:12px system-ui,Arial;color:#1e2733;max-width:260px';
-        elSelo.addEventListener('click', function (ev) { if (ev.target && ev.target.getAttribute('data-cmp') === 'sync') { varrerStorage(); selo(); } });
-        document.body.appendChild(elSelo);
+      if (!el) {
+        el = document.createElement('div');
+        el.style.cssText = 'position:fixed;right:14px;bottom:14px;z-index:2147483647;background:#fff;border:1px solid #d7dde5;border-radius:10px;box-shadow:0 4px 14px rgba(0,0,0,.14);padding:8px 11px;font:12px system-ui,Arial;color:#1e2733;max-width:250px';
+        el.addEventListener('click', function (ev) {
+          if (ev.target && ev.target.getAttribute('data-a') === 'go') { if (NO_GESTAO) { ultimoEnviado = ''; empurrar(); } else { varrerStorage(); } selo(); }
+        });
+        document.body.appendChild(el);
       }
-      var estado, cor;
-      if (ultimoErro) { estado = 'erro: ' + ultimoErro; cor = '#b5342b'; }
-      else if (ultimoOkMs) { estado = 'sincronizado ' + hhmm(ultimoOkMs); cor = '#0F6E56'; }
-      else { estado = 'aguardando token…'; cor = '#8a5a00'; }
-      elSelo.innerHTML = '<div style="font-weight:700;color:#2E3A4B;margin-bottom:2px">CMPGestão</div>'
+      el.innerHTML = '<div style="font-weight:700;color:#2E3A4B;margin-bottom:2px">CMPGestão' + (NO_GESTAO ? '' : ' · jus.br') + '</div>'
         + '<div style="color:' + cor + ';font-weight:600">' + estado + '</div>'
-        + (ultimaOrigem ? '<div style="color:#697180;font-size:11px">via ' + ultimaOrigem + '</div>' : '')
-        + '<div style="margin-top:5px"><button data-cmp="sync" style="cursor:pointer;border:1px solid #cfe0f2;background:#eef4fb;color:#185FA5;border-radius:7px;padding:3px 8px;font-size:11px">sincronizar agora</button></div>';
+        + (origem ? '<div style="color:#697180;font-size:11px">via ' + origem + '</div>' : '')
+        + '<div style="margin-top:5px"><button data-a="go" style="cursor:pointer;border:1px solid #cfe0f2;background:#eef4fb;color:#185FA5;border-radius:7px;padding:3px 8px;font-size:11px">sincronizar agora</button></div>';
     } catch (e) {}
   }
-
-  // ---------- 4) marcha: varre já, depois a cada minuto ----------
-  function ciclo() { varrerStorage(); selo(); }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { setTimeout(ciclo, 2500); });
-  else setTimeout(ciclo, 2500);
-  setInterval(ciclo, 60000);
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { setTimeout(selo, 1500); });
+  else setTimeout(selo, 1500);
 })();
 `
 }
