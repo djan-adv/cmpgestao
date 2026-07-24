@@ -3712,25 +3712,49 @@ async function jusbrBaixarSelecionados(formato){
   var numero=window.__jusbrNum||(atual&&atual.numero)||'';
   var sels=[].slice.call(document.querySelectorAll('#jusbr-lista .jbr-sel:checked')).map(function(c){return c.value;}).filter(Boolean);
   if(!sels.length){ alert('Marque as caixinhas dos documentos que quer baixar.\n\n(Use "marcar todos" para selecionar a lista inteira.)'); return; }
-  var jwt=await jusbrJwt(); if(!jwt){ alert('Sessão expirada — recarregue a página.'); return; }
-  var base='/api/jusbr/integra?numero='+encodeURIComponent(String(numero).replace(/\D/g,''))+'&jwt='+encodeURIComponent(jwt);
+  var jwt=await jusbrJwt(); if(!jwt){ alert('Sessão expirada — recarregue a página (F5).'); return; }
+  var base='/api/jusbr/integra?numero='+encodeURIComponent(String(numero).replace(/\D/g,''));
+  var st=document.getElementById('jusbr-status');
+  function aviso(t,cor){ if(st) st.innerHTML='<span style="color:'+(cor||'var(--muted)')+'">'+t+'</span>'; }
+  /* busca a URL e, se vier arquivo, salva; se vier JSON, MOSTRA o erro */
+  async function baixar(url,rotulo){
+    var r;
+    try{ r=await fetch(url,{headers:{Authorization:'Bearer '+jwt}}); }
+    catch(e){ aviso('Falha de rede ao baixar. Tente de novo.','#b5342b'); return false; }
+    var ct=(r.headers.get('content-type')||'').toLowerCase();
+    if(!r.ok || ct.indexOf('json')>-1){
+      var j={}; try{ j=await r.json(); }catch(e){}
+      var m=(j&&j.erro)||('HTTP '+r.status);
+      aviso('Não deu para baixar: '+esc(String(m)),'#b5342b');
+      if(j&&j.motivo==='expirado'||/expirad|sincronize/i.test(String(m))) alert('O acesso ao jus.br expirou.\n\nAbra a aba do jus.br (portaldeservicos.pdpj.jus.br), confira o selo verde, e tente de novo.');
+      else alert('jus.br: '+m);
+      return false;
+    }
+    var nome=rotulo||'documento';
+    var cd=r.headers.get('content-disposition')||'';
+    var mm=cd.match(/filename="?([^"]+)"?/i); if(mm) nome=mm[1];
+    var blob=await r.blob();
+    var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=nome;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function(){ try{ URL.revokeObjectURL(a.href); }catch(e){} },4000);
+    return true;
+  }
   if(formato==='soltos'){
-    if(sels.length>12 && !confirm('Baixar '+sels.length+' arquivos soltos? O navegador pode pedir permissão para vários downloads.\n\n(Para muitos arquivos, o .zip costuma ser melhor.)')) return;
-    sels.forEach(function(u,i){
-      setTimeout(function(){
-        var a=document.createElement('a');
-        a.href=base+'&formato=solto&uuids='+encodeURIComponent(u);
-        a.download=''; document.body.appendChild(a); a.click(); document.body.removeChild(a);
-      }, i*900);
-    });
+    if(sels.length>12 && !confirm('Baixar '+sels.length+' arquivos separados?\n\n(Para muitos arquivos, o .zip costuma ser mais prático.)')) return;
+    var n=0;
+    for(var i=0;i<sels.length;i++){
+      aviso('Baixando '+(i+1)+' de '+sels.length+'…');
+      var ok=await baixar(base+'&formato=solto&uuids='+encodeURIComponent(sels[i]));
+      if(!ok) return;
+      n++;
+    }
+    aviso(n+' arquivo(s) baixado(s) na pasta Downloads.','#0F6E56');
     return;
   }
   var fmt=(formato==='pdf')?'pdf':'zip';
-  var msg=(fmt==='pdf')?'Montando um PDF único com '+sels.length+' peça(s)…':'Preparando o .zip com '+sels.length+' peça(s)…';
-  var st=document.getElementById('jusbr-status'); if(st) st.innerHTML='<span class="note">'+msg+' (pode levar alguns segundos)</span>';
-  var a=document.createElement('a');
-  a.href=base+'&formato='+fmt+'&uuids='+encodeURIComponent(sels.join(','));
-  a.download=''; document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  aviso((fmt==='pdf'?'Montando um PDF único com ':'Preparando o .zip com ')+sels.length+' peça(s)… (pode levar alguns segundos)');
+  var ok2=await baixar(base+'&formato='+fmt+'&uuids='+encodeURIComponent(sels.join(',')));
+  if(ok2) aviso('Pronto — o arquivo foi para a pasta Downloads.','#0F6E56');
 }
 async function jusbrCarregar(numero){
   var st=document.getElementById('jusbr-status'), lista=document.getElementById('jusbr-lista');
