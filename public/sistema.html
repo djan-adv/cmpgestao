@@ -1002,7 +1002,9 @@ async function publicarAtualizacao(){
   _stGrande(st,false); if(st){ st.style.color='var(--muted)'; st.textContent='Puxando a versão nova no servidor…'; }
   try{
     var sb=window.__sb; var jwt='';
-    if(sb){ var s=await sb.auth.getSession(); jwt=(s&&s.data&&s.data.session&&s.data.session.access_token)||''; }
+    if(sb){ var s=await sb.auth.getSession(); jwt=(s&&s.data&&s.data.session&&s.data.session.access_token)||'';
+      if(!jwt){ try{ var sr=await sb.auth.refreshSession(); jwt=(sr&&sr.data&&sr.data.session&&sr.data.session.access_token)||''; }catch(e){} } }
+    if(!jwt){ if(st){ st.style.color='#b5342b'; st.textContent='Sua sessão expirou — recarregue a página (F5) e faça login de novo, depois publique.'; } if(btn){ btn.disabled=false; btn.textContent=txt0; } return; }
     var r=await fetch('/api/deploy',{method:'POST',headers:{'Authorization':'Bearer '+jwt}});
     var j={}; try{ j=await r.json(); }catch(e){}
     if(r.ok && j.ok){
