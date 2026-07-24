@@ -37,7 +37,7 @@ function scriptTexto(segredo, endpoint) {
   return `// ==UserScript==
 // @name         CMPGestão — Sincronizar token jus.br (PDPJ)
 // @namespace    cmpadvogados.com.br
-// @version      4.0
+// @version      4.1
 // @description  Ponte entre a sua sessão do jus.br e o CMPGestão. A aba do jus.br guarda o token no cofre do Tampermonkey; a aba do CMPGestão o envia (mesma origem, sem bloqueios). Selo na tela mostra o estado.
 // @match        https://portaldeservicos.pdpj.jus.br/*
 // @match        https://sso.cloud.pje.jus.br/*
@@ -219,12 +219,23 @@ function scriptTexto(segredo, endpoint) {
 `
 }
 
+// Endereço PÚBLICO do sistema. NÃO usar new URL(request.url).origin: o app roda
+// atrás de proxy (nginx → 127.0.0.1:3000), então request.url traz o endereço
+// interno — e o userscript acabaria apontando para a máquina do próprio
+// navegador (foi exatamente o que quebrou a sincronização do jus.br).
+function basePublica(request) {
+  const proto = (request.headers.get('x-forwarded-proto') || 'https').split(',')[0].trim()
+  const host = (request.headers.get('x-forwarded-host') || request.headers.get('host') || '').split(',')[0].trim()
+  if (host && !/^(127\.|localhost|0\.0\.0\.0|\[::1\])/i.test(host)) return proto + '://' + host
+  return process.env.PUBLIC_BASE_URL || 'https://gestao.cmpadvogados.com.br'
+}
+
 export async function GET(request) {
   const user = await usuario(request)
   if (!user) return new Response('Faça login no sistema para gerar o userscript.', { status: 401 })
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) return new Response('servidor sem service key', { status: 500 })
   const sb = admin()
   const segredo = await garantirSegredo(sb)
-  const endpoint = new URL(request.url).origin + '/api/jusbr/token'
+  const endpoint = basePublica(request) + '/api/jusbr/token'
   return new Response(scriptTexto(segredo, endpoint), { headers: { 'Content-Type': 'text/plain; charset=utf-8' } })
 }
