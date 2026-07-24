@@ -3726,8 +3726,9 @@ async function jusbrBaixarSelecionados(formato){
       var j={}; try{ j=await r.json(); }catch(e){}
       var m=(j&&j.erro)||('HTTP '+r.status);
       aviso('Não deu para baixar: '+esc(String(m)),'#b5342b');
-      if(j&&j.motivo==='expirado'||/expirad|sincronize/i.test(String(m))) alert('O acesso ao jus.br expirou.\n\nAbra a aba do jus.br (portaldeservicos.pdpj.jus.br), confira o selo verde, e tente de novo.');
-      else alert('jus.br: '+m);
+      var dica='';
+      if((j&&j.motivo==='expirado')||/expirad/i.test(String(m))) dica='\n\nDica: abra a aba do jus.br (portaldeservicos.pdpj.jus.br) e confira o selo verde.';
+      alert('Não deu para baixar.\n\nMensagem do servidor:\n' + m + (j&&j.motivo?('\n(motivo: '+j.motivo+')'):'') + dica);
       return false;
     }
     var nome=rotulo||'documento';
