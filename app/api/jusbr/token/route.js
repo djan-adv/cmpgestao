@@ -53,7 +53,16 @@ export async function POST(request) {
     const relay = request.headers.get('x-jusbr-relay') || ''
     const relaySecret = process.env.JUSBR_RELAY_SECRET || ''
     let quem = null
-    if (relaySecret && relay && relay === relaySecret) {
+    // segredo do banco (gerado pelo /api/jusbr/userscript) — dispensa configurar env
+    let relayDB = ''
+    if (relay && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      try {
+        const sbA = admin()
+        const { data } = await sbA.from('produtividade_config').select('valor').eq('escritorio_id', ESCRITORIO_CMP).eq('chave', 'jusbr_relay_secret').maybeSingle()
+        relayDB = (data && data.valor) || ''
+      } catch (e) {}
+    }
+    if (relay && ((relaySecret && relay === relaySecret) || (relayDB && relay === relayDB))) {
       quem = 'relay'
     } else {
       const user = await usuario(request)

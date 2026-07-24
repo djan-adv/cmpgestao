@@ -228,6 +228,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
       <a data-s="procedimentos" onclick="go('procedimentos')"><span class="ic">☰</span> Procedimentos</a>
       <a data-s="produtividade" class="cmp-only" onclick="go('produtividade')" title="Métricas de volume e esforço por pessoa, derivadas do log de eventos do sistema (sem vigilância de tela)"><span class="ic">📈</span> Produtividade</a>
       <a data-s="monitoramento" class="cmp-only" onclick="go('monitoramento')" title="Pedidos de acompanhamento processual feitos pelo portal público (produto de captação)"><span class="ic">🛰</span> Monitoramento <span id="nav-n-monit" style="margin-left:auto;font-size:10.5px;background:var(--navy2);border-radius:10px;padding:1px 7px"></span></a>
+      <a data-s="robos" class="cmp-only" onclick="go('robos')" title="Robôs do sistema: status e execução manual (sem terminal)"><span class="ic">🤖</span> Robôs</a>
       <a data-s="sugestoes" onclick="go('sugestoes')" style="margin-top:12px;color:#ffd98a"><span class="ic">💡</span> Sugestões / Melhorias</a>
     </nav>
   </aside>
@@ -517,6 +518,27 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
   </div>
   </div>
 </section>
+<section id="s-robos" class="hidden">
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+          <p class="sectlabel" style="margin:0">🤖 Robôs do sistema</p>
+          <button class="btn sm ghost" onclick="renderRobos()">↻ atualizar</button>
+        </div>
+        <p class="note" style="margin:6px 0 10px">Rodam sozinhos (agendador interno — não precisa de terminal nem crontab). Aqui você vê o último resultado e pode rodar qualquer um na hora.</p>
+        <div id="robos-body"><div class="note">Carregando…</div></div>
+      </div>
+      <div class="card">
+        <p class="sectlabel">🔐 jus.br — meu userscript (Tampermonkey)</p>
+        <p class="note" style="margin:6px 0 10px">Gera o script já com o segredo embutido — é só copiar e colar no Tampermonkey. Não precisa digitar nada. Depois, faça login no jus.br uma vez.</p>
+        <div id="robos-jusbr-status" class="note" style="margin-bottom:8px"></div>
+        <button class="btn sm" onclick="gerarUserscriptJusbr()">📄 Gerar meu userscript</button>
+        <div id="robos-userscript" style="display:none;margin-top:10px">
+          <textarea id="robos-userscript-txt" readonly style="width:100%;height:180px;font-family:monospace;font-size:11px;border:1px solid var(--line);border-radius:8px;padding:8px"></textarea>
+          <div style="margin-top:6px"><button class="btn sm" onclick="copiarUserscriptJusbr()">📋 Copiar</button> <span class="note">Cole no Tampermonkey (novo script) e salve.</span></div>
+        </div>
+      </div>
+    </section>
+
 <section id="s-sugestoes" class="hidden">
   <div class="card">
     <h3 style="margin-top:0">💡 Sugestões e melhorias</h3>
@@ -5355,7 +5377,7 @@ function go(s){
 function go(s){
   try{ localStorage.setItem('cmp_secao', s); if(s!=='proc-det') localStorage.removeItem('cmp_proc'); }catch(e){}
   var showId=(s==='contatos')?'crm':s;
-  ["painel","triagem","agenda","processos","proc-det","crm","financeiro","etiquetas","procedimentos","diligencias","relatorio","encerrados","inove","james","cadastros","fases","sugestoes","lote","produtividade","monitoramento"].forEach(function(id){var e=document.getElementById("s-"+id);if(e)e.classList.add("hidden")});
+  ["painel","triagem","agenda","processos","proc-det","crm","financeiro","etiquetas","procedimentos","diligencias","relatorio","encerrados","inove","james","cadastros","fases","sugestoes","lote","produtividade","monitoramento","robos"].forEach(function(id){var e=document.getElementById("s-"+id);if(e)e.classList.add("hidden")});
   var sec=document.getElementById("s-"+showId); if(sec) sec.classList.remove("hidden");
   document.querySelectorAll("#nav a").forEach(function(a){a.classList.remove("active")});
   var link=document.querySelector('#nav a[data-s="'+s+'"]');if(link)link.classList.add("active");
@@ -5383,6 +5405,7 @@ function go(s){
   if(s==="fases" && typeof renderFasesRevisao==='function')renderFasesRevisao();
   if(s==="produtividade" && typeof renderProdutividade==='function')renderProdutividade();
   if(s==="monitoramento" && typeof renderMonitoramento==='function')renderMonitoramento();
+  if(s==="robos" && typeof renderRobos==='function')renderRobos();
   if(s==="sugestoes" && typeof renderSugestoes==='function'){ var _an=document.getElementById('sg-autor'); if(_an && !_an.value){ _an.value=((document.getElementById('who-name')||{}).textContent||'').trim(); } renderSugestoes(); }
   if(s==="lote") renderLote();
   try{ if(typeof renderNavLotes==='function') renderNavLotes(); }catch(e){}
@@ -9976,6 +9999,67 @@ async function editarPrdPeso(tipo){
   }catch(e){ alert('Erro: '+(e&&e.message||e)); }
 }
 /* ===== Painel Monitoramento (pedidos do portal público) ===== */
+/* ===== Painel Robôs — status + rodar agora (sem terminal) ===== */
+var _ROBOS_LABELS={};
+async function renderRobos(){
+  var el=document.getElementById('robos-body'); if(!el) return;
+  el.innerHTML='<div class="note">Carregando…</div>';
+  _renderJusbrStatus();
+  try{
+    var r=await fetch('/api/cron/tick?status=1'); var j=await r.json();
+    if(!j||!j.jobs){ el.innerHTML='<div class="note">Falha ao carregar (o build pode não ter recompilado ainda).</div>'; return; }
+    el.innerHTML='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px">'+j.jobs.map(function(job){
+      _ROBOS_LABELS[job.nome]=job.rotulo;
+      var quando=job.ultima_exec?new Date(job.ultima_exec).toLocaleString('pt-BR'):'nunca';
+      var cor=job.ultimo_ok===false?'#b5342b':(job.ultimo_ok===true?'#127a53':'#697180');
+      var badge=job.devido_agora?'<span style="font-size:10px;background:#fff4e5;color:#8a5a00;border-radius:8px;padding:1px 6px;margin-left:6px">na fila</span>':'';
+      return '<div style="border:1px solid var(--line);border-radius:12px;padding:12px">'
+        +'<div style="display:flex;justify-content:space-between;align-items:baseline"><b style="color:var(--navy);font-size:13px">'+finEsc(job.rotulo)+'</b>'+badge+'</div>'
+        +'<div class="note" style="margin:2px 0">'+finEsc(job.agenda)+'</div>'
+        +'<div style="font-size:12px;color:'+cor+'">Última: '+finEsc(quando)+(job.ultimo_ok===false?' · falhou':(job.ultimo_ok===true?' · ok':''))+'</div>'
+        +(job.ultimo_resultado?'<div class="note" style="font-size:10.5px;max-height:44px;overflow:auto;margin-top:3px">'+finEsc(String(job.ultimo_resultado).slice(0,200))+'</div>':'')
+        +'<div style="margin-top:8px"><button class="btn sm" style="font-size:11px" onclick="rodarRobo(\''+job.nome+'\',this)">▶ rodar agora</button></div>'
+        +'</div>';
+    }).join('')+'</div>';
+  }catch(e){ el.innerHTML='<div class="note">Erro: '+finEsc(String(e&&e.message||e))+'</div>'; }
+}
+async function rodarRobo(nome,btn){
+  if(btn){ btn.disabled=true; btn.textContent='rodando…'; }
+  try{
+    var r=await fetch('/api/cron/tick?rodar='+encodeURIComponent(nome)); var j=await r.json();
+    var res=j&&j.resultado;
+    alert((res&&res.ok?'✓ ':'⚠ ')+(_ROBOS_LABELS[nome]||nome)+'\n\n'+((res&&res.resumo)||JSON.stringify(j)).slice(0,300));
+  }catch(e){ alert('Erro ao rodar: '+(e&&e.message||e)); }
+  renderRobos();
+}
+async function _renderJusbrStatus(){
+  var el=document.getElementById('robos-jusbr-status'); if(!el) return;
+  try{
+    var tok=(typeof finToken==='function')?await finToken():null;
+    var r=await fetch('/api/jusbr/token',{headers:tok?{Authorization:'Bearer '+tok}:{}}); var j=await r.json();
+    if(j&&j.ok){
+      var v=j.valido?'<b style="color:#127a53">sessão válida</b>':'<b style="color:#b5342b">sessão expirada — faça login no jus.br</b>';
+      var ar=j.auto_renova?' · <span style="color:#127a53">auto-renovação armada ✓</span>':' · <span style="color:#8a5a00">sem refresh (faça 1 login com o userscript v2 instalado)</span>';
+      el.innerHTML=v+ar+(j.expira?(' · expira '+new Date(j.expira).toLocaleString('pt-BR')):'');
+    } else el.innerHTML='<span class="note">Não foi possível ler o status.</span>';
+  }catch(e){ el.innerHTML='<span class="note">Status indisponível (recompile o build).</span>'; }
+}
+async function gerarUserscriptJusbr(){
+  try{
+    var tok=(typeof finToken==='function')?await finToken():null;
+    var r=await fetch('/api/jusbr/userscript',{headers:tok?{Authorization:'Bearer '+tok}:{}});
+    var txt=await r.text();
+    if(!r.ok){ alert('Não foi possível gerar: '+txt.slice(0,200)); return; }
+    document.getElementById('robos-userscript-txt').value=txt;
+    document.getElementById('robos-userscript').style.display='block';
+  }catch(e){ alert('Erro: '+(e&&e.message||e)); }
+}
+function copiarUserscriptJusbr(){
+  var ta=document.getElementById('robos-userscript-txt'); if(!ta) return;
+  ta.select(); try{ document.execCommand('copy'); }catch(e){}
+  try{ navigator.clipboard.writeText(ta.value); }catch(e){}
+  alert('Copiado! No Tampermonkey: novo script → cole tudo → salve. Depois entre no jus.br uma vez.');
+}
 /* ===== Monitoramento de MARCAS no INPI (RPI) ===== */
 async function _renderInpiMarcas(anchor){
   var host=anchor.parentNode; var box=document.getElementById('monit-inpi');
