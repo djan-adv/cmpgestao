@@ -37,7 +37,7 @@ function scriptTexto(segredo, endpoint) {
   return `// ==UserScript==
 // @name         CMPGestão — Sincronizar token jus.br (PDPJ)
 // @namespace    cmpadvogados.com.br
-// @version      4.1
+// @version      4.2
 // @description  Ponte entre a sua sessão do jus.br e o CMPGestão. A aba do jus.br guarda o token no cofre do Tampermonkey; a aba do CMPGestão o envia (mesma origem, sem bloqueios). Selo na tela mostra o estado.
 // @match        https://portaldeservicos.pdpj.jus.br/*
 // @match        https://sso.cloud.pje.jus.br/*
@@ -58,16 +58,30 @@ function scriptTexto(segredo, endpoint) {
 
   var estado = '', cor = '#8a5a00', origem = '', quandoOk = 0;
   function ehJwt(t) { return typeof t === 'string' && t.split('.').length === 3 && t.length > 60; }
+  // validade (exp) do JWT em ms — o navegador guarda tokens VELHOS, e mandá-los
+  // por cima do bom derruba a sessão do escritório. Só enviamos os válidos.
+  function expDe(t) {
+    try {
+      var p = t.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+      while (p.length % 4) p += '=';
+      var o = JSON.parse(atob(p));
+      return (o && o.exp) ? o.exp * 1000 : 0;
+    } catch (e) { return 0; }
+  }
+  function valido(t) { var e = expDe(t); return e === 0 || e > Date.now() + 60000; }
   function hhmm(ms) { if (!ms) return '—'; var d = new Date(ms); return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2); }
 
   // ---------------- LADO A: dentro do jus.br — capturar e GUARDAR ----------------
   function guardar(payload, de) {
     if (!payload || !ehJwt(payload.token)) return;
+    if (!valido(payload.token)) return;               // token velho do navegador: ignora
     var atual = '';
     try { atual = GM_getValue(CHAVE, ''); } catch (e) {}
     try {
       var ja = atual ? JSON.parse(atual) : null;
       if (ja && ja.token === payload.token) return;   // já guardado
+      // nunca substituir por um token que vence ANTES do que já temos
+      if (ja && ja.token && expDe(ja.token) > expDe(payload.token)) return;
     } catch (e) {}
     payload.ts = Date.now();
     try { GM_setValue(CHAVE, JSON.stringify(payload)); } catch (e) { return; }

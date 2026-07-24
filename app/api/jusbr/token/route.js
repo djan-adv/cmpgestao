@@ -89,6 +89,17 @@ export async function POST(request) {
 
     const expira = expDoJwt(token)
     const sb = admin()
+    // Blindagem: NUNCA regredir a sessão. O navegador guarda JWTs antigos e o
+    // userscript pode reenviá-los; sem isto, um token vencido sobrescreve o bom.
+    if (expira && new Date(expira).getTime() <= Date.now()) {
+      return j({ ok: true, ignorado: 'token_vencido', expira }, 200)
+    }
+    try {
+      const { data: atual } = await sb.from('jusbr_sessao').select('expira').eq('escritorio_id', ESCRITORIO_CMP).maybeSingle()
+      if (atual && atual.expira && expira && new Date(expira).getTime() <= new Date(atual.expira).getTime()) {
+        return j({ ok: true, ignorado: 'nao_e_mais_novo', expira: atual.expira }, 200)
+      }
+    } catch (e) {}
     const { error } = await sb.rpc('jusbr_set_sessao', { p_esc: ESCRITORIO_CMP, p_token: token, p_refresh: refresh, p_key: encKey, p_expira: expira, p_por: quem, p_oidc: oidc })
     if (error) return j({ erro: 'falha ao salvar token: ' + error.message }, 500)
     return j({ ok: true, expira, refresh: !!refresh })
