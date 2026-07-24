@@ -25,8 +25,11 @@ function admin() {
 }
 // CORS para o relay do userscript (roda no domínio do jus.br). Só liberamos o
 // necessário (POST + o header do segredo). O segredo continua sendo a barreira real.
+// Origin '*' de propósito: o userscript roda em mais de um domínio do jus.br
+// (portaldeservicos e sso.cloud.pje) e o navegador só aceita UM valor aqui.
+// Não há cookie/credencial nesta rota — a barreira real é o segredo de relay.
 const CORS = {
-  'Access-Control-Allow-Origin': 'https://portaldeservicos.pdpj.jus.br',
+  'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, x-jusbr-relay',
   'Access-Control-Max-Age': '86400',

@@ -36,8 +36,8 @@ function scriptTexto(segredo, endpoint) {
   return `// ==UserScript==
 // @name         CMPGestão — Sincronizar token jus.br (PDPJ)
 // @namespace    cmpadvogados.com.br
-// @version      3.0
-// @description  Mantém o CMPGestão sincronizado com a sua sessão do jus.br. Mostra um selo na tela com o estado. Segredo já embutido.
+// @version      3.1
+// @description  Mantém o CMPGestão sincronizado com a sua sessão do jus.br. Envia por fetch (CORS) e só usa GM como reserva. Mostra um selo na tela com o estado.
 // @match        https://portaldeservicos.pdpj.jus.br/*
 // @match        https://sso.cloud.pje.jus.br/*
 // @run-at       document-start
@@ -62,20 +62,28 @@ function scriptTexto(segredo, endpoint) {
     ultimoToken = payload.token; ultimoEnvioMs = agora; ultimaOrigem = origem || '';
     function ok() { ultimoOkMs = Date.now(); ultimoErro = ''; selo(); }
     function falhou(e) { ultimoErro = String(e || 'falha'); selo(); }
-    try {
-      GM_xmlhttpRequest({
-        method: 'POST', url: ENDPOINT,
-        headers: { 'Content-Type': 'application/json', 'x-jusbr-relay': RELAY_SECRET },
-        data: JSON.stringify(payload),
-        onload: function (r) { if (r && r.status >= 200 && r.status < 300) ok(); else falhou('HTTP ' + (r && r.status)); },
-        onerror: function () { falhou('rede'); }
-      });
-    } catch (e) {
+    var corpo = JSON.stringify(payload);
+    var cab = { 'Content-Type': 'application/json', 'x-jusbr-relay': RELAY_SECRET };
+    // 1ª tentativa: fetch normal (o endpoint libera CORS) — não depende de
+    // permissão do Tampermonkey, que é onde costuma travar.
+    var viaFetch = null;
+    try { viaFetch = of.call(window, ENDPOINT, { method: 'POST', headers: cab, body: corpo, mode: 'cors', credentials: 'omit' }); } catch (e) { viaFetch = null; }
+    if (viaFetch && viaFetch.then) {
+      viaFetch.then(function (r) {
+        if (r && r.ok) { ok(); return; }
+        if (r) { falhou('HTTP ' + r.status); return; }
+        viaGM();
+      }).catch(function () { viaGM(); });
+    } else { viaGM(); }
+    // 2ª tentativa: GM_xmlhttpRequest (ignora CORS, mas pede permissão)
+    function viaGM() {
       try {
-        fetch(ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-jusbr-relay': RELAY_SECRET }, body: JSON.stringify(payload) })
-          .then(function (r) { if (r.ok) ok(); else falhou('HTTP ' + r.status); })
-          .catch(function () { falhou('rede'); });
-      } catch (e2) { falhou('sem permissão'); }
+        GM_xmlhttpRequest({
+          method: 'POST', url: ENDPOINT, headers: cab, data: corpo,
+          onload: function (r) { if (r && r.status >= 200 && r.status < 300) ok(); else falhou('HTTP ' + (r && r.status)); },
+          onerror: function () { falhou('bloqueado (permita o domínio no Tampermonkey)'); }
+        });
+      } catch (e) { falhou('sem permissão do Tampermonkey'); }
     }
   }
 
