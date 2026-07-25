@@ -37,7 +37,7 @@ function scriptTexto(segredo, endpoint) {
   return `// ==UserScript==
 // @name         CMPGestão — Sincronizar token jus.br (PDPJ)
 // @namespace    cmpadvogados.com.br
-// @version      5.2
+// @version      5.3
 // @description  Ponte entre a sua sessão do jus.br e o CMPGestão. A aba do jus.br guarda o token no cofre do Tampermonkey; a aba do CMPGestão o envia (mesma origem, sem bloqueios). Selo na tela mostra o estado.
 // @match        https://portaldeservicos.pdpj.jus.br/*
 // @match        https://sso.cloud.pje.jus.br/*
@@ -161,16 +161,16 @@ function scriptTexto(segredo, endpoint) {
   // ---------- MODO APRENDIZADO: registra a FORMA do peticionamento ----------
   // Grava só o esqueleto (URL, nomes de cabeçalhos, chaves do JSON com valores
   // truncados). Conteúdo de arquivo vira "<arquivo N bytes>". Nada de token.
-  var ENDPOINT_APRENDER = ENDPOINT.replace(/\/token$/, '/aprender');
+  var ENDPOINT_APRENDER = ENDPOINT.replace(/\\/token$/, '/aprender');
   function ehPeticionamento(u) {
     u = String(u || '');
     if (!u) return false;
     if (ehEndpointToken(u)) return false;                 // login/refresh não interessa
-    if (/\.(js|css|png|jpe?g|svg|woff2?|ico)(\?|$)/i.test(u)) return false;
+    if (/\\.(js|css|png|jpe?g|svg|woff2?|ico)(\\?|$)/i.test(u)) return false;
     // só escrita na API do PDPJ/PJe — amplo o bastante para achar o peticionamento,
     // estreito o bastante para não encher a fila de ruído.
-    if (!/\/api\//i.test(u)) return false;
-    return /pdpj\.jus\.br|pje\.jus\.br/i.test(u) || u.charAt(0) === '/';
+    if (!/\\/api\\//i.test(u)) return false;
+    return /pdpj\\.jus\\.br|pje\\.jus\\.br/i.test(u) || u.charAt(0) === '/';
   }
   function esqueleto(v, prof) {
     prof = prof || 0;
