@@ -4,6 +4,7 @@
 // (a query é útil para abrir o PDF direto numa nova aba / <embed>).
 
 import { createClient } from '@supabase/supabase-js'
+import { tipoRealDoArquivo, pdfDeTexto } from '../lib.js'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 20
@@ -31,8 +32,18 @@ export async function GET(request) {
   if (!data || !data.conteudo_b64) return Response.json({ erro: 'arquivo não encontrado (pode ter expirado)' }, { status: 404 })
 
   let buf = Buffer.from(data.conteudo_b64, 'base64')
-  const tipo = data.doc_tipo || 'application/pdf'
-  const ext = tipo.indexOf('html') > -1 ? '.html' : (tipo.indexOf('pdf') > -1 ? '.pdf' : '')
+  // O rótulo guardado não é confiável: o PDPJ manda TEXTO puro dizendo que é PDF,
+  // e o navegador responde "Falha ao carregar o documento PDF". Vale o conteúdo.
+  let tipo = tipoRealDoArquivo(buf, data.doc_tipo, data.doc_nome)
+  // texto puro rotulado como PDF: entregamos um PDF de verdade, montado na hora —
+  // é o que o advogado espera abrir/imprimir, sem precisar rebaixar o arquivo.
+  if (tipo === 'text/plain' && String(data.doc_tipo || '').indexOf('pdf') > -1) {
+    try {
+      buf = await pdfDeTexto(buf.toString('utf8'), data.doc_nome)
+      tipo = 'application/pdf'
+    } catch (e) { tipo = 'text/plain; charset=utf-8' }
+  }
+  const ext = tipo.indexOf('html') > -1 ? '.html' : (tipo.indexOf('pdf') > -1 ? '.pdf' : (tipo.indexOf('text/plain') > -1 ? '.txt' : ''))
   const nome = (data.doc_nome || 'documento').replace(/[^\w.\- ]+/g, '_')
   const nomeFinal = /\.\w+$/.test(nome) ? nome : (nome + ext)
   // HTML do jus.br (expediente/decisão): tira o <script> (que travava em "Carregando")

@@ -4,7 +4,7 @@
 // Se já estiver baixado, devolve o existente. Guarda o PDF em base64 (jusbr_arquivos).
 
 import { createClient } from '@supabase/supabase-js'
-import { getFreshToken, ehFaltaDeAcessoAoProcesso } from '../lib.js'
+import { getFreshToken, ehFaltaDeAcessoAoProcesso, tipoRealDoArquivo } from '../lib.js'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -132,14 +132,10 @@ export async function POST(request) {
   const buf = escolhido.buf
   if (buf.length > MAX_BYTES) return Response.json({ erro: 'arquivo grande demais (>25MB) para guardar no sistema' }, { status: 413 })
 
-  // detecta o tipo REAL (PDPJ às vezes não rotula ou rotula errado)
-  let tipoFinal = String(resp.headers.get('content-type') || body.tipo || '').split(';')[0].trim().toLowerCase()
-  const head = buf.slice(0, 256).toString('utf8').trim().toLowerCase()
-  const parecePdf = head.startsWith('%pdf')
-  const pareceHtml = /\.html?$/i.test(nome) || head.startsWith('<!doctype html') || head.startsWith('<html') || (head.startsWith('<') && head.indexOf('<body') > -1)
-  if (!tipoFinal || tipoFinal === 'application/octet-stream') tipoFinal = parecePdf ? 'application/pdf' : (pareceHtml ? 'text/html' : 'application/pdf')
-  if (tipoFinal === 'application/pdf' && pareceHtml && !parecePdf) tipoFinal = 'text/html'
-  if (tipoFinal.indexOf('html') > -1 && parecePdf) tipoFinal = 'application/pdf'
+  // detecta o tipo REAL (PDPJ às vezes não rotula ou rotula errado). Antes, o que
+  // não fosse PDF nem HTML virava "application/pdf" no chute — e texto puro
+  // guardado como PDF quebra na hora de abrir.
+  let tipoFinal = tipoRealDoArquivo(buf, resp.headers.get('content-type') || body.tipo, nome)
 
   // procuração e petição inicial são leves e sempre úteis: guardamos PERMANENTE
   const ehLeve = /procura[çc][aã]o|peti[çc][aã]o\s+inicial|\binicial\b/i.test(String(nome || ''))

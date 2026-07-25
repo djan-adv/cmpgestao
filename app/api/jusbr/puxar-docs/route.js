@@ -8,7 +8,7 @@
 //   Parâmetros: ?dias=2 (janela de movimentação) ?porproc=3 ?max=120 (tetos)
 // Aberta (sem login) para rodar no crontab; não expõe o token.
 
-import { jusbrAdmin, getFreshToken, ESCRITORIO_CMP } from '../lib.js'
+import { jusbrAdmin, getFreshToken, tipoRealDoArquivo, ESCRITORIO_CMP } from '../lib.js'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -81,12 +81,8 @@ async function baixarDoc(token, numero, doc) {
   // rejeita envelope JSON de erro e a casca do app Angular
   if (/json/.test(ct) || head.startsWith('{') || head.startsWith('[')) return { erro: 'json' }
   if (/<app-root|ng-version=/.test(buf.slice(0, 6000).toString('utf8').toLowerCase())) return { erro: 'visor' }
-  const parecePdf = head.startsWith('%pdf')
-  const pareceHtml = /\.html?$/i.test(doc.nome) || head.startsWith('<!doctype html') || head.startsWith('<html') || head.startsWith('<')
-  let tipo = ct
-  if (!tipo || tipo === 'application/octet-stream') tipo = parecePdf ? 'application/pdf' : (pareceHtml ? 'text/html' : 'application/pdf')
-  if (tipo === 'application/pdf' && pareceHtml && !parecePdf) tipo = 'text/html'
-  if (tipo.indexOf('html') > -1 && parecePdf) tipo = 'application/pdf'
+  // o rótulo do PDPJ não decide nada: quem manda é o conteúdo (ver ../lib.js)
+  const tipo = tipoRealDoArquivo(buf, ct, doc.nome)
   return { buf, tipo }
 }
 

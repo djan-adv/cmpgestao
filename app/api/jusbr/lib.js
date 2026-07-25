@@ -60,6 +60,54 @@ export function ehEmissorPdpj(t) {
   return /(^|\/\/)([a-z0-9.-]*\.)?(pje|pdpj)\.jus\.br/i.test(String(c.iss))
 }
 
+// ————— tipo REAL de um arquivo baixado do PDPJ —————
+// O portal rotula errado com frequência: manda texto puro dizendo que é PDF.
+// Servir isso como PDF dá "Falha ao carregar o documento PDF" no navegador.
+export function tipoRealDoArquivo(buf, tipoDeclarado, nome) {
+  const decl = String(tipoDeclarado || '').split(';')[0].trim().toLowerCase()
+  if (!buf || !buf.length) return decl || 'application/octet-stream'
+  const cabeca = buf.slice(0, 512).toString('utf8').trim().toLowerCase()
+  if (cabeca.startsWith('%pdf')) return 'application/pdf'
+  if (buf[0] === 0x50 && buf[1] === 0x4b) return /\.docx$/i.test(String(nome || '')) ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : 'application/zip'
+  if (cabeca.startsWith('<!doctype html') || cabeca.startsWith('<html') || (cabeca.startsWith('<') && cabeca.indexOf('<body') > -1)) return 'text/html'
+  if (/^image\//.test(decl) || /msword|officedocument|rtf/.test(decl)) return decl
+  // sobrou texto: só é texto se for legível (senão é binário sem rótulo)
+  const amostra = buf.slice(0, 2000).toString('utf8')
+  if (!/�/.test(amostra) && /[a-zA-ZÀ-ÿ]{3}/.test(amostra)) return 'text/plain'
+  return decl || 'application/octet-stream'
+}
+
+// Texto puro → PDF de verdade. O jus.br devolve certidões e expedientes como
+// texto; o advogado quer um PDF que abra e imprima.
+export async function pdfDeTexto(texto, titulo) {
+  const { PDFDocument, StandardFonts, rgb } = await import('pdf-lib')
+  const doc = await PDFDocument.create()
+  const fonte = await doc.embedFont(StandardFonts.Helvetica)
+  const TAM = 10, ALT = 14, MARGEM = 56, LARG_PAG = 595.28, ALT_PAG = 841.89
+  const util = LARG_PAG - MARGEM * 2
+  const linhas = []
+  String(texto || '').replace(/\r/g, '').split('\n').forEach((par) => {
+    // pdf-lib só aceita WinAnsi na fonte padrão — troca o que não couber
+    const limpo = par.replace(/[^\x09\x0A\x20-\x7E -ÿ]/g, ' ')
+    if (!limpo.trim()) { linhas.push(''); return }
+    let atual = ''
+    limpo.split(/\s+/).forEach((p) => {
+      const teste = atual ? atual + ' ' + p : p
+      if (fonte.widthOfTextAtSize(teste, TAM) > util) { if (atual) linhas.push(atual); atual = p } else atual = teste
+    })
+    if (atual) linhas.push(atual)
+  })
+  const porPag = Math.floor((ALT_PAG - MARGEM * 2) / ALT)
+  for (let i = 0; i < Math.max(1, Math.ceil(linhas.length / porPag)); i++) {
+    const pag = doc.addPage([LARG_PAG, ALT_PAG])
+    linhas.slice(i * porPag, (i + 1) * porPag).forEach((ln, k) => {
+      pag.drawText(ln, { x: MARGEM, y: ALT_PAG - MARGEM - k * ALT, size: TAM, font: fonte, color: rgb(0.1, 0.12, 0.15) })
+    })
+  }
+  if (titulo) doc.setTitle(String(titulo).slice(0, 120))
+  return Buffer.from(await doc.save())
+}
+
 // O 401 do PDPJ é ambíguo: serve tanto para "token ruim" quanto para "este
 // processo não é seu". Só o corpo da resposta distingue os dois.
 export function ehFaltaDeAcessoAoProcesso(corpo) {
