@@ -861,7 +861,7 @@ async function identificarUsuarioLogado(){
 }
 var __hoje0=new Date();
 var __ehCel=(typeof window!=='undefined' && window.innerWidth<=860);
-var KAN=null, atual=null, TRIAGEM=null, AGENDA=null, VIEWAG="tarefas", curY=__hoje0.getFullYear(), curM=__hoje0.getMonth(), curD=__hoje0.getDate(), agView=(__ehCel?"dia":"mes"), triagemAtual=null, crmView="contatos", agResp="Todos", canalSel="Geral", mesSel="todos", histShown=10, PUBIDX=null;
+var KAN=null, atual=null, TRIAGEM=null, AGENDA=null, VIEWAG="tarefas", curY=__hoje0.getFullYear(), curM=__hoje0.getMonth(), curD=__hoje0.getDate(), agView=(__ehCel?"dia":"mes"), triagemAtual=null, crmView="contatos", agResp="Todos", canalSel="Geral", mesSel="todos", histShown=5, PUBIDX=null;
 
 /* acesso único por login: o login mais recente assume; os anteriores são
    deslogados. Força cada sócio a ter o próprio acesso. Falha aberta (erro de
@@ -1772,7 +1772,7 @@ function abrir(i){
     '<span id="obs-acoes"></span></p><div id="obs-audiencia"></div><div id="obs-corpo"></div></div>';
   // histórico (termos oficiais)
   /* aba "Publicações com inteiro teor (DJEN)" removida a pedido — sem utilidade prática */
-  html+='<div class="card"><p class="sectlabel" style="display:flex;justify-content:space-between;align-items:center">Histórico completo (termos oficiais)'+(p.hist_full&&p.hist_full.length?(' — '+p.hist_full.length+' andamentos'):'')+'<span style="display:flex;gap:6px"><button class="btn sm ghost" style="font-size:12px" onclick="addHistManual()">+ histórico manual</button></span></p><ul class="timeline" id="det-hist"></ul><div id="det-hist-more" style="margin-top:8px"></div></div>';
+  html+='<div class="card"><p class="sectlabel" style="display:flex;justify-content:space-between;align-items:center">Histórico completo (termos oficiais)'+(p.hist_full&&p.hist_full.length?(' — '+p.hist_full.length+' andamentos'):'')+'<span style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn sm ghost" style="font-size:12px" id="btn-atu-hist" onclick="atualizarHistorico()" title="Busca no DJEN as publicações novas deste processo (com o inteiro teor) e os movimentos do jus.br">&#8635; atualizar</button><button class="btn sm ghost" style="font-size:12px" onclick="addHistManual()">+ histórico manual</button></span></p><ul class="timeline" id="det-hist"></ul><div id="det-hist-more" style="margin-top:8px"></div></div>';
   // documentos do jus.br (PDPJ) — puxa sob demanda a peça escolhida (some após 30 dias)
   try{ if(typeof carregarProtocolados==='function'){ carregarProtocolados(p.numero).then(function(){ try{ var bx=document.getElementById('proto-na-ficha'); if(bx) bx.innerHTML=protoBlocoHTML(p.numero); }catch(e){} }); } }catch(e){}
   var _pb=''; try{ _pb=(typeof protoBlocoHTML==='function')?protoBlocoHTML(p.numero):''; }catch(ePB){ _pb=''; }
@@ -1811,7 +1811,7 @@ function abrir(i){
   document.getElementById("det-body").innerHTML=html;
   posicionarHonMobile();
   try{ _preencheFaturadoAuto(); }catch(e){}
-  histShown=10; renderHistorico(); if(typeof loadAnexosProc==='function') loadAnexosProc(p.numero);
+  histShown=5; renderHistorico(); if(typeof loadAnexosProc==='function') loadAnexosProc(p.numero);
   try{ if(typeof renderPedidoVara==='function') renderPedidoVara(); }catch(e){}
   if(typeof renderAtivProc==='function') renderAtivProc();
   renderDetEtq();
@@ -3611,19 +3611,46 @@ function classMov(t){
   if(/decurso|publica|disponibiliza|intima|comunica|ci[êe]ncia|di[áa]rio da justi/.test(t)) return ["Publicação / prazo","#8a5a00","pub"];
   return ["Andamento do juízo","#185FA5","and"];
 }
-function setFiltroHist(f){window.histFiltro=f;histShown=10;renderHistorico();}
+/* Um andamento só é útil se disser o que aconteceu. A base tem ~93 mil andamentos
+   e só ~4% trazem teor: o DataJud manda título de movimento com 27 caracteres em
+   média ("Conclusos para despacho"), e eles enterram as decisões. Esta função é o
+   critério único de "tem conteúdo", usado pelo filtro e pela ordenação. */
+function temTeor(mv){
+  if(!mv) return false;
+  var t=String(mv.texto||'').trim();
+  if(mv.f==='captura'||mv.f==='email'||mv.f==='minuta') return true;
+  if(mv.f==='manual') return t.length>120;
+  return t.length>180;
+}
+function setFiltroHist(f){window.histFiltro=f;histShown=5;renderHistorico();}
 function renderHistorico(){
   var ul=document.getElementById("det-hist");if(!ul)return;
-  if(window.histFiltro===undefined)window.histFiltro="all";
   var full=(atual.hist_full&&atual.hist_full.length)?atual.hist_full:(atual.hist?[{data:atual.data,texto:atual.hist}]:[]);
-  var arr=full.filter(function(mv){return window.histFiltro==="all"||classMov(mv.texto)[2]==="peca";});
+  var nteor=full.filter(temTeor).length;
+  /* abre no que tem conteúdo — é o que o advogado precisa ler. Se o processo não
+     tiver nenhum teor, cai em "Tudo" sozinho, para a aba não abrir vazia. */
+  if(window.histFiltro===undefined)window.histFiltro=(nteor?"teor":"all");
+  if(window.histFiltro==="teor" && !nteor)window.histFiltro="all";
+  var arr=full.filter(function(mv){
+    if(window.histFiltro==="teor")return temTeor(mv);
+    if(window.histFiltro==="peca")return classMov(mv.texto)[2]==="peca";
+    return true;
+  });
+  /* mesma data: o que tem teor vem primeiro. Não distorce a cronologia — só
+     resolve o empate a favor de quem tem o que dizer. */
+  arr=arr.slice().sort(function(a,b){
+    var da=String(a.data||''), db=String(b.data||'');
+    if(da!==db) return da<db?1:-1;
+    return (temTeor(b)?1:0)-(temTeor(a)?1:0);
+  });
   var pubs=pubsDoProcesso(atual.numero);
   ul.innerHTML="";
   var more=document.getElementById("det-hist-more");
   var nped=full.filter(function(mv){return classMov(mv.texto)[2]==="peca";}).length;
   var bar=document.createElement("li");bar.style.cssText="list-style:none;margin:0 0 12px;padding:0;border:none";
   bar.innerHTML='<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:12px">'
-    +'<button class="btn sm '+(window.histFiltro==="all"?"":"ghost")+'" onclick="setFiltroHist(\'all\')">Tudo ('+full.length+')</button>'
+    +'<button class="btn sm '+(window.histFiltro==="teor"?"":"ghost")+'" onclick="setFiltroHist(\'teor\')" title="Só os andamentos que trazem o inteiro teor — decisões, despachos e intimações com texto">Com teor ('+nteor+')</button>'
+    +'<button class="btn sm '+(window.histFiltro==="all"?"":"ghost")+'" onclick="setFiltroHist(\'all\')" title="Inclui os títulos de movimento do DataJud, que não trazem texto">Tudo ('+full.length+')</button>'
     +'<button class="btn sm '+(window.histFiltro==="peca"?"":"ghost")+'" onclick="setFiltroHist(\'peca\')">Só nossas peças ('+nped+')</button>'
     +'<span style="margin-left:auto;color:var(--muted);font-size:11px">'
       +'<span style="color:#0F6E56">●</span> peça &nbsp;<span style="color:#6d28a8">●</span> decisão &nbsp;<span style="color:#185FA5">●</span> andamento &nbsp;<span style="color:#8a5a00">●</span> publicação'
@@ -3654,6 +3681,11 @@ function renderHistorico(){
       +'<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap"><button class="btn sm ghost" onclick="abrirTarefaKanban('+a.id+')">Abrir tarefa</button><button class="btn sm ghost" style="color:#127a53;border-color:#bfe3d1" onclick="concluirTarefaKanban('+a.id+');renderHistorico();if(typeof renderAtivProc===\'function\')renderAtivProc();">✓ Concluir</button></div>';
     ul.appendChild(li);
   })();
+  if(window.histFiltro==="all" && nteor && full.length>nteor*3){
+    var liA=document.createElement("li");liA.style.cssText="list-style:none;margin:0 0 10px";
+    liA.innerHTML='<div class="note" style="background:#fafbfc;border-left:3px solid var(--line);padding:7px 10px;border-radius:0 6px 6px 0">A maior parte destes '+full.length+' itens é título de movimento do DataJud, sem texto. <a onclick="setFiltroHist(\'teor\')" style="cursor:pointer;color:#185FA5;text-decoration:underline;font-weight:600">Ver só os '+nteor+' com teor</a>.</div>';
+    ul.appendChild(liA);
+  }
   if(!arr.length){var li0=document.createElement("li");li0.style.listStyle="none";li0.innerHTML='<div class="note">Sem itens para este filtro.</div>';ul.appendChild(li0);more.innerHTML="";return;}
   var lim=Math.min(histShown,arr.length);
   for(var k=0;k<lim;k++){(function(mv){
@@ -3773,12 +3805,14 @@ async function atualizarHistorico(){
     if(tot>0 && atual._id){
       try{
         var q=await window.__sb.from('andamentos').select('id,data,texto,fonte,providencia').eq('processo_id',atual._id).order('data',{ascending:false});
-        if(q&&q.data){ atual.hist_full=q.data.map(function(a){return {id:a.id,data:(a.data?a.data+'T00:00:00.000Z':null),texto:a.texto,f:a.fonte||'',pr:(a.providencia===true)};}); histShown=6; }
+        if(q&&q.data){ atual.hist_full=q.data.map(function(a){return {id:a.id,data:(a.data?a.data+'T00:00:00.000Z':null),texto:a.texto,f:a.fonte||'',pr:(a.providencia===true)};}); histShown=5; }
       }catch(e){}
     }
     /* re-renderiza a ficha inteira (recalcula o selo "vinculado" e preenche os dados) */
     if(tot>0 || fichaUpd){ var _i=DADOS.processos.indexOf(atual); if(_i>=0){ abrir(_i); } else { renderHistorico(); } }
-    alert((tot>0 ? (tot+' novo(s) andamento(s): '+djenNovos+' do DJEN + '+mvNovos+' dos movimentos do jus.br.') : 'Nenhum andamento novo.')+(fichaUpd?'\n✓ Dados do processo atualizados pelo jus.br (classe/assunto/vara).':'')+notas);
+    alert((tot>0
+      ? (tot+' novo(s) andamento(s):\n• '+djenNovos+' do DJEN — são estes que trazem o inteiro teor.\n• '+mvNovos+' movimentos do jus.br — só o título, sem texto.\n\nO histórico abre no filtro "Com teor"; use "Tudo" para ver os títulos de movimento também.')
+      : 'Nenhum andamento novo.')+(fichaUpd?'\n\n✓ Dados do processo atualizados pelo jus.br (classe/assunto/vara).':'')+notas);
   }catch(e){ alert('Falha: '+(e&&e.message||e)); }
   if(btn){ btn.disabled=false; btn.textContent=t0; }
 }
@@ -4102,7 +4136,7 @@ async function jusbrExcluir(ev,id,el){ if(ev)ev.preventDefault(); if(!confirm('E
     if(acao) acao.innerHTML='<button class="btn sm" style="font-size:11px" onclick="jusbrBaixar(this,\''+esc(uuid)+'\',\'\',\'documento\')">⬇ puxar</button>';
   }catch(e){ alert('Falha ao excluir'); }
 }
-function verMenosHist(){histShown=10;renderHistorico();window.scrollTo(0,0);}
+function verMenosHist(){histShown=5;renderHistorico();}
 
 /* formata data do cartão: ISO (2026-07-09) ou dd/mm/aaaa -> dd/mm */
 function _kDataBR(s){
@@ -7318,7 +7352,7 @@ async function peticionarClaude(){
   var dig=String(atual.numero||'').replace(/\D/g,'');
   var txt='[PETIÇÃO SOLICITADA AO CLAUDE] '+inst+' (solicitada em '+iso.split('-').reverse().join('/')+', a redigir no Cowork)';
   try{ var sb=window.__sb; var w=await sb.from('andamentos').insert({processo_id:atual._id,data:iso,texto:txt,fonte:'manual'}).select('id').single();
-    if(!w.error){ atual.hist_full=atual.hist_full||[]; atual.hist_full.unshift({id:w.data&&w.data.id,data:iso+'T00:00:00.000Z',texto:txt,f:'manual'}); histShown=10; renderHistorico(); }
+    if(!w.error){ atual.hist_full=atual.hist_full||[]; atual.hist_full.unshift({id:w.data&&w.data.id,data:iso+'T00:00:00.000Z',texto:txt,f:'manual'}); histShown=5; renderHistorico(); }
   }catch(e){}
   var pedido='Usando a skill "peticoes-cmp", redija no padrão CMP a seguinte peça:\n\n'+
     'PEÇA: '+inst+'\n'+
@@ -7663,7 +7697,7 @@ async function addHistManual(){
     var w=await sb.from('andamentos').insert({processo_id:atual._id,data:iso,texto:t,fonte:'manual'}).select('id').single();
     if(w.error){ alert('Erro ao salvar: '+w.error.message); return; }
     atual.hist_full=atual.hist_full||[]; atual.hist_full.unshift({id:w.data&&w.data.id,data:iso+'T00:00:00.000Z',texto:t,f:'manual'});
-    histShown=10; renderHistorico();
+    histShown=5; renderHistorico();
   }catch(e){ alert('Erro: '+(e&&e.message||e)); }
 }
 /* ponto 4: o telefone/WhatsApp é do CLIENTE, não do processo.
