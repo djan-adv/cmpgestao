@@ -10264,7 +10264,9 @@ function _protoAlertaDoDia(){
     document.body.appendChild(faixa);
   }
   var lista=venc.slice(0,3).map(function(x){ return esc(x.titulo)+' ('+esc(fmtCNJ(x.processo_numero))+')'; }).join(' · ');
+  var umSo=(venc.length===1)?venc[0]:null;
   faixa.innerHTML='<b>⚠ PRAZO FATAL HOJE — '+venc.length+' petição(ões) a protocolar:</b> <span style="opacity:.95">'+lista+(venc.length>3?(' + '+(venc.length-3)+' …'):'')+'</span>'
+    +(umSo?('<button onclick="protoMarcarProtocolada(\''+umSo.id+'\')" style="background:#0F6E56;color:#fff;border:0;border-radius:8px;padding:4px 12px;font-weight:700;cursor:pointer" title="Encerra o prazo na hora — sem esperar a peça entrar nos autos">✓ já protocolei</button>'):'')
     +'<button onclick="go(\'painel\');" style="background:#fff;color:#7b1e3a;border:0;border-radius:8px;padding:4px 12px;font-weight:700;cursor:pointer">ver no painel</button>'
     +'<button onclick="document.getElementById(\'proto-faixa\').remove()" style="background:transparent;color:#fff;border:1px solid rgba(255,255,255,.5);border-radius:8px;padding:4px 10px;cursor:pointer">fechar</button>';
 }
@@ -10288,7 +10290,7 @@ function protoBlocoHTML(numero){
       +'<button class="btn sm ghost" style="font-size:11px;color:#b5342b" onclick="protoCancelar(\''+x.id+'\')">✕</button></span></div>';
   }).join('');
   return '<div class="card" style="border-left:4px solid #7b1e3a"><p class="sectlabel" style="margin:0 0 4px;color:#7b1e3a">📤 Petições a protocolar ('+itens.length+')</p>'
-    +'<p class="note" style="margin:0 0 4px">Prazo fatal. O sistema fecha sozinho quando a peça aparecer nos autos — ou marque "protocolada" ao concluir.</p>'+linhas+'</div>';
+    +'<p class="note" style="margin:0 0 4px">Prazo fatal. Ao protocolar, clique em <b>✓ protocolada</b> — o prazo encerra na hora. (O sistema também encerra sozinho quando o movimento/peça aparecer nos autos, mas isso costuma demorar.)</p>'+linhas+'</div>';
 }
 async function protoAbrirArquivo(id){
   var x=(PROTO_PEND||[]).find(function(y){return String(y.id)===String(id);}); if(!x||!x.arquivo_caminho) return;

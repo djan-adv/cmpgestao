@@ -30,6 +30,28 @@ function combina(nomeDoc, tituloPend) {
   return /peticao|peca|manifestacao|contrarrazoes|recurso|embargos|apelacao|contestacao|replica|memoriais|alegacoes/.test(nd)
 }
 
+// Varre o JSON do PDPJ atrás de movimentos (data + texto), sem depender do nome
+// exato dos campos — o formato varia entre tribunais.
+function colheMovimentos(node, out, prof) {
+  out = out || []; prof = prof || 0
+  if (!node || typeof node !== 'object' || prof > 7) return out
+  if (Array.isArray(node)) { for (const x of node) colheMovimentos(x, out, prof + 1); return out }
+  const ks = Object.keys(node)
+  let dataV = null, textoV = ''
+  for (const k of ks) {
+    const v = node[k]
+    if (typeof v === 'string') {
+      if (!dataV && /data|dt_?mov|datahora/i.test(k) && /\d{4}-\d{2}-\d{2}/.test(v)) dataV = v
+      else if (/descri|nome|movimento|complement|titulo|texto|tipo/i.test(k) && v.length > 3) textoV += ' ' + v
+    } else if (v && typeof v === 'object') colheMovimentos(v, out, prof + 1)
+  }
+  if (dataV && textoV.trim()) {
+    const ts = new Date(dataV).getTime()
+    if (ts) out.push({ iso: dataV, ts, txt: textoV.trim() })
+  }
+  return out
+}
+
 export async function GET(request) {
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) return Response.json({ erro: 'falta service key' }, { status: 500 })
   const debug = new URL(request.url).searchParams.get('debug') != null
@@ -57,26 +79,36 @@ export async function GET(request) {
     } catch (e) { rel.detalhe.push({ numero, erro: 'rede' }); continue }
     const proc = Array.isArray(data && data.content) ? data.content[0] : (Array.isArray(data) ? data[0] : data)
     const docs = (proc && (proc.documentos || (proc.tramitacaoAtual && proc.tramitacaoAtual.documentos))) || []
-    if (!Array.isArray(docs) || !docs.length) continue
+    // MOVIMENTOS: no PDPJ o "protocolo/juntada" costuma aparecer ANTES da peça em si,
+    // que pode demorar dias para entrar nos autos. Por isso olhamos os dois.
+    const movs = colheMovimentos(data)
 
     for (const p of porProc[numero]) {
       const desde = new Date(p.criado_em).getTime()
-      const achou = docs.find(d => {
-        const dt = new Date(String(d.dataHoraJuntada || d.data || '')).getTime()
-        if (!dt || dt < desde) return false                 // só peças juntadas DEPOIS do registro
-        return combina(d.nome || (d.arquivo && d.arquivo.nome), p.titulo)
-      })
+      let achou = null, via = ''
+      if (Array.isArray(docs)) {
+        achou = docs.find(d => {
+          const dt = new Date(String(d.dataHoraJuntada || d.data || '')).getTime()
+          if (!dt || dt < desde) return false               // só peças juntadas DEPOIS do registro
+          return combina(d.nome || (d.arquivo && d.arquivo.nome), p.titulo)
+        })
+        if (achou) via = 'peça nos autos'
+      }
+      if (!achou) {
+        const m = movs.find(x => x.ts >= desde && /junt|petic|protocol/i.test(x.txt))
+        if (m) { achou = { nome: m.txt.slice(0, 120), dataHoraJuntada: m.iso }; via = 'movimento' }
+      }
       if (!achou) continue
       if (!debug) {
         await sb.from('peticoes_protocolo').update({
           status: 'protocolada',
           protocolada_em: new Date().toISOString(),
           protocolo_ref: String(achou.nome || '').slice(0, 120),
-          fechada_por: 'jusbr',
+          fechada_por: 'jusbr:' + (via || 'autos'),
         }).eq('id', p.id)
       }
       rel.fechadas++
-      rel.detalhe.push({ numero, titulo: p.titulo, peca: achou.nome, juntada: achou.dataHoraJuntada })
+      rel.detalhe.push({ numero, titulo: p.titulo, via, peca: achou.nome, juntada: achou.dataHoraJuntada })
     }
   }
   return Response.json(rel)
