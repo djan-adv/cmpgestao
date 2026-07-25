@@ -376,15 +376,15 @@ async function faseDossie(sb) {
 }
 
 // ————— fase 3: íntegra dos autos na pasta do processo —————
-// Sem custo de IA: é download do jus.br. Guarda UM PDF por processo, em ordem
-// crescente (do mais antigo ao mais novo, como os autos), com prefixo "000 - "
-// para ficar como primeiro arquivo da pasta. A íntegra anterior é substituída —
-// é isso que impede a pasta (e o disco) de crescer sem fim.
+// Vale para TODA intimação triada, exija peça ou não: se o processo se mexeu, a
+// íntegra fica atualizada na pasta. Sem custo de IA — é download do jus.br.
+// Um PDF único por processo, em ordem crescente (começa pela petição inicial e
+// vai até a peça mais recente), com prefixo "000 - " para ser o primeiro arquivo
+// da pasta. A íntegra anterior é substituída — é isso que segura o disco.
 async function faseIntegra(sb) {
-  // pega a pendência mais urgente que ainda não tem íntegra recente
+  // quem tem prazo vai na frente; o resto vem depois (prazo_em nulo por último)
   const { data: pend } = await sb.from('robo_minutas')
     .select('id,processo_id,processo_numero,prazo_em,integra_em')
-    .eq('exige_peca', true).in('status', ['triado', 'dossie', 'sem_orcamento', 'pronta'])
     .is('integra_em', null)
     .order('prazo_em', { ascending: true, nullsFirst: false }).limit(1)
   const alvo = pend && pend[0]

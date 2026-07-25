@@ -21,6 +21,9 @@ sem custo de API) e sobe a minuta revisada. O robô nunca protocola nada.
      depende do dossiê, nem do orçamento, nem de nada dar certo depois.
 3. **Dossiê** (`/api/robo/minutas?fase=dossie`, a cada 15 min) pega a pendência de
    prazo mais curto e monta o zip. Sem IA nenhuma nesta fase — só junta o que já temos.
+4. **Íntegra** (`/api/robo/minutas?fase=integra`, a cada 20 min) guarda os autos
+   inteiros em PDF na pasta do processo. Vale para toda intimação, exija peça ou não;
+   quem tem prazo entra na frente da fila.
 
 ## O que vem dentro do zip
 
@@ -47,9 +50,10 @@ Os documentos saem, nesta ordem: os da pasta do processo em `/opt/cmpdocs`
 
 ## Íntegra dos autos na pasta do processo
 
-Junto com o dossiê, o robô também guarda **a íntegra dos autos em um PDF só**, em
-**ordem crescente** (do documento mais antigo ao mais novo, como os autos), como
-**primeiro arquivo** da pasta do processo:
+**Toda intimação** — exija peça ou não — faz o robô guardar **a íntegra dos autos em
+um PDF único** na pasta do processo, em **ordem crescente**: começa pela petição
+inicial e vai até a peça mais recente, como os autos. Fica como **primeiro arquivo**
+da pasta:
 
 ```
 /opt/cmpdocs/08116164820268152001/
@@ -69,15 +73,20 @@ paga acontece nesta fase.
 
 ### O que isso custa de verdade: disco
 
-Uma íntegra costuma ter dezenas de MB (o teto por pacote é 180 MB). Para o disco do
-VPS não crescer sem fim, valem duas regras:
+Custo de IA é zero, mas **disco não é**. Como vale para toda intimação, na prática
+quase todo processo com movimentação no mês ganha uma íntegra. Com ~500 publicações
+por mês e uma íntegra típica de algumas dezenas de MB (teto de 180 MB por pacote),
+dá para esperar **alguns gigabytes por mês** se nada for apagado.
+
+Duas regras seguram isso:
 
 - **Uma íntegra por processo.** Ao gravar a nova, o robô apaga a anterior.
 - **Íntegra com menos de 7 dias não é refeita** (`INTEGRA_VALIDADE_DIAS`), mesmo que
   chegue outra intimação.
 
-Na prática, o piso é ~1 PDF por processo com prazo ativo. Se o disco apertar, dá para
-apagar as íntegras antigas sem perder nada — o robô refaz quando precisar:
+Ou seja, o teto é ~1 PDF por processo movimentado, não por intimação. Ainda assim,
+**vale acompanhar o disco no primeiro mês**. Apagar íntegra antiga não perde nada —
+o robô refaz quando aquele processo se mexer de novo:
 
 ```bash
 # quanto as íntegras estão ocupando
