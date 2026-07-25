@@ -44,9 +44,23 @@ async function coordenador(request) {
   const u = await sb.auth.getUser(jwt)
   const user = (u && u.data && u.data.user) || null
   if (!user) return null
-  const email = String(user.email || '').toLowerCase()
-  if (!ACESSOS_ALLOW.map(e => e.toLowerCase()).includes(email)) return null
+  if (!(await ehCoordenador(user))) return null
   return user
+}
+
+// Coordenadores: Djan, Jader e Maria Eduarda. Além do e-mail fixo do Djan,
+// aceitamos quem estiver como sócio na tabela usuarios COM um desses nomes —
+// assim Jader e Maria Eduarda passam a gerir acessos assim que se cadastrarem.
+const COORD_NOMES = [/djan/i, /jader/i, /eduarda/i]
+async function ehCoordenador(user) {
+  const email = String((user && user.email) || '').toLowerCase()
+  if (ACESSOS_ALLOW.map(e => e.toLowerCase()).includes(email)) return true
+  try {
+    const sbA = createClient(SB_URL, SERVICE, { auth: { persistSession: false } })
+    const { data } = await sbA.from('usuarios').select('nome,papel').eq('id', user.id).maybeSingle()
+    if (!data || data.papel !== 'socio') return false
+    return COORD_NOMES.some(rx => rx.test(String(data.nome || '')))
+  } catch (e) { return false }
 }
 
 // procura a conta pelo e-mail (varre as páginas de usuários — escritório pequeno)
