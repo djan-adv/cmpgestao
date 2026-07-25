@@ -10,13 +10,16 @@
 import { createClient } from '@supabase/supabase-js'
 import { zip } from '../../_lib/zip.js'
 import { jusbrAdmin } from '../lib.js'
-import { coletarPecas, ordenarPecas, pdfUnico } from './core.js'
+import fs from 'fs'
+import path from 'path'
+import { coletarPecas, ordenarPecas, pdfUnico, salvarNaPasta } from './core.js'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
 export const revalidate = 0
 export const maxDuration = 60
 
+const ROOT = '/opt/cmpdocs'
 const soDig = (s) => String(s || '').replace(/\D/g, '')
 
 async function usuario(jwt) {
@@ -63,14 +66,21 @@ export async function GET(request) {
     try { r = await pdfUnico(files) }
     catch (e) { return Response.json({ erro: 'PDF único indisponível: ' + String((e && e.message) || e) + ' — use o .zip' }, { status: 502 }) }
     if (r.erro) return Response.json({ erro: r.erro }, { status: 502 })
-    return new Response(r.bytes, {
-      headers: {
-        'Content-Type': 'application/pdf',
-        'Content-Disposition': 'attachment; filename="' + numero + '-autos.pdf"',
-        'Content-Length': String(r.bytes.length),
-        'X-CMP-Pecas': String(r.juntados) + '/' + String(r.total) + (r.falhos ? (' (' + r.falhos + ' falharam)') : ''),
-      },
-    })
+    // ?salvar=1 → além de baixar, deixa uma cópia na pasta do processo, no topo
+    // da lista. Substitui a cópia anterior do mesmo tipo (íntegra ou seleção).
+    let salvo = null
+    if (searchParams.get('salvar') != null) {
+      const completa = !uuidsSel.length || uuidsSel.length >= (col.totalDocs || 0)
+      salvo = salvarNaPasta(fs, path, ROOT, numero, r.bytes, completa)
+    }
+    const cab = {
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': 'attachment; filename="' + numero + '-autos.pdf"',
+      'Content-Length': String(r.bytes.length),
+      'X-CMP-Pecas': String(r.juntados) + '/' + String(r.total) + (r.falhos ? (' (' + r.falhos + ' falharam)') : ''),
+    }
+    if (salvo) cab['X-CMP-Salvo'] = encodeURIComponent(salvo)
+    return new Response(r.bytes, { headers: cab })
   }
 
   // ——— formato ZIP (padrão) ———

@@ -3871,6 +3871,13 @@ async function jusbrBaixarSelecionados(formato){
     var nome=rotulo||'documento';
     var cd=r.headers.get('content-disposition')||'';
     var mm=cd.match(/filename="?([^"]+)"?/i); if(mm) nome=mm[1];
+    /* o servidor guardou uma cópia na pasta do processo (topo da lista) */
+    var salvo=r.headers.get('X-CMP-Salvo');
+    if(salvo){ try{ salvo=decodeURIComponent(salvo); }catch(e){}
+      aviso('Baixado. Uma cópia ficou em <b>Documentos do processo</b>, no topo: “'+esc(salvo)+'”.','#127a53');
+      /* se a aba de documentos estiver aberta, recarrega para o arquivo aparecer */
+      try{ var c=window.__docCtx; if(c && typeof carregarDocs==='function') carregarDocs(c.numero,c.sub,c.escopo); }catch(e){}
+    }
     var blob=await r.blob();
     var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=nome;
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
@@ -3891,8 +3898,11 @@ async function jusbrBaixarSelecionados(formato){
   }
   var fmt=(formato==='pdf')?'pdf':'zip';
   aviso((fmt==='pdf'?'Montando um PDF único com ':'Preparando o .zip com ')+sels.length+' peça(s)… (pode levar alguns segundos)');
-  var ok2=await baixar(base+'&formato='+fmt+'&uuids='+encodeURIComponent(sels.join(',')));
-  if(ok2) aviso('Pronto — o arquivo foi para a pasta Downloads.','#0F6E56');
+  /* no PDF único, o servidor também guarda uma cópia na pasta do processo, no topo
+     da lista — assim, ao voltar ao processo, os autos já estão ali. */
+  var extra=(fmt==='pdf')?'&salvar=1':'';
+  var ok2=await baixar(base+'&formato='+fmt+extra+'&uuids='+encodeURIComponent(sels.join(',')));
+  if(ok2 && fmt!=='pdf') aviso('Pronto — o arquivo foi para a pasta Downloads.','#0F6E56');
 }
 async function jusbrCarregar(numero){
   var st=document.getElementById('jusbr-status'), lista=document.getElementById('jusbr-lista');

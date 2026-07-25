@@ -20,7 +20,7 @@ import path from 'path'
 import { chamarClaude, orcamento } from '../../_ia/claude.js'
 import { gerarMinuta, coletaPdfs, ROOT, ESCRITORIO_CMP } from '../../peticao/core.js'
 import { zip } from '../../_lib/zip.js'
-import { coletarPecas, ordenarPecas, pdfUnico } from '../../jusbr/integra/core.js'
+import { coletarPecas, ordenarPecas, pdfUnico, INTEGRA_PREFIXO, nomeArquivoAutos } from '../../jusbr/integra/core.js'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -32,7 +32,6 @@ const RESERVA_MINUTA_USD = 0.4 // modo 'api': só redige se sobrar isto do teto
 const PASTA_DOSSIE = 'Estagiário Virtual'
 const DOSSIE_MAX_DOCS = 8
 const DOSSIE_MAX_BYTES = 60 * 1024 * 1024 // o zip precisa caber num upload de chat
-const INTEGRA_PREFIXO = '000 - ÍNTEGRA DOS AUTOS'
 const INTEGRA_VALIDADE_DIAS = 7 // íntegra mais nova que isto não precisa refazer
 
 function admin() {
@@ -430,7 +429,7 @@ async function faseIntegra(sb) {
   }
 
   const hoje = new Date().toISOString().slice(0, 10)
-  const nome = INTEGRA_PREFIXO + ' (' + hoje.split('-').reverse().join('-') + ').pdf'
+  const nome = nomeArquivoAutos(true, hoje)
   try {
     fs.mkdirSync(pastaProc, { recursive: true })
     // fora a anterior: só uma íntegra por processo

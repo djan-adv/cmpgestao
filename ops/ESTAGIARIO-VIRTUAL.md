@@ -94,6 +94,23 @@ du -ch /opt/cmpdocs/*/000\ -\ ÍNTEGRA* 2>/dev/null | tail -1
 find /opt/cmpdocs -name '000 - ÍNTEGRA*' -mtime +60 -delete
 ```
 
+### O botão manual também guarda cópia
+
+Quando você mesmo baixa pelo **PDF único** (jus.br → marcar peças → "PDF único"), o
+servidor deixa a mesma cópia na pasta do processo, no topo da lista — assim, na volta
+ao processo, os autos já estão ali sem precisar baixar de novo.
+
+- Marcou **todas** as peças → grava como `000 - ÍNTEGRA DOS AUTOS (data).pdf`, o mesmo
+  slot do robô (um substitui o outro, sem duplicar).
+- Marcou **algumas** → grava como `000 - PEÇAS SELECIONADAS (data).pdf`, em slot
+  próprio, que também é substituído a cada novo download.
+
+São dois arquivos no máximo por processo. O `.zip` e o download "soltos" não gravam
+cópia — só o PDF único, que é o formato de leitura.
+
+Se a gravação falhar (disco cheio, permissão), o download continua normalmente: salvar
+é um extra e nunca derruba o que você pediu.
+
 ### Esta fase depende do jus.br
 
 Diferente do dossiê, a íntegra **precisa da sessão do PDPJ ativa** — ela baixa peça

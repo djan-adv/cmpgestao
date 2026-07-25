@@ -14,6 +14,31 @@ export const PDPJ_HEADERS = {
 }
 export const MAX_TOTAL = 180 * 1024 * 1024 // teto do pacote (memória/tempo)
 
+// Nome do PDF guardado na pasta do processo. O prefixo "000 - " é o que faz o
+// arquivo ficar no topo da listagem, que é alfabética. Um slot por tipo: gravar
+// de novo substitui o anterior, então a pasta não engorda.
+export const INTEGRA_PREFIXO = '000 - ÍNTEGRA DOS AUTOS'
+export const SELECAO_PREFIXO = '000 - PEÇAS SELECIONADAS'
+export function nomeArquivoAutos(completa, hoje) {
+  const d = (hoje || new Date().toISOString().slice(0, 10)).split('-').reverse().join('-')
+  return (completa ? INTEGRA_PREFIXO : SELECAO_PREFIXO) + ' (' + d + ').pdf'
+}
+
+// Grava o PDF na pasta do processo, apagando a versão anterior do mesmo slot.
+// Devolve o nome gravado, ou null se não deu (nunca lança: salvar é um extra,
+// não pode derrubar o download que o usuário pediu).
+export function salvarNaPasta(fs, path, ROOT, dig, bytes, completa) {
+  try {
+    const nome = nomeArquivoAutos(completa)
+    const prefixo = completa ? INTEGRA_PREFIXO : SELECAO_PREFIXO
+    const pasta = path.join(ROOT, dig)
+    fs.mkdirSync(pasta, { recursive: true })
+    try { fs.readdirSync(pasta).filter(n => n.startsWith(prefixo) && n !== nome).forEach(n => fs.unlinkSync(path.join(pasta, n))) } catch (e) {}
+    fs.writeFileSync(path.join(pasta, nome), bytes)
+    return nome
+  } catch (e) { return null }
+}
+
 export function abs(h) {
   h = String(h || '').trim()
   if (!h) return null
@@ -72,7 +97,7 @@ export async function coletarPecas(sb, numero, { uuidsSel = [] } = {}) {
     total += buf.length
   }
   if (!files.length) return { erro: 'não foi possível baixar nenhuma peça', status: 502 }
-  return { files, pulados }
+  return { files, pulados, totalDocs: docs.length }
 }
 
 // Ordem final: a MESMA da tela. Com seleção, os uuids vêm na ordem escolhida
