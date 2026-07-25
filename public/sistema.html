@@ -1777,6 +1777,8 @@ function abrir(i){
   try{ if(typeof carregarProtocolados==='function'){ carregarProtocolados(p.numero).then(function(){ try{ var bx=document.getElementById('proto-na-ficha'); if(bx) bx.innerHTML=protoBlocoHTML(p.numero); }catch(e){} }); } }catch(e){}
   var _pb=''; try{ _pb=(typeof protoBlocoHTML==='function')?protoBlocoHTML(p.numero):''; }catch(ePB){ _pb=''; }
   html+='<div id="proto-na-ficha">'+_pb+'</div>';
+  /* Dossiê do devedor: procura bens e créditos dele em OUTROS processos, pelo nome */
+  html+='<div class="card cmp-only" id="devedor-card"><p class="sectlabel" style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">🕵 Dossiê do devedor <button class="btn sm" style="font-size:12px;background:#7a4b00;color:#fff" onclick="abrirDossieDevedor()">Procurar bens e créditos</button></p><div class="note">Varre o Diário de Justiça de todos os tribunais atrás de <b>'+esc(p.oponente||'parte contrária')+'</b> em <b>outros processos</b> — como réu e como autor — e destaca penhoras, avaliações, leilões, alvarás e créditos a receber. É pista de investigação, não certidão.</div></div>';
   html+='<div class="card cmp-only" id="jusbr-card"><p class="sectlabel" style="display:flex;justify-content:space-between;align-items:center">Documentos do jus.br <button class="btn sm" style="font-size:12px" onclick="jusbrCarregar(\''+esc(p.numero)+'\')">Carregar documentos</button> <button class="btn sm ghost" style="font-size:11px" title="Diagnóstico técnico dos documentos (para o Claude)" onclick="jusbrDiag(\''+esc(p.numero)+'\')">🔎 diag</button></p><div id="jusbr-status" class="note" style="margin-bottom:6px">Lista as peças do processo no jus.br. O arquivo escolhido é baixado sob demanda e removido do sistema após 30 dias (o original fica no tribunal).</div><div id="jusbr-barra" style="display:none;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px;padding:7px 9px;background:#f4f7fb;border:1px solid #e1e8f0;border-radius:9px"><span class="note" style="margin:0;font-weight:600">Marcados:</span><button class="btn sm ghost" style="font-size:11px" onclick="jusbrMarcarTodos()">marcar todos</button><button id="jusbr-ordem-btn" class="btn sm ghost" style="font-size:11px" title="Inverter a ordem da lista — o download e o PDF seguem esta ordem" onclick="jusbrInverterOrdem()">↓ mais recentes primeiro</button><button class="btn sm" style="font-size:11px;background:#0F6E56;color:#fff" title="Baixa os marcados numa pasta compactada (.zip)" onclick="jusbrBaixarSelecionados(\'zip\')">⬇ pasta .zip</button><button class="btn sm" style="font-size:11px;background:#185FA5;color:#fff" title="Junta todos os marcados num único arquivo PDF" onclick="jusbrBaixarSelecionados(\'pdf\')">⬇ PDF único</button><button class="btn sm ghost" style="font-size:11px" title="Baixa cada arquivo separadamente na pasta Downloads" onclick="jusbrBaixarSelecionados(\'soltos\')">⬇ soltos</button></div><div id="jusbr-lista"></div></div>';
   // IA
   if(!KAN)initKanban(); initAgenda();
@@ -10701,6 +10703,105 @@ async function renderRobos(){
         +'</div>';
     }).join('')+'</div>';
   }catch(e){ el.innerHTML='<div class="note">Erro: '+finEsc(String(e&&e.message||e))+'</div>'; }
+}
+/* ===== Dossiê do devedor — bens e créditos em outros processos =====
+   Fonte: DJEN/Comunica do CNJ, busca por NOME da parte (o CNJ não aceita
+   CPF/CNPJ). A IA lê só as publicações com cara de bem, então o custo é baixo. */
+var _DEV_TIPOS={penhora:'⚖️ penhora',avaliacao:'📐 avaliação',leilao:'🔨 leilão',arrematacao:'🔨 arrematação',adjudicacao:'📜 adjudicação',bloqueio_valores:'🏦 bloqueio de valores',credito_a_receber:'💰 crédito a receber',precatorio_rpv:'🏛️ precatório/RPV',bem_identificado:'🔎 bem identificado',outro:'• outro'};
+var _DEV_CONF={alta:'#127a53',media:'#8a5a00',baixa:'#b5342b'};
+async function abrirDossieDevedor(){
+  if(!atual) return;
+  var sugestao=(atual.oponente||'').split(/[;|]+/)[0].trim();
+  var nome=window.prompt('Dossiê do devedor — nome completo ou razão social exata.\n\nA busca do CNJ é por NOME (não aceita CPF/CNPJ), então nome incompleto acha pouco e nome comum traz homônimo.',sugestao);
+  if(!nome||nome.trim().length<5) return;
+  nome=nome.trim();
+  var meses=parseInt(window.prompt('Procurar em quantos meses para trás? (1 a 36)\n\nQuanto maior, mais demora — 12 costuma ser um bom começo.','12')||'12',10);
+  if(!meses||meses<1) meses=12;
+  _devModal('<div class="note">Varrendo o Diário de Justiça de todos os tribunais… isso leva de 30 segundos a 2 minutos.</div>');
+  try{
+    var jwt=(typeof finToken==='function')?await finToken():await jusbrJwt();
+    var u='/api/devedor/dossie?nome='+encodeURIComponent(nome)+'&meses='+meses+'&numero='+encodeURIComponent(String(atual.numero||'').replace(/\D/g,''));
+    var r=await fetch(u,{headers:jwt?{Authorization:'Bearer '+jwt}:{}});
+    var j=await r.json();
+    if(!j||!j.ok){ _devModal('<div class="note" style="color:#b5342b">'+finEsc((j&&j.erro)||'não deu para consultar')+'</div>'); return; }
+    _devModal(_devHtml(j),j);
+  }catch(e){ _devModal('<div class="note" style="color:#b5342b">Erro: '+finEsc(String(e&&e.message||e))+'</div>'); }
+}
+function _devHtml(j){
+  var h='<div style="font-weight:700;font-size:16px">🕵 '+finEsc(j.nome)+'</div>'
+    +'<div class="note" style="margin:2px 0 12px">'+finEsc(j.resumo||'')+'</div>';
+  if(j.erro_ia) h+='<div class="note" style="color:#b5342b;margin-bottom:8px">A IA não conseguiu analisar: '+finEsc(j.erro_ia)+' — a lista de processos abaixo continua válida.</div>';
+  if((j.sinais||[]).length){
+    h+='<div style="font-weight:700;font-size:13px;margin:10px 0 6px">Sinais patrimoniais</div>';
+    h+=(j.sinais||[]).map(function(s){
+      var cor=_DEV_CONF[s.confianca]||'#697180';
+      return '<div style="border:1px solid var(--line);border-left:3px solid '+cor+';border-radius:0 8px 8px 0;padding:9px 11px;margin-bottom:8px">'
+        +'<div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:baseline">'
+          +'<b style="font-size:13px">'+finEsc(_DEV_TIPOS[s.tipo]||s.tipo)+'</b>'
+          +'<span style="font-size:10.5px;color:'+cor+';font-weight:700">confiança '+finEsc(s.confianca)+'</span>'
+        +'</div>'
+        +'<div style="font-size:13px;margin-top:3px">'+finEsc(s.bem||'')+(s.valor?(' — <b>'+finEsc(s.valor)+'</b>'):'')+'</div>'
+        +'<div class="note" style="font-size:11.5px;margin-top:3px">'+finEsc(typeof fmtCNJ==="function"?fmtCNJ(s.processo):s.processo)+(s.tribunal?(' · '+finEsc(s.tribunal)):'')+(s.polo?(' · devedor é '+finEsc(s.polo)):'')+(s.data?(' · '+String(s.data).split("-").reverse().join("/")):'')+(s.nosso?' · <b style="color:#127a53">processo nosso</b>':'')+'</div>'
+        +'<div style="font-size:12.5px;margin-top:5px;color:#0F2A4A"><b>→</b> '+finEsc(s.aproveitamento||'')+'</div>'
+        +(s.trecho?('<div class="note" style="font-size:11px;margin-top:4px;background:#fafbfc;padding:5px 7px;border-radius:5px;max-height:60px;overflow:auto">“'+finEsc(s.trecho)+'”</div>'):'')
+        +'</div>';
+    }).join('');
+  } else {
+    h+='<div class="note" style="background:#fafbfc;border-left:3px solid var(--line);padding:8px 10px;border-radius:0 6px 6px 0;margin-bottom:10px">Nenhum sinal patrimonial nas publicações do período. Isso <b>não</b> quer dizer que ele não tem bens — só que nada foi publicado no diário. Tente ampliar o período ou conferir a grafia do nome.</div>';
+  }
+  var ps=(j.processos||[]);
+  if(ps.length){
+    h+='<div style="font-weight:700;font-size:13px;margin:14px 0 6px">Processos onde ele aparece ('+ps.length+')</div>'
+      +'<div style="max-height:220px;overflow:auto;border:1px solid var(--line);border-radius:8px">'
+      +'<table style="width:100%;font-size:12px"><tbody>'+ps.slice(0,80).map(function(p){
+        return '<tr style="border-bottom:1px solid #f0f2f5"><td style="padding:4px 8px">'+finEsc(typeof fmtCNJ==="function"?fmtCNJ(p.numero):p.numero)+'</td>'
+          +'<td style="padding:4px 8px;color:#697180">'+finEsc(p.tribunal||'')+'</td>'
+          +'<td style="padding:4px 8px">'+(p.polo?finEsc(p.polo):'<span style="color:#98a2b3">—</span>')+'</td>'
+          +'<td style="padding:4px 8px;color:#697180">'+finEsc(String(p.ultima||'').split("-").reverse().join("/"))+'</td>'
+          +'<td style="padding:4px 8px">'+(p.nosso?'<span style="color:#127a53;font-weight:700">nosso</span>':'')+'</td></tr>';
+      }).join('')+'</tbody></table></div>';
+  }
+  h+='<div class="note" style="margin-top:12px;font-size:11px;background:#fff8e6;border-left:3px solid #e8dcbb;padding:8px 10px;border-radius:0 6px 6px 0"><b>Antes de usar:</b><br>'+(j.avisos||[]).map(function(a){return '• '+finEsc(a);}).join('<br>')+'</div>';
+  return h;
+}
+function _devModal(html,j){
+  var id='dev-dossie'; var old=document.getElementById(id); if(old) old.remove();
+  var ov=document.createElement('div'); ov.id=id;
+  ov.style.cssText='position:fixed;inset:0;background:rgba(20,26,38,.55);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px';
+  var rodape=j?('<button class="btn" onclick="_devSalvar()">💾 guardar na pasta do processo</button>'):'';
+  ov.innerHTML='<div style="background:#fff;border-radius:12px;padding:20px;max-width:720px;width:100%;max-height:88vh;overflow:auto;font-size:14px;color:#1e2733">'+html
+    +'<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;flex-wrap:wrap"><button class="btn ghost" onclick="var e=document.getElementById(\'dev-dossie\');if(e)e.remove()">Fechar</button>'+rodape+'</div></div>';
+  ov.onclick=function(e){ if(e.target===ov) ov.remove(); };
+  document.body.appendChild(ov);
+  window.__devDossie=j||null;
+}
+/* guarda o dossiê como texto na pasta do processo, para consultar depois */
+async function _devSalvar(){
+  var j=window.__devDossie; if(!j||!atual) return;
+  var linhas=['DOSSIE DO DEVEDOR — '+j.nome,'Gerado em '+new Date().toLocaleString('pt-BR')+' · periodo: '+j.meses+' meses','','RESUMO: '+(j.resumo||''),'','SINAIS PATRIMONIAIS'];
+  (j.sinais||[]).forEach(function(s,i){
+    linhas.push('');
+    linhas.push((i+1)+') '+(_DEV_TIPOS[s.tipo]||s.tipo).replace(/^\S+\s/,'')+' — confianca '+s.confianca);
+    linhas.push('   Bem: '+(s.bem||'')+(s.valor?(' — '+s.valor):''));
+    linhas.push('   Processo: '+s.processo+(s.tribunal?(' ('+s.tribunal+')'):'')+(s.polo?(' — devedor e '+s.polo):'')+(s.data?(' — '+s.data):''));
+    linhas.push('   O que fazer: '+(s.aproveitamento||''));
+    if(s.trecho) linhas.push('   Trecho: "'+s.trecho+'"');
+  });
+  if(!(j.sinais||[]).length) linhas.push('(nenhum sinal no periodo)');
+  linhas.push('','PROCESSOS ONDE APARECE');
+  (j.processos||[]).forEach(function(p){ linhas.push('- '+p.numero+' '+(p.tribunal||'')+' '+(p.polo||'polo?')+' ultima '+(p.ultima||'')+(p.nosso?' [nosso]':'')); });
+  linhas.push('','AVISOS'); (j.avisos||[]).forEach(function(a){ linhas.push('- '+a); });
+  var txt=linhas.join('\n');
+  var dig=String(atual.numero||'').replace(/\D/g,'');
+  var nomeArq='001 - DOSSIE DO DEVEDOR ('+new Date().toISOString().slice(0,10).split('-').reverse().join('-')+').txt';
+  try{
+    var jwt=(typeof finToken==='function')?await finToken():await jusbrJwt();
+    var b64=btoa(unescape(encodeURIComponent(txt)));
+    var r=await fetch('/api/docs',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+jwt},body:JSON.stringify({path:dig+'/'+nomeArq,b64:b64})});
+    if(!r.ok){ alert('Não consegui guardar na pasta.'); return; }
+    alert('Guardado em Documentos do processo: '+nomeArq);
+    try{ var c=window.__docCtx; if(c && typeof carregarDocs==='function') carregarDocs(c.numero,c.sub,c.escopo); }catch(e){}
+  }catch(e){ alert('Erro ao guardar: '+(e&&e.message||e)); }
 }
 /* ===== Conta da API da Anthropic — gasto do mês + recarga =====
    Saldo de crédito NÃO existe em API (a Anthropic só mostra no Console), então
