@@ -66,8 +66,16 @@ export function ehEmissorPdpj(t) {
 // NÃO deve barrar nada, para não travar por causa de falha nossa.
 export async function provarToken(sb, token) {
   try {
-    const { data: pr } = await sb.from('processos').select('numero_digitos').not('numero_digitos', 'is', null).limit(1)
-    const numero = pr && pr[0] && String(pr[0].numero_digitos || '').replace(/\D/g, '')
+    // Testa num processo do qual JÁ baixamos peça — ou seja, comprovadamente
+    // acessível com uma credencial boa. Testar num processo qualquer confundiria
+    // "token ruim" com "processo que o advogado não acompanha".
+    let numero = ''
+    const { data: ja } = await sb.from('jusbr_arquivos').select('processo_numero').order('criado_em', { ascending: false }).limit(1)
+    if (ja && ja[0]) numero = String(ja[0].processo_numero || '').replace(/\D/g, '')
+    if (numero.length < 16) {
+      const { data: pr } = await sb.from('processos').select('numero_digitos').not('numero_digitos', 'is', null).limit(1)
+      numero = (pr && pr[0] && String(pr[0].numero_digitos || '').replace(/\D/g, '')) || ''
+    }
     if (!numero || numero.length < 16) return { aceito: null, motivo: 'sem processo para testar' }
     const r = await fetch('https://portaldeservicos.pdpj.jus.br/api/v2/processos/' + numero, {
       headers: {
@@ -80,8 +88,8 @@ export async function provarToken(sb, token) {
     })
     // só 401 condena o token. 403/404 podem ser falta de acesso ÀQUELE processo —
     // barrar por isso derrubaria uma credencial boa.
-    if (r.status === 401) return { aceito: false, http: 401 }
-    return { aceito: true, http: r.status }
+    if (r.status === 401) return { aceito: false, http: 401, processo: numero, detalhe: String(await r.text().catch(() => '')).slice(0, 200) }
+    return { aceito: true, http: r.status, processo: numero }
   } catch (e) { return { aceito: null, motivo: String((e && e.message) || e) } }
 }
 

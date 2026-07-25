@@ -106,6 +106,7 @@ export async function POST(request) {
     if (prova.aceito === false) {
       const nota = {
         quando: new Date().toISOString(), por: quem, http: prova.http,
+        processo_testado: prova.processo || null, resposta: prova.detalhe || null,
         emissor_pdpj: ehEmissorPdpj(token), claims: resumoClaims(token),
       }
       try {

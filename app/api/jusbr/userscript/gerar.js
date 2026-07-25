@@ -100,7 +100,18 @@ export function scriptTexto(segredo, endpoint, urlAtualizacao) {
         method: 'POST', url: ENDPOINT,
         headers: { 'Content-Type': 'application/json', 'x-jusbr-relay': RELAY_SECRET },
         data: JSON.stringify({ token: payload.token, refresh_token: payload.refresh_token || undefined }),
-        onload: function (r) { if (r && r.status >= 200 && r.status < 300) { estado = 'sincronizado ' + hhmm(Date.now()); cor = '#0F6E56'; selo(); } },
+        onload: function (r) {
+          if (!r || r.status < 200 || r.status >= 300) return;
+          // 200 não quer dizer aceito: o servidor responde 200 e IGNORA quando o
+          // PDPJ recusa o token. Sem ler o corpo, o selo mente (foi o que houve).
+          var res = null; try { res = JSON.parse(r.responseText || '{}'); } catch (e) {}
+          if (res && res.ignorado === 'recusado_pelo_pdpj') {
+            try { GM_setValue(CHAVE, ''); } catch (e) {}
+            estado = 'token recusado pelo jus.br — recapturando'; cor = '#b5342b'; origem = '';
+          } else if (res && res.ignorado) { estado = 'ignorado: ' + res.ignorado; cor = '#8a5a00'; }
+          else { estado = 'sincronizado ' + hhmm(Date.now()); cor = '#0F6E56'; }
+          selo();
+        },
         onerror: function () {}
       });
     } catch (e) {}
