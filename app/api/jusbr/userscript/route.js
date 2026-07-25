@@ -37,7 +37,7 @@ function scriptTexto(segredo, endpoint) {
   return `// ==UserScript==
 // @name         CMPGestão — Sincronizar token jus.br (PDPJ)
 // @namespace    cmpadvogados.com.br
-// @version      5.0
+// @version      5.1
 // @description  Ponte entre a sua sessão do jus.br e o CMPGestão. A aba do jus.br guarda o token no cofre do Tampermonkey; a aba do CMPGestão o envia (mesma origem, sem bloqueios). Selo na tela mostra o estado.
 // @match        https://portaldeservicos.pdpj.jus.br/*
 // @match        https://sso.cloud.pje.jus.br/*
@@ -55,6 +55,7 @@ function scriptTexto(segredo, endpoint) {
   var HOST_GESTAO = '${host}';
   var NO_GESTAO = (location.host === HOST_GESTAO);
   var CHAVE = 'cmp_jusbr_token';
+  var CHAVE_APRENDER = 'cmp_jusbr_aprender';
 
   var estado = '', cor = '#8a5a00', origem = '', quandoOk = 0;
   function ehJwt(t) { return typeof t === 'string' && t.split('.').length === 3 && t.length > 60; }
@@ -161,7 +162,14 @@ function scriptTexto(segredo, endpoint) {
   // Grava só o esqueleto (URL, nomes de cabeçalhos, chaves do JSON com valores
   // truncados). Conteúdo de arquivo vira "<arquivo N bytes>". Nada de token.
   var ENDPOINT_APRENDER = ENDPOINT.replace(/\/token$/, '/aprender');
-  function ehPeticionamento(u) { return /petic|protocol|peticionamento/i.test(String(u || '')); }
+  function ehPeticionamento(u) {
+    u = String(u || '');
+    if (!u) return false;
+    if (ehEndpointToken(u)) return false;                 // login/refresh não interessa
+    // qualquer chamada de escrita à API do PDPJ/PJe entra — não dá para adivinhar
+    // o caminho exato do peticionamento, então guardamos todos e eu escolho depois.
+    return /pdpj\.jus\.br|pje\.jus\.br/i.test(u) || u.indexOf('/api/') === 0 || u.charAt(0) === '/';
+  }
   function esqueleto(v, prof) {
     prof = prof || 0;
     if (v == null) return null;
@@ -202,13 +210,17 @@ function scriptTexto(segredo, endpoint) {
       try { if (headers && typeof headers.forEach === 'function') headers.forEach(function (v, k) { nomes.push(k); }); else if (headers) nomes = Object.keys(headers); } catch (e) {}
       var respForma = null;
       try { if (respTxt && respTxt.length < 20000) respForma = esqueleto(JSON.parse(respTxt), 0); } catch (e) {}
-      var payload = { metodo: metodo, url: String(url).split('?')[0], cabecalhos: nomes, corpo_forma: formaDoCorpo(body), resposta_status: status || null, resposta_forma: respForma };
-      GM_xmlhttpRequest({
-        method: 'POST', url: ENDPOINT_APRENDER,
-        headers: { 'Content-Type': 'application/json', 'x-jusbr-relay': RELAY_SECRET },
-        data: JSON.stringify(payload), onload: function () {}, onerror: function () {}
-      });
-      estado = 'peticionamento observado ' + hhmm(Date.now()); cor = '#185FA5'; selo();
+      var payload = { metodo: metodo, url: String(url).split('?')[0], cabecalhos: nomes, corpo_forma: formaDoCorpo(body), resposta_status: status || null, resposta_forma: respForma, ts: Date.now() };
+      // vai para a FILA no cofre do Tampermonkey — a aba do CMPGestão envia
+      // (o portal bloqueia envio direto; foi o que já nos travou antes).
+      try {
+        var fila = [];
+        try { fila = JSON.parse(GM_getValue(CHAVE_APRENDER, '[]')) || []; } catch (e) { fila = []; }
+        fila.push(payload);
+        if (fila.length > 40) fila = fila.slice(-40);
+        GM_setValue(CHAVE_APRENDER, JSON.stringify(fila));
+        estado = 'peticionamento observado ' + hhmm(Date.now()) + ' (' + fila.length + ' na fila)'; cor = '#185FA5'; selo();
+      } catch (e) {}
     } catch (e) {}
   }
 
@@ -268,8 +280,25 @@ function scriptTexto(segredo, endpoint) {
       })
       .catch(function () { estado = 'falha de rede'; cor = '#b5342b'; selo(); });
   }
+  // envia o que o portal observou (fila do cofre) — daqui é mesma origem, sem bloqueio
+  async function enviarAprendizado() {
+    var fila = [];
+    try { fila = JSON.parse(GM_getValue(CHAVE_APRENDER, '[]')) || []; } catch (e) { return; }
+    if (!fila.length) return;
+    var restantes = [];
+    for (var i = 0; i < fila.length; i++) {
+      try {
+        var r = await fetch('/api/jusbr/aprender', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-jusbr-relay': RELAY_SECRET }, body: JSON.stringify(fila[i]) });
+        if (!r.ok) restantes.push(fila[i]);
+      } catch (e) { restantes.push(fila[i]); }
+    }
+    try { GM_setValue(CHAVE_APRENDER, JSON.stringify(restantes)); } catch (e) {}
+    if (fila.length !== restantes.length) { estado = 'aprendizado enviado ' + hhmm(Date.now()); cor = '#185FA5'; selo(); }
+  }
   if (NO_GESTAO) {
     estado = 'verificando…';
+    setTimeout(function () { enviarAprendizado(); }, 4000);
+    setInterval(enviarAprendizado, 60000);
     setTimeout(function () { empurrar(); }, 3000);
     setInterval(empurrar, 45000);
   }
