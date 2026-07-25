@@ -34,6 +34,10 @@ const JOBS = [
   { nome: 'monit_cobrar', rotulo: 'Monitoramento — cobrança', url: '/api/monitoramento/robo?tarefa=cobrar', diario_hora: 6 },
   { nome: 'monit_varrer', rotulo: 'Monitoramento — varredura', url: '/api/monitoramento/robo?tarefa=varrer', semanal_dias: [1, 5], hora: 8 },
   { nome: 'inpi_varrer', rotulo: 'INPI — RPI de marcas', url: '/api/inpi/robo?tarefa=varrer', semanal_dias: [2], hora: 9 },
+  { nome: 'minuta_triagem', rotulo: 'Minutas — triar intimações', url: '/api/robo/minutas?fase=triagem', cada_min: 30 },
+  // dossiê do Estagiário Virtual: junta instruções + peças num zip só. Sai de um em
+  // um, com janela própria (no modo 'api' esta mesma fase redige a minuta, e aí é lenta).
+  { nome: 'minuta_dossie', rotulo: 'Minutas — dossiê do Estagiário Virtual', url: '/api/robo/minutas?fase=dossie', cada_min: 15, timeout_ms: 240000 },
 ]
 
 function jobDevido(job, execRow, bt) {
@@ -54,7 +58,7 @@ const BASE_LOCAL = 'http://127.0.0.1:' + (process.env.PORT || 3000)
 async function rodar(job, sb) {
   let ok = false, resumo = ''
   try {
-    const r = await fetch(BASE_LOCAL + job.url, { cache: 'no-store', signal: AbortSignal.timeout(55000) })
+    const r = await fetch(BASE_LOCAL + job.url, { cache: 'no-store', signal: AbortSignal.timeout(job.timeout_ms || 55000) })
     ok = r.ok
     const t = await r.text()
     resumo = ('HTTP ' + r.status + ' ' + t).slice(0, 400)

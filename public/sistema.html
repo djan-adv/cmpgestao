@@ -533,6 +533,15 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
         <div id="robos-body"><div class="note">Carregando…</div></div>
       </div>
       <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+          <p class="sectlabel" style="margin:0">🎓 Estagiário Virtual — fila de peças</p>
+          <button class="btn sm ghost" onclick="renderEstagiario()">↻ atualizar</button>
+        </div>
+        <p class="note" style="margin:6px 0 10px">O robô lê as intimações do DJEN, separa as que exigem peça e monta um dossiê: <b>um zip só</b>, com as instruções da petição e os documentos dos autos, na pasta <b>&ldquo;Estagiário Virtual&rdquo;</b> do processo. Baixe, mande redigir no Claude do escritório e suba a minuta revisada. O prazo já entra no Kanban na hora da triagem.</p>
+        <div id="estagiario-orcamento" class="note" style="margin-bottom:8px"></div>
+        <div id="estagiario-body"><div class="note">Carregando…</div></div>
+      </div>
+      <div class="card">
         <p class="sectlabel">🔐 jus.br — meu userscript (Tampermonkey)</p>
         <p class="note" style="margin:6px 0 10px">Gera o script já com o segredo embutido — é só copiar e colar no Tampermonkey. Não precisa digitar nada. Depois, faça login no jus.br uma vez.</p>
         <div id="robos-jusbr-status" class="note" style="margin-bottom:8px"></div>
@@ -5759,7 +5768,7 @@ function go(s){
   if(s==="fases" && typeof renderFasesRevisao==='function')renderFasesRevisao();
   if(s==="produtividade" && typeof renderProdutividade==='function')renderProdutividade();
   if(s==="monitoramento" && typeof renderMonitoramento==='function')renderMonitoramento();
-  if(s==="robos" && typeof renderRobos==='function')renderRobos();
+  if(s==="robos" && typeof renderRobos==='function')renderRobos();if(s==="robos" && typeof renderEstagiario==='function')renderEstagiario();
   try{ var _cfgP=document.getElementById('btn-cfg-proc'); if(_cfgP) _cfgP.style.display=(s==='processos')?'inline-block':'none'; }catch(e){}
   if(s==="sugestoes" && typeof renderSugestoes==='function'){ var _an=document.getElementById('sg-autor'); if(_an && !_an.value){ _an.value=((document.getElementById('who-name')||{}).textContent||'').trim(); } renderSugestoes(); }
   if(s==="lote") renderLote();
@@ -10682,6 +10691,60 @@ async function renderRobos(){
         +'</div>';
     }).join('')+'</div>';
   }catch(e){ el.innerHTML='<div class="note">Erro: '+finEsc(String(e&&e.message||e))+'</div>'; }
+}
+/* ===== Estagiário Virtual — fila de peças + download do dossiê ===== */
+var _EST_ROTULOS={triado:'aguardando dossiê',dossie:'dossiê pronto',pronta:'minuta pronta',minutando:'redigindo…',sem_orcamento:'teto do mês atingido',erro:'falhou'};
+var _EST_CORES={dossie:'#127a53',pronta:'#127a53',triado:'#8a5a00',minutando:'#8a5a00',sem_orcamento:'#b5342b',erro:'#b5342b'};
+function _estKb(n){ n=Number(n||0); return n>=1048576?((n/1048576).toFixed(1)+' MB'):(Math.round(n/1024)+' KB'); }
+async function renderEstagiario(){
+  var el=document.getElementById('estagiario-body'); if(!el) return;
+  el.innerHTML='<div class="note">Carregando…</div>';
+  var orc=document.getElementById('estagiario-orcamento');
+  try{
+    var r=await fetch('/api/robo/minutas?status=1'); var j=await r.json();
+    if(!j||!j.ok){ el.innerHTML='<div class="note">Falha ao carregar (o build pode não ter recompilado ainda).</div>'; return; }
+    if(orc&&j.orcamento){
+      var o=j.orcamento, pct=o.tetoBrl?Math.min(100,Math.round(o.gastoBrl/o.tetoBrl*100)):0;
+      orc.innerHTML='Modo: <b>'+(j.modo==='api'?'robô redige pela API (custa)':'dossiê para redigir fora (sem custo de API)')+'</b>'
+        +' · Gasto de IA no mês: <b>R$ '+(o.gastoBrl||0).toFixed(2)+'</b> de R$ '+(o.tetoBrl||0).toFixed(2)+' ('+pct+'%)'
+        +(o.estourou?' — <b style="color:#b5342b">teto atingido</b>':'')
+        +(o.ativo?'':' — <b style="color:#b5342b">robô desligado</b>');
+    }
+    var fila=j.fila||[];
+    if(!fila.length){ el.innerHTML='<div class="note">Nenhuma intimação exigindo peça no momento.'+(j.arquivadas_sem_peca?(' O robô já arquivou '+j.arquivadas_sem_peca+' publicação(ões) que não exigiam peça.'):'')+'</div>'; return; }
+    el.innerHTML='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:10px">'+fila.map(function(x){
+      var cor=_EST_CORES[x.status]||'#697180', rot=_EST_ROTULOS[x.status]||x.status;
+      var prazo=x.prazo_em?String(x.prazo_em).split('-').reverse().join('/'):'—';
+      var venceu=x.prazo_em&&(x.prazo_em<new Date().toISOString().slice(0,10));
+      return '<div style="border:1px solid var(--line);border-radius:12px;padding:12px">'
+        +'<div style="display:flex;justify-content:space-between;align-items:baseline;gap:6px;flex-wrap:wrap">'
+          +'<b style="color:var(--navy);font-size:13px">'+finEsc(x.tipo_peca||'peça')+'</b>'
+          +'<span style="font-size:10.5px;color:'+cor+';font-weight:700">'+finEsc(rot)+'</span>'
+        +'</div>'
+        +'<div class="note" style="margin:2px 0">'+finEsc(typeof fmtCNJ==='function'?fmtCNJ(x.processo_numero||''):(x.processo_numero||''))+'</div>'
+        +'<div style="font-size:12px;color:'+(venceu?'#b5342b':'var(--ink)')+'">Prazo: <b>'+finEsc(prazo)+'</b>'+(x.urgencia?(' · urgência '+finEsc(x.urgencia)):'')+'</div>'
+        +(x.resumo?'<div class="note" style="font-size:11px;margin-top:4px;max-height:52px;overflow:auto">'+finEsc(x.resumo)+'</div>':'')
+        +(x.erro?'<div class="note" style="font-size:11px;color:#b5342b;margin-top:4px">'+finEsc(String(x.erro).slice(0,160))+'</div>':'')
+        +'<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">'
+          +(x.dossie_path?('<button class="btn sm" style="font-size:11px" onclick="baixarDossie(\''+String(x.dossie_path).replace(/'/g,"")+'\',this)">⬇ baixar dossiê ('+_estKb(x.dossie_bytes)+')</button>'):'')
+          +'<button class="btn sm ghost" style="font-size:11px" onclick="irParaProcesso(\''+String(x.processo_numero||'').replace(/'/g,"")+'\')">abrir processo</button>'
+        +'</div>'
+        +'</div>';
+    }).join('')+'</div>';
+  }catch(e){ el.innerHTML='<div class="note">Erro: '+finEsc(String(e&&e.message||e))+'</div>'; }
+}
+/* o zip mora em /opt/cmpdocs — baixa autenticado e entrega ao navegador */
+async function baixarDossie(caminho,btn){
+  if(btn){ btn.disabled=true; var _t=btn.textContent; btn.textContent='baixando…'; }
+  try{
+    var jwt=(typeof finToken==='function')?await finToken():null;
+    var r=await fetch('/api/docs?file='+encodeURIComponent(caminho),{headers:jwt?{Authorization:'Bearer '+jwt}:{}});
+    if(!r.ok){ alert('Não consegui baixar o dossiê. Ele pode ter sido movido na pasta do processo.'); return; }
+    var b=await r.blob(), u=URL.createObjectURL(b), a=document.createElement('a');
+    a.href=u; a.download=caminho.split('/').pop(); document.body.appendChild(a); a.click();
+    setTimeout(function(){ URL.revokeObjectURL(u); a.remove(); },1500);
+  }catch(e){ alert('Erro ao baixar: '+(e&&e.message||e)); }
+  if(btn){ btn.disabled=false; btn.textContent=_t||'⬇ baixar dossiê'; }
 }
 async function rodarRobo(nome,btn){
   if(btn){ btn.disabled=true; btn.textContent='rodando…'; }
