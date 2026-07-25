@@ -58,7 +58,7 @@ export async function GET(request) {
   const sb = jusbrAdmin()
 
   const { data: pend } = await sb.from('peticoes_protocolo')
-    .select('id,processo_numero,titulo,criado_em,prazo_fatal')
+    .select('id,processo_numero,titulo,criado_em,prazo_fatal,criado_por')
     .eq('escritorio_id', ESCRITORIO_CMP).eq('status', 'pendente').limit(200)
   if (!pend || !pend.length) return Response.json({ ok: true, pendentes: 0, fechadas: 0 })
 
@@ -106,6 +106,17 @@ export async function GET(request) {
           protocolo_ref: String(achou.nome || '').slice(0, 120),
           fechada_por: 'jusbr:' + (via || 'autos'),
         }).eq('id', p.id)
+        // registro permanente no histórico do processo (quem/quando/por qual via)
+        try {
+          const { data: pr } = await sb.from('processos').select('id').eq('numero_digitos', soDig(p.processo_numero)).limit(1)
+          const pid = pr && pr[0] && pr[0].id
+          if (pid) {
+            const hoje = new Date(Date.now() - 3 * 3600000).toISOString().slice(0, 10)
+            const txt = '[PROTOCOLO] ' + p.titulo + ' — confirmada nos autos (' + via + ') · registro automático do sistema'
+              + (p.criado_por ? (' · anexada por ' + p.criado_por) : '')
+            await sb.from('andamentos').insert({ processo_id: pid, data: hoje, texto: txt, fonte: 'protocolo', providencia: true })
+          }
+        } catch (e) {}
       }
       rel.fechadas++
       rel.detalhe.push({ numero, titulo: p.titulo, via, peca: achou.nome, juntada: achou.dataHoraJuntada })
