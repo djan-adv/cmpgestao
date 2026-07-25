@@ -10162,8 +10162,11 @@ function abrirProtocolarPeticao(numero){
   var ov=document.createElement('div'); ov.id='proto-modal';
   ov.style.cssText='position:fixed;inset:0;background:rgba(20,28,40,.5);z-index:99;display:flex;align-items:center;justify-content:center;padding:18px';
   ov.innerHTML='<div style="background:#fff;border-radius:14px;max-width:560px;width:100%;max-height:92vh;overflow:auto;padding:18px">'
-    +'<h3 style="margin:0 0 2px;color:var(--navy)">📤 Protocolar petição</h3>'
-    +'<p class="note" style="margin:0 0 10px">Processo '+esc(fmtCNJ(numero))+'</p>'
+    +'<h3 style="margin:0 0 2px;color:var(--navy)">📤 Petição para protocolo</h3>'
+    +'<p class="note" style="margin:0 0 8px">Processo '+esc(fmtCNJ(numero))+'</p>'
+    +'<div style="background:#fff4e5;border:1px solid #ffd9a8;border-radius:10px;padding:9px 12px;margin-bottom:11px;font-size:12.5px;color:#7a4b00;line-height:1.5">'
+      +'<b>Isto NÃO protocola no tribunal.</b> Aqui a peça fica guardada com prazo e alerta. O protocolo é feito no <a href="https://portaldeservicos.pdpj.jus.br/peticao" target="_blank" rel="noopener" style="color:#185FA5;font-weight:700">portal do jus.br ↗</a> — depois volte e clique em <b>✓ protocolada</b>.'
+    +'</div>'
     +'<div style="background:#fdecec;border:1px solid #f3c2c2;border-radius:10px;padding:11px 13px;margin-bottom:12px">'
       +'<div style="font-weight:800;color:#b5342b;font-size:13px;margin-bottom:4px">⚠ Antes de anexar, confira a peça</div>'
       +'<div style="font-size:12.5px;color:#7b2b26;line-height:1.5">Não pode haver <b>recados internos</b>, <b>campos a preencher</b> (XXX, [nome], ____), <b>comentários</b>, marcações de revisão ou trechos destacados. Vale para as duas opções — inclusive a que vai para ajuste.</div>'
@@ -10257,7 +10260,7 @@ async function salvarProtocolarPeticao(numero,btn){
     }catch(e){}
     try{ if(typeof logEvent==='function') logEvent('record_saved','peticao',numero,{titulo:titulo,modo:modo,prazo:prazo}); }catch(e){}
     var mo=document.getElementById('proto-modal'); if(mo) mo.remove();
-    alert('✓ Petição anexada.'+(anexos.length?(' ('+anexos.length+' anexo(s))'):'')+'\n\n'+(modo==='correcao'?'Ela ficou marcada como "aguardando ajuste".':'Ela está pronta para protocolar.')+'\nPrazo fatal: '+_protoFmt(prazo)+'.\n\nO sistema vai cobrar esse prazo e fechar a pendência quando a peça aparecer nos autos.');
+    alert('✓ Petição anexada NO SISTEMA.'+(anexos.length?(' ('+anexos.length+' anexo(s))'):'')+'\n\n⚠ ATENÇÃO: o tribunal NÃO recebeu nada ainda.\nO protocolo é feito no portal do jus.br — depois volte aqui e clique em "✓ protocolada".\n\n'+(modo==='correcao'?'Situação: aguardando ajuste.':'Situação: pronta para protocolar.')+'\nPrazo fatal: '+_protoFmt(prazo)+'.\n\nO sistema vai cobrar esse prazo e fechar a pendência quando a peça aparecer nos autos.');
     try{ await carregarProtocolosPendentes(); }catch(e){}
     try{ var i=DADOS.processos.indexOf(atual); if(i>=0) abrir(i); }catch(e){}
   }catch(e){ alert('Não foi possível anexar: '+(e&&e.message||e)); }
@@ -10308,6 +10311,7 @@ function protoBlocoHTML(numero){
       +'</div>'
       +'<span style="white-space:nowrap">'
       +(x.arquivo_caminho?('<button class="btn sm ghost" style="font-size:11px" onclick="protoAbrirArquivo(\''+x.id+'\')">📎 arquivo</button> '):'')
+      +'<a class="btn sm" style="font-size:11px;background:#185FA5;color:#fff;text-decoration:none" target="_blank" rel="noopener" href="https://portaldeservicos.pdpj.jus.br/peticao/processo?processo='+encodeURIComponent(fmtCNJ(x.processo_numero))+'" title="Abrir o peticionamento deste processo no jus.br">↗ protocolar no jus.br</a> '
       +'<button class="btn sm" style="font-size:11px;background:#0F6E56;color:#fff" onclick="protoMarcarProtocolada(\''+x.id+'\')">✓ protocolada</button> '
       +'<button class="btn sm ghost" style="font-size:11px;color:#b5342b" onclick="protoCancelar(\''+x.id+'\')">✕</button></span></div>';
   }).join('');
