@@ -807,6 +807,11 @@ var USUARIO_ATUAL_VISUAL='djan';
    Coordenadores (engrenagens, acessos e publicação): Djan, Jader e Maria Eduarda.
    Estagiários: só consultam — nada de configurar, publicar ou gerir acessos. */
 var COORD_IDS=['djan','jader','eduarda'];
+/* Mover tarefas/prazos na agenda (Kanban e calendário) é restrito a Djan e
+   Jader — remarcar prazo é decisão de sócio responsável, não operacional. */
+var MOVE_AGENDA_IDS=['djan','jader'];
+function podeMoverAgenda(){ return MOVE_AGENDA_IDS.indexOf(USUARIO_ATUAL_VISUAL)>-1; }
+function _avisoMover(){ alert('Apenas Djan e Jader podem mover tarefas e prazos na agenda.\n\nSe precisar remarcar, peça a um deles.'); }
 function souCoordenador(){ return COORD_IDS.indexOf(USUARIO_ATUAL_VISUAL)>-1; }
 function souEstagiario(){ var u=usuarioVisualAtual(); return !!(u&&u.perfil==='est'); }
 function _aplicaPapelNaTela(){
@@ -4090,11 +4095,14 @@ function renderKanban(){
   COLS.forEach(function(c){
     var itens=KAN.filter(function(a){return a.col===c[0]});
     var col=document.createElement("div");col.className="col";
-    col.ondragover=function(e){e.preventDefault()};
-    col.ondrop=function(e){e.preventDefault();var id=+e.dataTransfer.getData("id");var a=KAN.find(function(x){return x.id===id});if(a){a.col=c[0];renderKanban();renderPainelTarefasEtiquetas();persisteKanban(a);}};
+    col.ondragover=function(e){ if(!podeMoverAgenda()) return; e.preventDefault(); };
+    col.ondrop=function(e){e.preventDefault();
+      if(!podeMoverAgenda()){ _avisoMover(); return; }
+      var id=+e.dataTransfer.getData("id");var a=KAN.find(function(x){return x.id===id});if(a){a.col=c[0];renderKanban();renderPainelTarefasEtiquetas();persisteKanban(a);}};
     col.innerHTML='<h3>'+c[1]+' <span>'+itens.length+'</span></h3>';
-    itens.forEach(function(a){var el=document.createElement("div");el.className="task"+(a.col==='finalizado'?' done':'');el.draggable=true;
-      el.ondragstart=function(e){e.dataTransfer.setData("id",a.id)};
+    itens.forEach(function(a){var el=document.createElement("div");el.className="task"+(a.col==='finalizado'?' done':'');el.draggable=podeMoverAgenda();
+      if(!el.draggable) el.title='Apenas Djan e Jader podem mover cartões na agenda';
+      el.ondragstart=function(e){ if(!podeMoverAgenda()){ e.preventDefault(); return; } e.dataTransfer.setData("id",a.id)};
       /* ponto 2: clicar na tarefa abre a TAREFA (edição). Abrir o processo fica no painel de pendências. */
       el.onclick=function(ev){ev.stopPropagation();abrirTarefaKanban(a.id);};
       el.ondblclick=function(ev){ev.stopPropagation();abrirTarefaKanban(a.id);};
@@ -4197,7 +4205,7 @@ function renderTarefasMes(){
         var w=document.createElement('div'); w.innerHTML=_tarChipHTML(a);
         var chip=w.firstChild;
         /* arrastar para outro dia = remarcar automaticamente */
-        chip.setAttribute('draggable','true');
+        chip.setAttribute('draggable', podeMoverAgenda()?'true':'false');
         chip.addEventListener('dragstart',(function(idT){ return function(ev){ try{ ev.dataTransfer.setData('text/plain','tar:'+idT); ev.dataTransfer.effectAllowed='move'; }catch(eD){} }; })(a.id));
         cell.appendChild(chip);
       });
@@ -4218,9 +4226,10 @@ function renderTarefasMes(){
     }
     (function(isoC,cellC){
       cellC.onclick=function(){ abrirTarDia(isoC); };
-      cellC.ondragover=function(ev){ ev.preventDefault(); ev.dataTransfer.dropEffect='move'; cellC.style.outline='2px dashed var(--gold)'; };
+      cellC.ondragover=function(ev){ if(!podeMoverAgenda()) return; ev.preventDefault(); ev.dataTransfer.dropEffect='move'; cellC.style.outline='2px dashed var(--gold)'; };
       cellC.ondragleave=function(){ cellC.style.outline=''; };
       cellC.ondrop=function(ev){ ev.preventDefault(); cellC.style.outline='';
+        if(!podeMoverAgenda()){ _avisoMover(); return; }
         var d0=''; try{ d0=ev.dataTransfer.getData('text/plain')||''; }catch(eG){}
         var mI=d0.match(/^tar:(\d+)$/); if(!mI) return;
         moverTarefaParaDia(parseInt(mI[1],10), isoC);
