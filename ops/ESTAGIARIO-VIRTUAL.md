@@ -45,10 +45,62 @@ Os documentos saem, nesta ordem: os da pasta do processo em `/opt/cmpdocs`
 > Se nenhum documento estiver guardado, o zip sai só com o `PEDIDO.md` e um aviso.
 > Abra o processo no jus.br e use "baixar peças" antes de mandar redigir.
 
+## Íntegra dos autos na pasta do processo
+
+Junto com o dossiê, o robô também guarda **a íntegra dos autos em um PDF só**, em
+**ordem crescente** (do documento mais antigo ao mais novo, como os autos), como
+**primeiro arquivo** da pasta do processo:
+
+```
+/opt/cmpdocs/08116164820268152001/
+├── 000 - ÍNTEGRA DOS AUTOS (25-07-2026).pdf   ← o robô põe e mantém atualizada
+├── Estagiário Virtual/
+│   └── 2026-07-25_contestacao.zip
+├── Contestação - Réu.pdf
+└── ...
+```
+
+Assim você escolhe: ler só as peças que o robô selecionou (o zip do dossiê) ou ler
+os autos inteiros. O prefixo `000 - ` é o que faz o arquivo ficar em primeiro na
+listagem, que é alfabética.
+
+**Custo de IA: zero.** A íntegra vem do jus.br, não da Anthropic — nenhuma chamada
+paga acontece nesta fase.
+
+### O que isso custa de verdade: disco
+
+Uma íntegra costuma ter dezenas de MB (o teto por pacote é 180 MB). Para o disco do
+VPS não crescer sem fim, valem duas regras:
+
+- **Uma íntegra por processo.** Ao gravar a nova, o robô apaga a anterior.
+- **Íntegra com menos de 7 dias não é refeita** (`INTEGRA_VALIDADE_DIAS`), mesmo que
+  chegue outra intimação.
+
+Na prática, o piso é ~1 PDF por processo com prazo ativo. Se o disco apertar, dá para
+apagar as íntegras antigas sem perder nada — o robô refaz quando precisar:
+
+```bash
+# quanto as íntegras estão ocupando
+du -ch /opt/cmpdocs/*/000\ -\ ÍNTEGRA* 2>/dev/null | tail -1
+
+# apagar as que não são tocadas há mais de 60 dias
+find /opt/cmpdocs -name '000 - ÍNTEGRA*' -mtime +60 -delete
+```
+
+### Esta fase depende do jus.br
+
+Diferente do dossiê, a íntegra **precisa da sessão do PDPJ ativa** — ela baixa peça
+por peça na hora. Com a sessão caída, o robô não marca a pendência como resolvida:
+tenta de novo no ciclo seguinte, sozinho, quando a sessão voltar. O dossiê e o prazo
+seguem normalmente enquanto isso.
+
+Se algumas peças não couberem no limite, a íntegra sai **parcial** e o lançamento no
+histórico diz quantas ficaram de fora.
+
 ## Onde ver
 
-- **Sistema → Robôs → 🎓 Estagiário Virtual**: a fila, o prazo de cada uma, o botão
-  de baixar o dossiê e o gasto de IA do mês.
+- **Sistema → Robôs → 🎓 Estagiário Virtual**: a fila, o prazo de cada uma, os botões
+  de baixar o dossiê e a íntegra, e o gasto de IA do mês.
 - **Documentos do processo → pasta "Estagiário Virtual"**: os zips daquele processo.
 - **Histórico do processo**: cada dossiê deixa um lançamento `[ESTAGIÁRIO VIRTUAL]`.
 - **Kanban**: o prazo, criado na triagem.

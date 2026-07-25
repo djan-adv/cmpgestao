@@ -10766,8 +10766,10 @@ async function renderEstagiario(){
         +'<div style="font-size:12px;color:'+(venceu?'#b5342b':'var(--ink)')+'">Prazo: <b>'+finEsc(prazo)+'</b>'+(x.urgencia?(' · urgência '+finEsc(x.urgencia)):'')+'</div>'
         +(x.resumo?'<div class="note" style="font-size:11px;margin-top:4px;max-height:52px;overflow:auto">'+finEsc(x.resumo)+'</div>':'')
         +(x.erro?'<div class="note" style="font-size:11px;color:#b5342b;margin-top:4px">'+finEsc(String(x.erro).slice(0,160))+'</div>':'')
+        +(x.integra_path?('<div class="note" style="font-size:11px;color:#127a53;margin-top:4px">📚 íntegra dos autos na pasta ('+_estKb(x.integra_bytes)+')</div>'):(x.integra_erro?('<div class="note" style="font-size:11px;color:#8a5a00;margin-top:4px">íntegra: '+finEsc(String(x.integra_erro).slice(0,120))+'</div>'):''))
         +'<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">'
           +(x.dossie_path?('<button class="btn sm" style="font-size:11px" onclick="baixarDossie(\''+String(x.dossie_path).replace(/'/g,"")+'\',this)">⬇ baixar dossiê ('+_estKb(x.dossie_bytes)+')</button>'):'')
+          +(x.integra_path?('<button class="btn sm ghost" style="font-size:11px" onclick="baixarDossie(\''+String(x.integra_path).replace(/'/g,"")+'\',this)">📚 íntegra</button>'):'')
           +'<button class="btn sm ghost" style="font-size:11px" onclick="irParaProcesso(\''+String(x.processo_numero||'').replace(/'/g,"")+'\')">abrir processo</button>'
         +'</div>'
         +'</div>';

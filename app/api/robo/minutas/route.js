@@ -20,6 +20,7 @@ import path from 'path'
 import { chamarClaude, orcamento } from '../../_ia/claude.js'
 import { gerarMinuta, coletaPdfs, ROOT, ESCRITORIO_CMP } from '../../peticao/core.js'
 import { zip } from '../../_lib/zip.js'
+import { coletarPecas, ordenarPecas, pdfUnico } from '../../jusbr/integra/core.js'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -31,6 +32,8 @@ const RESERVA_MINUTA_USD = 0.4 // modo 'api': só redige se sobrar isto do teto
 const PASTA_DOSSIE = 'Estagiário Virtual'
 const DOSSIE_MAX_DOCS = 8
 const DOSSIE_MAX_BYTES = 60 * 1024 * 1024 // o zip precisa caber num upload de chat
+const INTEGRA_PREFIXO = '000 - ÍNTEGRA DOS AUTOS'
+const INTEGRA_VALIDADE_DIAS = 7 // íntegra mais nova que isto não precisa refazer
 
 function admin() {
   return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } })
@@ -372,6 +375,93 @@ async function faseDossie(sb) {
   }
 }
 
+// ————— fase 3: íntegra dos autos na pasta do processo —————
+// Sem custo de IA: é download do jus.br. Guarda UM PDF por processo, em ordem
+// crescente (do mais antigo ao mais novo, como os autos), com prefixo "000 - "
+// para ficar como primeiro arquivo da pasta. A íntegra anterior é substituída —
+// é isso que impede a pasta (e o disco) de crescer sem fim.
+async function faseIntegra(sb) {
+  // pega a pendência mais urgente que ainda não tem íntegra recente
+  const { data: pend } = await sb.from('robo_minutas')
+    .select('id,processo_id,processo_numero,prazo_em,integra_em')
+    .eq('exige_peca', true).in('status', ['triado', 'dossie', 'sem_orcamento', 'pronta'])
+    .is('integra_em', null)
+    .order('prazo_em', { ascending: true, nullsFirst: false }).limit(1)
+  const alvo = pend && pend[0]
+  if (!alvo) return { pulou: 'nada na fila' }
+
+  const dig = String(alvo.processo_numero || '').replace(/\D/g, '')
+  if (dig.length < 16) {
+    await sb.from('robo_minutas').update({ integra_em: new Date().toISOString(), integra_erro: 'número inválido' }).eq('id', alvo.id)
+    return { integra: false, erro: 'número de processo inválido' }
+  }
+  const pastaProc = path.join(ROOT, dig)
+
+  // já existe íntegra recente? então não baixa de novo (economiza tempo e disco)
+  try {
+    const existentes = fs.readdirSync(pastaProc).filter(n => n.startsWith(INTEGRA_PREFIXO))
+    for (const nome of existentes) {
+      const st = fs.statSync(path.join(pastaProc, nome))
+      if (Date.now() - st.mtimeMs < INTEGRA_VALIDADE_DIAS * 86400000) {
+        await sb.from('robo_minutas').update({
+          integra_em: new Date().toISOString(), integra_path: dig + '/' + nome,
+          integra_bytes: st.size, integra_erro: null,
+        }).eq('id', alvo.id)
+        return { integra: true, reaproveitou: true, processo: alvo.processo_numero, arquivo: nome }
+      }
+    }
+  } catch (e) { /* pasta ainda não existe — segue e baixa */ }
+
+  const col = await coletarPecas(sb, dig, {})
+  if (col.erro) {
+    // sessão do jus.br caída é temporário: não marca como resolvido, tenta de novo
+    const temporario = col.motivo === 'expirado' || col.motivo === 'sem_token'
+    if (!temporario) await sb.from('robo_minutas').update({ integra_em: new Date().toISOString(), integra_erro: String(col.erro).slice(0, 300) }).eq('id', alvo.id)
+    return { integra: false, processo: alvo.processo_numero, erro: col.erro, tentar_depois: temporario }
+  }
+  ordenarPecas(col.files, { ordem: 'asc' }) // crescente: os autos na sequência
+
+  let r
+  try { r = await pdfUnico(col.files) } catch (e) { r = { erro: String((e && e.message) || e) } }
+  if (r.erro) {
+    await sb.from('robo_minutas').update({ integra_em: new Date().toISOString(), integra_erro: String(r.erro).slice(0, 300) }).eq('id', alvo.id)
+    return { integra: false, processo: alvo.processo_numero, erro: r.erro }
+  }
+
+  const hoje = new Date().toISOString().slice(0, 10)
+  const nome = INTEGRA_PREFIXO + ' (' + hoje.split('-').reverse().join('-') + ').pdf'
+  try {
+    fs.mkdirSync(pastaProc, { recursive: true })
+    // fora a anterior: só uma íntegra por processo
+    try { fs.readdirSync(pastaProc).filter(n => n.startsWith(INTEGRA_PREFIXO) && n !== nome).forEach(n => fs.unlinkSync(path.join(pastaProc, n))) } catch (e) {}
+    fs.writeFileSync(path.join(pastaProc, nome), r.bytes)
+  } catch (e) {
+    const msg = 'não consegui gravar a íntegra: ' + String((e && e.message) || e)
+    await sb.from('robo_minutas').update({ integra_em: new Date().toISOString(), integra_erro: msg.slice(0, 300) }).eq('id', alvo.id)
+    return { integra: false, processo: alvo.processo_numero, erro: msg }
+  }
+
+  try {
+    await sb.from('andamentos').insert({
+      processo_id: alvo.processo_id, data: hoje, fonte: 'minuta',
+      texto: '[ESTAGIÁRIO VIRTUAL] Íntegra dos autos guardada em "' + nome + '" (primeiro arquivo da pasta do processo), ' +
+        r.juntados + ' de ' + r.total + ' peça(s) em ordem crescente' + (r.falhos ? (', ' + r.falhos + ' não converteram') : '') + '. ' +
+        (col.pulados ? ('Íntegra parcial: ' + col.pulados + ' peça(s) ficaram de fora por tamanho/formato. ') : '') +
+        'Substitui a íntegra anterior.',
+    })
+  } catch (e) {}
+
+  await sb.from('robo_minutas').update({
+    integra_em: new Date().toISOString(), integra_path: dig + '/' + nome,
+    integra_bytes: r.bytes.length, integra_erro: null,
+  }).eq('id', alvo.id)
+
+  return {
+    integra: true, processo: alvo.processo_numero, arquivo: nome,
+    pecas: r.juntados + '/' + r.total, parcial: col.pulados || 0, bytes: r.bytes.length,
+  }
+}
+
 // ————— fase 2 (modo 'api'): o robô redige pela API paga —————
 async function faseMinuta(sb) {
   const orc = await orcamento(sb)
@@ -420,7 +510,7 @@ export async function GET(request) {
   if (searchParams.get('status') != null) {
     const orc = await orcamento(sb)
     const { data: fila } = await sb.from('robo_minutas')
-      .select('id,processo_numero,status,tipo_peca,prazo_em,urgencia,resumo,dossie_nome,dossie_path,dossie_bytes,minuta_anexo_id,erro,criado_em')
+      .select('id,processo_numero,status,tipo_peca,prazo_em,urgencia,resumo,dossie_nome,dossie_path,dossie_bytes,integra_path,integra_bytes,integra_erro,minuta_anexo_id,erro,criado_em')
       .eq('exige_peca', true).order('criado_em', { ascending: false }).limit(40)
     const { count: semPeca } = await sb.from('robo_minutas').select('id', { count: 'exact', head: true }).eq('exige_peca', false)
     return Response.json({ ok: true, orcamento: orc, modo: await modoAtual(sb), fila: fila || [], arquivadas_sem_peca: semPeca || 0 })
@@ -430,6 +520,8 @@ export async function GET(request) {
   if (!orc.ativo) return Response.json({ ok: true, pulou: 'robô desligado no painel' })
 
   const fase = searchParams.get('fase') || 'triagem'
+  // fase 3: íntegra dos autos (download do jus.br, sem custo de IA)
+  if (fase === 'integra') return Response.json({ ok: true, fase, ...(await faseIntegra(sb)) })
   // fase 2: dossiê (padrão, sem custo) ou minuta pela API, conforme ia_config.modo
   if (fase === 'dossie' || fase === 'minuta') {
     const modo = await modoAtual(sb)
