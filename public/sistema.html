@@ -535,7 +535,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
       <div class="card">
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
           <p class="sectlabel" style="margin:0">🎓 Estagiário Virtual — fila de peças</p>
-          <button class="btn sm ghost" onclick="renderEstagiario()">↻ atualizar</button>
+          <span style="display:inline-flex;gap:6px"><button class="btn sm ghost" onclick="abrirContaIA()" title="Gasto de IA do mês e link para pagar/recarregar a conta da Anthropic">💳 conta da API</button><button class="btn sm ghost" onclick="renderEstagiario()">↻ atualizar</button></span>
         </div>
         <p class="note" style="margin:6px 0 10px">O robô lê as intimações do DJEN, separa as que exigem peça e monta um dossiê: <b>um zip só</b>, com as instruções da petição e os documentos dos autos, na pasta <b>&ldquo;Estagiário Virtual&rdquo;</b> do processo. Baixe, mande redigir no Claude do escritório e suba a minuta revisada. O prazo já entra no Kanban na hora da triagem.</p>
         <div id="estagiario-orcamento" class="note" style="margin-bottom:8px"></div>
@@ -10691,6 +10691,47 @@ async function renderRobos(){
         +'</div>';
     }).join('')+'</div>';
   }catch(e){ el.innerHTML='<div class="note">Erro: '+finEsc(String(e&&e.message||e))+'</div>'; }
+}
+/* ===== Conta da API da Anthropic — gasto do mês + recarga =====
+   Saldo de crédito NÃO existe em API (a Anthropic só mostra no Console), então
+   aqui aparecem os dois números que dá para ter: o nosso (tempo real, chamada a
+   chamada) e o oficial da fatura (se houver Admin API key configurada). */
+async function abrirContaIA(){
+  var id='conta-ia'; var old=document.getElementById(id); if(old) old.remove();
+  var ov=document.createElement('div'); ov.id=id;
+  ov.style.cssText='position:fixed;inset:0;background:rgba(20,26,38,.55);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px';
+  ov.innerHTML='<div style="background:#fff;border-radius:12px;padding:20px;max-width:560px;width:100%;font-size:14px;color:#1e2733"><div class="note">Carregando…</div></div>';
+  ov.onclick=function(e){ if(e.target===ov) ov.remove(); };
+  document.body.appendChild(ov);
+  var caixa=ov.firstChild;
+  try{
+    var jwt=(typeof finToken==='function')?await finToken():null;
+    var r=await fetch('/api/ia/conta',{headers:jwt?{Authorization:'Bearer '+jwt}:{}});
+    var j=await r.json();
+    if(!j||!j.ok){ caixa.innerHTML='<div class="note">Não consegui ler a conta: '+finEsc((j&&j.erro)||'erro')+'</div>'; return; }
+    var n=j.nosso||{}, o=j.oficial||{};
+    var pct=n.teto_brl?Math.min(100,Math.round((n.mes_brl||0)/n.teto_brl*100)):0;
+    var linhas=(n.por_rotina||[]).map(function(x){
+      return '<tr><td style="padding:3px 0">'+finEsc(x.rotina)+'</td><td style="text-align:right">'+x.chamadas+'</td><td style="text-align:right">US$ '+(x.usd||0).toFixed(4)+'</td></tr>';
+    }).join('')||'<tr><td colspan="3" class="note" style="padding:3px 0">Nada gasto neste mês.</td></tr>';
+    var oficialHtml = o.disponivel
+      ? ('<b>US$ '+(o.mes_usd||0).toFixed(2)+'</b> <span class="note">— número oficial da Anthropic, o mesmo da fatura ('+(o.dias||0)+' dia(s), atualiza em ~5 min)</span>')
+      : ('<span class="note">'+finEsc(o.erro||o.dica||'indisponível')+'</span>');
+    caixa.innerHTML=
+      '<div style="font-weight:700;font-size:16px;margin-bottom:10px">💳 Conta da API — Anthropic</div>'
+      +'<div style="border:1px solid #e6e8ec;border-radius:10px;padding:12px;margin-bottom:10px">'
+        +'<div style="font-size:12px;color:#697180">Gasto do mês (nosso registro, tempo real)</div>'
+        +'<div style="font-size:22px;font-weight:700;color:#0F2A4A">R$ '+(n.mes_brl||0).toFixed(2)+' <span style="font-size:13px;font-weight:400;color:#697180">de R$ '+(n.teto_brl||0).toFixed(2)+' ('+pct+'%)</span></div>'
+        +'<div style="height:6px;background:#eef1f5;border-radius:4px;margin-top:6px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+(n.estourou?'#b5342b':'#127a53')+'"></div></div>'
+      +'</div>'
+      +'<table style="width:100%;font-size:12.5px;margin-bottom:12px"><thead><tr style="color:#697180;font-size:11px"><th style="text-align:left">rotina</th><th style="text-align:right">chamadas</th><th style="text-align:right">custo</th></tr></thead><tbody>'+linhas+'</tbody></table>'
+      +'<div style="border-top:1px dashed #e6e8ec;padding-top:10px;margin-bottom:10px"><div style="font-size:12px;color:#697180">Conferência com a fatura</div><div style="margin-top:2px">'+oficialHtml+'</div></div>'
+      +'<div class="note" style="background:#fafbfc;border-left:3px solid #e6e8ec;padding:8px 10px;border-radius:0 6px 6px 0;margin-bottom:12px">O <b>saldo de crédito</b> não aparece aqui porque a Anthropic não expõe isso em API — só no Console. O botão abaixo abre a página de cobrança para ver o saldo e recarregar.</div>'
+      +'<div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">'
+        +'<button class="btn ghost" onclick="var e=document.getElementById(\'conta-ia\');if(e)e.remove()">Fechar</button>'
+        +'<a class="btn" target="_blank" rel="noopener" style="text-decoration:none" href="'+finEsc(j.console_url||'https://platform.claude.com')+'">💳 Ver saldo e pagar ↗</a>'
+      +'</div>';
+  }catch(e){ caixa.innerHTML='<div class="note">Erro: '+finEsc(String(e&&e.message||e))+'</div>'; }
 }
 /* ===== Estagiário Virtual — fila de peças + download do dossiê ===== */
 var _EST_ROTULOS={triado:'aguardando dossiê',dossie:'dossiê pronto',pronta:'minuta pronta',minutando:'redigindo…',sem_orcamento:'teto do mês atingido',erro:'falhou'};

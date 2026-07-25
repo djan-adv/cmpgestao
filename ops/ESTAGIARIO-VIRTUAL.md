@@ -108,3 +108,33 @@ update robo_minutas set status = 'triado', erro = null where id = '<uuid>';
 - Só processos ativos do escritório entram (arquivado e suspenso ficam de fora).
 - Publicações com mais de 5 dias o robô não pega — é para não ressuscitar fila antiga
   numa primeira execução.
+
+---
+
+## Conta da API (botão 💳 no painel)
+
+Em **Robôs → 🎓 Estagiário Virtual → 💳 conta da API** aparece:
+
+- **Gasto do mês** pelo nosso registro (`ia_uso`), em tempo real, quebrado por rotina.
+  É o número que segura o teto.
+- **Conferência com a fatura**: o custo oficial da Anthropic (`/v1/organizations/cost_report`),
+  se houver uma Admin API key configurada.
+- **Botão "Ver saldo e pagar"**, que abre o Console da Anthropic.
+
+### Saldo de crédito não dá para mostrar aqui
+
+A Anthropic **não expõe saldo de crédito em nenhum endpoint** — nem no Admin API.
+Só no Console. Por isso o botão leva para lá em vez de mostrar o número.
+
+### Para ligar a conferência oficial
+
+1. Console → Settings → API keys → crie uma **Admin API key** (`sk-ant-admin01-…`).
+   É diferente da chave normal.
+2. Ponha no servidor: `ANTHROPIC_ADMIN_KEY=sk-ant-admin01-…` e reinicie.
+
+> ⚠️ **Exige conta de organização.** O Admin API não funciona em conta individual —
+> nesse caso o painel mostra só o nosso número, que é suficiente para o teto.
+
+O número oficial é diário e atualiza uns 5 minutos depois da chamada, então ele
+vai ficar sempre um pouco atrás do nosso. Divergência grande entre os dois quer
+dizer que alguém está usando a mesma chave fora do CMPGestão.
