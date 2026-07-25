@@ -1758,7 +1758,7 @@ function abrir(i){
   /* aba "Publicações com inteiro teor (DJEN)" removida a pedido — sem utilidade prática */
   html+='<div class="card"><p class="sectlabel" style="display:flex;justify-content:space-between;align-items:center">Histórico completo (termos oficiais)'+(p.hist_full&&p.hist_full.length?(' — '+p.hist_full.length+' andamentos'):'')+'<span style="display:flex;gap:6px"><button class="btn sm ghost" style="font-size:12px" onclick="addHistManual()">+ histórico manual</button></span></p><ul class="timeline" id="det-hist"></ul><div id="det-hist-more" style="margin-top:8px"></div></div>';
   // documentos do jus.br (PDPJ) — puxa sob demanda a peça escolhida (some após 30 dias)
-  html+='<div class="card cmp-only" id="jusbr-card"><p class="sectlabel" style="display:flex;justify-content:space-between;align-items:center">Documentos do jus.br <button class="btn sm" style="font-size:12px" onclick="jusbrCarregar(\''+esc(p.numero)+'\')">Carregar documentos</button> <button class="btn sm" style="font-size:12px;background:#0F6E56;color:#fff" title="Baixar todas as peças do processo (íntegra) para a sua pasta de Downloads — não guarda no sistema" onclick="jusbrBaixarIntegra(\''+esc(p.numero)+'\')">⬇ Baixar íntegra</button> <button class="btn sm ghost" style="font-size:11px" title="Diagnóstico técnico dos documentos (para o Claude)" onclick="jusbrDiag(\''+esc(p.numero)+'\')">🔎 diag</button></p><div id="jusbr-status" class="note" style="margin-bottom:6px">Lista as peças do processo no jus.br. O arquivo escolhido é baixado sob demanda e removido do sistema após 30 dias (o original fica no tribunal).</div><div id="jusbr-barra" style="display:none;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px;padding:7px 9px;background:#f4f7fb;border:1px solid #e1e8f0;border-radius:9px"><span class="note" style="margin:0;font-weight:600">Marcados:</span><button class="btn sm ghost" style="font-size:11px" onclick="jusbrMarcarTodos()">marcar todos</button><button class="btn sm" style="font-size:11px;background:#0F6E56;color:#fff" title="Baixa os marcados numa pasta compactada (.zip)" onclick="jusbrBaixarSelecionados(\'zip\')">⬇ pasta .zip</button><button class="btn sm" style="font-size:11px;background:#185FA5;color:#fff" title="Junta todos os marcados num único arquivo PDF" onclick="jusbrBaixarSelecionados(\'pdf\')">⬇ PDF único</button><button class="btn sm ghost" style="font-size:11px" title="Baixa cada arquivo separadamente na pasta Downloads" onclick="jusbrBaixarSelecionados(\'soltos\')">⬇ soltos</button></div><div id="jusbr-lista"></div></div>';
+  html+='<div class="card cmp-only" id="jusbr-card"><p class="sectlabel" style="display:flex;justify-content:space-between;align-items:center">Documentos do jus.br <button class="btn sm" style="font-size:12px" onclick="jusbrCarregar(\''+esc(p.numero)+'\')">Carregar documentos</button> <button class="btn sm" style="font-size:12px;background:#0F6E56;color:#fff" title="Baixar todas as peças do processo (íntegra) para a sua pasta de Downloads — não guarda no sistema" onclick="jusbrBaixarIntegra(\''+esc(p.numero)+'\')">⬇ Baixar íntegra</button> <button class="btn sm ghost" style="font-size:11px" title="Diagnóstico técnico dos documentos (para o Claude)" onclick="jusbrDiag(\''+esc(p.numero)+'\')">🔎 diag</button></p><div id="jusbr-status" class="note" style="margin-bottom:6px">Lista as peças do processo no jus.br. O arquivo escolhido é baixado sob demanda e removido do sistema após 30 dias (o original fica no tribunal).</div><div id="jusbr-barra" style="display:none;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px;padding:7px 9px;background:#f4f7fb;border:1px solid #e1e8f0;border-radius:9px"><span class="note" style="margin:0;font-weight:600">Marcados:</span><button class="btn sm ghost" style="font-size:11px" onclick="jusbrMarcarTodos()">marcar todos</button><button id="jusbr-ordem-btn" class="btn sm ghost" style="font-size:11px" title="Inverter a ordem da lista — o download e o PDF seguem esta ordem" onclick="jusbrInverterOrdem()">↓ mais recentes primeiro</button><button class="btn sm" style="font-size:11px;background:#0F6E56;color:#fff" title="Baixa os marcados numa pasta compactada (.zip)" onclick="jusbrBaixarSelecionados(\'zip\')">⬇ pasta .zip</button><button class="btn sm" style="font-size:11px;background:#185FA5;color:#fff" title="Junta todos os marcados num único arquivo PDF" onclick="jusbrBaixarSelecionados(\'pdf\')">⬇ PDF único</button><button class="btn sm ghost" style="font-size:11px" title="Baixa cada arquivo separadamente na pasta Downloads" onclick="jusbrBaixarSelecionados(\'soltos\')">⬇ soltos</button></div><div id="jusbr-lista"></div></div>';
   // IA
   if(!KAN)initKanban(); initAgenda();
   html+='<div class="card"><p class="sectlabel" style="display:flex;justify-content:space-between;align-items:center">Atividades do escritório neste processo (tarefas e prazos)<button class="btn sm" style="font-size:12px" onclick="novaTarefaDoProcesso()">+ Nova tarefa</button></p><div id="ativ-proc"></div></div>';
@@ -3793,6 +3793,29 @@ function jusbrItemHtml(doc){
   var chk='<input type="checkbox" class="jbr-sel" value="'+esc(doc.uuid||'')+'" title="Marcar para baixar" style="cursor:pointer">';
   return '<div class="jusbr-item" data-uuid="'+esc(doc.uuid||'')+'" style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #eee"><label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;flex:1">'+chk+'<span><span style="color:#888">'+dt+'</span> '+esc(doc.nome||'documento')+'</span></label><div class="jusbr-acao" style="white-space:nowrap">'+acao+'</div></div>';
 }
+/* ordena a lista de peças por data — crescente (autos na ordem) ou decrescente */
+function _jusbrPintaLista(){
+  var lista=document.getElementById('jusbr-lista'); if(!lista) return;
+  var marcados={};
+  [].slice.call(lista.querySelectorAll('.jbr-sel')).forEach(function(c){ if(c.checked) marcados[c.value]=1; });
+  var arr=(window.__jusbrDocs||[]).slice();
+  var asc=(window.__jusbrOrdem==='asc');
+  arr.sort(function(a,b){
+    var da=String(a.data||''), db=String(b.data||'');
+    if(da!==db) return asc?da.localeCompare(db):db.localeCompare(da);
+    var sa=parseInt(a.seq||0,10)||0, sb2=parseInt(b.seq||0,10)||0;
+    return asc?(sa-sb2):(sb2-sa);
+  });
+  window.__jusbrDocsOrd=arr;
+  lista.innerHTML=arr.map(jusbrItemHtml).join('');
+  [].slice.call(lista.querySelectorAll('.jbr-sel')).forEach(function(c){ if(marcados[c.value]) c.checked=true; });
+  var bt=document.getElementById('jusbr-ordem-btn');
+  if(bt) bt.textContent=asc?'↑ mais antigos primeiro':'↓ mais recentes primeiro';
+}
+function jusbrInverterOrdem(){
+  window.__jusbrOrdem=(window.__jusbrOrdem==='asc')?'desc':'asc';
+  _jusbrPintaLista();
+}
 /* marca/desmarca todos os documentos da lista */
 function jusbrMarcarTodos(){
   var cx=[].slice.call(document.querySelectorAll('#jusbr-lista .jbr-sel'));
@@ -3805,6 +3828,7 @@ function jusbrMarcarTodos(){
 async function jusbrBaixarSelecionados(formato){
   var numero=window.__jusbrNum||(atual&&atual.numero)||'';
   var sels=[].slice.call(document.querySelectorAll('#jusbr-lista .jbr-sel:checked')).map(function(c){return c.value;}).filter(Boolean);
+  /* a ordem enviada é a da tela — o servidor monta o zip/PDF nessa sequência */
   if(!sels.length){ alert('Marque as caixinhas dos documentos que quer baixar.\n\n(Use "marcar todos" para selecionar a lista inteira.)'); return; }
   var jwt=await jusbrJwt(); if(!jwt){ alert('Sessão expirada — recarregue a página (F5).'); return; }
   var base='/api/jusbr/integra?numero='+encodeURIComponent(String(numero).replace(/\D/g,''));
@@ -3863,7 +3887,9 @@ async function jusbrCarregar(numero){
     if(!r.ok){ st.innerHTML=jusbrMsgErro(d); return; }
     if(!d.documentos||!d.documentos.length){ st.textContent='Nenhum documento retornado pelo jus.br.'; return; }
     st.innerHTML=d.total+' documento(s) — <b>marque as caixinhas</b> e escolha como baixar na barra abaixo; ou clique em "puxar" para ver aqui dentro.';
-    if(lista)lista.innerHTML=d.documentos.map(jusbrItemHtml).join('');
+    window.__jusbrDocs=d.documentos.slice();
+    window.__jusbrOrdem=window.__jusbrOrdem||'desc';
+    _jusbrPintaLista();
     var barra=document.getElementById('jusbr-barra'); if(barra) barra.style.display='flex';
   }catch(e){ st.textContent='Falha: '+(e&&e.message||e); }
 }

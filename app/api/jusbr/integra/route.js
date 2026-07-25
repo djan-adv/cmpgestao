@@ -123,10 +123,24 @@ export async function GET(request) {
     if (!/\.[a-z0-9]{2,4}$/i.test(base)) base += head.startsWith('%pdf') ? '.pdf' : '.html'
     let name = seq + ' - ' + base
     if (usados[name]) { name = seq + '-' + (usados[name]++) + ' - ' + base } else usados[name] = 1
-    files.push({ name, data: buf })
+    const duuid = ((String(hb || '').match(/documentos\/([^/]+)\//) || [])[1]) || ''
+    files.push({ name, data: buf, uuid: duuid, dt: String(d.dataHoraJuntada || d.data || '') })
     total += buf.length
   }
   if (!files.length) return Response.json({ erro: 'não foi possível baixar nenhuma peça' }, { status: 502 })
+
+  // ordem final: a MESMA da tela. Quando o usuário manda a seleção, os uuids vêm
+  // na ordem escolhida (crescente = autos na sequência); sem seleção, usa ?ordem.
+  if (uuidsSel.length) {
+    const pos = {}; uuidsSel.forEach((u, i) => { pos[u] = i })
+    files.sort((a, b) => (pos[a.uuid] == null ? 9999 : pos[a.uuid]) - (pos[b.uuid] == null ? 9999 : pos[b.uuid]))
+  } else if ((searchParams.get('ordem') || '').toLowerCase() === 'asc') {
+    files.sort((a, b) => String(a.dt || '').localeCompare(String(b.dt || '')))
+  } else if ((searchParams.get('ordem') || '').toLowerCase() === 'desc') {
+    files.sort((a, b) => String(b.dt || '').localeCompare(String(a.dt || '')))
+  }
+  // renumera os prefixos (001, 002…) seguindo a ordem final
+  files.forEach((f, i) => { f.name = String(i + 1).padStart(3, '0') + ' - ' + f.name.replace(/^\d{3}(-\d+)? - /, '') })
 
   // ——— formato SOLTO: devolve UM arquivo só, com o nome original ———
   if (formato === 'solto') {
