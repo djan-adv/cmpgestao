@@ -10168,6 +10168,10 @@ function abrirProtocolarPeticao(numero){
       +'<div style="font-weight:800;color:#b5342b;font-size:13px;margin-bottom:4px">⚠ Antes de anexar, confira a peça</div>'
       +'<div style="font-size:12.5px;color:#7b2b26;line-height:1.5">Não pode haver <b>recados internos</b>, <b>campos a preencher</b> (XXX, [nome], ____), <b>comentários</b>, marcações de revisão ou trechos destacados. Vale para as duas opções — inclusive a que vai para ajuste.</div>'
     +'</div>'
+    +'<div style="background:#eef4fb;border:1px solid #cfe0f2;border-radius:10px;padding:10px 12px;margin-bottom:12px">'
+      +'<div style="font-weight:800;color:#185FA5;font-size:12.5px;margin-bottom:3px">📄 Formato exigido pelo jus.br</div>'
+      +'<div style="font-size:12.5px;color:#22405f;line-height:1.5">A <b>peça principal</b> precisa ser <b>PDF/A</b> (no Word: Salvar como → PDF → Opções → <i>Compatível com PDF/A</i>). Os <b>anexos</b> podem ser PDF comum. Limite de 10 MB por arquivo.</div>'
+    +'</div>'
     +'<label>Título da peça</label><input id="proto-titulo" placeholder="Ex.: Contrarrazões de apelação">'
     +'<div style="margin-top:10px"><label>O que fazer com ela</label>'
       +'<label style="display:flex;gap:8px;align-items:flex-start;border:1px solid var(--line);border-radius:9px;padding:9px;margin-bottom:6px;cursor:pointer">'
@@ -10320,7 +10324,7 @@ function protoBlocoHTML(numero){
       }).join('')+'</div>'):'';
   if(!itens.length) return blocoFeitas?('<div class="card" style="border-left:4px solid #0F6E56"><p class="sectlabel" style="margin:0 0 4px;color:#0F6E56">📤 Protocolos</p>'+blocoFeitas+'</div>'):'';
   return '<div class="card" style="border-left:4px solid #7b1e3a"><p class="sectlabel" style="margin:0 0 4px;color:#7b1e3a">📤 Petições a protocolar ('+itens.length+')</p>'
-    +'<p class="note" style="margin:0 0 4px">Prazo fatal. Ao protocolar, clique em <b>✓ protocolada</b> — o prazo encerra na hora. (O sistema também encerra sozinho quando o movimento/peça aparecer nos autos, mas isso costuma demorar.)</p>'+linhas+blocoFeitas+'</div>';
+    +'<p class="note" style="margin:0 0 4px"><a href="https://portaldeservicos.pdpj.jus.br/minhas-peticoes" target="_blank" rel="noopener" style="color:#185FA5;font-weight:600">↗ minhas petições no jus.br</a> · Prazo fatal. Ao protocolar, clique em <b>✓ protocolada</b> — o prazo encerra na hora. (O sistema também encerra sozinho quando o movimento/peça aparecer nos autos, mas isso costuma demorar.)</p>'+linhas+blocoFeitas+'</div>';
 }
 async function protoAbrirArquivo(id){
   var x=(PROTO_PEND||[]).find(function(y){return String(y.id)===String(id);}); if(!x||!x.arquivo_caminho) return;
