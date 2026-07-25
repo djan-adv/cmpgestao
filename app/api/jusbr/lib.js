@@ -60,6 +60,13 @@ export function ehEmissorPdpj(t) {
   return /(^|\/\/)([a-z0-9.-]*\.)?(pje|pdpj)\.jus\.br/i.test(String(c.iss))
 }
 
+// O 401 do PDPJ é ambíguo: serve tanto para "token ruim" quanto para "este
+// processo não é seu". Só o corpo da resposta distingue os dois.
+export function ehFaltaDeAcessoAoProcesso(corpo) {
+  const t = String(corpo || '').toLowerCase()
+  return /n[ãa]o possui acesso|sem acesso ao processo|acesso ao processo|n[ãa]o autorizado ao processo/.test(t)
+}
+
 // PROVA DE FOGO: o PDPJ aceita este token? Só isto distingue "token dentro da
 // validade" de "token que serve". Devolve { aceito, http } — e { aceito:null }
 // quando não deu para testar (sem processo, rede fora): nesse caso quem chama
@@ -88,7 +95,14 @@ export async function provarToken(sb, token) {
     })
     // só 401 condena o token. 403/404 podem ser falta de acesso ÀQUELE processo —
     // barrar por isso derrubaria uma credencial boa.
-    if (r.status === 401) return { aceito: false, http: 401, processo: numero, detalhe: String(await r.text().catch(() => '')).slice(0, 200) }
+    if (r.status === 401) {
+      const corpo = String(await r.text().catch(() => ''))
+      // ARMADILHA DO PDPJ: ele responde 401 também quando o token é ÓTIMO mas o
+      // processo não está no acervo do advogado. Condenar o token nesse caso é
+      // trocar as bolas — some a sessão inteira por causa de um processo alheio.
+      if (ehFaltaDeAcessoAoProcesso(corpo)) return { aceito: null, motivo: 'sem acesso a este processo', processo: numero }
+      return { aceito: false, http: 401, processo: numero, detalhe: corpo.slice(0, 200) }
+    }
     return { aceito: true, http: r.status, processo: numero }
   } catch (e) { return { aceito: null, motivo: String((e && e.message) || e) } }
 }

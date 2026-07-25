@@ -4,7 +4,7 @@
 // Se já estiver baixado, devolve o existente. Guarda o PDF em base64 (jusbr_arquivos).
 
 import { createClient } from '@supabase/supabase-js'
-import { getFreshToken } from '../lib.js'
+import { getFreshToken, ehFaltaDeAcessoAoProcesso } from '../lib.js'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -106,7 +106,14 @@ export async function POST(request) {
     try {
       r = await fetch(u, { headers: { ...PDPJ_HEADERS, Accept: 'application/pdf,application/octet-stream,text/html;q=0.8,*/*;q=0.5', Authorization: 'Bearer ' + sess.token }, signal: AbortSignal.timeout(40000) })
     } catch (e) { tentativas.push({ url: u.replace(PDPJ, ''), erro: String((e && e.message) || e) }); continue }
-    if (r.status === 401) return Response.json({ erro: 'jus.br: token inválido/expirado — sincronize novamente', motivo: 'expirado' }, { status: 409 })
+    if (r.status === 401) {
+      // 401 no PDPJ tanto pode ser sessão caída quanto processo fora do acervo.
+      const corpo401 = await r.clone().text().catch(() => '')
+      if (ehFaltaDeAcessoAoProcesso(corpo401)) {
+        return Response.json({ erro: 'jus.br: seu login não tem acesso a este processo no PDPJ (não consta como advogado habilitado). A sessão está normal.', motivo: 'sem_acesso' }, { status: 409 })
+      }
+      return Response.json({ erro: 'jus.br: token inválido/expirado — sincronize novamente', motivo: 'expirado' }, { status: 409 })
+    }
     const b = Buffer.from(await r.arrayBuffer())
     const ct = String(r.headers.get('content-type') || '').split(';')[0].trim()
     const real = r.ok && ehArquivoReal(b, ct, nome)

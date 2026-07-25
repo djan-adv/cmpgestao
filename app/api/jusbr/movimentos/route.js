@@ -8,7 +8,7 @@
 // robot_add_andamento (dedup por texto). Também atualizamos os dados do processo.
 
 import { createClient } from '@supabase/supabase-js'
-import { getFreshToken } from '../lib.js'
+import { getFreshToken, ehFaltaDeAcessoAoProcesso } from '../lib.js'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -112,7 +112,16 @@ export async function POST(request) {
   } catch (e) {
     return Response.json({ erro: 'falha ao consultar o PDPJ: ' + (e && e.message || e) }, { status: 502 })
   }
-  if (resp.status === 401) return Response.json({ erro: 'jus.br: token inválido/expirado — sincronize novamente', motivo: 'expirado' }, { status: 409 })
+  if (resp.status === 401) {
+    // O PDPJ usa 401 para DUAS coisas diferentes. Só o corpo separa "sua sessão
+    // caiu" de "este processo não é seu" — e mandar o advogado relogar por causa
+    // de um processo alheio já custou uma manhã inteira.
+    const msg = String((data && (data.message || data.error)) || '')
+    if (ehFaltaDeAcessoAoProcesso(msg)) {
+      return Response.json({ erro: 'jus.br: seu login não tem acesso a este processo no PDPJ (não consta como advogado habilitado). A sessão está normal.', motivo: 'sem_acesso', detalhe: msg.slice(0, 200) }, { status: 409 })
+    }
+    return Response.json({ erro: 'jus.br: token inválido/expirado — sincronize novamente', motivo: 'expirado' }, { status: 409 })
+  }
   if (!resp.ok) return Response.json({ erro: 'PDPJ recusou (HTTP ' + resp.status + ')' }, { status: 502 })
 
   const proc = Array.isArray(data && data.content) ? data.content[0] : (Array.isArray(data) ? data[0] : data)
