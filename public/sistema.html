@@ -243,6 +243,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
     <section id="s-painel">
       <div id="painel-hello"></div>
       <div class="kpis kpis5" id="kpis"></div>
+      <div id="painel-protocolos"></div>
       <div class="pv2-cols">
         <div>
           <div class="card" id="painel-meudia"></div>
@@ -1241,6 +1242,7 @@ function drillFase(fid){
 /* clicar numa linha do painel/drill: fecha o modal e abre a ficha do processo */
 function abrirDoDrill(i){ try{ fecharDrill(); }catch(e){} if(i>=0 && typeof abrir==='function') abrir(i); }
 function renderPainel(){
+  try{ var bp=document.getElementById('painel-protocolos'); if(bp) bp.innerHTML=(typeof protoBlocoHTML==='function')?protoBlocoHTML(null):''; }catch(e){}
   var k=DADOS.kpis||{}, el=document.getElementById("kpis");
   var pend=TRIAGEM?TRIAGEM.filter(function(t){return !t.done}).length:0;
   initAgenda();
@@ -1714,7 +1716,7 @@ function abrir(i){
     '<span id="proc-vinculados" style="display:inline-flex;gap:6px;flex-wrap:wrap;align-items:center"></span></div>'+
     '<div id="ctl-chips" style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center"></div>'+
     ''+
-    '<div style="margin-top:10px"><button class="btn sm" onclick="novaTarefaDoProcesso()">+ Nova tarefa</button> <button class="btn sm" style="background:#eef4fb;color:#185FA5;border:1px solid #cfe0f2;font-weight:700" onclick="abrirTribunal(\''+p.numero+'\')" title="Abrir o sistema do tribunal (PJe/e-SAJ/Projudi) no grau deste processo — o número é copiado para você colar na busca">&#9878; Abrir no tribunal</button> <button id="btn-atualizar-cli" class="btn sm cmp-only" style="background:#eaf4f4;color:#0b7285;border:1px solid #cfe6e6;font-weight:700" onclick="abrirAtualizarCliente(\''+p.numero+'\')" title="E-mail de atualização ao cliente — informar movimentação, pedir providência, ou ativar o acompanhamento semanal automático">&#9993; Atualizar cliente</button> <button class="btn sm cmp-only" style="background:#f7f3e8;color:#8a6d00;border:1px solid #e8dcbb;font-weight:700" onclick="abrirAssinatura(\''+p.numero+'\')" title="Gerar procuração ou documento para assinatura eletrônica, já com o cliente deste processo no contexto">&#9997; Procuração</button>'+((typeof _ehCasoProc==='function'&&_ehCasoProc(p))?' <button class="btn sm cmp-only" style="background:#f3eaf7;color:#6d28a8;border:1px solid #ddc9ea;font-weight:700" onclick="monitorarAcoesCliente()" title="Testar: buscar no DJEN ações NOVAS (últimos 3 meses) que citem o nome deste cliente — inclui trabalhista. Não busca por CNPJ (a API do CNJ não permite).">&#128269; Monitorar ações novas</button>':'')+'</div>'+
+    '<div style="margin-top:10px"><button class="btn sm" onclick="novaTarefaDoProcesso()">+ Nova tarefa</button> <button class="btn sm cmp-only" style="background:#7b1e3a;color:#fff;border:1px solid #7b1e3a;font-weight:700" onclick="abrirProtocolarPeticao(\''+p.numero+'\')" title="Subir a petição pronta (PDF) para protocolo, ou em Word para ajuste — com prazo fatal e alertas">&#128228; Protocolar petição</button> <button class="btn sm" style="background:#eef4fb;color:#185FA5;border:1px solid #cfe0f2;font-weight:700" onclick="abrirTribunal(\''+p.numero+'\')" title="Abrir o sistema do tribunal (PJe/e-SAJ/Projudi) no grau deste processo — o número é copiado para você colar na busca">&#9878; Abrir no tribunal</button> <button id="btn-atualizar-cli" class="btn sm cmp-only" style="background:#eaf4f4;color:#0b7285;border:1px solid #cfe6e6;font-weight:700" onclick="abrirAtualizarCliente(\''+p.numero+'\')" title="E-mail de atualização ao cliente — informar movimentação, pedir providência, ou ativar o acompanhamento semanal automático">&#9993; Atualizar cliente</button> <button class="btn sm cmp-only" style="background:#f7f3e8;color:#8a6d00;border:1px solid #e8dcbb;font-weight:700" onclick="abrirAssinatura(\''+p.numero+'\')" title="Gerar procuração ou documento para assinatura eletrônica, já com o cliente deste processo no contexto">&#9997; Procuração</button>'+((typeof _ehCasoProc==='function'&&_ehCasoProc(p))?' <button class="btn sm cmp-only" style="background:#f3eaf7;color:#6d28a8;border:1px solid #ddc9ea;font-weight:700" onclick="monitorarAcoesCliente()" title="Testar: buscar no DJEN ações NOVAS (últimos 3 meses) que citem o nome deste cliente — inclui trabalhista. Não busca por CNPJ (a API do CNJ não permite).">&#128269; Monitorar ações novas</button>':'')+'</div>'+
     /* ponto 12: bloco de processos vinculados no canto inferior direito da aba (perto do botão Encerrar) */
     '<div id="proc-vinculados-rodape" style="position:absolute;bottom:12px;right:14px;max-width:60%;display:flex;gap:6px;flex-wrap:wrap;align-items:center;justify-content:flex-end;font-size:12px"></div>'+
     '</div>';
@@ -1758,6 +1760,7 @@ function abrir(i){
   /* aba "Publicações com inteiro teor (DJEN)" removida a pedido — sem utilidade prática */
   html+='<div class="card"><p class="sectlabel" style="display:flex;justify-content:space-between;align-items:center">Histórico completo (termos oficiais)'+(p.hist_full&&p.hist_full.length?(' — '+p.hist_full.length+' andamentos'):'')+'<span style="display:flex;gap:6px"><button class="btn sm ghost" style="font-size:12px" onclick="addHistManual()">+ histórico manual</button></span></p><ul class="timeline" id="det-hist"></ul><div id="det-hist-more" style="margin-top:8px"></div></div>';
   // documentos do jus.br (PDPJ) — puxa sob demanda a peça escolhida (some após 30 dias)
+  try{ html+=(typeof protoBlocoHTML==='function')?protoBlocoHTML(p.numero):''; }catch(e){}
   html+='<div class="card cmp-only" id="jusbr-card"><p class="sectlabel" style="display:flex;justify-content:space-between;align-items:center">Documentos do jus.br <button class="btn sm" style="font-size:12px" onclick="jusbrCarregar(\''+esc(p.numero)+'\')">Carregar documentos</button> <button class="btn sm" style="font-size:12px;background:#0F6E56;color:#fff" title="Baixar todas as peças do processo (íntegra) para a sua pasta de Downloads — não guarda no sistema" onclick="jusbrBaixarIntegra(\''+esc(p.numero)+'\')">⬇ Baixar íntegra</button> <button class="btn sm ghost" style="font-size:11px" title="Diagnóstico técnico dos documentos (para o Claude)" onclick="jusbrDiag(\''+esc(p.numero)+'\')">🔎 diag</button></p><div id="jusbr-status" class="note" style="margin-bottom:6px">Lista as peças do processo no jus.br. O arquivo escolhido é baixado sob demanda e removido do sistema após 30 dias (o original fica no tribunal).</div><div id="jusbr-barra" style="display:none;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px;padding:7px 9px;background:#f4f7fb;border:1px solid #e1e8f0;border-radius:9px"><span class="note" style="margin:0;font-weight:600">Marcados:</span><button class="btn sm ghost" style="font-size:11px" onclick="jusbrMarcarTodos()">marcar todos</button><button id="jusbr-ordem-btn" class="btn sm ghost" style="font-size:11px" title="Inverter a ordem da lista — o download e o PDF seguem esta ordem" onclick="jusbrInverterOrdem()">↓ mais recentes primeiro</button><button class="btn sm" style="font-size:11px;background:#0F6E56;color:#fff" title="Baixa os marcados numa pasta compactada (.zip)" onclick="jusbrBaixarSelecionados(\'zip\')">⬇ pasta .zip</button><button class="btn sm" style="font-size:11px;background:#185FA5;color:#fff" title="Junta todos os marcados num único arquivo PDF" onclick="jusbrBaixarSelecionados(\'pdf\')">⬇ PDF único</button><button class="btn sm ghost" style="font-size:11px" title="Baixa cada arquivo separadamente na pasta Downloads" onclick="jusbrBaixarSelecionados(\'soltos\')">⬇ soltos</button></div><div id="jusbr-lista"></div></div>';
   // IA
   if(!KAN)initKanban(); initAgenda();
@@ -4305,6 +4308,7 @@ function toggleConcluirTarefa(id){
      mostrava sempre "Djan" para qualquer pessoa) */
   try{ await _carregarAssentos(); }catch(e){}
   try{ await identificarUsuarioLogado(); }catch(e){}
+  try{ carregarProtocolosPendentes(); }catch(e){}
   /* acesso único por login — INCUMBENTE VENCE: enquanto a sua sessão estiver
      aberta (batimento a cada 30s), qualquer OUTRO dispositivo que tentar entrar
      é bloqueado. Se você fechar, a sessão fica "vaga" após ~90s e outro pode
@@ -10141,6 +10145,179 @@ function finCopiarPix(el,enc){
 }
 </script>
 <script>
+/* ===== Petições para PROTOCOLO =====
+   A peça é redigida fora do sistema; aqui ela é anexada com prazo fatal.
+   Dois caminhos: "protocolar direto" (PDF pronto) ou "aguardar ajuste" (Word).
+   O sistema NÃO protocola sozinho — protocolo é ato irreversível. Ele cobra o
+   prazo, alerta no dia e fecha a pendência quando a peça aparece nos autos. */
+var PROTO_PEND=[];
+function _protoHoje(){ var d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function _protoFmt(iso){ return iso?String(iso).slice(0,10).split('-').reverse().join('/'):''; }
+
+function abrirProtocolarPeticao(numero){
+  numero=numero||(atual&&atual.numero)||'';
+  var old=document.getElementById('proto-modal'); if(old) old.remove();
+  var ov=document.createElement('div'); ov.id='proto-modal';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(20,28,40,.5);z-index:99;display:flex;align-items:center;justify-content:center;padding:18px';
+  ov.innerHTML='<div style="background:#fff;border-radius:14px;max-width:560px;width:100%;max-height:92vh;overflow:auto;padding:18px">'
+    +'<h3 style="margin:0 0 2px;color:var(--navy)">📤 Protocolar petição</h3>'
+    +'<p class="note" style="margin:0 0 10px">Processo '+esc(fmtCNJ(numero))+'</p>'
+    +'<div style="background:#fdecec;border:1px solid #f3c2c2;border-radius:10px;padding:11px 13px;margin-bottom:12px">'
+      +'<div style="font-weight:800;color:#b5342b;font-size:13px;margin-bottom:4px">⚠ Antes de anexar, confira a peça</div>'
+      +'<div style="font-size:12.5px;color:#7b2b26;line-height:1.5">Não pode haver <b>recados internos</b>, <b>campos a preencher</b> (XXX, [nome], ____), <b>comentários</b>, marcações de revisão ou trechos destacados. Vale para as duas opções — inclusive a que vai para ajuste.</div>'
+    +'</div>'
+    +'<label>Título da peça</label><input id="proto-titulo" placeholder="Ex.: Contrarrazões de apelação">'
+    +'<div style="margin-top:10px"><label>O que fazer com ela</label>'
+      +'<label style="display:flex;gap:8px;align-items:flex-start;border:1px solid var(--line);border-radius:9px;padding:9px;margin-bottom:6px;cursor:pointer">'
+        +'<input type="radio" name="proto-modo" value="protocolo" checked onchange="_protoModo()"><span><b>Protocolar direto</b><div class="note" style="margin:0">A peça está pronta. Anexe o <b>PDF</b> final.</div></span></label>'
+      +'<label style="display:flex;gap:8px;align-items:flex-start;border:1px solid var(--line);border-radius:9px;padding:9px;cursor:pointer">'
+        +'<input type="radio" name="proto-modo" value="correcao" onchange="_protoModo()"><span><b>Aguardar ajuste / correção</b><div class="note" style="margin:0">Anexe o <b>Word</b> para revisão antes do protocolo.</div></span></label>'
+    +'</div>'
+    +'<div style="margin-top:10px"><label id="proto-lbl-arq">Arquivo da petição (PDF)</label><input type="file" id="proto-arq" accept=".pdf"></div>'
+    +'<div class="row2" style="margin-top:10px"><div><label>Prazo fatal (dia do protocolo)</label><input type="date" id="proto-prazo" value="'+_protoHoje()+'"></div><div><label>Responsável</label><input id="proto-resp" value="'+esc(((document.getElementById('who-name')||{}).textContent)||'')+'"></div></div>'
+    +'<label style="margin-top:10px">Observações (opcional)</label><textarea id="proto-obs" rows="2" placeholder="Algo que o revisor precisa saber"></textarea>'
+    +'<label style="display:flex;gap:8px;align-items:flex-start;margin-top:12px;background:#f4f7fb;border:1px solid #dbe6f2;border-radius:9px;padding:10px;cursor:pointer">'
+      +'<input type="checkbox" id="proto-ok"><span style="font-size:12.5px;color:#2E3A4B"><b>Conferi a peça inteira.</b> Não há recados, campos a preencher, comentários nem destaques pendentes.</span></label>'
+    +'<div class="foot" style="margin-top:14px"><button class="btn ghost" onclick="document.getElementById(\'proto-modal\').remove()">Cancelar</button><button class="btn" style="background:#7b1e3a;border-color:#7b1e3a" onclick="salvarProtocolarPeticao(\''+esc(numero)+'\',this)">Anexar e criar prazo</button></div>'
+    +'</div>';
+  ov.onclick=function(e){ if(e.target===ov) ov.remove(); };
+  document.body.appendChild(ov);
+}
+function _protoModo(){
+  var m=(document.querySelector('input[name="proto-modo"]:checked')||{}).value||'protocolo';
+  var lbl=document.getElementById('proto-lbl-arq'), arq=document.getElementById('proto-arq');
+  if(m==='correcao'){ if(lbl) lbl.textContent='Arquivo da petição (Word)'; if(arq) arq.setAttribute('accept','.doc,.docx'); }
+  else { if(lbl) lbl.textContent='Arquivo da petição (PDF)'; if(arq) arq.setAttribute('accept','.pdf'); }
+}
+async function salvarProtocolarPeticao(numero,btn){
+  var titulo=(document.getElementById('proto-titulo')||{}).value||'';
+  var modo=(document.querySelector('input[name="proto-modo"]:checked')||{}).value||'protocolo';
+  var prazo=(document.getElementById('proto-prazo')||{}).value||'';
+  var resp=(document.getElementById('proto-resp')||{}).value||'';
+  var obs=(document.getElementById('proto-obs')||{}).value||'';
+  var ok=(document.getElementById('proto-ok')||{}).checked;
+  var inp=document.getElementById('proto-arq'); var f=inp&&inp.files&&inp.files[0];
+  titulo=titulo.trim();
+  if(titulo.length<3){ alert('Dê um título à peça (ex.: "Contrarrazões de apelação").'); return; }
+  if(!f){ alert('Anexe o arquivo da petição.'); return; }
+  if(!prazo){ alert('Informe o prazo fatal (o dia do protocolo).'); return; }
+  if(!ok){ alert('Confirme que conferiu a peça (sem recados, campos a preencher ou comentários).\n\nEssa conferência é obrigatória — inclusive na peça que vai para ajuste.'); return; }
+  var ehPdf=/\.pdf$/i.test(f.name), ehWord=/\.docx?$/i.test(f.name);
+  if(modo==='protocolo' && !ehPdf){ alert('Para protocolar direto, o arquivo precisa ser o PDF final.'); return; }
+  if(modo==='correcao' && !ehWord){ alert('Para ajuste/correção, anexe o arquivo em Word (.doc/.docx).'); return; }
+  if(f.size>25*1024*1024){ alert('Arquivo grande demais (máx. 25 MB).'); return; }
+  if(btn){ btn.disabled=true; btn.textContent='Enviando…'; }
+  try{
+    var esc2=await _escBusca(); if(!esc2) throw new Error('escritório não identificado');
+    /* 1) guarda o arquivo nos Documentos do processo, pasta "Protocolo" */
+    var caminho='';
+    try{
+      var tok=await docToken(); var dig=_docChaveProc(numero);
+      if(tok&&dig){
+        var dir=dig+'/'+_docDir('proc','')+'/Protocolo';
+        await fetch('/api/docs',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({path:dir,mkdir:true})});
+        var b64=await new Promise(function(res,rej){ var rd=new FileReader(); rd.onload=function(){ res(String(rd.result).split(',')[1]||''); }; rd.onerror=rej; rd.readAsDataURL(f); });
+        var nomeArq=(prazo+' - '+titulo).replace(/[\\/:*?"<>|]+/g,'-').slice(0,110)+(ehPdf?'.pdf':(f.name.match(/\.docx?$/i)||['.docx'])[0]);
+        var rr=await fetch('/api/docs',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({path:dir+'/'+nomeArq,b64:b64})});
+        if(rr.ok) caminho=dir+'/'+nomeArq;
+      }
+    }catch(e){}
+    /* 2) registra a pendência com prazo fatal */
+    var ins=await window.__sb.from('peticoes_protocolo').insert({
+      escritorio_id:esc2, processo_numero:numero, processo_id:(atual&&atual._id)||null,
+      titulo:titulo, modo:modo, status:'pendente', prazo_fatal:prazo,
+      arquivo_nome:f.name, arquivo_caminho:caminho||null, observacoes:obs||null,
+      conferida:true, criado_por:resp||null
+    }).select('id').single();
+    if(ins&&ins.error) throw new Error(ins.error.message);
+    /* 3) tarefa/prazo na agenda, para não depender só do alerta */
+    try{
+      var rot=(modo==='correcao'?'AJUSTAR e protocolar: ':'PROTOCOLAR: ')+titulo;
+      await window.__sb.from('agenda_eventos').insert({escritorio_id:esc2,data:prazo,hora:null,tipo:'prazo',titulo:rot,resp:(resp||null),processo_numero:numero,origem:'protocolo'});
+    }catch(e){}
+    try{ if(typeof logEvent==='function') logEvent('record_saved','peticao',numero,{titulo:titulo,modo:modo,prazo:prazo}); }catch(e){}
+    var mo=document.getElementById('proto-modal'); if(mo) mo.remove();
+    alert('✓ Petição anexada.\n\n'+(modo==='correcao'?'Ela ficou marcada como "aguardando ajuste".':'Ela está pronta para protocolar.')+'\nPrazo fatal: '+_protoFmt(prazo)+'.\n\nO sistema vai cobrar esse prazo e fechar a pendência quando a peça aparecer nos autos.');
+    try{ await carregarProtocolosPendentes(); }catch(e){}
+    try{ var i=DADOS.processos.indexOf(atual); if(i>=0) abrir(i); }catch(e){}
+  }catch(e){ alert('Não foi possível anexar: '+(e&&e.message||e)); }
+  if(btn){ btn.disabled=false; btn.textContent='Anexar e criar prazo'; }
+}
+/* carrega as pendências e dispara o alerta do dia */
+async function carregarProtocolosPendentes(){
+  try{
+    var r=await window.__sb.from('peticoes_protocolo').select('*').eq('status','pendente').order('prazo_fatal',{ascending:true}).limit(300);
+    PROTO_PEND=(r&&r.data)||[];
+  }catch(e){ PROTO_PEND=[]; }
+  _protoAlertaDoDia();
+  return PROTO_PEND;
+}
+/* alerta no DIA do prazo (e vencidos), em qualquer aba — 1x por sessão */
+function _protoAlertaDoDia(){
+  var hoje=_protoHoje();
+  var venc=(PROTO_PEND||[]).filter(function(x){ return x.prazo_fatal && String(x.prazo_fatal)<=hoje; });
+  if(!venc.length){ var b0=document.getElementById('proto-faixa'); if(b0) b0.remove(); return; }
+  var faixa=document.getElementById('proto-faixa');
+  if(!faixa){
+    faixa=document.createElement('div'); faixa.id='proto-faixa';
+    faixa.style.cssText='position:fixed;left:0;right:0;bottom:0;z-index:9998;background:#7b1e3a;color:#fff;padding:9px 14px;font:13px system-ui;display:flex;gap:12px;align-items:center;justify-content:center;flex-wrap:wrap;box-shadow:0 -2px 10px rgba(0,0,0,.2)';
+    document.body.appendChild(faixa);
+  }
+  var lista=venc.slice(0,3).map(function(x){ return esc(x.titulo)+' ('+esc(fmtCNJ(x.processo_numero))+')'; }).join(' · ');
+  faixa.innerHTML='<b>⚠ PRAZO FATAL HOJE — '+venc.length+' petição(ões) a protocolar:</b> <span style="opacity:.95">'+lista+(venc.length>3?(' + '+(venc.length-3)+' …'):'')+'</span>'
+    +'<button onclick="go(\'painel\');" style="background:#fff;color:#7b1e3a;border:0;border-radius:8px;padding:4px 12px;font-weight:700;cursor:pointer">ver no painel</button>'
+    +'<button onclick="document.getElementById(\'proto-faixa\').remove()" style="background:transparent;color:#fff;border:1px solid rgba(255,255,255,.5);border-radius:8px;padding:4px 10px;cursor:pointer">fechar</button>';
+}
+/* bloco no painel e na ficha do processo */
+function protoBlocoHTML(numero){
+  var itens=(PROTO_PEND||[]).filter(function(x){ return !numero || String(x.processo_numero)===String(numero); });
+  if(!itens.length) return '';
+  var hoje=_protoHoje();
+  var linhas=itens.map(function(x){
+    var atrasado=(x.prazo_fatal&&String(x.prazo_fatal)<hoje), hojeSim=(String(x.prazo_fatal)===hoje);
+    var cor=atrasado?'#b5342b':(hojeSim?'#7b1e3a':'#8a6d1a');
+    var selo=atrasado?'VENCIDO':(hojeSim?'HOJE':_protoFmt(x.prazo_fatal));
+    var tag=(x.modo==='correcao')?'<span style="background:#fff4e5;color:#8a5a00;border-radius:8px;padding:1px 7px;font-size:10.5px;font-weight:700">aguardando ajuste</span>':'<span style="background:#e5f4ed;color:#127a53;border-radius:8px;padding:1px 7px;font-size:10.5px;font-weight:700">pronta p/ protocolo</span>';
+    return '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:7px 0;border-top:1px dashed #e4e8ef;flex-wrap:wrap">'
+      +'<div style="font-size:13px"><b style="color:'+cor+'">'+selo+'</b> · '+esc(x.titulo)+' '+tag
+      +(numero?'':(' <span class="proc" style="font-size:12px">'+esc(fmtCNJ(x.processo_numero))+'</span>'))
+      +'</div>'
+      +'<span style="white-space:nowrap">'
+      +(x.arquivo_caminho?('<button class="btn sm ghost" style="font-size:11px" onclick="protoAbrirArquivo(\''+x.id+'\')">📎 arquivo</button> '):'')
+      +'<button class="btn sm" style="font-size:11px;background:#0F6E56;color:#fff" onclick="protoMarcarProtocolada(\''+x.id+'\')">✓ protocolada</button> '
+      +'<button class="btn sm ghost" style="font-size:11px;color:#b5342b" onclick="protoCancelar(\''+x.id+'\')">✕</button></span></div>';
+  }).join('');
+  return '<div class="card" style="border-left:4px solid #7b1e3a"><p class="sectlabel" style="margin:0 0 4px;color:#7b1e3a">📤 Petições a protocolar ('+itens.length+')</p>'
+    +'<p class="note" style="margin:0 0 4px">Prazo fatal. O sistema fecha sozinho quando a peça aparecer nos autos — ou marque "protocolada" ao concluir.</p>'+linhas+'</div>';
+}
+async function protoAbrirArquivo(id){
+  var x=(PROTO_PEND||[]).find(function(y){return String(y.id)===String(id);}); if(!x||!x.arquivo_caminho) return;
+  try{
+    var tok=await docToken();
+    window.open('/api/docs?path='+encodeURIComponent(x.arquivo_caminho)+'&jwt='+encodeURIComponent(tok),'_blank');
+  }catch(e){ alert('Não foi possível abrir o arquivo.'); }
+}
+async function protoMarcarProtocolada(id){
+  var x=(PROTO_PEND||[]).find(function(y){return String(y.id)===String(id);}); if(!x) return;
+  var ref=prompt('Protocolada! Se quiser, informe o número/ID do protocolo (opcional):','');
+  if(ref===null) return;
+  try{
+    var w=await window.__sb.from('peticoes_protocolo').update({status:'protocolada',protocolada_em:new Date().toISOString(),protocolo_ref:(ref||null),fechada_por:'manual'}).eq('id',id).select('id');
+    if(w&&w.error) throw new Error(w.error.message);
+    try{ if(typeof logEvent==='function') logEvent('task_completed','peticao',x.processo_numero,{titulo:x.titulo,tipo:'protocolo'}); }catch(e){}
+    await carregarProtocolosPendentes();
+    try{ var i=DADOS.processos.indexOf(atual); if(i>=0) abrir(i); else if(typeof renderPainel==='function') renderPainel(); }catch(e){}
+  }catch(e){ alert('Erro: '+(e&&e.message||e)); }
+}
+async function protoCancelar(id){
+  if(!confirm('Cancelar esta pendência de protocolo?')) return;
+  try{
+    await window.__sb.from('peticoes_protocolo').update({status:'cancelada'}).eq('id',id);
+    await carregarProtocolosPendentes();
+    try{ var i=DADOS.processos.indexOf(atual); if(i>=0) abrir(i); }catch(e){}
+  }catch(e){}
+}
+
 /* ===== Módulo de Produtividade — log central de eventos (activity_events) =====
    ADITIVO: nunca quebra o fluxo existente. Toda métrica (tempo ativo, pontos,
    volume) deriva DESTE log — sem vigilância de mouse/tela/screenshot.
