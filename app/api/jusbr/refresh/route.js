@@ -7,6 +7,8 @@
 import { jusbrAdmin, lerSessao, renovar, getFreshToken } from '../lib.js'
 
 export const dynamic = 'force-dynamic'
+export const fetchCache = 'force-no-store'
+export const revalidate = 0
 export const maxDuration = 30
 
 export async function GET(request) {

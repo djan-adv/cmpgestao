@@ -8,6 +8,8 @@
 import { createClient } from '@supabase/supabase-js'
 
 export const dynamic = 'force-dynamic'
+export const fetchCache = 'force-no-store'
+export const revalidate = 0
 export const maxDuration = 15
 
 const ESCRITORIO_CMP = '908f77fc-19f5-4d86-9576-f5590af09e0a'

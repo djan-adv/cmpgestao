@@ -8,6 +8,8 @@ import { createClient } from '@supabase/supabase-js'
 import { getFreshToken } from '../lib.js'
 
 export const dynamic = 'force-dynamic'
+export const fetchCache = 'force-no-store'
+export const revalidate = 0
 export const maxDuration = 30
 
 const ESCRITORIO_CMP = '908f77fc-19f5-4d86-9576-f5590af09e0a'
@@ -28,7 +30,11 @@ async function usuario(request) {
   return (u && u.data && u.data.user) || null
 }
 function admin() {
-  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } })
+  // sem cache: sessão é dado vivo (ver ../lib.js)
+  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { persistSession: false },
+    global: { fetch: (input, init) => fetch(input, { ...(init || {}), cache: 'no-store' }) },
+  })
 }
 // usa a sessão com renovação automática (refresh_token) — ver ../lib.js
 async function tokenValido(sb) { return await getFreshToken(sb) }

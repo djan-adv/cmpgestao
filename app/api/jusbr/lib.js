@@ -18,8 +18,14 @@ export const ESCRITORIO_CMP = '908f77fc-19f5-4d86-9576-f5590af09e0a'
 const TOKEN_URL_PADRAO = 'https://sso.cloud.pje.jus.br/auth/realms/pje/protocol/openid-connect/token'
 const CLIENT_ID_PADRAO = 'portalexterno-frontend'
 
+// IMPORTANTE: cache: 'no-store' em todas as chamadas. O Next.js guarda respostas
+// de fetch e chegou a servir uma leitura ANTIGA da sessão — o download acusava
+// "expirado" enquanto o banco tinha token válido. Sessão é dado vivo: nunca cachear.
 export function jusbrAdmin() {
-  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } })
+  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { persistSession: false },
+    global: { fetch: (input, init) => fetch(input, { ...(init || {}), cache: 'no-store' }) },
+  })
 }
 
 // exp do JWT (sem validar assinatura) → ISO
