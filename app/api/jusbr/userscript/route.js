@@ -37,7 +37,7 @@ function scriptTexto(segredo, endpoint) {
   return `// ==UserScript==
 // @name         CMPGestão — Sincronizar token jus.br (PDPJ)
 // @namespace    cmpadvogados.com.br
-// @version      4.2
+// @version      5.0
 // @description  Ponte entre a sua sessão do jus.br e o CMPGestão. A aba do jus.br guarda o token no cofre do Tampermonkey; a aba do CMPGestão o envia (mesma origem, sem bloqueios). Selo na tela mostra o estado.
 // @match        https://portaldeservicos.pdpj.jus.br/*
 // @match        https://sso.cloud.pje.jus.br/*
@@ -157,6 +157,61 @@ function scriptTexto(segredo, endpoint) {
     return false;
   }
 
+  // ---------- MODO APRENDIZADO: registra a FORMA do peticionamento ----------
+  // Grava só o esqueleto (URL, nomes de cabeçalhos, chaves do JSON com valores
+  // truncados). Conteúdo de arquivo vira "<arquivo N bytes>". Nada de token.
+  var ENDPOINT_APRENDER = ENDPOINT.replace(/\/token$/, '/aprender');
+  function ehPeticionamento(u) { return /petic|protocol|peticionamento/i.test(String(u || '')); }
+  function esqueleto(v, prof) {
+    prof = prof || 0;
+    if (v == null) return null;
+    if (typeof v === 'string') {
+      if (v.length > 300) return '<texto ' + v.length + ' chars>';
+      if (/^[A-Za-z0-9+/=]{200,}$/.test(v)) return '<arquivo base64 ' + v.length + ' bytes>';
+      return v.length > 60 ? (v.slice(0, 60) + '…') : v;
+    }
+    if (typeof v === 'number' || typeof v === 'boolean') return v;
+    if (prof > 5) return '…';
+    if (Array.isArray(v)) return v.slice(0, 2).map(function (x) { return esqueleto(x, prof + 1); });
+    if (typeof v === 'object') {
+      var o = {};
+      for (var k in v) { try { o[k] = esqueleto(v[k], prof + 1); } catch (e) {} }
+      return o;
+    }
+    return String(typeof v);
+  }
+  function formaDoCorpo(body) {
+    try {
+      if (!body) return null;
+      if (typeof body === 'string') { try { return esqueleto(JSON.parse(body), 0); } catch (e) { return '<texto ' + body.length + ' chars>'; } }
+      if (typeof FormData !== 'undefined' && body instanceof FormData) {
+        var o = {};
+        body.forEach(function (val, k) {
+          if (val && val.name && typeof val.size === 'number') o[k] = '<arquivo ' + val.name + ' ' + val.size + ' bytes>';
+          else o[k] = esqueleto(String(val), 1);
+        });
+        return { _formdata: o };
+      }
+      if (typeof body === 'object') return esqueleto(body, 0);
+    } catch (e) {}
+    return null;
+  }
+  function aprender(metodo, url, headers, body, status, respTxt) {
+    try {
+      var nomes = [];
+      try { if (headers && typeof headers.forEach === 'function') headers.forEach(function (v, k) { nomes.push(k); }); else if (headers) nomes = Object.keys(headers); } catch (e) {}
+      var respForma = null;
+      try { if (respTxt && respTxt.length < 20000) respForma = esqueleto(JSON.parse(respTxt), 0); } catch (e) {}
+      var payload = { metodo: metodo, url: String(url).split('?')[0], cabecalhos: nomes, corpo_forma: formaDoCorpo(body), resposta_status: status || null, resposta_forma: respForma };
+      GM_xmlhttpRequest({
+        method: 'POST', url: ENDPOINT_APRENDER,
+        headers: { 'Content-Type': 'application/json', 'x-jusbr-relay': RELAY_SECRET },
+        data: JSON.stringify(payload), onload: function () {}, onerror: function () {}
+      });
+      estado = 'peticionamento observado ' + hhmm(Date.now()); cor = '#185FA5'; selo();
+    } catch (e) {}
+  }
+
   if (!NO_GESTAO) {
     var of = window.fetch;
     window.fetch = function (input, init) {
@@ -164,10 +219,17 @@ function scriptTexto(segredo, endpoint) {
       try { var t = bearerDe(init && init.headers) || bearerDe(input && input.headers); if (t) guardar({ token: t }, 'rede'); } catch (e) {}
       var p = of.apply(this, arguments);
       try { if (ehEndpointToken(url)) p.then(function (r) { try { r.clone().text().then(daRespostaToken); } catch (e) {} }); } catch (e) {}
+      try {
+        var mt = String((init && init.method) || 'GET').toUpperCase();
+        if (mt !== 'GET' && ehPeticionamento(url)) {
+          var bd = init && init.body, hd = init && init.headers;
+          p.then(function (r) { try { r.clone().text().then(function (tx) { aprender(mt, url, hd, bd, r.status, tx); }); } catch (e) { aprender(mt, url, hd, bd, r.status, ''); } });
+        }
+      } catch (e) {}
       return p;
     };
     var oOpen = XMLHttpRequest.prototype.open, oSend = XMLHttpRequest.prototype.send, oSet = XMLHttpRequest.prototype.setRequestHeader;
-    XMLHttpRequest.prototype.open = function (m, u) { try { this.__u = u; } catch (e) {} return oOpen.apply(this, arguments); };
+    XMLHttpRequest.prototype.open = function (m, u) { try { this.__u = u; this.__m = m; } catch (e) {} return oOpen.apply(this, arguments); };
     XMLHttpRequest.prototype.setRequestHeader = function (k, v) {
       try { if (/^authorization$/i.test(k) && /^Bearer\\s+/i.test(v)) guardar({ token: v.replace(/^Bearer\\s+/i, '').trim() }, 'rede'); } catch (e) {}
       return oSet.apply(this, arguments);
@@ -175,6 +237,10 @@ function scriptTexto(segredo, endpoint) {
     XMLHttpRequest.prototype.send = function (b) {
       try {
         if (ehEndpointToken(this.__u)) { var s = this; s.addEventListener('load', function () { try { if (s.status >= 200 && s.status < 300) daRespostaToken(s.responseText); } catch (e) {} }); }
+        if (ehPeticionamento(this.__u) && String(this.__m || 'GET').toUpperCase() !== 'GET') {
+          var s2 = this, bd2 = b;
+          s2.addEventListener('load', function () { try { aprender(String(s2.__m || 'POST').toUpperCase(), s2.__u, null, bd2, s2.status, s2.responseText); } catch (e) {} });
+        }
       } catch (e) {}
       return oSend.apply(this, arguments);
     };
