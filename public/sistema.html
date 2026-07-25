@@ -1761,7 +1761,8 @@ function abrir(i){
   html+='<div class="card"><p class="sectlabel" style="display:flex;justify-content:space-between;align-items:center">Histórico completo (termos oficiais)'+(p.hist_full&&p.hist_full.length?(' — '+p.hist_full.length+' andamentos'):'')+'<span style="display:flex;gap:6px"><button class="btn sm ghost" style="font-size:12px" onclick="addHistManual()">+ histórico manual</button></span></p><ul class="timeline" id="det-hist"></ul><div id="det-hist-more" style="margin-top:8px"></div></div>';
   // documentos do jus.br (PDPJ) — puxa sob demanda a peça escolhida (some após 30 dias)
   try{ if(typeof carregarProtocolados==='function'){ carregarProtocolados(p.numero).then(function(){ try{ var bx=document.getElementById('proto-na-ficha'); if(bx) bx.innerHTML=protoBlocoHTML(p.numero); }catch(e){} }); } }catch(e){}
-  html+='<div id="proto-na-ficha">'+((typeof protoBlocoHTML==='function')?protoBlocoHTML(p.numero):'')+'</div>';
+  var _pb=''; try{ _pb=(typeof protoBlocoHTML==='function')?protoBlocoHTML(p.numero):''; }catch(ePB){ _pb=''; }
+  html+='<div id="proto-na-ficha">'+_pb+'</div>';
   html+='<div class="card cmp-only" id="jusbr-card"><p class="sectlabel" style="display:flex;justify-content:space-between;align-items:center">Documentos do jus.br <button class="btn sm" style="font-size:12px" onclick="jusbrCarregar(\''+esc(p.numero)+'\')">Carregar documentos</button> <button class="btn sm ghost" style="font-size:11px" title="Diagnóstico técnico dos documentos (para o Claude)" onclick="jusbrDiag(\''+esc(p.numero)+'\')">🔎 diag</button></p><div id="jusbr-status" class="note" style="margin-bottom:6px">Lista as peças do processo no jus.br. O arquivo escolhido é baixado sob demanda e removido do sistema após 30 dias (o original fica no tribunal).</div><div id="jusbr-barra" style="display:none;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px;padding:7px 9px;background:#f4f7fb;border:1px solid #e1e8f0;border-radius:9px"><span class="note" style="margin:0;font-weight:600">Marcados:</span><button class="btn sm ghost" style="font-size:11px" onclick="jusbrMarcarTodos()">marcar todos</button><button id="jusbr-ordem-btn" class="btn sm ghost" style="font-size:11px" title="Inverter a ordem da lista — o download e o PDF seguem esta ordem" onclick="jusbrInverterOrdem()">↓ mais recentes primeiro</button><button class="btn sm" style="font-size:11px;background:#0F6E56;color:#fff" title="Baixa os marcados numa pasta compactada (.zip)" onclick="jusbrBaixarSelecionados(\'zip\')">⬇ pasta .zip</button><button class="btn sm" style="font-size:11px;background:#185FA5;color:#fff" title="Junta todos os marcados num único arquivo PDF" onclick="jusbrBaixarSelecionados(\'pdf\')">⬇ PDF único</button><button class="btn sm ghost" style="font-size:11px" title="Baixa cada arquivo separadamente na pasta Downloads" onclick="jusbrBaixarSelecionados(\'soltos\')">⬇ soltos</button></div><div id="jusbr-lista"></div></div>';
   // IA
   if(!KAN)initKanban(); initAgenda();
@@ -10306,6 +10307,18 @@ function protoBlocoHTML(numero){
       +'<button class="btn sm" style="font-size:11px;background:#0F6E56;color:#fff" onclick="protoMarcarProtocolada(\''+x.id+'\')">✓ protocolada</button> '
       +'<button class="btn sm ghost" style="font-size:11px;color:#b5342b" onclick="protoCancelar(\''+x.id+'\')">✕</button></span></div>';
   }).join('');
+  /* protocoladas recentes deste processo, com o ícone do comprovante */
+  var feitas=(numero?(PROTO_FEITAS||[]).filter(function(f){ return String(f.processo_numero)===String(numero); }):[]).slice(0,6);
+  var blocoFeitas=feitas.length?('<div style="margin-top:10px;border-top:1px solid var(--line);padding-top:7px">'
+    +'<div class="note" style="margin:0 0 3px;font-weight:600">Protocoladas</div>'
+    +feitas.map(function(f){
+        var q=String(f.fechada_por||'').split(':')[1]||'';
+        return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:3px 0;font-size:12.5px">'
+          +'<span>'+(f.comprovante_caminho?'🧾 ':'✓ ')+esc(f.titulo)+' <span class="note" style="font-size:11px">'+(f.protocolada_em?new Date(f.protocolada_em).toLocaleDateString('pt-BR'):'')+(q?(' · '+esc(q)):'')+(f.protocolo_ref?(' · '+esc(f.protocolo_ref)):'')+'</span></span>'
+          +(f.comprovante_caminho?('<button class="btn sm ghost" style="font-size:11px" title="Abrir o comprovante do protocolo (PDF)" onclick="protoAbrirComprovante(\''+f.id+'\')">🧾 comprovante</button>'):'<span class="note" style="font-size:11px">sem comprovante</span>')
+          +'</div>';
+      }).join('')+'</div>'):'';
+  if(!itens.length) return blocoFeitas?('<div class="card" style="border-left:4px solid #0F6E56"><p class="sectlabel" style="margin:0 0 4px;color:#0F6E56">📤 Protocolos</p>'+blocoFeitas+'</div>'):'';
   return '<div class="card" style="border-left:4px solid #7b1e3a"><p class="sectlabel" style="margin:0 0 4px;color:#7b1e3a">📤 Petições a protocolar ('+itens.length+')</p>'
     +'<p class="note" style="margin:0 0 4px">Prazo fatal. Ao protocolar, clique em <b>✓ protocolada</b> — o prazo encerra na hora. (O sistema também encerra sozinho quando o movimento/peça aparecer nos autos, mas isso costuma demorar.)</p>'+linhas+blocoFeitas+'</div>';
 }
