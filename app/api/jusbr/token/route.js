@@ -6,6 +6,7 @@
 // processos dele. Fica em tabela com RLS (jusbr_sessao) — lido apenas pelo servidor.
 
 import { createClient } from '@supabase/supabase-js'
+import { provarToken, resumoClaims, ehEmissorPdpj } from '../lib.js'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -96,12 +97,46 @@ export async function POST(request) {
     if (expira && new Date(expira).getTime() <= Date.now()) {
       return j({ ok: true, ignorado: 'token_vencido', expira }, 200)
     }
+    // Blindagem 2 — a que faltava. Validade não é qualidade: o navegador guarda
+    // VÁRIOS JWTs (gov.br, outros clientes do Keycloak) e um deles pode ser mais
+    // novo que o bom. Entrando no lugar dele, o banco fica "válido" e todo
+    // download passa a dar 401. Agora quem decide é o PRÓPRIO PDPJ.
+    // Se o teste não puder ser feito (rede fora, sem processo), não barramos nada.
+    const prova = await provarToken(sb, token)
+    if (prova.aceito === false) {
+      const nota = {
+        quando: new Date().toISOString(), por: quem, http: prova.http,
+        emissor_pdpj: ehEmissorPdpj(token), claims: resumoClaims(token),
+      }
+      try {
+        await sb.from('produtividade_config').upsert(
+          { escritorio_id: ESCRITORIO_CMP, chave: 'jusbr_ultima_rejeicao', valor: JSON.stringify(nota).slice(0, 4000) },
+          { onConflict: 'escritorio_id,chave' })
+      } catch (e) {}
+      return j({ ok: true, ignorado: 'recusado_pelo_pdpj', http: prova.http }, 200)
+    }
+
+    // Não regredir a validade — MAS só quando o que está guardado realmente
+    // funciona. Um token guardado que o PDPJ recusa não pode barrar o bom só
+    // por vencer mais tarde; era essa a armadilha que travava a sincronização.
     try {
       const { data: atual } = await sb.from('jusbr_sessao').select('expira').eq('escritorio_id', ESCRITORIO_CMP).maybeSingle()
       if (atual && atual.expira && expira && new Date(expira).getTime() <= new Date(atual.expira).getTime()) {
-        return j({ ok: true, ignorado: 'nao_e_mais_novo', expira: atual.expira }, 200)
+        let guardadoServe = true
+        if (prova.aceito === true) {
+          const { lerSessao } = await import('../lib.js')
+          const sess = await lerSessao(sb)
+          if (sess && sess.token && sess.token !== token) {
+            const pv = await provarToken(sb, sess.token)
+            guardadoServe = (pv.aceito !== false)
+          }
+        }
+        if (guardadoServe) return j({ ok: true, ignorado: 'nao_e_mais_novo', expira: atual.expira }, 200)
       }
     } catch (e) {}
+
+    if (!oidc) oidc = {}
+    oidc.claims = resumoClaims(token)   // rastro de qual sessão do jus.br está valendo
     const { error } = await sb.rpc('jusbr_set_sessao', { p_esc: ESCRITORIO_CMP, p_token: token, p_refresh: refresh, p_key: encKey, p_expira: expira, p_por: quem, p_oidc: oidc })
     if (error) return j({ erro: 'falha ao salvar token: ' + error.message }, 500)
     return j({ ok: true, expira, refresh: !!refresh })

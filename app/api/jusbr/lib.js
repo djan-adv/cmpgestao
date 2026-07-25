@@ -28,6 +28,63 @@ export function jusbrAdmin() {
   })
 }
 
+// claims do JWT (sem validar assinatura). Serve para saber DE ONDE veio o token:
+// o navegador do advogado guarda vários JWTs (gov.br, outros clientes Keycloak) e
+// só o do realm do PJe/PDPJ é aceito pela API do processo. Sem isto, um token de
+// outro emissor entra no lugar do bom e todo download passa a dar 401.
+export function claimsDoJwt(t) {
+  try {
+    const p = JSON.parse(Buffer.from(String(t).split('.')[1].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8'))
+    return p && typeof p === 'object' ? p : null
+  } catch (e) { return null }
+}
+
+// resumo não sensível dos claims — o que pode aparecer em diagnóstico/log
+export function resumoClaims(t) {
+  const c = claimsDoJwt(t)
+  if (!c) return null
+  const aud = Array.isArray(c.aud) ? c.aud.join(',') : (c.aud || null)
+  return {
+    iss: c.iss || null, aud, azp: c.azp || null, typ: c.typ || null,
+    scope: c.scope || null,
+    usuario: c.preferred_username || c.email || c.name || null,
+    exp: c.exp ? new Date(c.exp * 1000).toISOString() : null,
+  }
+}
+
+// O token bom vem do SSO do PJe/PDPJ. Qualquer outro emissor (gov.br puro, por
+// exemplo) é recusado pela API v2 do portal com 401.
+export function ehEmissorPdpj(t) {
+  const c = claimsDoJwt(t)
+  if (!c || !c.iss) return false
+  return /(^|\/\/)([a-z0-9.-]*\.)?(pje|pdpj)\.jus\.br/i.test(String(c.iss))
+}
+
+// PROVA DE FOGO: o PDPJ aceita este token? Só isto distingue "token dentro da
+// validade" de "token que serve". Devolve { aceito, http } — e { aceito:null }
+// quando não deu para testar (sem processo, rede fora): nesse caso quem chama
+// NÃO deve barrar nada, para não travar por causa de falha nossa.
+export async function provarToken(sb, token) {
+  try {
+    const { data: pr } = await sb.from('processos').select('numero_digitos').not('numero_digitos', 'is', null).limit(1)
+    const numero = pr && pr[0] && String(pr[0].numero_digitos || '').replace(/\D/g, '')
+    if (!numero || numero.length < 16) return { aceito: null, motivo: 'sem processo para testar' }
+    const r = await fetch('https://portaldeservicos.pdpj.jus.br/api/v2/processos/' + numero, {
+      headers: {
+        Authorization: 'Bearer ' + token, Accept: 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36',
+        Origin: 'https://portaldeservicos.pdpj.jus.br',
+        Referer: 'https://portaldeservicos.pdpj.jus.br/consulta/autosdigitais',
+      },
+      cache: 'no-store', signal: AbortSignal.timeout(15000),
+    })
+    // só 401 condena o token. 403/404 podem ser falta de acesso ÀQUELE processo —
+    // barrar por isso derrubaria uma credencial boa.
+    if (r.status === 401) return { aceito: false, http: 401 }
+    return { aceito: true, http: r.status }
+  } catch (e) { return { aceito: null, motivo: String((e && e.message) || e) } }
+}
+
 // exp do JWT (sem validar assinatura) → ISO
 export function expDoJwt(t) {
   try {

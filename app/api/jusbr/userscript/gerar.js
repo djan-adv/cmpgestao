@@ -18,7 +18,7 @@ export function scriptTexto(segredo, endpoint, urlAtualizacao) {
   return `// ==UserScript==
 // @name         CMPGestão — Sincronizar token jus.br (PDPJ)
 // @namespace    cmpadvogados.com.br
-// @version      5.4
+// @version      5.5
 // @description  Ponte entre a sua sessão do jus.br e o CMPGestão. A aba do jus.br guarda o token no cofre do Tampermonkey; a aba do CMPGestão o envia (mesma origem, sem bloqueios). Selo na tela mostra o estado.
 // @match        https://portaldeservicos.pdpj.jus.br/*
 // @match        https://sso.cloud.pje.jus.br/*
@@ -53,6 +53,21 @@ export function scriptTexto(segredo, endpoint, urlAtualizacao) {
     } catch (e) { return 0; }
   }
   function valido(t) { var e = expDe(t); return e === 0 || e > Date.now() + 60000; }
+  // De QUAL emissor é o token. O navegador guarda vários JWTs (gov.br, outros
+  // clientes do Keycloak); só o do realm do PJe/PDPJ serve para a API do portal.
+  function ehDoPje(t) {
+    try {
+      var p = t.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+      while (p.length % 4) p += '=';
+      var o = JSON.parse(atob(p));
+      return !!(o && o.iss && /(pje|pdpj)\\.jus\\.br/i.test(String(o.iss)));
+    } catch (e) { return false; }
+  }
+  // Qualidade da captura. Validade NÃO é qualidade: um JWT alheio mais longo
+  // não pode ocupar o lugar do bom. Emissor certo pesa mais que origem.
+  function nota(t, de) {
+    return (ehDoPje(t) ? 10 : 0) + (de === 'login' ? 3 : (de === 'rede' ? 2 : 1));
+  }
   function hhmm(ms) { if (!ms) return '—'; var d = new Date(ms); return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2); }
 
   // ---------------- LADO A: dentro do jus.br — capturar e GUARDAR ----------------
@@ -64,10 +79,15 @@ export function scriptTexto(segredo, endpoint, urlAtualizacao) {
     try {
       var ja = atual ? JSON.parse(atual) : null;
       if (ja && ja.token === payload.token) return;   // já guardado
-      // nunca substituir por um token que vence ANTES do que já temos
-      if (ja && ja.token && expDe(ja.token) > expDe(payload.token)) return;
+      if (ja && ja.token) {
+        var nNovo = nota(payload.token, de || ''), nJa = nota(ja.token, ja.de || '');
+        if (nNovo < nJa) return;                      // captura pior: não troca
+        // empate de qualidade: aí sim vale o mais duradouro
+        if (nNovo === nJa && expDe(ja.token) > expDe(payload.token)) return;
+      }
     } catch (e) {}
     payload.ts = Date.now();
+    payload.de = de || '';
     try { GM_setValue(CHAVE, JSON.stringify(payload)); } catch (e) { return; }
     quandoOk = Date.now(); origem = de || ''; estado = 'token capturado ' + hhmm(quandoOk); cor = '#0F6E56';
     selo();
@@ -258,9 +278,24 @@ export function scriptTexto(segredo, endpoint, urlAtualizacao) {
     if (o.token === ultimoEnviado) { return; }
     var corpo = JSON.stringify({ token: o.token, refresh_token: o.refresh_token || undefined });
     fetch('/api/jusbr/token', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-jusbr-relay': RELAY_SECRET }, body: corpo })
-      .then(function (r) {
-        if (r.ok) { ultimoEnviado = o.token; quandoOk = Date.now(); estado = 'sincronizado ' + hhmm(quandoOk); cor = '#0F6E56'; origem = 'cofre'; }
-        else { estado = 'erro HTTP ' + r.status; cor = '#b5342b'; }
+      .then(function (r) { return r.json().catch(function () { return { _http: r.status, ok: r.ok }; }); })
+      .then(function (res) {
+        // O servidor responde 200 mesmo quando IGNORA o token — antes o selo
+        // ficava verde "sincronizado" com o servidor sem token nenhum. Agora o
+        // selo conta a verdade, e um token recusado pelo PDPJ é JOGADO FORA do
+        // cofre para o portal capturar outro no lugar.
+        if (res && res.ignorado === 'recusado_pelo_pdpj') {
+          try { GM_setValue(CHAVE, ''); } catch (e) {}
+          ultimoEnviado = '';
+          estado = 'token recusado pelo jus.br — recapturando'; cor = '#b5342b'; origem = '';
+        } else if (res && res.ignorado) {
+          estado = 'ignorado: ' + res.ignorado; cor = '#8a5a00';
+        } else if (res && (res.ok || res.expira)) {
+          ultimoEnviado = o.token; quandoOk = Date.now();
+          estado = 'sincronizado ' + hhmm(quandoOk); cor = '#0F6E56'; origem = 'cofre';
+        } else {
+          estado = 'erro' + (res && res.erro ? ': ' + String(res.erro).slice(0, 40) : ''); cor = '#b5342b';
+        }
         selo();
       })
       .catch(function () { estado = 'falha de rede'; cor = '#b5342b'; selo(); });

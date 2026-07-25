@@ -2,7 +2,14 @@
 // Não devolve o token; só metadados (validade, origem, projeto do banco, relógio).
 //   GET /api/jusbr/diag
 import { createClient } from '@supabase/supabase-js'
-import { lerSessao, getFreshToken, ESCRITORIO_CMP } from '../lib.js'
+import { lerSessao, getFreshToken, resumoClaims, ehEmissorPdpj, ESCRITORIO_CMP } from '../lib.js'
+
+const PDPJ = 'https://portaldeservicos.pdpj.jus.br'
+const PDPJ_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36',
+  'Origin': PDPJ,
+  'Referer': PDPJ + '/consulta/autosdigitais',
+}
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -39,6 +46,42 @@ export async function GET() {
     // 3) o veredito que as rotas de download recebem
     const fresco = await getFreshToken(sb)
     out.veredito = fresco.erro ? { erro: fresco.erro, detalhe: fresco.detalhe || null } : { ok: true, expira: fresco.expira, token_termina_em: String(fresco.token).slice(-12) }
+
+    // 4) DE ONDE veio o token. O navegador guarda vários JWTs; se o userscript
+    // pegar o de outro emissor (gov.br, outro cliente), o banco fica "válido" e
+    // mesmo assim o PDPJ devolve 401. Aqui isso aparece na hora.
+    if (fresco.token) {
+      out.token_claims = resumoClaims(fresco.token)
+      out.emissor_pdpj = ehEmissorPdpj(fresco.token)
+    }
+    // última captura recusada (se houve) — ajuda a ver o que o portal mandou
+    try {
+      const { data: rej } = await sb.from('produtividade_config').select('valor')
+        .eq('escritorio_id', ESCRITORIO_CMP).eq('chave', 'jusbr_ultima_rejeicao').maybeSingle()
+      if (rej && rej.valor) { try { out.ultima_rejeicao = JSON.parse(rej.valor) } catch (e) { out.ultima_rejeicao = rej.valor } }
+    } catch (e) {}
+
+    // 5) PROVA REAL: chama o PDPJ com o token guardado, usando um processo do
+    // escritório. É o único teste que distingue "token válido" de "token aceito".
+    if (fresco.token) {
+      try {
+        const { data: pr } = await sb.from('processos').select('numero_digitos')
+          .not('numero_digitos', 'is', null).limit(1)
+        const numero = pr && pr[0] && String(pr[0].numero_digitos || '').replace(/\D/g, '')
+        if (numero && numero.length >= 16) {
+          const r = await fetch(`${PDPJ}/api/v2/processos/${numero}`, {
+            headers: { ...PDPJ_HEADERS, Authorization: 'Bearer ' + fresco.token, Accept: 'application/json' },
+            cache: 'no-store', signal: AbortSignal.timeout(20000),
+          })
+          const corpo = await r.text().catch(() => '')
+          out.teste_pdpj = {
+            processo: numero, http: r.status, aceito: r.ok,
+            www_authenticate: r.headers.get('www-authenticate') || null,
+            corpo: String(corpo).slice(0, 300),
+          }
+        } else out.teste_pdpj = { erro: 'sem processo cadastrado para testar' }
+      } catch (e) { out.teste_pdpj = { erro: String((e && e.message) || e) } }
+    }
   } catch (e) {
     out.excecao = String((e && e.message) || e)
   }
