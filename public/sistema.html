@@ -770,6 +770,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
       <button type="button" class="btn sm ghost" style="font-size:11.5px" onclick="corrigirTipoEvento('reuniao')">&rarr; é Reunião</button>
     </div>
     <div class="foot">
+      <button class="btn ghost" style="color:#b5342b;border-color:#f0c8c4;margin-right:auto" onclick="apagarEventoDoModal()" title="Apagar este agendamento (errado ou em duplicidade). Fica registrado no histórico do processo quem apagou.">🗑 Apagar</button>
       <button class="btn ghost" onclick="fecharEventoAgenda()">Cancelar</button>
       <button class="btn ghost" id="ev-btn-abrir-proc" onclick="abrirProcessoDoEvento()">Abrir processo</button>
       <button class="btn" onclick="salvarEventoAgenda()">Salvar</button>
@@ -1640,8 +1641,11 @@ async function mdReagendar(gi){
   try{
     var sb=window.__sb;
     if(sb && a.id){ var r=await sb.from('agenda_eventos').update({data:iso,hora:novaHora,resp:(novoResp||null)}).eq('id',a.id); if(r&&r.error){ alert('Não foi possível reagendar: '+r.error.message); return; } }
+    var _antes={tt:a.tt,data:a.data,hora:a.hora,resp:a.resp};
     a.data=iso; a.hora=novaHora; a.resp=novoResp;
     if(window.__AGDB && a.id){ window.__AGDB.forEach(function(x){ if(x.id===a.id){ x.data=iso; x.hora=novaHora; x.resp=novoResp; } }); }
+    /* fica registrado no histórico do processo quem reagendou */
+    try{ var _d=_evDiff(_antes,{tt:a.tt,data:iso,hora:novaHora,resp:novoResp}); if(_d) await logAgendaHist((a.p&&a.p.numero)||'', '[AGENDA] Agendamento alterado: '+_evRotulo(_antes)+' → '+_d); }catch(eH){}
     renderMeuDia();
     try{ if(typeof renderAgendaView==='function'){ AGENDA=null; initAgenda(); } }catch(eA){}
     alert('Reagendado para '+novaData+(novoResp?(' · '+novoResp):'')+'. Já aparece na agenda dessa pessoa.');
@@ -1657,6 +1661,8 @@ async function mdExcluir(gi){
     await _mdOcultarSemId(a); /* sem id (carga Astrea): persiste o sumiço */
     var i=(AGENDA||[]).indexOf(a); if(i>=0) AGENDA.splice(i,1);
     if(window.__AGDB && a.id){ window.__AGDB=window.__AGDB.filter(function(x){return x.id!==a.id;}); }
+    /* fica registrado no histórico do processo quem apagou */
+    try{ await logAgendaHist((a.p&&a.p.numero)||'', '[AGENDA] Agendamento APAGADO: '+_evRotulo(a)+(a.resp?(' · '+a.resp):'')); }catch(eH){}
     renderMeuDia(); if(typeof renderAudSemana==='function') renderAudSemana();
   }catch(e){ alert('Erro ao excluir: '+(e&&e.message||e)); }
 }
@@ -2891,13 +2897,16 @@ function setAgResp(v){agResp=v;renderAgViewInner();}
 function eventosDoDia(iso){initAgenda();return AGENDA.filter(function(e){var okTipo=(e.tipo==='az'); return e.data===iso && okTipo && (agResp==="Todos"||e.resp===agResp);}).sort(function(a,b){return a.hora<b.hora?-1:1;});}
 function evChip(e){var ev=document.createElement("div");ev.className="cev "+e.tipo;ev.title=e.hora+" "+e.tt+(e.resp?(" · "+e.resp):"");ev.textContent=e.hora+" "+e.tt+(e.resp?(" · "+firstName(e.resp)):"");ev.onclick=(function(ref){return function(){abrirEventoAgenda(ref);};})(e);return ev;}
 /* ponto 10: clicar no evento abre a edição do próprio evento, com link para o processo */
-var _evEdit=null;
+var _evEdit=null, _evAntes=null;
 function abrirEventoAgenda(e){
   _evEdit=e;
+  /* foto do "antes" — é o que permite dizer no histórico o que mudou e quem mudou */
+  _evAntes={tt:e.tt||'',data:e.data||'',hora:e.hora||'',resp:e.resp||'',tipo:_tipoDaCor(e.tipo,e.tt)};
   var proc=(e.p&&e.p.numero&&e.p.numero!=='—')?e.p.numero:'';
   /* se não há número no evento, tenta descobrir pelo nome do cliente/partes */
   if(!proc){ proc=_processoPorCliente((e.p&&e.p.cliente)||''); }
-  _evEdit._procResolvido=proc||'';
+  /* quem abriu já pode ter dito o processo (ex.: o card da ficha) — não perder */
+  _evEdit._procResolvido=proc||_evEdit._procResolvido||'';
   var linkProc=proc?('<a onclick="abrirProcessoDaTarefa(\''+String(proc).replace(/'/g,'')+'\')" style="cursor:pointer;color:var(--navy);text-decoration:underline">'+esc(proc)+'</a>'):'<span class="note">sem processo vinculado</span>';
   var m=document.getElementById('modal-evento');
   document.getElementById('ev-titulo').value=e.tt||'';
@@ -2923,7 +2932,7 @@ function _processoPorCliente(nome){
   var hit=(DADOS.processos||[]).find(function(p){ return String(p.cliente||'').trim().toLowerCase().indexOf(nome.split(' ')[0])>-1 && nome.split(' ')[0].length>2; });
   return hit?hit.numero:'';
 }
-function fecharEventoAgenda(){document.getElementById('modal-evento').classList.add('hidden');_evEdit=null;}
+function fecharEventoAgenda(){document.getElementById('modal-evento').classList.add('hidden');_evEdit=null;_evAntes=null;}
 function salvarEventoAgenda(){
   if(!_evEdit)return;
   _evEdit.tt=_v('ev-titulo')||_evEdit.tt;
@@ -2939,10 +2948,100 @@ function salvarEventoAgenda(){
      evento só recolore a agenda — para o item APARECER na outra aba, a tarefa
      precisa existir. Se não existir, criamos aqui. */
   try{ _garanteTarefaDoEvento(_evEdit, _tipoNome); }catch(eK){}
+  /* deixa no histórico do processo o que mudou e quem mudou */
+  try{
+    var _mud=_evDiff(_evAntes,{tt:_evEdit.tt,data:_evEdit.data,hora:_evEdit.hora,resp:_evEdit.resp,tipo:_tipoNome});
+    if(_mud) logAgendaHist(_evEdit._procResolvido||((_evEdit.p&&_evEdit.p.numero)||''), '[AGENDA] Agendamento alterado: '+_evRotulo(_evAntes)+' → '+_mud);
+  }catch(eH){}
   fecharEventoAgenda();
-  renderAgViewInner();
+  try{ renderAgViewInner(); }catch(e){}
   try{ if(typeof renderMeuDia==='function') renderMeuDia(); }catch(e){}
   try{ if(typeof renderAudSemana==='function') renderAudSemana(); }catch(e){}
+  try{ if(typeof renderAudienciaSugestao==='function') renderAudienciaSugestao(); }catch(e){}
+}
+/* ——— alterar / apagar agendamento, com registro no histórico ———
+   Audiência marcada na data errada ou em duplicidade é para ser corrigida ou
+   apagada na hora. Como mexe na agenda de todo mundo, cada alteração deixa um
+   lançamento no histórico do processo dizendo o que mudou e QUEM mudou. */
+var TIPO_ROTULO={tarefa:'Tarefa',prazo:'Prazo',audiencia:'Audiência',reuniao:'Reunião',manifestacao:'Manifestação',diligencia:'Diligência',evento:'Evento'};
+function _dBR(iso){ return String(iso||'').indexOf('-')>0?String(iso).slice(0,10).split('-').reverse().join('/'):String(iso||''); }
+function _evRotulo(e){
+  if(!e) return 'agendamento';
+  return (e.tt||'sem título')+' — '+_dBR(e.data)+((e.hora&&e.hora!=='Dia todo')?(' às '+e.hora):'');
+}
+/* Descreve só o que mudou. Devolve '' quando nada mudou (aí não polui o histórico). */
+function _evDiff(a,b){
+  if(!a||!b) return '';
+  var m=[];
+  if(String(a.tt||'')!==String(b.tt||'')) m.push('título: "'+(a.tt||'—')+'" → "'+(b.tt||'—')+'"');
+  if(String(a.data||'')!==String(b.data||'')) m.push('data: '+(_dBR(a.data)||'—')+' → '+(_dBR(b.data)||'—'));
+  if(String(a.hora||'')!==String(b.hora||'')) m.push('hora: '+(a.hora||'—')+' → '+(b.hora||'—'));
+  if(String(a.resp||'')!==String(b.resp||'')) m.push('responsável: '+(a.resp||'—')+' → '+(b.resp||'—'));
+  if(String(a.tipo||'')!==String(b.tipo||'')) m.push('tipo: '+(TIPO_ROTULO[a.tipo]||a.tipo||'—')+' → '+(TIPO_ROTULO[b.tipo]||b.tipo||'—'));
+  return m.join('; ');
+}
+/* Quem está mexendo — vai junto no lançamento do histórico. */
+function _quemAlterou(){ try{ var u=usuarioVisualAtual(); return (u&&u.nome)||'—'; }catch(e){ return '—'; } }
+/* Lança no histórico do processo. Nunca derruba a ação: se não houver processo
+   vinculado ou o insert falhar, a alteração/exclusão vale do mesmo jeito. */
+async function logAgendaHist(numero,texto){
+  try{
+    var sb=window.__sb; if(!sb) return false;
+    var pid=_procIdPorNumero(numero); if(!pid) return false;
+    var iso=_hojeISO(), full=texto+' — por '+_quemAlterou();
+    var w=await sb.from('andamentos').insert({processo_id:pid,data:iso,texto:full,fonte:'manual'}).select('id').single();
+    if(w.error){ console.warn('histórico da agenda: '+w.error.message); return false; }
+    /* reflete na ficha aberta, se for a do mesmo processo */
+    try{ if(typeof atual!=='undefined' && atual && atual._id===pid){ atual.hist_full=atual.hist_full||[]; atual.hist_full.unshift({id:w.data&&w.data.id,data:iso+'T00:00:00.000Z',texto:full,f:'manual'}); if(typeof renderHistorico==='function') renderHistorico(); } }catch(eR){}
+    return true;
+  }catch(e){ return false; }
+}
+/* Se o evento já tinha virado tarefa em "Prazos e tarefas", ela sai junto —
+   senão o agendamento apagado continuaria vivo do outro lado. */
+async function _apagaTarefaDoEvento(ev){
+  try{
+    if(!ev||!ev.tt) return;
+    if(!KAN) initKanban();
+    var alvos=(KAN||[]).filter(function(x){ return x && String(x.titulo||'')===String(ev.tt||'') && (!ev.data || x.data===ev.data || x.prazo===ev.data); });
+    if(!alvos.length) return;
+    var sb=window.__sb;
+    for(var i=0;i<alvos.length;i++){
+      if(sb && alvos[i].dbid){ try{ await sb.from('kanban_tarefas').delete().eq('id',alvos[i].dbid); }catch(eD){} }
+      var j=KAN.indexOf(alvos[i]); if(j>=0) KAN.splice(j,1);
+    }
+    try{ if(typeof renderKanban==='function') renderKanban(); }catch(eK){}
+  }catch(e){}
+}
+/* Apaga o agendamento de vez. Confirma nomeando a audiência, tira da agenda e de
+   "Prazos e tarefas", e registra no histórico quem apagou. */
+async function apagarEventoDaAgenda(ev){
+  if(!ev) return false;
+  if(!confirm('Apagar da agenda:\n\n'+_evRotulo(ev)+'\n\nFica registrado no histórico do processo quem apagou.\nEsta ação não pode ser desfeita.')) return false;
+  try{
+    var sb=window.__sb;
+    if(sb && ev.id){
+      var r=await sb.from('agenda_eventos').delete().eq('id',ev.id).select('id');
+      if(r&&r.error){ alert('Não foi possível apagar: '+r.error.message); return false; }
+      if(r&&(!r.data||!r.data.length)){ alert('O banco não confirmou a exclusão (permissão). Nada foi apagado.'); return false; }
+    }
+    try{ await _mdOcultarSemId(ev); }catch(eO){} /* sem id (carga antiga): persiste o sumiço */
+    await _apagaTarefaDoEvento(ev);
+    /* tira da memória: agenda do banco, agenda montada e listas na tela */
+    if(window.__AGDB && ev.id) window.__AGDB=window.__AGDB.filter(function(x){ return x.id!==ev.id; });
+    try{ if(AGENDA){ var i=AGENDA.indexOf(ev); if(i>=0) AGENDA.splice(i,1); else if(ev.id) AGENDA=AGENDA.filter(function(x){ return x.id!==ev.id; }); } }catch(eA){}
+    await logAgendaHist(ev._procResolvido||((ev.p&&ev.p.numero)||''), '[AGENDA] Agendamento APAGADO: '+_evRotulo(ev)+(ev.resp?(' · '+ev.resp):''));
+    try{ if(typeof renderAgViewInner==='function') renderAgViewInner(); }catch(e1){}
+    try{ if(typeof renderMeuDia==='function') renderMeuDia(); }catch(e2){}
+    try{ if(typeof renderAudSemana==='function') renderAudSemana(); }catch(e3){}
+    try{ if(typeof renderAudienciaSugestao==='function') renderAudienciaSugestao(); }catch(e4){}
+    return true;
+  }catch(e){ alert('Erro ao apagar: '+((e&&e.message)||e)); return false; }
+}
+/* botão 🗑 Apagar da janela "Editar evento da agenda" */
+async function apagarEventoDoModal(){
+  var ev=_evEdit; if(!ev) return;
+  var ok=await apagarEventoDaAgenda(ev);
+  if(ok) fecharEventoAgenda();
 }
 /* Tipos que vivem na aba "Prazos e tarefas". Audiência, reunião e evento ficam
    só na agenda — não viram tarefa. */
@@ -7812,7 +7911,10 @@ function renderAudienciaSugestao(){
       && (e.tipo==='az'||/audi[êe]ncia/i.test(e.tt||''));
   }).sort(function(a,b){return a.data<b.data?-1:1;});
   var datasMarcadas={};
-  marcadas.slice(0,3).forEach(function(e){
+  /* guardamos as que estão na tela para os botões de alterar/apagar acharem o
+     evento certo (a mesma referência que a agenda usa) */
+  window.__audCard=marcadas.slice(0,3);
+  window.__audCard.forEach(function(e,ix){
     datasMarcadas[e.data]=1;
     var br=e.data.split('-').reverse().join('/');
     var selo='';
@@ -7823,8 +7925,15 @@ function renderAudienciaSugestao(){
       +'<span class="note" style="margin:0">'+esc(e.tt||'')+'</span>'+selo
       +'<a onclick="go(\'agenda\')" style="cursor:pointer;color:#185FA5;font-size:11.5px">abrir agenda</a>'
       +_btnLink()
+      +' <button class="btn sm ghost" style="font-size:11.5px;padding:3px 9px" onclick="alterarAudienciaCard('+ix+')" title="Corrigir data, hora, título, responsável ou tipo desta audiência">✎ alterar</button>'
+      +'<button class="btn sm ghost" style="font-size:11.5px;padding:3px 9px;color:#b5342b;border-color:#f0c8c4" onclick="apagarAudienciaCard('+ix+')" title="Apagar audiência marcada errada ou em duplicidade — fica registrado no histórico quem apagou">🗑 apagar</button>'
       +'</div>';
   });
+  /* mais de uma audiência futura no mesmo processo quase sempre é duplicidade
+     (o sistema marcou e alguém marcou de novo, ou houve redesignação) */
+  if(window.__audCard.length>1){
+    html+='<p class="note" style="margin:-4px 0 10px;font-size:11.5px">⚠ Há '+window.__audCard.length+' audiências futuras neste processo. Se alguma estiver em duplicidade ou na data errada, use <b>✎ alterar</b> ou <b>🗑 apagar</b> — fica registrado no histórico quem mexeu.</p>';
+  }
   /* 2) audiências FUTURAS encontradas no histórico e ainda fora da agenda: sugerir gravar */
   auds.slice(0,3).forEach(function(a){
     if(datasMarcadas[a.iso]) return;
@@ -7842,6 +7951,19 @@ function renderAudienciaSugestao(){
       +'</div>';
   });
   el.innerHTML=html;
+}
+/* ✎ alterar — abre a janela de edição da agenda já apontando para esta audiência.
+   O que mudar vai para o histórico do processo com o nome de quem mudou. */
+function alterarAudienciaCard(ix){
+  var e=(window.__audCard||[])[ix]; if(!e){ alert('Audiência não encontrada — recarregue a página.'); return; }
+  if(!e._procResolvido && typeof atual!=='undefined' && atual && atual.numero) e._procResolvido=atual.numero;
+  if(typeof abrirEventoAgenda==='function') abrirEventoAgenda(e);
+}
+/* 🗑 apagar — audiência marcada errada ou em duplicidade. */
+function apagarAudienciaCard(ix){
+  var e=(window.__audCard||[])[ix]; if(!e){ alert('Audiência não encontrada — recarregue a página.'); return; }
+  if(!e._procResolvido && typeof atual!=='undefined' && atual && atual.numero) e._procResolvido=atual.numero;
+  apagarEventoDaAgenda(e);
 }
 /* Trabalhista (TRT): audiência gera TAREFA AUTOMÁTICA de buscar a ATA no dia
    seguinte — na ata ficam prazos e acordos, e o cliente recebe a ata/resumo. */
