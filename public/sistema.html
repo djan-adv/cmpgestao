@@ -286,10 +286,11 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
       <div id="view-kanban" class="hidden"><p class="note" style="margin-bottom:10px">Etapas reais do CMP. Arraste os cards entre as colunas.</p><div class="kanwrap"><div class="kanban" id="kanban"></div></div></div>
       <div id="view-tarefas"><div class="card">
         <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
-          <div class="switch"><button id="tg-mes" class="on" onclick="setTarView('mes')">Mês</button><button id="tg-lista" onclick="setTarView('lista')">Lista</button></div>
+          <div class="switch"><button id="tg-mes" class="on" onclick="setTarView('mes')">Mês</button><button id="tg-semana" onclick="setTarView('semana')">Semana</button><button id="tg-lista" onclick="setTarView('lista')">Lista</button></div>
           <label style="margin:0;color:var(--muted);font-size:13px">Responsável:</label>
           <select id="tar-resp" style="width:auto" onchange="setTarResp(this.value)"><option>Todos</option><option>Djan</option><option>Maria Rita</option><option>Jader Pinheiro</option><option>Maria Eduarda</option><option>Estagiário(a)</option></select>
           <label style="margin:0;color:var(--muted);font-size:13px"><input type="checkbox" id="tar-ocultar-concl" onchange="renderTarefasView()"> ocultar concluídas</label>
+          <label style="margin:0;color:var(--muted);font-size:13px" title="Não há expediente forense nem audiência no fim de semana — ocultando, os cinco dias úteis ficam com colunas largas"><input type="checkbox" id="tar-ocultar-fds" checked onchange="setTarFds(!this.checked)"> ocultar sábados e domingos</label>
           <button class="btn sm ghost" style="margin-left:auto;font-size:12px" onclick="repararAgendamentosSemTarefa()" title="Traz para cá os agendamentos que você corrigiu de audiência para tarefa/prazo mas que ficaram só na aba Reuniões e audiências">&#8635; trazer agendamentos corrigidos</button>
         </div>
         <div class="calnav" id="tar-nav"><button class="navbtn" onclick="navegaTar(-1)">‹ anterior</button><b id="tar-label"></b><button class="navbtn" onclick="navegaTar(1)">próximo ›</button></div>
@@ -4296,14 +4297,38 @@ function renderKanban(){
 }
 /* ===== Agenda de prazos e tarefas (nova 3ª visão da aba Agenda) ===== */
 var tarView=(__ehCel?"lista":"mes"), tarResp="Todos", tarY=curY, tarM=curM;
-function setTarView(v){ tarView=v;
+/* fim de semana escondido por padrão: não há expediente forense nem audiência
+   sábado e domingo, e as duas colunas roubavam largura dos dias que importam.
+   A escolha fica gravada no navegador. */
+var tarFds=(function(){ try{ return localStorage.getItem('cmp_tar_fds')==='1'; }catch(e){ return false; } })(); /* false = fim de semana oculto (padrão) */
+/* semana em curso (visão Semana) — segunda a domingo da data de referência */
+var tarSemRef=new Date();
+function setTarFds(v){
+  tarFds=!!v;
+  try{ localStorage.setItem('cmp_tar_fds', tarFds?'1':'0'); }catch(e){}
+  renderTarefasView();
+}
+/* dias da semana exibidos, conforme a caixa. No celular sempre mostra os 7 —
+   lá a grade já é estreita e esconder coluna confunde mais do que ajuda. */
+function _tarDows(){ return (tarFds||__ehCel)?[0,1,2,3,4,5,6]:[1,2,3,4,5]; }
+function _tarNomesDow(){ var n=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb']; return _tarDows().map(function(i){return n[i];}); }
+/* segunda-feira da semana de uma data */
+function _segundaDe(d){ var x=new Date(d); var dow=x.getDay(); x.setDate(x.getDate()-((dow+6)%7)); x.setHours(0,0,0,0); return x; }
+function setTarView(v){
+  /* entrar em "Semana" sempre abre na semana em curso — é o que se espera de um
+     botão chamado Semana; navegar para outras é papel das setas. */
+  if(v==='semana' && tarView!=='semana') tarSemRef=new Date();
+  tarView=v;
   var a=document.getElementById('tg-mes'), b=document.getElementById('tg-lista');
   if(a)a.classList.toggle('on',v==='mes'); if(b)b.classList.toggle('on',v==='lista');
   var nav=document.getElementById('tar-nav'); if(nav) nav.style.display=(v==='mes')?'':'none';
   renderTarefasView();
 }
 function setTarResp(v){ tarResp=v; renderTarefasView(); }
-function navegaTar(d){ tarM+=d; if(tarM<0){tarM=11;tarY--;} if(tarM>11){tarM=0;tarY++;} renderTarefasView(); }
+function navegaTar(d){
+  if(tarView==='semana'){ tarSemRef=new Date(tarSemRef.getTime()+d*7*86400000); renderTarefasView(); return; }
+  tarM+=d; if(tarM<0){tarM=11;tarY--;} if(tarM>11){tarM=0;tarY++;} renderTarefasView();
+}
 /* data de referência da tarefa na agenda = prazo fatal se houver, senão a data prevista */
 function _tarISO(a){
   var s=a.prazo||a.data||''; s=String(s).trim();
@@ -4323,10 +4348,61 @@ function tarefasFiltradas(){
   });
 }
 function renderTarefasView(){
-  var a=document.getElementById('tg-mes'), b=document.getElementById('tg-lista');
-  if(a)a.classList.toggle('on',tarView==='mes'); if(b)b.classList.toggle('on',tarView==='lista');
-  var nav=document.getElementById('tar-nav'); if(nav) nav.style.display=(tarView==='mes')?'':'none';
-  if(tarView==='lista') renderTarefasLista(); else renderTarefasMes();
+  var a=document.getElementById('tg-mes'), b=document.getElementById('tg-lista'), c=document.getElementById('tg-semana');
+  if(a)a.classList.toggle('on',tarView==='mes'); if(b)b.classList.toggle('on',tarView==='lista'); if(c)c.classList.toggle('on',tarView==='semana');
+  var cx=document.getElementById('tar-ocultar-fds'); if(cx) cx.checked=!tarFds;
+  var lblFds=cx&&cx.parentElement; if(lblFds) lblFds.style.display=(tarView==='lista')?'none':'';
+  var nav=document.getElementById('tar-nav'); if(nav) nav.style.display=(tarView==='lista')?'none':'';
+  if(tarView==='lista') renderTarefasLista();
+  else if(tarView==='semana') renderTarefasSemana();
+  else renderTarefasMes();
+}
+/* Visão Semana: a semana em curso, segunda a sexta (ou os 7 dias, se a caixa
+   estiver marcada). Cada dia mostra todas as atividades, sem corte. */
+function renderTarefasSemana(){
+  var cal=document.getElementById('tar-cal'); if(!cal) return;
+  var seg=_segundaDe(tarSemRef);
+  var dows=_tarDows(), nomes=_tarNomesDow();
+  var lista=tarefasFiltradas();
+  var isoDe=function(dt){ return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0'); };
+  /* deslocamento: a grade começa na segunda, então o índice 0 (domingo) fica no fim */
+  var datas=dows.map(function(dw){ var x=new Date(seg); x.setDate(seg.getDate()+((dw+6)%7)); return x; });
+  var ini=datas[0], fim=datas[datas.length-1];
+  var fmt=function(d){ return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0'); };
+  document.getElementById('tar-label').textContent='Semana de '+fmt(ini)+' a '+fmt(fim)+'/'+fim.getFullYear();
+  cal.innerHTML='';
+  cal.style.gridTemplateColumns='repeat('+datas.length+',1fr)';
+  nomes.forEach(function(n,i){ var h=document.createElement('div'); h.className='dow'; h.textContent=n+' '+fmt(datas[i]); cal.appendChild(h); });
+  datas.forEach(function(dt){
+    var iso=isoDe(dt);
+    var cell=document.createElement('div'); cell.className='day'+(iso===todayISO?' today':'');
+    cell.style.cssText+='min-height:150px;cursor:pointer';
+    var dtasks=lista.filter(function(a){ return _tarISO(a)===iso; });
+    var nPz=dtasks.filter(function(a){ return a.prazo&&!_tarConcluida(a); }).length;
+    cell.innerHTML='<div class="dn">'+dt.getDate()+(nPz?(' <span style="color:#b5342b;font-weight:800" title="prazo fatal">●</span>'):'')+'</div>';
+    if(!dtasks.length){
+      var vz=document.createElement('div'); vz.className='note'; vz.style.cssText='font-size:11px;color:#b9c0ca;margin-top:4px'; vz.textContent='livre';
+      cell.appendChild(vz);
+    } else dtasks.forEach(function(a){
+      var w=document.createElement('div'); w.innerHTML=_tarChipHTML(a);
+      var chip=w.firstChild;
+      chip.setAttribute('draggable', podeMoverAgenda()?'true':'false');
+      chip.addEventListener('dragstart',(function(idT){ return function(ev){ try{ ev.dataTransfer.setData('text/plain','tar:'+idT); ev.dataTransfer.effectAllowed='move'; }catch(eD){} }; })(a.id));
+      cell.appendChild(chip);
+    });
+    (function(isoC,cellC){
+      cellC.onclick=function(){ abrirTarDia(isoC); };
+      cellC.ondragover=function(ev){ if(!podeMoverAgenda()) return; ev.preventDefault(); ev.dataTransfer.dropEffect='move'; cellC.style.outline='2px dashed var(--gold)'; };
+      cellC.ondragleave=function(){ cellC.style.outline=''; };
+      cellC.ondrop=function(ev){ ev.preventDefault(); cellC.style.outline='';
+        if(!podeMoverAgenda()){ _avisoMover(); return; }
+        var d0=''; try{ d0=ev.dataTransfer.getData('text/plain')||''; }catch(eG){}
+        var mI=d0.match(/^tar:(\d+)$/); if(!mI) return;
+        moverTarefaParaDia(parseInt(mI[1],10), isoC);
+      };
+    })(iso,cell);
+    cal.appendChild(cell);
+  });
 }
 function _tarChipHTML(a){
   var concl=_tarConcluida(a);
@@ -4357,14 +4433,22 @@ function renderTarefasMes(){
   cal.innerHTML='';
   /* sábado/domingo quase nunca têm agendamento — colunas estreitas liberam espaço
      para os dias úteis, e o sábado vira um resumo da semana */
-  var colunas=__ehCel?'repeat(7,1fr)':'0.5fr repeat(5,1fr) 0.5fr';
+  var dowsM=_tarDows();
+  var colunas=__ehCel?'repeat(7,1fr)':(tarFds?'0.5fr repeat(5,1fr) 0.5fr':'repeat(5,1fr)');
   if(avisoHTML){ var av=document.createElement('div'); av.style.gridColumn='1 / -1'; av.innerHTML=avisoHTML; cal.style.gridTemplateColumns=colunas; cal.appendChild(av); }
   else { cal.style.gridTemplateColumns=colunas; }
-  ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'].forEach(function(d){var h=document.createElement('div');h.className='dow';h.textContent=d;cal.appendChild(h);});
+  _tarNomesDow().forEach(function(d){var h=document.createElement('div');h.className='dow';h.textContent=d;cal.appendChild(h);});
   var first=new Date(tarY,tarM,1),start=first.getDay(),dim=new Date(tarY,tarM+1,0).getDate();
-  for(var i=0;i<start;i++){var o=document.createElement('div');o.className='day out';cal.appendChild(o);}
+  /* com o fim de semana oculto a grade começa na segunda, então o recuo do
+     primeiro dia é contado sobre os dias úteis */
+  var _posCol=function(dow){ return tarFds?dow:((dow+6)%7); };
+  var vagas=tarFds?start:Math.min(_posCol(start),4);
+  if(!tarFds && (start===0||start===6)) vagas=0; /* mês que começa no fim de semana */
+  for(var i=0;i<vagas;i++){var o=document.createElement('div');o.className='day out';cal.appendChild(o);}
   for(var d=1;d<=dim;d++){
     var iso=tarY+'-'+mm+'-'+String(d).padStart(2,'0');
+    var _dw=new Date(tarY,tarM,d).getDay();
+    if(dowsM.indexOf(_dw)<0) continue; /* fim de semana oculto */
     var cell=document.createElement('div');cell.className='day'+(iso===todayISO?' today':'');
     cell.style.cursor='pointer';
     cell.innerHTML='<div class="dn">'+d+'</div>';
