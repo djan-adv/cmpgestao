@@ -2956,13 +2956,20 @@ function repararAgendamentosSemTarefa(){
    nt=o resto. Como a cor é ambígua, o título desempata — é o melhor palpite
    possível, e o seletor fica ali para o advogado corrigir. */
 function _tipoDaCor(cor, titulo){
+  /* A COR GRAVADA VEM PRIMEIRO. O título é só desempate.
+     Foi aqui que errei antes: o título decidia na frente da cor, então uma
+     audiência corrigida para tarefa — que continua se chamando "AUDIÊNCIA ..." —
+     era lida como audiência de novo, desfazendo a correção na tela e sumindo do
+     reparo. Quem já disse o tipo tem a palavra final. */
   var t=String(titulo||'').toLowerCase();
+  if(cor==='vm'||cor==='prazo') return 'prazo';
+  if(cor==='am') return 'manifestacao';
+  if(cor==='nt') return 'tarefa';
+  if(cor==='az') return /reuni[ãa]o/.test(t)?'reuniao':'audiencia';
+  /* sem cor conhecida (carga antiga, importação): aí sim o título palpita */
   if(/audi[êe]ncia|instru[çc][ãa]o|concilia|media[çc]|cejusc/.test(t)) return 'audiencia';
   if(/reuni[ãa]o/.test(t)) return 'reuniao';
   if(/prazo|contrarraz|contestar|recurso|agravar|manifest|impugna/.test(t)) return 'prazo';
-  if(cor==='vm') return 'prazo';
-  if(cor==='am') return 'manifestacao';
-  if(cor==='az') return 'audiencia';
   return 'tarefa';
 }
 /* Corrige o tipo do evento da agenda e salva na hora. */
