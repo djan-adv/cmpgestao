@@ -9783,7 +9783,15 @@ function finRenderTabela(){
     if(x.boleto_url) pagar+='<a class="btn sm ghost" href="'+x.boleto_url+'" target="_blank" rel="noopener">Boleto</a> ';
     if(x.pix_emv) pagar+='<button class="btn sm ghost" onclick="finCopiarPix(this,\''+encodeURIComponent(x.pix_emv)+'\')">Copiar PIX</button>';
     if(!pagar) pagar='<span class="note">—</span>';
-    var reenviarBtn=(x.boleto_url||x.pix_emv)?('<button class="btn sm" style="background:#FE3E6D;border-color:#FE3E6D;color:#fff;font-size:11px;padding:4px 10px" onclick="reenviarBoletoLinha(\''+x.id+'\')" title="Reenviar este boleto por e-mail ao cliente">reenviar</button>'):'<span class="note">—</span>';
+    /* sem e-mail cadastrado o reenvio não sai — e antes isso só se descobria ao
+       clicar, ou no resumo do envio em lote ("1 cliente não recebeu"). A linha
+       agora diz o que falta e resolve ali mesmo. */
+    var _cliFin=(FIN_CLIENTES&&FIN_CLIENTES[x.contato_id])||{};
+    var _semEmail=!String(_cliFin.email||'').trim();
+    var reenviarBtn;
+    if(!(x.boleto_url||x.pix_emv)) reenviarBtn='<span class="note">—</span>';
+    else if(_semEmail) reenviarBtn='<button class="btn sm" style="background:#fff4e5;border:1px solid #ffd9a8;color:#8a5a00;font-size:11px;padding:4px 9px;font-weight:700;white-space:nowrap" onclick="finCadastrarEmail(\''+x.contato_id+'\')" title="Este cliente não tem e-mail cadastrado, então não recebe cobrança. Clique para cadastrar agora.">&#9888; sem e-mail</button>';
+    else reenviarBtn='<button class="btn sm" style="background:#FE3E6D;border-color:#FE3E6D;color:#fff;font-size:11px;padding:4px 10px" onclick="reenviarBoletoLinha(\''+x.id+'\')" title="Reenviar este boleto por e-mail para '+finEsc(_cliFin.email||'')+'">reenviar</button>';
     var badge=(x.status==='paga')?'<span style="color:#0F6E56;font-weight:700">✓ paga</span>':(x.status==='cancelada'?'<span class="note">cancelada</span>':'<span style="color:#185FA5;font-weight:700">em aberto</span>');
     var nf=(x.nf_status==='emitida')?('NF '+finEsc(x.nf_numero||'')):(x.nf_status==='dispensada')?'<span class="note" style="margin:0">sem nota</span>':(x.status==='paga'?'<button class="btn sm gold" style="font-size:11px;padding:4px 10px" onclick="abrirNf(\''+x.id+'\')">Emitir NF</button>':'—');
     /* ações: cancelar boleto (se em aberto) e apagar a linha */
@@ -10402,9 +10410,29 @@ async function reenviarTodasCobrancas(){
     if(i<comEmail.length-1) await new Promise(function(r){ setTimeout(r,700); });
   }
   if(btn){ btn.disabled=false; btn.innerHTML=t0; }
+  var nomesSem=semEmail.map(function(o){ return '• '+((o.c&&o.c.nome)||'sem nome'); }).join('\n');
   alert(ok+' cobrança(s) reenviada(s).'
     +(falhas.length?('\n\n'+falhas.length+' falhou(aram):\n'+falhas.slice(0,10).join('\n')+(falhas.length>10?('\n… e mais '+(falhas.length-10)):'')):'')
-    +(semEmail.length?('\n\n'+semEmail.length+' cliente(s) sem e-mail não receberam.'):''));
+    +(semEmail.length?('\n\nSEM E-MAIL — não receberam:\n'+nomesSem+'\n\nNa lista, essas linhas mostram "⚠ sem e-mail". Clique para cadastrar.'):''));
+}
+/* Cadastra ou corrige o e-mail do cliente sem sair do financeiro. Grava em
+   `contatos`, atualiza o cache da tela e repinta a lista. */
+async function finCadastrarEmail(contatoId){
+  if(!contatoId||contatoId==='null'){ alert('Esta cobrança não está vinculada a um contato do sistema. Abra o contato e cadastre o e-mail por lá.'); return; }
+  var c=(FIN_CLIENTES&&FIN_CLIENTES[contatoId])||{};
+  var atual=String(c.email||'').trim();
+  var novo=window.prompt('E-mail de '+(c.nome||'cliente')+'\n\nÉ para onde vão o boleto e o PIX. Sem ele, este cliente não recebe cobrança.', atual);
+  if(novo===null) return;
+  novo=String(novo).trim();
+  if(novo && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(novo)){ alert('E-mail inválido: '+novo); return; }
+  try{
+    var r=await window.__sb.from('contatos').update({email:(novo||null)}).eq('id',contatoId).select('id');
+    if(r&&r.error){ alert('Não consegui salvar: '+r.error.message); return; }
+    if(!(r&&r.data&&r.data.length)){ alert('Não consegui salvar — o contato não foi encontrado.'); return; }
+  }catch(e){ alert('Erro ao salvar: '+(e&&e.message||e)); return; }
+  if(FIN_CLIENTES&&FIN_CLIENTES[contatoId]) FIN_CLIENTES[contatoId].email=novo;
+  try{ renderFinanceiro(); }catch(e){}
+  if(novo) alert('E-mail salvo. Agora dá para reenviar a cobrança para '+novo+'.');
 }
 async function reenviarBoletoLinha(id){
   var x=(FIN_ROWS||[]).find(function(r){return r.id===id;}); if(!x) return;
