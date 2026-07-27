@@ -1451,7 +1451,7 @@ async function renderAlertasDiligencias(){
         +' <span class="note">(entrou movimentação nova após a diligência — confirme e resolva)</span></div>';
     }
     if(cobrar.length){
-      html+='<div style="background:#fbefe9;border:1px solid #f0cfc0;border-radius:8px;padding:9px 11px;margin-bottom:8px;font-size:13px"><b>🔔 Diligências a cobrar ('+cobrar.length+') — 7+ dias sem retorno:</b><div style="margin-top:5px">'
+      html+='<div style="background:#fbefe9;border:1px solid #f0cfc0;border-radius:8px;padding:9px 11px;margin-bottom:8px;font-size:13px"><b>🔔 Diligências a cobrar ('+cobrar.length+') — 7+ dias sem retorno:</b> <a onclick="abrirFilaEmails()" style="cursor:pointer;color:#185FA5;font-size:11.5px;text-decoration:underline" title="E-mails que ainda vão sair no horário da vara (08h comum/trabalhista, 10h federal)">📮 fila de e-mails</a><div style="margin-top:5px">'
         +cobrar.map(function(x){return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:3px 0;border-top:1px dashed #eedcd2"><span>'+esc(x.cli||x.num)+' <span class="note">('+x.dias+' dias)</span></span><button class="btn sm" onclick="cobrarDiligencia(\''+String(x.num).replace(/'/g,'')+'\')">Cobrar por e-mail</button></div>';}).join('')
         +'</div></div>';
     }
@@ -1466,12 +1466,14 @@ async function cobrarDiligencia(num){
   var msg=bvMsg(num,'geral');
   if(!confirm('Reenviar a cobrança de andamento para a vara ('+c.email+'), pelo contato@?')) return;
   try{
-    var tok=await docToken();
-    var r=await fetch('/api/enviar-email',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({para:c.email,assunto:'Processo nº '+num+' — reiteração de pedido de andamento — CMP Advogados',corpo:msg,numero:num})});
-    var j=await r.json().catch(function(){return {};});
-    if(!r.ok||j.erro){ alert('Não enviou: '+(j.erro||('HTTP '+r.status))+'\n\nSe o envio pelo servidor não estiver ativo, use o botão "E-mail" na ficha do processo.'); return; }
-    var sb=window.__sb; if(sb&&p._id){ await sb.from('diligencias').update({ultima_cobranca:new Date().toISOString(),canal:'email'}).eq('processo_id',p._id).neq('status','resolvida'); }
-    alert('Cobrança reenviada para a vara ('+c.email+'). Volta a alertar em 7 dias se não houver retorno.');
+    /* respeita o horário de envio da vara (08h comum/trabalhista, 10h federal) */
+    var rv=await enviarEmailVara({para:c.email,assunto:'Processo nº '+num+' — reiteração de pedido de andamento — CMP Advogados',corpo:msg,numero:num});
+    if(rv.cancelado) return;
+    if(!rv.ok){ alert('Não enviou: '+rv.erro+'\n\nSe o envio pelo servidor não estiver ativo, use o botão "E-mail" na ficha do processo.'); return; }
+    var sb=window.__sb; if(sb&&p._id&&!rv.agendado){ await sb.from('diligencias').update({ultima_cobranca:new Date().toISOString(),canal:'email'}).eq('processo_id',p._id).neq('status','resolvida'); }
+    alert(rv.agendado
+      ? ('📮 Na fila — a cobrança sai '+rv.slotTxt+' para a vara ('+c.email+').')
+      : ('Cobrança reenviada para a vara ('+c.email+'). Volta a alertar em 7 dias se não houver retorno.'));
     if(typeof renderAlertasDiligencias==='function') renderAlertasDiligencias();
   }catch(e){ alert('Erro ao cobrar: '+(e&&e.message||e)); }
 }
@@ -8836,6 +8838,24 @@ async function desativarAcompanhamento(){
 }
 </script>
 <!-- Atualizar cliente — Passo 1: monta e-mail com as últimas movimentações (revisar + enviar pelo seu Gmail) -->
+<div id="modal-hvara" class="overlay hidden"><div class="modal" style="max-width:520px">
+  <h2>⏰ Horário de envio à vara</h2>
+  <div id="hv-txt" style="font-size:13.5px;line-height:1.6;margin-bottom:12px"></div>
+  <div class="foot" style="flex-wrap:wrap">
+    <button class="btn ghost" onclick="_hvResp(null)">Cancelar</button>
+    <button class="btn ghost" onclick="_hvResp('agora')" title="Ignora o horário e envia neste momento">Enviar agora mesmo assim</button>
+    <button class="btn" style="background:#0F6E56;color:#fff" onclick="_hvResp('agendar')" id="hv-btn-ag">Agendar</button>
+  </div>
+</div></div>
+<div id="modal-filaemail" class="overlay hidden"><div class="modal" style="max-width:760px">
+  <h2>📮 Fila de e-mails com hora marcada</h2>
+  <p class="note" style="margin-top:0">Saem sozinhos no horário — o robô da fila roda de 5 em 5 minutos. Enquanto estiverem <b>na fila</b>, dá para cancelar ou disparar na hora.</p>
+  <div id="fe-lista" style="max-height:56vh;overflow:auto"></div>
+  <div class="foot">
+    <button class="btn ghost" onclick="abrirFilaEmails()">↻ atualizar</button>
+    <button class="btn ghost" onclick="document.getElementById('modal-filaemail').classList.add('hidden')">Fechar</button>
+  </div>
+</div></div>
 <div id="modal-atualizar" class="overlay hidden"><div class="modal" style="max-width:640px">
   <h2 id="atz-titulo">Atualizar cliente por e-mail</h2>
   <div class="note" id="atz-proc" style="margin-bottom:8px"></div>
@@ -8875,8 +8895,10 @@ async function desativarAcompanhamento(){
     <button class="btn ghost" onclick="abrirNoGmail()">Abrir no Gmail</button>
     <button class="btn ghost" onclick="copiarAtualizacao()">Copiar texto</button>
     <button class="btn ghost" onclick="registrarEnvioAtualizacao()">Registrar envio no histórico</button>
+    <button class="btn ghost" id="atz-btn-fila" style="display:none" onclick="abrirFilaEmails()" title="E-mails que ainda vão sair no horário da vara">📮 Fila de e-mails</button>
     <button class="btn ghost" onclick="fecharAtualizar()">Fechar</button>
   </div>
+  <p class="note" id="atz-horario-vara" style="display:none;margin-top:8px;background:#eaf5ef;border:1px solid #bfe0cf;border-radius:8px;padding:8px 10px;color:#0F6E56"></p>
   <p class="note" style="margin-top:8px;color:#b5342b">⚠ O e-mail sai da <b>conta que está logada no Gmail deste navegador</b> — confira o remetente (deve ser o do escritório) <b>antes de enviar</b>. O envio pelo <b>contato@cmpadvogados.com.br</b> automático vem no Passo 2.</p>
   <p class="note" style="margin-top:4px">Fluxo: revise o texto &rarr; <b>Abrir no Gmail</b> &rarr; conferir remetente &rarr; enviar &rarr; <b>Registrar envio no histórico</b>.</p>
 </div></div>
@@ -9131,12 +9153,160 @@ function _atzAplicarDivulgacao(){
   el.value=chk.checked?(semTexto+_DIVULG_TXT):semTexto;
 }
 /* liga/desliga o "modo vara" do modal (mesmo formulário, sem os controles de cliente) */
+/* ═══════════ HORÁRIO DE ENVIO ÀS VARAS E CARTÓRIOS ═══════════
+   E-mail que chega às 14h afunda no meio da caixa do servidor. Chegando na
+   abertura do expediente, fica no topo. Por isso todo e-mail à vara/cartório
+   sai em hora marcada:
+     • 08:00 — justiça estadual (comum) e do trabalho
+     • 10:00 — justiça federal
+   Fora dessa hora, o sistema oferece agendar para o próximo dia útil. A fila
+   fica em emails_agendados e o robô /api/cron/email-fila dispara. */
+var HORA_VARA_PADRAO=8, HORA_VARA_FEDERAL=10;
+/* dígito J do número CNJ (NNNNNNN-DD.AAAA.J.TR.OOOO): 4=Justiça Federal,
+   5=Trabalho, 8=Estadual, 6=Eleitoral, 7/9=Militar, 1/2/3=tribunais superiores */
+function _segmentoCNJ(numero){ var d=String(numero||'').replace(/\D/g,''); return d.length>=20?d.charAt(13):''; }
+function _horaEnvioVara(numero){ return _segmentoCNJ(numero)==='4'?HORA_VARA_FEDERAL:HORA_VARA_PADRAO; }
+function _justicaNome(numero){
+  var s=_segmentoCNJ(numero);
+  if(s==='4') return 'Justiça Federal';
+  if(s==='5') return 'Justiça do Trabalho';
+  if(s==='8') return 'Justiça Estadual';
+  if(s==='6') return 'Justiça Eleitoral';
+  if(s==='7'||s==='9') return 'Justiça Militar';
+  if(s==='1'||s==='2'||s==='3') return 'tribunal superior';
+  return 'justiça comum';
+}
+/* Próximo horário de envio: hoje, se ainda não passou e for dia útil; senão o
+   próximo dia útil. Sábado e domingo nunca — cartório fechado.
+   ⚠ Feriado não é considerado: se cair em feriado, o e-mail sai mesmo assim. */
+function _proximoSlotVara(numero){
+  var h=_horaEnvioVara(numero), agora=new Date();
+  var d=new Date(agora.getFullYear(),agora.getMonth(),agora.getDate(),h,0,0,0);
+  if(d.getTime()<=agora.getTime()) d.setDate(d.getDate()+1);
+  while(d.getDay()===0||d.getDay()===6) d.setDate(d.getDate()+1);
+  return d;
+}
+/* Já estamos na hora certa? Vale a hora cheia do slot (ex.: 08:00–08:59) —
+   nesse intervalo o e-mail já chega no topo da caixa, então envia direto. */
+function _naJanelaVara(numero){
+  var a=new Date();
+  if(a.getDay()===0||a.getDay()===6) return false;
+  return a.getHours()===_horaEnvioVara(numero);
+}
+function _slotTxt(d){
+  var hoje=new Date(); hoje.setHours(0,0,0,0);
+  var dd=new Date(d); dd.setHours(0,0,0,0);
+  var dias=Math.round((dd-hoje)/86400000);
+  var nome=dias===0?'hoje':(dias===1?'amanhã':['domingo','segunda','terça','quarta','quinta','sexta','sábado'][d.getDay()]);
+  return nome+' ('+String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+') às '+String(d.getHours()).padStart(2,'0')+':00';
+}
+/* pergunta agendar / enviar agora / cancelar — devolve 'agendar' | 'agora' | null */
+var _hvResolve=null;
+function _hvResp(v){ document.getElementById('modal-hvara').classList.add('hidden'); var f=_hvResolve; _hvResolve=null; if(f) f(v); }
+function _perguntaHorarioVara(numero,para){
+  var slot=_proximoSlotVara(numero), h=_horaEnvioVara(numero);
+  document.getElementById('hv-txt').innerHTML=
+    'Este e-mail vai para <b>'+esc(para||'a vara/cartório')+'</b>'+(numero?(' — processo '+esc(numero)):'')+'.<br><br>'
+    +'Como é <b>'+esc(_justicaNome(numero))+'</b>, o horário de envio é <b>'+String(h).padStart(2,'0')+':00</b> — assim a mensagem chega no <b>topo da caixa</b> quando o servidor abre o expediente, em vez de afundar no meio do dia.<br><br>'
+    +'<div style="background:#eaf5ef;border:1px solid #bfe0cf;border-radius:8px;padding:9px 11px"><b>Agendar para '+esc(_slotTxt(slot))+'</b><br><span class="note" style="font-size:11.5px">Fica na fila e sai sozinho. Dá para cancelar até lá.</span></div>';
+  var b=document.getElementById('hv-btn-ag'); if(b) b.textContent='Agendar para '+_slotTxt(slot);
+  document.getElementById('modal-hvara').classList.remove('hidden');
+  return new Promise(function(res){ _hvResolve=res; });
+}
+/* Único caminho de e-mail para vara/cartório: pergunta o horário quando for o
+   caso, e envia ou agenda. Devolve {ok, agendado, enviar_em, j} ou {cancelado:true}. */
+async function enviarEmailVara(o){
+  var numero=o.numero||'', modo='agora';
+  if(!_naJanelaVara(numero)){
+    modo=await _perguntaHorarioVara(numero,o.para);
+    if(!modo) return {cancelado:true};
+  }
+  var corpo={para:o.para,assunto:o.assunto,corpo:o.corpo,numero:numero||undefined};
+  if(o.cc) corpo.cc=o.cc;
+  var slot=null;
+  if(modo==='agendar'){ slot=_proximoSlotVara(numero); corpo.enviar_em=slot.toISOString(); corpo.destino='vara'; }
+  var tok=await docToken();
+  var r=await fetch('/api/enviar-email',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify(corpo)});
+  var j=await r.json().catch(function(){return {};});
+  if(!r.ok||j.erro) return {ok:false,erro:(j.erro||('HTTP '+r.status)),j:j};
+  return {ok:true,agendado:!!j.agendado,enviar_em:slot,slotTxt:(slot?_slotTxt(slot):''),j:j};
+}
+/* ——— fila: ver, cancelar, disparar na hora ——— */
+async function abrirFilaEmails(){
+  var el=document.getElementById('fe-lista'); if(!el) return;
+  document.getElementById('modal-filaemail').classList.remove('hidden');
+  el.innerHTML='<p class="note">carregando…</p>';
+  try{
+    var sb=window.__sb; if(!sb){ el.innerHTML='<p class="note">sem conexão com o banco.</p>'; return; }
+    var r=await sb.from('emails_agendados').select('id,para,cc,assunto,numero,enviar_em,status,erro,criado_por,enviado_em').order('enviar_em',{ascending:true}).limit(200);
+    if(r.error){ el.innerHTML='<p class="note">não foi possível ler a fila: '+esc(r.error.message)+'</p>'; return; }
+    var itens=(r.data||[]).filter(function(x){ return x.status!=='enviado' || (x.enviado_em && (Date.now()-new Date(x.enviado_em).getTime())<7*86400000); });
+    window.__filaEmails=itens;
+    if(!itens.length){ el.innerHTML='<p class="note" style="margin:0">Nada na fila.</p>'; return; }
+    var selo={agendado:['#eaf5ef','#0F6E56','na fila'],enviando:['#eef4fb','#185FA5','saindo agora'],enviado:['#f2f5f8','#6d7a8c','enviado'],falhou:['#fbeceb','#b5342b','falhou'],cancelado:['#f6f6f6','#8a8f98','cancelado']};
+    el.innerHTML=itens.map(function(x,i){
+      var s=selo[x.status]||selo.cancelado;
+      var d=new Date(x.enviar_em);
+      var quando=String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+' às '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+      return '<div style="border-bottom:1px solid var(--accentbg);padding:9px 0;font-size:13px">'
+        +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
+        +'<b style="color:var(--navy);min-width:120px">'+esc(quando)+'</b>'
+        +'<span style="font-size:10.5px;background:'+s[0]+';color:'+s[1]+';border-radius:10px;padding:1px 8px;font-weight:700">'+s[2]+'</span>'
+        +'<span style="flex:1;min-width:160px">'+esc(x.para)+'</span>'
+        +(x.status==='agendado'?('<button class="btn sm ghost" style="font-size:11.5px" onclick="filaEnviarJa('+i+')" title="Não esperar o horário — enviar neste momento">▶ enviar já</button>'
+          +'<button class="btn sm ghost" style="font-size:11.5px;color:#b5342b" onclick="filaCancelar('+i+')">✕ cancelar</button>'):'')
+        +'</div>'
+        +'<div class="note" style="margin:2px 0 0;font-size:11.5px">'+esc(x.assunto||'')+(x.numero?(' · processo '+esc(fmtCNJ(x.numero))):'')+(x.criado_por?(' · por '+esc(x.criado_por)):'')+'</div>'
+        +(x.erro?('<div style="font-size:11.5px;color:#b5342b;margin-top:2px">'+esc(x.erro)+'</div>'):'')
+        +'</div>';
+    }).join('');
+  }catch(e){ el.innerHTML='<p class="note">erro: '+esc((e&&e.message)||String(e))+'</p>'; }
+}
+async function filaCancelar(i){
+  var x=(window.__filaEmails||[])[i]; if(!x) return;
+  if(!confirm('Cancelar o envio agendado para '+x.para+'?\n\n'+(x.assunto||''))) return;
+  try{
+    var r=await window.__sb.from('emails_agendados').update({status:'cancelado'}).eq('id',x.id).eq('status','agendado').select('id');
+    if(r.error){ alert('Não cancelou: '+r.error.message); return; }
+    if(!r.data||!r.data.length){ alert('Já saiu da fila — não deu para cancelar.'); }
+    abrirFilaEmails();
+  }catch(e){ alert('Erro: '+((e&&e.message)||e)); }
+}
+/* "enviar já": adianta a hora marcada para agora e chama o robô da fila — o
+   envio continua passando pelo mesmo caminho, então nada é enviado duas vezes. */
+async function filaEnviarJa(i){
+  var x=(window.__filaEmails||[])[i]; if(!x) return;
+  if(!confirm('Enviar agora, sem esperar o horário?\n\nPara: '+x.para+'\n'+(x.assunto||''))) return;
+  try{
+    var up=await window.__sb.from('emails_agendados').update({enviar_em:new Date().toISOString()}).eq('id',x.id).eq('status','agendado').select('id');
+    if(up.error){ alert('Não deu: '+up.error.message); return; }
+    if(!up.data||!up.data.length){ alert('Este item já saiu da fila.'); abrirFilaEmails(); return; }
+    var tok=await docToken();
+    await fetch('/api/cron/tick?rodar=email_fila',{headers:{Authorization:'Bearer '+tok}}).catch(function(){});
+    setTimeout(abrirFilaEmails,2500);
+    alert('Disparado. Em instantes o status vira "enviado" — use ↻ atualizar.');
+  }catch(e){ alert('Erro: '+((e&&e.message)||e)); }
+}
 function _atzSetVara(on){
   var t=document.getElementById('atz-titulo'); if(t) t.textContent=on?'E-mail para a vara / cartório':'Atualizar cliente por e-mail';
   ['atz-modo-row','atz-qtd-box'].forEach(function(id){ var e=document.getElementById(id); if(e) e.style.display=on?'none':''; });
   var pb=document.getElementById('atz-pedido-box'); if(pb && on) pb.style.display='none';
   var cc=document.getElementById('atz-cc-box'); if(cc) cc.style.display=on?'':'none'; /* cópia ao cliente: só no modo vara */
   var dv=document.getElementById('atz-divulg-box'); if(dv) dv.style.display=on?'none':''; /* divulgação: nunca pra vara/cartório */
+  var bf=document.getElementById('atz-btn-fila'); if(bf) bf.style.display=on?'':'none';
+  /* aviso do horário de envio — só faz sentido no modo vara */
+  var hv=document.getElementById('atz-horario-vara');
+  if(hv){
+    hv.style.display=on?'':'none';
+    if(on){
+      var _n=(window.__atzCtx&&window.__atzCtx.p&&window.__atzCtx.p.numero)||'';
+      var _h=String(_horaEnvioVara(_n)).padStart(2,'0');
+      hv.innerHTML='⏰ <b>Horário de envio: '+_h+':00</b> ('+esc(_justicaNome(_n))+'). '
+        +(_naJanelaVara(_n)
+          ? 'Estamos dentro do horário — o e-mail sai na hora.'
+          : ('Fora do horário: ao enviar, o sistema oferece <b>agendar para '+esc(_slotTxt(_proximoSlotVara(_n)))+'</b>, para a mensagem chegar no topo da caixa do servidor.'));
+    }
+  }
   if(on){ var chk=document.getElementById('atz-divulg-on'); if(chk&&chk.checked){ chk.checked=false; _atzAplicarDivulgacao(); } }
 }
 /* abre o MESMO formulário do e-mail de cliente, mas para a VARA (texto pronto do balcão) */
@@ -9218,6 +9388,23 @@ async function enviarAgoraAtualizacao(){
   try{
     var tok=await docToken();
     var numero=(window.__atzCtx&&window.__atzCtx.p&&window.__atzCtx.p.numero)||'';
+    /* e-mail à vara/cartório passa pelo horário de envio (08h comum/trabalhista,
+       10h federal) — fora dele, o sistema oferece agendar */
+    if(window.__atzCtx&&window.__atzCtx.vara){
+      var rv=await enviarEmailVara({para:email,cc:(ccCli||''),assunto:assunto,corpo:corpo,numero:numero});
+      if(rv.cancelado) return;
+      if(!rv.ok){ alert('Não enviou: '+rv.erro+'\n\nSe o envio pelo servidor ainda não foi ativado, use "Abrir no Gmail" por enquanto.'); return; }
+      if(rv.agendado){
+        alert('📮 Na fila — sai '+rv.slotTxt+' para '+email+'.\n\nPode acompanhar ou cancelar em "Fila de e-mails".');
+        try{ if(typeof logEvent==='function') logEvent('email_scheduled','processo',numero||null,{para:email,enviar_em:rv.enviar_em&&rv.enviar_em.toISOString()}); }catch(e){}
+        await registrarEnvioAtualizacao(true,rv.slotTxt);
+        fecharAtualizar(); return;
+      }
+      alert('E-mail enviado de '+(rv.j.de||'contato@cmpadvogados.com.br')+' para '+email+'.');
+      try{ if(typeof logEvent==='function') logEvent('email_sent','processo',numero||null,{para:email,assunto:(assunto||'').slice(0,140)}); }catch(e){}
+      await registrarEnvioAtualizacao(true);
+      fecharAtualizar(); return;
+    }
     var r=await fetch('/api/enviar-email',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({para:email,assunto:assunto,corpo:corpo,numero:numero,cc:(ccCli||undefined)})});
     var j=await r.json().catch(function(){return {};});
     if(!r.ok||j.erro){ alert('Não enviou: '+(j.erro||('HTTP '+r.status))+'\n\nSe o envio pelo servidor ainda não foi ativado, use "Abrir no Gmail" por enquanto.'); return; }
@@ -9231,7 +9418,7 @@ async function enviarAgoraAtualizacao(){
     fecharAtualizar();
   }catch(e){ alert('Erro ao enviar: '+(e&&e.message||e)); }
 }
-async function registrarEnvioAtualizacao(silent){
+async function registrarEnvioAtualizacao(silent,agendadoPara){
   var ctx=window.__atzCtx; if(!ctx) return; var p=ctx.p;
   var email=(document.getElementById('atz-email').value||'').trim();
   var assunto=(document.getElementById('atz-assunto').value||'').trim();
@@ -9242,7 +9429,7 @@ async function registrarEnvioAtualizacao(silent){
   var cab=ehVara?'Solicitação de andamento':((_atzModoAtual()==='pedido')?'Pedido de providência':'Atualização');
   /* registra a MENSAGEM enviada, com marca de envio manual pelo painel */
   var ccReg=''; try{ if(ehVara){ var _o2=document.getElementById('atz-cc-on'), _e2=document.getElementById('atz-cc-email'); if(_o2&&_o2.checked&&_e2&&/@/.test(_e2.value)) ccReg=String(_e2.value).trim(); } }catch(e){}
-  var texto='['+(ehVara?'E-mail à vara/cartório':'E-mail ao cliente')+' — '+cab+', enviado via painel em '+dbr+']\n'
+  var texto='['+(ehVara?'E-mail à vara/cartório':'E-mail ao cliente')+' — '+cab+', '+(agendadoPara?('AGENDADO via painel em '+dbr+' para sair '+agendadoPara):('enviado via painel em '+dbr))+']\n'
     +'Para: '+(ehVara?'':((nomeCli?(nomeCli+' '):'')))+(email?('<'+email+'>'):'')+'\n'
     +(ccReg?('Cópia (cliente): <'+ccReg+'>\n'):'')
     +(assunto?('Assunto: '+assunto+'\n'):'')
