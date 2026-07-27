@@ -409,6 +409,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
         <div class="switch"><button id="fin-sw-a" class="on" onclick="setFinView('abertas')">Em aberto</button><button id="fin-sw-p" onclick="setFinView('pagas')">Recebidas</button></div>
         <span id="fin-mes-box" style="display:none;margin-left:10px"><select id="fin-mes" class="btn sm" onchange="setFinMes(this.value)" title="Mostrar só o que foi EFETIVAMENTE recebido (boletos pagos + alvarás conferidos) no mês escolhido"><option value="todos">Todos os meses</option></select></span>
         <button class="btn sm ghost" style="margin-left:auto" onclick="conferirPagamentos(this)" title="Pergunta ao Cora, agora, o status das cobranças em aberto e baixa as que já foram pagas">↻ Conferir pagamentos</button>
+        <button id="fin-btn-reenviar-todas" class="btn sm" style="background:#FE3E6D;border-color:#FE3E6D;color:#fff" onclick="reenviarTodasCobrancas()" title="Reenvia por e-mail, uma a uma, todas as cobranças em aberto que já têm boleto ou PIX. Mostra a lista antes de enviar.">&#9993; Reenviar todas em aberto</button>
         <button class="btn sm ghost" onclick="ativarBaixaAutomatica(this)" title="Registra no Cora o aviso automático de pagamento: quando o cliente pagar, a cobrança é baixada sozinha">⚡ Ativar baixa automática</button>
         <button class="btn sm" style="background:#FE3E6D;border-color:#FE3E6D;color:#fff" onclick="abrirNovaCobranca()">&#9673; Nova cobrança (Cora)</button>
       </div>
@@ -10352,6 +10353,59 @@ async function enviarBoletoDoProcesso(){
 }
 /* botão "reenviar" na tabela do Financeiro: usa os dados já carregados da
    cobrança (FIN_ROWS/FIN_CLIENTES), sem precisar ler a pasta de documentos. */
+/* Reenvia TODAS as cobranças em aberto de uma vez. É disparo para fora — então
+   monta a lista antes, mostra para quem vai, e só envia depois da confirmação.
+   Manda uma por vez com respiro entre elas, para não levar bloqueio do provedor. */
+async function reenviarTodasCobrancas(){
+  var hoje=new Date().toISOString().slice(0,10);
+  var abertas=(FIN_ROWS||[]).filter(function(x){
+    if(String(x.status||'').toLowerCase()!=='em aberto' && x.pago_em) return false;
+    if(x.pago_em) return false;
+    if(String(x.status||'').toLowerCase()==='cancelada') return false;
+    return !!(x.boleto_url||x.pix_emv);
+  });
+  if(!abertas.length){ alert('Nenhuma cobrança em aberto com boleto ou PIX gerado.'); return; }
+
+  /* separa quem dá para enviar de quem não tem e-mail — o segundo grupo precisa
+     aparecer, senão o escritório acha que cobrou e não cobrou */
+  var comEmail=[], semEmail=[];
+  abertas.forEach(function(x){
+    var c=(FIN_CLIENTES&&FIN_CLIENTES[x.contato_id])||{};
+    var email=String(c.email||'').trim();
+    if(email) comEmail.push({x:x,c:c,email:email}); else semEmail.push({x:x,c:c});
+  });
+  if(!comEmail.length){
+    alert('Nenhum dos '+abertas.length+' clientes com cobrança em aberto tem e-mail cadastrado.\n\nCadastre o e-mail no contato para poder reenviar.');
+    return;
+  }
+  var vencidas=comEmail.filter(function(o){ return o.x.vencimento && String(o.x.vencimento).slice(0,10)<hoje; }).length;
+  var amostra=comEmail.slice(0,8).map(function(o){
+    return '• '+((o.c.nome||'sem nome'))+' — '+finReais(o.x.valor_centavos)+' (vence '+(o.x.vencimento?String(o.x.vencimento).slice(0,10).split('-').reverse().join('/'):'—')+')';
+  }).join('\n');
+  var aviso='Reenviar '+comEmail.length+' cobrança(s) em aberto por e-mail?\n\n'+amostra
+    +(comEmail.length>8?('\n… e mais '+(comEmail.length-8)):'')
+    +(vencidas?('\n\n'+vencidas+' já está(ão) vencida(s).'):'')
+    +(semEmail.length?('\n\n⚠ '+semEmail.length+' cliente(s) ficam de fora por não ter e-mail cadastrado.'):'')
+    +'\n\nO cliente recebe um e-mail por cobrança. Confirma?';
+  if(!confirm(aviso)) return;
+
+  var btn=document.getElementById('fin-btn-reenviar-todas'); var t0=btn?btn.innerHTML:'';
+  var ok=0, falhas=[];
+  for(var i=0;i<comEmail.length;i++){
+    var o=comEmail[i];
+    if(btn){ btn.disabled=true; btn.textContent='enviando '+(i+1)+' de '+comEmail.length+'…'; }
+    var cob={vencimento:o.x.vencimento,valor_centavos:o.x.valor_centavos,descricao:o.x.descricao,boleto_url:o.x.boleto_url,linha_digitavel:o.x.linha_digitavel,pix_emv:o.x.pix_emv};
+    var res=null;
+    try{ res=await _enviarBoletoPorEmail(o.email, cob, null, o.c.nome); }catch(e){ res={ok:false,erro:String(e&&e.message||e)}; }
+    if(res&&res.ok) ok++; else falhas.push((o.c.nome||o.email)+': '+((res&&res.erro)||'erro'));
+    /* respiro entre os envios — rajada seguida costuma virar bloqueio no provedor */
+    if(i<comEmail.length-1) await new Promise(function(r){ setTimeout(r,700); });
+  }
+  if(btn){ btn.disabled=false; btn.innerHTML=t0; }
+  alert(ok+' cobrança(s) reenviada(s).'
+    +(falhas.length?('\n\n'+falhas.length+' falhou(aram):\n'+falhas.slice(0,10).join('\n')+(falhas.length>10?('\n… e mais '+(falhas.length-10)):'')):'')
+    +(semEmail.length?('\n\n'+semEmail.length+' cliente(s) sem e-mail não receberam.'):''));
+}
 async function reenviarBoletoLinha(id){
   var x=(FIN_ROWS||[]).find(function(r){return r.id===id;}); if(!x) return;
   var c=(FIN_CLIENTES&&FIN_CLIENTES[x.contato_id])||{};
