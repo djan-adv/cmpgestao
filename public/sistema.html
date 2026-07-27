@@ -780,7 +780,11 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
   <h2 id="mc-titulo">Contato</h2>
   <label>Nome</label><input id="c-nome">
   <div class="row2"><div><label>Tipo</label><select id="c-tipo"><option>cliente</option><option>lead</option><option>devedor</option><option>parceiro</option></select></div><div><label>Origem</label><select id="c-origem"><option>Indicação</option><option>Google Meu Negócio</option><option>Google Ads</option><option>Meta Ads (Instagram/Facebook)</option><option>Instagram orgânico</option><option>TikTok</option><option>YouTube</option><option>Site / Blog (SEO)</option><option>LinkedIn</option><option>Eventos / Palestras</option><option>Parceiro / Correspondente</option><option>WhatsApp</option><option>Jusbrasil</option><option>Outro</option></select></div></div>
-  <div class="row2"><div><label>Telefone</label><input id="c-tel"></div><div><label>E-mail</label><input id="c-email"></div></div>
+  <div class="row2"><div><label>Telefone principal</label><input id="c-tel"></div><div><label>E-mail principal</label><input id="c-email"></div></div>
+  <label style="margin-top:8px">Outros e-mails <span class="note" style="font-weight:400">— um por linha. O cliente pode ter o do financeiro, o pessoal, o da empresa.</span></label>
+  <textarea id="c-emails" rows="2" placeholder="financeiro@empresa.com.br&#10;pessoal@gmail.com" style="width:100%;box-sizing:border-box;font-family:inherit;font-size:13px"></textarea>
+  <label style="margin-top:6px">Outros telefones <span class="note" style="font-weight:400">— um por linha</span></label>
+  <textarea id="c-tels" rows="2" placeholder="(71) 3333-4444&#10;(71) 99999-8888" style="width:100%;box-sizing:border-box;font-family:inherit;font-size:13px"></textarea>
   <label>Etiquetas</label><div id="c-etq" style="display:flex;flex-wrap:wrap;gap:6px"></div>
   <label style="margin-top:10px">Comercial — jogar no funil de captação na etapa</label><div style="display:flex;gap:8px"><select id="c-etapa" style="flex:1"></select><button class="btn ghost" onclick="contatoParaFunil()">Adicionar ao funil</button></div>
   <div class="foot"><button class="btn gold" onclick="novaTarefaContato()">Criar atividade de captação</button><button class="btn ghost" onclick="assinaturaDoContato()" title="Gerar procuração para este contato assinar eletronicamente (abre o módulo Assinaturas já preenchido)">✍ Procuração</button><button class="btn ghost" onclick="fecharContato()">Cancelar</button><button class="btn" onclick="salvarContato()">Salvar</button></div>
@@ -2059,7 +2063,7 @@ function renderContatos(){
   document.getElementById("crm-kpis").innerHTML=kpi("contatos",CONTATOS.length)+kpi("clientes",CONTATOS.filter(function(c){return c.tipo==="cliente";}).length)+kpi("leads ativos",ativos)+kpi("origem que + converte","Indicação");
   var b=document.getElementById("crm-body");b.innerHTML="";
   f.slice(0,300).forEach(function(c){var tr=document.createElement("tr");
-    tr.innerHTML='<td style="text-align:center"><input type="checkbox" class="cmerge" data-id="'+c.id+'"></td><td><b>'+esc(nomeBonito(c.nome))+'</b> '+chipsFor(c.labels)+'</td><td><span class="b '+(c.tipo==="lead"?"warn":"ok")+'">'+esc(c.tipo)+'</span></td><td>'+esc(c.tel)+'</td><td>'+esc(c.email)+'</td><td>'+esc(c.origem)+'</td><td>'+((c.proc>0)?'<a href="#" onclick="verProcessosDoContato('+c.id+');return false;" style="font-weight:700;color:var(--gold);text-decoration:none;border-bottom:1px dotted var(--gold);cursor:pointer" title="Ver os processos deste contato">'+c.proc+'</a>':'')+'</td><td><button class="btn sm ghost" onclick="editarContato('+c.id+')">Editar</button></td><td><button class="btn sm ghost" style="color:var(--danger)" onclick="excluirContato('+c.id+')">Excluir</button></td>';
+    tr.innerHTML='<td style="text-align:center"><input type="checkbox" class="cmerge" data-id="'+c.id+'"></td><td><b>'+esc(nomeBonito(c.nome))+'</b> '+chipsFor(c.labels)+'</td><td><span class="b '+(c.tipo==="lead"?"warn":"ok")+'">'+esc(c.tipo)+'</span></td><td>'+esc(c.tel)+_extrasChip(c,'telefones',c.tel)+'</td><td>'+esc(c.email)+_extrasChip(c,'emails',c.email)+'</td><td>'+esc(c.origem)+'</td><td>'+((c.proc>0)?'<a href="#" onclick="verProcessosDoContato('+c.id+');return false;" style="font-weight:700;color:var(--gold);text-decoration:none;border-bottom:1px dotted var(--gold);cursor:pointer" title="Ver os processos deste contato">'+c.proc+'</a>':'')+'</td><td><button class="btn sm ghost" onclick="editarContato('+c.id+')">Editar</button></td><td><button class="btn sm ghost" style="color:var(--danger)" onclick="excluirContato('+c.id+')">Excluir</button></td>';
     b.appendChild(tr);});
 }
 /* Modal: ao clicar na quantidade de processos (coluna Proc.), lista todos os
@@ -3313,6 +3317,15 @@ function renderEtqPicker(cid,sel){var box=document.getElementById(cid);if(!box)r
     box.appendChild(sp);});}
 function novaTarefaContato(){var c=window._cedit;fecharContato();abrirNovaTarefa(c&&c.nome?c.nome:"");document.getElementById("t-tipo").value="comercial";}
 function contatoParaFunil(){var nome=_v("c-nome")||(window._cedit&&window._cedit.nome)||"";if(!nome){alert("Informe o nome.");return;}var est=_v("c-etapa");LEADS.push({id:lseq++,nome:nome,canal:_v("c-origem")||"Indicação",estagio:est,tel:_v("c-tel"),email:_v("c-email"),valor:"",lemdata:"",lemtxt:"",labels:(window._csel||[]).slice()});fecharContato();crmView="captacao";setCrmView("captacao");}
+/* Selinho "+N" quando o contato tem mais e-mails ou telefones além do principal.
+   Sem isso os contatos extras existiriam no banco e ninguém saberia. */
+function _extrasChip(c, campo, principal){
+  var db=(window.__CONTATOSDB||[]).find(function(x){ return c&&c.dbid&&x.id===c.dbid; });
+  var lista=(db&&db[campo])||[];
+  var extras=lista.filter(function(v){ return String(v||'').trim().toLowerCase()!==String(principal||'').trim().toLowerCase(); });
+  if(!extras.length) return '';
+  return ' <span style="background:#eef4fb;color:#185FA5;border:1px solid #cfe0f2;border-radius:9px;padding:0 6px;font-size:10.5px;font-weight:700;cursor:help" title="'+esc(extras.join(' · '))+'">+'+extras.length+'</span>';
+}
 /* Mesclar contatos duplicados (grava no banco): junta 2+ registros da mesma pessoa
    num só — mantém o nome mais completo e consolida e-mail/telefone/processos. */
 /* bloco de escolha (e-mail/telefone) no diálogo de mesclagem. Só aparece quando
@@ -3362,9 +3375,9 @@ function mesclarContatos(){
       '<label style="display:block;cursor:pointer;margin-bottom:6px"><input type="radio" name="mg-nome" value="outro"> Outro nome (digite abaixo)</label>'+
       '<input id="mg-outro" type="text" placeholder="Ex.: F F Dourado / Fernando Ferreira Dourado" style="display:block;width:100%;box-sizing:border-box;font-size:13px;padding:7px 9px;border:1px solid var(--line);border-radius:6px" oninput="var r=document.querySelector(\'input[name=mg-nome][value=outro]\'); if(r) r.checked=true" onfocus="var r=document.querySelector(\'input[name=mg-nome][value=outro]\'); if(r) r.checked=true">'+
     '</div>'+
-    _mgEscolha('email','E-mail que fica', emails)+
-    _mgEscolha('tel','Telefone que fica', tels)+
-    ((emails.length>1||tels.length>1)?('<div style="background:#fdecec;border:1px solid #f3c2c2;border-radius:9px;padding:9px 11px;margin-top:10px;font-size:12.5px;color:#7b2b26;line-height:1.5"><b>⚠ O contato guarda um e-mail e um telefone só.</b> O que não for escolhido acima <b>será apagado</b>. Se as duas pessoas cobram/recebem em endereços diferentes (por exemplo, uma PF e uma PJ), talvez seja melhor <b>não mesclar</b> e manter os cadastros separados.</div>'):'')+
+    _mgEscolha('email','E-mail principal (o da cobrança)', emails)+
+    _mgEscolha('tel','Telefone principal', tels)+
+    ((emails.length>1||tels.length>1)?('<div style="background:#e9f6f0;border:1px solid #bfe3d1;border-radius:9px;padding:9px 11px;margin-top:10px;font-size:12.5px;color:#0f5c46;line-height:1.5"><b>✓ Nada é apagado.</b> Todos os '+emails.length+' e-mail(s) e '+tels.length+' telefone(s) ficam guardados na ficha do contato. A escolha acima define apenas <b>qual é o principal</b> — o que o boleto e os e-mails do sistema usam.</div>'):'')+
     '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px"><button class="btn sm ghost" onclick="document.getElementById(\'merge-ov\').remove()">Cancelar</button><button class="btn sm gold" id="mg-ok">✓ Mesclar e sincronizar processos</button></div>'+
   '</div>';
   ov.onclick=function(e){ if(e.target===ov) ov.remove(); };
@@ -3375,15 +3388,20 @@ function mesclarContatos(){
     else if(r) nomeFinal=String((sel[parseInt(r.value,10)]||{}).nome||'').trim();
     if(!nomeFinal){ alert('Escolha um dos nomes ou digite o nome final.'); return; }
     var emailFinal=_mgLido('email', emails), telFinal=_mgLido('tel', tels);
-    var perdidos=[]
-      .concat(emails.filter(function(o){ return o.v!==emailFinal; }).map(function(o){ return 'e-mail '+o.v; }))
-      .concat(tels.filter(function(o){ return o.v!==telFinal; }).map(function(o){ return 'telefone '+o.v; }));
-    if(perdidos.length && !confirm('Ao mesclar, isto será APAGADO e não tem como recuperar:\n\n• '+perdidos.join('\n• ')+'\n\nContinuar?')) return;
+    /* o principal na frente, os demais logo atrás — a ficha guarda todos */
+    var todosEmails=[emailFinal].concat(emails.map(function(o){return o.v;})).filter(Boolean);
+    var todosTels=[telFinal].concat(tels.map(function(o){return o.v;})).filter(Boolean);
     ov.remove();
-    _mesclarExec(sel, nomeFinal, emailFinal, telFinal);
+    _mesclarExec(sel, nomeFinal, emailFinal, telFinal, _unicos(todosEmails), _unicos(todosTels));
   };
 }
-async function _mesclarExec(sel, nomeFinal, emailFinal, telFinal){
+/* remove repetidos ignorando maiúsculas/espaços, preservando a ordem */
+function _unicos(arr){
+  var vis=[], out=[];
+  (arr||[]).forEach(function(v){ v=String(v||'').trim(); if(!v||v==='—') return; var k=v.toLowerCase(); if(vis.indexOf(k)>-1) return; vis.push(k); out.push(v); });
+  return out;
+}
+async function _mesclarExec(sel, nomeFinal, emailFinal, telFinal, todosEmails, todosTels){
   var sb=window.__sb; if(!sb){ alert('Sessão não encontrada.'); return; }
   var nkFinal=normClienteNome(nomeFinal);
   var prin=sel.find(function(c){ return normClienteNome(c.nome)===nkFinal; })||sel[0];
@@ -3395,15 +3413,31 @@ async function _mesclarExec(sel, nomeFinal, emailFinal, telFinal){
   try{
     var esc=null; try{ var ug=await sb.auth.getUser(); var pf=await sb.from('usuarios').select('escritorio_id').eq('id',ug.data.user.id).single(); esc=pf&&pf.data&&pf.data.escritorio_id; }catch(e){}
     var prinDb=_dbRow(prin);
-    /* a escolha do diálogo manda; sem escolha (chamada antiga) cai no 1º não-vazio */
+    /* a escolha do diálogo define o PRINCIPAL; os arrays guardam todos */
     var reg={ nome:nomeFinal, email:(emailFinal||_pick('email')), telefone:(telFinal||_pick('tel')) };
+    var _em=_unicos(todosEmails&&todosEmails.length?todosEmails:sel.map(function(c){return c.email;}));
+    var _tl=_unicos(todosTels&&todosTels.length?todosTels:sel.map(function(c){return c.tel;}));
+    if(_em.length) reg.emails=_em;
+    if(_tl.length) reg.telefones=_tl;
     if(esc) reg.escritorio_id=esc;
     if(!prinDb){ var ins=await sb.from('contatos').insert(reg).select('id').single(); if(ins.error) throw new Error(ins.error.message); prinDb=ins.data.id; }
     else { var up=await sb.from('contatos').update(reg).eq('id',prinDb); if(up.error) throw new Error(up.error.message); }
     /* apaga os demais registros e reaponta processos ligados por cliente_id */
     for(var k=0;k<outros.length;k++){
       var d=_dbRow(outros[k]);
-      if(d && d!==prinDb){ try{ await sb.from('processos').update({cliente_id:prinDb}).eq('cliente_id',d); }catch(e){} await sb.from('contatos').delete().eq('id',d); }
+      if(d && d!==prinDb){
+        /* o duplicado pode ter arrays próprios (de uma mesclagem anterior) —
+           recolhe antes de apagar, senão o contato perderia contatos guardados */
+        try{
+          var ex=await sb.from('contatos').select('emails,telefones').eq('id',d).maybeSingle();
+          if(ex&&ex.data){
+            if(ex.data.emails&&ex.data.emails.length) reg.emails=_unicos((reg.emails||[]).concat(ex.data.emails));
+            if(ex.data.telefones&&ex.data.telefones.length) reg.telefones=_unicos((reg.telefones||[]).concat(ex.data.telefones));
+          }
+        }catch(e){}
+        try{ await sb.from('processos').update({cliente_id:prinDb}).eq('cliente_id',d); }catch(e){}
+        await sb.from('contatos').delete().eq('id',d);
+      }
     }
     /* SINCRONIZA OS PROCESSOS: todo processo de QUALQUER um dos nomes selecionados
        passa a usar o nome final (a lista de contatos nasce dos processos — é isso que
@@ -3416,11 +3450,14 @@ async function _mesclarExec(sel, nomeFinal, emailFinal, telFinal){
       (DADOS.processos||[]).forEach(function(p){ if(normClienteNome(p.cliente)===nkOld){ p.cliente=nomeFinal; if(p._id) idsProc.push(p._id); } });
       if(idsProc.length){ var rn=await sb.from('processos').update({cliente_nome:nomeFinal}).in('id',idsProc); if(rn&&rn.error) throw new Error('sincronizar processos: '+rn.error.message); procsRenomeados+=idsProc.length; }
     }
+    try{ await sb.from('contatos').update({emails:(reg.emails||[]),telefones:(reg.telefones||[])}).eq('id',prinDb); }catch(e){}
     prin.nome=nomeFinal; prin.dbid=prinDb;
     var ct=await sb.from('contatos').select('*').limit(5000); if(!ct.error) window.__CONTATOSDB=ct.data;
     CONTATOS=null; syncContatosClientes(true); renderContatos();
     try{ if(typeof renderProc==='function') renderProc(); }catch(e){}
-    alert('✓ Mesclado em "'+nomeFinal+'".'+(procsRenomeados?('\n'+procsRenomeados+' processo(s) sincronizado(s) com o nome escolhido.'):''));
+    alert('✓ Mesclado em "'+nomeFinal+'".'
+      +(procsRenomeados?('\n'+procsRenomeados+' processo(s) sincronizado(s) com o nome escolhido.'):'')
+      +'\n\nGuardados na ficha: '+((reg.emails||[]).length)+' e-mail(s) e '+((reg.telefones||[]).length)+' telefone(s). Nada foi apagado.');
   }catch(e){ alert('Erro ao mesclar: '+(e&&e.message||e)); }
 }
 function novoContato(){editarContato(null);}
@@ -3428,6 +3465,14 @@ function editarContato(id){seedContatos();var c=id?CONTATOS.find(function(x){ret
   document.getElementById("mc-titulo").textContent=id?"Editar contato":"Novo contato";
   document.getElementById("c-nome").value=(c.nome==="—"?"":c.nome); document.getElementById("c-tipo").value=c.tipo;
   document.getElementById("c-tel").value=(c.tel==="—"?"":c.tel); document.getElementById("c-email").value=(c.email==="—"?"":c.email);
+  /* os "outros" são todos menos o principal — o principal já tem campo próprio */
+  (function(){
+    var db=(window.__CONTATOSDB||[]).find(function(x){ return c&&c.dbid&&x.id===c.dbid; })||{};
+    var _fora=function(lista,principal){ return (lista||[]).filter(function(v){ return String(v||'').trim().toLowerCase()!==String(principal||'').trim().toLowerCase(); }); };
+    var em=document.getElementById('c-emails'), tl=document.getElementById('c-tels');
+    if(em) em.value=_fora(db.emails, c.email).join('\n');
+    if(tl) tl.value=_fora(db.telefones, c.tel).join('\n');
+  })();
   document.getElementById("c-origem").value=(c.origem==="—"?"Indicação":c.origem);
   window._csel=(c.labels?c.labels.slice():[]); renderEtqPicker("c-etq",window._csel);
   document.getElementById("c-etapa").innerHTML=FUNIL.map(function(f){return '<option value="'+f.id+'">'+esc(f.nome)+'</option>';}).join("");
@@ -3443,6 +3488,10 @@ async function salvarContato(){var c=window._cedit;var nome=_v("c-nome");if(!nom
     if(sb){
       /* atenção: a tabela contatos NÃO tem coluna 'origem' — enviar quebrava TODO save */
       var reg={nome:nome, tipo:obj.tipo||null, telefone:(obj.tel&&obj.tel!=='—')?obj.tel:null, email:(obj.email&&obj.email!=='—')?obj.email:null};
+      /* principal + os outros, sem repetir — é o acervo completo de contato */
+      var _linhas=function(id){ var e=document.getElementById(id); return e?String(e.value||'').split(/[\n,;]+/):[]; };
+      reg.emails=_unicos([reg.email].concat(_linhas('c-emails')));
+      reg.telefones=_unicos([reg.telefone].concat(_linhas('c-tels')));
       var dbid=(c&&c.dbid)||null;
       if(dbid){ var up=await sb.from('contatos').update(reg).eq('id',dbid); if(up&&up.error) throw new Error(up.error.message); }
       else{
