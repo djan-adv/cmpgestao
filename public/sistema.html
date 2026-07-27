@@ -736,6 +736,15 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
       <div><label>Hora</label><input id="ev-hora" type="time"></div>
       <div><label>Responsável</label><input id="ev-resp" placeholder="Nome"></div>
     </div>
+    <label>Tipo</label>
+    <select id="ev-tipo"><option value="tarefa">Tarefa</option><option value="prazo">Prazo</option><option value="audiencia">Audiência</option><option value="reuniao">Reunião</option><option value="manifestacao">Manifestação</option><option value="diligencia">Diligência</option><option value="evento">Evento</option></select>
+    <div id="ev-corrigir" style="display:none;background:#fbeceb;border:1px solid #f3d4d1;border-radius:10px;padding:8px 11px;margin:8px 0 0">
+      <span style="font-size:12px;font-weight:700;color:#b5342b">Marcado como audiência por engano?</span>
+      <span class="note" style="display:block;margin:2px 0 6px;font-size:11.5px">Um clique corrige e salva — sai da aba "Reuniões e audiências" e vai para o lugar certo.</span>
+      <button type="button" class="btn sm" style="font-size:11.5px" onclick="corrigirTipoEvento('tarefa')">&rarr; é Tarefa</button>
+      <button type="button" class="btn sm" style="font-size:11.5px" onclick="corrigirTipoEvento('prazo')">&rarr; é Prazo</button>
+      <button type="button" class="btn sm ghost" style="font-size:11.5px" onclick="corrigirTipoEvento('reuniao')">&rarr; é Reunião</button>
+    </div>
     <div class="foot">
       <button class="btn ghost" onclick="fecharEventoAgenda()">Cancelar</button>
       <button class="btn ghost" id="ev-btn-abrir-proc" onclick="abrirProcessoDoEvento()">Abrir processo</button>
@@ -2867,6 +2876,12 @@ function abrirEventoAgenda(e){
   /* mostra/esconde o botão "Abrir processo" conforme houver processo resolvido */
   var btnAP=document.getElementById('ev-btn-abrir-proc');
   if(btnAP) btnAP.style.display=proc?'':'none';
+  /* a agenda guarda a COR do tipo ("az", "vm", "nt"…), não o nome — traduzimos de
+     volta para o seletor. Cor compartilhada por vários tipos cai no mais comum. */
+  var selT=document.getElementById('ev-tipo');
+  if(selT){ selT.value=_tipoDaCor(e.tipo, e.tt); }
+  var faixa=document.getElementById('ev-corrigir');
+  if(faixa) faixa.style.display=(selT && selT.value==='audiencia')?'block':'none';
   m.classList.remove('hidden');
 }
 /* acha o número de processo pelo nome do cliente (1º processo que bate) */
@@ -2883,12 +2898,41 @@ function salvarEventoAgenda(){
   _evEdit.data=_v('ev-data')||_evEdit.data;
   var h=_v('ev-hora'); _evEdit.hora=h||'Dia todo';
   _evEdit.resp=_v('ev-resp');
+  var _tipoNome=_v('ev-tipo'); var _cor=TIPOCOR[_tipoNome]||_evEdit.tipo||'nt';
+  _evEdit.tipo=_cor;
   /* persiste no banco quando o evento tem id (agenda_eventos) — se não houver, atualiza só na tela */
-  try{ var sb=window.__sb; if(sb && _evEdit.id){ sb.from('agenda_eventos').update({titulo:_evEdit.tt,data:_evEdit.data,hora:_evEdit.hora,resp:(_evEdit.resp||null)}).eq('id',_evEdit.id).then(function(){}); } }catch(eP){}
+  try{ var sb=window.__sb; if(sb && _evEdit.id){ sb.from('agenda_eventos').update({titulo:_evEdit.tt,data:_evEdit.data,hora:_evEdit.hora,resp:(_evEdit.resp||null),tipo:_cor}).eq('id',_evEdit.id).then(function(){}); } }catch(eP){}
+  /* a mesma atividade pode ter uma linha no Kanban — corrige lá também, senão
+     o tipo volta a divergir entre a agenda e o painel de atividades. */
+  try{
+    if(KAN && _evEdit.tt){
+      var kt=KAN.find(function(x){ return x && x.titulo===_evEdit.tt; });
+      if(kt && kt.tipoForm!==_tipoNome){ kt.tipoForm=_tipoNome; persisteKanban(kt); }
+    }
+  }catch(eK){}
   fecharEventoAgenda();
   renderAgViewInner();
   try{ if(typeof renderMeuDia==='function') renderMeuDia(); }catch(e){}
   try{ if(typeof renderAudSemana==='function') renderAudSemana(); }catch(e){}
+}
+/* A agenda guarda cor, não tipo: az=audiência/reunião, vm=prazo, am=manifestação,
+   nt=o resto. Como a cor é ambígua, o título desempata — é o melhor palpite
+   possível, e o seletor fica ali para o advogado corrigir. */
+function _tipoDaCor(cor, titulo){
+  var t=String(titulo||'').toLowerCase();
+  if(/audi[êe]ncia|instru[çc][ãa]o|concilia|media[çc]|cejusc/.test(t)) return 'audiencia';
+  if(/reuni[ãa]o/.test(t)) return 'reuniao';
+  if(/prazo|contrarraz|contestar|recurso|agravar|manifest|impugna/.test(t)) return 'prazo';
+  if(cor==='vm') return 'prazo';
+  if(cor==='am') return 'manifestacao';
+  if(cor==='az') return 'audiencia';
+  return 'tarefa';
+}
+/* Corrige o tipo do evento da agenda e salva na hora. */
+function corrigirTipoEvento(novoTipo){
+  var sel=document.getElementById('ev-tipo'); if(!sel) return;
+  sel.value=novoTipo;
+  salvarEventoAgenda();
 }
 function abrirProcessoDoEvento(){
   var n=(_evEdit&&_evEdit._procResolvido)||(_evEdit&&_evEdit.p&&_evEdit.p.numero&&_evEdit.p.numero!=='—'?_evEdit.p.numero:'');
