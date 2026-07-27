@@ -9166,6 +9166,10 @@ var HORA_VARA_PADRAO=8, HORA_VARA_FEDERAL=10;
    5=Trabalho, 8=Estadual, 6=Eleitoral, 7/9=Militar, 1/2/3=tribunais superiores */
 function _segmentoCNJ(numero){ var d=String(numero||'').replace(/\D/g,''); return d.length>=20?d.charAt(13):''; }
 function _horaEnvioVara(numero){ return _segmentoCNJ(numero)==='4'?HORA_VARA_FEDERAL:HORA_VARA_PADRAO; }
+/* Rede de segurança: destinatário oficial (@…jus.br, @…mp.br, @…def.br) é vara,
+   cartório ou órgão — vale o horário mesmo que a janela tenha sido aberta por um
+   caminho que não marcou o modo vara. */
+function _ehEmailVara(email){ return /@([a-z0-9.-]+\.)?(jus|mp|def|tj|trf|trt)\.br$/i.test(String(email||'').trim()); }
 function _justicaNome(numero){
   var s=_segmentoCNJ(numero);
   if(s==='4') return 'Justiça Federal';
@@ -9213,23 +9217,55 @@ function _perguntaHorarioVara(numero,para){
   document.getElementById('modal-hvara').classList.remove('hidden');
   return new Promise(function(res){ _hvResolve=res; });
 }
+/* Põe na fila DIRETO no banco, sem passar pela rota de envio.
+   É de propósito: se a rota /api/enviar-email do servidor for uma versão antiga,
+   que não conhece `enviar_em`, ela enviaria na hora — exatamente o que não se
+   quer. Gravando na fila aqui, o pior caso é o e-mail ficar esperando, nunca
+   sair adiantado. Devolve {ok:true} ou {erro:'…'}. */
+async function _agendarNaFila(o){
+  var sb=window.__sb; if(!sb) return {erro:'sem conexão com o banco'};
+  var esc1=await _escBusca(); if(!esc1) return {erro:'não foi possível identificar o escritório'};
+  var para=String(o.para||'').trim().toLowerCase();
+  try{
+    var ja=await sb.from('emails_agendados').select('id,enviar_em').eq('status','agendado')
+      .eq('para',para).eq('numero',String(o.numero||'').replace(/\D/g,'')).eq('assunto',o.assunto||'').limit(1);
+    if(ja.error) throw ja.error;
+    if(ja.data&&ja.data.length) return {erro:'Este mesmo e-mail JÁ ESTÁ na fila. Abra "📮 Fila de e-mails" para ver ou cancelar.'};
+    var ins=await sb.from('emails_agendados').insert({
+      escritorio_id:esc1, para:para, cc:(String(o.cc||'').trim()||null),
+      assunto:o.assunto||'', corpo:o.corpo||'', numero:String(o.numero||'').replace(/\D/g,''),
+      enviar_em:o.quando.toISOString(), destino:'vara', criado_por:_quemAlterou(),
+    }).select('id').single();
+    if(ins.error) throw ins.error;
+    return {ok:true,id:ins.data.id};
+  }catch(e){
+    var m=String((e&&e.message)||e);
+    if(/emails_agendados/.test(m)&&/(does not exist|schema cache|relation)/i.test(m)) m='a fila de e-mails ainda não existe neste banco (falta aplicar a migração no servidor)';
+    return {erro:m};
+  }
+}
 /* Único caminho de e-mail para vara/cartório: pergunta o horário quando for o
-   caso, e envia ou agenda. Devolve {ok, agendado, enviar_em, j} ou {cancelado:true}. */
+   caso, e agenda ou envia. Devolve {ok, agendado, enviar_em, j} ou {cancelado:true}.
+   NADA é enviado se o agendamento falhar — é melhor não sair do que sair na hora errada. */
 async function enviarEmailVara(o){
   var numero=o.numero||'', modo='agora';
   if(!_naJanelaVara(numero)){
     modo=await _perguntaHorarioVara(numero,o.para);
     if(!modo) return {cancelado:true};
   }
+  if(modo==='agendar'){
+    var slot=_proximoSlotVara(numero);
+    var ag=await _agendarNaFila({para:o.para,cc:o.cc,assunto:o.assunto,corpo:o.corpo,numero:numero,quando:slot});
+    if(ag.erro) return {ok:false,erro:'não foi possível agendar: '+ag.erro+'\n\nO e-mail NÃO foi enviado.'};
+    return {ok:true,agendado:true,enviar_em:slot,slotTxt:_slotTxt(slot),j:{}};
+  }
   var corpo={para:o.para,assunto:o.assunto,corpo:o.corpo,numero:numero||undefined};
   if(o.cc) corpo.cc=o.cc;
-  var slot=null;
-  if(modo==='agendar'){ slot=_proximoSlotVara(numero); corpo.enviar_em=slot.toISOString(); corpo.destino='vara'; }
   var tok=await docToken();
   var r=await fetch('/api/enviar-email',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify(corpo)});
   var j=await r.json().catch(function(){return {};});
   if(!r.ok||j.erro) return {ok:false,erro:(j.erro||('HTTP '+r.status)),j:j};
-  return {ok:true,agendado:!!j.agendado,enviar_em:slot,slotTxt:(slot?_slotTxt(slot):''),j:j};
+  return {ok:true,agendado:false,j:j};
 }
 /* ——— fila: ver, cancelar, disparar na hora ——— */
 async function abrirFilaEmails(){
@@ -9390,7 +9426,7 @@ async function enviarAgoraAtualizacao(){
     var numero=(window.__atzCtx&&window.__atzCtx.p&&window.__atzCtx.p.numero)||'';
     /* e-mail à vara/cartório passa pelo horário de envio (08h comum/trabalhista,
        10h federal) — fora dele, o sistema oferece agendar */
-    if(window.__atzCtx&&window.__atzCtx.vara){
+    if((window.__atzCtx&&window.__atzCtx.vara)||_ehEmailVara(email)){
       var rv=await enviarEmailVara({para:email,cc:(ccCli||''),assunto:assunto,corpo:corpo,numero:numero});
       if(rv.cancelado) return;
       if(!rv.ok){ alert('Não enviou: '+rv.erro+'\n\nSe o envio pelo servidor ainda não foi ativado, use "Abrir no Gmail" por enquanto.'); return; }
@@ -9528,6 +9564,9 @@ function contatoBlocoHTML(p){
     h+='<select class="btn sm bv-mod" style="max-width:250px"><option value="concluso">Concluso — pedir andamento ao gabinete</option><option value="peticao">Petição pendente — pedir conclusão</option><option value="despacho">Despacho — pedir cumprimento</option><option value="geral">Andamento geral</option></select>';
     if(c.whatsapp) h+='<button class="btn sm" style="background:#128C7E;color:#fff" onclick="bvSend(\'wa\',\''+ne+'\',this)">WhatsApp</button>';
     if(c.email) h+='<button class="btn sm" onclick="bvSend(\'em\',\''+ne+'\',this)">E-mail</button>';
+    /* horário em que o e-mail sai — 08h justiça comum/trabalhista, 10h federal */
+    if(c.email){ try{ var _hv=String(_horaEnvioVara(p.numero)).padStart(2,'0');
+      h+='<span style="font-size:11px;background:#eaf5ef;color:#0F6E56;border:1px solid #bfe0cf;border-radius:10px;padding:2px 8px;font-weight:600;white-space:nowrap" title="Fora deste horário o sistema oferece agendar para o próximo dia útil, para o e-mail chegar no topo da caixa do servidor">⏰ e-mail sai '+_hv+':00</span>'; }catch(eH){} }
     if(c.balcao_link) h+='<button class="btn sm gold" onclick="bvSend(\'vid\',\''+ne+'\',this)">Vídeo</button>';
     h+='<a href="#" onclick="abrirContatoOrgao(\''+ne+'\');return false;" style="color:#888;font-size:11px">editar contato</a>';
   } else {
