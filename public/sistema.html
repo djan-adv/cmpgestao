@@ -600,7 +600,14 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
     </div>
     <div class="row2">
       <div><label>Responsável</label><select id="t-resp"><option>Djan</option><option>Maria Rita</option><option>Jader Pinheiro</option><option>Maria Eduarda</option><option>Estagiário(a)</option></select></div>
-      <div><label>Tipo</label><select id="t-tipo" onchange="onTipoTarefa()"><option value="audiencia">Audiência</option><option value="reuniao">Reunião</option><option value="manifestacao">Manifestação</option><option value="prazo">Prazo</option><option value="tarefa">Tarefa</option><option value="diligencia">Diligência</option><option value="evento">Evento</option><option value="comercial">Comercial / Captação</option></select></div>
+      <div><label>Tipo</label><select id="t-tipo" onchange="onTipoTarefa()"><option value="tarefa">Tarefa</option><option value="prazo">Prazo</option><option value="audiencia">Audiência</option><option value="reuniao">Reunião</option><option value="manifestacao">Manifestação</option><option value="diligencia">Diligência</option><option value="evento">Evento</option><option value="comercial">Comercial / Captação</option></select></div>
+    </div>
+    <div id="t-corrigir-tipo" style="display:none;background:#fbeceb;border:1px solid #f3d4d1;border-radius:10px;padding:8px 11px;margin:0 0 8px">
+      <span style="font-size:12px;font-weight:700;color:#b5342b">Marcado como audiência por engano?</span>
+      <span class="note" style="display:block;margin:2px 0 6px;font-size:11.5px">Um clique corrige e salva — a atividade muda de tipo na agenda e no Kanban.</span>
+      <button type="button" class="btn sm" style="font-size:11.5px" onclick="corrigirTipoAtividade('tarefa')">&rarr; é Tarefa</button>
+      <button type="button" class="btn sm" style="font-size:11.5px" onclick="corrigirTipoAtividade('prazo')">&rarr; é Prazo</button>
+      <button type="button" class="btn sm ghost" style="font-size:11.5px" onclick="corrigirTipoAtividade('reuniao')">&rarr; é Reunião</button>
     </div>
     <div id="t-prazo-box" style="display:none;background:#faf7ec;border:1px solid #ecdfb8;border-radius:10px;padding:10px 12px;margin-bottom:6px">
       <div style="font-size:12px;font-weight:700;color:#8a5a00;margin-bottom:6px">Cálculo do prazo (dias úteis · CPC art. 224)</div>
@@ -2249,7 +2256,9 @@ function persisteKanban(a){
   try{
     var sb=window.__sb; if(!sb||!a) return;
     if(a.dbid){ /* já existe no banco: atualiza */
-      sb.from('kanban_tarefas').update({coluna:a.col,titulo:a.titulo,resp:(a.resp||null),data:(a.data||null),prazo:(a.prazo||null)}).eq('id',a.dbid).then(function(r){ if(r&&r.error) console.warn('kanban update:',r.error.message); });
+      /* `tipo` PRECISA entrar aqui: sem ele, corrigir "audiência → tarefa" mudava
+         só a memória e voltava ao errado no próximo carregamento. */
+      sb.from('kanban_tarefas').update({coluna:a.col,titulo:a.titulo,resp:(a.resp||null),data:(a.data||null),prazo:(a.prazo||null),tipo:(a.tipoForm||null)}).eq('id',a.dbid).then(function(r){ if(r&&r.error) console.warn('kanban update:',r.error.message); });
     } else { /* novo: insere e guarda o dbid */
       sb.auth.getUser().then(function(ug){ return sb.from('usuarios').select('escritorio_id').eq('id',ug.data.user.id).single(); }).then(function(pf){
         var esc=pf&&pf.data&&pf.data.escritorio_id; if(!esc) return;
@@ -2670,6 +2679,32 @@ function abrirTarefaKanban(id){
   try{ if(typeof logEvent==='function') logEvent('task_opened','tarefa',(a.dbid||a.id),{titulo:(a.titulo||'').slice(0,140),numero:(a.numero||null)}); }catch(e){}
   var _cb=document.getElementById('t-btn-concluir'); if(_cb) _cb.style.display=(a.col==='finalizado'?'none':'');
   var _sb=document.getElementById('t-btn-salvar'); if(_sb) _sb.textContent='Salvar alterações';
+  var _ct=document.getElementById('t-corrigir-tipo');
+  if(_ct) _ct.style.display=(a.tipoForm==='audiencia'?'block':'none');
+}
+/* Corrige o tipo de uma atividade já criada e salva na hora. Nasceu de um erro
+   real: "Audiência" era a primeira opção do seletor, então tarefa criada às
+   pressas virava audiência — e depois não havia como desfazer, porque o update
+   não gravava o tipo (ver persisteKanban). */
+function corrigirTipoAtividade(novoTipo){
+  var sel=document.getElementById('t-tipo'); if(!sel) return;
+  var antigo=sel.value;
+  if(antigo===novoTipo){ fecharTarefa(); return; }
+  sel.value=novoTipo;
+  if(typeof onTipoTarefa==='function') onTipoTarefa();
+  /* a agenda guarda a COR do tipo numa linha própria, que não é atualizada pelo
+     Kanban — então corrigimos ali também, casando por título + processo. */
+  try{
+    var sb=window.__sb, tit=_v('t-titulo'), proc=_v('t-proc'), corNova=(TIPOCOR[novoTipo]||'nt');
+    if(sb && tit){
+      var q=sb.from('agenda_eventos').update({tipo:corNova}).eq('titulo',tit);
+      if(proc) q=q.eq('processo_numero',proc);
+      q.then(function(){}, function(){});
+    }
+    if(AGENDA && tit){ AGENDA.forEach(function(ev){ if(ev && ev.tt===tit) ev.tipo=corNova; }); }
+  }catch(e){}
+  salvarTarefa();
+  try{ if(typeof renderAgendaView==='function') renderAgendaView(); }catch(e){}
 }
 function concluirTarefaModal(){ var id=window._tarEditId; if(id!=null){ concluirTarefaKanban(id); } fecharTarefa(); try{ if(typeof renderAtivProc==='function') renderAtivProc(); if(typeof renderHistorico==='function') renderHistorico(); }catch(e){} }
 /* ===== Painel "Atividades do escritório neste processo" (tarefas/prazos deste processo) ===== */
@@ -2925,6 +2960,7 @@ function _v(id){var e=document.getElementById(id);return e?(e.value||"").trim():
 /* assinatura padrão do escritório; comunicações em nome do DJAN levam a OAB na linha abaixo */
 function _assinaturaCMP(nome){ nome=String(nome||'').trim(); var oab=/(^|\s)djan/i.test(nome)?'\nOAB/PB 5219-A':''; return 'Atenciosamente,\n'+nome+oab+'\nCrispim Mendonça e Pinheiro Advogados'; }
 function abrirNovaTarefa(proc){window._tarEditId=null;
+  var _ct0=document.getElementById('t-corrigir-tipo'); if(_ct0) _ct0.style.display='none';
   var ov=document.getElementById("modal-tarefa");
   /* pano de fundo: abre a FICHA do processo atrás do formulário, com rolagem e
      leitura livres — agendar olhando o processo evita erro de data */
