@@ -307,7 +307,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
       <div id="view-kanban" class="hidden"><p class="note" style="margin-bottom:10px">Etapas reais do CMP. Arraste os cards entre as colunas.</p><div class="kanwrap"><div class="kanban" id="kanban"></div></div></div>
       <div id="view-tarefas"><div class="card">
         <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
-          <div class="switch"><button id="tg-mes" class="on" onclick="setTarView('mes')">Mês</button><button id="tg-semana" onclick="setTarView('semana')">Semana</button><button id="tg-lista" onclick="setTarView('lista')">Lista</button></div>
+          <div class="switch"><button id="tg-mes" onclick="setTarView('mes')">Mês</button><button id="tg-semana" class="on" onclick="setTarView('semana')">Semana</button><button id="tg-lista" onclick="setTarView('lista')">Lista</button></div>
           <label style="margin:0;color:var(--muted);font-size:13px">Responsável:</label>
           <select id="tar-resp" style="width:auto" onchange="setTarResp(this.value)"><option>Todos</option><option>Djan</option><option>Maria Rita</option><option>Jader Pinheiro</option><option>Maria Eduarda</option><option>Estagiário(a)</option></select>
           <label style="margin:0;color:var(--muted);font-size:13px"><input type="checkbox" id="tar-ocultar-concl" onchange="renderTarefasView()"> ocultar concluídas</label>
@@ -4321,7 +4321,7 @@ function renderKanban(){
   });
 }
 /* ===== Agenda de prazos e tarefas (nova 3ª visão da aba Agenda) ===== */
-var tarView=(__ehCel?"lista":"mes"), tarResp="Todos", tarY=curY, tarM=curM;
+var tarView=(__ehCel?"lista":"semana"), tarResp="Todos", tarY=curY, tarM=curM;
 /* fim de semana escondido por padrão: não há expediente forense nem audiência
    sábado e domingo, e as duas colunas roubavam largura dos dias que importam.
    A escolha fica gravada no navegador. */
