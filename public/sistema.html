@@ -125,6 +125,16 @@
   .flags label{display:flex;align-items:center;gap:5px;margin:0}
   textarea{width:100%;padding:9px 12px;border:1px solid var(--line);border-radius:8px;font-family:inherit;font-size:14px;min-height:56px}
   .cev.nt{background:#3d4c60}
+  /* Agenda de prazos e tarefas: paleta sóbria, estilo marca d'água. O vermelho e o
+     azul cheios competiam com o texto e cansavam num calendário inteiro cheio.
+     Aqui o PRAZO é o tom escuro (pesa mais na leitura) e a TAREFA o claro.
+     Vale só nesta agenda — a de audiências mantém as cores originais. */
+  #tar-cal .cev{color:#2b3646;border:1px solid transparent;font-weight:500}
+  #tar-cal .cev.vm{background:rgba(24,95,165,.16);border-color:rgba(24,95,165,.32);color:#123f6d}
+  #tar-cal .cev.nt{background:rgba(109,122,140,.11);border-color:rgba(109,122,140,.22);color:#49566a}
+  #tar-cal .cev.vm:hover{background:rgba(24,95,165,.24)}
+  #tar-cal .cev.nt:hover{background:rgba(109,122,140,.18)}
+  #tar-cal .day.today{background:rgba(24,95,165,.05)}
   .task.pri-alta{border-left-color:#b5342b} .task.pri-media{border-left-color:#E0A800} .task.pri-baixa{border-left-color:#127a53}
   .quick-link{display:inline-flex;align-items:center;gap:6px;background:var(--accentbg);color:var(--navy);border-radius:16px;padding:4px 10px;font-size:12px;font-weight:600;margin:4px 6px 0 0;cursor:pointer}
   .quick-link.del{background:#fbeceb;color:var(--danger)}
@@ -272,7 +282,8 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
       <div class="agtools">
         <div class="switch"><button id="sw-tar" class="on" onclick="setViewAg('tarefas')">Prazos e tarefas</button><button id="sw-ag" onclick="setViewAg('agenda')">Reuniões e audiências</button><button id="sw-kan" onclick="setViewAg('kanban')">Kanban</button></div>
         <button class="btn sm" style="margin-left:auto" onclick="abrirNovaTarefa()">+ Nova tarefa</button>
-        <div class="legend"><span class="lg"><i class="dot az"></i>Audiência / Reunião</span><span class="lg"><i class="dot am"></i>Manifestação</span><span class="lg"><i class="dot vm"></i>Prazo importante</span></div>
+        <div class="legend" id="legenda-agenda"><span class="lg"><i class="dot az"></i>Audiência / Reunião</span><span class="lg"><i class="dot am"></i>Manifestação</span><span class="lg"><i class="dot vm"></i>Prazo importante</span></div>
+        <div class="legend" id="legenda-tarefas" style="display:none"><span class="lg"><i style="display:inline-block;width:11px;height:11px;border-radius:3px;background:rgba(24,95,165,.16);border:1px solid rgba(24,95,165,.32);margin-right:5px;vertical-align:-1px"></i>Prazo</span><span class="lg"><i style="display:inline-block;width:11px;height:11px;border-radius:3px;background:rgba(109,122,140,.11);border:1px solid rgba(109,122,140,.22);margin-right:5px;vertical-align:-1px"></i>Tarefa</span></div>
       </div>
       <div id="view-agenda" class="hidden"><div class="card">
         <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
@@ -2837,6 +2848,10 @@ function setViewAg(v){VIEWAG=v;
   document.getElementById("view-agenda").classList.toggle("hidden",v!=="agenda");
   document.getElementById("view-kanban").classList.toggle("hidden",v!=="kanban");
   var vt=document.getElementById("view-tarefas"); if(vt) vt.classList.toggle("hidden",v!=="tarefas");
+  /* cada aba tem a sua legenda: a de prazos usa a paleta sóbria, a de audiências as cores cheias */
+  var lgA=document.getElementById("legenda-agenda"), lgT=document.getElementById("legenda-tarefas");
+  if(lgA) lgA.style.display=(v==="tarefas")?"none":"";
+  if(lgT) lgT.style.display=(v==="tarefas")?"":"none";
   renderAgendaView();
 }
 function renderAgendaView(){ if(VIEWAG==="kanban")renderKanban(); else if(VIEWAG==="tarefas")renderTarefasView(); else renderAgViewInner(); }
