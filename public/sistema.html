@@ -786,6 +786,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
       <span id="ev-conf-txt" style="font-size:12.5px"></span>
       <div style="margin-top:6px">
         <button type="button" id="ev-conf-btn" class="btn sm" style="font-size:11.5px;background:#0F6E56;color:#fff" onclick="confirmarEventoCliente()">✓ Cliente confirmou</button>
+        <button type="button" id="ev-conf-reenviar" class="btn sm ghost" style="font-size:11.5px" onclick="reenviarAvisoAudiencia(this)" title="Manda (de novo) o e-mail de aviso ao cliente, com o botão de confirmar presença dentro">✉ reenviar aviso por e-mail</button>
         <button type="button" id="ev-conf-desfazer" class="btn sm ghost" style="font-size:11.5px;display:none" onclick="desconfirmarEventoCliente()">desfazer</button>
       </div>
     </div>
@@ -2975,10 +2976,12 @@ function _evConfRender(){
     txt.innerHTML='<b style="color:#0F6E56">✓ Cliente confirmou</b> em '+String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')
       +(e.confPor?(' <span class="note" style="font-size:11px">— '+esc(e.confPor)+'</span>'):'');
     if(btn) btn.style.display='none'; if(des) des.style.display='';
+    var re1=document.getElementById('ev-conf-reenviar'); if(re1) re1.style.display='none';
   } else {
     box.style.background='#f6f9fc'; box.style.border='1px solid #dbe6f2';
     txt.innerHTML='<b style="color:#22405f">Cliente ainda não confirmou.</b> <span class="note" style="font-size:11px">O e-mail de aviso traz o botão "confirmo que recebi" — o clique do cliente marca sozinho. Se ele confirmar por WhatsApp/telefone, marque aqui.</span>';
     if(btn) btn.style.display=''; if(des) des.style.display='none';
+    var re2=document.getElementById('ev-conf-reenviar'); if(re2) re2.style.display='';
   }
   /* abertura do e-mail (pixel): busca o último aviso rastreado deste processo */
   (function(){
@@ -3013,6 +3016,39 @@ async function confirmarEventoCliente(){
     try{ if(typeof renderAudSemana==='function') renderAudSemana(); }catch(e1){}
     try{ if(typeof renderAudienciaSugestao==='function') renderAudienciaSugestao(); }catch(e2){}
   }catch(er){ alert('Erro: '+((er&&er.message)||er)); }
+}
+/* (Re)envia o e-mail de aviso da audiência ao cliente, com o botão "confirmo que
+   recebi" dentro. Manual, então não passa pela trava do aviso automático — pode
+   reenviar quantas vezes precisar. */
+async function reenviarAvisoAudiencia(btn){
+  var e=_evEdit; if(!e||!e.id){ alert('Este agendamento ainda não está gravado no banco.'); return; }
+  var dig=String(e._procResolvido||((e.p&&e.p.numero)||'')).replace(/\D/g,'');
+  var p=(DADOS.processos||[]).find(function(y){ return String(y.numero||'').replace(/\D/g,'')===dig&&dig; });
+  if(!p){ alert('Não achei o processo deste evento — abra pelo processo e tente de novo.'); return; }
+  var email=_emailClienteDoProc(p);
+  email=window.prompt('Enviar o aviso da audiência (com o botão de confirmar presença) para:',email||'');
+  if(email===null) return; email=email.trim();
+  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ alert('E-mail inválido.'); return; }
+  var dbr=String(e.data||'').split('-').reverse().join('/');
+  var horaTxt=(e.hora&&e.hora!=='Dia todo')?(' às '+e.hora):'';
+  var primeiro=(String(p.cliente||'').trim().split(/\s+/)[0]||'');
+  var link=(typeof _linkAudiencia==='function')?_linkAudiencia(p):'';
+  var corpo='Olá'+(primeiro?(', '+primeiro):'')+'!\n\nLembrando: há uma audiência marcada no seu processo nº '+p.numero+' para o dia '+dbr+horaTxt+'.'
+    +(link?('\n\nLink da audiência (sala virtual/videoconferência):\n'+link):'')
+    +'\n\nPor favor, confirme o recebimento deste aviso no botão abaixo — é um clique, não precisa responder. Em caso de dúvidas sobre local, formato (presencial ou por vídeo) ou documentos, estamos à disposição.'
+    +'\n\n'+_assinaturaCMP('Djan');
+  var t0=btn?btn.textContent:''; if(btn){ btn.textContent='enviando…'; btn.disabled=true; }
+  try{
+    var tok=await docToken();
+    var r=await fetch('/api/enviar-email',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},
+      body:JSON.stringify({para:email,assunto:'Sua audiência de '+dbr+' — processo '+p.numero,corpo:corpo,numero:p.numero,confirmar_evento:e.id,forcar:1})});
+    var j=await r.json().catch(function(){return {};});
+    if(!r.ok||j.erro){ alert('Não enviou: '+(j.erro||('HTTP '+r.status))); return; }
+    try{ await logAgendaHist(p.numero,'[Aviso ao cliente] Aviso de audiência (re)enviado para '+email+' — '+_evRotulo(e)+' — com botão de confirmação de presença'); }catch(eH){}
+    alert('Aviso enviado para '+email+'.\nQuando o cliente clicar em "confirmo que recebi", o evento fica confirmado sozinho e entra no histórico.');
+    _evConfRender();
+  }catch(er){ alert('Erro: '+((er&&er.message)||er)); }
+  finally{ if(btn){ btn.textContent=t0; btn.disabled=false; } }
 }
 async function desconfirmarEventoCliente(){
   var e=_evEdit; if(!e||!e.id) return;
