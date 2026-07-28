@@ -18,6 +18,20 @@ function raizThread(chave) {
   return '<cmp-thread-' + h + '@cmpadvogados.com.br>'
 }
 
+export { raizThread }
+
+// Guarda a raiz da conversa → processo. É o que permite reconhecer a RESPOSTA:
+// ela volta com essa raiz em References, e o robô da caixa acha o processo sem
+// depender de o remetente citar o número. Best-effort — não derruba o envio.
+async function anotarThread(raiz, numero, destinatario) {
+  const svcKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!svcKey) return
+  try {
+    const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, svcKey, { auth: { persistSession: false } })
+    await sb.from('email_threads').upsert({ raiz, numero: numero || null, destinatario }, { onConflict: 'raiz' })
+  } catch (e) {}
+}
+
 export function emailValido(e) { return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(e || '').trim()) }
 export function hashEmail(assunto, corpo) { return crypto.createHash('sha1').update(String(assunto) + '\n' + String(corpo)).digest('hex') }
 
@@ -66,7 +80,7 @@ function esc(s) {
 
 // Envia de fato. Devolve { ok, de, id, copiado_enviados, copia_pasta, copia_motivo }
 // ou { erro, status, repetido }. Nunca lança.
-export async function enviarEmailCore({ para, cc, assunto, corpo, numero, dedup = true }) {
+export async function enviarEmailCore({ para, cc, assunto, corpo, numero, dedup = true, inReplyTo = '' }) {
   const host = process.env.SMTP_HOST
   const port = parseInt(process.env.SMTP_PORT || '465', 10)
   const smtpUser = process.env.SMTP_USER
@@ -135,6 +149,7 @@ export async function enviarEmailCore({ para, cc, assunto, corpo, numero, dedup 
   const fromName = process.env.SMTP_FROM_NAME || 'Crispim Mendonça e Pinheiro Advogados'
   // cabeçalhos de conversa: raiz por (processo|destinatário) — agrupa envios e respostas
   const raiz = raizThread((numero || 'sem-proc') + '|' + para.toLowerCase())
+  await anotarThread(raiz, numero, para.toLowerCase())
   const messageId = '<' + crypto.randomUUID() + '@cmpadvogados.com.br>'
   const dados = {
     from: '"' + fromName + '" <' + smtpUser + '>',
@@ -144,8 +159,10 @@ export async function enviarEmailCore({ para, cc, assunto, corpo, numero, dedup 
     html,
     attachments,
     messageId,
-    references: raiz,
-    inReplyTo: raiz,
+    // respondendo: a cadeia carrega a raiz E a mensagem respondida, para o
+    // cliente/vara ver a resposta encaixada na conversa dele
+    references: inReplyTo ? (raiz + ' ' + inReplyTo) : raiz,
+    inReplyTo: inReplyTo || raiz,
   }
   if (cc) dados.cc = cc
 

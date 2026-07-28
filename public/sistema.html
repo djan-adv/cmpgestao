@@ -241,6 +241,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
       </div>
       <!-- lotes personalizados: só aparecem dentro da área de Processos (igual Inove/Encerrados/James) -->
       <div id="proc-subnav-lotes" style="display:none"></div>
+      <a data-s="emails" onclick="go('emails')" title="Respostas das varas, cartórios e clientes — cada uma já lançada no histórico do processo"><span class="ic">✉</span> E-mails <span id="nav-n-email" style="margin-left:auto;font-size:10.5px;background:#C9A227;color:#22405f;border-radius:10px;padding:1px 7px;font-weight:800;display:none"></span></a>
       <a data-s="diligencias" onclick="go('diligencias')"><span class="ic">◔</span> Diligências</a>
       <a data-s="relatorio" onclick="go('relatorio')"><span class="ic">◫</span> Relatório mensal</a>
       <a data-s="crm" onclick="go('crm')"><span class="ic">▣</span> Comercial</a>
@@ -545,6 +546,25 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
     <h3 style="margin-top:0">Diligências em andamento</h3>
     <div id="dilig-andamento"></div>
   </div>
+  </div>
+</section>
+<section id="s-emails" class="hidden">
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+      <p class="sectlabel" style="margin:0">✉ Caixa de e-mails — respostas recebidas</p>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn sm ghost" onclick="renderEmails()">↻ atualizar</button>
+        <button class="btn sm ghost" onclick="buscarEmailsAgora(this)" title="Ler a caixa no servidor agora, sem esperar o robô de 10 em 10 minutos">📥 buscar agora</button>
+        <button class="btn sm ghost" onclick="abrirFilaEmails()" title="E-mails que ainda vão sair no horário da vara">📮 fila de envio</button>
+      </div>
+    </div>
+    <p class="note" style="margin:6px 0 10px">Cada resposta já entra no <b>histórico do processo</b> quando o sistema consegue identificá-lo. As que não casaram ficam aqui em <b>sem processo</b> — vincule à mão para não ir parar no processo errado.</p>
+    <div class="switch" style="margin-bottom:10px">
+      <button id="em-sw-t" class="on" onclick="setEmailView('todos')">Todas</button>
+      <button id="em-sw-n" onclick="setEmailView('novas')">Não lidas</button>
+      <button id="em-sw-s" onclick="setEmailView('sem')">Sem processo</button>
+    </div>
+    <div id="em-lista"></div>
   </div>
 </section>
 <section id="s-robos" class="hidden">
@@ -4032,6 +4052,9 @@ function renderHistorico(){
     var cl=classMov(mv.texto);
     var ehCaptura=(mv.f==='captura');
     if(ehCaptura) cl=["Captura externa (celular)","#127a53","cap"];
+    /* resposta que chegou por e-mail — importada da caixa pelo robô do IMAP */
+    var ehEmail=(mv.f==='email');
+    if(ehEmail) cl=["E-mail recebido — resposta","#0b7285","email"];
     var li=document.createElement("li");li.style.cssText="cursor:pointer;list-style:none;border-left:3px solid "+cl[1]+";padding:2px 0 2px 10px;margin-bottom:9px";
     var nome=String(mv.texto||"").split(" — ")[0].split("\n")[0];
     var isMan=(mv.f==='manual')||/^\[Anotação/.test(String(mv.texto||''));
@@ -4039,15 +4062,18 @@ function renderHistorico(){
     var teor=null,best=99;for(var pi=0;pi<pubs.length;pi++){if(!pubs[pi].texto)continue;var df=Math.abs(dDiff((pubs[pi].data||"").slice(0,10),dt));if(df<=7&&df<best){best=df;teor=pubs[pi].texto;}}
     /* o próprio andamento pode JÁ conter o inteiro teor (publicação DJEN gravada
        no histórico) — nesse caso mostra "ver teor" direto, sem depender da lista global */
-    if(!teor && !isMan && !ehCaptura && String(mv.texto||'').length>180) teor=mv.texto;
+    if(!teor && !isMan && !ehCaptura && !ehEmail && String(mv.texto||'').length>180) teor=mv.texto;
     /* captura externa: mostra o próprio texto (com a transcrição da IA), sem a nota de "não está na captura pública" */
-    var content=teor||(ehCaptura?(mv.texto||nome):("Registro do movimento: "+(mv.texto||nome)+"\n\n(O conteúdo detalhado deste andamento não está na captura pública. As publicações com o inteiro teor estão no bloco de publicações e marcadas em dourado.)"));
-    /* captura: transcrição da IA (tudo depois do título) mostrada direto no histórico */
-    var captInline=ehCaptura?String(mv.texto||"").split("\n").slice(1).join("\n").trim():"";
-    var label=teor?"ver teor":((ehCaptura&&captInline)?"":"ver registro");var cor=teor?"var(--gold)":"var(--muted)";
+    var content=teor||((ehCaptura||ehEmail)?(mv.texto||nome):("Registro do movimento: "+(mv.texto||nome)+"\n\n(O conteúdo detalhado deste andamento não está na captura pública. As publicações com o inteiro teor estão no bloco de publicações e marcadas em dourado.)"));
+    /* captura e e-mail recebido: o texto vem direto na tela, sem precisar clicar —
+       é uma resposta que alguém escreveu, tem que dar para ler de bate-pronto */
+    var captInline=(ehCaptura||ehEmail)?String(mv.texto||"").split("\n").slice(1).join("\n").trim():"";
+    var label=teor?"ver teor":(((ehCaptura||ehEmail)&&captInline)?"":"ver registro");var cor=teor?"var(--gold)":"var(--muted)";
     li.innerHTML='<div class="dt" style="font-size:11px;color:var(--muted)">'+dt+' · <span style="color:'+(isMan?'#7b1e3a':cl[1])+';font-weight:600">'+(isMan?'Histórico manual (interno — não enviar ao cliente)':cl[0])+'</span>'+(mv.pr?' · <span style="color:#0b7285;font-weight:700" title="Entra no resumo dos e-mails de atualização ao cliente">★ providência do escritório</span>':'')+'</div>'
       +'<div'+(isMan?' style="color:#7b1e3a;font-weight:600"':'')+'>'+esc(nome)+(label?(' <span style="color:'+cor+';font-size:11px">('+label+')</span>'):'')+'</div>'
-      +(captInline?('<div style="font-size:13px;color:#374151;margin-top:4px;white-space:pre-wrap;max-height:280px;overflow:auto;background:#f4f7f5;border-radius:8px;padding:8px 10px">'+esc(captInline)+'</div>'):'')
+      +(captInline?('<div style="font-size:13px;color:#374151;margin-top:4px;white-space:pre-wrap;max-height:280px;overflow:auto;background:'+(ehEmail?'#eef6f8':'#f4f7f5')+';border-radius:8px;padding:8px 10px">'+esc(captInline)+'</div>'):'')
+      /* responder sem sair do processo — o botão fica sempre visível na resposta */
+      +(ehEmail?('<div style="margin-top:6px"><button class="btn sm" style="font-size:11px;background:#0F6E56;color:#fff" onclick="responderDoHistorico(event,'+atual.hist_full.indexOf(mv)+')">✉ responder</button> <button class="btn sm ghost" style="font-size:11px" onclick="event.stopPropagation();go(\'emails\')" title="Abrir a caixa de e-mails">abrir caixa</button></div>'):'')
       +anexosHtml(mv.id)
       +((/^\[MINUTA/.test(String(mv.texto||'')) && mv.id)?('<div style="margin-top:5px">'+(/APROVADA/.test(mv.texto)?'<span style="font-size:11px;color:#127a53;font-weight:700">✓ aprovada — cópia em Documentos do processo</span>':'<button class="btn sm" style="font-size:11px;background:#127a53" onclick="aprovarMinuta(event,'+mv.id+')">✔ Aprovar (copiar p/ Documentos do processo)</button>')+'</div>'):'')
       +'<div class="hist-det" style="display:none;font-size:13px;color:var(--muted);margin-top:4px;white-space:pre-wrap;max-height:260px;overflow:auto"></div>'
@@ -4904,6 +4930,8 @@ function toggleConcluirTarefa(id){
       }catch(e){ window.__histCarga.done=true; console.log('históricos fundo: '+(e&&e.message||e)); }
     }
     carregarHistoricosFundo();
+    /* respostas por e-mail ainda não lidas → contador no menu */
+    try{ if(typeof atualizaBadgeEmail==='function') atualizaBadgeEmail(); }catch(eBE){}
     /* publicações novas (robô DJEN) → fila de triagem */
     try{
       /* triagem: TODAS as publicações recentes não tratadas (não só as de hoje).
@@ -6228,11 +6256,11 @@ function go(s){
 function go(s){
   try{ localStorage.setItem('cmp_secao', s); if(s!=='proc-det') localStorage.removeItem('cmp_proc'); }catch(e){}
   var showId=(s==='contatos')?'crm':s;
-  ["painel","triagem","agenda","processos","proc-det","crm","financeiro","etiquetas","procedimentos","diligencias","relatorio","encerrados","inove","james","cadastros","fases","sugestoes","lote","produtividade","monitoramento","robos"].forEach(function(id){var e=document.getElementById("s-"+id);if(e)e.classList.add("hidden")});
+  ["painel","triagem","agenda","processos","proc-det","crm","financeiro","etiquetas","procedimentos","diligencias","relatorio","encerrados","inove","james","cadastros","fases","sugestoes","lote","produtividade","monitoramento","robos","emails"].forEach(function(id){var e=document.getElementById("s-"+id);if(e)e.classList.add("hidden")});
   var sec=document.getElementById("s-"+showId); if(sec) sec.classList.remove("hidden");
   document.querySelectorAll("#nav a").forEach(function(a){a.classList.remove("active")});
   var link=document.querySelector('#nav a[data-s="'+s+'"]');if(link)link.classList.add("active");
-  var t={painel:"Painel",triagem:"Publicações",agenda:"Agenda — Kanban (etapas CMP)",processos:"Processos",crm:"Comercial",financeiro:"Financeiro — cobranças e recebimentos",contatos:"Contatos",procedimentos:"Procedimentos CMP",etiquetas:"Etiquetas","proc-det":"Processo",diligencias:"Diligências",relatorio:"Relatório mensal para clientes",encerrados:"Processos encerrados",inove:"Processos Inove (terceiros)",james:"Processos contra James Laurence",cadastros:"Cadastros — Tribunais de Justiça",inovesol:"Solicitar novas funcionalidades",fases:"Revisar fases dos processos",produtividade:"Produtividade e auditoria de logins"};
+  var t={painel:"Painel",triagem:"Publicações",agenda:"Agenda — Kanban (etapas CMP)",processos:"Processos",crm:"Comercial",financeiro:"Financeiro — cobranças e recebimentos",contatos:"Contatos",procedimentos:"Procedimentos CMP",etiquetas:"Etiquetas","proc-det":"Processo",diligencias:"Diligências",emails:"E-mails — respostas recebidas",relatorio:"Relatório mensal para clientes",encerrados:"Processos encerrados",inove:"Processos Inove (terceiros)",james:"Processos contra James Laurence",cadastros:"Cadastros — Tribunais de Justiça",inovesol:"Solicitar novas funcionalidades",fases:"Revisar fases dos processos",produtividade:"Produtividade e auditoria de logins"};
   /* sub-pastas de Processos (Inove/Encerrados/James/lotes personalizados): só
      aparecem dentro da área de Processos (inclusive ao abrir um lote específico) */
   try{
@@ -6257,6 +6285,7 @@ function go(s){
   if(s==="produtividade" && typeof renderProdutividade==='function')renderProdutividade();
   if(s==="monitoramento" && typeof renderMonitoramento==='function')renderMonitoramento();
   if(s==="robos" && typeof renderRobos==='function')renderRobos();if(s==="robos" && typeof renderEstagiario==='function')renderEstagiario();
+  if(s==="emails" && typeof renderEmails==='function')renderEmails();
   try{ var _cfgP=document.getElementById('btn-cfg-proc'); if(_cfgP) _cfgP.style.display=(s==='processos')?'inline-block':'none'; }catch(e){}
   if(s==="sugestoes" && typeof renderSugestoes==='function'){ var _an=document.getElementById('sg-autor'); if(_an && !_an.value){ _an.value=((document.getElementById('who-name')||{}).textContent||'').trim(); } renderSugestoes(); }
   if(s==="lote") renderLote();
@@ -8838,6 +8867,20 @@ async function desativarAcompanhamento(){
 }
 </script>
 <!-- Atualizar cliente — Passo 1: monta e-mail com as últimas movimentações (revisar + enviar pelo seu Gmail) -->
+<div id="modal-responder" class="overlay hidden"><div class="modal" style="max-width:660px">
+  <h2>✉ Responder</h2>
+  <div id="rp-ctx" class="note" style="margin-top:0;margin-bottom:8px"></div>
+  <div class="row2"><div><label>Para</label><input id="rp-para" type="email" style="width:100%;box-sizing:border-box"></div><div><label>Processo (para o histórico)</label><input id="rp-num" placeholder="—" style="width:100%;box-sizing:border-box"></div></div>
+  <label>Assunto</label><input id="rp-assunto" style="width:100%;box-sizing:border-box">
+  <label>Mensagem</label>
+  <textarea id="rp-corpo" rows="11" style="width:100%;box-sizing:border-box;font-family:inherit;font-size:13px"></textarea>
+  <div id="rp-orig" style="margin-top:8px;font-size:12px"></div>
+  <p class="note" id="rp-horario" style="display:none;margin-top:8px;background:#eaf5ef;border:1px solid #bfe0cf;border-radius:8px;padding:8px 10px;color:#0F6E56"></p>
+  <div class="foot">
+    <button class="btn ghost" onclick="document.getElementById('modal-responder').classList.add('hidden')">Cancelar</button>
+    <button class="btn" style="background:#0F6E56;color:#fff" onclick="enviarResposta(this)">Enviar resposta</button>
+  </div>
+</div></div>
 <div id="modal-hvara" class="overlay hidden"><div class="modal" style="max-width:520px">
   <h2>⏰ Horário de envio à vara</h2>
   <div id="hv-txt" style="font-size:13.5px;line-height:1.6;margin-bottom:12px"></div>
@@ -9235,6 +9278,7 @@ async function _agendarNaFila(o){
       escritorio_id:esc1, para:para, cc:(String(o.cc||'').trim()||null),
       assunto:o.assunto||'', corpo:o.corpo||'', numero:String(o.numero||'').replace(/\D/g,''),
       enviar_em:o.quando.toISOString(), destino:'vara', criado_por:_quemAlterou(),
+      in_reply_to:(o.inReplyTo||null), responder_id:(o.responderId||null),
     }).select('id').single();
     if(ins.error) throw ins.error;
     return {ok:true,id:ins.data.id};
@@ -9255,17 +9299,218 @@ async function enviarEmailVara(o){
   }
   if(modo==='agendar'){
     var slot=_proximoSlotVara(numero);
-    var ag=await _agendarNaFila({para:o.para,cc:o.cc,assunto:o.assunto,corpo:o.corpo,numero:numero,quando:slot});
+    var ag=await _agendarNaFila({para:o.para,cc:o.cc,assunto:o.assunto,corpo:o.corpo,numero:numero,quando:slot,
+      inReplyTo:o.inReplyTo,responderId:o.responderId});
     if(ag.erro) return {ok:false,erro:'não foi possível agendar: '+ag.erro+'\n\nO e-mail NÃO foi enviado.'};
     return {ok:true,agendado:true,enviar_em:slot,slotTxt:_slotTxt(slot),j:{}};
   }
   var corpo={para:o.para,assunto:o.assunto,corpo:o.corpo,numero:numero||undefined};
   if(o.cc) corpo.cc=o.cc;
+  if(o.inReplyTo) corpo.in_reply_to=o.inReplyTo;
+  if(o.responderId) corpo.responder_id=o.responderId;
   var tok=await docToken();
   var r=await fetch('/api/enviar-email',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify(corpo)});
   var j=await r.json().catch(function(){return {};});
   if(!r.ok||j.erro) return {ok:false,erro:(j.erro||('HTTP '+r.status)),j:j};
   return {ok:true,agendado:false,j:j};
+}
+/* ═══════════ CAIXA DE E-MAILS — respostas recebidas ═══════════
+   O robô lê a caixa por IMAP e leva cada resposta para o histórico do processo
+   que ela responde. Aqui a gente vê tudo, responde, e vincula à mão o que o
+   sistema não conseguiu identificar sozinho. */
+var emailView='todos';
+function setEmailView(v){
+  emailView=v;
+  [['todos','em-sw-t'],['novas','em-sw-n'],['sem','em-sw-s']].forEach(function(x){
+    var b=document.getElementById(x[1]); if(b) b.className=(v===x[0]?'on':'');
+  });
+  renderEmails();
+}
+async function renderEmails(){
+  var el=document.getElementById('em-lista'); if(!el) return;
+  el.innerHTML='<p class="note">carregando…</p>';
+  try{
+    var sb=window.__sb; if(!sb){ el.innerHTML='<p class="note">sem conexão com o banco.</p>'; return; }
+    var q=sb.from('emails_recebidos').select('*').eq('arquivado',false).order('recebido_em',{ascending:false}).limit(300);
+    if(emailView==='novas') q=q.eq('lido',false);
+    if(emailView==='sem') q=q.is('numero',null);
+    var r=await q;
+    if(r.error){
+      var m=String(r.error.message||'');
+      el.innerHTML='<p class="note">'+(/does not exist|schema cache/i.test(m)?'A caixa de e-mails ainda não existe neste servidor (falta aplicar a migração e recompilar).':('não foi possível ler: '+esc(m)))+'</p>';
+      return;
+    }
+    var itens=r.data||[]; window.__EMAILS=itens;
+    atualizaBadgeEmail();
+    if(!itens.length){ el.innerHTML='<p class="note" style="margin:0">Nada por aqui.</p>'; return; }
+    el.innerHTML=itens.map(function(x,i){
+      var d=new Date(x.recebido_em);
+      var quando=String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+      var vinc=x.numero
+        ? ('<span style="font-size:10.5px;background:#eaf5ef;color:#0F6E56;border-radius:10px;padding:1px 8px;font-weight:700" title="Já lançado no histórico deste processo — casou por '+esc(x.casou_por||'')+'">✓ '+esc(fmtCNJ(x.numero))+'</span>')
+        : '<span style="font-size:10.5px;background:#fdf3e7;color:#8a5a00;border-radius:10px;padding:1px 8px;font-weight:700">sem processo</span>';
+      return '<div style="border-bottom:1px solid var(--accentbg);padding:10px 0">'
+        +'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
+          +(x.lido?'':'<span style="width:8px;height:8px;border-radius:50%;background:#C9A227;display:inline-block" title="não lida"></span>')
+          +'<b style="color:var(--navy);font-size:13.5px">'+esc(x.de_nome||x.de)+'</b>'
+          +'<span class="note" style="margin:0;font-size:11.5px">'+esc(x.de)+'</span>'
+          +vinc
+          +(x.respondido?'<span style="font-size:10.5px;color:#185FA5;font-weight:700">↩ respondido</span>':'')
+          +'<span style="margin-left:auto;font-size:11.5px;color:var(--muted)">'+quando+'</span>'
+        +'</div>'
+        +'<div style="font-weight:600;font-size:13.5px;margin:3px 0 2px;cursor:pointer" onclick="emToggle('+i+',this)">'+esc(x.assunto||'(sem assunto)')+' <span style="color:var(--muted);font-size:11px">(ver)</span></div>'
+        +'<div id="em-c-'+i+'" style="display:none;white-space:pre-wrap;font-size:13px;color:#374151;background:#f7f9fb;border-radius:8px;padding:9px 11px;max-height:320px;overflow:auto;margin:4px 0">'+esc(x.corpo||'(sem texto)')+'</div>'
+        +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:5px">'
+          +'<button class="btn sm" style="font-size:11.5px;background:#0F6E56;color:#fff" onclick="responderEmail('+i+')">✉ responder</button>'
+          +(x.numero?('<button class="btn sm ghost" style="font-size:11.5px" onclick="irParaProcesso(\''+esc(String(x.numero)).replace(/'/g,'')+'\')">abrir processo</button>')
+                    :('<button class="btn sm ghost" style="font-size:11.5px;color:#8a5a00" onclick="emVincular('+i+')" title="Dizer a que processo esta resposta pertence — vai para o histórico dele">🔗 vincular a um processo</button>'))
+          +'<button class="btn sm ghost" style="font-size:11.5px" onclick="emLido('+i+','+(x.lido?'false':'true')+')">'+(x.lido?'marcar como não lida':'✓ marcar lida')+'</button>'
+          +'<button class="btn sm ghost" style="font-size:11.5px;color:#b5342b" onclick="emArquivar('+i+')" title="Some da caixa. O lançamento no histórico do processo continua lá.">arquivar</button>'
+        +'</div></div>';
+    }).join('');
+  }catch(e){ el.innerHTML='<p class="note">erro: '+esc((e&&e.message)||String(e))+'</p>'; }
+}
+function emToggle(i,el){
+  var d=document.getElementById('em-c-'+i); if(!d) return;
+  var abrindo=(d.style.display==='none'); d.style.display=abrindo?'block':'none';
+  if(abrindo){ var x=(window.__EMAILS||[])[i]; if(x&&!x.lido) emLido(i,true,true); }
+}
+async function emLido(i,v,silencioso){
+  var x=(window.__EMAILS||[])[i]; if(!x) return;
+  try{ await window.__sb.from('emails_recebidos').update({lido:!!v}).eq('id',x.id); x.lido=!!v; atualizaBadgeEmail(); if(!silencioso) renderEmails(); }catch(e){}
+}
+async function emArquivar(i){
+  var x=(window.__EMAILS||[])[i]; if(!x) return;
+  if(!confirm('Arquivar este e-mail de '+x.de+'?\n\nEle some da caixa. O lançamento no histórico do processo continua lá.')) return;
+  try{ await window.__sb.from('emails_recebidos').update({arquivado:true}).eq('id',x.id); renderEmails(); }catch(e){ alert('Erro: '+((e&&e.message)||e)); }
+}
+/* vincular à mão: leva a resposta para o histórico do processo escolhido */
+async function emVincular(i){
+  var x=(window.__EMAILS||[])[i]; if(!x) return;
+  var num=window.prompt('Número do processo a que esta resposta pertence:\n(cole o número CNJ)','');
+  if(!num) return;
+  var dig=String(num).replace(/\D/g,'');
+  var p=(DADOS.processos||[]).find(function(y){ return String(y.numero||'').replace(/\D/g,'')===dig; });
+  if(!p||!p._id){ alert('Processo não encontrado no sistema. Confira o número.'); return; }
+  try{
+    var hoje=new Date().toISOString().slice(0,10);
+    var texto='[E-mail recebido — resposta] De: '+(x.de_nome?(x.de_nome+' <'+x.de+'>'):x.de)+'\n'
+      +'Assunto: '+(x.assunto||'(sem assunto)')+'\n'
+      +'(vinculado a este processo manualmente por '+_quemAlterou()+')\n\n'+(x.corpo||'');
+    var a=await window.__sb.from('andamentos').insert({processo_id:p._id,data:hoje,texto:texto,fonte:'email'}).select('id').single();
+    if(a.error){ alert('Não foi possível lançar no histórico: '+a.error.message); return; }
+    await window.__sb.from('emails_recebidos').update({numero:dig,processo_id:p._id,casou_por:'manual',andamento_id:a.data.id,lido:true}).eq('id',x.id);
+    alert('Pronto — a resposta está no histórico de '+fmtCNJ(dig)+'.');
+    renderEmails();
+  }catch(e){ alert('Erro: '+((e&&e.message)||e)); }
+}
+async function buscarEmailsAgora(btn){
+  var t0=btn?btn.textContent:''; if(btn){ btn.textContent='buscando…'; btn.disabled=true; }
+  try{
+    var tok=await docToken();
+    var r=await fetch('/api/email/receber',{headers:{Authorization:'Bearer '+tok}});
+    var j=await r.json().catch(function(){return {};});
+    if(j.erro) alert('Não deu para ler a caixa: '+j.erro);
+    else alert('Leitura concluída: '+(j.importados||0)+' nova(s) — '+(j.no_historico||0)+' já no histórico do processo, '+(j.sem_processo||0)+' sem processo.');
+    renderEmails();
+  }catch(e){ alert('Erro: '+((e&&e.message)||e)); }
+  finally{ if(btn){ btn.textContent=t0; btn.disabled=false; } }
+}
+async function atualizaBadgeEmail(){
+  var b=document.getElementById('nav-n-email'); if(!b) return;
+  try{
+    var r=await window.__sb.from('emails_recebidos').select('id',{count:'exact',head:true}).eq('lido',false).eq('arquivado',false);
+    var n=r.count||0;
+    b.textContent=n; b.style.display=n?'':'none';
+  }catch(e){ b.style.display='none'; }
+}
+/* ——— responder ——— */
+var _rpCtx=null;
+function _rpAbrir(o){
+  _rpCtx=o;
+  document.getElementById('rp-ctx').innerHTML=o.contexto||'';
+  document.getElementById('rp-para').value=o.para||'';
+  document.getElementById('rp-num').value=o.numero||'';
+  document.getElementById('rp-assunto').value=/^re:/i.test(o.assunto||'')?o.assunto:('Re: '+(o.assunto||''));
+  var ass=(typeof _assinaturaCMP==='function')?('\n\n'+_assinaturaCMP('Djan')):'';
+  document.getElementById('rp-corpo').value=ass;
+  document.getElementById('rp-orig').innerHTML=o.original
+    ? '<details><summary style="cursor:pointer;color:var(--muted)">ver a mensagem que está sendo respondida</summary><div style="white-space:pre-wrap;background:#f7f9fb;border-radius:8px;padding:9px 11px;margin-top:5px;max-height:220px;overflow:auto;font-size:12.5px">'+esc(o.original)+'</div></details>' : '';
+  var hv=document.getElementById('rp-horario');
+  var oficial=_ehEmailVara(o.para);
+  hv.style.display=oficial?'':'none';
+  if(oficial) hv.innerHTML=_naJanelaVara(o.numero)
+    ? '⏰ Vara/cartório — estamos dentro do horário de envio ('+String(_horaEnvioVara(o.numero)).padStart(2,'0')+':00). Sai na hora.'
+    : ('⏰ Vara/cartório — fora do horário de envio ('+String(_horaEnvioVara(o.numero)).padStart(2,'0')+':00). Ao enviar, o sistema oferece agendar para '+esc(_slotTxt(_proximoSlotVara(o.numero)))+'.');
+  document.getElementById('modal-responder').classList.remove('hidden');
+  setTimeout(function(){ try{ document.getElementById('rp-corpo').focus(); document.getElementById('rp-corpo').setSelectionRange(0,0); }catch(e){} },60);
+}
+function responderEmail(i){
+  var x=(window.__EMAILS||[])[i]; if(!x) return;
+  _rpAbrir({
+    para:x.de, numero:x.numero||'', assunto:x.assunto||'', original:x.corpo||'',
+    inReplyTo:x.message_id||'', responderId:x.id,
+    contexto:'Respondendo <b>'+esc(x.de_nome||x.de)+'</b>'+(x.numero?(' — processo '+esc(fmtCNJ(x.numero))):''),
+  });
+}
+async function enviarResposta(btn){
+  if(!_rpCtx) return;
+  var para=(document.getElementById('rp-para').value||'').trim();
+  var assunto=(document.getElementById('rp-assunto').value||'').trim();
+  var corpo=(document.getElementById('rp-corpo').value||'').trim();
+  var numero=(document.getElementById('rp-num').value||'').trim();
+  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(para)){ alert('E-mail do destinatário inválido.'); return; }
+  if(!corpo){ alert('Escreva a resposta.'); return; }
+  var t0=btn?btn.textContent:''; if(btn){ btn.textContent='enviando…'; btn.disabled=true; }
+  try{
+    var res;
+    /* vara/cartório: passa pelo horário de envio, como qualquer e-mail oficial */
+    if(_ehEmailVara(para)){
+      res=await enviarEmailVara({para:para,assunto:assunto,corpo:corpo,numero:numero,
+        inReplyTo:_rpCtx.inReplyTo,responderId:_rpCtx.responderId});
+      if(res.cancelado) return;
+    } else {
+      var tok=await docToken();
+      var r=await fetch('/api/enviar-email',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},
+        body:JSON.stringify({para:para,assunto:assunto,corpo:corpo,numero:numero||undefined,in_reply_to:_rpCtx.inReplyTo||undefined,responder_id:_rpCtx.responderId||undefined})});
+      var j=await r.json().catch(function(){return {};});
+      res=(!r.ok||j.erro)?{ok:false,erro:(j.erro||('HTTP '+r.status))}:{ok:true,agendado:false,j:j};
+    }
+    if(!res.ok){ alert('Não enviou: '+res.erro); return; }
+    /* histórico do processo: a resposta que NÓS demos também fica registrada */
+    try{
+      var dig=String(numero||'').replace(/\D/g,'');
+      var p=(DADOS.processos||[]).find(function(y){ return String(y.numero||'').replace(/\D/g,'')===dig; });
+      if(p&&p._id){
+        var hoje=new Date().toISOString().slice(0,10);
+        var txt='[E-mail enviado — resposta'+(res.agendado?(' AGENDADA para '+res.slotTxt):'')+'] Para: '+para+'\n'
+          +'Assunto: '+assunto+'\n(por '+_quemAlterou()+')\n\n'+corpo;
+        var ins=await window.__sb.from('andamentos').insert({processo_id:p._id,data:hoje,texto:txt,fonte:'manual'}).select('id').single();
+        if(!ins.error && typeof atual!=='undefined' && atual && atual._id===p._id){
+          atual.hist_full=atual.hist_full||[]; atual.hist_full.unshift({id:ins.data&&ins.data.id,data:hoje+'T00:00:00.000Z',texto:txt,f:'manual'});
+          if(typeof renderHistorico==='function') renderHistorico();
+        }
+      }
+    }catch(eH){}
+    document.getElementById('modal-responder').classList.add('hidden');
+    alert(res.agendado?('📮 Na fila — a resposta sai '+res.slotTxt+' para '+para+'.'):('Resposta enviada para '+para+'.'));
+    try{ if(document.getElementById('s-emails') && !document.getElementById('s-emails').classList.contains('hidden')) renderEmails(); }catch(e){}
+  }catch(e){ alert('Erro: '+((e&&e.message)||e)); }
+  finally{ if(btn){ btn.textContent=t0; btn.disabled=false; } }
+}
+/* responder direto do histórico do processo: pega o remetente do lançamento */
+function responderDoHistorico(ev,idx){
+  if(ev){ ev.stopPropagation(); }
+  var mv=(atual&&atual.hist_full)?atual.hist_full[idx]:null; if(!mv) return;
+  var t=String(mv.texto||'');
+  var de=(t.match(/<([^@\s>]+@[^@\s>]+)>/)||[])[1] || (t.match(/De:\s*([^\s<]+@[^\s>]+)/i)||[])[1] || '';
+  var assunto=(t.match(/Assunto:\s*([^\n]+)/i)||[])[1]||'';
+  if(!de){ alert('Não consegui identificar o e-mail do remetente neste lançamento.\nResponda pela Caixa de e-mails.'); return; }
+  _rpAbrir({
+    para:de.trim(), numero:(atual&&atual.numero)||'', assunto:assunto.trim(),
+    original:t.split('\n').slice(3).join('\n').trim(), inReplyTo:'', responderId:null,
+    contexto:'Respondendo <b>'+esc(de.trim())+'</b> — processo '+esc(atual&&atual.numero||''),
+  });
 }
 /* ——— fila: ver, cancelar, disparar na hora ——— */
 async function abrirFilaEmails(){

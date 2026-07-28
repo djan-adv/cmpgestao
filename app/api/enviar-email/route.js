@@ -86,7 +86,21 @@ export async function POST(request) {
   }
 
   // ——— envio na hora ———
-  const r = await enviarEmailCore({ para: body.para, cc: body.cc, assunto: body.assunto, corpo: body.corpo, numero: body.numero })
+  // in_reply_to: message-id do e-mail respondido — encaixa a resposta na conversa
+  const r = await enviarEmailCore({
+    para: body.para, cc: body.cc, assunto: body.assunto, corpo: body.corpo, numero: body.numero,
+    inReplyTo: String(body.in_reply_to || ''),
+  })
   if (r.erro) return Response.json({ erro: r.erro, repetido: r.repetido }, { status: r.status || 500 })
+
+  // resposta enviada: marca o e-mail original como respondido na caixa
+  if (body.responder_id) {
+    try {
+      const sbU = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY, {
+        global: { headers: { Authorization: 'Bearer ' + sess.jwt } }, auth: { persistSession: false },
+      })
+      await sbU.from('emails_recebidos').update({ respondido: true, lido: true }).eq('id', body.responder_id)
+    } catch (e) {}
+  }
   return Response.json(r)
 }
