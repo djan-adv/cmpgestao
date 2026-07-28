@@ -3033,8 +3033,10 @@ async function reenviarAvisoAudiencia(btn){
   var horaTxt=(e.hora&&e.hora!=='Dia todo')?(' às '+e.hora):'';
   var primeiro=(String(p.cliente||'').trim().split(/\s+/)[0]||'');
   var link=(typeof _linkAudiencia==='function')?_linkAudiencia(p):'';
+  var tipoAud=_tipoAudienciaTexto(p,String(e.data||''));
   var corpo='Olá'+(primeiro?(', '+primeiro):'')+'!\n\nLembrando: há uma audiência marcada no seu processo nº '+p.numero+' para o dia '+dbr+horaTxt+'.'
     +(link?('\n\nLink da audiência (sala virtual/videoconferência):\n'+link):'')
+    +'\n\n'+_blocoPresenca(tipoAud)
     +'\n\nPor favor, confirme o recebimento deste aviso no botão abaixo — é um clique, não precisa responder. Em caso de dúvidas sobre local, formato (presencial ou por vídeo) ou documentos, estamos à disposição.'
     +'\n\n'+_assinaturaCMP('Djan');
   var t0=btn?btn.textContent:''; if(btn){ btn.textContent='enviando…'; btn.disabled=true; }
@@ -8198,6 +8200,36 @@ function _emailClienteDoProc(p){
   var s=String((p&&p.ctl)||''); var m=s.match(/[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}/);
   return m?m[0]:'';
 }
+/* Tipo da audiência (para o texto do aviso): procura no título do evento da
+   agenda daquela data e, se não achar, no histórico do processo.
+   Devolve: 'instrucao' (una / instrução e julgamento — testemunhas necessárias),
+   'conciliacao' (inaugural / inicial / conciliação — testemunhas dispensadas),
+   ou '' (não deu para saber). */
+function _tipoAudienciaTexto(p,isoData){
+  var textos=[];
+  try{ var dg=String((p&&p.numero)||'').replace(/\D/g,'');
+    (window.__AGDB||[]).forEach(function(x){ if(x&&x.data===isoData&&String((x.p&&x.p.numero)||'').replace(/\D/g,'')===dg) textos.push(String(x.tt||'')); });
+  }catch(e){}
+  try{ _audienciasFuturasDoHist(p).forEach(function(h){ if(h.iso===isoData&&h.tipo) textos.push(h.tipo); }); }catch(e){}
+  var t=textos.join(' | ').toLowerCase();
+  if(/\buna\b|instru/.test(t)) return 'instrucao';
+  if(/concilia|inicial|inaugural|cejusc|media[çc]/.test(t)) return 'conciliacao';
+  return '';
+}
+/* Regra CMP dos avisos: a presença do CLIENTE é sempre obrigatória. Testemunha
+   depende do tipo — dispensada na inaugural/inicial/conciliação; necessária (e
+   comunicada com antecedência) na una/instrução e julgamento. */
+function _blocoPresenca(tipoAud){
+  var s='⚠️ A sua presença na audiência é OBRIGATÓRIA — reserve a data e o horário.';
+  if(tipoAud==='instrucao'){
+    s+='\n\nComo se trata de audiência de instrução (una), as TESTEMUNHAS também participam: precisamos comunicá-las com antecedência e elas devem comparecer no dia. Por favor, nos informe o quanto antes o nome e o telefone das suas testemunhas, caso ainda não tenha nos passado.';
+  } else if(tipoAud==='conciliacao'){
+    s+='\n\nNesta audiência (inaugural/conciliação) NÃO é necessário levar testemunhas — basta a sua presença.';
+  } else {
+    s+='\n\nSobre testemunhas: conforme o tipo da audiência, pode ser necessário comunicá-las e levá-las no dia. Vamos confirmar com você com antecedência.';
+  }
+  return s;
+}
 async function avisoAudienciaCliente(p, isoData, hora, tipo){
   try{
     if(!p || isInove(p)) return;
@@ -8212,11 +8244,16 @@ async function avisoAudienciaCliente(p, isoData, hora, tipo){
     var primeiro=(String(p.cliente||'').trim().split(/\s+/)[0]||'');
     var link=(typeof _linkAudiencia==='function')?_linkAudiencia(p):'';
     var linkTxt=link?('\n\nLink da audiência (sala virtual/videoconferência):\n'+link):'';
+    var tipoAud=_tipoAudienciaTexto(p,isoData);
     var corpo;
     if(tipo==='vespera'){
-      corpo='Olá'+(primeiro?(', '+primeiro):'')+'!\n\nLembrete: sua audiência no processo nº '+p.numero+' é AMANHÃ, dia '+dbr+horaTxt+'.'+linkTxt+'\n\nSe a sua presença for necessária, por favor confirme conosco. Em caso de dúvidas sobre local, formato (presencial ou por vídeo) ou documentos, estamos à disposição.';
+      corpo='Olá'+(primeiro?(', '+primeiro):'')+'!\n\nLembrete: sua audiência no processo nº '+p.numero+' é AMANHÃ, dia '+dbr+horaTxt+'.'+linkTxt
+        +'\n\n'+_blocoPresenca(tipoAud)
+        +'\n\nEm caso de dúvidas sobre local, formato (presencial ou por vídeo) ou documentos, estamos à disposição.';
     } else {
-      corpo='Olá'+(primeiro?(', '+primeiro):'')+'!\n\nInformamos que foi designada uma audiência no seu processo nº '+p.numero+', marcada para o dia '+dbr+horaTxt+'.'+linkTxt+'\n\nJá anotamos em nossa agenda e vamos acompanhar. Faremos um novo contato na véspera. Se precisarmos da sua presença ou de testemunhas, avisaremos com antecedência.';
+      corpo='Olá'+(primeiro?(', '+primeiro):'')+'!\n\nInformamos que foi designada uma audiência no seu processo nº '+p.numero+', marcada para o dia '+dbr+horaTxt+'.'+linkTxt
+        +'\n\n'+_blocoPresenca(tipoAud)
+        +'\n\nJá anotamos em nossa agenda e vamos acompanhar. Faremos um novo contato na véspera.';
     }
     corpo+='\n\n'+_assinaturaCMP('Djan')+(typeof _msgAcompProcCliente==='function'?_msgAcompProcCliente():'');
     var assunto=(tipo==='vespera')?('Lembrete: sua audiência é amanhã — processo '+p.numero):('Audiência designada no seu processo '+p.numero);
