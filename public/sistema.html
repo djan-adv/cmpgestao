@@ -782,6 +782,13 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
     </div>
     <label>Tipo</label>
     <select id="ev-tipo"><option value="tarefa">Tarefa</option><option value="prazo">Prazo</option><option value="audiencia">Audiência</option><option value="reuniao">Reunião</option><option value="manifestacao">Manifestação</option><option value="diligencia">Diligência</option><option value="evento">Evento</option></select>
+    <div id="ev-conf-box" style="display:none;border-radius:10px;padding:8px 11px;margin:8px 0 0">
+      <span id="ev-conf-txt" style="font-size:12.5px"></span>
+      <div style="margin-top:6px">
+        <button type="button" id="ev-conf-btn" class="btn sm" style="font-size:11.5px;background:#0F6E56;color:#fff" onclick="confirmarEventoCliente()">✓ Cliente confirmou</button>
+        <button type="button" id="ev-conf-desfazer" class="btn sm ghost" style="font-size:11.5px;display:none" onclick="desconfirmarEventoCliente()">desfazer</button>
+      </div>
+    </div>
     <div id="ev-corrigir" style="display:none;background:#fbeceb;border:1px solid #f3d4d1;border-radius:10px;padding:8px 11px;margin:8px 0 0">
       <span style="font-size:12px;font-weight:700;color:#b5342b">Marcado como audiência por engano?</span>
       <span class="note" style="display:block;margin:2px 0 6px;font-size:11.5px">Um clique corrige e salva — sai da aba "Reuniões e audiências" e vai para o lugar certo.</span>
@@ -1735,6 +1742,7 @@ function renderAudSemana(){
       if(a.org==='auto-sistema') selos+=' <span style="font-size:10px;background:#eaf4f4;color:#0b7285;border-radius:10px;padding:1px 7px;font-weight:600;white-space:nowrap">agendada automaticamente pelo sistema</span>';
       else { try{ var dig=String(num).replace(/\D/g,''); var pr2=(DADOS.processos||[]).find(function(x){return String(x.numero||'').replace(/\D/g,'')===dig;});
         if(pr2 && _audienciasFuturasDoHist(pr2).some(function(h){return h.iso===a.data;})) selos+=' <span style="font-size:10px;background:#eaf7f1;color:#0F6E56;border-radius:10px;padding:1px 7px;font-weight:600;white-space:nowrap">✓ conferida pelo histórico</span>'; }catch(e){} }
+      if(a.conf) selos+=' <span style="font-size:10px;background:#0F6E56;color:#fff;border-radius:10px;padding:1px 7px;font-weight:700;white-space:nowrap" title="'+esc(a.confPor||'')+'">✓ cliente confirmou</span>';
       return '<div style="display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--accentbg)">'
         +'<span style="min-width:86px;font-weight:700;color:var(--navy);font-size:13px">'+dia+' '+(a.hora||"")+'</span>'
         +'<div style="flex:1"><div style="font-weight:600;font-size:13.5px">'+esc(a.tt)+selos+'</div>'
@@ -2945,7 +2953,79 @@ function abrirEventoAgenda(e){
   if(selT){ selT.value=_tipoDaCor(e.tipo, e.tt); }
   var faixa=document.getElementById('ev-corrigir');
   if(faixa) faixa.style.display=(selT && selT.value==='audiencia')?'block':'none';
+  /* confirmação do cliente: só faz sentido em audiência e reunião */
+  var cb=document.getElementById('ev-conf-box');
+  if(cb){
+    var _tp=selT?selT.value:'';
+    cb.style.display=(_tp==='audiencia'||_tp==='reuniao')?'block':'none';
+    if(cb.style.display==='block') _evConfRender();
+  }
   m.classList.remove('hidden');
+}
+/* pinta o bloco de confirmação conforme o estado do evento, e busca no rastreio
+   se o e-mail de aviso já foi ABERTO (pixel) — indício, não prova */
+function _evConfRender(){
+  var e=_evEdit; if(!e) return;
+  var box=document.getElementById('ev-conf-box'), txt=document.getElementById('ev-conf-txt');
+  var btn=document.getElementById('ev-conf-btn'), des=document.getElementById('ev-conf-desfazer');
+  if(!box||!txt) return;
+  if(e.conf){
+    var d=new Date(e.conf);
+    box.style.background='#eaf7f1'; box.style.border='1px solid #bfe0cf';
+    txt.innerHTML='<b style="color:#0F6E56">✓ Cliente confirmou</b> em '+String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')
+      +(e.confPor?(' <span class="note" style="font-size:11px">— '+esc(e.confPor)+'</span>'):'');
+    if(btn) btn.style.display='none'; if(des) des.style.display='';
+  } else {
+    box.style.background='#f6f9fc'; box.style.border='1px solid #dbe6f2';
+    txt.innerHTML='<b style="color:#22405f">Cliente ainda não confirmou.</b> <span class="note" style="font-size:11px">O e-mail de aviso traz o botão "confirmo que recebi" — o clique do cliente marca sozinho. Se ele confirmar por WhatsApp/telefone, marque aqui.</span>';
+    if(btn) btn.style.display=''; if(des) des.style.display='none';
+  }
+  /* abertura do e-mail (pixel): busca o último aviso rastreado deste processo */
+  (function(){
+    try{
+      var dig=String((e.p&&e.p.numero)||'').replace(/\D/g,''); if(!dig) return;
+      window.__sb.from('email_rastreio').select('criado_em,aberto_em,para,evento_id').eq('numero',dig).order('criado_em',{ascending:false}).limit(1)
+        .then(function(r){
+          if(!r.data||!r.data.length) return;
+          var x=r.data[0], extra='';
+          function _dh(s){ var d=new Date(s); return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }
+          if(x.aberto_em) extra='📬 e-mail de aviso <b>aberto</b> em '+_dh(x.aberto_em)+' <span class="note" style="font-size:10.5px">(indício — imagens carregadas; a cópia oculta também conta)</span>';
+          else extra='📭 e-mail de aviso enviado em '+_dh(x.criado_em)+' — <b>ainda não aberto</b> <span class="note" style="font-size:10.5px">(ou o e-mail dele bloqueia imagens)</span>';
+          txt.innerHTML+='<div style="margin-top:4px;font-size:11.5px">'+extra+'</div>';
+        });
+    }catch(eR){}
+  })();
+}
+/* marca a confirmação à mão (cliente confirmou por WhatsApp/telefone/e-mail) */
+async function confirmarEventoCliente(){
+  var e=_evEdit; if(!e||!e.id){ alert('Este agendamento ainda não está gravado no banco.'); return; }
+  var canal=window.prompt('Cliente confirmou por onde?\n 1 = WhatsApp\n 2 = telefone\n 3 = e-mail\n(ou escreva)','1');
+  if(canal===null) return;
+  var nomeCanal=(canal==='1')?'WhatsApp':((canal==='2')?'telefone':((canal==='3')?'e-mail':(String(canal).trim()||'contato')));
+  try{
+    var agora=new Date().toISOString();
+    var quem=_quemAlterou()+' (cliente confirmou por '+nomeCanal+')';
+    var r=await window.__sb.from('agenda_eventos').update({confirmado_em:agora,confirmado_por:quem}).eq('id',e.id).select('id');
+    if(r.error){ alert('Não salvou: '+r.error.message); return; }
+    e.conf=agora; e.confPor=quem;
+    try{ await logAgendaHist(e._procResolvido||((e.p&&e.p.numero)||''), '[AGENDA] Cliente CONFIRMOU ('+nomeCanal+'): '+_evRotulo(e)); }catch(eH){}
+    _evConfRender();
+    try{ if(typeof renderAudSemana==='function') renderAudSemana(); }catch(e1){}
+    try{ if(typeof renderAudienciaSugestao==='function') renderAudienciaSugestao(); }catch(e2){}
+  }catch(er){ alert('Erro: '+((er&&er.message)||er)); }
+}
+async function desconfirmarEventoCliente(){
+  var e=_evEdit; if(!e||!e.id) return;
+  if(!confirm('Desfazer a confirmação do cliente?')) return;
+  try{
+    var r=await window.__sb.from('agenda_eventos').update({confirmado_em:null,confirmado_por:null}).eq('id',e.id).select('id');
+    if(r.error){ alert('Não salvou: '+r.error.message); return; }
+    e.conf=null; e.confPor='';
+    try{ await logAgendaHist(e._procResolvido||((e.p&&e.p.numero)||''), '[AGENDA] Confirmação do cliente DESFEITA: '+_evRotulo(e)); }catch(eH){}
+    _evConfRender();
+    try{ if(typeof renderAudSemana==='function') renderAudSemana(); }catch(e1){}
+    try{ if(typeof renderAudienciaSugestao==='function') renderAudienciaSugestao(); }catch(e2){}
+  }catch(er){ alert('Erro: '+((er&&er.message)||er)); }
 }
 /* acha o número de processo pelo nome do cliente (1º processo que bate) */
 function _processoPorCliente(nome){
@@ -4965,7 +5045,7 @@ function toggleConcluirTarefa(id){
          Agora carrega tudo em blocos (keyset por id). */
       var agRows=[], agLast=null;
       for(;;){
-        var agQ=sb.from('agenda_eventos').select('id,data,hora,tipo,titulo,resp,processo_numero,origem').order('id',{ascending:true}).limit(1000);
+        var agQ=sb.from('agenda_eventos').select('id,data,hora,tipo,titulo,resp,processo_numero,origem,confirmado_em,confirmado_por').order('id',{ascending:true}).limit(1000);
         if(agLast!==null) agQ=agQ.gt('id',agLast);
         var agR=await agQ;
         if(agR.error){ if(!agRows.length){ agRows=null; } break; }
@@ -4975,7 +5055,7 @@ function toggleConcluirTarefa(id){
       }
       var ag={error:(agRows===null), data:agRows||[]};
       if(!ag.error&&ag.data){
-        window.__AGDB=ag.data.map(function(e){return {id:e.id,data:String(e.data).slice(0,10),hora:e.hora||'09:00',tipo:e.tipo||'nt',tt:e.titulo,resp:e.resp||'',org:(e.origem||''),p:{numero:e.processo_numero||'—',cliente:''}};});
+        window.__AGDB=ag.data.map(function(e){return {id:e.id,data:String(e.data).slice(0,10),hora:e.hora||'09:00',tipo:e.tipo||'nt',tt:e.titulo,resp:e.resp||'',org:(e.origem||''),conf:(e.confirmado_em||null),confPor:(e.confirmado_por||''),p:{numero:e.processo_numero||'—',cliente:''}};});
         /* dedup de exibição: se houver cópias idênticas (mesmo processo+data+título),
            mostra UMA — as cópias continuam no banco até a limpeza, mas não poluem */
         (function(){ var seen={}; window.__AGDB=window.__AGDB.filter(function(e){ var k=e.data+'|'+(e.hora||'')+'|'+String(e.tt||'').slice(0,60)+'|'+String((e.p&&e.p.numero)||'').replace(/\D/g,''); if(seen[k]) return false; seen[k]=1; return true; }); })();
@@ -7951,6 +8031,9 @@ function renderAudienciaSugestao(){
     var selo='';
     if(e.org==='auto-sistema') selo='<span style="font-size:10px;background:#eaf4f4;color:#0b7285;border-radius:10px;padding:1px 7px;font-weight:600;white-space:nowrap">agendada automaticamente pelo sistema</span>';
     else if(auds.some(function(h){return h.iso===e.data;})) selo='<span style="font-size:10px;background:#eaf7f1;color:#0F6E56;border-radius:10px;padding:1px 7px;font-weight:600;white-space:nowrap">✓ conferida pelo histórico</span>';
+    selo+=e.conf
+      ? ' <span style="font-size:10px;background:#0F6E56;color:#fff;border-radius:10px;padding:1px 7px;font-weight:700;white-space:nowrap" title="'+esc(e.confPor||'')+'">✓ cliente confirmou</span>'
+      : ' <span style="font-size:10px;background:#fdf3e7;color:#8a5a00;border-radius:10px;padding:1px 7px;font-weight:600;white-space:nowrap" title="O e-mail de aviso traz o botão de confirmar; se ele confirmar por WhatsApp/telefone, use ✎ alterar e marque">aguardando confirmação do cliente</span>';
     html+='<div style="background:var(--dangerbg);border:1px solid #f0c8c4;border-radius:8px;padding:8px 11px;margin:0 0 10px;font-size:13px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">'
       +'<b style="color:var(--danger);font-size:13.5px">📅 AUDIÊNCIA — '+esc(br)+(e.hora&&e.hora!=='Dia todo'?(' às '+esc(e.hora)):'')+'</b>'
       +'<span class="note" style="margin:0">'+esc(e.tt||'')+'</span>'+selo
@@ -8101,8 +8184,13 @@ async function avisoAudienciaCliente(p, isoData, hora, tipo){
     }
     corpo+='\n\n'+_assinaturaCMP('Djan')+(typeof _msgAcompProcCliente==='function'?_msgAcompProcCliente():'');
     var assunto=(tipo==='vespera')?('Lembrete: sua audiência é amanhã — processo '+p.numero):('Audiência designada no seu processo '+p.numero);
+    /* evento da agenda desta audiência → liga o botão "confirmo presença" no e-mail */
+    var evConfId=null;
+    try{ var _dg=String(p.numero||'').replace(/\D/g,'');
+      var _ev=(window.__AGDB||[]).find(function(x){ return x && x.data===isoData && String((x.p&&x.p.numero)||'').replace(/\D/g,'')===_dg; });
+      evConfId=(_ev&&_ev.id)||null; }catch(eEv){}
     var tok=await docToken();
-    var r=await fetch('/api/enviar-email',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({para:email,assunto:assunto,corpo:corpo,numero:p.numero})});
+    var r=await fetch('/api/enviar-email',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({para:email,assunto:assunto,corpo:corpo,numero:p.numero,confirmar_evento:(evConfId||undefined)})});
     var j=await r.json().catch(function(){return {};});
     if(!r.ok||j.erro){
       /* falhou o envio: remove o marcador para tentar de novo depois */

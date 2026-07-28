@@ -90,6 +90,8 @@ export async function POST(request) {
   const r = await enviarEmailCore({
     para: body.para, cc: body.cc, assunto: body.assunto, corpo: body.corpo, numero: body.numero,
     inReplyTo: String(body.in_reply_to || ''),
+    // aviso de audiência: liga o botão "confirmo presença" apontando para o evento
+    confirmarEventoId: (body.confirmar_evento ? Number(body.confirmar_evento) : null) || null,
   })
   if (r.erro) return Response.json({ erro: r.erro, repetido: r.repetido }, { status: r.status || 500 })
 

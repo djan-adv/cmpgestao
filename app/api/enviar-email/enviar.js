@@ -32,6 +32,36 @@ async function anotarThread(raiz, numero, destinatario) {
   } catch (e) {}
 }
 
+// endereço público do sistema — os links do e-mail (pixel, botão de confirmar)
+// precisam funcionar no celular do cliente, então nunca podem ser 127.0.0.1
+export const URL_PUBLICA = (process.env.PUBLIC_URL || 'https://gestao.cmpadvogados.com.br').replace(/\/+$/, '')
+
+let _escCache = null
+async function escritorioPadrao(sb) {
+  if (_escCache) return _escCache
+  try { const r = await sb.from('escritorios').select('id').order('criado_em', { ascending: true }).limit(1).single(); _escCache = (r.data && r.data.id) || null } catch (e) {}
+  return _escCache
+}
+
+// Cria o token de rastreio deste envio (pixel de abertura e, se for aviso de
+// audiência, o botão "confirmo presença"). Best-effort: sem service key ou com
+// erro no banco, o e-mail sai sem rastreio — nunca deixa de sair por causa disso.
+async function criarRastreio({ para, numero, assunto, eventoId }) {
+  const svcKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!svcKey) return null
+  try {
+    const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, svcKey, { auth: { persistSession: false } })
+    const token = crypto.randomUUID().replace(/-/g, '')
+    const ins = await sb.from('email_rastreio').insert({
+      token, escritorio_id: await escritorioPadrao(sb),
+      para: String(para || '').toLowerCase(), numero: numero || '', assunto: (assunto || '').slice(0, 300),
+      evento_id: eventoId || null,
+    }).select('id').single()
+    if (ins.error) return null
+    return token
+  } catch (e) { return null }
+}
+
 export function emailValido(e) { return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(e || '').trim()) }
 export function hashEmail(assunto, corpo) { return crypto.createHash('sha1').update(String(assunto) + '\n' + String(corpo)).digest('hex') }
 
@@ -80,7 +110,9 @@ function esc(s) {
 
 // Envia de fato. Devolve { ok, de, id, copiado_enviados, copia_pasta, copia_motivo }
 // ou { erro, status, repetido }. Nunca lança.
-export async function enviarEmailCore({ para, cc, assunto, corpo, numero, dedup = true, inReplyTo = '' }) {
+// confirmarEventoId: id do evento da agenda — liga o botão "✅ Confirmo presença"
+// dentro do e-mail; o clique do cliente confirma o evento sozinho.
+export async function enviarEmailCore({ para, cc, assunto, corpo, numero, dedup = true, inReplyTo = '', confirmarEventoId = null }) {
   const host = process.env.SMTP_HOST
   const port = parseInt(process.env.SMTP_PORT || '465', 10)
   const smtpUser = process.env.SMTP_USER
@@ -133,11 +165,27 @@ export async function enviarEmailCore({ para, cc, assunto, corpo, numero, dedup 
     }
   } catch (e) {}
 
+  // rastreio: pixel de abertura + (se for aviso de audiência) botão de confirmar
+  const tokenRastreio = await criarRastreio({ para, numero, assunto, eventoId: confirmarEventoId })
+  let blocoConfirmar = ''
+  if (tokenRastreio && confirmarEventoId) {
+    const urlConf = URL_PUBLICA + '/api/email/confirmar?t=' + tokenRastreio
+    blocoConfirmar =
+      '<div style="text-align:center;padding:6px 0 14px">' +
+        '<a href="' + urlConf + '" style="display:inline-block;background:#0F6E56;color:#fff;text-decoration:none;padding:12px 26px;border-radius:24px;font-size:15px;font-weight:700">&#9989; Confirmo que recebi este aviso</a>' +
+        '<div style="font-size:11.5px;color:#8a8f98;margin-top:6px">Um clique basta — n&atilde;o precisa responder este e-mail.</div>' +
+      '</div>'
+  }
+  const pixel = tokenRastreio
+    ? '<img src="' + URL_PUBLICA + '/api/email/abertura?t=' + tokenRastreio + '" width="1" height="1" alt="" style="display:block;width:1px;height:1px;border:0">'
+    : ''
+
   const corpoHtml = esc(corpo).replace(/\n/g, '<br>')
   const html =
     '<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#1e2733;max-width:600px;margin:0 auto;padding:8px">' +
       '<div style="text-align:center;padding:6px 0 2px">' + logoTag + '</div>' +
       '<div style="border-top:3px solid #b8912e;padding:16px 6px;line-height:1.55">' + corpoHtml + '</div>' +
+      blocoConfirmar +
       '<div style="text-align:center;padding:14px 0;border-top:1px solid #eaeaea;margin-top:6px">' +
         '<div style="font-size:12px;color:#8a8f98;margin-bottom:8px">Acompanhe o escritório:</div>' +
         '<a href="https://instagram.com/cmpadvs" style="display:inline-block;background:#2E3A4B;color:#fff;text-decoration:none;padding:8px 16px;border-radius:20px;font-size:13px;margin:2px 4px">Instagram @cmpadvs</a>' +
@@ -155,7 +203,8 @@ export async function enviarEmailCore({ para, cc, assunto, corpo, numero, dedup 
     from: '"' + fromName + '" <' + smtpUser + '>',
     to: para,
     subject: assunto,
-    text: corpo,
+    // texto puro: o link de confirmação vai por extenso (clientes sem HTML)
+    text: corpo + ((tokenRastreio && confirmarEventoId) ? ('\n\nPara confirmar que recebeu este aviso, basta abrir o link (um clique, sem precisar responder):\n' + URL_PUBLICA + '/api/email/confirmar?t=' + tokenRastreio) : ''),
     html,
     attachments,
     messageId,
