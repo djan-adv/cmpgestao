@@ -20,7 +20,10 @@
 //
 // Segurança:
 //  - exige usuário autenticado no CMPGestão (qualquer conta do escritório);
-//  - a chave secreta do assinador (SIGN_SUPABASE_SERVICE_ROLE_KEY) fica só no servidor.
+//  - no banco do assinador o servidor usa a chave secreta (SIGN_SUPABASE_SERVICE_ROLE_KEY)
+//    ou, se ela não estiver configurada, a CONTA DE SERVIÇO do assinador — um login
+//    exclusivo do servidor que as políticas RLS de lá (is_admin) tratam como admin.
+//    As credenciais dela só valem no projeto do assinador e nunca vão ao navegador.
 
 import { createClient } from '@supabase/supabase-js'
 import { randomUUID } from 'crypto'
@@ -30,13 +33,44 @@ export const maxDuration = 30
 
 const CMP_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
 const CMP_ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+const CMP_SERVICE = process.env.SUPABASE_SERVICE_ROLE_KEY
 const SIGN_URL = process.env.NEXT_PUBLIC_SIGN_SUPABASE_URL || 'https://fjboytucivmdykkfpdhs.supabase.co'
+const SIGN_KEY = process.env.NEXT_PUBLIC_SIGN_SUPABASE_ANON_KEY || 'sb_publishable_9K2-GBTRb7ZYd5dkjPoeZA_kPPNElex'
 const SIGN_SERVICE = process.env.SIGN_SUPABASE_SERVICE_ROLE_KEY
 
 const BUCKETS = ['documentos', 'assinaturas']
 
-function admin() {
-  return createClient(SIGN_URL, SIGN_SERVICE, { auth: { autoRefreshToken: false, persistSession: false } })
+// Credenciais da conta de serviço: ficam na tabela app_secrets do banco do CMP
+// (RLS sem políticas — só a service role do CMP lê). Nada de segredo no código.
+async function credenciaisServico() {
+  if (process.env.SIGN_SERVICE_ACCOUNT_EMAIL && process.env.SIGN_SERVICE_ACCOUNT_SENHA) {
+    return { email: process.env.SIGN_SERVICE_ACCOUNT_EMAIL, senha: process.env.SIGN_SERVICE_ACCOUNT_SENHA }
+  }
+  if (!CMP_SERVICE) return null
+  const cmp = createClient(CMP_URL, CMP_SERVICE, { auth: { autoRefreshToken: false, persistSession: false } })
+  const { data } = await cmp.from('app_secrets').select('valor').eq('chave', 'sign_service_account').maybeSingle()
+  if (!data || !data.valor || !data.valor.email || !data.valor.senha) return null
+  return { email: data.valor.email, senha: data.valor.senha }
+}
+
+let _svc = null // sessão da conta de serviço reaproveitada entre requisições
+async function admin() {
+  if (SIGN_SERVICE) {
+    return createClient(SIGN_URL, SIGN_SERVICE, { auth: { autoRefreshToken: false, persistSession: false } })
+  }
+  if (_svc) {
+    const s = await _svc.auth.getSession()
+    const exp = s && s.data && s.data.session && s.data.session.expires_at
+    if (exp && exp * 1000 > Date.now() + 60000) return _svc
+    _svc = null
+  }
+  const cred = await credenciaisServico()
+  if (!cred) throw new Error('Assinador não configurado: falta SIGN_SUPABASE_SERVICE_ROLE_KEY ou a conta de serviço em app_secrets.')
+  const c = createClient(SIGN_URL, SIGN_KEY, { auth: { autoRefreshToken: false, persistSession: false } })
+  const r = await c.auth.signInWithPassword({ email: cred.email, password: cred.senha })
+  if (r.error) throw new Error('Assinador indisponível (conta de serviço): ' + r.error.message)
+  _svc = c
+  return c
 }
 
 async function usuarioCMP(request) {
@@ -54,14 +88,11 @@ export async function POST(request) {
 
   const user = await usuarioCMP(request)
   if (!user) return Response.json({ erro: 'Faça login no CMPGestão para usar o módulo de assinaturas.' }, { status: 401 })
-  if (!SIGN_SERVICE) {
-    return Response.json({ erro: 'Falta configurar SIGN_SUPABASE_SERVICE_ROLE_KEY no servidor (chave secreta do projeto do assinador).' }, { status: 500 })
-  }
 
-  const sb = admin()
   const acao = body.acao
 
   try {
+    const sb = await admin()
     if (acao === 'listar') {
       const { data, error } = await sb.from('documentos')
         .select('*, signatarios(*)')

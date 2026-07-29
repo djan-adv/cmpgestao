@@ -11912,8 +11912,16 @@ function _prdPontosTarefa(ev){
   if(/recurso|recorrer|embarg/.test(txt)) return (PRD_PESOS['recurso']||{}).pontos||0;
   if(/c[áa]lculo/.test(txt)) return (PRD_PESOS['calculos']||{}).pontos||0;
   if(/endere[çc]o|gratuidade/.test(txt)) return (PRD_PESOS['correcao_endereco_gratuidade']||{}).pontos||0;
+  /* tipos personalizados (criados na config): casa se o título contém o rótulo */
+  var tipos=Object.keys(PRD_PESOS||{});
+  for(var i=0;i<tipos.length;i++){
+    if(PRD_TIPOS_FIXOS.indexOf(tipos[i])>=0) continue;
+    var rot=String((PRD_PESOS[tipos[i]]||{}).rotulo||'').toLowerCase().trim();
+    if(rot && txt.indexOf(rot)>=0) return (PRD_PESOS[tipos[i]]||{}).pontos||0;
+  }
   return parseFloat(_prdCfg('peso_default','1'))||1;
 }
+var PRD_TIPOS_FIXOS=['peticao_inicial','contestacao','agravo','contrarrazoes','recurso','calculos','correcao_endereco_gratuidade'];
 /* tempo ativo derivado: soma janelas entre eventos consecutivos, descartando
    pausas > IDLE_TIMEOUT — exceto pausa seguida de entrega (task_completed),
    que conta como trabalho fora do sistema ("tempo em entregável"). */
@@ -12021,10 +12029,44 @@ async function renderProdutividadeConfig(){
   html+='</tbody></table>';
   html+='<p style="margin:10px 0 4px;font-weight:700;color:var(--navy);font-size:13px">Pesos por tipo de tarefa</p><table style="font-size:13px"><tbody>';
   Object.keys(PRD_PESOS||{}).forEach(function(t){
-    html+='<tr><td style="color:var(--muted);padding:2px 12px 2px 0">'+finEsc(PRD_PESOS[t].rotulo)+'</td><td><b>'+PRD_PESOS[t].pontos+' pts</b> <a onclick="editarPrdPeso(\''+t+'\')" style="cursor:pointer;color:#185FA5;font-size:12px">✎</a></td></tr>';
+    var custom=PRD_TIPOS_FIXOS.indexOf(t)<0;
+    html+='<tr><td style="color:var(--muted);padding:2px 12px 2px 0">'+finEsc(PRD_PESOS[t].rotulo)+(custom?' <span style="font-size:10px;background:#eef4fb;color:#185FA5;border-radius:8px;padding:1px 6px">novo</span>':'')+'</td>'
+      +'<td><b>'+PRD_PESOS[t].pontos+' pts</b> <a onclick="editarPrdPeso(\''+t+'\')" style="cursor:pointer;color:#185FA5;font-size:12px">✎</a>'
+      +(custom?' <a onclick="removerPrdTipo(\''+t+'\')" style="cursor:pointer;color:#b5342b;font-size:12px" title="Remover tipo">🗑</a>':'')
+      +'</td></tr>';
   });
   html+='</tbody></table>';
+  html+='<p style="margin:8px 0 0"><a onclick="adicionarPrdTipo()" style="cursor:pointer;color:#185FA5;font-weight:700;font-size:13px">+ adicionar tipo de tarefa</a>'
+    +'<span class="note" style="display:block;margin-top:2px">A tarefa pontua quando o título contém o nome do tipo (ex.: crie o tipo "Contrato confeccionado" e conclua a tarefa "Contrato confeccionado — cliente X").</span></p>';
   el.innerHTML=html;
+}
+/* tipos personalizados de tarefa: criam pontuação nova sem mexer em código */
+async function adicionarPrdTipo(){
+  var rotulo=window.prompt('Nome do novo tipo de tarefa (ex.: "Contrato confeccionado", "Atendimento novo cliente — CRM fechado"):','');
+  if(rotulo===null) return; rotulo=String(rotulo).trim(); if(!rotulo) return;
+  var v=window.prompt('Pontos para "'+rotulo+'":','10');
+  if(v===null) return; var n=parseFloat(String(v).replace(',','.')); if(isNaN(n)||n<0){ alert('Valor inválido.'); return; }
+  var tipo=rotulo.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'').slice(0,40)||('tipo_'+Date.now());
+  if(PRD_PESOS && PRD_PESOS[tipo]){ alert('Já existe um tipo com esse nome.'); return; }
+  try{
+    var esc=window.__prodEsc||await (async function(){ await _prodIds(); return window.__prodEsc; })();
+    var r=await window.__sb.from('task_weights').insert({escritorio_id:esc,tipo:tipo,rotulo:rotulo,pontos:n});
+    if(r&&r.error){ alert('Erro: '+r.error.message); return; }
+    if(!PRD_PESOS) PRD_PESOS={};
+    PRD_PESOS[tipo]={rotulo:rotulo,pontos:n}; logEvent('config_changed','task_weights',tipo,{rotulo:rotulo,pontos:n,acao:'criado'});
+    renderProdutividade();
+  }catch(e){ alert('Erro: '+(e&&e.message||e)); }
+}
+async function removerPrdTipo(tipo){
+  var rot=(PRD_PESOS[tipo]||{}).rotulo||tipo;
+  if(!window.confirm('Remover o tipo "'+rot+'"? Tarefas com esse nome passam a valer o peso padrão.')) return;
+  try{
+    var esc=window.__prodEsc||await (async function(){ await _prodIds(); return window.__prodEsc; })();
+    var r=await window.__sb.from('task_weights').delete().eq('escritorio_id',esc).eq('tipo',tipo);
+    if(r&&r.error){ alert('Erro: '+r.error.message); return; }
+    delete PRD_PESOS[tipo]; logEvent('config_changed','task_weights',tipo,{acao:'removido'});
+    renderProdutividade();
+  }catch(e){ alert('Erro: '+(e&&e.message||e)); }
 }
 async function editarPrdConfig(chave){
   var v=window.prompt('Novo valor para "'+chave+'":', _prdCfg(chave,''));
