@@ -4,7 +4,7 @@
 // As assinaturas entram no documento com trilha de auditoria.
 import { useEffect, useState, useCallback } from 'react'
 import { signSb } from '../../../lib/supabaseAssinatura'
-import { apiAssinatura } from '../../../lib/assinaturaApi'
+import { apiAssinatura, enviarLinkAssinatura } from '../../../lib/assinaturaApi'
 
 const NAVY = '#2E3A4B'
 const estCampo = { width: '100%', padding: 10, border: '1px solid #d9dde3', borderRadius: 8, fontSize: 14, boxSizing: 'border-box' }
@@ -96,10 +96,8 @@ export default function DocumentoAvulso() {
   }
 
   async function enviarEmail(link, to, nome, tituloDoc) {
-    try {
-      const r = await signSb.functions.invoke('enviar-email', { body: { to, nome: nome || '', titulo: tituloDoc, link } })
-      return !(r.error || (r.data && r.data.ok === false))
-    } catch { return false }
+    // sai pelo servidor do CMP (contato@) — a edge function do assinador dava 500
+    return enviarLinkAssinatura({ to, nome: nome || '', titulo: tituloDoc, link })
   }
 
   async function gerar() {
