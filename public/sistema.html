@@ -6657,6 +6657,27 @@ async function renderRelatorioMensal(){
   html+='</tbody></table></div>';
   lista.innerHTML=html;
 }
+/* ===== Proteção contra a seta "voltar" do navegador (e o botão lateral do mouse):
+   numa página única, o Voltar saía do site e DERRUBAVA a ficha no meio da edição.
+   Agora: Voltar com ficha aberta = volta à lista (dentro do sistema); Voltar nas
+   demais telas = segura na página. Fechar/recarregar com edição aberta pede
+   confirmação. ===== */
+try{
+  history.pushState({cmp:1},'');
+  window.addEventListener('popstate', function(){
+    history.pushState({cmp:1},'');
+    try{
+      var sec=document.querySelector('section[id^="s-"]:not(.hidden)');
+      /* com modal/cartão aberto, não navega — só segura a saída */
+      if(document.getElementById('modal-atudados')||document.querySelector('.overlay:not(.hidden)')) return;
+      if(sec&&sec.id==='s-proc-det'&&typeof go==='function') go(window.__voltarPara||'processos');
+    }catch(e){}
+  });
+  window.addEventListener('beforeunload', function(e){
+    var editando=document.getElementById('modal-atudados')||document.querySelector('.overlay:not(.hidden)');
+    if(editando){ e.preventDefault(); e.returnValue=''; }
+  });
+}catch(e){}
 /* ===== Lotes personalizados (pastas do menu esquerdo · engrenagem de config) ===== */
 window.__LOTES=window.__LOTES||[];
 function loteById(id){ return (window.__LOTES||[]).find(function(x){return String(x.id)===String(id);}); }
