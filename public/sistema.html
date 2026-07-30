@@ -845,7 +845,11 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
 <div id="modal-lead" class="overlay hidden"><div class="modal" style="max-width:min(1120px,94vw);width:94vw">
   <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
     <h2 id="ml-titulo" style="margin:0">Lead</h2>
-    <span class="note" style="font-size:12px;margin:0">📋 <b>Ctrl+V</b> em qualquer lugar desta janela: colo o texto nas Anotações e preencho nome, telefone, e-mail e processo sozinhos</span>
+    <span style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <span class="note" style="font-size:12px;margin:0">📋 <b>Ctrl+V</b>: print vira anexo (e a IA lê); texto preenche os campos</span>
+      <button class="btn sm ghost" onclick="document.getElementById('ml-file').click()" title="Subir PDF, print ou Word — anexa ao lead e a IA lê para preencher os campos">📎 subir PDF/print</button>
+      <input id="ml-file" type="file" multiple accept=".pdf,image/*,.doc,.docx" style="display:none" onchange="mlSubirArquivos(this.files)">
+    </span>
   </div>
   <div id="l-capt" class="note" style="margin:4px 0 6px"></div>
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:0 16px">
@@ -3981,32 +3985,53 @@ function fecharLead(){document.getElementById("modal-lead").classList.add("hidde
     }
     return preencheu;
   }
+  function _mlSetIf(id,val,rot,lista){ var el=document.getElementById(id); if(el&&val&&!String(el.value||'').trim()){ el.value=val; lista.push(rot); } }
+  /* sobe arquivos (print colado ou PDF pelo botão), anexa ao lead e manda a IA ler
+     para preencher os campos vazios do formulário */
+  window.mlSubirArquivos=async function(fileList){
+    var files=[].slice.call(fileList||[]); if(!files.length) return;
+    var l=window._ledit; if(!l) return;
+    if(!l.arquivos) l.arquivos=[]; if(!l._pasta) l._pasta='card_'+_uuidL();
+    var sb=window.__sb; if(!sb){ _mlMsg('sem sessão — faça login para anexar.'); return; }
+    _mlMsg('⏳ enviando '+files.length+' arquivo(s)…');
+    var ok=0, novos=[];
+    for(var j=0;j<files.length;j++){
+      var f2=files[j];
+      var nome=(f2.name&&f2.name!=='image.png')?f2.name:('print-'+new Date().toISOString().slice(0,16).replace(/[T:]/g,'-')+'-'+(j+1)+'.png');
+      var path=l._pasta+'/'+_slugArq(nome);
+      try{
+        var up=await sb.storage.from(LEADS_BUCKET).upload(path,f2,{upsert:true,contentType:(f2.type||'application/octet-stream')});
+        if(!up.error){ l.arquivos.push({nome:nome,path:path,tipo:(f2.type||''),tamanho:f2.size,quando:new Date().toISOString()}); novos.push(path); ok++; }
+      }catch(e2){}
+    }
+    l.ultimaAtividade=new Date().toISOString();
+    try{ salvarLeadsLocal(); }catch(e3){}
+    try{ var mf=document.getElementById('ml-file'); if(mf) mf.value=''; }catch(e4){}
+    if(!ok){ _mlMsg('não consegui anexar — tente pelo 📎 Arquivos do card.'); return; }
+    /* IA lê o que subiu e preenche os campos VAZIOS (nada é sobrescrito) */
+    _mlMsg('✓ '+ok+' arquivo(s) anexado(s) · 🤖 lendo com a IA…');
+    try{
+      var r=await sb.functions.invoke('ler-lead',{ body:{ paths:novos,
+        mensagem:((document.getElementById('l-obs')||{}).value||''),
+        nome:((document.getElementById('l-nome')||{}).value||''),
+        telefone:((document.getElementById('l-tel')||{}).value||'') } });
+      var card=(r&&r.data&&r.data.card)||{};
+      if(r&&r.data&&r.data.memoria) l.memoria=r.data.memoria;
+      var pf=[];
+      _mlSetIf('l-nome',card.nome,'nome',pf);
+      _mlSetIf('l-tel',card.telefone,'telefone',pf);
+      _mlSetIf('l-procref',card.processo,'processo',pf);
+      _mlSetIf('l-acao',card.assunto,'próxima ação',pf);
+      if(card.observacao){ var ob=document.getElementById('l-obs'); if(ob){ ob.value=(ob.value?ob.value.replace(/\s+$/,'')+'\n\n':'')+card.observacao; pf.push('anotações'); } }
+      _mlMsg(pf.length?('✓ anexado · 🤖 a IA preencheu: <b>'+pf.join(', ')+'</b> — confira.'):'✓ anexado. A IA leu, mas não achou dado novo para os campos.');
+    }catch(eIA){ _mlMsg('✓ '+ok+' arquivo(s) anexado(s) (IA indisponível agora).'); }
+  };
   var ml=document.getElementById('modal-lead'); if(!ml||ml.__pv) return; ml.__pv=1;
   ml.addEventListener('paste', async function(e){
     var cd=e.clipboardData; if(!cd) return;
-    /* imagem/arquivo no clipboard (print) → anexo do lead na hora */
+    /* imagem/arquivo no clipboard (print) → anexo do lead na hora + leitura da IA */
     var files=[]; for(var i=0;i<(cd.items?cd.items.length:0);i++){ var it=cd.items[i]; if(it.kind==='file'){ var f=it.getAsFile(); if(f) files.push(f); } }
-    if(files.length){
-      e.preventDefault();
-      var l=window._ledit; if(!l) return;
-      if(!l.arquivos) l.arquivos=[]; if(!l._pasta) l._pasta='card_'+_uuidL();
-      var sb=window.__sb; if(!sb){ _mlMsg('sem sessão — faça login para anexar.'); return; }
-      _mlMsg('⏳ enviando print…');
-      var ok=0;
-      for(var j=0;j<files.length;j++){
-        var f2=files[j];
-        var nome=(f2.name&&f2.name!=='image.png')?f2.name:('print-'+new Date().toISOString().slice(0,16).replace(/[T:]/g,'-')+'-'+(j+1)+'.png');
-        var path=l._pasta+'/'+_slugArq(nome);
-        try{
-          var up=await sb.storage.from(LEADS_BUCKET).upload(path,f2,{upsert:true,contentType:(f2.type||'image/png')});
-          if(!up.error){ l.arquivos.push({nome:nome,path:path,tipo:(f2.type||''),tamanho:f2.size,quando:new Date().toISOString()}); ok++; }
-        }catch(e2){}
-      }
-      l.ultimaAtividade=new Date().toISOString();
-      try{ salvarLeadsLocal(); }catch(e3){}
-      _mlMsg(ok?('✓ '+ok+' print(s) anexado(s) ao lead — estão em 📎 Arquivos.'):'não consegui anexar o print — tente pelo 📎 Arquivos do card.');
-      return;
-    }
+    if(files.length){ e.preventDefault(); window.mlSubirArquivos(files); return; }
     /* texto → preenche campos vazios; colado fora de um campo, cai nas Anotações */
     var txt=cd.getData('text')||'';
     if(!txt||txt.length<5) return;
@@ -5822,6 +5847,12 @@ async function gerarCasoNovoCliente(){
   if(DADOS.kpis) DADOS.kpis.total=DADOS.processos.length;
   var digCaso=num.replace(/\D/g,'');
   var anexos=(window.__cmDocs||[]).slice();
+  /* TUDO do lead (prints, PDFs colados no card) vai junto para o caso criado */
+  var _leadTransf=window.__cadLead;
+  if(_leadTransf && _leadTransf.arquivos && _leadTransf.arquivos.length){
+    transferirArqsLeadParaProc(_leadTransf, num).catch(function(){});
+  }
+  window.__cadLead=null;
   fecharCadManual();
   var idx=DADOS.processos.indexOf(novo);
   go('processos'); if(idx>=0) abrir(idx);
