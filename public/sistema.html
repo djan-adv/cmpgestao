@@ -1813,12 +1813,10 @@ function abrir(i){
   var html='';
   // cabeçalho: partes no mesmo tamanho, cliente em negrito e marcado
   var __enc=/encerr/i.test(p.status||'');
+  // cabeçalho ENXUTO e estável: só os nomes (os botões de edição moram no card "Partes",
+  // para não ficarem "andando" conforme o tamanho dos nomes — memória visual das fichas)
   html+='<div class="card" style="position:relative">'+honQuadroHTML(p)+'<div class="parties" style="padding-right:0"><span style="display:inline-block;vertical-align:top;line-height:1.15"><span class="cli">'+nomeDisplay(p.cliente)+'</span><br><span class="tag-cli" style="margin:3px 0 0;font-size:9px;padding:1px 7px;display:inline-block">cliente principal</span></span>'+
-    '<span class="vs" style="vertical-align:top">×</span><span style="display:inline-block;vertical-align:top;line-height:1.15"><span class="op">'+nomeDisplay(p.oponente||'—')+'</span><br><span style="font-size:9.5px;color:var(--muted);display:inline-block;margin-top:3px">parte contrária</span></span>'+
-    '<button class="btn sm ghost" style="margin-left:12px;font-size:11px;padding:4px 9px;vertical-align:top" onclick="editarPartesContatos()" title="Editar as partes, o assunto e os contatos do processo — tudo num lugar só">✎ editar dados</button>'+
-    '<button class="btn sm ghost" style="margin-left:6px;font-size:11px;padding:4px 9px;vertical-align:top" onclick="atualizarDadosCliente()" title="Lê a procuração e a petição inicial (Word e PDF) e sugere o nome completo, o e-mail e o telefone do cliente">🔄 Atualizar dados do cliente</button>'+
-    '<button class="btn sm ghost" style="margin-left:6px;font-size:11px;padding:4px 9px;vertical-align:top" onclick="inverterPolos()" title="Trocar cliente ↔ oponente (o cliente fica sempre à esquerda)">⇄ inverter polos</button>'+
-    ((!p.oponente||!String(p.oponente).trim())?'<button class="btn sm ghost" style="margin-left:6px;font-size:11px;padding:4px 9px;vertical-align:top" onclick="sugerirPartes()" title="Ler o histórico do processo e sugerir os nomes das partes que estão faltando">✨ sugerir partes pelo histórico</button>':'')+'</div>'+
+    '<span class="vs" style="vertical-align:top">×</span><span style="display:inline-block;vertical-align:top;line-height:1.15"><span class="op">'+nomeDisplay(p.oponente||'—')+'</span><br><span style="font-size:9.5px;color:var(--muted);display:inline-block;margin-top:3px">parte contrária</span></span></div>'+
     '<div class="subhead" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">'+_numFichaHTML(p)+
     (typeof JALINE!=='undefined'&&JALINE[String(p.numero||'').replace(/\D/g,'')]?'<span class="pill" style="background:var(--gold);color:#fff" title="Pasta de Jaline — honorários exclusivos Djan e Jaline">Jaline</span>':'')+
     '<span id="proc-vinculados" style="display:inline-flex;gap:6px;flex-wrap:wrap;align-items:center"></span></div>'+
@@ -1828,6 +1826,8 @@ function abrir(i){
     /* ponto 12: bloco de processos vinculados no canto inferior direito da aba (perto do botão Encerrar) */
     '<div id="proc-vinculados-rodape" style="position:absolute;bottom:12px;right:14px;max-width:60%;display:flex;gap:6px;flex-wrap:wrap;align-items:center;justify-content:flex-end;font-size:12px"></div>'+
     '</div>';
+  // card "Partes": nomes copiáveis com CPF/CNPJ abaixo + botões de edição num lugar FIXO
+  html+=_partesCardHTML(p);
   // dados do processo
   html+='<div class="card" id="card-dados-proc"><p class="sectlabel">Dados do processo</p><div style="font-size:13.5px;line-height:1.6;color:var(--ink)">'+
     (function(){
@@ -2094,6 +2094,81 @@ function nomeDisplay(nome, maxPrim){
   var w=t.split(' '); var mp=maxPrim||3;
   if(w.length<=mp+1 && t.length<=30) return esc(t);
   return esc(w.slice(0,mp).join(' '))+'<br><span style="font-size:0.72em;font-weight:400;opacity:.85">'+esc(w.slice(mp).join(' '))+'</span>';
+}
+/* ===== card "Partes" da ficha: nomes + CPF/CNPJ copiáveis, botões de edição fixos ===== */
+function _partesSplit(s){
+  var out=[];
+  String(s||'').split(/[;\n]+/).forEach(function(t){
+    t=t.trim(); if(!t||t==='—') return;
+    // separa por " e " apenas quando os dois lados parecem nomes completos (2+ palavras),
+    // para não quebrar razões sociais como "Crispim, Mendonça e Pinheiro"
+    var partes=t.split(/\s+e\s+/i);
+    var ok=partes.length>1 && partes.every(function(x){ return x.trim().split(/\s+/).length>=2; });
+    (ok?partes:[t]).forEach(function(x){ x=x.trim(); if(x) out.push(x); });
+  });
+  return out;
+}
+function _fmtDocParte(d){
+  d=String(d||'').replace(/\D/g,'');
+  if(d.length===11) return d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/,'$1.$2.$3-$4');
+  if(d.length===14) return d.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/,'$1.$2.$3/$4-$5');
+  return '';
+}
+function copiarParte(el){
+  var v=el.getAttribute('data-v')||el.textContent;
+  try{ navigator.clipboard.writeText(v); }catch(e){}
+  if(el.__tip) return;
+  var tip=document.createElement('span'); tip.textContent=' copiado ✓';
+  tip.style.cssText='color:#0F6E56;font-size:10.5px;font-weight:700'; el.__tip=tip;
+  var bg=el.style.background; el.style.background='#d9f2e4'; el.appendChild(tip);
+  setTimeout(function(){ el.style.background=bg||''; try{ el.removeChild(tip); }catch(e){} el.__tip=null; },900);
+}
+function _parteItemHTML(nome){
+  var nk=normClienteNome(nome);
+  return '<div style="margin:0 0 9px;line-height:1.25">'
+    +'<span onclick="copiarParte(this)" data-v="'+esc(nome)+'" title="Clique para copiar o nome" style="cursor:copy;font-weight:600;color:var(--ink);border-radius:4px;padding:1px 3px;margin-left:-3px">'+esc(nome)+'</span>'
+    +'<br><span class="parte-doc-slot" data-nk="'+esc(nk)+'" onclick="if(this.getAttribute(\'data-v\'))copiarParte(this)" style="cursor:copy;font-size:11.5px;color:var(--muted);opacity:.8;border-radius:4px;padding:1px 3px;margin-left:-3px"></span>'
+    +'</div>';
+}
+function _partesCardHTML(p){
+  var todosA=_partesSplit(p.cliente), todosR=_partesSplit(p.oponente);
+  var autores=todosA.slice(0,4), reus=todosR.slice(0,3);
+  var col=function(rot, itens, sobra){
+    return '<div><div style="font-size:10.5px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);margin-bottom:7px">'+rot+'</div>'
+      +(itens.length?itens.map(_parteItemHTML).join(''):'<div class="note">—</div>')
+      +(sobra>0?'<div class="note" style="font-size:11px">+ '+sobra+' outro(s) — veja em ✎ editar dados</div>':'')+'</div>';
+  };
+  var html='<div class="card" id="card-partes"><p class="sectlabel" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px">Partes'
+    +'<span style="display:flex;gap:6px;flex-wrap:wrap">'
+    +'<button class="btn sm ghost" style="font-size:11px;padding:4px 9px" onclick="editarPartesContatos()" title="Editar as partes, o assunto e os contatos do processo — tudo num lugar só">✎ editar dados</button>'
+    +'<button class="btn sm ghost" style="font-size:11px;padding:4px 9px" onclick="atualizarDadosCliente()" title="Lê a procuração e a petição inicial (Word e PDF) e sugere o nome completo, o e-mail e o telefone do cliente">🔄 Atualizar dados do cliente</button>'
+    +'<button class="btn sm ghost" style="font-size:11px;padding:4px 9px" onclick="inverterPolos()" title="Trocar cliente ↔ oponente (o cliente fica sempre à esquerda)">⇄ inverter polos</button>'
+    +((!p.oponente||!String(p.oponente).trim())?'<button class="btn sm ghost" style="font-size:11px;padding:4px 9px" onclick="sugerirPartes()" title="Ler o histórico do processo e sugerir os nomes das partes que estão faltando">✨ sugerir partes</button>':'')
+    +'</span></p>'
+    +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px">'
+    +col('Autor — nosso cliente', autores, todosA.length-autores.length)
+    +col('Réu — parte contrária', reus, todosR.length-reus.length)
+    +'</div><p class="note" style="margin:6px 0 0;font-size:11px">Clique no nome ou no CPF/CNPJ para copiar.</p></div>';
+  setTimeout(_preencherDocsPartes, 60);
+  return html;
+}
+async function _preencherDocsPartes(){
+  var slots=document.querySelectorAll('#card-partes .parte-doc-slot'); if(!slots.length) return;
+  if(!window.__docsPorNome){
+    window.__docsPorNome={};
+    try{
+      var r=await window.__sb.from('contatos').select('nome,cpf_cnpj').limit(5000);
+      (r.data||[]).forEach(function(c){
+        var d=String(c.cpf_cnpj||'').replace(/\D/g,'');
+        if((d.length===11||d.length===14)&&c.nome) window.__docsPorNome[normClienteNome(c.nome)]=d;
+      });
+    }catch(e){}
+  }
+  slots.forEach(function(s){
+    var d=window.__docsPorNome[s.getAttribute('data-nk')||''];
+    if(d){ s.setAttribute('data-v',_fmtDocParte(d)); s.textContent=_fmtDocParte(d); s.title='Clique para copiar'; }
+    else { s.textContent='CPF/CNPJ não cadastrado'; s.style.cursor='default'; s.style.opacity='.45'; s.style.fontStyle='italic'; }
+  });
 }
 function renderContatos(){
   seedContatos();
