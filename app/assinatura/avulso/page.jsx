@@ -103,7 +103,9 @@ export default function DocumentoAvulso() {
     setMsg({ texto: 'Enviando arquivo…', ok: true })
     const docId = crypto.randomUUID()
     const path = docId + '/original.pdf'
-    const up = await signSb.storage.from('documentos').upload(path, pdfBlob, { contentType: 'application/pdf', upsert: true })
+    // sem upsert: o caminho é um uuid novo, e upsert (ON CONFLICT) exige política de
+    // SELECT no storage — que o papel público não tem, de propósito (privacidade).
+    const up = await signSb.storage.from('documentos').upload(path, pdfBlob, { contentType: 'application/pdf' })
     if (up.error) { setMsg({ texto: 'Erro ao enviar arquivo: ' + up.error.message, ok: false }); setBusy(false); return }
 
     const r = await apiAssinatura({ acao: 'criar', tipo: 'upload', doc_id: docId, titulo: titulo.trim(), arquivo_path: path, signatarios: validos })
@@ -170,7 +172,15 @@ export default function DocumentoAvulso() {
       page.drawText('Assinado eletronicamente nos termos da Lei nº 14.063/2020 e da MP nº 2.200-2/2001.', { x: M, y: 60, size: 8, font, color: rgb(.35, .35, .35) })
       page.drawText('Crispim, Mendonça e Pinheiro — Advogados · 0800 591 7259 · contato@cmpadvogados.com.br', { x: M, y: 48, size: 8, font, color: rgb(.35, .35, .35) })
       const bytes = await pdf.save()
-      await signSb.storage.from('documentos').upload(d.id + '/assinado.pdf', new Blob([bytes], { type: 'application/pdf' }), { upsert: true, contentType: 'application/pdf' })
+      // sem upsert (papel público não pode ON CONFLICT); se já houver montagem
+      // anterior, pede ao servidor para apagar e sobe de novo.
+      const blobFinal = new Blob([bytes], { type: 'application/pdf' })
+      let upf = await signSb.storage.from('documentos').upload(d.id + '/assinado.pdf', blobFinal, { contentType: 'application/pdf' })
+      if (upf.error && /exist|duplicate/i.test(upf.error.message || '')) {
+        await apiAssinatura({ acao: 'apagar_arquivo', bucket: 'documentos', path: d.id + '/assinado.pdf' })
+        upf = await signSb.storage.from('documentos').upload(d.id + '/assinado.pdf', blobFinal, { contentType: 'application/pdf' })
+      }
+      if (upf.error) throw new Error('não deu para salvar a montagem: ' + upf.error.message)
       const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }))
       const a = document.createElement('a'); a.href = url; a.download = (doc.titulo || 'documento').replace(/[^\w\-]+/g, '_') + '_assinado.pdf'; a.click()
       setMfMsg(m => ({ ...m, [d.id]: '✓ PDF final montado e baixado.' }))

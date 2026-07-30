@@ -125,6 +125,7 @@ export async function POST(request) {
         titulo,
         tipo,
         modelo: body.modelo || null,
+        finalidade: String(body.finalidade || '').trim() || null,
         arquivo_path: body.arquivo_path || null,
         status: 'enviado',
       })).error
@@ -179,6 +180,14 @@ export async function POST(request) {
       const { data, error } = await sb.storage.from(body.bucket).createSignedUrl(String(body.path), 600)
       if (error) return Response.json({ erro: error.message }, { status: 404 })
       return Response.json({ ok: true, url: data.signedUrl })
+    }
+
+    if (acao === 'apagar_arquivo') {
+      // remove um arquivo para permitir re-upload (ex.: remontar o PDF final do avulso)
+      if (!BUCKETS.includes(body.bucket) || !body.path) return Response.json({ erro: 'Pedido inválido.' }, { status: 400 })
+      const { error } = await sb.storage.from(body.bucket).remove([String(body.path)])
+      if (error) return Response.json({ erro: error.message }, { status: 400 })
+      return Response.json({ ok: true })
     }
 
     return Response.json({ erro: 'ação desconhecida' }, { status: 400 })
