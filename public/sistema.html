@@ -244,6 +244,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
       <a data-s="emails" onclick="go('emails')" title="Respostas das varas, cartórios e clientes — cada uma já lançada no histórico do processo"><span class="ic">✉</span> E-mails <span id="nav-n-email" style="margin-left:auto;font-size:10.5px;background:#C9A227;color:#22405f;border-radius:10px;padding:1px 7px;font-weight:800;display:none"></span></a>
       <a data-s="diligencias" onclick="go('diligencias')"><span class="ic">◔</span> Diligências</a>
       <a data-s="relatorio" onclick="go('relatorio')"><span class="ic">◫</span> Relatório mensal</a>
+      <a data-s="publicacoes" class="cmp-only" onclick="go('publicacoes')" title="Portal de notícias: extrato dos artigos dos sites, rascunhos e publicação direta no WordPress (sem navegador)"><span class="ic">📰</span> Publicações</a>
       <a data-s="crm" onclick="go('crm')"><span class="ic">▣</span> Comercial</a>
       <a data-s="financeiro" onclick="go('financeiro')"><span class="ic">＄</span> Financeiro</a>
       <a onclick="window.open('/assinatura','_blank')" title="Assinador de documentos do escritório — procurações e contratos com assinatura eletrônica"><span class="ic">✍</span> Assinaturas</a>
@@ -644,6 +645,31 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
   <div class="card">
     <h3 style="margin-top:0">Próxima etapa — linha do tempo por cliente</h3>
     <p class="note" style="max-width:680px">Em construção. A ideia: para cada cliente, uma linha do tempo com <b>todas as movimentações e atividades do mês</b> dos processos dele, gerada e enviada automaticamente <b>1x por mês</b>. Vamos detalhar juntos o formato (PDF/e-mail/WhatsApp), o que entra e o que fica de fora.</p>
+  </div>
+</section>
+<section id="s-publicacoes" class="hidden">
+  <div class="card">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <h3 style="margin:0">📰 Publicações — portal de notícias</h3>
+      <span style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn sm ghost" onclick="pubImportar(this)" title="Lê os posts públicos de djan.com.br e cmpadvogados.com.br e atualiza o extrato">↻ importar dos sites</button>
+        <button class="btn sm" style="background:#6d28a8;color:#fff;border:1px solid #6d28a8" onclick="pubGerarIA(this)" title="A IA redige DUAS versões distintas do tema (djan = consumidor, cmp = empresarial), no padrão editorial do escritório — viram rascunhos para você revisar e publicar">🤖 Gerar com IA (2 versões)</button>
+        <button class="btn sm" style="background:#0F6E56;color:#fff;border:1px solid #0F6E56" onclick="pubNovoRascunho()">+ Novo rascunho</button>
+      </span>
+    </div>
+    <p class="note" style="margin-top:6px">Extrato dos artigos dos dois sites + rascunhos do escritório. Cole o texto (do chat do Claude ou seu), escolha o site e clique em Publicar — sai direto no WordPress pela API, sem navegador. Instagram fica de fora, por decisão do escritório.</p>
+    <div id="pub-form" style="display:none;background:#f6f9fc;border:1px solid #dbe6f2;border-radius:10px;padding:12px;margin:10px 0">
+      <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px">
+        <div><label style="font-size:12px;font-weight:600;color:var(--muted)">Título</label><input id="pub-titulo" style="width:100%"></div>
+        <div><label style="font-size:12px;font-weight:600;color:var(--muted)">Site de destino</label><select id="pub-site" style="width:100%"><option value="cmp">cmpadvogados.com.br</option><option value="djan">djan.com.br</option></select></div>
+        <div><label style="font-size:12px;font-weight:600;color:var(--muted)">Tema (opcional)</label><input id="pub-tema" style="width:100%" placeholder="Ex.: Direito Imobiliário"></div>
+      </div>
+      <label style="font-size:12px;font-weight:600;color:var(--muted);margin-top:8px;display:block">Texto do artigo (cole aqui — parágrafos separados por linha em branco)</label>
+      <textarea id="pub-corpo" style="width:100%;min-height:180px"></textarea>
+      <div style="margin-top:8px;display:flex;gap:8px;justify-content:flex-end"><button class="btn ghost sm" onclick="document.getElementById('pub-form').style.display='none'">Cancelar</button><button class="btn sm" onclick="pubSalvarRascunho()">Salvar rascunho</button></div>
+    </div>
+    <div id="pub-resumo" style="display:flex;gap:10px;flex-wrap:wrap;margin:8px 0"></div>
+    <div id="pub-lista"><div class="note">Carregando…</div></div>
   </div>
 </section>
 </main>
@@ -6679,7 +6705,7 @@ function go(s){
 function go(s){
   try{ localStorage.setItem('cmp_secao', s); if(s!=='proc-det') localStorage.removeItem('cmp_proc'); }catch(e){}
   var showId=(s==='contatos')?'crm':s;
-  ["painel","triagem","agenda","processos","proc-det","crm","financeiro","etiquetas","procedimentos","diligencias","relatorio","encerrados","inove","james","cadastros","fases","sugestoes","lote","produtividade","monitoramento","robos","emails"].forEach(function(id){var e=document.getElementById("s-"+id);if(e)e.classList.add("hidden")});
+  ["painel","triagem","agenda","processos","proc-det","crm","financeiro","etiquetas","procedimentos","diligencias","relatorio","publicacoes","encerrados","inove","james","cadastros","fases","sugestoes","lote","produtividade","monitoramento","robos","emails"].forEach(function(id){var e=document.getElementById("s-"+id);if(e)e.classList.add("hidden")});
   var sec=document.getElementById("s-"+showId); if(sec) sec.classList.remove("hidden");
   document.querySelectorAll("#nav a").forEach(function(a){a.classList.remove("active")});
   var link=document.querySelector('#nav a[data-s="'+s+'"]');if(link)link.classList.add("active");
@@ -6710,6 +6736,7 @@ function go(s){
   if(s==="robos" && typeof renderRobos==='function')renderRobos();if(s==="robos" && typeof renderEstagiario==='function')renderEstagiario();
   if(s==="emails" && typeof renderEmails==='function')renderEmails();
   if(s==="relatorio" && typeof renderRelatorioMensal==='function')renderRelatorioMensal();
+  if(s==="publicacoes" && typeof renderPublicacoes==='function'){renderPublicacoes(); var _t2=document.getElementById("scr-title"); if(_t2)_t2.textContent="Publicações — portal de notícias";}
   try{ var _cfgP=document.getElementById('btn-cfg-proc'); if(_cfgP) _cfgP.style.display=(s==='processos')?'inline-block':'none'; }catch(e){}
   if(s==="sugestoes" && typeof renderSugestoes==='function'){ var _an=document.getElementById('sg-autor'); if(_an && !_an.value){ _an.value=((document.getElementById('who-name')||{}).textContent||'').trim(); } renderSugestoes(); }
   if(s==="lote") renderLote();
@@ -6780,6 +6807,101 @@ async function renderRelatorioMensal(){
   });
   html+='</tbody></table></div>';
   lista.innerHTML=html;
+}
+/* ===== Publicações · portal de notícias (djan.com.br + cmpadvogados.com.br) ===== */
+var PUB_SITES={djan:'djan.com.br', cmp:'cmpadvogados.com.br'};
+async function renderPublicacoes(){
+  var el=document.getElementById('pub-lista'); if(!el) return;
+  var res=document.getElementById('pub-resumo');
+  try{
+    var q=await window.__sb.from('publicacoes').select('*').order('publicado_em',{ascending:false,nullsFirst:true}).order('criado_em',{ascending:false}).limit(500);
+    if(q.error){ el.innerHTML='<div class="note" style="color:#b5342b">Erro: '+finEsc(q.error.message)+'</div>'; return; }
+    var rows=q.data||[];
+    var chip=function(n,rot){ return '<span style="background:#eef4fb;color:#22405f;border-radius:16px;padding:5px 12px;font-size:13px"><b>'+n+'</b> '+rot+'</span>'; };
+    var pubN=rows.filter(function(x){return x.status==='publicado';}).length;
+    var rasN=rows.filter(function(x){return x.status!=='publicado';}).length;
+    if(res) res.innerHTML=chip(pubN,'publicado(s)')+chip(rows.filter(function(x){return x.site==='djan';}).length,'no djan.com.br')+chip(rows.filter(function(x){return x.site==='cmp';}).length,'no cmpadvogados')+(rasN?chip(rasN,'rascunho(s)'):'');
+    if(!rows.length){ el.innerHTML='<div class="note">Nada aqui ainda — clique em <b>↻ importar dos sites</b> para trazer o catálogo existente, ou crie um rascunho.</div>'; return; }
+    var html='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr>'
+      +['Título','Site','Tema','Status','Data',''].map(function(h){return '<th style="text-align:left;padding:6px 10px 6px 0;color:var(--muted)">'+h+'</th>';}).join('')+'</tr></thead><tbody>';
+    rows.forEach(function(x){
+      var st=x.status==='publicado'?'<span style="color:#0F6E56;font-weight:700">✓ publicado</span>':(x.status==='erro'?('<span style="color:#b5342b;font-weight:700" title="'+finEsc(x.erro||'')+'">erro</span>'):'<span style="color:#8a6d00;font-weight:700">rascunho</span>');
+      var dt=(x.publicado_em||x.criado_em)?String(x.publicado_em||x.criado_em).slice(0,10).split('-').reverse().join('/'):'—';
+      var acoes='';
+      if(x.status!=='publicado') acoes+='<button class="btn sm" style="font-size:11px;background:#0F6E56;color:#fff;border:1px solid #0F6E56" onclick="pubPublicar(\''+x.id+'\',this)">publicar</button> <button class="btn sm ghost" style="font-size:11px;color:#b5342b" onclick="pubExcluir(\''+x.id+'\')">excluir</button>';
+      html+='<tr style="border-top:1px solid #e5e9ef">'
+        +'<td style="padding:7px 10px 7px 0;font-weight:600;color:var(--navy)">'+(x.link?('<a href="'+finEsc(x.link)+'" target="_blank" style="color:var(--navy)">'+finEsc(x.titulo)+'</a>'):finEsc(x.titulo))+'</td>'
+        +'<td style="padding:7px 10px 7px 0;white-space:nowrap">'+(PUB_SITES[x.site]||x.site)+'</td>'
+        +'<td style="padding:7px 10px 7px 0">'+finEsc(x.tema||'—')+'</td>'
+        +'<td style="padding:7px 10px 7px 0;white-space:nowrap">'+st+'</td>'
+        +'<td style="padding:7px 10px 7px 0;white-space:nowrap">'+dt+'</td>'
+        +'<td style="padding:7px 0;white-space:nowrap;text-align:right">'+acoes+'</td></tr>';
+    });
+    el.innerHTML=html+'</tbody></table></div>';
+  }catch(e){ el.innerHTML='<div class="note" style="color:#b5342b">Erro: '+finEsc(e&&e.message||e)+'</div>'; }
+}
+async function pubImportar(btn){
+  if(btn){btn.disabled=true;btn.textContent='importando…';}
+  try{
+    var tok=await docToken();
+    var r=await fetch('/api/publicacoes?importar=1',{headers:{Authorization:'Bearer '+tok}});
+    var j=await r.json();
+    if(!r.ok||j.erro){ alert('Falha ao importar: '+(j.erro||r.status)); }
+    else{
+      var m=j.resultado||{};
+      alert('Importação concluída.\n\ndjan.com.br: '+((m.djan||{}).lidos||0)+' post(s) lido(s) via '+((m.djan||{}).via||'—')+'\ncmpadvogados.com.br: '+((m.cmp||{}).lidos||0)+' post(s) lido(s) via '+((m.cmp||{}).via||'—')+(((m.djan||{}).via==='nenhum'||(m.cmp||{}).via==='nenhum')?'\n\n⚠ Um dos sites bloqueou a leitura — me avise que eu investigo.':''));
+    }
+  }catch(e){ alert('Erro: '+(e&&e.message||e)); }
+  if(btn){btn.disabled=false;btn.textContent='↻ importar dos sites';}
+  renderPublicacoes();
+}
+function pubNovoRascunho(){ var f=document.getElementById('pub-form'); if(f){ f.style.display='block'; var t=document.getElementById('pub-titulo'); if(t) t.focus(); } }
+async function pubGerarIA(btn){
+  var tema=window.prompt('Tema do artigo (a IA escreve DUAS versões: consumidor para djan.com.br e empresarial para cmpadvogados.com.br):\n\nEx.: "Distrato de compra e venda de imóvel" ou cole o resumo de uma sentença.','');
+  if(tema===null) return; tema=String(tema).trim(); if(!tema) return;
+  if(btn){btn.disabled=true;btn.textContent='🤖 redigindo (1-2 min)…';}
+  try{
+    var tok=await docToken();
+    var r=await fetch('/api/publicacoes',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({acao:'gerar',tema:tema})});
+    var j=await r.json();
+    if(!r.ok||j.erro) alert('Não gerou: '+(j.erro||r.status));
+    else alert('✓ 2 rascunhos criados:\n\n• djan: '+((j.titulos||[])[0]||'')+'\n• cmp: '+((j.titulos||[])[1]||'')+'\n\nCusto: ~US$ '+(j.custo_usd||0)+'. Revise e clique em "publicar" em cada um.');
+  }catch(e){ alert('Erro: '+(e&&e.message||e)); }
+  if(btn){btn.disabled=false;btn.textContent='🤖 Gerar com IA (2 versões)';}
+  renderPublicacoes();
+}
+async function pubSalvarRascunho(){
+  var titulo=(document.getElementById('pub-titulo').value||'').trim();
+  var corpo=(document.getElementById('pub-corpo').value||'').trim();
+  var site=document.getElementById('pub-site').value;
+  var tema=(document.getElementById('pub-tema').value||'').trim();
+  if(!titulo){ alert('Informe o título.'); return; }
+  if(!corpo){ alert('Cole o texto do artigo.'); return; }
+  /* texto simples -> HTML: parágrafos por linha em branco */
+  var html=corpo.split(/\n\s*\n/).map(function(p){ return '<p>'+finEsc(p.trim()).replace(/\n/g,'<br>')+'</p>'; }).join('\n');
+  var r=await window.__sb.from('publicacoes').insert({site:site,titulo:titulo,conteudo_html:html,tema:tema||null,status:'rascunho',origem:'gestao'});
+  if(r&&r.error){ alert('Erro ao salvar: '+r.error.message); return; }
+  document.getElementById('pub-form').style.display='none';
+  ['pub-titulo','pub-corpo','pub-tema'].forEach(function(id){ var e=document.getElementById(id); if(e) e.value=''; });
+  renderPublicacoes();
+}
+async function pubPublicar(id, btn){
+  if(!confirm('Publicar este artigo no site agora? Ele fica visível ao público imediatamente.')) return;
+  if(btn){btn.disabled=true;btn.textContent='publicando…';}
+  try{
+    var tok=await docToken();
+    var r=await fetch('/api/publicacoes',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({acao:'publicar',id:id})});
+    var j=await r.json();
+    if(!r.ok||j.erro) alert('Não publicou: '+(j.erro||r.status));
+    else alert('✓ Publicado!\n\n'+(j.link||''));
+  }catch(e){ alert('Erro: '+(e&&e.message||e)); }
+  renderPublicacoes();
+}
+async function pubExcluir(id){
+  if(!confirm('Excluir este rascunho? (Posts já publicados no site não são apagados por aqui.)')) return;
+  var r=await window.__sb.from('publicacoes').delete().eq('id',id).neq('status','publicado');
+  if(r&&r.error){ alert('Erro: '+r.error.message); return; }
+  renderPublicacoes();
 }
 /* ===== Proteção contra a seta "voltar" do navegador (e o botão lateral do mouse):
    numa página única, o Voltar saía do site e DERRUBAVA a ficha no meio da edição.
