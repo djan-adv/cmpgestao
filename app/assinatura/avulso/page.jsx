@@ -132,6 +132,14 @@ export default function DocumentoAvulso() {
       const det = await apiAssinatura({ acao: 'detalhe', doc_id: d.id })
       if (!det.ok) throw new Error(det.erro || 'falha ao carregar')
       const doc = det.documento, sigs = det.signatarios || []
+      // trava: com assinatura pendente, avisa e pede confirmação (dá para remontar depois)
+      const pendentes = sigs.filter(s => s.status !== 'assinado')
+      if (pendentes.length) {
+        const quem = pendentes.map(s => s.nome || s.email).filter(Boolean).join(', ')
+        if (!window.confirm('Ainda falta(m) assinar: ' + quem + '.\n\nMontar mesmo assim (parcial)? O link de quem falta continua valendo e você pode montar de novo quando todos assinarem.')) {
+          setMfMsg(m => ({ ...m, [d.id]: '' })); return
+        }
+      }
       const orig = await apiAssinatura({ acao: 'signed', bucket: 'documentos', path: doc.arquivo_path })
       if (!orig.ok) throw new Error(orig.erro || 'arquivo original indisponível')
       const origBytes = await (await fetch(orig.url)).arrayBuffer()
