@@ -5477,7 +5477,7 @@ function renderProc(){
   <h2>Cadastrar manualmente</h2>
   <div class="switch" style="margin-bottom:10px"><button id="cm-tab-proc" class="on" onclick="setCadTipo('processo')">Processo (com nº CNJ)</button><button id="cm-tab-caso" onclick="setCadTipo('caso')">Caso (administrativo, sem CNJ)</button><button id="cm-tab-novo" onclick="setCadTipo('novo')">Cliente novo</button></div>
   <div id="cm-proc-num-wrap"><label>Número do processo (CNJ) <span style="color:#b3261e">*obrigatório</span></label><input id="cm-numero" placeholder="0000000-00.0000.0.00.0000"></div>
-  <div id="cm-caso-id-wrap" style="display:none"><label>Identificação do caso <span style="color:#b3261e">*obrigatório</span></label><input id="cm-casoid" placeholder="Ex.: PA 123/2026, Requerimento INSS, Protocolo SEI..."></div>
+  <div id="cm-caso-id-wrap" style="display:none"><label>Identificação do caso <span class="note" style="font-weight:400">— CPF/CNPJ do cliente, protocolo, ou deixe em branco para gerar a numeração interna automática (ano.mês.dia.hora)</span></label><input id="cm-casoid" placeholder="Ex.: CPF/CNPJ, PA 123/2026 — ou vazio p/ gerar 2026.07.30.1651"></div>
   <div id="cm-novo-wrap" style="display:none">
     <div style="background:#eef7f1;border:1px solid #cfe8db;border-radius:9px;padding:10px 12px;margin-bottom:10px;font-size:12.5px;color:#0F6E56;line-height:1.5">
       <b>Cliente novo (ainda sem processo).</b> Preencha a ficha no <b>modelo padrão CMP</b>, depois anexe a ficha + os documentos e clique em <b>Gerar caso</b>: o sistema lê a ficha, cria/vincula o cliente, sobe os arquivos para a pasta do caso e registra o pedido para o Claude elaborar a peça no padrão CMP.
@@ -5599,9 +5599,17 @@ function setCadTipo(t){ cadTipo=t;
   if(bs) bs.style.display=ehNovo?'none':'';
   if(bg) bg.style.display=ehNovo?'':'none';
 }
+/* numeração interna de caso: ano.mes.dia.hora — ex.: 2026.07.30.1651.
+   Se já existir uma no mesmo minuto, acrescenta os segundos. */
+function _numCasoAuto(){
+  var d=new Date(), p2=function(n){return String(n).padStart(2,'0');};
+  var base=d.getFullYear()+'.'+p2(d.getMonth()+1)+'.'+p2(d.getDate())+'.'+p2(d.getHours())+p2(d.getMinutes());
+  var existe=function(n){ return (DADOS.processos||[]).some(function(p){ return String(p.numero||'').replace(/\s/g,'')===n; }); };
+  return existe(base)?(base+p2(d.getSeconds())):base;
+}
 async function salvarCadManual(){
   var num, ehCaso=(cadTipo==='caso');
-  if(ehCaso){ num=(document.getElementById('cm-casoid').value||'').trim(); if(!num){ alert('Informe a identificação do caso.'); return; } }
+  if(ehCaso){ num=(document.getElementById('cm-casoid').value||'').trim(); if(!num) num=_numCasoAuto(); }
   else { num=(document.getElementById('cm-numero').value||'').trim(); if(!num||num.replace(/\D/g,'').length<15){ alert('Informe o número do processo (CNJ) completo.'); return; } }
   if(DADOS.processos.some(function(p){return String(p.numero||'').replace(/\s/g,'')===num.replace(/\s/g,'');})){ alert('Já existe um cadastro com esse número/identificação.'); return; }
   var cli=(document.getElementById('cm-cliente').value||'').trim();
@@ -5692,9 +5700,8 @@ async function gerarCasoNovoCliente(){
   if(peca==='Outra'){ peca=(document.getElementById('cm-peca-livre').value||'').trim(); if(!peca){ alert('Descreva qual peça o Claude deve elaborar.'); document.getElementById('cm-peca-livre').focus(); return; } }
   var d=new Date(), pad=function(n){return String(n).padStart(2,'0');};
   var dbr=pad(d.getDate())+'/'+pad(d.getMonth()+1)+'/'+d.getFullYear();
-  var stamp=dbr+' '+pad(d.getHours())+':'+pad(d.getMinutes());
-  var primeiro=(cli.split(/\s+/)[0]||'Cliente');
-  var num='Caso novo — '+primeiro+' ('+stamp+')';
+  /* numeração interna automática: ano.mes.dia.hora (hora com 4 dígitos) */
+  var num=_numCasoAuto();
   var isoDia=d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
   var pedido='[PEÇA SOLICITADA AO CLAUDE] '+peca+' — '+cli+(op?(' × '+op):'')+(assunto?(' — '+assunto):'')+'. Ficha de atendimento e documentos anexados na pasta do caso; elaborar no padrão CMP. (solicitada em '+dbr+', pendente de elaboração)';
   var hist=[{data:isoDia+'T00:00:00.000Z',texto:pedido,f:'manual'}];
