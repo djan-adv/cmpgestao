@@ -11632,7 +11632,30 @@ function abrirNovaCobranca(){
   window.__cobProcSel=null;
   var dd=document.getElementById('cob-proc-drop'); if(dd){ dd.classList.remove('on'); dd.innerHTML=''; }
   document.getElementById('modal-cobranca').classList.remove('hidden');
+  tornarPopupSolto('modal-cobranca');
   finCarregarClientes();
+}
+/* Vira um POP-UP solto: o fundo continua vivo (rolagem, cliques, copiar dados da
+   ficha) e a janela pode ser arrastada pelo título. */
+function tornarPopupSolto(idOverlay){
+  var ov=document.getElementById(idOverlay); if(!ov) return;
+  ov.style.background='transparent'; ov.style.pointerEvents='none';
+  var box=ov.querySelector('.modal'); if(!box) return;
+  box.style.pointerEvents='auto';
+  box.style.boxShadow='0 14px 52px rgba(0,0,0,.38)';
+  box.style.border='1px solid #cfd6df';
+  var h=box.querySelector('h2'); if(!h||h.__drag) return; h.__drag=1;
+  h.style.cursor='move'; h.title='Arraste para mover — o fundo continua clicável';
+  h.addEventListener('mousedown', function(ev){
+    if(/^(input|select|textarea|button|a)$/i.test((ev.target&&ev.target.tagName)||'')) return;
+    ev.preventDefault();
+    var r=box.getBoundingClientRect();
+    box.style.position='fixed'; box.style.margin='0'; box.style.left=r.left+'px'; box.style.top=r.top+'px'; box.style.zIndex='135'; box.style.maxHeight='92vh'; box.style.overflow='auto';
+    var dx=ev.clientX-r.left, dy=ev.clientY-r.top;
+    function mv(e){ box.style.left=Math.max(0,e.clientX-dx)+'px'; box.style.top=Math.max(0,e.clientY-dy)+'px'; }
+    function up(){ document.removeEventListener('mousemove',mv); document.removeEventListener('mouseup',up); }
+    document.addEventListener('mousemove',mv); document.addEventListener('mouseup',up);
+  });
 }
 /* busca processo OU pasta de assessoria (caso sem CNJ, identificado só por
    CNPJ/CPF — ex.: Valtex, FF Dourado, Conceito) para vincular o boleto */
@@ -11819,6 +11842,7 @@ async function boletoDoProcesso(){
   var sub=document.getElementById('bp-sub'), lista=document.getElementById('bp-lista');
   if(sub) sub.textContent='Carregando boletos…'; if(lista) lista.innerHTML='';
   document.getElementById('modal-boletos-proc').classList.remove('hidden');
+  tornarPopupSolto('modal-boletos-proc');
   var bols=await _boletosDoProcesso(atual);
   window.__bpRows=bols;
   var email=_emailClienteDoProc(atual);
