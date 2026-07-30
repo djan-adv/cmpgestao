@@ -2340,7 +2340,13 @@ function renderCaptacao(){
     itens.sort(function(a,b){return (PRANK[a.prioridade]||1)-(PRANK[b.prioridade]||1);});
     var col=document.createElement("div");col.className="col";
     col.ondragover=function(e){e.preventDefault();};
-    col.ondrop=function(e){e.preventDefault();var id=+e.dataTransfer.getData("id");var l=LEADS.find(function(x){return x.id===id;});if(l){_leadAck(l);var eraGanho=(l.estagio==='ganho');l.estagio=c.id; if(c.id==='ganho'&&!l.dataFechamento) l.dataFechamento=hojeISO(); salvarLeadsLocal(); renderCaptacao(); if(c.id==='ganho'&&!eraGanho) fecharLeadEAbrirCaso(l);}};
+    col.ondrop=function(e){e.preventDefault();var id=+e.dataTransfer.getData("id");var l=LEADS.find(function(x){return x.id===id;});if(l){_leadAck(l);
+      /* o caso/processo nasce já na ASSINATURA da procuração (ou checklist/fechado) */
+      var GAT=['assinado','checklist','ganho'];
+      var eraGat=GAT.indexOf(l.estagio)>=0;
+      l.estagio=c.id; if(c.id==='ganho'&&!l.dataFechamento) l.dataFechamento=hojeISO(); salvarLeadsLocal(); renderCaptacao();
+      if(GAT.indexOf(c.id)>=0 && !eraGat && !l.casoCriado){ l.casoCriado=true; salvarLeadsLocal(); fecharLeadEAbrirCaso(l); }
+    }};
     var mvL=(idx>0)?'<a onclick="moverEtapa('+idx+',-1)" style="cursor:pointer;color:var(--muted);text-decoration:none" title="mover para a esquerda">&#9664;</a> ':'';
     var mvR=(idx<FUNIL.length-1)?' <a onclick="moverEtapa('+idx+',1)" style="cursor:pointer;color:var(--muted);text-decoration:none" title="mover para a direita">&#9654;</a>':'';
     /* colunas finais (Fechado/Perdido): cards PERMANECEM, porém compactos —
@@ -4056,11 +4062,16 @@ function salvarLead(){var l=window._ledit;var nome=_v("l-nome");if(!nome){alert(
   var jaFech=(l&&l.dataFechamento)||'';
   if(estagio==='ganho'){ obj.dataFechamento=jaFech||hojeISO(); } else { obj.dataFechamento=jaFech; }
   var _ehNovoLead=!l.id;
-  if(l.id){Object.assign(l,obj);}else{obj.id=lseq++;if(l.arquivos&&l.arquivos.length)obj.arquivos=l.arquivos;if(l._pasta)obj._pasta=l._pasta;LEADS.push(obj);}
+  /* mudou de etapa pelo formulário? o caso nasce em assinado/checklist/fechado */
+  var _GAT=['assinado','checklist','ganho'];
+  var _abrirCaso=(_GAT.indexOf(estagio)>=0 && _GAT.indexOf(l.estagio)<0 && !l.casoCriado);
+  if(l.id){Object.assign(l,obj); if(_abrirCaso) l.casoCriado=true;}
+  else{obj.id=lseq++;if(l.arquivos&&l.arquivos.length)obj.arquivos=l.arquivos;if(l._pasta)obj._pasta=l._pasta;if(_abrirCaso)obj.casoCriado=true;LEADS.push(obj);l=obj;}
   salvarLeadsLocal();
   /* lead novo criado à mão: sobe pro banco e avisa Jader imediatamente */
   if(_ehNovoLead && estagio==='novo'){ try{ if(typeof syncLeadsDb==='function'){ syncLeadsDb().then(function(){ setTimeout(_notifJaderSweep,800); }); } else setTimeout(_notifJaderSweep,1200); }catch(e){} }
-  fecharLead();renderCaptacao();}
+  fecharLead();renderCaptacao();
+  if(_abrirCaso){ try{ fecharLeadEAbrirCaso(l); }catch(e){} }}
 function hojeISO(){ var d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 /* tempo de conversão em dias (entrada → fechamento) */
 function leadDiasConversao(l){ if(!l||!l.data||!l.dataFechamento) return null; var a=new Date(l.data+'T00:00:00'), b=new Date(l.dataFechamento+'T00:00:00'); if(isNaN(a)||isNaN(b)) return null; return Math.max(0,Math.round((b-a)/86400000)); }
