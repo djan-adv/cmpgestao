@@ -92,6 +92,8 @@ export async function POST(request) {
         const upd = {}
         if (soDigitos(c.cpf_cnpj).length !== 11 && soDigitos(c.cpf_cnpj).length !== 14) upd.cpf_cnpj = doc
         if (!c.email && emailDigitado) upd.email = emailDigitado
+        // o nome DIGITADO no formulário vale mais que a grafia curta do cadastro
+        if (nomeDigitado && nomeDigitado.length > String(c.nome || '').length) upd.nome = nomeDigitado
         if (Object.keys(upd).length) { try { await sb.from('contatos').update(upd).eq('id', contato_id) } catch (e) {}; c = { ...c, ...upd } }
       }
     } catch (e) {}
@@ -117,7 +119,8 @@ export async function POST(request) {
   const invoiceBody = {
     code,
     customer: {
-      name: c.nome || 'Cliente',
+      // o boleto sai com o nome digitado no formulário (completo); cadastro é fallback
+      name: nomeDigitado || c.nome || 'Cliente',
       email: c.email || undefined,
       document: { identity: doc, type: doc.length === 14 ? 'CNPJ' : 'CPF' }
     },
