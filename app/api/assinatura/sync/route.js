@@ -17,12 +17,16 @@ export const maxDuration = 120
 
 const ROOT = '/opt/cmpdocs'
 const EMAIL_ESCRITORIO = process.env.EMAIL_CONFIRMACAO_ASSINATURA || 'contato@cmpadvogados.com.br'
-// pasta de destino nos Documentos do processo, conforme o tipo do documento
-function pastaDestino(d) {
+// destino nos Documentos do processo:
+//  - procuração: ARQUIVO na raiz, numerado "2 Procuração - ..." (sem subpasta)
+//  - contrato: dentro da pasta "Contrato de honorários"
+//  - demais: arquivo na raiz com o próprio título
+// o "✓" no nome do arquivo indica que o documento está ASSINADO
+function destinoDoc(d) {
   const t = String((d && d.titulo) || '')
-  if (d.tipo === 'procuracao' || /procura/i.test(t)) return '2 Procuração'
-  if (/contrat/i.test(t)) return 'Contrato de honorários'
-  return 'Procurações e assinaturas'
+  if (d.tipo === 'procuracao' || /procura/i.test(t)) return { dir: '', nomeFixo: '2 Procuração ✓' }
+  if (/contrat/i.test(t)) return { dir: 'Contrato de honorários', nomeFixo: '' }
+  return { dir: '', nomeFixo: '' }
 }
 const SIGN_URL = process.env.NEXT_PUBLIC_SIGN_SUPABASE_URL || 'https://fjboytucivmdykkfpdhs.supabase.co'
 const SIGN_KEY = process.env.NEXT_PUBLIC_SIGN_SUPABASE_ANON_KEY || 'sb_publishable_9K2-GBTRb7ZYd5dkjPoeZA_kPPNElex'
@@ -76,23 +80,31 @@ export async function GET(request) {
 
       const sigs = (d.signatarios || []).filter(s => s.status === 'assinado')
       const quem = sigs.map(s => (s.nome || s.email || '') + (s.cpf ? ' (CPF ' + s.cpf + ')' : '')).filter(Boolean).join('; ')
-      const PASTA = pastaDestino(d)
+      const dest = destinoDoc(d)
 
       // baixa o PDF assinado (procuração: <id>.pdf · avulso: <id>/assinado.pdf)
-      let pdfBuf = null, pdfNome = ''
+      let pdfBuf = null, ehOriginal = false
       const tenta = d.tipo === 'upload' ? [d.id + '/assinado.pdf', d.id + '/original.pdf'] : [d.id + '.pdf']
       for (const pth of tenta) {
         const dl = await sign.storage.from('documentos').download(pth)
-        if (!dl.error && dl.data) { pdfBuf = Buffer.from(await dl.data.arrayBuffer()); pdfNome = slug(d.titulo) + (pth.endsWith('original.pdf') ? '-original' : '-assinado') + '.pdf'; break }
+        if (!dl.error && dl.data) { pdfBuf = Buffer.from(await dl.data.arrayBuffer()); ehOriginal = pth.endsWith('original.pdf'); break }
       }
 
-      let salvoEm = ''
+      let salvoEm = '', pdfNome = ''
       if (row && pdfBuf) {
         const chave = dig || ('caso-' + String(row.id).replace(/[^a-zA-Z0-9-]/g, ''))
-        const dir = path.join(ROOT, chave, PASTA)
+        const dir = path.join(ROOT, chave, dest.dir)
         fs.mkdirSync(dir, { recursive: true })
+        // "✓" no nome = assinado. Procuração vira "2 Procuração ✓"; se já existir uma
+        // (casal com duas procurações), acrescenta o nome do signatário.
+        const base = dest.nomeFixo || (slug(d.titulo) + ' ✓' + (ehOriginal ? ' (original)' : ''))
+        pdfNome = base + '.pdf'
+        if (fs.existsSync(path.join(dir, pdfNome))) {
+          const quem1 = slug((sigs[0] && (sigs[0].nome || sigs[0].email)) || d.id.slice(0, 8))
+          pdfNome = base + ' - ' + quem1 + '.pdf'
+        }
         fs.writeFileSync(path.join(dir, pdfNome), pdfBuf)
-        salvoEm = 'Documentos > ' + PASTA
+        salvoEm = 'Documentos do processo' + (dest.dir ? ' > ' + dest.dir : '') + ' ("' + pdfNome + '")'
       }
       if (row) {
         const texto = '[Assinatura] ' + (d.titulo || 'Documento') + ' ASSINADO' + (quem ? ' por ' + quem : '') +
