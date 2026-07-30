@@ -840,19 +840,34 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
   <label style="margin-top:10px">Comercial — jogar no funil de captação na etapa</label><div style="display:flex;gap:8px"><select id="c-etapa" style="flex:1"></select><button class="btn ghost" onclick="contatoParaFunil()">Adicionar ao funil</button></div>
   <div class="foot"><button class="btn gold" onclick="novaTarefaContato()">Criar atividade de captação</button><button class="btn ghost" onclick="assinaturaDoContato()" title="Gerar procuração para este contato assinar eletronicamente (abre o módulo Assinaturas já preenchido)">✍ Procuração</button><button class="btn ghost" onclick="fecharContato()">Cancelar</button><button class="btn" onclick="salvarContato()">Salvar</button></div>
 </div></div>
-<div id="modal-lead" class="overlay hidden"><div class="modal">
-  <h2 id="ml-titulo">Lead</h2>
-  <label>Nome</label><input id="l-nome">
-  <label>Processo de referência <span style="color:var(--muted);font-weight:400">(nº do processo, se houver)</span></label><input id="l-procref" placeholder="0000000-00.0000.0.00.0000">
-  <div id="l-capt" class="note" style="margin:6px 0 2px"></div>
-  <div class="row2"><div><label>Canal</label><select id="l-canal"><option>Indicação</option><option>Google Meu Negócio</option><option>Google Ads</option><option>Meta Ads (Instagram/Facebook)</option><option>Instagram orgânico</option><option>TikTok</option><option>YouTube</option><option>Site / Blog (SEO)</option><option>LinkedIn</option><option>Eventos / Palestras</option><option>Parceiro / Correspondente</option><option>WhatsApp</option><option>Jusbrasil</option><option>Outro</option></select></div><div><label>Etapa do funil</label><select id="l-estagio"></select></div></div>
-  <div class="row2"><div><label>Telefone</label><input id="l-tel"></div><div><label>E-mail</label><input id="l-email"></div></div>
-  <div class="row2"><div><label>Data de entrada</label><input id="l-data" type="date" min="2000-01-01" max="2100-12-31" onchange="guardData(this)"></div><div><label>Valor estimado (R$)</label><input id="l-valor"></div></div>
-  <div class="row2"><div><label>Valor fechado (R$) <span style="color:var(--muted);font-weight:400">— honorário contratado</span></label><input id="l-valorf" placeholder="preenchido quando fechar"></div><div><label>Motivo da perda <span style="color:var(--muted);font-weight:400">(se perdido)</span></label><select id="l-motivo"><option value="">—</option><option>Preço / honorários</option><option>Sumiu / parou de responder</option><option>Foi a outro escritório</option><option>Sem viabilidade jurídica</option><option>Fora da nossa área</option><option>Só queria informação</option><option>Demorou / concorrente foi mais rápido</option><option>Outro</option></select></div></div>
-  <div class="row2"><div><label>Prioridade</label><select id="l-prio"><option value="alta">Alta</option><option value="media">Média</option><option value="baixa">Baixa</option></select></div><div><label>Próxima ação (o que fazer)</label><input id="l-acao" placeholder="Ex.: enviar proposta, ligar de volta"></div></div>
-  <div class="row2"><div><label>Lembrete — data</label><input id="l-lemdata" type="date"></div><div><label>Lembrete — o quê</label><input id="l-lemtxt" placeholder="Ex.: ligar de volta"></div></div>
-  <label>Anotações</label><textarea id="l-obs" style="min-height:150px" placeholder="Observações sobre o lead (contexto, histórico da conversa, próximos passos)..."></textarea>
-  <label>Etiquetas</label><div id="l-etq" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+<!-- ficha do lead: LARGA (≈90% da tela) e em colunas — sem barra de rolagem interna.
+     Ctrl+V de qualquer texto (conversa, e-mail) preenche os campos vazios sozinho. -->
+<div id="modal-lead" class="overlay hidden"><div class="modal" style="max-width:min(1120px,94vw);width:94vw">
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+    <h2 id="ml-titulo" style="margin:0">Lead</h2>
+    <span class="note" style="font-size:12px;margin:0">📋 <b>Ctrl+V</b> em qualquer lugar desta janela: colo o texto nas Anotações e preencho nome, telefone, e-mail e processo sozinhos</span>
+  </div>
+  <div id="l-capt" class="note" style="margin:4px 0 6px"></div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:0 16px">
+    <div><label>Nome</label><input id="l-nome"></div>
+    <div><label>Processo de referência <span style="color:var(--muted);font-weight:400">(se houver)</span></label><input id="l-procref" placeholder="0000000-00.0000.0.00.0000"></div>
+    <div><label>Canal</label><select id="l-canal"><option>Indicação</option><option>Google Meu Negócio</option><option>Google Ads</option><option>Meta Ads (Instagram/Facebook)</option><option>Instagram orgânico</option><option>TikTok</option><option>YouTube</option><option>Site / Blog (SEO)</option><option>LinkedIn</option><option>Eventos / Palestras</option><option>Parceiro / Correspondente</option><option>WhatsApp</option><option>Jusbrasil</option><option>Outro</option></select></div>
+    <div><label>Etapa do funil</label><select id="l-estagio"></select></div>
+    <div><label>Telefone</label><input id="l-tel"></div>
+    <div><label>E-mail</label><input id="l-email"></div>
+    <div><label>Data de entrada</label><input id="l-data" type="date" min="2000-01-01" max="2100-12-31" onchange="guardData(this)"></div>
+    <div><label>Valor estimado (R$)</label><input id="l-valor"></div>
+    <div><label>Valor fechado (R$) <span style="color:var(--muted);font-weight:400">— contratado</span></label><input id="l-valorf" placeholder="preenchido quando fechar"></div>
+    <div><label>Motivo da perda <span style="color:var(--muted);font-weight:400">(se perdido)</span></label><select id="l-motivo"><option value="">—</option><option>Preço / honorários</option><option>Sumiu / parou de responder</option><option>Foi a outro escritório</option><option>Sem viabilidade jurídica</option><option>Fora da nossa área</option><option>Só queria informação</option><option>Demorou / concorrente foi mais rápido</option><option>Outro</option></select></div>
+    <div><label>Prioridade</label><select id="l-prio"><option value="alta">Alta</option><option value="media">Média</option><option value="baixa">Baixa</option></select></div>
+    <div><label>Próxima ação (o que fazer)</label><input id="l-acao" placeholder="Ex.: enviar proposta, ligar de volta"></div>
+    <div><label>Lembrete — data</label><input id="l-lemdata" type="date"></div>
+    <div><label>Lembrete — o quê</label><input id="l-lemtxt" placeholder="Ex.: ligar de volta"></div>
+  </div>
+  <div style="display:grid;grid-template-columns:2fr 1fr;gap:0 16px;align-items:start">
+    <div><label>Anotações</label><textarea id="l-obs" style="min-height:96px" placeholder="Observações sobre o lead — ou simplesmente Ctrl+V com a conversa/e-mail do cliente..."></textarea></div>
+    <div><label>Etiquetas</label><div id="l-etq" style="display:flex;flex-wrap:wrap;gap:6px"></div></div>
+  </div>
   <div class="foot"><button class="btn ghost" onclick="fecharLead()">Cancelar</button><button class="btn" onclick="salvarLead()">Salvar</button></div>
 </div></div>
 <div id="modal-lead-arqs" class="overlay hidden"><div class="modal">
@@ -3940,6 +3955,73 @@ function editarLead(id){ if(id){ var _l0=LEADS.find(function(x){return x.id===id
   document.getElementById("modal-lead").classList.remove("hidden");}
 function fmtDataHora(iso){ try{ var d=new Date(iso); if(isNaN(d.getTime())) return String(iso); return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear()+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }catch(e){ return String(iso); } }
 function fecharLead(){document.getElementById("modal-lead").classList.add("hidden");}
+/* ===== Ctrl+V na ficha do lead: PRINT vira anexo na hora; texto preenche os
+   campos vazios (nome, telefone, e-mail, processo, valor) e cai nas Anotações ===== */
+(function(){
+  function _mlMsg(t){ var c=document.getElementById('l-capt'); if(c) c.innerHTML='📋 '+t; }
+  function _mlPreencheDoTexto(txt){
+    var preencheu=[];
+    function setIf(id,val,rot){ var el=document.getElementById(id); if(el&&val&&!String(el.value||'').trim()){ el.value=val; preencheu.push(rot); } }
+    var t=String(txt||'');
+    var em=(t.match(/[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/)||[])[0]||'';
+    setIf('l-email', em, 'e-mail');
+    var cnj=(t.match(/\d{7}-?\d{2}\.?\d{4}\.?\d\.?\d{2}\.?\d{4}/)||[])[0]||'';
+    setIf('l-procref', cnj, 'processo');
+    var semCnj=cnj?t.split(cnj).join(' '):t;
+    var tel=''; (semCnj.match(/(?:\+?55[\s.\-]?)?(?:\(?\d{2}\)?[\s.\-]?)?9?\d{4}[\s.\-]?\d{4}/g)||[]).some(function(c){ var d=c.replace(/\D/g,''); if(d.length>=10&&d.length<=13){ tel=c.trim(); return true; } return false; });
+    setIf('l-tel', tel, 'telefone');
+    var vm=t.match(/R\$\s?([\d.]+(?:,\d{1,2})?)/); if(vm) setIf('l-valor', vm[1], 'valor');
+    var nomeEl=document.getElementById('l-nome');
+    if(nomeEl&&!String(nomeEl.value||'').trim()){
+      var lin=t.split(/\n/).map(function(x){return x.trim();}).filter(Boolean);
+      for(var i=0;i<Math.min(lin.length,12);i++){
+        var s=lin[i].replace(/^[-*•\d.\s]+/,'').replace(/[:;,.]+$/,'');
+        if(/^[A-Za-zÀ-ÿ'’ ]{5,60}$/.test(s)){ var w=s.split(/\s+/); if(w.length>=2&&w.length<=6){ var limpo=(typeof _atdLimpaNome==='function')?_atdLimpaNome(s):s; if(limpo){ nomeEl.value=limpo; preencheu.push('nome'); break; } } }
+      }
+    }
+    return preencheu;
+  }
+  var ml=document.getElementById('modal-lead'); if(!ml||ml.__pv) return; ml.__pv=1;
+  ml.addEventListener('paste', async function(e){
+    var cd=e.clipboardData; if(!cd) return;
+    /* imagem/arquivo no clipboard (print) → anexo do lead na hora */
+    var files=[]; for(var i=0;i<(cd.items?cd.items.length:0);i++){ var it=cd.items[i]; if(it.kind==='file'){ var f=it.getAsFile(); if(f) files.push(f); } }
+    if(files.length){
+      e.preventDefault();
+      var l=window._ledit; if(!l) return;
+      if(!l.arquivos) l.arquivos=[]; if(!l._pasta) l._pasta='card_'+_uuidL();
+      var sb=window.__sb; if(!sb){ _mlMsg('sem sessão — faça login para anexar.'); return; }
+      _mlMsg('⏳ enviando print…');
+      var ok=0;
+      for(var j=0;j<files.length;j++){
+        var f2=files[j];
+        var nome=(f2.name&&f2.name!=='image.png')?f2.name:('print-'+new Date().toISOString().slice(0,16).replace(/[T:]/g,'-')+'-'+(j+1)+'.png');
+        var path=l._pasta+'/'+_slugArq(nome);
+        try{
+          var up=await sb.storage.from(LEADS_BUCKET).upload(path,f2,{upsert:true,contentType:(f2.type||'image/png')});
+          if(!up.error){ l.arquivos.push({nome:nome,path:path,tipo:(f2.type||''),tamanho:f2.size,quando:new Date().toISOString()}); ok++; }
+        }catch(e2){}
+      }
+      l.ultimaAtividade=new Date().toISOString();
+      try{ salvarLeadsLocal(); }catch(e3){}
+      _mlMsg(ok?('✓ '+ok+' print(s) anexado(s) ao lead — estão em 📎 Arquivos.'):'não consegui anexar o print — tente pelo 📎 Arquivos do card.');
+      return;
+    }
+    /* texto → preenche campos vazios; colado fora de um campo, cai nas Anotações */
+    var txt=cd.getData('text')||'';
+    if(!txt||txt.length<5) return;
+    var alvo=e.target||{}; var tag=(alvo.tagName||'').toLowerCase();
+    var preencheu=_mlPreencheDoTexto(txt);
+    var foraDeCampo=!(tag==='input'||tag==='textarea'||tag==='select');
+    var campoPequeno=(tag==='input'&&txt.length>80);
+    if(foraDeCampo||campoPequeno){
+      e.preventDefault();
+      var obs=document.getElementById('l-obs');
+      if(obs){ obs.value=(obs.value?obs.value.replace(/\s+$/,'')+'\n\n':'')+txt; preencheu.push('anotações'); }
+    }
+    if(preencheu.length) _mlMsg('aproveitei do colado: <b>'+preencheu.join(', ')+'</b>.');
+  });
+})();
 function salvarLead(){var l=window._ledit;var nome=_v("l-nome");if(!nome){alert("Informe o nome.");return;}
   var estagio=_v("l-estagio");
   var obj={nome:nome,canal:_v("l-canal"),estagio:estagio,tel:_v("l-tel"),email:_v("l-email"),valor:_v("l-valor"),valorFechado:_v("l-valorf"),motivo:_v("l-motivo"),data:normData(_v("l-data")),lemdata:_v("l-lemdata"),lemtxt:_v("l-lemtxt"),obs:_v("l-obs"),prioridade:_v("l-prio"),acao:_v("l-acao"),procRef:_v("l-procref"),labels:(window._lsel||[]).slice()};
@@ -3949,7 +4031,7 @@ function salvarLead(){var l=window._ledit;var nome=_v("l-nome");if(!nome){alert(
   var jaFech=(l&&l.dataFechamento)||'';
   if(estagio==='ganho'){ obj.dataFechamento=jaFech||hojeISO(); } else { obj.dataFechamento=jaFech; }
   var _ehNovoLead=!l.id;
-  if(l.id){Object.assign(l,obj);}else{obj.id=lseq++;LEADS.push(obj);}
+  if(l.id){Object.assign(l,obj);}else{obj.id=lseq++;if(l.arquivos&&l.arquivos.length)obj.arquivos=l.arquivos;if(l._pasta)obj._pasta=l._pasta;LEADS.push(obj);}
   salvarLeadsLocal();
   /* lead novo criado à mão: sobe pro banco e avisa Jader imediatamente */
   if(_ehNovoLead && estagio==='novo'){ try{ if(typeof syncLeadsDb==='function'){ syncLeadsDb().then(function(){ setTimeout(_notifJaderSweep,800); }); } else setTimeout(_notifJaderSweep,1200); }catch(e){} }
