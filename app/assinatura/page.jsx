@@ -4,7 +4,7 @@
 // por e-mail automaticamente; dá pra copiar, mandar por WhatsApp ou reenviar.
 import { useEffect, useState } from 'react'
 import { signSb } from '../../lib/supabaseAssinatura'
-import { apiAssinatura } from '../../lib/assinaturaApi'
+import { apiAssinatura, enviarLinkAssinatura } from '../../lib/assinaturaApi'
 import { supabase as cmpSb } from '../../lib/supabase'
 
 // registra a geração do link no histórico do processo/caso do CMPGestão (best-effort)
@@ -111,10 +111,8 @@ export default function GerarProcuracao() {
   }
 
   async function enviarEmailFn(link, to, nome, titulo) {
-    try {
-      const r = await signSb.functions.invoke('enviar-email', { body: { to, nome: nome || '', titulo, link } })
-      return !(r.error || (r.data && r.data.ok === false))
-    } catch { return false }
+    // sai pelo servidor do CMP (contato@) — a edge function do assinador dava 500
+    return enviarLinkAssinatura({ to, nome: nome || '', titulo, link })
   }
 
   function copiar() { navigator.clipboard.writeText(resultado.link); setMsgEnvio({ texto: 'Link copiado!', ok: true }) }

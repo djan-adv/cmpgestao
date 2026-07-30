@@ -10,12 +10,20 @@
 import fs from 'fs'
 import path from 'path'
 import { createClient } from '@supabase/supabase-js'
+import { enviarEmailCore } from '../../enviar-email/enviar.js'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 120
 
 const ROOT = '/opt/cmpdocs'
-const PASTA = 'Procurações e assinaturas'
+const EMAIL_ESCRITORIO = process.env.EMAIL_CONFIRMACAO_ASSINATURA || 'contato@cmpadvogados.com.br'
+// pasta de destino nos Documentos do processo, conforme o tipo do documento
+function pastaDestino(d) {
+  const t = String((d && d.titulo) || '')
+  if (d.tipo === 'procuracao' || /procura/i.test(t)) return '2 Procuração'
+  if (/contrat/i.test(t)) return 'Contrato de honorários'
+  return 'Procurações e assinaturas'
+}
 const SIGN_URL = process.env.NEXT_PUBLIC_SIGN_SUPABASE_URL || 'https://fjboytucivmdykkfpdhs.supabase.co'
 const SIGN_KEY = process.env.NEXT_PUBLIC_SIGN_SUPABASE_ANON_KEY || 'sb_publishable_9K2-GBTRb7ZYd5dkjPoeZA_kPPNElex'
 
@@ -50,22 +58,25 @@ export async function GET(request) {
 
   const { data: docs, error } = await sign.from('documentos')
     .select('id, titulo, tipo, processo, status, sync_cmp_em, signatarios(nome, cpf, email, status, assinado_em)')
-    .not('processo', 'is', null).is('sync_cmp_em', null).eq('status', 'assinado').limit(10)
+    .is('sync_cmp_em', null).eq('status', 'assinado').limit(10)
   if (error) return Response.json({ ok: false, erro: error.message }, { status: 500 })
 
   const resultados = []
   for (const d of (docs || [])) {
     try {
       const dig = String(d.processo || '').replace(/\D/g, '')
-      // acha o processo no CMP: número exato, número por dígitos
+      // acha o processo no CMP (quando há vínculo): número exato ou por dígitos
       let row = null
-      let q = await cmp.from('processos').select('id, numero').eq('numero', d.processo).limit(1)
-      row = q.data && q.data[0]
-      if (!row && dig) { q = await cmp.from('processos').select('id, numero').eq('numero_digitos', dig).limit(1); row = q.data && q.data[0] }
-      if (!row && dig) { q = await cmp.from('processos').select('id, numero').ilike('numero', '%' + d.processo + '%').limit(1); row = q.data && q.data[0] }
+      if (d.processo) {
+        let q = await cmp.from('processos').select('id, numero').eq('numero', d.processo).limit(1)
+        row = q.data && q.data[0]
+        if (!row && dig) { q = await cmp.from('processos').select('id, numero').eq('numero_digitos', dig).limit(1); row = q.data && q.data[0] }
+        if (!row && dig) { q = await cmp.from('processos').select('id, numero').ilike('numero', '%' + d.processo + '%').limit(1); row = q.data && q.data[0] }
+      }
 
       const sigs = (d.signatarios || []).filter(s => s.status === 'assinado')
       const quem = sigs.map(s => (s.nome || s.email || '') + (s.cpf ? ' (CPF ' + s.cpf + ')' : '')).filter(Boolean).join('; ')
+      const PASTA = pastaDestino(d)
 
       // baixa o PDF assinado (procuração: <id>.pdf · avulso: <id>/assinado.pdf)
       let pdfBuf = null, pdfNome = ''
@@ -81,15 +92,35 @@ export async function GET(request) {
         const dir = path.join(ROOT, chave, PASTA)
         fs.mkdirSync(dir, { recursive: true })
         fs.writeFileSync(path.join(dir, pdfNome), pdfBuf)
-        salvoEm = PASTA + '/' + pdfNome
+        salvoEm = 'Documentos > ' + PASTA
       }
       if (row) {
         const texto = '[Assinatura] ' + (d.titulo || 'Documento') + ' ASSINADO' + (quem ? ' por ' + quem : '') +
-          (salvoEm ? ' — cópia salva em Documentos > ' + PASTA + '.' : ' — cópia disponível no painel de Assinaturas.')
+          (salvoEm ? ' — cópia salva em ' + salvoEm + '.' : ' — cópia disponível no painel de Assinaturas.')
         await cmp.from('andamentos').insert({ processo_id: row.id, data: new Date().toISOString().slice(0, 10), texto, fonte: 'manual' })
       }
+
+      // e-mail de confirmação ao escritório (sempre que algo é assinado)
+      let emailOk = false
+      try {
+        const quando = (sigs[0] && sigs[0].assinado_em) ? new Date(sigs[0].assinado_em).toLocaleString('pt-BR', { timeZone: 'America/Fortaleza' }) : ''
+        const corpo = 'Documento assinado no assinador do CMPGestão.\n\n' +
+          'Documento: ' + (d.titulo || '(sem título)') + '\n' +
+          (quem ? ('Assinado por: ' + quem + '\n') : '') +
+          (quando ? ('Quando: ' + quando + '\n') : '') +
+          (d.processo ? ('Processo/caso: ' + d.processo + '\n') : 'Sem processo vinculado.\n') +
+          (salvoEm ? ('Cópia salva na ficha do processo, em ' + salvoEm + '.\n') : 'Cópia disponível no painel de Assinaturas.\n') +
+          '\nPainel: https://gestao.cmpadvogados.com.br/assinatura/painel'
+        const env = await enviarEmailCore({
+          para: EMAIL_ESCRITORIO,
+          assunto: '✍ Assinado: ' + (d.titulo || 'documento') + (quem ? ' — ' + quem.split(';')[0] : ''),
+          corpo, numero: dig || '', dedup: true
+        })
+        emailOk = !!(env && env.ok)
+      } catch (e) {}
+
       await sign.from('documentos').update({ sync_cmp_em: new Date().toISOString() }).eq('id', d.id)
-      resultados.push({ id: d.id, processo: d.processo, ficha: !!row, pdf: !!pdfBuf })
+      resultados.push({ id: d.id, processo: d.processo || null, ficha: !!row, pdf: !!pdfBuf, pasta: PASTA, email: emailOk })
     } catch (e) {
       resultados.push({ id: d.id, ok: false, erro: String((e && e.message) || e) })
     }

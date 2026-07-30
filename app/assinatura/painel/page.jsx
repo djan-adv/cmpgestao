@@ -4,7 +4,7 @@
 // de reenviar link, corrigir e-mail, baixar PDF (final ou parcial) e excluir.
 import { useEffect, useState, useCallback } from 'react'
 import { signSb } from '../../../lib/supabaseAssinatura'
-import { apiAssinatura } from '../../../lib/assinaturaApi'
+import { apiAssinatura, enviarLinkAssinatura } from '../../../lib/assinaturaApi'
 
 const NAVY = '#2E3A4B'
 const CORES = {
@@ -91,11 +91,13 @@ export default function PainelAssinaturas() {
     if (btn) { btn.disabled = true; btn.textContent = '…' }
     let ok = 0
     for (const s of pend) {
-      const r = await signSb.functions.invoke('enviar-email', { body: { to: s.email, nome: s.nome || '', titulo: d.titulo || 'documento', link: linkDe(d, s) } })
-      if (!(r.error || (r.data && r.data.ok === false))) ok++
+      // sai pelo servidor do CMP (contato@) — a edge function do assinador dava 500
+      if (await enviarLinkAssinatura({ to: s.email, nome: s.nome || '', titulo: d.titulo || 'documento', link: linkDe(d, s) })) ok++
     }
     if (btn) { btn.disabled = false; btn.textContent = '↻' }
-    alert('E-mail reenviado para ' + ok + ' de ' + pend.length + ' signatário(s) pendente(s).')
+    alert(ok === pend.length
+      ? ('✓ E-mail reenviado para ' + ok + ' signatário(s) pendente(s).')
+      : ('E-mail reenviado para ' + ok + ' de ' + pend.length + ' — o restante falhou; verifique o e-mail cadastrado ou use o link por WhatsApp.'))
   }
 
   async function corrigirEmail(d) {
