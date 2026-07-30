@@ -119,8 +119,10 @@ export default function AssinarDocumento() {
     const canvas = canvasRef.current
     const blob = await new Promise(res => canvas.toBlob(res, 'image/png'))
     const path = `${info.sig_id}.png`
-    const up = await signSb.storage.from('assinaturas').upload(path, blob, { upsert: true, contentType: 'image/png' })
-    if (up.error) { setMsg({ texto: 'Erro ao salvar assinatura: ' + up.error.message, ok: false }); setBusy(false); return }
+    // sem upsert: papel público não pode ON CONFLICT no storage. Se já existir
+    // (tentativa anterior que falhou no meio), segue com o arquivo que está lá.
+    const up = await signSb.storage.from('assinaturas').upload(path, blob, { contentType: 'image/png' })
+    if (up.error && !/exist|duplicate/i.test(up.error.message || '')) { setMsg({ texto: 'Erro ao salvar assinatura: ' + up.error.message, ok: false }); setBusy(false); return }
     const metodo = sigMode === 'typed' ? 'assinatura digitada em caligrafia' : 'assinatura desenhada à mão'
     const { error } = await signSb.rpc('assinar_avulso', { tok: token, p_nome: nomeF, p_cpf: cpf.trim() || null, p_path: path, p_ua: navigator.userAgent, p_metodo: metodo })
     if (error) { setMsg({ texto: error.message, ok: false }); setBusy(false); return }

@@ -35,7 +35,8 @@ const CSS = `
   .asn-hint{font-size:12px;color:var(--suave);margin-top:4px}
   .asn-gate{max-width:440px;margin:50px auto;display:block}
   .asn-doc{position:relative;overflow:hidden}
-  .asn-doc-inner{position:relative;z-index:1;padding:30px 34px;font-family:'Barlow',Arial,sans-serif;font-size:12pt;line-height:1.5;color:#1c1c1c;text-align:justify;border:1.6px solid #33475f}
+  .asn-doc-inner{position:relative;z-index:1;padding:30px 34px;font-family:'Barlow',Arial,sans-serif;font-size:12pt;line-height:1.5;color:#1c1c1c;text-align:justify;border:1.6px solid #33475f;display:flex;flex-direction:column;aspect-ratio:210/297}
+  .asn-doc-inner>*{width:100%}
   .asn-watermark{position:absolute;inset:0;background:url('/logo_cmp_full.png') center 46% no-repeat;background-size:360px;opacity:.06;z-index:0;pointer-events:none}
   .asn-doc-inner .timbre{text-align:left;padding-bottom:8px;margin-bottom:14px}
   .asn-doc-inner .timbre img{max-height:52px;width:auto}
@@ -43,7 +44,7 @@ const CSS = `
   .asn-doc-inner p{margin:0 0 12pt}
   .asn-doc-inner .rodape-doc{margin-top:2px;text-align:center;font-size:11pt}
   .asn-doc-inner .rodape-doc .nome-out{font-weight:700}
-  .asn-doc-inner .rodape-doc .contato-cmp{font-size:10.5pt;color:#333}
+  .asn-doc-inner .rodape-cmp{margin-top:auto;padding-top:8px;border-top:1px solid #c9cfd8;text-align:center;font-size:10pt;color:#555}
   .asn-doc-inner .rodape-doc .cpf-out{font-weight:700;margin-top:2px}
   .asn-doc-inner .campo{background:#fff6d8;padding:0 3px;border-radius:2px}
   .asn-doc-inner .vazio{color:#b98a00;font-style:italic}
@@ -69,7 +70,9 @@ const CSS = `
     .asn-doc{overflow:visible}
     .asn-doc-inner{padding:1.2cm 1.3cm;font-size:12pt;border:1.6px solid #33475f;-webkit-print-color-adjust:exact;print-color-adjust:exact}
     .asn-watermark{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .asn-doc-inner{display:block;aspect-ratio:auto}
     .asn-doc-inner .auditoria{page-break-before:always;margin-top:0;border-top:none}
+    .asn-doc-inner .rodape-cmp{position:fixed;bottom:0;left:0;right:0;background:#fff}
     @page{margin:1.2cm 1.1cm}
   }
 `
@@ -203,12 +206,10 @@ export default function AssinarProcuracao() {
        <div class="rodape-doc">
          <div class="cpf-out">${escH(assinado.cpf)}</div>
          ${assinado.ip ? `<div style="font-size:9.5pt;color:#555">IP: ${escH(assinado.ip)} · ${assinado.quando}</div>` : ''}
-         <div class="contato-cmp">0800 591 7259 &nbsp;|&nbsp; contato@cmpadvogados.com.br</div>
        </div>
        <div class="auditoria"><b>TRILHA DE AUDITORIA</b><br>Assinado eletronicamente por <b>${escH(assinado.nome)}</b> (CPF ${escH(assinado.cpf)}).<br><b>Fatores de autenticação:</b> ${assinado.fatores}.<br><b>Método:</b> ${assinado.metodo}.<br>Data/hora: <b>${assinado.quando}</b> · Identificador: <b>${assinado.id}</b><br>Fundamento: Lei nº 14.063/2020 e MP nº 2.200-2/2001.</div>`
     : `<div class="assin-linha">${escH(f.nome.trim()) || '[assinatura do outorgante]'}</div>
        <div class="rodape-doc">
-         <div class="contato-cmp">0800 591 7259 &nbsp;|&nbsp; contato@cmpadvogados.com.br</div>
          <div class="cpf-out">${escH(f.cpf) || '—'}</div>
        </div>`
 
@@ -217,11 +218,12 @@ export default function AssinarProcuracao() {
     <h1>Procuração</h1>
     <p><b>Outorgante:</b> ${f.nome.trim() ? ('<b>' + escH(f.nome.trim()) + '</b>') : ph('nome', '')}, ${qualif}, inscrito(a) no CPF de nº ${ph('CPF', f.cpf)}${f.rg.trim() ? ' e RG ' + escH(f.rg.trim()) : ''}, residente e domiciliado(a) na ${ph('endereço', enderecoCompleto)}, com e-mail: ${escH(f.email.trim())}${f.telefone.trim() ? (' e contato: ' + escH(f.telefone.trim())) : ''}.</p>
     <p><b>Outorgado:</b> ${OUTORGADO}.</p>
-    <p><b>Poderes:</b> o(a) outorgante nomeia e constitui seu bastante procurador o(a) outorgado(a), conferindo-lhe a cláusula <b>ad judicia et extra</b>, para o foro em geral, podendo propor, acompanhar e contestar ações em qualquer juízo, instância ou tribunal, bem como representá-lo(a) perante repartições públicas e privadas, com poderes especiais para <b>transigir, negociar</b>, firmar acordos, desistir, renunciar, substabelecer com ou sem reserva${podExtra}.</p>
+    <p><b>Poderes:</b> o(a) outorgante nomeia e constitui seu bastante procurador o(a) outorgado(a), conferindo-lhe a cláusula <b>ad judicia et extra</b>, para o foro em geral, ${doc && doc.finalidade ? 'em especial para <b>' + escH(doc.finalidade) + '</b>, ' : ''}podendo propor, acompanhar e contestar ações em qualquer juízo, instância ou tribunal, bem como representá-lo(a) perante repartições públicas e privadas, com poderes especiais para <b>transigir, negociar</b>, firmar acordos, desistir, renunciar, substabelecer com ou sem reserva${podExtra}.</p>
     ${clausulas(doc && doc.modelo)}
     <p>Outorgada de forma livre e consciente, por assinatura eletrônica, nos termos da Lei nº 14.063/2020 e da MP nº 2.200-2/2001.</p>
     <p style="text-align:center;margin-top:16pt">João Pessoa/PB, ${new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}.</p>
-    <div class="assin-bloco">${blocoAssinatura}</div>`
+    <div class="assin-bloco">${blocoAssinatura}</div>
+    <div class="rodape-cmp">0800 591 7259 &nbsp;|&nbsp; contato@cmpadvogados.com.br</div>`
 
   async function assinar() {
     setBusy(true)
@@ -231,8 +233,10 @@ export default function AssinarProcuracao() {
     const canvas = canvasRef.current
     const blob = await new Promise(res => canvas.toBlob(res, 'image/png'))
     const path = `${doc.sig_id}.png`
-    const up = await signSb.storage.from('assinaturas').upload(path, blob, { upsert: true, contentType: 'image/png' })
-    if (up.error) { setMsg({ texto: 'Erro ao salvar assinatura: ' + up.error.message, ok: false }); setBusy(false); return }
+    // sem upsert: papel público não pode ON CONFLICT no storage. Se já existir
+    // (tentativa anterior que falhou no meio), segue com o arquivo que está lá.
+    const up = await signSb.storage.from('assinaturas').upload(path, blob, { contentType: 'image/png' })
+    if (up.error && !/exist|duplicate/i.test(up.error.message || '')) { setMsg({ texto: 'Erro ao salvar assinatura: ' + up.error.message, ok: false }); setBusy(false); return }
     const metodo = sigMode === 'typed' ? 'assinatura digitada em caligrafia' : 'assinatura desenhada à mão'
     const { data, error } = await signSb.rpc('assinar_procuracao', { tok: params.s, p_nome: nome, p_cpf: cpf, p_telefone: telefone || null, p_email: email || null, p_path: path, p_ua: navigator.userAgent, p_metodo: metodo })
     if (error) { setMsg({ texto: error.message, ok: false }); setBusy(false); return }
@@ -280,7 +284,9 @@ export default function AssinarProcuracao() {
         pdf.addImage(c2.toDataURL('image/jpeg', 0.92), 'JPEG', 10, 10, w2, h2)
       }
       const blob = pdf.output('blob')
-      await signSb.storage.from('documentos').upload(params.d + '.pdf', blob, { upsert: true, contentType: 'application/pdf' })
+      // sem upsert (papel público); se a cópia já existe de uma tentativa anterior, usa-a
+      const upc = await signSb.storage.from('documentos').upload(params.d + '.pdf', blob, { contentType: 'application/pdf' })
+      if (upc.error && !/exist|duplicate/i.test(upc.error.message || '')) throw new Error(upc.error.message)
       const r = await signSb.functions.invoke('enviar-copia-assinada', {
         body: { doc_id: params.d, cliente_email: email, cliente_nome: nome, titulo: (doc && doc.titulo) || 'Procuração', pdf_path: params.d + '.pdf' },
       })

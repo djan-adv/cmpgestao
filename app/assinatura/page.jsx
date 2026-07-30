@@ -40,6 +40,7 @@ export default function GerarProcuracao() {
   const [nomeCli, setNomeCli] = useState('')
   const [telefone, setTelefone] = useState('')
   const [processo, setProcesso] = useState('')
+  const [finalidade, setFinalidade] = useState('')
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState(null)          // mensagem do formulário
   const [msgEnvio, setMsgEnvio] = useState(null) // mensagem da área do link
@@ -55,6 +56,7 @@ export default function GerarProcuracao() {
     if (q.get('email')) setEmailCli(q.get('email'))
     if (q.get('tel')) setTelefone(q.get('tel'))
     if (q.get('processo')) setProcesso(q.get('processo'))
+    if (q.get('finalidade')) setFinalidade(q.get('finalidade'))
   }, [])
 
   function mudarTipo(v) {
@@ -71,7 +73,7 @@ export default function GerarProcuracao() {
     const modelo = semGrat ? base + (grat ? 'g' : '') : base
     const titulo = LABELS[base] + (semGrat && grat ? ' c/ gratuidade' : '')
     const r = await apiAssinatura({
-      acao: 'criar', tipo: 'procuracao', modelo, titulo, processo: processo.trim() || null,
+      acao: 'criar', tipo: 'procuracao', modelo, titulo, processo: processo.trim() || null, finalidade: finalidade.trim() || null,
       signatarios: [{ nome: nomeCli.trim() || null, email: emailCli.trim() }],
     })
     if (!r.ok) { setMsg({ texto: r.erro || 'Não foi possível criar.', ok: false }); setBusy(false); return }
@@ -136,6 +138,10 @@ export default function GerarProcuracao() {
           <input type="checkbox" checked={grat} disabled={regra.travada} onChange={e => setGrat(e.target.checked)} style={{ width: 'auto' }} />
           Incluir requerimento de gratuidade da justiça
         </label>
+
+        <label style={estRotulo}>Finalidade (opcional)</label>
+        <input value={finalidade} onChange={e => setFinalidade(e.target.value)} placeholder='ex.: propor ação de indenização por danos morais contra a Energisa' style={estCampo} />
+        <p style={{ fontSize: 12, color: '#5b6673', margin: '4px 0 0' }}>Entra no texto da procuração logo após “para o foro em geral”.</p>
 
         <label style={estRotulo}>E-mail do cliente <span style={{ color: '#b3261e' }}>*</span></label>
         <input value={emailCli} onChange={e => setEmailCli(e.target.value)} type="email" placeholder="e-mail de quem vai assinar" style={estCampo} />
