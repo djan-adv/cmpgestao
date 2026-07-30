@@ -627,7 +627,20 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
 </section>
 <section id="s-relatorio" class="hidden">
   <div class="card">
-    <h3 style="margin-top:0">Relatório mensal para clientes</h3>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <h3 style="margin:0">Extrato de e-mails do mês</h3>
+      <span style="margin-left:auto;display:flex;gap:6px;align-items:center">
+        <button class="btn sm" onclick="relMes(-1)">◀</button>
+        <b id="rel-mes-label" style="min-width:140px;text-align:center;color:var(--navy)"></b>
+        <button class="btn sm" onclick="relMes(1)">▶</button>
+      </span>
+    </div>
+    <p class="note" style="margin-top:6px">Tudo o que o servidor enviou no mês (atualização semanal automática e envios pelo contato@), por cliente/processo/destinatário. Quando o e-mail tem rastreio, mostra se o destinatário abriu.</p>
+    <div id="rel-resumo" style="display:flex;gap:10px;flex-wrap:wrap;margin:10px 0"></div>
+    <div id="rel-lista"><div class="note">Carregando…</div></div>
+  </div>
+  <div class="card">
+    <h3 style="margin-top:0">Próxima etapa — linha do tempo por cliente</h3>
     <p class="note" style="max-width:680px">Em construção. A ideia: para cada cliente, uma linha do tempo com <b>todas as movimentações e atividades do mês</b> dos processos dele, gerada e enviada automaticamente <b>1x por mês</b>. Vamos detalhar juntos o formato (PDF/e-mail/WhatsApp), o que entra e o que fica de fora.</p>
   </div>
 </section>
@@ -6404,11 +6417,77 @@ function go(s){
   if(s==="monitoramento" && typeof renderMonitoramento==='function')renderMonitoramento();
   if(s==="robos" && typeof renderRobos==='function')renderRobos();if(s==="robos" && typeof renderEstagiario==='function')renderEstagiario();
   if(s==="emails" && typeof renderEmails==='function')renderEmails();
+  if(s==="relatorio" && typeof renderRelatorioMensal==='function')renderRelatorioMensal();
   try{ var _cfgP=document.getElementById('btn-cfg-proc'); if(_cfgP) _cfgP.style.display=(s==='processos')?'inline-block':'none'; }catch(e){}
   if(s==="sugestoes" && typeof renderSugestoes==='function'){ var _an=document.getElementById('sg-autor'); if(_an && !_an.value){ _an.value=((document.getElementById('who-name')||{}).textContent||'').trim(); } renderSugestoes(); }
   if(s==="lote") renderLote();
   try{ if(typeof renderNavLotes==='function') renderNavLotes(); }catch(e){}
   window.scrollTo(0,0);
+}
+/* ===== Relatório mensal · extrato de e-mails enviados pelo servidor ===== */
+window.__relMes=window.__relMes||(function(){ var d=new Date(); return {a:d.getFullYear(), m:d.getMonth()}; })();
+function relMes(delta){ var r=window.__relMes; r.m+=delta; if(r.m<0){r.m=11;r.a--;} if(r.m>11){r.m=0;r.a++;} renderRelatorioMensal(); }
+function relDig(s){ return String(s||'').replace(/\D/g,''); }
+async function renderRelatorioMensal(){
+  var lista=document.getElementById('rel-lista'); if(!lista) return;
+  var lab=document.getElementById('rel-mes-label'), res=document.getElementById('rel-resumo');
+  var r=window.__relMes;
+  var MESES=['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+  if(lab) lab.textContent=MESES[r.m]+' / '+r.a;
+  lista.innerHTML='<div class="note">Carregando…</div>'; if(res) res.innerHTML='';
+  var ini=new Date(r.a, r.m, 1).toISOString(), fim=new Date(r.a, r.m+1, 1).toISOString();
+  var sb=window.__sb;
+  var q=await sb.from('emails_enviados_dedup').select('para,numero,criado_em').gte('criado_em',ini).lt('criado_em',fim).order('criado_em',{ascending:true}).limit(3000);
+  if(q.error){ lista.innerHTML='<div class="note" style="color:#b5342b">Erro ao carregar: '+finEsc(q.error.message)+'</div>'; return; }
+  var envios=q.data||[];
+  // rastreio (aberturas) do mesmo mês, casado por destinatário+processo
+  var abertos={};
+  try{
+    var ras=await sb.from('email_rastreio').select('para,numero,aberturas,ultima_abertura').gte('criado_em',ini).lt('criado_em',fim).limit(3000);
+    (ras.data||[]).forEach(function(x){ if((x.aberturas||0)>0) abertos[String(x.para||'').toLowerCase()+'|'+relDig(x.numero)]=x; });
+  }catch(e){}
+  // mapa processo -> cliente (usa os processos já carregados; senão busca)
+  var mapa={};
+  ((window.DADOS&&DADOS.processos)||[]).forEach(function(p){ if(p&&p.numero) mapa[relDig(p.numero)]={cliente:p.cliente_nome||'', numero:p.numero}; });
+  if(!Object.keys(mapa).length){
+    try{ var pr=await sb.from('processos').select('numero,cliente_nome').limit(4000); (pr.data||[]).forEach(function(p){ if(p&&p.numero) mapa[relDig(p.numero)]={cliente:p.cliente_nome||'', numero:p.numero}; }); }catch(e){}
+  }
+  // agrupa por processo + destinatário
+  var g={};
+  envios.forEach(function(e){
+    var k=relDig(e.numero)+'|'+String(e.para||'').toLowerCase();
+    if(!g[k]) g[k]={numero:e.numero||'', para:e.para||'', datas:[]};
+    g[k].datas.push(new Date(e.criado_em));
+  });
+  var grupos=Object.keys(g).map(function(k){ return g[k]; });
+  grupos.forEach(function(x){ var m=mapa[relDig(x.numero)]; x.cliente=(m&&m.cliente)||''; x.aberto=abertos[String(x.para||'').toLowerCase()+'|'+relDig(x.numero)]||null; });
+  // resumo
+  var procs={}, dests={}; envios.forEach(function(e){ if(relDig(e.numero)) procs[relDig(e.numero)]=1; if(e.para) dests[String(e.para).toLowerCase()]=1; });
+  var qtdAbertos=grupos.filter(function(x){ return x.aberto; }).length;
+  var chip=function(n,rot){ return '<span style="background:#eef4fb;color:#22405f;border-radius:16px;padding:5px 12px;font-size:13px"><b>'+n+'</b> '+rot+'</span>'; };
+  if(res) res.innerHTML=chip(envios.length,'e-mail(s) enviado(s)')+chip(Object.keys(procs).length,'processo(s)')+chip(Object.keys(dests).length,'destinatário(s)')+(qtdAbertos?chip(qtdAbertos,'com abertura confirmada'):'');
+  if(!grupos.length){ lista.innerHTML='<div class="note">Nenhum e-mail enviado pelo servidor neste mês.</div>'; return; }
+  grupos.sort(function(a,b){ return (a.cliente||'￿').localeCompare(b.cliente||'￿') || String(a.numero).localeCompare(String(b.numero)) || a.para.localeCompare(b.para); });
+  var html='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr>'
+    +'<th style="text-align:left;padding:6px 10px 6px 0;color:var(--muted)">Cliente</th>'
+    +'<th style="text-align:left;padding:6px 10px 6px 0;color:var(--muted)">Processo</th>'
+    +'<th style="text-align:left;padding:6px 10px 6px 0;color:var(--muted)">Destinatário</th>'
+    +'<th style="text-align:center;padding:6px 8px;color:var(--muted)">Envios</th>'
+    +'<th style="text-align:left;padding:6px 10px 6px 0;color:var(--muted)">Dias do mês</th>'
+    +'<th style="text-align:left;padding:6px 0;color:var(--muted)">Abriu?</th></tr></thead><tbody>';
+  grupos.forEach(function(x){
+    var dias=x.datas.sort(function(a,b){return a-b;}).map(function(d){ return String(d.getDate()).padStart(2,'0'); }).join(', ');
+    var ab=x.aberto?('<span style="color:#0F6E56;font-weight:700">✓ sim</span>'+(x.aberto.ultima_abertura?(' <span class="note">('+new Date(x.aberto.ultima_abertura).toLocaleDateString('pt-BR')+')</span>'):'')):'<span class="note">—</span>';
+    html+='<tr style="border-top:1px solid #e5e9ef">'
+      +'<td style="padding:7px 10px 7px 0;font-weight:600;color:var(--navy)">'+(finEsc(x.cliente)||'<span class="note">(sem processo vinculado)</span>')+'</td>'
+      +'<td style="padding:7px 10px 7px 0;white-space:nowrap">'+finEsc(x.numero||'—')+'</td>'
+      +'<td style="padding:7px 10px 7px 0">'+finEsc(x.para)+'</td>'
+      +'<td style="padding:7px 8px;text-align:center"><b>'+x.datas.length+'</b></td>'
+      +'<td style="padding:7px 10px 7px 0">'+dias+'</td>'
+      +'<td style="padding:7px 0">'+ab+'</td></tr>';
+  });
+  html+='</tbody></table></div>';
+  lista.innerHTML=html;
 }
 /* ===== Lotes personalizados (pastas do menu esquerdo · engrenagem de config) ===== */
 window.__LOTES=window.__LOTES||[];
