@@ -417,6 +417,8 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
       <div class="kpis" id="fin-kpis"></div>
       <div class="card"><div style="max-height:46vh;overflow:auto"><table><thead><tr><th>Cliente</th><th>Descrição</th><th>Valor</th><th>Vencimento</th><th>Status</th><th>Pago em</th><th>Boleto/PIX</th><th>Reenviar</th><th>NF</th><th></th></tr></thead><tbody id="fin-body"></tbody></table></div></div>
       <p class="note" id="fin-nota" style="margin-top:8px"></p>
+      <!-- parcelas do parcelamento automático (emitidas pelo robô diário) -->
+      <div id="fin-programados" style="margin-top:14px"></div>
       <!-- metade de baixo: alvarás expedidos por mês -->
       <div class="card" id="fin-alvaras" style="margin-top:14px"></div>
     </section>
@@ -710,8 +712,15 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
     <label style="margin-top:10px">Descrição da cobrança</label>
     <input id="cob-desc" placeholder="Ex.: Honorários contratuais — parcela 1/3">
     <div class="row2">
-      <div><label>Valor (R$)</label><input id="cob-valor" inputmode="decimal" placeholder="0,00"></div>
-      <div><label>Vencimento</label><input id="cob-venc" type="date" min="2000-01-01" max="2100-12-31"></div>
+      <div><label>Valor (R$) <span class="note" style="font-weight:400">de cada parcela</span></label><input id="cob-valor" inputmode="decimal" placeholder="0,00"></div>
+      <div><label>Vencimento <span class="note" style="font-weight:400">da 1ª parcela</span></label><input id="cob-venc" type="date" min="2000-01-01" max="2100-12-31"></div>
+    </div>
+    <div class="row2" style="margin-top:8px">
+      <div><label>Parcelas</label>
+        <select id="cob-parcelas" onchange="cobParcelasMudou()">
+          <option value="1">1x (à vista)</option><option value="2">2x</option><option value="3">3x</option><option value="4">4x</option><option value="5">5x</option><option value="6">6x</option><option value="7">7x</option><option value="8">8x</option><option value="9">9x</option><option value="10">10x</option><option value="11">11x</option><option value="12">12x</option>
+        </select></div>
+      <div id="cob-parcelas-info" class="note" style="align-self:end;font-size:11.5px;line-height:1.4"></div>
     </div>
     <div style="margin-top:8px;background:#f6f9fc;border:1px solid #dbe6f2;border-radius:8px;padding:8px 10px;font-size:13px">
       <label style="cursor:pointer;font-weight:600;color:#22405f"><input type="checkbox" id="cob-cartao"> Aceitar também pagamento por CARTÃO (link do Cora)</label>
@@ -6482,7 +6491,7 @@ function go(s){
   if(s==="crm"){ if(typeof setCrmView==='function') setCrmView('captacao'); else renderCrm(); }
   if(s==="contatos"){ if(typeof setCrmView==='function') setCrmView('contatos'); else renderCrm(); }
   if(s==="etiquetas")renderEtiquetas(); if(s==="agenda")renderAgendaView(); if(s==="diligencias"){renderDiligencias(); try{ if(typeof renderVarasSemContato==='function') renderVarasSemContato(); }catch(e){}}
-  if(s==="financeiro" && typeof renderFinanceiro==='function')renderFinanceiro();
+  if(s==="financeiro" && typeof renderFinanceiro==='function'){renderFinanceiro(); try{ _renderProgramados(); }catch(e){}}
   if(s==="encerrados")renderEncerrados();
   if(s==="inove")renderInove();
   if(s==="james")renderJames();
@@ -8949,6 +8958,15 @@ async function _preencheFaturadoAuto(){
           +' · <span style="color:#185FA5">em aberto: '+reais(abertosC)+' ('+abertosB.length+')</span>'
           +(vencidos?(' · <span style="color:#b5342b;font-weight:700">'+vencidos+' vencido'+(vencidos===1?'':'s')+'</span>'):''));
       }
+      /* parcelas do parcelamento automático ainda por emitir */
+      try{
+        var rp=await window.__sb.from('boletos_programados').select('valor_centavos,vencimento').eq('processo_numero',String(p.numero||'')).eq('status','agendado').order('vencimento',{ascending:true});
+        var progs=(rp&&rp.data)||[];
+        if(progs.length){
+          var totP=progs.reduce(function(s,b){ return s+(parseInt(b.valor_centavos,10)||0); },0);
+          linhas.push('<span style="color:#7a4b00">⏱ programadas: '+progs.length+' parcela'+(progs.length===1?'':'s')+' ('+reais(totP)+') — próx. venc. '+String(progs[0].vencimento||'').split('-').reverse().join('/')+'</span>');
+        }
+      }catch(e){}
       /* sincroniza com o contratado: o que ainda falta emitir de boleto */
       var contratadoC=Math.round(_hv(p.hon_val_contratual)*100);
       if(contratadoC>0){
@@ -11219,8 +11237,67 @@ async function finCarregarClientes(){
   }catch(e){ if(sel) sel.innerHTML='<option value="">Falha ao carregar clientes</option>'; }
 }
 
+/* datas ISO (AAAA-MM-DD) para o parcelamento */
+function _addDiasISO(iso, dias){ var d=new Date(iso+'T12:00:00Z'); d.setUTCDate(d.getUTCDate()+dias); return d.toISOString().slice(0,10); }
+function _addMesesISO(iso, meses){
+  var p=String(iso).split('-').map(Number), a=p[0], m=p[1]-1+meses, dia=p[2];
+  var a2=a+Math.floor(m/12), m2=m%12; if(m2<0){m2+=12;a2--;}
+  var ultimo=new Date(Date.UTC(a2, m2+1, 0)).getUTCDate();
+  var d=new Date(Date.UTC(a2, m2, Math.min(dia,ultimo)));
+  return d.toISOString().slice(0,10);
+}
+function _isoMax(a,b){ return a>b?a:b; }
+/* lista dos boletos programados (parcelas futuras) no Financeiro */
+async function _renderProgramados(){
+  var el=document.getElementById('fin-programados'); if(!el) return;
+  try{
+    var r=await window.__sb.from('boletos_programados').select('*').in('status',['agendado','erro']).order('vencimento',{ascending:true}).limit(200);
+    if(r.error){ el.innerHTML=''; return; }
+    var rows=r.data||[];
+    if(!rows.length){ el.innerHTML=''; return; }
+    var html='<div class="card"><p class="sectlabel" style="display:flex;justify-content:space-between;align-items:center">Boletos programados (parcelas futuras)'
+      +'<span class="note" style="font-size:11px;text-transform:none;letter-spacing:0">emitidos e enviados automaticamente ~7 dias antes do vencimento</span></p>'
+      +'<div style="overflow-x:auto"><table style="width:100%;font-size:13px"><thead><tr><th style="text-align:left">Cliente</th><th style="text-align:left">Descrição</th><th style="text-align:right">Valor</th><th>Vencimento</th><th>Emite em</th><th>Status</th><th></th></tr></thead><tbody>';
+    rows.forEach(function(x){
+      var c=(FIN_CLIENTES&&FIN_CLIENTES[x.contato_id])||{};
+      var st=(x.status==='erro')?('<span style="color:#b5342b;font-weight:700" title="'+finEsc(x.erro||'')+'">erro</span>'):'<span style="color:#185FA5;font-weight:600">agendado</span>';
+      html+='<tr style="border-top:1px solid #eef2f7">'
+        +'<td style="padding:6px 8px 6px 0">'+finEsc(c.nome||'—')+'</td>'
+        +'<td style="padding:6px 8px 6px 0">'+finEsc(x.descricao||'')+(x.processo_numero?('<br><span class="note" style="font-size:10.5px">'+finEsc(x.processo_numero)+'</span>'):'')+'</td>'
+        +'<td style="padding:6px 8px;text-align:right;white-space:nowrap">'+finReais(x.valor_centavos)+'</td>'
+        +'<td style="padding:6px 8px;text-align:center;white-space:nowrap">'+String(x.vencimento||'').split('-').reverse().join('/')+'</td>'
+        +'<td style="padding:6px 8px;text-align:center;white-space:nowrap">'+String(x.emitir_em||'').split('-').reverse().join('/')+'</td>'
+        +'<td style="padding:6px 8px;text-align:center">'+st+'</td>'
+        +'<td style="padding:6px 0;text-align:right">'
+        +(x.status==='erro'?('<button class="btn sm ghost" style="font-size:11px" onclick="reativarProgramado(\''+x.id+'\')" title="Voltar para agendado e tentar de novo no próximo ciclo do robô">↻ tentar de novo</button> '):'')
+        +'<button class="btn sm ghost" style="font-size:11px;color:#b5342b;border-color:#e8c9c5" onclick="cancelarProgramado(\''+x.id+'\')">cancelar</button></td></tr>';
+    });
+    html+='</tbody></table></div></div>';
+    el.innerHTML=html;
+  }catch(e){ el.innerHTML=''; }
+}
+async function cancelarProgramado(id){
+  if(!confirm('Cancelar esta parcela programada? Ela NÃO será emitida (as já emitidas não mudam).')) return;
+  var r=await window.__sb.from('boletos_programados').update({status:'cancelado',atualizado_em:new Date().toISOString()}).eq('id',id);
+  if(r&&r.error){ alert('Erro: '+r.error.message); return; }
+  _renderProgramados();
+}
+async function reativarProgramado(id){
+  var r=await window.__sb.from('boletos_programados').update({status:'agendado',tentativas:0,erro:null,atualizado_em:new Date().toISOString()}).eq('id',id);
+  if(r&&r.error){ alert('Erro: '+r.error.message); return; }
+  _renderProgramados();
+}
+function cobParcelasMudou(){
+  var n=parseInt((document.getElementById('cob-parcelas')||{}).value,10)||1;
+  var info=document.getElementById('cob-parcelas-info'); if(!info) return;
+  if(n<=1){ info.textContent=''; return; }
+  var v=finCentavos((document.getElementById('cob-valor')||{}).value||'');
+  info.innerHTML='1ª parcela sai <b>agora</b>; as outras '+(n-1)+' são emitidas e enviadas <b>automaticamente</b>, uma por mês (~7 dias antes de cada vencimento)'+(v>0?(' — total R$ '+((v*n)/100).toFixed(2).replace('.',',')):'')+'.';
+}
 function abrirNovaCobranca(){
   ['cob-desc','cob-valor','cob-venc','cob-doc','cob-novo-nome','cob-novo-email','cob-proc'].forEach(function(id){var e=document.getElementById(id); if(e) e.value='';});
+  var np=document.getElementById('cob-parcelas'); if(np) np.value='1';
+  var ni=document.getElementById('cob-parcelas-info'); if(ni) ni.textContent='';
   var ck=document.getElementById('cob-cartao'); if(ck) ck.checked=false;
   var m=document.getElementById('cob-msg'); if(m) m.textContent='';
   window.__cobProcSel=null;
@@ -11294,6 +11371,8 @@ async function emitirCobranca(){
   if(!(centavos>0)){ msg.textContent='Informe um valor válido.'; return; }
   if(centavos<500){ msg.textContent='O Cora exige valor mínimo de R$ 5,00 por cobrança.'; return; }
   if(!vencimento){ msg.textContent='Informe o vencimento.'; return; }
+  var nParc=parseInt((document.getElementById('cob-parcelas')||{}).value,10)||1;
+  if(nParc>1 && !/parcela/i.test(descricao)) descricao=descricao+' — parcela 1/'+nParc;
   btn.disabled=true; var txt=btn.textContent; btn.textContent='Emitindo…'; msg.textContent='';
   try{
     var tok=await finToken();
@@ -11317,8 +11396,32 @@ async function emitirCobranca(){
       var nomeCli=ehNovo?novoNome:((FIN_CLIENTES&&FIN_CLIENTES[contato_id]&&FIN_CLIENTES[contato_id].nome)||'');
       if(destEmail) await _enviarBoletoPorEmail(destEmail, j.cobranca, window.__cobProcSel, nomeCli);
     }catch(e){ console.warn('envio automático do boleto:',e&&e.message||e); }
+    /* parcelamento: programa as parcelas 2..N — o robô diário emite e envia cada uma
+       ~7 dias antes do vencimento (sempre no mesmo dia do mês da 1ª) */
+    if(nParc>1){
+      try{
+        var progs=[];
+        for(var k=2;k<=nParc;k++){
+          var vencK=_addMesesISO(vencimento, k-1);
+          progs.push({
+            contato_id:(j.cobranca&&j.cobranca.contato_id)||null,
+            processo_numero:(window.__cobProcSel&&window.__cobProcSel.numero)?String(window.__cobProcSel.numero):null,
+            descricao:descricao.replace(/parcela\s*1\/(\d+)/i,'parcela '+k+'/$1'),
+            valor_centavos:centavos,
+            vencimento:vencK,
+            emitir_em:_isoMax(_addDiasISO(vencK,-7), _addDiasISO(_hojeISO(),1)),
+            cartao:aceitaCartao,
+            criado_por:((document.getElementById('who-name')||{}).textContent||'').trim()||null
+          });
+        }
+        var rp=await window.__sb.from('boletos_programados').insert(progs);
+        if(rp&&rp.error){ alert('Boleto 1/'+nParc+' emitido, mas NÃO consegui programar as demais parcelas: '+rp.error.message+'\n\nEmita-as manualmente ou tente de novo.'); }
+        else{ alert('Boleto 1/'+nParc+' emitido e enviado.\n\nAs outras '+(nParc-1)+' parcelas ficaram programadas — o sistema emite e envia cada uma automaticamente (~7 dias antes do vencimento). Acompanhe em Financeiro → Boletos programados.'); }
+      }catch(e){ alert('Boleto emitido, mas houve erro ao programar as parcelas: '+(e&&e.message||e)); }
+    }
     fecharNovaCobranca();
     await renderFinanceiro();
+    try{ _renderProgramados(); }catch(e){}
   }catch(e){ msg.textContent='Erro de rede. Tente de novo.'; }
   btn.disabled=false; btn.textContent=txt;
 }

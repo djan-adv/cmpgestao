@@ -27,6 +27,8 @@ function brasilia() {
 const JOBS = [
   { nome: 'jusbr_refresh', rotulo: 'jus.br — renovar token', url: '/api/jusbr/refresh', cada_min: 20 },
   { nome: 'conciliar', rotulo: 'Cora — baixa automática', url: '/api/cora/conciliar-auto', cada_min: 10 },
+  // parcelas do parcelamento automático: emite no Cora e envia por e-mail (~7 dias antes do venc.)
+  { nome: 'boletos_programados', rotulo: 'Cora — parcelas programadas', url: '/api/cora/programados?rodar=1', diario_hora: 8 },
   { nome: 'notificar_jader', rotulo: 'Notificações do Jader', url: '/api/notificar-jader', cada_min: 15 },
   { nome: 'djen', rotulo: 'DJEN — publicações do dia', url: '/api/cron/djen', diario_hora: 5 },
   { nome: 'jusbr_docs', rotulo: 'jus.br — puxar documentos', url: '/api/jusbr/puxar-docs', diario_hora: 6 },
