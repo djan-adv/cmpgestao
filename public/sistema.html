@@ -8768,6 +8768,15 @@ function honQuadroHTML(p){
     if(tem) out+=honVerbaRow(rot,valCampo,p[valCampo],pctCampo,pctCampo?p[pctCampo]:null,showPct&&!!pctCampo);
     else chips.push([rot,valCampo]);
   }
+  /* resumo em linguagem clara do que o cliente contratou: valor fixo + % do êxito */
+  (function(){
+    var cv=_hv(p.hon_val_contratual);
+    var cp=(p.hon_pct_contratual!=null&&p.hon_pct_contratual!=='')?Number(p.hon_pct_contratual):null;
+    if(cv>0||cp){
+      out+='<div style="font-size:11px;color:#0F6E56;background:#eaf6ef;border-radius:8px;padding:4px 9px;margin:0 0 7px;line-height:1.35"><b>Contratado:</b> '
+        +(cv>0?('R$ '+hFmt(cv)):'')+(cv>0&&cp?' + ':'')+(cp?(String(cp).replace('.',',')+'% do êxito'):'')+'</div>';
+    }
+  })();
   verba('Contratual','hon_val_contratual','hon_pct_contratual',true);
   verba('Sucumbência','hon_val_sucumbencia','hon_pct_sucumbencia',true);
   verba('Execução','hon_val_execucao','hon_pct_execucao',!trab);
@@ -8798,9 +8807,12 @@ function honQuadroHTML(p){
       +'</div>';
   }
   out+=div;
-  /* Faturado = soma dos boletos emitidos guardados em Documentos > Boletos emitidos
-     (preenchido em segundo plano por _preencheFaturadoAuto após a ficha abrir) */
-  out+=honRow('Faturado','<b id="hon-faturado-auto" style="color:#0F6E56;font-size:11.5px" title="Soma automática dos boletos emitidos guardados em Documentos > Boletos emitidos">…</b>');
+  /* Faturado = boletos emitidos no Financeiro (sincronizado: pagos / em aberto /
+     a faturar do contratado) — preenchido por _preencheFaturadoAuto após a ficha abrir */
+  out+='<div style="line-height:1.5">'
+    +'<div style="display:flex;justify-content:space-between;gap:8px"><span style="color:var(--muted)">Faturado</span><b id="hon-faturado-auto" style="color:#0F6E56;font-size:11.5px;white-space:nowrap" title="Boletos emitidos para este processo na aba Financeiro (cancelados não contam)">…</b></div>'
+    +'<div id="hon-fat-detalhe" style="font-size:10.5px;color:var(--muted);line-height:1.45"></div>'
+    +'</div>';
   /* rodapé: quando foi a última atualização monetária e o botão de refazer */
   var atzTxt=p.hon_atualizado_em
     ? ('atualizado em <b>'+String(p.hon_atualizado_em).slice(0,10).split('-').reverse().join('/')+'</b>'+(p.hon_indice?(' · '+esc(p.hon_indice)):''))
@@ -8917,13 +8929,36 @@ async function aplicarAtualizacaoHon(btn){
    cancelados). Apagar/cancelar no Financeiro reflete aqui automaticamente. */
 async function _preencheFaturadoAuto(){
   var el=document.getElementById('hon-faturado-auto'); if(!el||typeof atual==='undefined'||!atual) return;
+  var det=document.getElementById('hon-fat-detalhe');
+  var reais=function(c){ return 'R$ '+(c/100).toFixed(2).replace('.',','); };
   try{
-    var bols=(await _boletosDoProcesso(atual)).filter(function(x){ return x.status!=='cancelada'; });
+    var p=atual;
+    var bols=(await _boletosDoProcesso(p)).filter(function(x){ return x.status!=='cancelada'; });
     var tot=bols.reduce(function(s,b){ return s+(parseInt(b.valor_centavos,10)||0); },0);
-    var pagos=bols.filter(function(x){return x.status==='paga';}).length;
-    el.textContent=bols.length?('R$ '+(tot/100).toFixed(2).replace('.',',')+' ('+bols.length+' boleto'+(bols.length===1?'':'s')+(pagos?(', '+pagos+' pago'+(pagos===1?'':'s')):'')+')'):'R$ 0,00';
-    el.title='Soma dos boletos emitidos para este processo (aba Financeiro). Cancelados não contam.';
-  }catch(e){ el.textContent='—'; }
+    var pagosB=bols.filter(function(x){return x.status==='paga';});
+    var abertosB=bols.filter(function(x){return x.status!=='paga';});
+    var pagosC=pagosB.reduce(function(s,b){ return s+(parseInt(b.valor_centavos,10)||0); },0);
+    var abertosC=tot-pagosC;
+    var hoje=new Date().toISOString().slice(0,10);
+    var vencidos=abertosB.filter(function(x){ return x.vencimento && String(x.vencimento).slice(0,10)<hoje; }).length;
+    el.textContent=bols.length?(reais(tot)+' ('+bols.length+' boleto'+(bols.length===1?'':'s')+')'):'R$ 0,00';
+    if(det){
+      var linhas=[];
+      if(bols.length){
+        linhas.push('<span style="color:#0F6E56">✓ pagos: '+reais(pagosC)+' ('+pagosB.length+')</span>'
+          +' · <span style="color:#185FA5">em aberto: '+reais(abertosC)+' ('+abertosB.length+')</span>'
+          +(vencidos?(' · <span style="color:#b5342b;font-weight:700">'+vencidos+' vencido'+(vencidos===1?'':'s')+'</span>'):''));
+      }
+      /* sincroniza com o contratado: o que ainda falta emitir de boleto */
+      var contratadoC=Math.round(_hv(p.hon_val_contratual)*100);
+      if(contratadoC>0){
+        var aFat=contratadoC-tot;
+        if(aFat>0) linhas.push('a faturar do contratado: <b>'+reais(aFat)+'</b> (de '+reais(contratadoC)+')');
+        else if(bols.length) linhas.push('contratado ('+reais(contratadoC)+') já faturado por completo'+(aFat<0?' — excedente de '+reais(-aFat)+' (êxito/outras verbas)':''));
+      }
+      det.innerHTML=linhas.join('<br>');
+    }
+  }catch(e){ el.textContent='—'; if(det) det.textContent=''; }
 }
 /* No celular, o quadro de Honorários fica melhor abaixo do card "Dados do processo"
    (e acima do histórico), em vez de no topo da ficha. No desktop continua no canto
@@ -11373,9 +11408,11 @@ async function bpReenviar(id){
   var x=(window.__bpRows||[]).find(function(r){return r.id===id;}); if(!x) return;
   var email=_emailClienteDoProc(atual);
   if(!email){ alert('Este processo não tem e-mail de cliente cadastrado.'); return; }
+  var pr=podeReenviarBoleto(x); if(!pr.ok){ alert(pr.motivo); return; }
   if(!confirm('Reenviar o boleto de '+finReais(x.valor_centavos)+' para '+email+'?')) return;
   var cob={vencimento:x.vencimento,valor_centavos:x.valor_centavos,descricao:x.descricao,boleto_url:x.boleto_url,linha_digitavel:x.linha_digitavel,pix_emv:x.pix_emv};
   var res=await _enviarBoletoPorEmail(email, cob, atual);
+  if(res&&res.ok) marcarReenvioBoleto(x);
   alert(res&&res.ok?('Boleto reenviado para '+email+'.'):('Falha ao reenviar: '+((res&&res.erro)||'erro desconhecido')));
 }
 /* abre "Nova cobrança (Cora)" já vinculada a este processo/caso */
@@ -11518,6 +11555,22 @@ async function enviarBoletoDoProcesso(){
 }
 /* botão "reenviar" na tabela do Financeiro: usa os dados já carregados da
    cobrança (FIN_ROWS/FIN_CLIENTES), sem precisar ler a pasta de documentos. */
+/* Regra de reenvio de boleto: ANTES do vencimento, no máximo 1 reenvio (para a
+   cobrança não virar spam); NO DIA do vencimento e depois, libera de novo. */
+function podeReenviarBoleto(x){
+  var hoje=new Date().toISOString().slice(0,10);
+  var venc=String((x&&x.vencimento)||'').slice(0,10);
+  if(venc && hoje<venc && (parseInt(x.reenvio_count,10)||0)>=1){
+    return {ok:false, motivo:'Este boleto vence em '+venc.split('-').reverse().join('/')+' e já foi reenviado 1 vez.\n\nAntes do vencimento o limite é 1 reenvio. A partir da data do vencimento, o reenvio libera de novo.'};
+  }
+  return {ok:true};
+}
+async function marcarReenvioBoleto(x){
+  if(!x||!x.id) return;
+  x.reenvio_count=(parseInt(x.reenvio_count,10)||0)+1;
+  x.ultimo_reenvio=new Date().toISOString();
+  try{ await window.__sb.from('cora_cobrancas').update({reenvio_count:x.reenvio_count, ultimo_reenvio:x.ultimo_reenvio}).eq('id',x.id); }catch(e){}
+}
 /* Reenvia TODAS as cobranças em aberto de uma vez. É disparo para fora — então
    monta a lista antes, mostra para quem vai, e só envia depois da confirmação.
    Manda uma por vez com respiro entre elas, para não levar bloqueio do provedor. */
@@ -11533,12 +11586,18 @@ async function reenviarTodasCobrancas(){
 
   /* separa quem dá para enviar de quem não tem e-mail — o segundo grupo precisa
      aparecer, senão o escritório acha que cobrou e não cobrou */
-  var comEmail=[], semEmail=[];
+  var comEmail=[], semEmail=[], seguradas=0;
   abertas.forEach(function(x){
+    /* não vencidas já reenviadas 1x ficam de fora — liberam no vencimento */
+    if(!podeReenviarBoleto(x).ok){ seguradas++; return; }
     var c=(FIN_CLIENTES&&FIN_CLIENTES[x.contato_id])||{};
     var email=String(c.email||'').trim();
     if(email) comEmail.push({x:x,c:c,email:email}); else semEmail.push({x:x,c:c});
   });
+  if(!comEmail.length && seguradas){
+    alert('Nada a reenviar agora: '+seguradas+' cobrança(s) ainda não vencida(s) já foi(ram) reenviada(s) 1 vez.\n\nAntes do vencimento o limite é 1 reenvio; no vencimento libera de novo.');
+    return;
+  }
   if(!comEmail.length){
     alert('Nenhum dos '+abertas.length+' clientes com cobrança em aberto tem e-mail cadastrado.\n\nCadastre o e-mail no contato para poder reenviar.');
     return;
@@ -11550,6 +11609,7 @@ async function reenviarTodasCobrancas(){
   var aviso='Reenviar '+comEmail.length+' cobrança(s) em aberto por e-mail?\n\n'+amostra
     +(comEmail.length>8?('\n… e mais '+(comEmail.length-8)):'')
     +(vencidas?('\n\n'+vencidas+' já está(ão) vencida(s).'):'')
+    +(seguradas?('\n\n'+seguradas+' não vencida(s) já reenviada(s) 1x ficam de fora (liberam no vencimento).'):'')
     +(semEmail.length?('\n\n⚠ '+semEmail.length+' cliente(s) ficam de fora por não ter e-mail cadastrado.'):'')
     +'\n\nO cliente recebe um e-mail por cobrança. Confirma?';
   if(!confirm(aviso)) return;
@@ -11562,7 +11622,7 @@ async function reenviarTodasCobrancas(){
     var cob={vencimento:o.x.vencimento,valor_centavos:o.x.valor_centavos,descricao:o.x.descricao,boleto_url:o.x.boleto_url,linha_digitavel:o.x.linha_digitavel,pix_emv:o.x.pix_emv};
     var res=null;
     try{ res=await _enviarBoletoPorEmail(o.email, cob, null, o.c.nome); }catch(e){ res={ok:false,erro:String(e&&e.message||e)}; }
-    if(res&&res.ok) ok++; else falhas.push((o.c.nome||o.email)+': '+((res&&res.erro)||'erro'));
+    if(res&&res.ok){ ok++; marcarReenvioBoleto(o.x); } else falhas.push((o.c.nome||o.email)+': '+((res&&res.erro)||'erro'));
     /* respiro entre os envios — rajada seguida costuma virar bloqueio no provedor */
     if(i<comEmail.length-1) await new Promise(function(r){ setTimeout(r,700); });
   }
@@ -11597,9 +11657,11 @@ async function reenviarBoletoLinha(id){
   var email=String(c.email||'').trim();
   if(!email){ alert('Este cliente não tem e-mail cadastrado. Cadastre o e-mail no contato para poder reenviar.'); return; }
   if(!(x.boleto_url||x.pix_emv)){ alert('Esta cobrança não tem boleto/PIX gerado.'); return; }
+  var pr=podeReenviarBoleto(x); if(!pr.ok){ alert(pr.motivo); return; }
   if(!confirm('Reenviar o boleto de '+finReais(x.valor_centavos)+' para '+email+'?')) return;
   var cob={vencimento:x.vencimento,valor_centavos:x.valor_centavos,descricao:x.descricao,boleto_url:x.boleto_url,linha_digitavel:x.linha_digitavel,pix_emv:x.pix_emv};
   var res=await _enviarBoletoPorEmail(email, cob, null, c.nome);
+  if(res&&res.ok) marcarReenvioBoleto(x);
   alert(res&&res.ok?('Boleto reenviado para '+email+'.'):('Falha ao reenviar: '+((res&&res.erro)||'erro desconhecido')));
 }
 
