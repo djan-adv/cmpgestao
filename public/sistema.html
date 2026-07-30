@@ -1824,7 +1824,10 @@ function abrir(i){
   var __enc=/encerr/i.test(p.status||'');
   // cabeçalho: partes em duas colunas fixas (Autor | Réu) com CPF/CNPJ abaixo do nome,
   // e botões de edição SEMPRE no mesmo lugar (memória visual das fichas)
-  html+='<div class="card" style="position:relative">'+honQuadroHTML(p)+_partesTopoHTML(p)+
+  var _semBanco=(!p._id && (p.ehCaso || p.fonte==='caso' || p.fonte==='manual'));
+  html+='<div class="card" style="position:relative">'+honQuadroHTML(p)
+    +(_semBanco?'<div style="margin:0 0 10px;background:#fdecea;border:1px solid #f2b8b3;border-radius:8px;padding:7px 10px;font-size:12.5px;color:#b3261e"><b>⚠ Este cadastro ainda não está gravado no banco</b> — documentos, boletos e robôs não funcionam até salvar. <button class="btn sm" style="margin-left:8px;font-size:11px;background:#b3261e;color:#fff;border:1px solid #b3261e" onclick="salvarFichaNoBanco()">Salvar agora</button></div>':'')
+    +_partesTopoHTML(p)+
     '<div class="subhead" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">'+_numFichaHTML(p)+
     (typeof JALINE!=='undefined'&&JALINE[String(p.numero||'').replace(/\D/g,'')]?'<span class="pill" style="background:var(--gold);color:#fff" title="Pasta de Jaline — honorários exclusivos Djan e Jaline">Jaline</span>':'')+
     '<span id="proc-vinculados" style="display:inline-flex;gap:6px;flex-wrap:wrap;align-items:center"></span></div>'+
@@ -2136,8 +2139,63 @@ function _parteItemHTML(nome, autor){
     : 'font-size:17px;font-weight:500;color:var(--ink);line-height:1.2';
   return '<div style="margin:0 0 8px">'
     +'<span onclick="copiarParte(this)" data-v="'+esc(nome)+'" title="Clique para copiar o nome" style="cursor:copy;border-radius:4px;padding:1px 3px;margin-left:-3px;'+estNome+'">'+esc(nome)+'</span>'
-    +'<br><span class="parte-doc-slot" data-nk="'+esc(nk)+'" onclick="if(this.getAttribute(\'data-v\'))copiarParte(this)" title="Clique para copiar" style="cursor:copy;font-size:11.5px;color:var(--muted);opacity:.8;border-radius:4px;padding:1px 3px;margin-left:-3px"></span>'
+    +'<br><span class="parte-doc-slot" data-nk="'+esc(nk)+'" data-nome="'+esc(nome)+'" onclick="if(this.getAttribute(\'data-v\'))copiarParte(this)" title="Clique para copiar" style="cursor:copy;font-size:11.5px;color:var(--muted);opacity:.8;border-radius:4px;padding:1px 3px;margin-left:-3px"></span>'
+    +'<a onclick="editarDocParte(this.getAttribute(\'data-nome\'))" data-nome="'+esc(nome)+'" title="Informar/corrigir o CPF ou CNPJ desta parte (grava no cadastro de Contatos)" style="cursor:pointer;color:#185FA5;font-size:11px;margin-left:5px">✎</a>'
     +'</div>';
+}
+/* informa/corrige o CPF/CNPJ de uma parte — grava no cadastro de Contatos
+   (cria o contato se ainda não existir) e repinta o card */
+async function editarDocParte(nome){
+  if(!nome) return;
+  var nk=normClienteNome(nome);
+  var atualDoc=(window.__docsPorNome||{})[nk]||'';
+  var v=window.prompt('CPF ou CNPJ de '+nome+':\n(11 dígitos = CPF, 14 = CNPJ; deixe vazio para limpar)', _fmtDocParte(atualDoc));
+  if(v===null) return;
+  var d=String(v).replace(/\D/g,'');
+  if(String(v).trim()!=='' && d.length!==11 && d.length!==14){ alert('Documento inválido: informe 11 dígitos (CPF) ou 14 (CNPJ).'); return; }
+  try{
+    var sb=window.__sb; if(!sb) throw new Error('sem conexão');
+    var r=await sb.from('contatos').select('id,nome').limit(4000);
+    if(r.error) throw new Error(r.error.message);
+    var m=(r.data||[]).find(function(c){ return normClienteNome(c.nome)===nk; });
+    if(m){
+      var up=await sb.from('contatos').update({cpf_cnpj:(d||null)}).eq('id',m.id);
+      if(up.error) throw new Error(up.error.message);
+    } else if(d){
+      var esc2=null; try{ var ug=await sb.auth.getUser(); var pf=await sb.from('usuarios').select('escritorio_id').eq('id',ug.data.user.id).single(); esc2=pf&&pf.data&&pf.data.escritorio_id; }catch(e){}
+      var reg={nome:nome, cpf_cnpj:d, tipo:'cliente'}; if(esc2) reg.escritorio_id=esc2;
+      var insC=await sb.from('contatos').insert(reg);
+      if(insC.error) throw new Error(insC.error.message);
+      CONTATOS=null;
+    }
+    window.__docsPorNome=null; /* força recarregar o mapa */
+    _preencherDocsPartes();
+  }catch(e){ alert('Não consegui salvar o documento: '+((e&&e.message)||e)); }
+}
+/* grava no banco uma ficha que ficou só na tela (falha na criação pelo Comercial/
+   cadastro manual). Mostra o ERRO de verdade quando não dá — nada de falha muda. */
+async function salvarFichaNoBanco(){
+  if(typeof atual==='undefined'||!atual) return;
+  var p=atual;
+  if(p._id){ alert('Esta ficha já está gravada.'); return; }
+  try{
+    var sb=window.__sb; if(!sb) throw new Error('sem conexão com o banco');
+    var ug=await sb.auth.getUser();
+    if(!ug||!ug.data||!ug.data.user) throw new Error('sua sessão expirou — recarregue a página e entre de novo');
+    var pf=await sb.from('usuarios').select('escritorio_id').eq('id',ug.data.user.id).single();
+    var esc=pf&&pf.data&&pf.data.escritorio_id;
+    if(!esc) throw new Error('seu usuário está sem escritório vinculado (tabela usuarios)'+(pf&&pf.error?(' — '+pf.error.message):''));
+    var ins=await sb.from('processos').insert({escritorio_id:esc,numero:String(p.numero||''),cliente_nome:p.cliente||null,oponente:p.oponente||null,assunto:p.tipo||null,foro:p.foro||null,status:p.status||'Administrativo',fonte:p.fonte||(p.ehCaso?'caso':'manual')}).select('id').single();
+    if(ins.error) throw new Error(ins.error.message);
+    p._id=ins.data.id;
+    /* leva o histórico manual que ficou só na tela */
+    try{
+      var manuais=(p.hist_full||[]).filter(function(a){ return a && a.f==='manual' && a.texto; });
+      for(var i=0;i<manuais.length;i++){ await sb.from('andamentos').insert({processo_id:p._id,data:String(manuais[i].data||'').slice(0,10)||new Date().toISOString().slice(0,10),texto:manuais[i].texto,fonte:'manual'}); }
+    }catch(e){}
+    alert('✓ Gravado no banco. A ficha agora funciona por completo.');
+    var idx=DADOS.processos.indexOf(p); if(idx>=0) abrir(idx);
+  }catch(e){ alert('NÃO gravou: '+((e&&e.message)||e)+'\n\nMe mande esta mensagem que eu corrijo.'); }
 }
 /* topo da 1ª ficha: colunas Autor | Réu com CPF/CNPJ abaixo de cada nome (copiáveis)
    e a fileira de botões de edição SEMPRE no mesmo lugar */
@@ -2176,8 +2234,13 @@ async function _preencherDocsPartes(){
   }
   slots.forEach(function(s){
     var d=window.__docsPorNome[s.getAttribute('data-nk')||''];
-    if(d){ s.setAttribute('data-v',_fmtDocParte(d)); s.textContent=_fmtDocParte(d); s.title='Clique para copiar'; }
-    else { s.textContent='CPF/CNPJ não cadastrado'; s.style.cursor='default'; s.style.opacity='.45'; s.style.fontStyle='italic'; }
+    if(d){ s.setAttribute('data-v',_fmtDocParte(d)); s.textContent=_fmtDocParte(d); s.title='Clique para copiar'; s.style.cursor='copy'; s.style.opacity='.8'; s.style.fontStyle=''; s.onclick=null; }
+    else {
+      s.removeAttribute('data-v'); s.textContent='CPF/CNPJ não cadastrado — informar';
+      s.style.cursor='pointer'; s.style.opacity='.5'; s.style.fontStyle='italic';
+      s.title='Clique para informar o CPF/CNPJ';
+      s.onclick=function(){ editarDocParte(this.getAttribute('data-nome')); };
+    }
   });
 }
 function renderContatos(){
@@ -5550,8 +5613,13 @@ async function salvarCadManual(){
   try{ var sb=window.__sb; if(sb){ var ug=await sb.auth.getUser(); var pf=await sb.from('usuarios').select('escritorio_id').eq('id',ug.data.user.id).single(); var esc=pf&&pf.data&&pf.data.escritorio_id;
     if(esc){ var ins=await sb.from('processos').insert({escritorio_id:esc,numero:num,cliente_nome:cli||null,oponente:op||null,assunto:assunto||null,foro:foro||null,status:status,fonte:(ehCaso?'caso':'manual')}).select('id').single(); if(ins&&ins.data){ novo._id=ins.data.id;
       try{ if(typeof logEvent==='function') logEvent('case_registered','processo',num,{modo:(ehCaso?'caso':'manual')}); }catch(eLg){}
-      if(obs){ await sb.from('andamentos').insert({processo_id:ins.data.id,data:new Date().toISOString().slice(0,10),texto:'[Cadastro manual] '+obs,fonte:'manual'}); } } }
-  } }catch(e){ console.warn('cadastro manual (banco):',e&&e.message||e); }
+      if(obs){ await sb.from('andamentos').insert({processo_id:ins.data.id,data:new Date().toISOString().slice(0,10),texto:'[Cadastro manual] '+obs,fonte:'manual'}); } }
+      else if(ins&&ins.error){ window.__cadErro=ins.error.message; }
+    } else { window.__cadErro='seu usuário está sem escritório vinculado (tabela usuarios)'; }
+  } }catch(e){ window.__cadErro=(e&&e.message)||String(e); console.warn('cadastro manual (banco):',e&&e.message||e); }
+  /* falha ao gravar NÃO pode ser silenciosa: sem _id a ficha trava depois */
+  if(!novo._id){ alert('⚠ ATENÇÃO: o cadastro foi criado na tela mas NÃO gravou no banco'+(window.__cadErro?(':\n\n'+window.__cadErro):'.')+'\n\nA ficha vai abrir com o botão "Salvar agora" no topo — use-o para tentar de novo.'); }
+  window.__cadErro=null;
   /* Vincular a cliente da base OU criar contato novo */
   if(cli){
     try{ seedContatos(); }catch(e){}
@@ -5634,8 +5702,12 @@ async function gerarCasoNovoCliente(){
     if(esc){ var ins=await sb.from('processos').insert({escritorio_id:esc,numero:num,cliente_nome:cli||null,oponente:op||null,assunto:(assunto||peca)||null,status:'Administrativo',fonte:'caso'}).select('id').single(); if(ins&&ins.data){ novo._id=ins.data.id;
       try{ if(typeof logEvent==='function') logEvent('case_registered','processo',num,{modo:'caso'}); }catch(eLg){}
       if(obs) await sb.from('andamentos').insert({processo_id:ins.data.id,data:isoDia,texto:'[Cadastro manual] '+obs,fonte:'manual'});
-      await sb.from('andamentos').insert({processo_id:ins.data.id,data:isoDia,texto:pedido,fonte:'manual'}); } }
-  } }catch(e){ console.warn('gerar caso (banco):',e&&e.message||e); }
+      await sb.from('andamentos').insert({processo_id:ins.data.id,data:isoDia,texto:pedido,fonte:'manual'}); }
+      else if(ins&&ins.error){ window.__cadErro=ins.error.message; }
+    } else { window.__cadErro='seu usuário está sem escritório vinculado (tabela usuarios)'; }
+  } }catch(e){ window.__cadErro=(e&&e.message)||String(e); console.warn('gerar caso (banco):',e&&e.message||e); }
+  if(!novo._id){ alert('⚠ ATENÇÃO: o caso foi criado na tela mas NÃO gravou no banco'+(window.__cadErro?(':\n\n'+window.__cadErro):'.')+'\n\nA ficha vai abrir com o botão "Salvar agora" no topo — use-o para tentar de novo.'); }
+  window.__cadErro=null;
   /* vínculo com cliente (base) ou criação de contato novo — mesma lógica do cadastro */
   try{ seedContatos(); }catch(e){}
   var fe=window.__fichaExtraida||{};
