@@ -72,11 +72,24 @@ export default function DocumentoAvulso() {
   const [avulsos, setAvulsos] = useState([])
   const [mfMsg, setMfMsg] = useState({}) // doc_id -> mensagem da montagem final
 
+  const [processoVinc, setProcessoVinc] = useState('')
+
   const carregarLista = useCallback(async () => {
     const r = await apiAssinatura({ acao: 'listar' })
     if (r.ok) setAvulsos((r.documentos || []).filter(d => d.tipo === 'upload'))
   }, [])
   useEffect(() => { carregarLista() }, [carregarLista])
+
+  // chega pré-preenchido quando vem da ficha do processo (Kit do cliente novo)
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search)
+    if (q.get('titulo')) setTitulo(q.get('titulo'))
+    else if (q.get('nome')) setTitulo('Contrato de honorários — ' + q.get('nome'))
+    if (q.get('nome') || q.get('email')) {
+      setSigners(s => [{ nome: q.get('nome') || '', email: q.get('email') || '' }, ...s.slice(1)])
+    }
+    if (q.get('processo')) setProcessoVinc(q.get('processo'))
+  }, [])
 
   function setSigner(i, campo, valor) {
     setSigners(s => s.map((x, j) => j === i ? { ...x, [campo]: valor } : x))
@@ -108,7 +121,7 @@ export default function DocumentoAvulso() {
     const up = await signSb.storage.from('documentos').upload(path, pdfBlob, { contentType: 'application/pdf' })
     if (up.error) { setMsg({ texto: 'Erro ao enviar arquivo: ' + up.error.message, ok: false }); setBusy(false); return }
 
-    const r = await apiAssinatura({ acao: 'criar', tipo: 'upload', doc_id: docId, titulo: titulo.trim(), arquivo_path: path, signatarios: validos })
+    const r = await apiAssinatura({ acao: 'criar', tipo: 'upload', doc_id: docId, titulo: titulo.trim(), arquivo_path: path, processo: processoVinc.trim() || null, signatarios: validos })
     if (!r.ok) { setMsg({ texto: r.erro || 'Não foi possível criar.', ok: false }); setBusy(false); return }
 
     const itens = (r.signatarios || []).map(s => ({ ...s, link: window.location.origin + '/assinar-doc?d=' + docId + '&s=' + s.token }))

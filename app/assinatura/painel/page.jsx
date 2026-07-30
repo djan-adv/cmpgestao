@@ -75,7 +75,7 @@ export default function PainelAssinaturas() {
     .filter(d => {
       const q = busca.toLowerCase().trim()
       if (!q) return true
-      return [d.titulo, ...(d.sigs.flatMap(s => [s.nome, s.email, s.cpf]))].map(x => (x || '').toLowerCase()).join(' ').includes(q)
+      return [d.titulo, d.processo, ...(d.sigs.flatMap(s => [s.nome, s.email, s.cpf]))].map(x => (x || '').toLowerCase()).join(' ').includes(q)
     })
 
   async function excluir(d) {
@@ -228,6 +228,8 @@ export default function PainelAssinaturas() {
                         <td style={{ padding: 10, borderBottom: '1px solid #eef0f3', maxWidth: 300, wordBreak: 'break-word' }}>
                           <b>{d.titulo || '—'}</b>
                           <div style={{ color: '#5b6673', fontSize: 12 }}>{d.modelo || d.tipo || ''}</div>
+                          {d.processo && <div style={{ fontSize: 11.5, color: '#185FA5', marginTop: 2 }} title="Processo/caso vinculado no CMPGestão">⚖ {d.processo}</div>}
+                          {d.finalidade && <div style={{ fontSize: 11.5, color: '#8a6d00', marginTop: 2 }} title="Finalidade que consta no texto da procuração">🎯 {d.finalidade}</div>}
                         </td>
                         <td style={{ padding: 10, borderBottom: '1px solid #eef0f3' }}>
                           {d.sig1?.nome || '—'}

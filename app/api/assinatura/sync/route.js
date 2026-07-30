@@ -1,0 +1,98 @@
+// Robô: procuração/contrato ASSINADO no assinador → volta sozinho para a ficha
+// do processo no CMPGestão (andamento no histórico + PDF na pasta de Documentos).
+//
+//   GET /api/assinatura/sync?rodar=1   (chamado pelo /api/cron/tick)
+//
+// Só sincroniza documentos com `processo` preenchido (vínculo criado pela ficha)
+// e status 'assinado' ainda sem sync_cmp_em. Roda no próprio VPS: grava o PDF
+// direto em /opt/cmpdocs/<chave>/Procurações e assinaturas/.
+
+import fs from 'fs'
+import path from 'path'
+import { createClient } from '@supabase/supabase-js'
+
+export const dynamic = 'force-dynamic'
+export const maxDuration = 120
+
+const ROOT = '/opt/cmpdocs'
+const PASTA = 'Procurações e assinaturas'
+const SIGN_URL = process.env.NEXT_PUBLIC_SIGN_SUPABASE_URL || 'https://fjboytucivmdykkfpdhs.supabase.co'
+const SIGN_KEY = process.env.NEXT_PUBLIC_SIGN_SUPABASE_ANON_KEY || 'sb_publishable_9K2-GBTRb7ZYd5dkjPoeZA_kPPNElex'
+
+function cmpAdmin() {
+  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } })
+}
+
+// admin do assinador: chave secreta OU conta de serviço (credencial no app_secrets do CMP)
+async function signAdmin(cmp) {
+  if (process.env.SIGN_SUPABASE_SERVICE_ROLE_KEY) {
+    return createClient(SIGN_URL, process.env.SIGN_SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } })
+  }
+  const { data } = await cmp.from('app_secrets').select('valor').eq('chave', 'sign_service_account').maybeSingle()
+  const cred = data && data.valor
+  if (!cred || !cred.email || !cred.senha) throw new Error('sem credencial do assinador (app_secrets)')
+  const c = createClient(SIGN_URL, SIGN_KEY, { auth: { persistSession: false, autoRefreshToken: false } })
+  const r = await c.auth.signInWithPassword({ email: cred.email, password: cred.senha })
+  if (r.error) throw new Error('login conta de serviço: ' + r.error.message)
+  return c
+}
+
+function slug(s) { return String(s || 'documento').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w.\- ]+/g, '').replace(/\s+/g, '_').slice(0, 80) }
+
+export async function GET(request) {
+  const { searchParams } = new URL(request.url)
+  if (searchParams.get('rodar') === null) return Response.json({ info: 'Sync assinador → fichas. Use ?rodar=1 (cron).' })
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) return Response.json({ ok: false, erro: 'falta service key' }, { status: 500 })
+
+  const cmp = cmpAdmin()
+  let sign
+  try { sign = await signAdmin(cmp) } catch (e) { return Response.json({ ok: false, erro: String((e && e.message) || e) }, { status: 502 }) }
+
+  const { data: docs, error } = await sign.from('documentos')
+    .select('id, titulo, tipo, processo, status, sync_cmp_em, signatarios(nome, cpf, email, status, assinado_em)')
+    .not('processo', 'is', null).is('sync_cmp_em', null).eq('status', 'assinado').limit(10)
+  if (error) return Response.json({ ok: false, erro: error.message }, { status: 500 })
+
+  const resultados = []
+  for (const d of (docs || [])) {
+    try {
+      const dig = String(d.processo || '').replace(/\D/g, '')
+      // acha o processo no CMP: número exato, número por dígitos
+      let row = null
+      let q = await cmp.from('processos').select('id, numero').eq('numero', d.processo).limit(1)
+      row = q.data && q.data[0]
+      if (!row && dig) { q = await cmp.from('processos').select('id, numero').eq('numero_digitos', dig).limit(1); row = q.data && q.data[0] }
+      if (!row && dig) { q = await cmp.from('processos').select('id, numero').ilike('numero', '%' + d.processo + '%').limit(1); row = q.data && q.data[0] }
+
+      const sigs = (d.signatarios || []).filter(s => s.status === 'assinado')
+      const quem = sigs.map(s => (s.nome || s.email || '') + (s.cpf ? ' (CPF ' + s.cpf + ')' : '')).filter(Boolean).join('; ')
+
+      // baixa o PDF assinado (procuração: <id>.pdf · avulso: <id>/assinado.pdf)
+      let pdfBuf = null, pdfNome = ''
+      const tenta = d.tipo === 'upload' ? [d.id + '/assinado.pdf', d.id + '/original.pdf'] : [d.id + '.pdf']
+      for (const pth of tenta) {
+        const dl = await sign.storage.from('documentos').download(pth)
+        if (!dl.error && dl.data) { pdfBuf = Buffer.from(await dl.data.arrayBuffer()); pdfNome = slug(d.titulo) + (pth.endsWith('original.pdf') ? '-original' : '-assinado') + '.pdf'; break }
+      }
+
+      let salvoEm = ''
+      if (row && pdfBuf) {
+        const chave = dig || ('caso-' + String(row.id).replace(/[^a-zA-Z0-9-]/g, ''))
+        const dir = path.join(ROOT, chave, PASTA)
+        fs.mkdirSync(dir, { recursive: true })
+        fs.writeFileSync(path.join(dir, pdfNome), pdfBuf)
+        salvoEm = PASTA + '/' + pdfNome
+      }
+      if (row) {
+        const texto = '[Assinatura] ' + (d.titulo || 'Documento') + ' ASSINADO' + (quem ? ' por ' + quem : '') +
+          (salvoEm ? ' — cópia salva em Documentos > ' + PASTA + '.' : ' — cópia disponível no painel de Assinaturas.')
+        await cmp.from('andamentos').insert({ processo_id: row.id, data: new Date().toISOString().slice(0, 10), texto, fonte: 'manual' })
+      }
+      await sign.from('documentos').update({ sync_cmp_em: new Date().toISOString() }).eq('id', d.id)
+      resultados.push({ id: d.id, processo: d.processo, ficha: !!row, pdf: !!pdfBuf })
+    } catch (e) {
+      resultados.push({ id: d.id, ok: false, erro: String((e && e.message) || e) })
+    }
+  }
+  return Response.json({ ok: true, processados: resultados.length, resultados })
+}
