@@ -1813,10 +1813,9 @@ function abrir(i){
   var html='';
   // cabeçalho: partes no mesmo tamanho, cliente em negrito e marcado
   var __enc=/encerr/i.test(p.status||'');
-  // cabeçalho ENXUTO e estável: só os nomes (os botões de edição moram no card "Partes",
-  // para não ficarem "andando" conforme o tamanho dos nomes — memória visual das fichas)
-  html+='<div class="card" style="position:relative">'+honQuadroHTML(p)+'<div class="parties" style="padding-right:0"><span style="display:inline-block;vertical-align:top;line-height:1.15"><span class="cli">'+nomeDisplay(p.cliente)+'</span><br><span class="tag-cli" style="margin:3px 0 0;font-size:9px;padding:1px 7px;display:inline-block">cliente principal</span></span>'+
-    '<span class="vs" style="vertical-align:top">×</span><span style="display:inline-block;vertical-align:top;line-height:1.15"><span class="op">'+nomeDisplay(p.oponente||'—')+'</span><br><span style="font-size:9.5px;color:var(--muted);display:inline-block;margin-top:3px">parte contrária</span></span></div>'+
+  // cabeçalho: partes em duas colunas fixas (Autor | Réu) com CPF/CNPJ abaixo do nome,
+  // e botões de edição SEMPRE no mesmo lugar (memória visual das fichas)
+  html+='<div class="card" style="position:relative">'+honQuadroHTML(p)+_partesTopoHTML(p)+
     '<div class="subhead" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">'+_numFichaHTML(p)+
     (typeof JALINE!=='undefined'&&JALINE[String(p.numero||'').replace(/\D/g,'')]?'<span class="pill" style="background:var(--gold);color:#fff" title="Pasta de Jaline — honorários exclusivos Djan e Jaline">Jaline</span>':'')+
     '<span id="proc-vinculados" style="display:inline-flex;gap:6px;flex-wrap:wrap;align-items:center"></span></div>'+
@@ -1826,8 +1825,6 @@ function abrir(i){
     /* ponto 12: bloco de processos vinculados no canto inferior direito da aba (perto do botão Encerrar) */
     '<div id="proc-vinculados-rodape" style="position:absolute;bottom:12px;right:14px;max-width:60%;display:flex;gap:6px;flex-wrap:wrap;align-items:center;justify-content:flex-end;font-size:12px"></div>'+
     '</div>';
-  // card "Partes": nomes copiáveis com CPF/CNPJ abaixo + botões de edição num lugar FIXO
-  html+=_partesCardHTML(p);
   // dados do processo
   html+='<div class="card" id="card-dados-proc"><p class="sectlabel">Dados do processo</p><div style="font-size:13.5px;line-height:1.6;color:var(--ink)">'+
     (function(){
@@ -2123,37 +2120,41 @@ function copiarParte(el){
   var bg=el.style.background; el.style.background='#d9f2e4'; el.appendChild(tip);
   setTimeout(function(){ el.style.background=bg||''; try{ el.removeChild(tip); }catch(e){} el.__tip=null; },900);
 }
-function _parteItemHTML(nome){
+function _parteItemHTML(nome, autor){
   var nk=normClienteNome(nome);
-  return '<div style="margin:0 0 9px;line-height:1.25">'
-    +'<span onclick="copiarParte(this)" data-v="'+esc(nome)+'" title="Clique para copiar o nome" style="cursor:copy;font-weight:600;color:var(--ink);border-radius:4px;padding:1px 3px;margin-left:-3px">'+esc(nome)+'</span>'
-    +'<br><span class="parte-doc-slot" data-nk="'+esc(nk)+'" onclick="if(this.getAttribute(\'data-v\'))copiarParte(this)" style="cursor:copy;font-size:11.5px;color:var(--muted);opacity:.8;border-radius:4px;padding:1px 3px;margin-left:-3px"></span>'
+  var estNome=autor
+    ? 'font-size:17px;font-weight:700;color:var(--navy);line-height:1.2'
+    : 'font-size:17px;font-weight:500;color:var(--ink);line-height:1.2';
+  return '<div style="margin:0 0 8px">'
+    +'<span onclick="copiarParte(this)" data-v="'+esc(nome)+'" title="Clique para copiar o nome" style="cursor:copy;border-radius:4px;padding:1px 3px;margin-left:-3px;'+estNome+'">'+esc(nome)+'</span>'
+    +'<br><span class="parte-doc-slot" data-nk="'+esc(nk)+'" onclick="if(this.getAttribute(\'data-v\'))copiarParte(this)" title="Clique para copiar" style="cursor:copy;font-size:11.5px;color:var(--muted);opacity:.8;border-radius:4px;padding:1px 3px;margin-left:-3px"></span>'
     +'</div>';
 }
-function _partesCardHTML(p){
+/* topo da 1ª ficha: colunas Autor | Réu com CPF/CNPJ abaixo de cada nome (copiáveis)
+   e a fileira de botões de edição SEMPRE no mesmo lugar */
+function _partesTopoHTML(p){
   var todosA=_partesSplit(p.cliente), todosR=_partesSplit(p.oponente);
   var autores=todosA.slice(0,4), reus=todosR.slice(0,3);
-  var col=function(rot, itens, sobra){
-    return '<div><div style="font-size:10.5px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);margin-bottom:7px">'+rot+'</div>'
-      +(itens.length?itens.map(_parteItemHTML).join(''):'<div class="note">—</div>')
+  var col=function(rot, itens, autor, sobra){
+    return '<div><div style="font-size:10px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);margin-bottom:6px">'+rot+'</div>'
+      +(itens.length?itens.map(function(n){ return _parteItemHTML(n, autor); }).join(''):'<div class="note">—</div>')
       +(sobra>0?'<div class="note" style="font-size:11px">+ '+sobra+' outro(s) — veja em ✎ editar dados</div>':'')+'</div>';
   };
-  var html='<div class="card" id="card-partes"><p class="sectlabel" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px">Partes'
-    +'<span style="display:flex;gap:6px;flex-wrap:wrap">'
+  setTimeout(_preencherDocsPartes, 60);
+  return '<div id="partes-topo">'
+    +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:6px 18px">'
+    +col('Autor — nosso cliente', autores, true, todosA.length-autores.length)
+    +col('Réu — parte contrária', reus, false, todosR.length-reus.length)
+    +'</div>'
+    +'<div style="margin-top:2px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">'
     +'<button class="btn sm ghost" style="font-size:11px;padding:4px 9px" onclick="editarPartesContatos()" title="Editar as partes, o assunto e os contatos do processo — tudo num lugar só">✎ editar dados</button>'
     +'<button class="btn sm ghost" style="font-size:11px;padding:4px 9px" onclick="atualizarDadosCliente()" title="Lê a procuração e a petição inicial (Word e PDF) e sugere o nome completo, o e-mail e o telefone do cliente">🔄 Atualizar dados do cliente</button>'
     +'<button class="btn sm ghost" style="font-size:11px;padding:4px 9px" onclick="inverterPolos()" title="Trocar cliente ↔ oponente (o cliente fica sempre à esquerda)">⇄ inverter polos</button>'
     +((!p.oponente||!String(p.oponente).trim())?'<button class="btn sm ghost" style="font-size:11px;padding:4px 9px" onclick="sugerirPartes()" title="Ler o histórico do processo e sugerir os nomes das partes que estão faltando">✨ sugerir partes</button>':'')
-    +'</span></p>'
-    +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px">'
-    +col('Autor — nosso cliente', autores, todosA.length-autores.length)
-    +col('Réu — parte contrária', reus, todosR.length-reus.length)
-    +'</div><p class="note" style="margin:6px 0 0;font-size:11px">Clique no nome ou no CPF/CNPJ para copiar.</p></div>';
-  setTimeout(_preencherDocsPartes, 60);
-  return html;
+    +'</div></div>';
 }
 async function _preencherDocsPartes(){
-  var slots=document.querySelectorAll('#card-partes .parte-doc-slot'); if(!slots.length) return;
+  var slots=document.querySelectorAll('#partes-topo .parte-doc-slot'); if(!slots.length) return;
   if(!window.__docsPorNome){
     window.__docsPorNome={};
     try{
