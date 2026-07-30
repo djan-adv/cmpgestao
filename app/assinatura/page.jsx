@@ -5,6 +5,24 @@
 import { useEffect, useState } from 'react'
 import { signSb } from '../../lib/supabaseAssinatura'
 import { apiAssinatura } from '../../lib/assinaturaApi'
+import { supabase as cmpSb } from '../../lib/supabase'
+
+// registra a geração do link no histórico do processo/caso do CMPGestão (best-effort)
+async function registrarNaFichaCMP(numero, titulo, email) {
+  try {
+    const dig = String(numero || '').replace(/\D/g, '')
+    let q = await cmpSb.from('processos').select('id').eq('numero', numero).limit(1)
+    let row = q.data && q.data[0]
+    if (!row && dig) { q = await cmpSb.from('processos').select('id').eq('numero_digitos', dig).limit(1); row = q.data && q.data[0] }
+    if (!row) return
+    await cmpSb.from('andamentos').insert({
+      processo_id: row.id,
+      data: new Date().toISOString().slice(0, 10),
+      texto: '[Procuração] Link de assinatura gerado e enviado para ' + (email || '(sem e-mail)') + ' — ' + titulo + '.',
+      fonte: 'manual',
+    })
+  } catch { /* histórico é cortesia; a procuração já foi criada */ }
+}
 
 const NAVY = '#2E3A4B'
 
@@ -79,6 +97,7 @@ export default function GerarProcuracao() {
     if (!r.ok) { setMsg({ texto: r.erro || 'Não foi possível criar.', ok: false }); setBusy(false); return }
     const sig = r.signatarios[0]
     const link = window.location.origin + '/assinar?d=' + r.doc_id + '&s=' + sig.token
+    if (processo.trim()) registrarNaFichaCMP(processo.trim(), titulo, emailCli.trim())
     setResultado({ link, titulo, sig_id: sig.id })
     setMsg(null)
     setEmailDest(emailCli.trim()); setEmailRow(false)

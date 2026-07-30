@@ -126,6 +126,7 @@ export async function POST(request) {
         tipo,
         modelo: body.modelo || null,
         finalidade: String(body.finalidade || '').trim() || null,
+        processo: String(body.processo || '').trim() || null,
         arquivo_path: body.arquivo_path || null,
         status: 'enviado',
       })).error

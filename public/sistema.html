@@ -1832,7 +1832,14 @@ function abrir(i){
     (typeof JALINE!=='undefined'&&JALINE[String(p.numero||'').replace(/\D/g,'')]?'<span class="pill" style="background:var(--gold);color:#fff" title="Pasta de Jaline — honorários exclusivos Djan e Jaline">Jaline</span>':'')+
     '<span id="proc-vinculados" style="display:inline-flex;gap:6px;flex-wrap:wrap;align-items:center"></span></div>'+
     '<div id="ctl-chips" style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center"></div>'+
-    ''+
+    /* Kit do cliente novo: o momento mais tenso do trabalho — procuração, contrato e
+       boleto prontos em 3 cliques, tudo pré-preenchido com o que a ficha já sabe */
+    (_ehCasoProc(p)?('<div style="margin-top:10px;background:#eef7f1;border:1px solid #cfe8db;border-radius:10px;padding:8px 12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
+      +'<b style="color:#0F6E56;font-size:12.5px">🚀 Cliente novo:</b>'
+      +'<button class="btn sm" style="background:#f7f3e8;color:#8a6d00;border:1px solid #e8dcbb;font-weight:700" onclick="abrirAssinatura(\''+p.numero+'\')" title="Gera o link da procuração já com nome, e-mail, WhatsApp, processo e finalidade preenchidos — o cliente completa o resto e assina">✍ 1. Procuração</button>'
+      +'<button class="btn sm" style="background:#eef3fa;color:#185FA5;border:1px solid #cfe0f2;font-weight:700" onclick="kitContrato()" title="Sobe o contrato (PDF/Word) para assinatura eletrônica, já com o cliente como 1º signatário">📄 2. Contrato p/ assinar</button>'
+      +'<button class="btn sm" style="background:#fdeef2;color:#c2185b;border:1px solid #f2c9d6;font-weight:700" onclick="gerarBoletoNovoDoProcesso()" title="Emite o 1º boleto (à vista ou parcelado — as parcelas seguintes saem sozinhas todo mês)">💳 3. Boleto/parcelas</button>'
+      +'<span class="note" style="font-size:11px">tudo sai pré-preenchido; assinou → cai na pasta e no histórico sozinho</span></div>'):'')+
     '<div style="margin-top:10px"><button class="btn sm" onclick="novaTarefaDoProcesso()">+ Nova tarefa</button> <button class="btn sm cmp-only" style="background:#7b1e3a;color:#fff;border:1px solid #7b1e3a;font-weight:700;font-size:11px;line-height:1.18;white-space:normal;text-align:left;padding:4px 10px;vertical-align:middle" onclick="abrirProtocolarPeticao(\''+p.numero+'\')" title="Guarda a peça no sistema com prazo fatal e alerta — pronta para protocolo (PDF) ou aguardando ajuste (Word). O protocolo em si é feito no jus.br.">&#128228; Subir petição<br>para protocolo</button> <button class="btn sm" style="background:#eef4fb;color:#185FA5;border:1px solid #cfe0f2;font-weight:700" onclick="abrirTribunal(\''+p.numero+'\')" title="Abrir o sistema do tribunal (PJe/e-SAJ/Projudi) no grau deste processo — o número é copiado para você colar na busca">&#9878; Abrir no tribunal</button> <button id="btn-atualizar-cli" class="btn sm cmp-only" style="background:#eaf4f4;color:#0b7285;border:1px solid #cfe6e6;font-weight:700" onclick="abrirAtualizarCliente(\''+p.numero+'\')" title="E-mail de atualização ao cliente — informar movimentação, pedir providência, ou ativar o acompanhamento semanal automático">&#9993; Atualizar cliente</button> <button class="btn sm cmp-only" style="background:#f7f3e8;color:#8a6d00;border:1px solid #e8dcbb;font-weight:700" onclick="abrirAssinatura(\''+p.numero+'\')" title="Gerar procuração ou documento para assinatura eletrônica, já com o cliente deste processo no contexto">&#9997; Procuração</button>'+((typeof _ehCasoProc==='function'&&_ehCasoProc(p))?' <button class="btn sm cmp-only" style="background:#f3eaf7;color:#6d28a8;border:1px solid #ddc9ea;font-weight:700" onclick="monitorarAcoesCliente()" title="Testar: buscar no DJEN ações NOVAS (últimos 3 meses) que citem o nome deste cliente — inclui trabalhista. Não busca por CNPJ (a API do CNJ não permite).">&#128269; Monitorar ações novas</button>':'')+'</div>'+
     /* ponto 12: bloco de processos vinculados no canto inferior direito da aba (perto do botão Encerrar) */
     '<div id="proc-vinculados-rodape" style="position:absolute;bottom:12px;right:14px;max-width:60%;display:flex;gap:6px;flex-wrap:wrap;align-items:center;justify-content:flex-end;font-size:12px"></div>'+
@@ -2214,10 +2221,7 @@ function _partesTopoHTML(p){
     +col('Réu — parte contrária', reus, false, todosR.length-reus.length)
     +'</div>'
     +'<div style="margin-top:2px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">'
-    +'<button class="btn sm ghost" style="font-size:11px;padding:4px 9px" onclick="editarPartesContatos()" title="Editar as partes, o assunto e os contatos do processo — tudo num lugar só">✎ editar dados</button>'
-    +'<button class="btn sm ghost" style="font-size:11px;padding:4px 9px" onclick="atualizarDadosCliente()" title="Lê a procuração e a petição inicial (Word e PDF) e sugere o nome completo, o e-mail e o telefone do cliente">🔄 Atualizar dados do cliente</button>'
-    +'<button class="btn sm ghost" style="font-size:11px;padding:4px 9px" onclick="inverterPolos()" title="Trocar cliente ↔ oponente (o cliente fica sempre à esquerda)">⇄ inverter polos</button>'
-    +((!p.oponente||!String(p.oponente).trim())?'<button class="btn sm ghost" style="font-size:11px;padding:4px 9px" onclick="sugerirPartes()" title="Ler o histórico do processo e sugerir os nomes das partes que estão faltando">✨ sugerir partes</button>':'')
+    +'<button class="btn sm ghost" style="font-size:11.5px;padding:5px 12px;font-weight:700" onclick="abrirAtualizarDados()" title="Um cartão só: lê os documentos e o histórico (nomes completos, CPF/CNPJ, e-mails, telefones), edita as partes, inverte polos e salva tudo de uma vez">🔄 Atualizar dados (cliente, partes e contatos)</button>'
     +'</div></div>';
 }
 async function _preencherDocsPartes(){
@@ -7934,6 +7938,180 @@ function _extrairNomesOutorgante(txt){
    Une o antigo "Puxar nome" e "Puxar contato": lê procuração e petição inicial
    (Word e PDF; nomes de arquivo podem começar com número ou ser só "inicial"),
    varrendo os demais documentos se preciso. */
+/* ===== Cartão único "Dados do cliente e partes" (tela cheia) =====
+   Junta num lugar só: leitura automática de documentos + histórico (nomes
+   completos com multiplicidade no polo ativo, CPF/CNPJ, e-mails, telefones),
+   edição das partes, inverter polos e sugestões do histórico. Salva tudo junto. */
+function fecharAtualizarDados(){ var m=document.getElementById('modal-atudados'); if(m) m.remove(); }
+function atdInverter(){ var a=document.getElementById('atd-cliente'), b=document.getElementById('atd-oponente'); if(!a||!b) return; var t=a.value; a.value=b.value; b.value=t; }
+function atdAddReu(n){ var e=document.getElementById('atd-oponente'); if(!e||!n) return; var cur=e.value.trim(); if(cur.toLowerCase().indexOf(String(n).toLowerCase())>=0) return; e.value=cur?(cur.replace(/;\s*$/,'')+'; '+n):n; }
+function _atdRecalcCliente(){
+  var sel=[].slice.call(document.querySelectorAll('#atd-autores input[type=checkbox]:checked')).map(function(c){ return c.getAttribute('data-n'); }).filter(Boolean);
+  if(sel.length){ var e=document.getElementById('atd-cliente'); if(e) e.value=sel.join(' e '); }
+}
+/* associa CPF/CNPJ ao nome mais próximo nos textos (contrato, extrato, procuração…) */
+function _atdAssociaDocs(textos, nomes){
+  var porNome={}, todos=[];
+  var reDoc=/\d{3}\.?\d{3}\.?\d{3}-?\d{2}|\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}/g;
+  function vDoc(s){ var d=String(s).replace(/\D/g,''); if(d.length===11) return ((typeof _cpfValido!=='function')||_cpfValido(d))?d:''; if(d.length===14) return d; return ''; }
+  (textos||[]).forEach(function(t){
+    var T=String(t||'').replace(/\s+/g,' ');
+    var m; reDoc.lastIndex=0;
+    while((m=reDoc.exec(T))){ var d=vDoc(m[0]); if(d&&todos.indexOf(d)<0) todos.push(d); }
+    (nomes||[]).forEach(function(n){
+      if(porNome[n]) return;
+      var idx=T.toLowerCase().indexOf(String(n).toLowerCase());
+      if(idx<0) return;
+      var jan=T.slice(idx, idx+String(n).length+280);
+      reDoc.lastIndex=0; var mm;
+      while((mm=reDoc.exec(jan))){ var dd=vDoc(mm[0]); if(dd){ porNome[n]=dd; break; } }
+    });
+  });
+  return {porNome:porNome, todos:todos};
+}
+async function abrirAtualizarDados(){
+  if(!atual) return;
+  var p=atual, dig=_docChaveProc(p.numero);
+  fecharAtualizarDados();
+  var ov=document.createElement('div'); ov.id='modal-atudados';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(20,28,40,.55);z-index:120;overflow:auto';
+  var SEC='font-size:10.5px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);margin-bottom:6px';
+  ov.innerHTML='<div style="background:#fff;border-radius:14px;max-width:980px;width:96vw;margin:3vh auto;padding:20px 22px 16px;box-shadow:0 8px 40px rgba(0,0,0,.25)">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><h2 style="margin:0;font-size:17px;color:var(--navy)">Dados do cliente e partes</h2>'
+    +'<span style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn sm ghost" onclick="atdInverter()" title="Trocar autor ↔ réu">⇄ inverter polos</button><button class="btn sm ghost" onclick="fecharAtualizarDados()">✕ fechar</button></span></div>'
+    +'<p class="note" id="atd-status" style="margin:6px 0 12px">Lendo documentos e histórico (nomes, CPF/CNPJ, e-mails, telefones)…</p>'
+    +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px">'
+    +'<div><div style="'+SEC+'">Autor(es) — nosso cliente</div><div id="atd-autores"><div class="note">procurando nomes nos documentos…</div></div>'
+    +'<label style="font-size:12px;font-weight:600;color:var(--muted);margin-top:8px;display:block">Como fica na ficha</label><input id="atd-cliente" style="width:100%"></div>'
+    +'<div><div style="'+SEC+'">Réu(s) — parte contrária</div><input id="atd-oponente" style="width:100%" placeholder="nome(s), separados por ;">'
+    +'<div id="atd-reu-cands" style="margin-top:6px;display:flex;gap:5px;flex-wrap:wrap"></div>'
+    +'<label style="font-size:12px;font-weight:600;color:var(--muted);margin-top:10px;display:block">Assunto</label><input id="atd-assunto" style="width:100%"></div>'
+    +'</div>'
+    +'<div style="margin-top:14px;display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px">'
+    +'<div><div style="'+SEC+'">E-mails encontrados</div><div id="atd-emails"><span class="note">…</span></div></div>'
+    +'<div><div style="'+SEC+'">Telefones encontrados</div><div id="atd-tels"><span class="note">…</span></div></div>'
+    +'</div>'
+    +'<label style="font-size:12px;font-weight:600;color:var(--muted);margin-top:12px;display:block">Telefones/e-mails do cliente (campo livre da ficha)</label><input id="atd-ctl" style="width:100%">'
+    +'<p class="note" style="font-size:11px;margin:8px 0 0">Os itens marcados entram na ficha e no cadastro de Contatos (CPF/CNPJ por autor; e-mail e telefone no 1º autor). Nada é sobrescrito sem estar marcado aqui.</p>'
+    +'<div style="margin-top:14px;display:flex;justify-content:flex-end;gap:8px"><button class="btn ghost" onclick="fecharAtualizarDados()">Cancelar</button><button class="btn" id="atd-aplicar" onclick="aplicarAtualizarDados()">Salvar tudo</button></div>'
+    +'</div>';
+  ov.onclick=function(e){ if(e.target===ov) fecharAtualizarDados(); };
+  document.body.appendChild(ov);
+  document.getElementById('atd-cliente').value=p.cliente||'';
+  document.getElementById('atd-oponente').value=p.oponente||'';
+  document.getElementById('atd-assunto').value=p.tipo||'';
+  document.getElementById('atd-ctl').value=p.ctl||'';
+  /* sugestões de réu pelo histórico (o antigo "sugerir partes" embutido) */
+  try{
+    var cands=(typeof extrairPartesCandidatas==='function')?extrairPartesCandidatas(p):[];
+    var rc=document.getElementById('atd-reu-cands');
+    rc.innerHTML=(cands&&cands.length)?cands.slice(0,10).map(function(c){ return '<span class="quick-link" style="cursor:pointer;font-size:12px" data-n="'+esc(c.nome)+'" onclick="atdAddReu(this.getAttribute(\'data-n\'))" title="Clique para ACRESCENTAR à parte contrária">+ '+esc(c.nome)+' <span style="opacity:.6">×'+c.freq+'</span></span>'; }).join(''):'<span class="note" style="font-size:11px">sem candidatos no histórico ainda</span>';
+  }catch(e){}
+  _atdExtrair(p, dig);
+}
+async function _atdExtrair(p, dig){
+  var st=document.getElementById('atd-status');
+  function setSt(t){ if(st) st.innerHTML=t; }
+  function fill(id, html){ var e=document.getElementById(id); if(e) e.innerHTML=html; }
+  if(!dig){ setSt('⚠ Cadastro ainda não gravado no banco — a leitura automática precisa do caso salvo (botão "Salvar agora" na ficha). Dá para editar manualmente abaixo.'); fill('atd-autores','<div class="note">—</div>'); fill('atd-emails','<span class="note">—</span>'); fill('atd-tels','<span class="note">—</span>'); return; }
+  try{
+    var tok=await docToken();
+    async function _lerDoc(rel){ if(!rel) return ''; try{ var r=await fetch('/api/docs?file='+encodeURIComponent(dig+'/'+rel),{headers:{Authorization:'Bearer '+tok}}); if(!r.ok) return ''; var t=await _extrairTextoDoc(await r.arrayBuffer()); return (t&&t.replace(/\s/g,'').length>=20)?t:''; }catch(e){ return ''; } }
+    function _uniq(a){ var s={},o=[]; a.forEach(function(x){ var k=String(x).toLowerCase(); if(x&&!s[k]){s[k]=1;o.push(x);} }); return o; }
+    var acc={nomesInd:[], emails:[], tels:[], fontes:[], textos:[], _nk:{}};
+    function _pushNome(n){ n=String(n||'').replace(/\s+/g,' ').trim(); if(n.split(' ').length<2) return; var k=normClienteNome(n); if(!acc._nk[k]){ acc._nk[k]=1; acc.nomesInd.push(n); } }
+    function _colher(txt){
+      acc.textos.push(txt);
+      try{ var jw=_janelaOutorgante(txt); _extrairNomesOutorgante(jw.janela).forEach(_pushNome); }catch(e){}
+      try{ _extrairNomesOutorgante(_janelaCliente(txt,(p&&p.cliente)||'')).forEach(_pushNome); }catch(e){}
+      try{ var c2=_casalDoTexto(txt); if(c2) c2.split(' e ').forEach(_pushNome); }catch(e){}
+      try{ var jw2=_janelaOutorgante(txt); var em=_acharEmails(jw2.janela), tl=_acharTelefones(jw2.janela); if(!em.length&&!tl.length){ em=_acharEmails(txt); tl=_acharTelefones(txt); } acc.emails=acc.emails.concat(em); acc.tels=acc.tels.concat(tl); }catch(e){}
+    }
+    if(p.cliente) _partesSplit(p.cliente).forEach(_pushNome);
+    try{ var ch=(typeof _casalHistorico==='function')?_casalHistorico(p):''; if(ch) ch.split(' e ').forEach(_pushNome); }catch(e){}
+    try{ var ht=(p.hist_full||[]).map(function(a){return (a&&a.texto)||'';}).join('\n'); if(ht.replace(/\s/g,'').length>40) acc.textos.push(ht); }catch(e){}
+    var relP=await _acharDocRel(dig,/procura/i);
+    if(relP){ var tP=await _lerDoc(relP); if(tP){ _colher(tP); acc.fontes.push('procuração'); } }
+    var relI=await _acharDocRel(dig,/inicial|peti[çc][aã]o/i);
+    if(relI&&relI!==relP){ var tI=await _lerDoc(relI); if(tI){ _colher(tI); acc.fontes.push('petição inicial'); } }
+    var todos=[]; try{ todos=await _listarArquivosProc(dig); }catch(e){}
+    var docs=(todos||[]).filter(function(rr){ return /\.(docx?|pdf|html?)$/i.test(rr)&&rr!==relP&&rr!==relI; });
+    docs.sort(function(a,b){ function sc(x){ return /contrat/i.test(x)?0:(/extrat|pagament/i.test(x)?1:(/procura/i.test(x)?2:(/inicial|peti[çc]/i.test(x)?3:(/despach|senten|decis/i.test(x)?4:5)))); } return sc(a)-sc(b); });
+    for(var di=0; di<Math.min(docs.length,10); di++){
+      var tD=await _lerDoc(docs[di]); if(!tD) continue;
+      var antes=acc.nomesInd.length+acc.emails.length+acc.tels.length;
+      _colher(tD);
+      if(acc.nomesInd.length+acc.emails.length+acc.tels.length>antes) acc.fontes.push(docs[di].split('/').pop());
+    }
+    acc.emails=_uniq(acc.emails); acc.tels=_uniq(acc.tels);
+    var assoc=_atdAssociaDocs(acc.textos, acc.nomesInd);
+    /* render autores */
+    var atuais={}; _partesSplit(p.cliente).forEach(function(n){ atuais[normClienteNome(n)]=1; });
+    var nomes=acc.nomesInd.slice(0,8);
+    var docsSoltos=assoc.todos.filter(function(d){ return !Object.keys(assoc.porNome).some(function(n){ return assoc.porNome[n]===d; }); });
+    fill('atd-autores', (nomes.length?nomes.map(function(n,i){
+      var marcado=atuais[normClienteNome(n)]||(!p.cliente&&i===0);
+      var docV=assoc.porNome[n]?_fmtDocParte(assoc.porNome[n]):'';
+      return '<div class="atd-linha" style="display:flex;gap:8px;align-items:center;margin:0 0 6px;flex-wrap:wrap">'
+        +'<label style="display:flex;gap:6px;align-items:center;font-weight:600;color:var(--ink);cursor:pointer;margin:0"><input type="checkbox" '+(marcado?'checked':'')+' data-n="'+esc(n)+'" onchange="_atdRecalcCliente()" style="width:auto">'+esc(n)+'</label>'
+        +'<input type="text" value="'+esc(docV)+'" placeholder="CPF/CNPJ" style="width:160px;font-size:12.5px;padding:5px 8px">'
+        +'</div>';
+    }).join(''):'<div class="note">Nenhum nome encontrado — digite no campo abaixo.</div>')
+      +(docsSoltos.length?('<div class="note" style="font-size:11px;margin-top:4px">CPF/CNPJ achados sem dono certo (copie para o campo do autor certo): '+docsSoltos.map(function(d){ return '<b>'+_fmtDocParte(d)+'</b>'; }).join(' · ')+'</div>'):''));
+    /* render contatos */
+    var ctlAtual=String(p.ctl||'').toLowerCase();
+    fill('atd-emails', acc.emails.length?acc.emails.map(function(e2){ var ja=ctlAtual.indexOf(String(e2).toLowerCase())>=0; return '<label style="display:flex;gap:6px;align-items:center;margin:0 0 4px;font-size:13px;cursor:pointer"><input type="checkbox" '+(ja?'':'checked')+' data-v="'+esc(e2)+'" style="width:auto">'+esc(e2)+(ja?' <span class="note" style="font-size:10.5px">(já na ficha)</span>':'')+'</label>'; }).join(''):'<span class="note">nenhum</span>');
+    fill('atd-tels', acc.tels.length?acc.tels.map(function(t2){ var ja=ctlAtual.replace(/\D/g,'').indexOf(String(t2).replace(/\D/g,''))>=0&&String(t2).replace(/\D/g,'').length>=8; return '<label style="display:flex;gap:6px;align-items:center;margin:0 0 4px;font-size:13px;cursor:pointer"><input type="checkbox" '+(ja?'':'checked')+' data-v="'+esc(t2)+'" style="width:auto">'+esc(t2)+(ja?' <span class="note" style="font-size:10.5px">(já na ficha)</span>':'')+'</label>'; }).join(''):'<span class="note">nenhum</span>');
+    setSt('Lido de: <b>'+esc(_uniq(acc.fontes).slice(0,5).join(' · ')||'histórico')+'</b>. Marque o que vale, ajuste os CPFs e clique em <b>Salvar tudo</b>.');
+    _atdRecalcCliente();
+  }catch(e){ setSt('Erro ao ler documentos: '+esc((e&&e.message)||String(e))+' — dá para editar manualmente abaixo.'); }
+}
+async function aplicarAtualizarDados(){
+  var p=atual; if(!p) return;
+  var btn=document.getElementById('atd-aplicar'); if(btn){ btn.disabled=true; btn.textContent='Salvando…'; }
+  try{
+    var cli=(document.getElementById('atd-cliente').value||'').trim();
+    var op=(document.getElementById('atd-oponente').value||'').trim();
+    var ass=(document.getElementById('atd-assunto').value||'').trim();
+    p.ctl=(document.getElementById('atd-ctl').value||'').trim();
+    [].slice.call(document.querySelectorAll('#atd-emails input:checked')).forEach(function(c){ try{ mergeContatoNoProcesso(p,'',c.getAttribute('data-v')); }catch(e){} });
+    [].slice.call(document.querySelectorAll('#atd-tels input:checked')).forEach(function(c){ try{ mergeContatoNoProcesso(p,c.getAttribute('data-v'),''); }catch(e){} });
+    p.cliente=cli||p.cliente; p.oponente=op; if(ass) p.tipo=ass;
+    if(window.__sb && p._id){
+      var w=await window.__sb.from('processos').update({cliente_nome:p.cliente||null,oponente:op||null,assunto:p.tipo||null,contatos_livres:p.ctl||null}).eq('id',p._id);
+      if(w&&w.error) throw new Error(w.error.message);
+    }
+    /* CPF/CNPJ dos autores marcados -> cadastro de Contatos */
+    var linhas=[].slice.call(document.querySelectorAll('#atd-autores .atd-linha'));
+    if(linhas.length && window.__sb){
+      var rC=await window.__sb.from('contatos').select('id,nome,email,telefone,cpf_cnpj').limit(4000);
+      var lista=(rC&&rC.data)||[]; var esc2=null;
+      var em1=(document.querySelector('#atd-emails input:checked')||null); em1=em1?em1.getAttribute('data-v'):'';
+      var tl1=(document.querySelector('#atd-tels input:checked')||null); tl1=tl1?tl1.getAttribute('data-v'):'';
+      for(var i=0;i<linhas.length;i++){
+        var chk=linhas[i].querySelector('input[type=checkbox]'), docIn=linhas[i].querySelector('input[type=text]');
+        if(!chk||!chk.checked) continue;
+        var nome=chk.getAttribute('data-n'); var d=String((docIn&&docIn.value)||'').replace(/\D/g,'');
+        var temDoc=(d.length===11||d.length===14);
+        var nk=normClienteNome(nome);
+        var mC=lista.find(function(c){ return normClienteNome(c.nome)===nk; });
+        if(mC){
+          var upd={}; if(temDoc&&!String(mC.cpf_cnpj||'').replace(/\D/g,'').length) upd.cpf_cnpj=d; else if(temDoc) upd.cpf_cnpj=d;
+          if(i===0&&em1&&!mC.email) upd.email=em1;
+          if(i===0&&tl1&&!mC.telefone) upd.telefone=tl1;
+          if(Object.keys(upd).length) await window.__sb.from('contatos').update(upd).eq('id',mC.id);
+        } else if(temDoc||i===0){
+          if(esc2===null){ try{ var ug=await window.__sb.auth.getUser(); var pf=await window.__sb.from('usuarios').select('escritorio_id').eq('id',ug.data.user.id).single(); esc2=(pf&&pf.data&&pf.data.escritorio_id)||''; }catch(e){ esc2=''; } }
+          var reg={nome:nome,tipo:'cliente'}; if(temDoc) reg.cpf_cnpj=d; if(i===0&&em1) reg.email=em1; if(i===0&&tl1) reg.telefone=tl1; if(esc2) reg.escritorio_id=esc2;
+          await window.__sb.from('contatos').insert(reg);
+        }
+      }
+    }
+    CONTATOS=null; window.__docsPorNome=null;
+    fecharAtualizarDados();
+    var idx=DADOS.processos.indexOf(p); if(idx>=0) abrir(idx);
+  }catch(e){ alert('Erro ao salvar: '+((e&&e.message)||e)); if(btn){ btn.disabled=false; btn.textContent='Salvar tudo'; } }
+}
 async function atualizarDadosCliente(){
   if(!atual){ return; }
   var dig=_docChaveProc(atual.numero); if(!dig){ alert('Salve o caso primeiro (sem identificação ainda).'); return; }
@@ -9323,9 +9501,27 @@ function abrirAssinatura(num){
   var digs=String(num||'').replace(/\D/g,'');
   var p=(typeof atual!=='undefined'&&atual&&String(atual.numero||'').replace(/\D/g,'')===digs)?atual:(((typeof DADOS!=='undefined'&&DADOS.processos)||[]).filter(function(x){return String(x.numero||'').replace(/\D/g,'')===digs;})[0]||{});
   var q=[];
-  if(p.cliente) q.push('nome='+encodeURIComponent(p.cliente));
+  /* leva TUDO que a ficha já sabe — em caso novo o cliente completa o resto pelo link */
+  var nome1=(typeof _partesSplit==='function'?(_partesSplit(p.cliente)[0]||''):String(p.cliente||''));
+  if(nome1) q.push('nome='+encodeURIComponent(nome1));
+  try{ var em=(typeof _emailClienteDoProc==='function')?_emailClienteDoProc(p):''; if(em) q.push('email='+encodeURIComponent(em)); }catch(e){}
+  try{
+    var tel=''; (typeof splitCtlTokens==='function'?splitCtlTokens(p.ctl||''):[]).some(function(t){ if(!/@/.test(t)&&String(t).replace(/\D/g,'').length>=10){ tel=t; return true; } return false; });
+    if(tel) q.push('tel='+encodeURIComponent(tel));
+  }catch(e){}
   if(num) q.push('processo='+encodeURIComponent(num));
+  if(p.tipo&&String(p.tipo).trim()) q.push('finalidade='+encodeURIComponent(String(p.tipo).trim()));
   window.open('/assinatura'+(q.length?('?'+q.join('&')):''),'_blank');
+}
+/* Kit cliente novo: abre o contrato avulso já com o cliente como 1º signatário */
+function kitContrato(){
+  if(typeof atual==='undefined'||!atual) return;
+  var p=atual, q=[];
+  var nome1=(typeof _partesSplit==='function')?(_partesSplit(p.cliente)[0]||''):String(p.cliente||'');
+  if(nome1) q.push('nome='+encodeURIComponent(nome1));
+  try{ var em=_emailClienteDoProc(p); if(em) q.push('email='+encodeURIComponent(em)); }catch(e){}
+  if(p.numero) q.push('processo='+encodeURIComponent(p.numero));
+  window.open('/assinatura/avulso'+(q.length?('?'+q.join('&')):''),'_blank');
 }
 /* Abre o assinador com os dados do contato aberto no CRM (nome/e-mail/telefone). */
 function assinaturaDoContato(){
