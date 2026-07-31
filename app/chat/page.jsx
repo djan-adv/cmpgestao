@@ -67,6 +67,8 @@ export default function ChatMobile() {
   const [buscaResultados, setBuscaResultados] = useState([])
   const [seletorCor, setSeletorCor] = useState(false)
   const [pushEstado, setPushEstado] = useState('verificando') // verificando | indisponivel | desativado | ativando | ativado
+  const [imgToken, setImgToken] = useState('') // p/ mostrar os prints (imagens) via /api/anexo
+  const fileInputRef = useRef(null)
   const procNomesRef = useRef({})
   const [procTick, setProcTick] = useState(0) // só para forçar repintar quando um nome chega
   const scrollRef = useRef(null)
@@ -178,6 +180,20 @@ export default function ChatMobile() {
   }, [euId])
   useEffect(() => { carregar() }, [carregar])
 
+  // token p/ exibir os prints (imagens) via /api/anexo — atualizado periodicamente
+  useEffect(() => {
+    if (!euId) return
+    let ativo = true
+    async function atualiza() {
+      const { data } = await supabase.auth.getSession()
+      const t = data && data.session && data.session.access_token
+      if (ativo && t) setImgToken(t)
+    }
+    atualiza()
+    const iv = setInterval(atualiza, 4 * 60000)
+    return () => { ativo = false; clearInterval(iv) }
+  }, [euId])
+
   useEffect(() => {
     if (!euId) return
     const canal = supabase.channel('chat-cmp-mobile')
@@ -251,6 +267,43 @@ export default function ChatMobile() {
     setMsgs(cur => cur.some(m => m.id === r.data.id) ? cur : [...cur, r.data])
     if (r.data.id > ultimoIdRef.current) ultimoIdRef.current = r.data.id
     notificarEnvio(payload)
+  }
+
+  // envia um "print" (screenshot): sobe a imagem à parte (não vai pro
+  // chat_mensagens, que ficaria pesado) e grava a mensagem com texto curto
+  async function enviarPrint(file) {
+    if (!file) return
+    if (file.size > 8 * 1024 * 1024) { alert('Esse print tem mais de 8 MB — reduza e tente de novo.'); return }
+    try {
+      const b64 = await new Promise((resolve, reject) => {
+        const r = new FileReader()
+        r.onload = () => resolve(String(r.result || '').split(',')[1] || '')
+        r.onerror = reject
+        r.readAsDataURL(file)
+      })
+      const { data } = await supabase.auth.getSession()
+      const token = data && data.session && data.session.access_token
+      const up = await fetch('/api/chat/print', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        body: JSON.stringify({ nome: file.name || 'print.png', tipo: file.type || 'image/png', b64 }),
+      })
+      const j = await up.json().catch(() => ({}))
+      if (!up.ok || j.erro) { alert('Não deu pra enviar o print: ' + (j.erro || ('HTTP ' + up.status))); return }
+      const payload = {
+        texto: '📷 print enviado',
+        para_id: alvo ? alvo.id : null,
+        autor_nome: (porId[euId] && porId[euId].nome) || (user.email || '').split('@')[0],
+        respondendo_a: respondendoA ? respondendoA.id : null,
+        processo_id: pin ? pin.id : null,
+        imagem_anexo_id: j.id,
+      }
+      setRespondendoA(null)
+      const r = await supabase.from('chat_mensagens').insert(payload).select('*').single()
+      if (r.error) { alert('Não enviou: ' + r.error.message); return }
+      setMsgs(cur => cur.some(m => m.id === r.data.id) ? cur : [...cur, r.data])
+      if (r.data.id > ultimoIdRef.current) ultimoIdRef.current = r.data.id
+      notificarEnvio(payload)
+    } catch (e) { alert('Erro ao enviar o print: ' + (e && e.message || e)) }
   }
 
   // ---------------- telas ----------------
@@ -339,6 +392,11 @@ export default function ChatMobile() {
                   </div>
                 )}
                 <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontSize: 14.5, color: '#1b1b1b' }}>{m.texto}</div>
+                {m.imagem_anexo_id && imgToken && (
+                  <img src={'/api/anexo?id=' + encodeURIComponent(m.imagem_anexo_id) + '&jwt=' + encodeURIComponent(imgToken)}
+                    onClick={e => window.open(e.currentTarget.src, '_blank')}
+                    style={{ maxWidth: '100%', maxHeight: 260, borderRadius: 6, marginTop: 4, display: 'block', cursor: 'pointer' }} />
+                )}
                 {m.processo_id && <div style={{ fontSize: 10.5, color: '#7a5b00', marginTop: 3 }}>🔗 {procNomesRef.current[m.processo_id] === '…' ? 'processo vinculado' : (procNomesRef.current[m.processo_id] || 'processo vinculado')}</div>}
                 <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 6, marginTop: 2 }}>
                   <span onClick={() => responderA(m)} style={{ fontSize: 11, color: '#8a93a2', cursor: 'pointer' }}>↩ responder</span>
@@ -360,7 +418,15 @@ export default function ChatMobile() {
 
       {/* campo de digitar */}
       <form onSubmit={enviar} style={{ display: 'flex', gap: 8, padding: '8px 10px', background: '#fff', borderTop: '1px solid #ddd', flexShrink: 0, paddingBottom: 'max(8px, env(safe-area-inset-bottom))' }}>
-        <input ref={inputRef} value={texto} onChange={e => setTexto(e.target.value)} placeholder="Mensagem" autoComplete="off"
+        <input type="file" accept="image/*" ref={fileInputRef} style={{ display: 'none' }}
+          onChange={e => { const f = e.target.files && e.target.files[0]; e.target.value = ''; if (f) enviarPrint(f) }} />
+        <button type="button" onClick={() => fileInputRef.current && fileInputRef.current.click()} title="Enviar print"
+          style={{ width: 40, height: 40, borderRadius: '50%', border: '1px solid #ddd', background: '#fff', fontSize: 17, cursor: 'pointer', flexShrink: 0 }}>📷</button>
+        <input ref={inputRef} value={texto} onChange={e => setTexto(e.target.value)} placeholder="Mensagem ou cole um print"
+          autoComplete="off" onPaste={e => {
+            const f = Array.prototype.find.call(e.clipboardData.files || [], f => /^image\//.test(f.type))
+            if (f) { e.preventDefault(); enviarPrint(f) }
+          }}
           style={{ flex: 1, border: '1px solid #ddd', borderRadius: 20, padding: '11px 14px', fontSize: 15 }} />
         <button type="submit" style={{ width: 44, height: 44, borderRadius: '50%', border: 0, background: VERDE, color: '#fff', fontSize: 18, cursor: 'pointer', flexShrink: 0 }}>➤</button>
       </form>
