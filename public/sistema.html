@@ -1546,13 +1546,19 @@ async function renderAlertasDiligencias(){
         +' <span class="note">(entrou movimentação nova após a diligência — confirme e resolva)</span></div>';
     }
     if(cobrar.length){
+      var LIM_COBRAR=3;
+      var expandido=!!window.__dilCobrarExpandido;
+      var visiveis=expandido?cobrar:cobrar.slice(0,LIM_COBRAR);
+      var resto=cobrar.length-LIM_COBRAR;
       html+='<div style="background:#fbefe9;border:1px solid #f0cfc0;border-radius:8px;padding:9px 11px;margin-bottom:8px;font-size:13px"><b>🔔 Diligências a cobrar ('+cobrar.length+') — 7+ dias sem retorno:</b> <a onclick="abrirFilaEmails()" style="cursor:pointer;color:#185FA5;font-size:11.5px;text-decoration:underline" title="E-mails que ainda vão sair no horário da vara (08h comum/trabalhista, 10h federal)">📮 fila de e-mails</a><div style="margin-top:5px">'
-        +cobrar.map(function(x){return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:3px 0;border-top:1px dashed #eedcd2"><span>'+esc(x.cli||x.num)+' <span class="note">('+x.dias+' dias)</span></span><button class="btn sm" onclick="cobrarDiligencia(\''+String(x.num).replace(/'/g,'')+'\')">Cobrar por e-mail</button></div>';}).join('')
+        +visiveis.map(function(x){return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:3px 0;border-top:1px dashed #eedcd2"><span>'+esc(x.cli||x.num)+' <span class="note">('+x.dias+' dias)</span></span><button class="btn sm" onclick="cobrarDiligencia(\''+String(x.num).replace(/'/g,'')+'\')">Cobrar por e-mail</button></div>';}).join('')
+        +(resto>0?('<div style="padding:5px 0 0"><a onclick="_toggleDilCobrar()" style="cursor:pointer;color:#185FA5;font-size:12px;text-decoration:underline">'+(expandido?'ver menos':'ver todos ('+resto+' a mais)')+'</a></div>'):'')
         +'</div></div>';
     }
     box.innerHTML=html;
   }catch(e){ box.innerHTML=''; console.warn('alertas dilig:',e); }
 }
+function _toggleDilCobrar(){ window.__dilCobrarExpandido=!window.__dilCobrarExpandido; if(typeof renderAlertasDiligencias==='function') renderAlertasDiligencias(); }
 /* reenvia a cobrança de andamento à vara pelo contato@ (servidor) e atualiza a data */
 async function cobrarDiligencia(num){
   var p=(DADOS.processos||[]).filter(function(x){return x.numero===num;})[0]; if(!p){ alert('Processo não encontrado.'); return; }
