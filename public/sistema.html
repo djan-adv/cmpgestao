@@ -3838,7 +3838,8 @@ function mesclarContatos(){
     ((emails.length>1||tels.length>1)?('<div style="background:#e9f6f0;border:1px solid #bfe3d1;border-radius:9px;padding:9px 11px;margin-top:10px;font-size:12.5px;color:#0f5c46;line-height:1.5"><b>✓ Nada é apagado.</b> Todos os '+emails.length+' e-mail(s) e '+tels.length+' telefone(s) ficam guardados na ficha do contato. A escolha acima define apenas <b>qual é o principal</b> — o que o boleto e os e-mails do sistema usam.</div>'):'')+
     '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px"><button class="btn sm ghost" onclick="document.getElementById(\'merge-ov\').remove()">Cancelar</button><button class="btn sm gold" id="mg-ok">✓ Mesclar e sincronizar processos</button></div>'+
   '</div>';
-  ov.onclick=function(e){ if(e.target===ov) ov.remove(); };
+  ov.onmousedown=function(e){ ov.__bd=(e.target===ov); };
+  ov.onclick=function(e){ if(e.target===ov&&ov.__bd) ov.remove(); };
   document.body.appendChild(ov);
   document.getElementById('mg-ok').onclick=function(){
     var r=document.querySelector('input[name="mg-nome"]:checked'); var nomeFinal='';
@@ -4770,7 +4771,8 @@ async function jusbrDiag(numero){
     var txt=JSON.stringify({processo_campos:d.processo_campos,processo_hrefs:d.processo_hrefs,doc0:(d.amostra_crua&&d.amostra_crua[0])},null,1);
     var ov=document.createElement('div'); ov.style.cssText='position:fixed;inset:0;background:rgba(20,28,40,.6);z-index:99;display:flex;align-items:center;justify-content:center;padding:20px';
     ov.innerHTML='<div style="background:#fff;border-radius:12px;max-width:680px;width:100%;padding:16px"><b>Diagnóstico do 1º documento</b><p class="note" style="margin:4px 0">Copie e mande para o Claude:</p><textarea readonly style="width:100%;height:320px;font-family:monospace;font-size:11px">'+esc(txt)+'</textarea><div style="margin-top:8px;text-align:right"><button class="btn sm" onclick="this.closest(\'div[style*=fixed]\').remove()">fechar</button></div></div>';
-    ov.onclick=function(e){ if(e.target===ov) ov.remove(); };
+    ov.onmousedown=function(e){ ov.__bd=(e.target===ov); };
+  ov.onclick=function(e){ if(e.target===ov&&ov.__bd) ov.remove(); };
     document.body.appendChild(ov);
     try{ ov.querySelector('textarea').select(); }catch(e){}
   }catch(e){ alert('Falha no diag: '+(e&&e.message||e)); }
@@ -4819,7 +4821,8 @@ function jusbrViewer(url,nome){
     +'<button class="btn sm" style="background:#185FA5;color:#fff" onclick="_jbvSalvarPasta(this)" title="Salvar uma cópia na pasta &quot;Sentenças e Acórdãos&quot; do processo">📁 Salvar em Sentenças e Acórdãos</button></div>'
     +'<button class="btn sm" onclick="var v=document.getElementById(\'jusbr-viewer\');if(v)v.remove()">✕ Fechar</button></div>'
     +'<iframe id="jusbr-viewer-frame" style="flex:1;width:100%;border:0;background:#fff;border-radius:8px"></iframe>';
-  ov.onclick=function(e){ if(e.target===ov) ov.remove(); };
+  ov.onmousedown=function(e){ ov.__bd=(e.target===ov); };
+  ov.onclick=function(e){ if(e.target===ov&&ov.__bd) ov.remove(); };
   document.body.appendChild(ov);
   document.getElementById('jusbr-viewer-frame').src=url;
 }
@@ -8027,7 +8030,8 @@ function editarPartesContatos(){
     +campo('Contato 4',toks[3]||'','edt-c4','telefone ou e-mail')
     +'<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px"><button class="btn sm ghost" onclick="document.getElementById(\'edt-modal\').remove()">Cancelar</button><button class="btn sm" onclick="salvarPartesContatos()">Salvar</button></div>';
   ov.appendChild(bx);
-  ov.onclick=function(e){ if(e.target===ov) ov.remove(); };
+  ov.onmousedown=function(e){ ov.__bd=(e.target===ov); };
+  ov.onclick=function(e){ if(e.target===ov&&ov.__bd) ov.remove(); };
   document.body.appendChild(ov);
   var pc=document.getElementById('edt-cli'); if(pc) pc.focus();
 }
@@ -8299,7 +8303,8 @@ async function abrirAtualizarDados(){
     +'<p class="note" style="font-size:11px;margin:8px 0 0">Os itens marcados entram na ficha e no cadastro de Contatos (CPF/CNPJ por autor; e-mail e telefone no 1º autor). Nada é sobrescrito sem estar marcado aqui.</p>'
     +'<div style="margin-top:14px;display:flex;justify-content:flex-end;gap:8px"><button class="btn ghost" onclick="fecharAtualizarDados()">Cancelar</button><button class="btn" id="atd-aplicar" onclick="aplicarAtualizarDados()">Salvar tudo</button></div>'
     +'</div>';
-  ov.onclick=function(e){ if(e.target===ov) fecharAtualizarDados(); };
+  ov.onmousedown=function(e){ ov.__bd=(e.target===ov); };
+  ov.onclick=function(e){ if(e.target===ov&&ov.__bd) fecharAtualizarDados(); };
   document.body.appendChild(ov);
   document.getElementById('atd-cliente').value=p.cliente||'';
   document.getElementById('atd-oponente').value=p.oponente||'';
@@ -8456,8 +8461,8 @@ async function _atdExtrair(p, dig){
     if(completou){ var stEl=document.getElementById('atd-status'); if(stEl) stEl.innerHTML='✓ O nome do card ('+esc(seed)+') foi <b>completado</b> para <b>'+esc(melhor)+'</b> a partir dos documentos — confira e ajuste se preciso.'; }
     /* render contatos */
     var ctlAtual=String(p.ctl||'').toLowerCase();
-    fill('atd-emails', acc.emails.length?acc.emails.map(function(e2){ var ja=ctlAtual.indexOf(String(e2).toLowerCase())>=0; return '<label style="display:flex;gap:6px;align-items:center;margin:0 0 4px;font-size:13px;cursor:pointer"><input type="checkbox" '+(ja?'':'checked')+' data-v="'+esc(e2)+'" style="width:auto">'+esc(e2)+(ja?' <span class="note" style="font-size:10.5px">(já na ficha)</span>':'')+'</label>'; }).join(''):'<span class="note">nenhum</span>');
-    fill('atd-tels', acc.tels.length?acc.tels.map(function(t2){ var ja=ctlAtual.replace(/\D/g,'').indexOf(String(t2).replace(/\D/g,''))>=0&&String(t2).replace(/\D/g,'').length>=8; return '<label style="display:flex;gap:6px;align-items:center;margin:0 0 4px;font-size:13px;cursor:pointer"><input type="checkbox" '+(ja?'':'checked')+' data-v="'+esc(t2)+'" style="width:auto">'+esc(t2)+(ja?' <span class="note" style="font-size:10.5px">(já na ficha)</span>':'')+'</label>'; }).join(''):'<span class="note">nenhum</span>');
+    fill('atd-emails', acc.emails.length?acc.emails.map(function(e2){ var ja=ctlAtual.indexOf(String(e2).toLowerCase())>=0; return '<label style="display:flex;gap:6px;align-items:center;margin:0 0 4px;font-size:13px;cursor:pointer"><input type="checkbox" data-v="'+esc(e2)+'" style="width:auto">'+esc(e2)+(ja?' <span class="note" style="font-size:10.5px">(já na ficha)</span>':'')+'</label>'; }).join(''):'<span class="note">nenhum</span>');
+    fill('atd-tels', acc.tels.length?acc.tels.map(function(t2){ var ja=ctlAtual.replace(/\D/g,'').indexOf(String(t2).replace(/\D/g,''))>=0&&String(t2).replace(/\D/g,'').length>=8; return '<label style="display:flex;gap:6px;align-items:center;margin:0 0 4px;font-size:13px;cursor:pointer"><input type="checkbox" data-v="'+esc(t2)+'" style="width:auto">'+esc(t2)+(ja?' <span class="note" style="font-size:10.5px">(já na ficha)</span>':'')+'</label>'; }).join(''):'<span class="note">nenhum</span>');
     if(!completou) setSt('Lido de: <b>'+esc(_uniq(acc.fontes).slice(0,5).join(' · ')||'histórico')+'</b>. Use <b>→ autor</b> / <b>→ réu</b> em cada nome, ajuste os CPFs e clique em <b>Salvar tudo</b>.');
   }catch(e){ setSt('Erro ao ler documentos: '+esc((e&&e.message)||String(e))+' — dá para editar manualmente acima.'); }
 }
@@ -8715,7 +8720,8 @@ function _modalConfirmProcuracao(rel, emails, tels, cortou){
   html+= tels.length? tels.map(function(t){return linha(t,'tel',tels.length===1);}).join('') : '<div class="note">Nenhum telefone encontrado.</div>';
   html+='<div class="note" style="margin-top:8px">Slots livres: '+livres+'/4. Só slots vazios são preenchidos; nada é sobrescrito.</div>';
   html+='<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px"><button class="btn sm ghost" onclick="document.getElementById(\'pcr-modal\').remove()">Cancelar</button><button class="btn sm" onclick="_confirmarProcuracao()">Adicionar aos contatos</button></div>';
-  bx.innerHTML=html; ov.appendChild(bx); ov.onclick=function(e){ if(e.target===ov) ov.remove(); };
+  bx.innerHTML=html; ov.appendChild(bx); ov.onmousedown=function(e){ ov.__bd=(e.target===ov); };
+  ov.onclick=function(e){ if(e.target===ov&&ov.__bd) ov.remove(); };
   document.body.appendChild(ov);
 }
 function _confirmarProcuracao(){
@@ -8779,7 +8785,8 @@ function _peticaoCoworkModal(pedido){
     +'<textarea id="pet-cw-txt" readonly style="width:100%;min-height:190px;font-size:13px;padding:10px;border:1px solid #e6e8ec;border-radius:8px;font-family:inherit">'+esc(pedido)+'</textarea>'
     +'<div style="display:flex;gap:8px;margin-top:10px;justify-content:flex-end"><button class="btn ghost" onclick="var e=document.getElementById(\''+id+'\');if(e)e.remove()">Fechar</button><button class="btn" onclick="var t=document.getElementById(\'pet-cw-txt\');t.select();try{document.execCommand(\'copy\');}catch(e){};this.textContent=\'Copiado ✓\'">Copiar</button></div>'
     +'</div>';
-  ov.onclick=function(e){ if(e.target===ov) ov.remove(); };
+  ov.onmousedown=function(e){ ov.__bd=(e.target===ov); };
+  ov.onclick=function(e){ if(e.target===ov&&ov.__bd) ov.remove(); };
   document.body.appendChild(ov);
 }
 function _peticaoOverlay(msg){
@@ -12674,7 +12681,8 @@ function abrirProtocolarPeticao(numero){
       +'<input type="checkbox" id="proto-ok"><span style="font-size:12.5px;color:#2E3A4B"><b>Conferi a peça inteira.</b> Não há recados, campos a preencher, comentários nem destaques pendentes.</span></label>'
     +'<div class="foot" style="margin-top:14px"><button class="btn ghost" onclick="document.getElementById(\'proto-modal\').remove()">Cancelar</button><button class="btn" style="background:#7b1e3a;border-color:#7b1e3a" onclick="salvarProtocolarPeticao(\''+esc(numero)+'\',this)">Anexar e criar prazo</button></div>'
     +'</div>';
-  ov.onclick=function(e){ if(e.target===ov) ov.remove(); };
+  ov.onmousedown=function(e){ ov.__bd=(e.target===ov); };
+  ov.onclick=function(e){ if(e.target===ov&&ov.__bd) ov.remove(); };
   document.body.appendChild(ov);
 }
 function _protoModo(){
@@ -12834,7 +12842,8 @@ async function protoMarcarProtocolada(id){
     +'<div class="note" style="margin:3px 0 0">Guardado na pasta <b>Protocolos</b> dos Documentos do processo e disponível por um ícone aqui.</div>'
     +'<div class="foot" style="margin-top:14px"><button class="btn ghost" onclick="document.getElementById(\'proto-conf\').remove()">Cancelar</button><button class="btn" style="background:#0F6E56;border-color:#0F6E56" onclick="_protoConfirmar(\''+x.id+'\',this)">Confirmar protocolo</button></div>'
     +'</div>';
-  ov.onclick=function(e){ if(e.target===ov) ov.remove(); };
+  ov.onmousedown=function(e){ ov.__bd=(e.target===ov); };
+  ov.onclick=function(e){ if(e.target===ov&&ov.__bd) ov.remove(); };
   document.body.appendChild(ov);
 }
 async function _protoConfirmar(id,btn){
@@ -13267,7 +13276,8 @@ function _devModal(html,j){
   var rodape=j?('<button class="btn" onclick="_devSalvar()">💾 guardar na pasta do processo</button>'):'';
   ov.innerHTML='<div style="background:#fff;border-radius:12px;padding:20px;max-width:720px;width:100%;max-height:88vh;overflow:auto;font-size:14px;color:#1e2733">'+html
     +'<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;flex-wrap:wrap"><button class="btn ghost" onclick="var e=document.getElementById(\'dev-dossie\');if(e)e.remove()">Fechar</button>'+rodape+'</div></div>';
-  ov.onclick=function(e){ if(e.target===ov) ov.remove(); };
+  ov.onmousedown=function(e){ ov.__bd=(e.target===ov); };
+  ov.onclick=function(e){ if(e.target===ov&&ov.__bd) ov.remove(); };
   document.body.appendChild(ov);
   window.__devDossie=j||null;
 }
@@ -13308,7 +13318,8 @@ async function abrirContaIA(){
   var ov=document.createElement('div'); ov.id=id;
   ov.style.cssText='position:fixed;inset:0;background:rgba(20,26,38,.55);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px';
   ov.innerHTML='<div style="background:#fff;border-radius:12px;padding:20px;max-width:560px;width:100%;font-size:14px;color:#1e2733"><div class="note">Carregando…</div></div>';
-  ov.onclick=function(e){ if(e.target===ov) ov.remove(); };
+  ov.onmousedown=function(e){ ov.__bd=(e.target===ov); };
+  ov.onclick=function(e){ if(e.target===ov&&ov.__bd) ov.remove(); };
   document.body.appendChild(ov);
   var caixa=ov.firstChild;
   try{
