@@ -13756,7 +13756,7 @@ async function monitTrazerAssessoria(id){
    Mostra as respostas do chat que foram vinculadas a este processo (dock),
    citação + resposta no estilo WhatsApp. "Arquivar" apenas esconde (some da
    tela) — nunca apaga; "ver arquivadas" recupera, com desarquivar tudo. */
-window.__chatProcCache={}; // processo_id -> {ativos, arquivados}
+window.__chatProcMostrando={}; // processo_id -> true/false (se está exibindo as arquivadas) — separado do render, para não ser apagado a cada atualização
 function _cpEsc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
 function _cpHora(iso){ try{ var d=new Date(iso); return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }catch(e){ return ''; } }
 async function renderChatDoProcesso(processoId, mostrarArquivadas){
@@ -13768,7 +13768,6 @@ async function renderChatDoProcesso(processoId, mostrarArquivadas){
     var todos=q.data||[];
     var ativos=todos.filter(function(m){return !m.arquivado;});
     var arquivados=todos.filter(function(m){return m.arquivado;});
-    window.__chatProcCache[processoId]={ativos:ativos,arquivados:arquivados};
     if(acoes) acoes.innerHTML=arquivados.length?('<a onclick="_cpAlternarArquivadas(\''+processoId+'\')" style="cursor:pointer;color:#185FA5;font-size:12px;font-weight:600">'+(mostrarArquivadas?'ocultar arquivadas':'ver arquivadas ('+arquivados.length+')')+'</a>'):'';
     if(!ativos.length && !mostrarArquivadas){
       body.innerHTML='<div class="note">Nenhuma conversa da equipe vinculada a este processo ainda. No chat da equipe, responda uma mensagem e escolha vincular a este processo.</div>';
@@ -13804,24 +13803,27 @@ async function renderChatDoProcesso(processoId, mostrarArquivadas){
   }catch(e){ body.innerHTML='<div class="note" style="color:#b5342b">Erro: '+_cpEsc((e&&e.message)||e)+'</div>'; }
 }
 function _cpAlternarArquivadas(processoId){
-  var c=window.__chatProcCache[processoId]; var mostrando=!!(c&&c._mostrando);
-  if(c) c._mostrando=!mostrando;
+  var mostrando=!!window.__chatProcMostrando[processoId];
+  window.__chatProcMostrando[processoId]=!mostrando;
   renderChatDoProcesso(processoId, !mostrando);
 }
 async function _cpArquivar(processoId, msgId){
   var r=await window.__sb.from('chat_mensagens').update({arquivado:true}).eq('id',msgId);
   if(r.error){ alert('Erro: '+r.error.message); return; }
+  window.__chatProcMostrando[processoId]=false;
   renderChatDoProcesso(processoId, false);
 }
 async function _cpDesarquivar(processoId, msgId){
   var r=await window.__sb.from('chat_mensagens').update({arquivado:false}).eq('id',msgId);
   if(r.error){ alert('Erro: '+r.error.message); return; }
+  window.__chatProcMostrando[processoId]=true;
   renderChatDoProcesso(processoId, true);
 }
 async function _cpDesarquivarTudo(processoId){
   if(!confirm('Desarquivar todas as conversas deste processo?')) return;
   var r=await window.__sb.from('chat_mensagens').update({arquivado:false}).eq('processo_id',processoId).eq('arquivado',true);
   if(r.error){ alert('Erro: '+r.error.message); return; }
+  window.__chatProcMostrando[processoId]=false;
   renderChatDoProcesso(processoId, false);
 }
 function exportarProdutividadeCSV(){
