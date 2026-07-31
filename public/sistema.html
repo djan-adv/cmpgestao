@@ -13605,7 +13605,9 @@ async function monitTrazerAssessoria(id){
       +'<div id="cmp-chat-buscalist" style="margin-top:4px;max-height:130px;overflow:auto"></div>';
     var inp=document.getElementById('cmp-chat-buscatxt');
     function lista(){
-      var achados=buscarProcessosLocal(inp.value);
+      var q=(inp.value||'').trim();
+      if(q.length<2){ document.getElementById('cmp-chat-buscalist').innerHTML=''; return; }
+      var achados=buscarProcessosLocal(q);
       var lst=document.getElementById('cmp-chat-buscalist'); if(!lst) return;
       lst.innerHTML=achados.length?achados.map(function(p){
         return '<div onclick="__cmpChat.fixar(\''+p._id+'\',\''+h(rotuloProcesso(p)).replace(/'/g,'&#39;')+'\')" style="cursor:pointer;padding:5px 6px;border-radius:6px" onmouseover="this.style.background=\'#fff3b0\'" onmouseout="this.style.background=\'\'">'+h(rotuloProcesso(p))+'</div>';
