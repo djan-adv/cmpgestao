@@ -1883,10 +1883,11 @@ function abrir(i){
       +'<b style="color:#0F6E56;font-size:12.5px">🚀 Cliente novo:</b>'
       +'<button class="btn sm" style="background:#f7f3e8;color:#8a6d00;border:1px solid #e8dcbb;font-weight:700" onclick="abrirGerarProcuracao(\''+p.numero+'\')" title="O sistema já monta a procuração pronta (Word + PDF, padrão CMP) com nome/CPF/e-mail/telefone que já tem — só falta o endereço">✍ 1. Gerar procuração</button>'
       +'<button class="btn sm ghost" style="font-weight:700" onclick="abrirAssinatura(\''+p.numero+'\')" title="Gera o link da procuração já com nome, e-mail, WhatsApp, processo e finalidade preenchidos — o cliente completa o resto e assina eletronicamente à distância">✍ 1b. p/ cliente assinar</button>'
-      +'<button class="btn sm" style="background:#eef3fa;color:#185FA5;border:1px solid #cfe0f2;font-weight:700" onclick="kitContrato()" title="Sobe o contrato (PDF/Word) para assinatura eletrônica, já com o cliente como 1º signatário">📄 2. Contrato p/ assinar</button>'
+      +'<button class="btn sm" style="background:#eef3fa;color:#185FA5;border:1px solid #cfe0f2;font-weight:700" onclick="abrirGerarContrato(\''+p.numero+'\')" title="O sistema já monta o contrato de honorários pronto (Word + PDF) — pergunta objeto, honorários iniciais/parcelamento e percentual de êxito">📄 2. Gerar contrato</button>'
+      +'<button class="btn sm ghost" style="font-weight:700" onclick="kitContrato()" title="Sobe um contrato já pronto (PDF/Word) para assinatura eletrônica, já com o cliente como 1º signatário">📄 2b. p/ assinar avulso</button>'
       +'<button class="btn sm" style="background:#fdeef2;color:#c2185b;border:1px solid #f2c9d6;font-weight:700" onclick="gerarBoletoNovoDoProcesso()" title="Emite o 1º boleto (à vista ou parcelado — as parcelas seguintes saem sozinhas todo mês)">💳 3. Boleto/parcelas</button>'
       +'<span class="note" style="font-size:11px">tudo sai pré-preenchido; assinou → cai na pasta e no histórico sozinho</span></div>'):'')+
-    '<div style="margin-top:10px"><button class="btn sm" onclick="novaTarefaDoProcesso()">+ Nova tarefa</button> <button class="btn sm cmp-only" style="background:#7b1e3a;color:#fff;border:1px solid #7b1e3a;font-weight:700;font-size:11px;line-height:1.18;white-space:normal;text-align:left;padding:4px 10px;vertical-align:middle" onclick="abrirProtocolarPeticao(\''+p.numero+'\')" title="Guarda a peça no sistema com prazo fatal e alerta — pronta para protocolo (PDF) ou aguardando ajuste (Word). O protocolo em si é feito no jus.br.">&#128228; Subir petição<br>para protocolo</button> <button class="btn sm" style="background:#eef4fb;color:#185FA5;border:1px solid #cfe0f2;font-weight:700" onclick="abrirTribunal(\''+p.numero+'\')" title="Abrir o sistema do tribunal (PJe/e-SAJ/Projudi) no grau deste processo — o número é copiado para você colar na busca">&#9878; Abrir no tribunal</button> <button id="btn-atualizar-cli" class="btn sm cmp-only" style="background:#eaf4f4;color:#0b7285;border:1px solid #cfe6e6;font-weight:700" onclick="abrirAtualizarCliente(\''+p.numero+'\')" title="E-mail de atualização ao cliente — informar movimentação, pedir providência, ou ativar o acompanhamento semanal automático">&#9993; Atualizar cliente</button> <button class="btn sm cmp-only" style="background:#f7f3e8;color:#8a6d00;border:1px solid #e8dcbb;font-weight:700" onclick="abrirGerarProcuracao(\''+p.numero+'\')" title="Gera a procuração pronta (Word + PDF, padrão CMP) com os dados que o sistema já tem — só pede o que faltar">&#9997; Gerar procuração</button> <button class="btn sm cmp-only ghost" style="font-weight:700" onclick="abrirAssinatura(\''+p.numero+'\')" title="Gerar link de procuração para o CLIENTE preencher o que faltar e assinar eletronicamente à distância">&#128231; p/ assinatura eletrônica</button>'+((typeof _ehCasoProc==='function'&&_ehCasoProc(p))?' <button class="btn sm cmp-only" style="background:#f3eaf7;color:#6d28a8;border:1px solid #ddc9ea;font-weight:700" onclick="monitorarAcoesCliente()" title="Testar: buscar no DJEN ações NOVAS (últimos 3 meses) que citem o nome deste cliente — inclui trabalhista. Não busca por CNPJ (a API do CNJ não permite).">&#128269; Monitorar ações novas</button>':'')+'</div>'+
+    '<div style="margin-top:10px"><button class="btn sm" onclick="novaTarefaDoProcesso()">+ Nova tarefa</button> <button class="btn sm cmp-only" style="background:#7b1e3a;color:#fff;border:1px solid #7b1e3a;font-weight:700;font-size:11px;line-height:1.18;white-space:normal;text-align:left;padding:4px 10px;vertical-align:middle" onclick="abrirProtocolarPeticao(\''+p.numero+'\')" title="Guarda a peça no sistema com prazo fatal e alerta — pronta para protocolo (PDF) ou aguardando ajuste (Word). O protocolo em si é feito no jus.br.">&#128228; Subir petição<br>para protocolo</button> <button class="btn sm" style="background:#eef4fb;color:#185FA5;border:1px solid #cfe0f2;font-weight:700" onclick="abrirTribunal(\''+p.numero+'\')" title="Abrir o sistema do tribunal (PJe/e-SAJ/Projudi) no grau deste processo — o número é copiado para você colar na busca">&#9878; Abrir no tribunal</button> <button id="btn-atualizar-cli" class="btn sm cmp-only" style="background:#eaf4f4;color:#0b7285;border:1px solid #cfe6e6;font-weight:700" onclick="abrirAtualizarCliente(\''+p.numero+'\')" title="E-mail de atualização ao cliente — informar movimentação, pedir providência, ou ativar o acompanhamento semanal automático">&#9993; Atualizar cliente</button> <button class="btn sm cmp-only" style="background:#f7f3e8;color:#8a6d00;border:1px solid #e8dcbb;font-weight:700" onclick="abrirGerarProcuracao(\''+p.numero+'\')" title="Gera a procuração pronta (Word + PDF, padrão CMP) com os dados que o sistema já tem — só pede o que faltar">&#9997; Gerar procuração</button> <button class="btn sm cmp-only ghost" style="font-weight:700" onclick="abrirAssinatura(\''+p.numero+'\')" title="Gerar link de procuração para o CLIENTE preencher o que faltar e assinar eletronicamente à distância">&#128231; p/ assinatura eletrônica</button> <button class="btn sm cmp-only" style="background:#eef3fa;color:#185FA5;border:1px solid #cfe0f2;font-weight:700" onclick="abrirGerarContrato(\''+p.numero+'\')" title="Gera o contrato de honorários pronto (Word + PDF, padrão CMP) — pergunta objeto, honorários iniciais/parcelamento e percentual de êxito">&#128220; Gerar contrato</button>'+((typeof _ehCasoProc==='function'&&_ehCasoProc(p))?' <button class="btn sm cmp-only" style="background:#f3eaf7;color:#6d28a8;border:1px solid #ddc9ea;font-weight:700" onclick="monitorarAcoesCliente()" title="Testar: buscar no DJEN ações NOVAS (últimos 3 meses) que citem o nome deste cliente — inclui trabalhista. Não busca por CNPJ (a API do CNJ não permite).">&#128269; Monitorar ações novas</button>':'')+'</div>'+
     /* ponto 12: bloco de processos vinculados no canto inferior direito da aba (perto do botão Encerrar) */
     '<div id="proc-vinculados-rodape" style="position:absolute;bottom:12px;right:14px;max-width:60%;display:flex;gap:6px;flex-wrap:wrap;align-items:center;justify-content:flex-end;font-size:12px"></div>'+
     '</div>';
@@ -6641,6 +6642,64 @@ function renderProc(){
     <button class="btn ghost" onclick="fecharModalProcuracao()">Cancelar</button>
   </div>
 </div></div>
+<div id="modal-contrato" class="overlay hidden"><div class="modal" style="max-width:700px">
+  <h2>Gerar contrato de honorários</h2>
+  <div id="cont-status" class="note" style="margin:0 0 10px"></div>
+  <label>Objeto do contrato <span class="note" style="font-size:11px">(pode ser judicial — ação, recurso — ou extrajudicial — elaborar contrato, due diligence, assessoria etc.)</span></label>
+  <textarea id="cont-objeto" rows="3" style="width:100%;box-sizing:border-box"></textarea>
+
+  <div style="margin-top:12px;padding:10px 12px;background:#f7f8fa;border:1px solid #e3e6ea;border-radius:8px">
+    <label style="display:flex;align-items:center;gap:6px;margin:0"><input type="checkbox" id="cont-tem-inicial" checked onchange="_contToggleInicial()"> Tem honorários iniciais</label>
+    <div id="cont-bloco-inicial" style="margin-top:8px">
+      <div style="display:flex;gap:16px;margin:4px 0 8px">
+        <label style="display:flex;align-items:center;gap:5px;font-weight:400"><input type="radio" name="cont-forma" value="vista" checked onchange="_contToggleForma()"> À vista (pago de uma vez)</label>
+        <label style="display:flex;align-items:center;gap:5px;font-weight:400"><input type="radio" name="cont-forma" value="parcelado" onchange="_contToggleForma()"> Parcelado no boleto</label>
+      </div>
+      <div id="cont-vista" style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div><label>Valor (R$)</label><input id="cont-valor-vista" type="number" step="0.01" style="width:100%;box-sizing:border-box"></div>
+        <div><label>Vencimento</label><input id="cont-venc-vista" type="date" style="width:100%;box-sizing:border-box"></div>
+      </div>
+      <div id="cont-parcelado" style="display:none;grid-template-columns:1fr 1fr 1fr;gap:8px">
+        <div><label>Valor de cada parcela (R$)</label><input id="cont-valor-parcela" type="number" step="0.01" style="width:100%;box-sizing:border-box"></div>
+        <div><label>Nº de parcelas</label><input id="cont-qtd-parcelas" type="number" min="2" step="1" style="width:100%;box-sizing:border-box"></div>
+        <div><label>1º vencimento</label><input id="cont-venc-parcela1" type="date" style="width:100%;box-sizing:border-box"></div>
+      </div>
+    </div>
+  </div>
+
+  <div style="margin-top:10px;padding:10px 12px;background:#f7f8fa;border:1px solid #e3e6ea;border-radius:8px">
+    <label style="display:flex;align-items:center;gap:6px;margin:0"><input type="checkbox" id="cont-tem-exito" checked onchange="_contToggleExito()"> Tem percentual de êxito</label>
+    <div id="cont-bloco-exito" style="margin-top:8px">
+      <label>Percentual de êxito (%)</label>
+      <input id="cont-pct-exito" type="number" min="1" max="100" step="1" value="20" style="width:120px;box-sizing:border-box">
+    </div>
+  </div>
+
+  <p class="sectlabel" style="margin:14px 0 4px">Dados do contratante</p>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 10px">
+    <div><label>Nome completo</label><input id="cont-nome" style="width:100%;box-sizing:border-box"></div>
+    <div><label>CPF</label><input id="cont-cpf" style="width:100%;box-sizing:border-box"></div>
+    <div><label>Nacionalidade</label><input id="cont-nacionalidade" style="width:100%;box-sizing:border-box" value="Brasileiro(a)"></div>
+    <div><label>Estado civil</label>
+      <select id="cont-estadocivil" style="width:100%;box-sizing:border-box">
+        <option value="">selecione…</option>
+        <option>Solteiro(a)</option><option>Casado(a)</option><option>Divorciado(a)</option><option>Viúvo(a)</option><option>União estável</option>
+      </select>
+    </div>
+    <div><label>Profissão</label><input id="cont-profissao" style="width:100%;box-sizing:border-box"></div>
+    <div><label>E-mail</label><input id="cont-email" style="width:100%;box-sizing:border-box"></div>
+    <div><label>CEP</label><input id="cont-cep" style="width:100%;box-sizing:border-box" onblur="_contBuscarCep()"></div>
+    <div><label>Número</label><input id="cont-numero" style="width:100%;box-sizing:border-box"></div>
+    <div style="grid-column:1/-1"><label>Rua</label><input id="cont-rua" style="width:100%;box-sizing:border-box"></div>
+    <div><label>Bairro</label><input id="cont-bairro" style="width:100%;box-sizing:border-box"></div>
+    <div><label>Cidade</label><input id="cont-cidade" style="width:100%;box-sizing:border-box"></div>
+    <div><label>UF</label><input id="cont-uf" style="width:100%;box-sizing:border-box" maxlength="2"></div>
+  </div>
+  <div style="margin-top:12px;display:flex;gap:8px">
+    <button id="cont-btn-gerar" class="btn" onclick="gerarContratoAuto()">Gerar contrato (Word + PDF)</button>
+    <button class="btn ghost" onclick="fecharModalContrato()">Cancelar</button>
+  </div>
+</div></div>
 <script>
 function go(s){
   ["painel","triagem","agenda","processos","proc-det","crm","etiquetas","procedimentos","diligencias"].forEach(function(id){var e=document.getElementById("s-"+id);if(e)e.classList.add("hidden")});
@@ -10264,6 +10323,242 @@ async function gerarProcuracaoAuto(){
     setTimeout(fecharModalProcuracao, 1400);
   }catch(e){ if(st){ st.textContent='Erro: '+(e&&e.message||e); st.style.color='#b5342b'; } }
   finally{ if(btn){ btn.disabled=false; btn.textContent='Gerar procuração (Word + PDF)'; } }
+}
+/* ===== Gerar contrato de honorários automático (Word + PDF) — mesmo esquema da
+   procuração acima, mas com clausulado variável: pergunta se tem honorários
+   iniciais (e como — à vista ou parcelado no boleto, com as datas), se tem
+   percentual de êxito (e qual), e o objeto do contrato (serviço judicial ou
+   extrajudicial — due diligence, elaborar contrato, assessoria etc.). As
+   cláusulas de honorários só entram se marcadas, e a numeração se ajusta
+   sozinha (1ª, 2ª, 3ª…) conforme o que entrar. ===== */
+var CONT_CONTRATADO='<b>CRISPIM, MENDONÇA E PINHEIRO ADVOGADOS</b>, sociedade de advogados inscrita na OAB/PB e no CNPJ sob o nº 45.487.942/0001-84, com escritório na Rua Abelardo da Silva Guimarães Barreto, 51, sala 604, Edf Alliance Plaza, João Pessoa/PB, neste ato representada pelo advogado <b>DJAN HENRIQUE MENDONÇA DO NASCIMENTO</b>, OAB/PB nº 5219-A';
+/* números 0-999 por extenso (pt-BR) — usado tanto no valor em reais quanto no percentual de êxito */
+var _NX_UNI=['zero','um','dois','três','quatro','cinco','seis','sete','oito','nove'];
+var _NX_D10=['dez','onze','doze','treze','quatorze','quinze','dezesseis','dezessete','dezoito','dezenove'];
+var _NX_DEZ=['','','vinte','trinta','quarenta','cinquenta','sessenta','setenta','oitenta','noventa'];
+var _NX_CEM=['','cento','duzentos','trezentos','quatrocentos','quinhentos','seiscentos','setecentos','oitocentos','novecentos'];
+function _nxTri(n){
+  if(n===0) return '';
+  if(n===100) return 'cem';
+  var c=Math.floor(n/100), r=n%100, partes=[];
+  if(c) partes.push(_NX_CEM[c]);
+  if(r){
+    if(r<10) partes.push(_NX_UNI[r]);
+    else if(r<20) partes.push(_NX_D10[r-10]);
+    else { var dz=Math.floor(r/10), u=r%10; partes.push(_NX_DEZ[dz]+(u?(' e '+_NX_UNI[u]):'')); }
+  }
+  return partes.join(' e ');
+}
+function _numeroExtenso(n){
+  n=Math.floor(Math.abs(Number(n)||0));
+  if(n===0) return 'zero';
+  var milhoes=Math.floor(n/1000000), milhares=Math.floor((n%1000000)/1000), resto=n%1000, partes=[];
+  if(milhoes) partes.push(_nxTri(milhoes)+(milhoes===1?' milhão':' milhões'));
+  if(milhares) partes.push(milhares===1?'mil':(_nxTri(milhares)+' mil'));
+  if(resto) partes.push(_nxTri(resto));
+  if(partes.length>1){ var last=partes.pop(); return partes.join(', ')+' e '+last; }
+  return partes[0]||'zero';
+}
+function _valorExtenso(valor){
+  valor=Math.round((Number(valor)||0)*100)/100;
+  var reais=Math.floor(valor), centavos=Math.round((valor-reais)*100);
+  var s=_numeroExtenso(reais)+' '+(reais===1?'real':'reais');
+  if(centavos>0) s+=' e '+_numeroExtenso(centavos)+' '+(centavos===1?'centavo':'centavos');
+  return s;
+}
+function _reais(v){ return 'R$ '+(Number(v)||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function _contToggleInicial(){ var on=document.getElementById('cont-tem-inicial').checked; document.getElementById('cont-bloco-inicial').style.display=on?'block':'none'; }
+function _contToggleExito(){ var on=document.getElementById('cont-tem-exito').checked; document.getElementById('cont-bloco-exito').style.display=on?'block':'none'; }
+function _contToggleForma(){
+  var vista=document.querySelector('input[name="cont-forma"]:checked').value==='vista';
+  document.getElementById('cont-vista').style.display=vista?'grid':'none';
+  document.getElementById('cont-parcelado').style.display=vista?'none':'grid';
+}
+function _contDataExtenso(iso){
+  if(!iso) return '[data]';
+  var m=String(iso).split('-'); if(m.length!==3) return iso;
+  var MESES=['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+  return (+m[2])+' de '+MESES[(+m[1])-1]+' de '+m[0];
+}
+/* monta o corpo do contrato — cláusulas fixas + as condicionais (honorários
+   iniciais / êxito), numeradas na ordem em que entram */
+function _contratoCorpoHTML(d){
+  var clausulas=[];
+  clausulas.push(['DO OBJETO', 'O CONTRATADO prestará à CONTRATANTE serviços advocatícios consistentes em '+_procEsc(d.objeto)+'.']);
+  if(d.temInicial){
+    var corpoHon;
+    if(d.forma==='vista'){
+      corpoHon='Pela prestação dos serviços, a CONTRATANTE pagará ao CONTRATADO honorários contratuais de <b>'+_reais(d.valorVista)+' ('+_valorExtenso(d.valorVista)+')</b>, em parcela única, com vencimento em <b>'+_contDataExtenso(d.vencVista)+'</b>.';
+    } else {
+      var total=(Number(d.valorParcela)||0)*(Number(d.qtdParcelas)||0);
+      corpoHon='Pela prestação dos serviços, a CONTRATANTE pagará ao CONTRATADO honorários contratuais de <b>'+_reais(total)+' ('+_valorExtenso(total)+')</b>, em <b>'+d.qtdParcelas+' ('+_numeroExtenso(d.qtdParcelas)+') parcelas mensais e iguais de '+_reais(d.valorParcela)+' ('+_valorExtenso(d.valorParcela)+')</b>, vencendo a primeira em <b>'+_contDataExtenso(d.vencParcela1)+'</b> e as demais no mesmo dia de cada mês subsequente, até a quitação integral.';
+    }
+    corpoHon+='<br><br>Parágrafo único. O atraso de qualquer parcela implicará correção pelo IPCA, juros de mora de 1% ao mês e multa de 2% sobre o valor em atraso.';
+    clausulas.push(['DOS HONORÁRIOS CONTRATUAIS', corpoHon]);
+  }
+  if(d.temExito){
+    var refAnterior=d.temInicial?('Além dos honorários da Cláusula '+clausulas.length+'ª, a'):'A';
+    var corpoExito=refAnterior+' CONTRATANTE pagará honorários de êxito de <b>'+d.pctExito+'% ('+_numeroExtenso(d.pctExito)+' por cento)</b> sobre os valores líquidos efetivamente recebidos pela CONTRATANTE em razão do objeto deste contrato, a qualquer título, retidos por ocasião de cada disponibilização ou levantamento, ficando o CONTRATADO desde já autorizado a deduzi-los dos alvarás, depósitos ou pagamentos obtidos ou acordo celebrado entre as partes, com ou sem anuência do contratado.'
+      +'<br><br>Parágrafo único. Os honorários de sucumbência pertencem exclusivamente ao CONTRATADO (art. 23 da Lei nº 8.906/94), somando-se aos ora pactuados.';
+    clausulas.push(['DOS HONORÁRIOS DE ÊXITO', corpoExito]);
+  }
+  clausulas.push(['DAS OBRIGAÇÕES E DESPESAS', 'O CONTRATADO atuará com zelo e diligência técnica, mantendo a CONTRATANTE informada, tratando-se de obrigação de meio, sem garantia de resultado. A CONTRATANTE obriga-se a fornecer os documentos necessários e a adimplir pontualmente os honorários. As custas, despesas processuais, diligências e honorários periciais não integram este contrato e correrão por conta da CONTRATANTE.']);
+  clausulas.push(['DA RESCISÃO E DO FORO', 'Em caso de rescisão ou revogação do mandato antes do encerramento dos serviços, permanecerão devidas as parcelas vencidas e os honorários de êxito proporcionais aos atos praticados e ao proveito obtido (art. 17 do Código de Ética e Disciplina da OAB). Fica eleito o foro da Comarca de '+_procEsc(d.cidade)+'/'+_procEsc(d.uf)+' para dirimir controvérsias deste contrato.']);
+  var ROM=['1ª','2ª','3ª','4ª','5ª','6ª'];
+  var corpoClausulas=clausulas.map(function(c,i){ return '<p><b>CLÁUSULA '+(ROM[i]||(i+1)+'ª')+' – '+c[0]+'</b></p><p>'+c[1]+'</p>'; }).join('');
+  var end='Rua '+_procEsc(d.rua)+', nº '+_procEsc(d.numero)+', '+_procEsc(d.bairro)+', '+_procEsc(d.cidade)+'/'+_procEsc(d.uf)+', CEP '+_procEsc(d.cep);
+  return '<h1 style="text-align:center;font-size:14pt;font-weight:bold;margin:0 0 16pt;text-transform:uppercase">Contrato de Prestação de Serviços Advocatícios e Honorários</h1>'
+    +'<p><b>CONTRATANTE:</b> '+_procEsc(d.nome)+', '+_procEsc(d.nacionalidade)+', '+_procEsc(d.estadoCivil)+(d.profissao?(', '+_procEsc(d.profissao)):'')+', inscrito(a) no CPF sob o nº '+_procEsc(d.cpf)+', residente e domiciliado(a) na '+end+', e-mail '+_procEsc(d.email)+'.</p>'
+    +'<p><b>CONTRATADO:</b> '+CONT_CONTRATADO+'.</p>'
+    +'<p>As partes têm, entre si, justo e contratado o presente instrumento de prestação de serviços advocatícios, que se regerá pelas cláusulas seguintes.</p>'
+    +corpoClausulas
+    +'<p>E, por estarem assim justas e contratadas, firmam as partes o presente instrumento em duas vias de igual teor.</p>'
+    +'<p style="text-align:center;margin-top:16pt">João Pessoa/PB, '+new Date().toLocaleDateString('pt-BR',{day:'2-digit',month:'long',year:'numeric'})+'.</p>'
+    +'<table style="width:100%;margin-top:34pt;border-collapse:collapse"><tr>'
+    +'<td style="width:50%;text-align:center;vertical-align:top">_________________________________________<br><b>'+_procEsc(d.nome)+'</b><br>Contratante — CPF '+_procEsc(d.cpf)+'</td>'
+    +'<td style="width:50%;text-align:center;vertical-align:top">_________________________________________<br><b>CRISPIM, MENDONÇA E PINHEIRO ADVOGADOS</b><br>Djan Henrique Mendonça do Nascimento — OAB/PB 5219-A</td>'
+    +'</tr></table>'
+    +'<p style="text-align:center;margin-top:20pt;font-size:9pt;color:#555">0800 591 7259 | contato@cmpadvogados.com.br</p>';
+}
+async function abrirGerarContrato(numero){
+  var digs=String(numero||'').replace(/\D/g,'');
+  var p=(typeof atual!=='undefined'&&atual&&String(atual.numero||'').replace(/\D/g,'')===digs)?atual:(((typeof DADOS!=='undefined'&&DADOS.processos)||[]).filter(function(x){return String(x.numero||'').replace(/\D/g,'')===digs;})[0]||{});
+  window.__contCtx={numero:numero, p:p};
+  var m=document.getElementById('modal-contrato'); if(!m) return; m.classList.remove('hidden');
+  var st=document.getElementById('cont-status');
+  if(st){ st.textContent='Carregando dados do cliente…'; st.style.color='var(--muted)'; }
+  var nome1=(typeof _partesSplit==='function'?(_partesSplit(p.cliente)[0]||''):String(p.cliente||''));
+  document.getElementById('cont-nome').value=nome1;
+  document.getElementById('cont-objeto').value=(p.tipo?('patrocínio de ação relativa a "'+p.tipo+'"'+(p.numero?(', processo nº '+p.numero):'')+', acompanhando-a em todas as fases e instâncias — inclusive recursos, cumprimento de sentença e levantamento de valores — até o encerramento do processo'):'');
+  var em=''; try{ em=(typeof _emailClienteDoProc==='function')?_emailClienteDoProc(p):''; }catch(e){}
+  document.getElementById('cont-email').value=em;
+  document.getElementById('cont-cpf').value=''; document.getElementById('cont-cep').value='';
+  document.getElementById('cont-rua').value=''; document.getElementById('cont-numero').value='';
+  document.getElementById('cont-bairro').value=''; document.getElementById('cont-cidade').value=''; document.getElementById('cont-uf').value='';
+  document.getElementById('cont-nacionalidade').value='Brasileiro(a)';
+  document.getElementById('cont-estadocivil').value=''; document.getElementById('cont-profissao').value='';
+  document.getElementById('cont-tem-inicial').checked=true; _contToggleInicial();
+  document.getElementById('cont-tem-exito').checked=true; _contToggleExito();
+  document.querySelector('input[name="cont-forma"][value="vista"]').checked=true; _contToggleForma();
+  document.getElementById('cont-valor-vista').value=''; document.getElementById('cont-venc-vista').value='';
+  document.getElementById('cont-valor-parcela').value=''; document.getElementById('cont-qtd-parcelas').value=''; document.getElementById('cont-venc-parcela1').value='';
+  document.getElementById('cont-pct-exito').value='20';
+  try{
+    var sb=window.__sb;
+    var rc=await sb.from('contatos').select('*').ilike('nome', nome1).limit(1);
+    var ct=(rc.data||[])[0];
+    if(ct){
+      if(ct.cpf_cnpj) document.getElementById('cont-cpf').value=ct.cpf_cnpj;
+      if(ct.email && !em) document.getElementById('cont-email').value=ct.email;
+      if(ct.endereco_rua) document.getElementById('cont-rua').value=ct.endereco_rua;
+      if(ct.endereco_numero) document.getElementById('cont-numero').value=ct.endereco_numero;
+      if(ct.endereco_bairro) document.getElementById('cont-bairro').value=ct.endereco_bairro;
+      if(ct.endereco_cidade) document.getElementById('cont-cidade').value=ct.endereco_cidade;
+      if(ct.endereco_uf) document.getElementById('cont-uf').value=ct.endereco_uf;
+      if(ct.endereco_cep) document.getElementById('cont-cep').value=ct.endereco_cep;
+      if(ct.nacionalidade) document.getElementById('cont-nacionalidade').value=ct.nacionalidade;
+      if(ct.estado_civil) document.getElementById('cont-estadocivil').value=ct.estado_civil;
+      if(ct.profissao) document.getElementById('cont-profissao').value=ct.profissao;
+    }
+  }catch(e){}
+  if(!document.getElementById('cont-cpf').value){
+    try{ var r=await _cpfDoProcesso(p); if(r&&r.cpf) document.getElementById('cont-cpf').value=r.cpf; }catch(e){}
+  }
+  if(st){ st.textContent='Confira o objeto e os honorários — preencha o que faltar dos dados do contratante (geralmente o endereço).'; st.style.color='var(--muted)'; }
+}
+function fecharModalContrato(){ var m=document.getElementById('modal-contrato'); if(m) m.classList.add('hidden'); }
+async function _contBuscarCep(){
+  var cep=(document.getElementById('cont-cep').value||'').replace(/\D/g,'');
+  if(cep.length!==8) return;
+  var st=document.getElementById('cont-status');
+  try{
+    var r=await fetch('https://viacep.com.br/ws/'+cep+'/json/'); var d=await r.json();
+    if(d.erro){ if(st){ st.textContent='CEP não encontrado.'; st.style.color='#b5342b'; } return; }
+    if(d.logradouro && !document.getElementById('cont-rua').value) document.getElementById('cont-rua').value=d.logradouro;
+    if(d.bairro && !document.getElementById('cont-bairro').value) document.getElementById('cont-bairro').value=d.bairro;
+    if(d.localidade) document.getElementById('cont-cidade').value=d.localidade;
+    if(d.uf) document.getElementById('cont-uf').value=d.uf;
+  }catch(e){}
+}
+async function gerarContratoAuto(){
+  var ctx=window.__contCtx; if(!ctx) return;
+  var p=ctx.p;
+  var temInicial=document.getElementById('cont-tem-inicial').checked;
+  var temExito=document.getElementById('cont-tem-exito').checked;
+  var forma=(document.querySelector('input[name="cont-forma"]:checked')||{}).value||'vista';
+  var d={
+    objeto:_v('cont-objeto'), nome:_v('cont-nome'), cpf:_v('cont-cpf'), nacionalidade:_v('cont-nacionalidade'), estadoCivil:_v('cont-estadocivil'),
+    profissao:_v('cont-profissao'), email:_v('cont-email'), cep:_v('cont-cep'), rua:_v('cont-rua'), numero:_v('cont-numero'),
+    bairro:_v('cont-bairro'), cidade:_v('cont-cidade'), uf:_v('cont-uf'),
+    temInicial:temInicial, forma:forma, valorVista:_v('cont-valor-vista'), vencVista:_v('cont-venc-vista'),
+    valorParcela:_v('cont-valor-parcela'), qtdParcelas:_v('cont-qtd-parcelas'), vencParcela1:_v('cont-venc-parcela1'),
+    temExito:temExito, pctExito:_v('cont-pct-exito')
+  };
+  var st=document.getElementById('cont-status');
+  if(!d.objeto||!d.nome||!d.cpf||!d.rua||!d.numero||!d.bairro||!d.cidade||!d.uf||!d.cep||!d.estadoCivil){
+    if(st){ st.textContent='Preencha o objeto, nome, CPF, estado civil e o endereço completo antes de gerar.'; st.style.color='#b5342b'; }
+    return;
+  }
+  if(temInicial){
+    if(forma==='vista' && (!d.valorVista||!d.vencVista)){ if(st){ st.textContent='Informe o valor e o vencimento do pagamento à vista.'; st.style.color='#b5342b'; } return; }
+    if(forma==='parcelado' && (!d.valorParcela||!d.qtdParcelas||!d.vencParcela1)){ if(st){ st.textContent='Informe o valor da parcela, a quantidade e o 1º vencimento.'; st.style.color='#b5342b'; } return; }
+  }
+  if(temExito && !d.pctExito){ if(st){ st.textContent='Informe o percentual de êxito.'; st.style.color='#b5342b'; } return; }
+  var btn=document.getElementById('cont-btn-gerar');
+  if(btn){ btn.disabled=true; btn.textContent='Gerando…'; }
+  if(st){ st.textContent='Gerando o Word e o PDF…'; st.style.color='var(--muted)'; }
+  try{
+    var dig=(typeof _docChaveProcObj==='function')?_docChaveProcObj(p):'';
+    if(!dig) throw new Error('Salve o processo/caso primeiro.');
+    var tok=await docToken();
+    var corpo=_contratoCorpoHTML(d);
+    var rotulo='Contrato de Honorários';
+    var docHtml=_procDocWord(corpo);
+    var b64doc=btoa(unescape(encodeURIComponent(docHtml)));
+    var rDoc=await fetch('/api/docs',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},
+      body:JSON.stringify({path:dig+'/'+rotulo+'.doc', b64:b64doc})});
+    if(!rDoc.ok) throw new Error('falha ao salvar o Word (HTTP '+rDoc.status+')');
+    await _ensureHtml2Canvas(); var jspdfLib=await _ensureJsPDF();
+    var off=document.createElement('div');
+    off.style.cssText='position:fixed;left:-9999px;top:0;width:740px;background:#fff;padding:40px;font-family:Barlow,Arial,sans-serif;font-size:12pt;line-height:1.5;color:#1c1c1c;text-align:justify';
+    off.innerHTML='<div style="margin-bottom:14pt"><img src="/logo_cmp_full.png" style="max-height:50px" crossorigin="anonymous"></div>'+corpo;
+    document.body.appendChild(off);
+    await new Promise(function(r){ setTimeout(r,80); });
+    var canvas=await window.html2canvas(off, {scale:2, backgroundColor:'#ffffff', useCORS:true});
+    document.body.removeChild(off);
+    var jsPDF=jspdfLib.jsPDF;
+    var pdf=new jsPDF('p','mm','a4');
+    var pw=pdf.internal.pageSize.getWidth(), ph=pdf.internal.pageSize.getHeight();
+    var totalH=canvas.height*pw/canvas.width;
+    var pagPx=Math.floor(canvas.width*ph/pw);
+    var y=0;
+    while(y<canvas.height){
+      var fatia=document.createElement('canvas'); fatia.width=canvas.width; fatia.height=Math.min(pagPx,canvas.height-y);
+      fatia.getContext('2d').drawImage(canvas,0,y,canvas.width,fatia.height,0,0,canvas.width,fatia.height);
+      var hImg=fatia.height*pw/canvas.width;
+      if(y>0) pdf.addPage();
+      pdf.addImage(fatia.toDataURL('image/jpeg',0.92),'JPEG',0,0,pw,hImg);
+      y+=pagPx;
+    }
+    var blobPdf=pdf.output('blob');
+    var bufPdf=new Uint8Array(await blobPdf.arrayBuffer());
+    var sPdf=''; for(var k=0;k<bufPdf.length;k+=0x8000){ sPdf+=String.fromCharCode.apply(null, bufPdf.subarray(k,Math.min(k+0x8000,bufPdf.length))); }
+    var rPdf=await fetch('/api/docs',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},
+      body:JSON.stringify({path:dig+'/'+rotulo+'.pdf', b64:btoa(sPdf)})});
+    if(!rPdf.ok) throw new Error('falha ao salvar o PDF (HTTP '+rPdf.status+')');
+    try{
+      var reg={endereco_rua:d.rua, endereco_numero:d.numero, endereco_bairro:d.bairro, endereco_cidade:d.cidade, endereco_uf:d.uf, endereco_cep:d.cep, nacionalidade:d.nacionalidade, estado_civil:d.estadoCivil, profissao:d.profissao, cpf_cnpj:d.cpf};
+      if(d.email) reg.email=d.email;
+      var sb2=window.__sb;
+      var rc2=await sb2.from('contatos').select('id').ilike('nome', d.nome).limit(1);
+      if(rc2.data&&rc2.data[0]) await sb2.from('contatos').update(reg).eq('id', rc2.data[0].id);
+      else { reg.nome=d.nome; reg.tipo='cliente'; await sb2.from('contatos').insert(reg); }
+    }catch(e){}
+    if(st){ st.textContent='✓ Contrato gerado e salvo na pasta do processo!'; st.style.color='#0F6E56'; }
+    try{ if(typeof carregarDocs==='function' && typeof atual!=='undefined' && atual) carregarDocs(atual.numero,'','proc'); }catch(e){}
+    setTimeout(fecharModalContrato, 1400);
+  }catch(e){ if(st){ st.textContent='Erro: '+(e&&e.message||e); st.style.color='#b5342b'; } }
+  finally{ if(btn){ btn.disabled=false; btn.textContent='Gerar contrato (Word + PDF)'; } }
 }
 /* Abre o assinador com os dados do contato aberto no CRM (nome/e-mail/telefone). */
 function assinaturaDoContato(){
