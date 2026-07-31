@@ -12363,6 +12363,11 @@ function finRenderTabela(){
     var venc=x.vencimento?String(x.vencimento).split('-').reverse().join('/'):'—';
     var pago=x.pago_em?new Date(x.pago_em).toLocaleDateString('pt-BR'):'—';
     var cli=finNomeCliente(x.contato_id);
+    /* nome clicável → abre a ficha do cliente (processo OU caso, tanto faz a fase —
+       irParaProcesso acha pelo número, seja CNJ de verdade ou o interno do caso) */
+    var cliHtml=(cli&&cli!=='—'&&x.processo_numero)
+      ?('<a onclick="irParaProcesso(\''+String(x.processo_numero).replace(/'/g,'')+'\')" style="cursor:pointer;color:var(--navy);text-decoration:underline;font-weight:600" title="Abrir a ficha deste cliente">'+finEsc(cli)+'</a>')
+      :finEsc(cli);
     var pagar='';
     if(x.boleto_url) pagar+='<a class="btn sm ghost" href="'+x.boleto_url+'" target="_blank" rel="noopener">Boleto</a> ';
     if(x.pix_emv) pagar+='<button class="btn sm ghost" onclick="finCopiarPix(this,\''+encodeURIComponent(x.pix_emv)+'\')">Copiar PIX</button>';
@@ -12382,7 +12387,7 @@ function finRenderTabela(){
     var acoes='';
     if(x.status==='aberta') acoes+='<a onclick="cancelarCobranca(\''+x.id+'\')" title="Cancelar o boleto no Cora" style="cursor:pointer;color:#b5342b;font-size:11.5px;margin-right:10px">cancelar</a>';
     acoes+='<a onclick="apagarCobranca(\''+x.id+'\')" title="Apagar esta linha do financeiro" style="cursor:pointer;color:#8a8f98;font-size:11.5px">🗑</a>';
-    return '<tr><td>'+finEsc(cli)+'</td><td>'+finEsc(x.descricao||'')+'</td><td>'+finReais(x.valor_centavos)+'</td><td>'+venc+'</td><td>'+badge+'</td><td>'+pago+'</td><td style="white-space:nowrap">'+pagar+'</td><td style="white-space:nowrap">'+reenviarBtn+'</td><td>'+nf+'</td><td style="white-space:nowrap">'+acoes+'</td></tr>';
+    return '<tr><td>'+cliHtml+'</td><td>'+finEsc(x.descricao||'')+'</td><td>'+finReais(x.valor_centavos)+'</td><td>'+venc+'</td><td>'+badge+'</td><td>'+pago+'</td><td style="white-space:nowrap">'+pagar+'</td><td style="white-space:nowrap">'+reenviarBtn+'</td><td>'+nf+'</td><td style="white-space:nowrap">'+acoes+'</td></tr>';
   }).join('');
   try{ renderAlvarasMes(); }catch(e){}
 }
