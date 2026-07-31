@@ -38,6 +38,8 @@ const CSS = `
   .asn-doc-inner{position:relative;z-index:1;padding:30px 34px;font-family:'Barlow',Arial,sans-serif;font-size:12pt;line-height:1.5;color:#1c1c1c;text-align:justify;border:1.6px solid #33475f;display:flex;flex-direction:column;aspect-ratio:210/297}
   .asn-doc-inner>*{width:100%}
   .asn-watermark{position:absolute;inset:0;background:url('/logo_cmp_full.png') center 46% no-repeat;background-size:360px;opacity:.06;z-index:0;pointer-events:none}
+  .asn-selo-lateral{position:absolute;top:0;right:0;bottom:0;width:15px;background:#1f2b3a;overflow:hidden;z-index:2;pointer-events:none}
+  .asn-selo-lateral .txt{position:absolute;left:0;bottom:0;height:15px;line-height:15px;white-space:nowrap;color:#fff;font-size:7.2px;letter-spacing:1.4px;font-weight:600;font-family:'Barlow',Arial,sans-serif;transform-origin:0% 100%;transform:rotate(-90deg) translateY(100%);padding-left:8px;box-sizing:border-box}
   .asn-doc-inner .timbre{text-align:left;padding-bottom:8px;margin-bottom:14px}
   .asn-doc-inner .timbre img{max-height:52px;width:auto}
   .asn-doc-inner h1{font-size:13pt;text-align:center;letter-spacing:.5px;margin:6px 0 16px;text-transform:uppercase;font-weight:700}
@@ -70,12 +72,24 @@ const CSS = `
     .asn-doc{overflow:visible}
     .asn-doc-inner{padding:1.2cm 1.3cm;font-size:12pt;border:1.6px solid #33475f;-webkit-print-color-adjust:exact;print-color-adjust:exact}
     .asn-watermark{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .asn-selo-lateral{-webkit-print-color-adjust:exact;print-color-adjust:exact}
     .asn-doc-inner{display:block;aspect-ratio:auto}
     .asn-doc-inner .auditoria{page-break-before:always;margin-top:0;border-top:none}
     .asn-doc-inner .rodape-cmp{position:fixed;bottom:0;left:0;right:0;background:#fff}
     @page{margin:1.2cm 1.1cm}
   }
 `
+
+// código de verificação (estilo autentique.com.br): SHA-256 dos dados do
+// evento de assinatura, formatado em blocos de 4 — não é gravado no banco,
+// é só um "selo" visual; a fonte da verdade é a trilha de auditoria de sempre.
+async function gerarCodigoVerificacao(partes) {
+  try {
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(partes.join('|')))
+    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('').toUpperCase()
+  } catch { return '' }
+}
+function agruparCodigo(hex) { return (hex || '').replace(/(.{4})(?=.)/g, '$1-') }
 
 const OUTORGADO = '<b>Djan Henrique Mendonça do Nascimento</b>, brasileiro, casado, advogado, inscrito na OAB/PB n. 5.219-A, e os integrantes da sociedade <b>CRISPIM, MENDONÇA E PINHEIRO ADVOGADOS</b>, registrada na Ordem dos Advogados do Brasil, seccional da Paraíba sob o número OAB/PB 2200042, e no CNPJ 45.487.942/0001-84, com sede na Rua Abelardo da Silva Guimarães Barreto, 51, sala 604-C edf. Alliance Plaza Business, CEP 58046-110, Altiplano Cabo Branco, João Pessoa/PB, e-mail: djan.adv@gmail.com'
 
@@ -207,7 +221,7 @@ export default function AssinarProcuracao() {
          <div class="cpf-out">${escH(assinado.cpf)}</div>
          ${assinado.ip ? `<div style="font-size:9.5pt;color:#555">IP: ${escH(assinado.ip)} · ${assinado.quando}</div>` : ''}
        </div>
-       <div class="auditoria"><b>TRILHA DE AUDITORIA</b><br>Assinado eletronicamente por <b>${escH(assinado.nome)}</b> (CPF ${escH(assinado.cpf)}).<br><b>Fatores de autenticação:</b> ${assinado.fatores}.<br><b>Método:</b> ${assinado.metodo}.<br>Data/hora: <b>${assinado.quando}</b> · Identificador: <b>${assinado.id}</b><br>Fundamento: Lei nº 14.063/2020 e MP nº 2.200-2/2001.</div>`
+       <div class="auditoria"><b>TRILHA DE AUDITORIA</b><br>Assinado eletronicamente por <b>${escH(assinado.nome)}</b> (CPF ${escH(assinado.cpf)}).<br><b>Fatores de autenticação:</b> ${assinado.fatores}.<br><b>Método:</b> ${assinado.metodo}.<br>Data/hora: <b>${assinado.quando}</b> · Identificador: <b>${assinado.id}</b><br>Código de verificação: <b>${escH(assinado.codigo)}</b><br>Fundamento: Lei nº 14.063/2020 e MP nº 2.200-2/2001.</div>`
     : `<div class="assin-linha">${escH(f.nome.trim()) || '[assinatura do outorgante]'}</div>
        <div class="rodape-doc">
          <div class="cpf-out">${escH(f.cpf) || '—'}</div>
@@ -243,7 +257,9 @@ export default function AssinarProcuracao() {
     const res = data[0]
     const last4 = telefone.replace(/\D/g, '').slice(-4)
     const fatores = `e-mail informado (${escH(res.email_verificado)})` + (res.ip ? `; IP ${escH(res.ip)}` : '') + (last4 ? `; contato terminado em ••••${last4}` : '')
-    setAssinado({ img: canvas.toDataURL('image/png'), nome, cpf, ip: res.ip || '', id: res.id_evento, metodo, fatores, quando: new Date().toLocaleString('pt-BR') })
+    const quando = new Date().toLocaleString('pt-BR')
+    const codigo = agruparCodigo(await gerarCodigoVerificacao([params.d, params.s, res.id_evento, nome, cpf, res.ip || '', quando])) || res.id_evento
+    setAssinado({ img: canvas.toDataURL('image/png'), nome, cpf, ip: res.ip || '', id: res.id_evento, metodo, fatores, quando, codigo })
     setMsg({ texto: '✓ Procuração assinada! Clique em "Baixar PDF".', ok: true })
     gerarEEnviarCopia(nome, email)
     // Dupla verificação: pede ao cliente que confirme por e-mail
@@ -398,6 +414,11 @@ export default function AssinarProcuracao() {
             <div className="asn-card asn-doc">
               <div className="asn-watermark"></div>
               <div className="asn-doc-inner" dangerouslySetInnerHTML={{ __html: docHTML }} />
+              {assinado && (
+                <div className="asn-selo-lateral">
+                  <div className="txt">CMP ADVOGADOS · ASSINATURA ELETRÔNICA · CÓDIGO DE VERIFICAÇÃO {assinado.codigo} · ASSINADO EM {assinado.quando} · LEI 14.063/2020</div>
+                </div>
+              )}
             </div>
           </div>
         </div>
