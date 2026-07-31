@@ -8,6 +8,7 @@ import crypto from 'crypto'
 import fs from 'fs'
 import path from 'path'
 import { chamarClaude } from '../_ia/claude.js'
+import { lerPlanilhaTexto } from '../../../lib/planilha.js'
 
 export const ROOT = '/opt/cmpdocs'
 export const ESCRITORIO_CMP = '908f77fc-19f5-4d86-9576-f5590af09e0a'
@@ -24,6 +25,19 @@ export function coletaPdfs(dir, arr) {
     const full = path.join(dir, d.name)
     if (d.isDirectory()) coletaPdfs(full, arr)
     else if (/\.pdf$/i.test(d.name)) { try { const st = fs.statSync(full); arr.push({ full, nome: d.name, size: st.size, mtime: st.mtimeMs }) } catch (e) {} }
+  }
+}
+
+// mesma varredura, mas só planilhas (.xlsx/.csv) — viram texto (CSV) na minuta,
+// não dá pra mandar como "document" binário pra IA como o PDF
+export function coletaPlanilhas(dir, arr) {
+  let ents
+  try { ents = fs.readdirSync(dir, { withFileTypes: true }) } catch (e) { return }
+  for (const d of ents) {
+    if (d.name === 'Lixeira' || d.name === '.meta.json' || d.name === 'Minutas (para revisão)') continue
+    const full = path.join(dir, d.name)
+    if (d.isDirectory()) coletaPlanilhas(full, arr)
+    else if (/\.(xlsx|csv)$/i.test(d.name)) { try { const st = fs.statSync(full); arr.push({ full, nome: d.name, size: st.size, mtime: st.mtimeMs }) } catch (e) {} }
   }
 }
 
@@ -112,12 +126,27 @@ export async function gerarMinuta(sb, {
     } catch (e) {}
   }
 
+  // planilhas (.xlsx/.csv) da pasta do processo — viram texto (CSV), até 4 arquivos
+  const arrPlan = []
+  coletaPlanilhas(path.join(ROOT, dig), arrPlan)
+  arrPlan.sort((a, b) => (pontua(b) - pontua(a)) || (b.mtime - a.mtime))
+  const nomesPlanilhas = []
+  for (const f of arrPlan) {
+    if (nomesPlanilhas.length >= 4) break
+    try {
+      const buf = fs.readFileSync(f.full)
+      const texto = await lerPlanilhaTexto(buf, f.nome)
+      if (texto && texto.trim()) { content.push({ type: 'text', text: 'Conteúdo da planilha "' + f.nome + '":\n' + texto.slice(0, 20000) }); nomesPlanilhas.push(f.nome) }
+    } catch (e) {}
+  }
+
   // bloco VARIÁVEL (dados do processo/pedido/histórico) — sempre depois do breakpoint
   const pedidoTexto =
     'DADOS DO PROCESSO — nº ' + (proc.numero || '') + ' | Cliente: ' + (proc.cliente_nome || '') + ' | Parte contrária: ' + (proc.oponente || '') + ' | Classe/Assunto: ' + ((proc.classe || '') + ' ' + (proc.assunto || '')).trim() + ' | Órgão: ' + (proc.orgao || '') + '.\n\n' +
     'PEDIDO DO ADVOGADO: ' + instrucao + '\n\n' +
     'HISTÓRICO RECENTE (mais novo primeiro):\n' + (histTxt || '(sem histórico)') + '\n\n' +
-    (usados ? ('Documentos anexados (PDF do processo): ' + nomesUsados.join('; ') + '.') : 'Nenhum PDF localizado na pasta do processo — redija com base no histórico e marque [A PREENCHER]/[VERIFICAR] onde faltar documento.')
+    (usados ? ('Documentos anexados (PDF do processo): ' + nomesUsados.join('; ') + '.') : 'Nenhum PDF localizado na pasta do processo — redija com base no histórico e marque [A PREENCHER]/[VERIFICAR] onde faltar documento.') +
+    (nomesPlanilhas.length ? (' Planilhas anexadas: ' + nomesPlanilhas.join('; ') + '.') : '')
   content.push({ type: 'text', text: pedidoTexto })
 
   const r = await chamarClaude({

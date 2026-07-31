@@ -9,6 +9,7 @@
 //   NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY
 
 import { createClient } from '@supabase/supabase-js'
+import { ehPlanilha, lerPlanilhaTexto } from '../../../lib/planilha.js'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -49,8 +50,11 @@ export async function POST(request) {
         content.push({ type: 'image', source: { type: 'base64', media_type: mt, data: b64 } })
       } else if (mt === 'application/pdf' || /\.pdf$/i.test(p)) {
         content.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: b64 } })
+      } else if (ehPlanilha(mt) || ehPlanilha(p)) {
+        const texto = await lerPlanilhaTexto(buf, p)
+        if (texto && texto.trim()) content.push({ type: 'text', text: 'Conteúdo da planilha "' + p.split('/').pop() + '":\n' + texto.slice(0, 20000) })
       }
-      // outros tipos (docx, xlsx, etc.) são ignorados aqui — a mensagem de texto abaixo ainda é lida
+      // outros tipos (docx, etc.) são ignorados aqui — a mensagem de texto abaixo ainda é lida
     } catch (e) { /* ignora arquivo problemático */ }
   }
 

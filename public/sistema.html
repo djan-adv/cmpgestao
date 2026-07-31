@@ -873,8 +873,8 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
     <h2 id="ml-titulo" style="margin:0">Lead</h2>
     <span style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
       <span class="note" style="font-size:12px;margin:0">📋 <b>Ctrl+V</b>: print vira anexo (e a IA lê); texto preenche os campos</span>
-      <button class="btn sm ghost" onclick="document.getElementById('ml-file').click()" title="Subir PDF, print ou Word — anexa ao lead e a IA lê para preencher os campos">📎 subir PDF/print</button>
-      <input id="ml-file" type="file" multiple accept=".pdf,image/*,.doc,.docx" style="display:none" onchange="mlSubirArquivos(this.files)">
+      <button class="btn sm ghost" onclick="document.getElementById('ml-file').click()" title="Subir PDF, print, Word ou planilha (Excel/CSV) — anexa ao lead e a IA lê para preencher os campos">📎 subir PDF/print</button>
+      <input id="ml-file" type="file" multiple accept=".pdf,image/*,.doc,.docx,.xlsx,.xls,.csv" style="display:none" onchange="mlSubirArquivos(this.files)">
     </span>
   </div>
   <div id="l-capt" class="note" style="margin:4px 0 6px"></div>
@@ -5695,7 +5695,7 @@ function renderProc(){
       <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
         <button class="btn sm" type="button" style="background:#fff;color:#0F6E56;border:1px solid #0F6E56" onclick="baixarModeloFicha()">&#8681; Baixar modelo da ficha (Word)</button>
         <button class="btn sm" type="button" style="background:#0F6E56;border-color:#0F6E56" onclick="document.getElementById('cm-ficha-file').click()">&#128206; Anexar ficha + documentos</button>
-        <input type="file" id="cm-ficha-file" accept=".docx,.pdf,.doc,.jpg,.jpeg,.png,.webp" multiple style="display:none" onchange="anexarFichaDocs(this)">
+        <input type="file" id="cm-ficha-file" accept=".docx,.pdf,.doc,.jpg,.jpeg,.png,.webp,.xlsx,.xls,.csv" multiple style="display:none" onchange="anexarFichaDocs(this)">
         <span id="cm-ficha-status" style="font-size:12px"></span>
       </div>
       <div id="cm-ficha-lista" style="display:none;margin-top:6px;font-size:12px;color:#334"></div>
@@ -6000,9 +6000,7 @@ async function _lerFichaFile(file){
   if(!file) return;
   var st=document.getElementById('cm-ficha-status'); if(st){ st.style.color='#475569'; st.textContent='Lendo '+file.name+'…'; }
   try{
-    var buf=await file.arrayBuffer(); var txt='';
-    if(/\.pdf$/i.test(file.name)) txt=await _extrairTextoPdf(buf);
-    else txt=await _extrairTextoDocx(buf);
+    var buf=await file.arrayBuffer(); var txt=await _extrairTextoDoc(buf);
     if(!txt||txt.replace(/\s/g,'').length<20) throw new Error('Não consegui ler texto (a ficha pode estar como imagem/escaneada).');
     var nome=_fichaCampo(txt,'Nome completo');
     var cpf=_fichaCampo(txt,'CPF/CNPJ')||''; cpf=_acharCPF(cpf)||_acharCPF(txt);
@@ -6049,7 +6047,7 @@ function anexarFichaDocs(input){
   var lista=document.getElementById('cm-ficha-lista');
   if(lista){ lista.style.display=''; lista.innerHTML='<b>Anexos ('+window.__cmDocs.length+'):</b> '+window.__cmDocs.map(function(f){return esc(f.name);}).join(', ')+' <a onclick="limparAnexosCaso()" style="cursor:pointer;color:#b5342b;text-decoration:underline;margin-left:6px">limpar</a>'; }
   /* escolhe a ficha para leitura automática */
-  var ficha=files.filter(function(f){return /\.(docx|pdf)$/i.test(f.name);})
+  var ficha=files.filter(function(f){return /\.(docx|pdf|xlsx?|csv)$/i.test(f.name);})
                  .sort(function(a,b){return (/ficha/i.test(b.name)?1:0)-(/ficha/i.test(a.name)?1:0);})[0];
   if(ficha){ _lerFichaFile(ficha); }
   input.value='';
@@ -8179,24 +8177,62 @@ function _ensureJsZip(){
     document.head.appendChild(s);
   });
 }
-/* texto de um documento QUALQUER (pdf, docx, doc/html) — detecta o tipo pelo conteúdo */
+/* leitor de planilha (.xlsx, .xls antigo e .csv) — SheetJS via CDN, mesmo
+   padrão do PDF.js/JSZip acima. Cada aba vira um bloco de texto em CSV, que
+   os regex de nome/CPF/e-mail/telefone conseguem ler igual a um documento comum. */
+function _ensureXlsx(){
+  return new Promise(function(res,rej){
+    if(window.XLSX) return res(window.XLSX);
+    var s=document.createElement('script');
+    /* NÃO usar o pacote "xlsx" do npm/jsdelivr — parou em 0.18.5, versão com
+       CVEs conhecidos (prototype pollution + ReDoS). A própria SheetJS migrou
+       as versões corrigidas para a CDN própria deles. */
+    s.src='https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js';
+    s.onload=function(){ window.XLSX?res(window.XLSX):rej(new Error('XLSX não carregou')); };
+    s.onerror=function(){ rej(new Error('falha ao carregar o leitor de planilha (.xlsx/.xls/.csv)')); };
+    document.head.appendChild(s);
+  });
+}
+async function _extrairTextoXlsx(buf){
+  var XLSX=await _ensureXlsx();
+  var wb=XLSX.read(buf,{type:'array'});
+  var partes=[];
+  (wb.SheetNames||[]).forEach(function(nome){
+    var ws=wb.Sheets[nome]; if(!ws) return;
+    var csv=(XLSX.utils.sheet_to_csv(ws)||'').trim();
+    if(csv) partes.push('=== aba: '+nome+' ===\n'+csv);
+  });
+  return partes.join('\n\n');
+}
+/* texto de um documento QUALQUER (pdf, docx, xlsx/xls/csv, doc/html) — detecta o tipo pelo conteúdo */
 async function _extrairTextoDoc(buf){
   try{
     var u8=new Uint8Array(buf.slice(0,8)); var head=String.fromCharCode.apply(null,u8);
     if(head.indexOf('%PDF')===0) return await _extrairTextoPdf(buf);
-    if(head.indexOf('PK')===0){ /* .docx (Word moderno) */
+    if(head.indexOf('PK')===0){ /* .docx OU .xlsx — os dois são zip; olha dentro pra saber qual é */
       var JZ=await _ensureJsZip(); var zip=await JZ.loadAsync(buf);
-      var f=zip.file('word/document.xml'); if(!f) return '';
-      var xml=await f.async('string');
-      return xml.replace(/<w:p[ >]/g,'\n<w:p ').replace(/<[^>]+>/g,' ')
-        .replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&#\d+;/g,' ')
-        .replace(/[ \t]+/g,' ').trim();
+      var fw=zip.file('word/document.xml');
+      if(fw){
+        var xml=await fw.async('string');
+        return xml.replace(/<w:p[ >]/g,'\n<w:p ').replace(/<[^>]+>/g,' ')
+          .replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&#\d+;/g,' ')
+          .replace(/[ \t]+/g,' ').trim();
+      }
+      if(zip.file('xl/workbook.xml')) return await _extrairTextoXlsx(buf);
+      return '';
+    }
+    if(u8[0]===0xD0&&u8[1]===0xCF&&u8[2]===0x11&&u8[3]===0xE0){ /* .xls antigo (OLE) — o SheetJS lê o binário direto */
+      try{ return await _extrairTextoXlsx(buf); }catch(e){ return ''; }
     }
     var txt=new TextDecoder('utf-8').decode(buf);
     if(/<html|<body|<p[ >]|<w:|<div/i.test(txt.slice(0,4000))){ /* .doc "HTML" (Word/gerados) */
       return txt.replace(/<style[\s\S]*?<\/style>/gi,' ').replace(/<script[\s\S]*?<\/script>/gi,' ')
         .replace(/<[^>]+>/g,' ').replace(/&nbsp;/gi,' ').replace(/[ \t]+/g,' ').trim();
     }
+    /* .csv/.txt puro: se o texto decodificado como UTF-8 sai "limpo" (quase sem
+       caractere de substituição), usa direto — evita cair no salvamento binário abaixo */
+    var ruim=(txt.match(/�/g)||[]).length;
+    if(txt.length>0 && ruim/txt.length<0.02) return txt.trim();
     /* .doc binário antigo: melhor esforço (sequências legíveis) */
     var lat=new TextDecoder('iso-8859-1').decode(buf);
     return (lat.match(/[A-Za-zÀ-ÿ0-9 ,.;:()\-\/@]{40,}/g)||[]).join('\n');
@@ -8222,7 +8258,7 @@ async function _acharDocRel(dig, re){
     var itens=await listar(sub), pastas=[];
     for(var i=0;i<itens.length;i++){ var x=itens[i], rel=(sub?sub+'/':'')+x.nome;
       if(x.tipo==='pasta'){ if(x.nome!=='Lixeira') pastas.push(rel); continue; }
-      if(re.test(x.nome) && /\.(pdf|docx?|html?)$/i.test(x.nome)) return rel; /* aceita Word também ("2 procuração.docx") */
+      if(re.test(x.nome) && /\.(pdf|docx?|html?|xlsx?|csv)$/i.test(x.nome)) return rel; /* aceita Word também ("2 procuração.docx") */
     }
     if(prof>0){ for(var k=0;k<pastas.length;k++){ var f=await busca(pastas[k],prof-1); if(f) return f; } }
     return null;
@@ -8466,7 +8502,7 @@ async function _atdExtrair(p, dig){
     var relI=await _acharDocRel(dig,/inicial|peti[çc][aã]o/i);
     if(relI&&relI!==relP){ setSt(SP+'lendo a petição inicial…'); var tI=await _lerDoc(relI); if(tI){ _colher(tI); acc.fontes.push('petição inicial'); } }
     var todos=[]; try{ todos=await _listarArquivosProc(dig); }catch(e){}
-    var docs=(todos||[]).filter(function(rr){ return /\.(docx?|pdf|html?)$/i.test(rr)&&rr!==relP&&rr!==relI; });
+    var docs=(todos||[]).filter(function(rr){ return /\.(docx?|pdf|html?|xlsx?|csv)$/i.test(rr)&&rr!==relP&&rr!==relI; });
     docs.sort(function(a,b){ function sc(x){ return /contrat/i.test(x)?0:(/extrat|pagament/i.test(x)?1:(/procura/i.test(x)?2:(/inicial|peti[çc]/i.test(x)?3:(/despach|senten|decis/i.test(x)?4:5)))); } return sc(a)-sc(b); });
     var totD=Math.min(docs.length,10);
     for(var di=0; di<totD; di++){
@@ -8621,7 +8657,7 @@ async function atualizarDadosCliente(){
     if(!_temCasal() || !acc.emails.length || !acc.tels.length){
       try{
         var todos=await _listarArquivosProc(dig);
-        var docs=todos.filter(function(rr){ return /\.(docx?|pdf|html?)$/i.test(rr) && rr!==relP && rr!==relI; });
+        var docs=todos.filter(function(rr){ return /\.(docx?|pdf|html?|xlsx?|csv)$/i.test(rr) && rr!==relP && rr!==relI; });
         /* prioriza procuração/inicial, depois despacho/sentença, depois o resto */
         docs.sort(function(a,b){ function sc(x){ return /procura/i.test(x)?0:(/inicial|peti[çc]/i.test(x)?1:(/despach|senten|decis|ac[óo]rd/i.test(x)?2:(/\.docx?$/i.test(x)?3:4))); } return sc(a)-sc(b); });
         for(var di=0; di<Math.min(docs.length,10); di++){
@@ -8687,7 +8723,7 @@ async function puxarNomeCliente(){
     if(_extrairNomesOutorgante(janela).length<1){
       try{
         var todos=await _listarArquivosProc(dig);
-        var docs=todos.filter(function(rr){ return /\.(docx?|pdf|html?)$/i.test(rr) && rr!==relP && rr!==relI; });
+        var docs=todos.filter(function(rr){ return /\.(docx?|pdf|html?|xlsx?|csv)$/i.test(rr) && rr!==relP && rr!==relI; });
         docs.sort(function(a,b){ function sc(x){ return /procura/i.test(x)?0:(/inicial|peti[çc]/i.test(x)?1:(/\.docx?$/i.test(x)?2:3)); } return sc(a)-sc(b); });
         for(var di=0; di<Math.min(docs.length,8); di++){
           var tD=await _lerDoc(docs[di]); if(!tD) continue;
@@ -12408,7 +12444,7 @@ async function _cpfDoProcesso(p){
     }
     function rotuloFonte(nome){ if(/procura/i.test(nome)) return 'procuração'; if(/inicial|peti[çc]|a[çc][aã]o/i.test(nome)) return 'petição inicial'; return nome.split('/').pop(); }
     var todos=[]; try{ todos=await _listarArquivosProc(dig); }catch(e){}
-    var docs=todos.filter(function(rr){ return /\.(pdf|docx?|html?)$/i.test(rr) && !/Boletos/i.test(rr); });
+    var docs=todos.filter(function(rr){ return /\.(pdf|docx?|html?|xlsx?|csv)$/i.test(rr) && !/Boletos/i.test(rr); });
     /* prioridade: procuração(0) → inicial/ação/petição(1) → nº baixo no nome(2) → resto(3) */
     docs.sort(function(a,b){
       function sc(x){ var n=x.split('/').pop(); if(/procura/i.test(n)) return 0; if(/inicial|peti[çc]|a[çc][aã]o/i.test(n)) return 1; if(/^\s*0*1\b|^\s*0*[1-3][.\-) ]/.test(n)) return 2; return 3; }

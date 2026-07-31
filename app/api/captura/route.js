@@ -13,6 +13,7 @@
 
 import { createClient } from '@supabase/supabase-js'
 import crypto from 'crypto'
+import { ehPlanilha, lerPlanilhaTexto } from '../../../lib/planilha.js'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -56,6 +57,10 @@ async function transcreveAnexos(decoded, contextoTexto) {
   for (const f of decoded) {
     if (/^image\//.test(f.tipo)) content.push({ type: 'image', source: { type: 'base64', media_type: f.tipo, data: f.b64 } })
     else if (f.tipo === 'application/pdf' || /\.pdf$/i.test(f.nome)) content.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: f.b64 } })
+    else if (ehPlanilha(f.tipo) || ehPlanilha(f.nome)) {
+      const texto = await lerPlanilhaTexto(f.buf, f.nome)
+      if (texto && texto.trim()) content.push({ type: 'text', text: 'Conteúdo da planilha "' + f.nome + '":\n' + texto.slice(0, 20000) })
+    }
   }
   if (!content.length) return { status: 'sem_midia', transcricao: '', telefones: [] }
   // bloco FIXO (mesmas regras em toda chamada) — vai no `system` com cache_control.
@@ -154,7 +159,7 @@ export async function POST(request) {
   const sb = admin()
 
   // OCR/transcrição (uma vez) — quando houver imagem/PDF
-  const temMidia = decoded.some(f => /^image\//.test(f.tipo) || f.tipo === 'application/pdf' || /\.pdf$/i.test(f.nome))
+  const temMidia = decoded.some(f => /^image\//.test(f.tipo) || f.tipo === 'application/pdf' || /\.pdf$/i.test(f.nome) || ehPlanilha(f.tipo) || ehPlanilha(f.nome))
   const ocr = temMidia ? await transcreveAnexos(decoded, texto) : { status: 'sem_midia', transcricao: '', telefones: [] }
   const telsOcr = (ocr.telefones || []).map(fmtTelBR).filter(Boolean)
   const telOcr = telsOcr[0] || ''
