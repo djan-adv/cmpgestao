@@ -6849,7 +6849,8 @@ async function pubImportar(btn){
     if(!r.ok||j.erro){ alert('Falha ao importar: '+(j.erro||r.status)); }
     else{
       var m=j.resultado||{};
-      alert('Importação concluída.\n\ndjan.com.br: '+((m.djan||{}).lidos||0)+' post(s) lido(s) via '+((m.djan||{}).via||'—')+'\ncmpadvogados.com.br: '+((m.cmp||{}).lidos||0)+' post(s) lido(s) via '+((m.cmp||{}).via||'—')+(((m.djan||{}).via==='nenhum'||(m.cmp||{}).via==='nenhum')?'\n\n⚠ Um dos sites bloqueou a leitura — me avise que eu investigo.':''));
+      var li=function(k,rot){ var x=m[k]||{}; return rot+': '+(x.gravados||0)+' de '+(x.lidos||0)+' post(s) gravado(s) (via '+(x.via||'—')+')'+(x.erro?(' — ERRO: '+x.erro):''); };
+      alert('Importação concluída.\n\n'+li('djan','djan.com.br')+'\n'+li('cmp','cmpadvogados.com.br')+(((m.djan||{}).via==='nenhum'||(m.cmp||{}).via==='nenhum')?'\n\n⚠ Um dos sites bloqueou a leitura — me avise que eu investigo.':''));
     }
   }catch(e){ alert('Erro: '+(e&&e.message||e)); }
   if(btn){btn.disabled=false;btn.textContent='↻ importar dos sites';}
