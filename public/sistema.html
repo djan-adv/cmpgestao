@@ -13509,6 +13509,146 @@ async function monitTrazerAssessoria(id){
     renderMonitoramento();
   }catch(e){ alert('Erro: '+(e&&e.message||e)); }
 }
+/* ===================== CHAT DA EQUIPE (dock fixo, canto inferior direito) =====================
+   Fica em TODAS as telas (é preso ao rodapé, não à seção). Amarelo claro translúcido,
+   letras escuras. Minimizado continua minimizado; ao chegar mensagem nova, sobe sozinho.
+   Envio para TODOS ou PRIVADO (1:1) — a RLS do banco garante que privada só chega
+   a quem é destinatário. ===================================================================== */
+(function(){
+  var LIDO='cmp_chat_lido', MIN='cmp_chat_min';
+  var eu=null, euNome='', ultimoId=0, pessoas=[], msgs=[], pronto=false;
+  function esperaSessao(){ if(window.__sb && window.__sb.auth){ iniciar(); } else { setTimeout(esperaSessao,800); } }
+  function h(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+  function hora(iso){ try{ var d=new Date(iso); return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }catch(e){ return ''; } }
+  function minimizado(){ try{ return localStorage.getItem(MIN)==='1'; }catch(e){ return false; } }
+  function marcarLido(){ try{ localStorage.setItem(LIDO,new Date().toISOString()); }catch(e){} pintarBadge(); }
+
+  function montar(){
+    if(document.getElementById('cmp-chat')) return;
+    var d=document.createElement('div'); d.id='cmp-chat';
+    d.style.cssText='position:fixed;right:16px;bottom:0;width:390px;max-width:94vw;z-index:95;font-family:inherit;font-size:13px;color:#1b1b1b';
+    d.innerHTML=
+      '<div id="cmp-chat-bar" style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:rgba(250,240,170,.97);border:1px solid #e0d9a0;border-bottom:none;border-radius:12px 12px 0 0;cursor:pointer;box-shadow:0 -2px 14px rgba(0,0,0,.10)">'
+      +'<b style="color:#1b1b1b">💬 Chat da equipe</b>'
+      +'<span id="cmp-chat-badge" style="display:none;background:#b5342b;color:#fff;border-radius:10px;font-size:11px;font-weight:700;padding:1px 7px"></span>'
+      +'<button id="cmp-chat-min" title="Minimizar" style="margin-left:auto;border:0;background:transparent;color:#5a5326;font-weight:700;font-size:15px;line-height:1;cursor:pointer;padding:2px 4px">▁</button></div>'
+      +'<div id="cmp-chat-corpo" style="display:none;background:rgba(255,250,205,.94);border:1px solid #e0d9a0;border-top:none;backdrop-filter:blur(2px);box-shadow:0 -2px 14px rgba(0,0,0,.10)">'
+      +'<div id="cmp-chat-msgs" style="height:290px;overflow:auto;padding:10px 12px;line-height:1.45"></div>'
+      +'<div style="display:flex;gap:6px;padding:8px;border-top:1px solid #e0d9a0;align-items:center">'
+      +'<select id="cmp-chat-para" title="Para quem vai a mensagem" style="max-width:120px;font-size:12px;padding:6px;border:1px solid #d8d093;border-radius:7px;background:#fffdf0;color:#1b1b1b"><option value="">👥 Todos</option></select>'
+      +'<input id="cmp-chat-txt" placeholder="escreva e tecle Enter…" style="flex:1;font-size:13px;padding:7px 9px;border:1px solid #d8d093;border-radius:7px;background:#fffdf0;color:#1b1b1b">'
+      +'<button id="cmp-chat-env" style="border:0;background:#5a5326;color:#fff;border-radius:7px;padding:7px 11px;font-weight:700;cursor:pointer">➤</button>'
+      +'</div></div>';
+    document.body.appendChild(d);
+    /* a barra só ABRE; fechar é exclusividade do botão minimizar */
+    d.querySelector('#cmp-chat-bar').onclick=function(){ abrir(); };
+    d.querySelector('#cmp-chat-min').onclick=function(ev){ ev.stopPropagation(); alternar(); };
+    d.querySelector('#cmp-chat-env').onclick=enviar;
+    var t=d.querySelector('#cmp-chat-txt');
+    t.onkeydown=function(e){ if(e.key==='Enter'){ e.preventDefault(); enviar(); } };
+    t.onfocus=marcarLido;
+    if(minimizado()) fechar(); else abrir(true);
+  }
+  function abrir(semSalvar){
+    var c=document.getElementById('cmp-chat-corpo'); if(!c) return;
+    c.style.display='block';
+    var b=document.getElementById('cmp-chat-min'); if(b){ b.textContent='▁'; b.title='Minimizar'; }
+    if(!semSalvar){ try{ localStorage.setItem(MIN,'0'); }catch(e){} }
+    rolar(); marcarLido();
+  }
+  function fechar(){
+    var c=document.getElementById('cmp-chat-corpo'); if(!c) return;
+    c.style.display='none';
+    var b=document.getElementById('cmp-chat-min'); if(b){ b.textContent='▲'; b.title='Abrir o chat'; }
+    try{ localStorage.setItem(MIN,'1'); }catch(e){}
+  }
+  function alternar(){ var c=document.getElementById('cmp-chat-corpo'); if(!c) return; (c.style.display==='none')?abrir():fechar(); }
+  function rolar(){ var m=document.getElementById('cmp-chat-msgs'); if(m) m.scrollTop=m.scrollHeight; }
+
+  function pintarBadge(){
+    var b=document.getElementById('cmp-chat-badge'); if(!b) return;
+    var desde=''; try{ desde=localStorage.getItem(LIDO)||''; }catch(e){}
+    var n=msgs.filter(function(m){ return m.autor_id!==eu && (!desde || m.criado_em>desde); }).length;
+    var aberto=(document.getElementById('cmp-chat-corpo')||{}).style && document.getElementById('cmp-chat-corpo').style.display!=='none';
+    if(n>0 && !aberto){ b.style.display='inline-block'; b.textContent=n; } else { b.style.display='none'; }
+  }
+  function pintar(){
+    var el=document.getElementById('cmp-chat-msgs'); if(!el) return;
+    if(!msgs.length){ el.innerHTML='<div style="color:#6b6540;font-size:12px">Sem mensagens ainda. Escreva abaixo — vai para todo o escritório, ou escolha uma pessoa para conversa privada.</div>'; return; }
+    el.innerHTML=msgs.map(function(m){
+      var meu=(m.autor_id===eu);
+      var priv=!!m.para_id;
+      var quem=meu?'você':(m.autor_nome||'colega');
+      var alvo=priv?(meu?(' → '+(nomeDe(m.para_id)||'privado')):' (privado p/ você)'):'';
+      return '<div style="margin:0 0 7px;'+(meu?'text-align:right':'')+'">'
+        +'<div style="display:inline-block;max-width:88%;text-align:left;background:'+(meu?'#fff6c9':'#fffdf3')+';border:1px solid '+(priv?'#d9b64c':'#e6dfae')+';border-radius:9px;padding:6px 9px">'
+        +'<div style="font-size:11px;color:#6b6540;font-weight:700">'+h(quem)+h(alvo)+' · '+hora(m.criado_em)+(priv?' 🔒':'')+'</div>'
+        +'<div style="white-space:pre-wrap;word-break:break-word">'+h(m.texto)+'</div></div></div>';
+    }).join('');
+    rolar();
+  }
+  function nomeDe(id){ var p=pessoas.find(function(x){return x.id===id;}); return p?p.nome:''; }
+
+  async function carregarPessoas(){
+    try{
+      var r=await window.__sb.from('usuarios').select('id,nome').order('nome');
+      pessoas=(r.data||[]).filter(function(u){ return u.id!==eu; });
+      var s=document.getElementById('cmp-chat-para'); if(!s) return;
+      s.innerHTML='<option value="">👥 Todos</option>'+pessoas.map(function(p){ return '<option value="'+p.id+'">🔒 '+h((p.nome||'').split(' ')[0])+'</option>'; }).join('');
+    }catch(e){}
+  }
+  async function carregar(){
+    try{
+      var r=await window.__sb.from('chat_mensagens').select('*').order('id',{ascending:false}).limit(60);
+      if(r.error) return;
+      msgs=(r.data||[]).slice().reverse();
+      if(msgs.length) ultimoId=msgs[msgs.length-1].id;
+      pintar(); pintarBadge();
+    }catch(e){}
+  }
+  function chegou(m){
+    if(!m || msgs.some(function(x){return x.id===m.id;})) return;
+    /* segurança extra na tela: privada só aparece p/ envolvidos */
+    if(m.para_id && m.para_id!==eu && m.autor_id!==eu) return;
+    msgs.push(m); if(m.id>ultimoId) ultimoId=m.id;
+    if(msgs.length>120) msgs=msgs.slice(-120);
+    pintar();
+    if(m.autor_id!==eu){ abrir(true); pintarBadge(); }   /* sobe sozinho ao receber */
+    else marcarLido();
+  }
+  async function varrer(){
+    try{
+      var r=await window.__sb.from('chat_mensagens').select('*').gt('id',ultimoId).order('id');
+      (r.data||[]).forEach(chegou);
+    }catch(e){}
+  }
+  async function enviar(){
+    var t=document.getElementById('cmp-chat-txt'); if(!t) return;
+    var texto=(t.value||'').trim(); if(!texto) return;
+    var para=(document.getElementById('cmp-chat-para')||{}).value||null;
+    t.value='';
+    var r=await window.__sb.from('chat_mensagens').insert({texto:texto, para_id:para||null, autor_nome:euNome}).select('*').single();
+    if(r.error){ alert('Não enviou: '+r.error.message); t.value=texto; return; }
+    chegou(r.data);
+  }
+
+  async function iniciar(){
+    if(pronto) return; pronto=true;
+    try{
+      var u=await window.__sb.auth.getUser();
+      eu=u&&u.data&&u.data.user&&u.data.user.id; if(!eu){ pronto=false; setTimeout(esperaSessao,2000); return; }
+      euNome=((document.getElementById('who-name')||{}).textContent||'').trim()||((u.data.user.email||'').split('@')[0]);
+    }catch(e){ pronto=false; setTimeout(esperaSessao,2000); return; }
+    montar(); await carregarPessoas(); await carregar();
+    try{
+      window.__sb.channel('chat-cmp')
+        .on('postgres_changes',{event:'INSERT',schema:'public',table:'chat_mensagens'},function(p){ chegou(p.new); })
+        .subscribe();
+    }catch(e){}
+    setInterval(varrer, 20000);   /* reserva, caso o tempo real caia */
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',esperaSessao); else esperaSessao();
+})();
 function exportarProdutividadeCSV(){
   var evs=PRD_EVT||[]; if(!evs.length){ alert('Nada para exportar no período.'); return; }
   var head='user_nome;event_type;entity_type;entity_id;occurred_at;metadata';
