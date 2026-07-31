@@ -13616,18 +13616,13 @@ async function monitTrazerAssessoria(id){
   }
   function fixar(id, rotulo){ pin={id:id,rotulo:rotulo}; pintarPin(); pintar(); }
   function desfixar(){ pin=null; pintarPin(); pintar(); }
-  /* tenta achar nº de processo/CNJ no texto citado, para sugerir de cara na busca */
-  function _detectaProcesso(txt){
-    var m=String(txt||'').match(/\d{7}-?\d{2}\.?\d{4}\.?\d\.?\d{2}\.?\d{4}/);
-    return m?m[0]:'';
-  }
   function responderA(id){
     var m=msgs.find(function(x){return x.id===id;}); if(!m) return;
     respondendoA={id:m.id, texto:m.texto, autor:(m.autor_id===eu?'você':(nomeDe(m.autor_id)||m.autor_nome||'colega'))};
     pintarReply();
+    /* vai direto pra caixa de digitar — sem abrir nada por cima que roube o foco.
+       Quem quiser vincular a um processo clica em "🔍 falar sobre um processo". */
     var t=document.getElementById('cmp-chat-txt'); if(t) t.focus();
-    /* sem processo fixado ainda: sugere buscar, já tentando achar o nº no texto citado */
-    if(!pin) abrirBusca(_detectaProcesso(m.texto));
   }
   function cancelarResposta(){ respondendoA=null; pintarReply(); }
   function pintarReply(){
