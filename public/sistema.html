@@ -1928,6 +1928,9 @@ function abrir(i){
   // histórico (termos oficiais)
   /* aba "Publicações com inteiro teor (DJEN)" removida a pedido — sem utilidade prática */
   html+='<div class="card"><p class="sectlabel" style="display:flex;justify-content:space-between;align-items:center">Histórico completo (termos oficiais)'+(p.hist_full&&p.hist_full.length?(' — '+p.hist_full.length+' andamentos'):'')+'<span style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn sm ghost" style="font-size:12px" id="btn-atu-hist" onclick="atualizarHistorico()" title="Busca no DJEN as publicações novas deste processo (com o inteiro teor) e os movimentos do jus.br">&#8635; atualizar</button><button class="btn sm ghost" style="font-size:12px" onclick="addHistManual()">+ histórico manual</button></span></p><ul class="timeline" id="det-hist"></ul><div id="det-hist-more" style="margin-top:8px"></div></div>';
+  // histórico do chat da equipe sobre este processo (respostas vinculadas no dock)
+  html+='<div class="card" id="chatproc-card" style="background:#fffdf0;border-color:#e6dfae"><p class="sectlabel" style="display:flex;justify-content:space-between;align-items:center">💬 Histórico do chat sobre este processo<span id="chatproc-acoes"></span></p><div id="chatproc-corpo"><div class="note">Carregando…</div></div></div>';
+  if(p._id) setTimeout(function(){ renderChatDoProcesso(p._id); }, 0);
   // documentos do jus.br (PDPJ) — puxa sob demanda a peça escolhida (some após 30 dias)
   try{ if(typeof carregarProtocolados==='function'){ carregarProtocolados(p.numero).then(function(){ try{ var bx=document.getElementById('proto-na-ficha'); if(bx) bx.innerHTML=protoBlocoHTML(p.numero); }catch(e){} }); } }catch(e){}
   var _pb=''; try{ _pb=(typeof protoBlocoHTML==='function')?protoBlocoHTML(p.numero):''; }catch(ePB){ _pb=''; }
@@ -13517,6 +13520,9 @@ async function monitTrazerAssessoria(id){
 (function(){
   var LIDO='cmp_chat_lido', MIN='cmp_chat_min';
   var eu=null, euNome='', ultimoId=0, pessoas=[], porId={}, msgs=[], pronto=false;
+  var pin=null;            // processo fixado nesta conversa: {id, rotulo} — tudo que se envia vai marcado a ele
+  var respondendoA=null;   // {id, texto, autor} — mensagem sendo respondida (estilo WhatsApp)
+  var procNomeCache={};    // id do processo -> rótulo (para o chip "🔗 ...")
   function esperaSessao(){ if(window.__sb && window.__sb.auth){ iniciar(); } else { setTimeout(esperaSessao,800); } }
   function h(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
   function hora(iso){ try{ var d=new Date(iso); return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }catch(e){ return ''; } }
@@ -13533,7 +13539,9 @@ async function monitTrazerAssessoria(id){
       +'<span id="cmp-chat-badge" style="display:none;background:#b5342b;color:#fff;border-radius:10px;font-size:11px;font-weight:700;padding:1px 7px"></span>'
       +'<button id="cmp-chat-min" title="Minimizar" style="margin-left:auto;border:0;background:transparent;color:#5a5326;font-weight:700;font-size:15px;line-height:1;cursor:pointer;padding:2px 4px">▁</button></div>'
       +'<div id="cmp-chat-corpo" style="display:none;background:rgba(255,250,205,.94);border:1px solid #e0d9a0;border-top:none;backdrop-filter:blur(2px);box-shadow:0 -2px 14px rgba(0,0,0,.10)">'
-      +'<div id="cmp-chat-msgs" style="height:290px;overflow:auto;padding:10px 12px;line-height:1.45"></div>'
+      +'<div id="cmp-chat-pinbar" style="padding:7px 10px;border-bottom:1px solid #e6dfae;font-size:12px"></div>'
+      +'<div id="cmp-chat-msgs" style="height:250px;overflow:auto;padding:10px 12px;line-height:1.45"></div>'
+      +'<div id="cmp-chat-reply" style="display:none;padding:6px 10px;border-top:1px solid #e6dfae;background:#fdf6d8;font-size:12px"></div>'
       +'<div style="display:flex;gap:6px;padding:8px;border-top:1px solid #e0d9a0;align-items:center">'
       +'<select id="cmp-chat-para" title="Para quem vai a mensagem" style="max-width:120px;font-size:12px;padding:6px;border:1px solid #d8d093;border-radius:7px;background:#fffdf0;color:#1b1b1b"><option value="">👥 Todos</option></select>'
       +'<input id="cmp-chat-txt" placeholder="escreva e tecle Enter…" style="flex:1;font-size:13px;padding:7px 9px;border:1px solid #d8d093;border-radius:7px;background:#fffdf0;color:#1b1b1b">'
@@ -13547,6 +13555,7 @@ async function monitTrazerAssessoria(id){
     var t=d.querySelector('#cmp-chat-txt');
     t.onkeydown=function(e){ if(e.key==='Enter'){ e.preventDefault(); enviar(); } };
     t.onfocus=marcarLido;
+    pintarPin(); pintarReply();
     if(minimizado()) fechar(); else abrir(true);
   }
   function abrir(semSalvar){
@@ -13565,12 +13574,82 @@ async function monitTrazerAssessoria(id){
   function alternar(){ var c=document.getElementById('cmp-chat-corpo'); if(!c) return; (c.style.display==='none')?abrir():fechar(); }
   function rolar(){ var m=document.getElementById('cmp-chat-msgs'); if(m) m.scrollTop=m.scrollHeight; }
 
+  /* ---- vincular a um processo/caso: busca local (mesmos dados da tela de Processos) ---- */
+  function buscarProcessosLocal(q){
+    var Q=(typeof normClienteNome==='function')?normClienteNome(q||''):String(q||'').toLowerCase();
+    var qDig=String(q||'').replace(/\D/g,'');
+    if(!Q && !qDig) return [];
+    return ((typeof DADOS!=='undefined'&&DADOS.processos)||[]).filter(function(p){
+      if(!p._id) return false; /* precisa estar gravado no banco para poder vincular */
+      if(qDig.length>=4 && String(p.numero||'').replace(/\D/g,'').indexOf(qDig)>=0) return true;
+      if(Q && String(p.cliente||'').toLowerCase().indexOf(Q)>=0) return true;
+      return false;
+    }).slice(0,7);
+  }
+  function rotuloProcesso(p){ return (p.cliente||p.numero||'processo')+(p.numero?(' — '+p.numero):''); }
+  function pintarPin(){
+    var el=document.getElementById('cmp-chat-pinbar'); if(!el) return;
+    if(pin){
+      el.innerHTML='<span style="background:#fff3b0;border:1px solid #d9b64c;border-radius:14px;padding:3px 10px;display:inline-flex;align-items:center;gap:6px">📌 <b>'+h(pin.rotulo)+'</b> <a onclick="__cmpChat.desfixar()" style="cursor:pointer;color:#7a5b00;font-weight:700">✕</a></span>'
+        +'<span style="color:#6b6540;margin-left:6px">— tudo que você mandar agora fica marcado a este processo</span>';
+    } else {
+      el.innerHTML='<a onclick="__cmpChat.abrirBusca()" style="cursor:pointer;color:#5a5326;font-weight:700">🔍 falar sobre um processo…</a>'
+        +'<div id="cmp-chat-busca" style="display:none;margin-top:6px"></div>';
+    }
+  }
+  function abrirBusca(prefill){
+    pintarPin();
+    var el=document.getElementById('cmp-chat-busca'); if(!el) return;
+    el.style.display='block';
+    el.innerHTML='<input id="cmp-chat-buscatxt" placeholder="nome do cliente ou nº do processo…" style="width:100%;font-size:12px;padding:6px 8px;border:1px solid #d8d093;border-radius:7px;background:#fffdf0;color:#1b1b1b">'
+      +'<div id="cmp-chat-buscalist" style="margin-top:4px;max-height:130px;overflow:auto"></div>';
+    var inp=document.getElementById('cmp-chat-buscatxt');
+    function lista(){
+      var achados=buscarProcessosLocal(inp.value);
+      var lst=document.getElementById('cmp-chat-buscalist'); if(!lst) return;
+      lst.innerHTML=achados.length?achados.map(function(p){
+        return '<div onclick="__cmpChat.fixar(\''+p._id+'\',\''+h(rotuloProcesso(p)).replace(/'/g,'&#39;')+'\')" style="cursor:pointer;padding:5px 6px;border-radius:6px" onmouseover="this.style.background=\'#fff3b0\'" onmouseout="this.style.background=\'\'">'+h(rotuloProcesso(p))+'</div>';
+      }).join(''):'<div class="note" style="font-size:11px">nenhum processo encontrado</div>';
+    }
+    inp.oninput=lista;
+    inp.value=prefill||''; lista(); inp.focus();
+  }
+  function fixar(id, rotulo){ pin={id:id,rotulo:rotulo}; pintarPin(); pintar(); }
+  function desfixar(){ pin=null; pintarPin(); pintar(); }
+  /* tenta achar nº de processo/CNJ no texto citado, para sugerir de cara na busca */
+  function _detectaProcesso(txt){
+    var m=String(txt||'').match(/\d{7}-?\d{2}\.?\d{4}\.?\d\.?\d{2}\.?\d{4}/);
+    return m?m[0]:'';
+  }
+  function responderA(id){
+    var m=msgs.find(function(x){return x.id===id;}); if(!m) return;
+    respondendoA={id:m.id, texto:m.texto, autor:(m.autor_id===eu?'você':(nomeDe(m.autor_id)||m.autor_nome||'colega'))};
+    pintarReply();
+    var t=document.getElementById('cmp-chat-txt'); if(t) t.focus();
+    /* sem processo fixado ainda: sugere buscar, já tentando achar o nº no texto citado */
+    if(!pin) abrirBusca(_detectaProcesso(m.texto));
+  }
+  function cancelarResposta(){ respondendoA=null; pintarReply(); }
+  function pintarReply(){
+    var el=document.getElementById('cmp-chat-reply'); if(!el) return;
+    if(!respondendoA){ el.style.display='none'; el.innerHTML=''; return; }
+    el.style.display='block';
+    el.innerHTML='<div style="display:flex;gap:8px;align-items:flex-start"><div style="flex:1;border-left:3px solid #d9b64c;padding-left:8px;color:#6b6540"><b>'+h(respondendoA.autor)+'</b><br>'+h(respondendoA.texto.slice(0,140))+'</div><a onclick="__cmpChat.cancelarResposta()" style="cursor:pointer;color:#7a5b00;font-weight:700">✕</a></div>';
+  }
+
   function pintarBadge(){
     var b=document.getElementById('cmp-chat-badge'); if(!b) return;
     var desde=''; try{ desde=localStorage.getItem(LIDO)||''; }catch(e){}
     var n=msgs.filter(function(m){ return m.autor_id!==eu && (!desde || m.criado_em>desde); }).length;
     var aberto=(document.getElementById('cmp-chat-corpo')||{}).style && document.getElementById('cmp-chat-corpo').style.display!=='none';
     if(n>0 && !aberto){ b.style.display='inline-block'; b.textContent=n; } else { b.style.display='none'; }
+  }
+  function _procRotuloPorId(id){
+    if(procNomeCache[id]) return procNomeCache[id];
+    var p=((typeof DADOS!=='undefined'&&DADOS.processos)||[]).find(function(x){return x._id===id;});
+    var r=p?rotuloProcesso(p):'';
+    if(r) procNomeCache[id]=r;
+    return r||'processo vinculado';
   }
   function pintar(){
     var el=document.getElementById('cmp-chat-msgs'); if(!el) return;
@@ -13580,10 +13659,20 @@ async function monitTrazerAssessoria(id){
       var priv=!!m.para_id;
       var quem=meu?'você':(nomeDe(m.autor_id)||m.autor_nome||'colega');
       var alvo=priv?(meu?(' → '+(nomeDe(m.para_id)||'privado')):' (privado p/ você)'):'';
+      var citada='';
+      if(m.respondendo_a){
+        var orig=msgs.find(function(x){return x.id===m.respondendo_a;});
+        var origAutor=orig?(orig.autor_id===eu?'você':(nomeDe(orig.autor_id)||orig.autor_nome||'colega')):'';
+        var origTxt=orig?orig.texto:'mensagem anterior';
+        citada='<div style="border-left:3px solid #c9c08a;padding-left:7px;margin-bottom:4px;color:#7a7550;font-size:12px">'+(origAutor?('<b>'+h(origAutor)+'</b><br>'):'')+h(String(origTxt).slice(0,140))+'</div>';
+      }
+      var chipProc=m.processo_id?('<div style="margin-top:3px;font-size:10.5px;color:#7a5b00">🔗 '+h(_procRotuloPorId(m.processo_id))+'</div>'):'';
       return '<div style="margin:0 0 7px;'+(meu?'text-align:right':'')+'">'
         +'<div style="display:inline-block;max-width:88%;text-align:left;background:'+(meu?'#fff6c9':'#fffdf3')+';border:1px solid '+(priv?'#d9b64c':'#e6dfae')+';border-radius:9px;padding:6px 9px">'
-        +'<div style="font-size:11px;color:#6b6540;font-weight:700">'+h(quem)+h(alvo)+' · '+hora(m.criado_em)+(priv?' 🔒':'')+'</div>'
-        +'<div style="white-space:pre-wrap;word-break:break-word">'+h(m.texto)+'</div></div></div>';
+        +'<div style="font-size:11px;color:#6b6540;font-weight:700">'+h(quem)+h(alvo)+' · '+hora(m.criado_em)+(priv?' 🔒':'')+' <a onclick="__cmpChat.responderA('+m.id+')" title="Responder" style="cursor:pointer;color:#8a8355;font-weight:400;margin-left:4px">↩</a></div>'
+        +citada
+        +'<div style="white-space:pre-wrap;word-break:break-word">'+h(m.texto)+'</div>'
+        +chipProc+'</div></div>';
     }).join('');
     rolar();
   }
@@ -13634,8 +13723,10 @@ async function monitTrazerAssessoria(id){
     var t=document.getElementById('cmp-chat-txt'); if(!t) return;
     var texto=(t.value||'').trim(); if(!texto) return;
     var para=(document.getElementById('cmp-chat-para')||{}).value||null;
-    t.value='';
-    var r=await window.__sb.from('chat_mensagens').insert({texto:texto, para_id:para||null, autor_nome:euNome}).select('*').single();
+    var respId=respondendoA?respondendoA.id:null;
+    var procId=pin?pin.id:null;
+    t.value=''; cancelarResposta();
+    var r=await window.__sb.from('chat_mensagens').insert({texto:texto, para_id:para||null, autor_nome:euNome, respondendo_a:respId, processo_id:procId}).select('*').single();
     if(r.error){ alert('Não enviou: '+r.error.message); t.value=texto; return; }
     chegou(r.data);
   }
@@ -13660,7 +13751,82 @@ async function monitTrazerAssessoria(id){
     setInterval(varrer, 20000);   /* reserva, caso o tempo real caia */
   }
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',esperaSessao); else esperaSessao();
+  /* ponte para os onclick inline (o dock inteiro vive numa closure) */
+  window.__cmpChat={responderA:responderA, cancelarResposta:cancelarResposta, abrirBusca:abrirBusca, fixar:fixar, desfixar:desfixar};
 })();
+
+/* ===== Histórico do chat sobre o processo (painel amarelo na ficha) =====
+   Mostra as respostas do chat que foram vinculadas a este processo (dock),
+   citação + resposta no estilo WhatsApp. "Arquivar" apenas esconde (some da
+   tela) — nunca apaga; "ver arquivadas" recupera, com desarquivar tudo. */
+window.__chatProcCache={}; // processo_id -> {ativos, arquivados}
+function _cpEsc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+function _cpHora(iso){ try{ var d=new Date(iso); return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }catch(e){ return ''; } }
+async function renderChatDoProcesso(processoId, mostrarArquivadas){
+  var body=document.getElementById('chatproc-corpo'), acoes=document.getElementById('chatproc-acoes');
+  if(!body) return;
+  try{
+    var q=await window.__sb.from('chat_mensagens').select('*').eq('processo_id',processoId).order('id',{ascending:true});
+    if(q.error){ body.innerHTML='<div class="note" style="color:#b5342b">Erro: '+_cpEsc(q.error.message)+'</div>'; return; }
+    var todos=q.data||[];
+    var ativos=todos.filter(function(m){return !m.arquivado;});
+    var arquivados=todos.filter(function(m){return m.arquivado;});
+    window.__chatProcCache[processoId]={ativos:ativos,arquivados:arquivados};
+    if(acoes) acoes.innerHTML=arquivados.length?('<a onclick="_cpAlternarArquivadas(\''+processoId+'\')" style="cursor:pointer;color:#185FA5;font-size:12px;font-weight:600">'+(mostrarArquivadas?'ocultar arquivadas':'ver arquivadas ('+arquivados.length+')')+'</a>'):'';
+    if(!ativos.length && !mostrarArquivadas){
+      body.innerHTML='<div class="note">Nenhuma conversa da equipe vinculada a este processo ainda. No chat da equipe, responda uma mensagem e escolha vincular a este processo.</div>';
+      return;
+    }
+    /* nomes: resolve autores (das mensagens e das citadas) de uma vez */
+    var precisa=todos.slice(); var ids={};
+    precisa.forEach(function(m){ ids[m.autor_id]=1; });
+    var respIds=precisa.map(function(m){return m.respondendo_a;}).filter(Boolean);
+    var citadas={};
+    if(respIds.length){
+      var qc=await window.__sb.from('chat_mensagens').select('id,texto,autor_id').in('id',respIds);
+      (qc.data||[]).forEach(function(c){ citadas[c.id]=c; ids[c.autor_id]=1; });
+    }
+    var nomes={};
+    try{ var qn=await window.__sb.from('usuarios').select('id,nome').in('id',Object.keys(ids)); (qn.data||[]).forEach(function(u){ nomes[u.id]=u.nome; }); }catch(e){}
+    function linha(m, arquivada){
+      var quem=nomes[m.autor_id]||'colega';
+      var cit=m.respondendo_a&&citadas[m.respondendo_a]?citadas[m.respondendo_a]:null;
+      var citHtml=cit?('<div style="border-left:3px solid #d9b64c;padding-left:8px;margin-bottom:5px;color:#7a7550;font-size:12.5px"><b>'+_cpEsc(nomes[cit.autor_id]||'colega')+'</b><br>'+_cpEsc(cit.texto)+'</div>'):'';
+      var btn=arquivada?('<a onclick="_cpDesarquivar(\''+processoId+'\','+m.id+')" style="cursor:pointer;color:#185FA5;font-size:11.5px">↩ desarquivar</a>'):('<a onclick="_cpArquivar(\''+processoId+'\','+m.id+')" style="cursor:pointer;color:#8a6d00;font-size:11.5px">📥 arquivar</a>');
+      return '<div style="border:1px solid '+(arquivada?'#eef1f5':'#e6dfae')+';background:'+(arquivada?'#f7f8fa':'#fffdf3')+';border-radius:9px;padding:8px 10px;margin-bottom:8px'+(arquivada?';opacity:.75':'')+'">'
+        +'<div style="display:flex;justify-content:space-between;gap:8px;align-items:start"><b style="color:var(--navy);font-size:12.5px">'+_cpEsc(quem)+'</b><span class="note" style="font-size:11px;white-space:nowrap">'+_cpHora(m.criado_em)+'</span></div>'
+        +citHtml+'<div style="margin:3px 0;white-space:pre-wrap;word-break:break-word;font-size:13px">'+_cpEsc(m.texto)+'</div>'
+        +'<div style="text-align:right">'+btn+'</div></div>';
+    }
+    var html=ativos.map(function(m){ return linha(m,false); }).join('');
+    if(mostrarArquivadas && arquivados.length){
+      html+='<div style="margin:10px 0 6px;display:flex;justify-content:space-between;align-items:center"><b class="note" style="font-size:11px;text-transform:uppercase">Arquivadas</b><a onclick="_cpDesarquivarTudo(\''+processoId+'\')" style="cursor:pointer;color:#185FA5;font-size:11.5px">desarquivar tudo</a></div>'
+        +arquivados.map(function(m){ return linha(m,true); }).join('');
+    }
+    body.innerHTML=html;
+  }catch(e){ body.innerHTML='<div class="note" style="color:#b5342b">Erro: '+_cpEsc((e&&e.message)||e)+'</div>'; }
+}
+function _cpAlternarArquivadas(processoId){
+  var c=window.__chatProcCache[processoId]; var mostrando=!!(c&&c._mostrando);
+  if(c) c._mostrando=!mostrando;
+  renderChatDoProcesso(processoId, !mostrando);
+}
+async function _cpArquivar(processoId, msgId){
+  var r=await window.__sb.from('chat_mensagens').update({arquivado:true}).eq('id',msgId);
+  if(r.error){ alert('Erro: '+r.error.message); return; }
+  renderChatDoProcesso(processoId, false);
+}
+async function _cpDesarquivar(processoId, msgId){
+  var r=await window.__sb.from('chat_mensagens').update({arquivado:false}).eq('id',msgId);
+  if(r.error){ alert('Erro: '+r.error.message); return; }
+  renderChatDoProcesso(processoId, true);
+}
+async function _cpDesarquivarTudo(processoId){
+  if(!confirm('Desarquivar todas as conversas deste processo?')) return;
+  var r=await window.__sb.from('chat_mensagens').update({arquivado:false}).eq('processo_id',processoId).eq('arquivado',true);
+  if(r.error){ alert('Erro: '+r.error.message); return; }
+  renderChatDoProcesso(processoId, false);
+}
 function exportarProdutividadeCSV(){
   var evs=PRD_EVT||[]; if(!evs.length){ alert('Nada para exportar no período.'); return; }
   var head='user_nome;event_type;entity_type;entity_id;occurred_at;metadata';

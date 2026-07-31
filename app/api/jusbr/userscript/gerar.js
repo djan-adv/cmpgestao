@@ -18,7 +18,7 @@ export function scriptTexto(segredo, endpoint, urlAtualizacao) {
   return `// ==UserScript==
 // @name         CMPGestão — Sincronizar token jus.br (PDPJ)
 // @namespace    cmpadvogados.com.br
-// @version      5.5
+// @version      5.6
 // @description  Ponte entre a sua sessão do jus.br e o CMPGestão. A aba do jus.br guarda o token no cofre do Tampermonkey; a aba do CMPGestão o envia (mesma origem, sem bloqueios). Selo na tela mostra o estado.
 // @match        https://portaldeservicos.pdpj.jus.br/*
 // @match        https://sso.cloud.pje.jus.br/*
@@ -39,6 +39,7 @@ export function scriptTexto(segredo, endpoint, urlAtualizacao) {
   var NO_GESTAO = (location.host === HOST_GESTAO);
   var CHAVE = 'cmp_jusbr_token';
   var CHAVE_APRENDER = 'cmp_jusbr_aprender';
+  var CHAVE_MIN = 'cmp_jusbr_selo_min';
 
   var estado = '', cor = '#8a5a00', origem = '', quandoOk = 0;
   function ehJwt(t) { return typeof t === 'string' && t.split('.').length === 3 && t.length > 60; }
@@ -335,19 +336,34 @@ export function scriptTexto(segredo, endpoint, urlAtualizacao) {
   }
 
   // ---------------------------- selo visível ----------------------------
+  // Canto INFERIOR ESQUERDO (o CMPGestão tem um chat da equipe fixo no canto
+  // direito — ficar do lado oposto evita os dois se sobreporem). Minimiza para
+  // uma pastilha pequena com um clique; lembra o estado (GM_setValue) entre
+  // páginas e recarregamentos.
   var el = null;
+  function minimizado() { try { return GM_getValue(CHAVE_MIN, false) === true; } catch (e) { return false; } }
+  function setMinimizado(v) { try { GM_setValue(CHAVE_MIN, !!v); } catch (e) {} }
   function selo() {
     try {
       if (!document.body) return;
       if (!el) {
         el = document.createElement('div');
-        el.style.cssText = 'position:fixed;right:14px;bottom:14px;z-index:2147483647;background:#fff;border:1px solid #d7dde5;border-radius:10px;box-shadow:0 4px 14px rgba(0,0,0,.14);padding:8px 11px;font:12px system-ui,Arial;color:#1e2733;max-width:250px';
+        el.style.cssText = 'position:fixed;left:14px;bottom:14px;z-index:2147483647;background:#fff;border:1px solid #d7dde5;border-radius:10px;box-shadow:0 4px 14px rgba(0,0,0,.14);padding:8px 11px;font:12px system-ui,Arial;color:#1e2733;max-width:250px';
         el.addEventListener('click', function (ev) {
-          if (ev.target && ev.target.getAttribute('data-a') === 'go') { if (NO_GESTAO) { ultimoEnviado = ''; empurrar(); } else { varrerStorage(); } selo(); }
+          var a = ev.target && ev.target.getAttribute('data-a');
+          if (a === 'go') { if (NO_GESTAO) { ultimoEnviado = ''; empurrar(); } else { varrerStorage(); } selo(); }
+          else if (a === 'min') { setMinimizado(true); selo(); }
+          else if (a === 'max') { setMinimizado(false); selo(); }
         });
         document.body.appendChild(el);
       }
-      el.innerHTML = '<div style="font-weight:700;color:#2E3A4B;margin-bottom:2px">CMPGestão' + (NO_GESTAO ? '' : ' · jus.br') + '</div>'
+      if (minimizado()) {
+        el.style.padding = '5px 9px';
+        el.innerHTML = '<span style="cursor:pointer;color:' + cor + ';font-weight:700" data-a="max" title="' + estado.replace(/"/g, '&quot;') + '">● CMPGestão' + (NO_GESTAO ? '' : ' · jus.br') + '</span>';
+        return;
+      }
+      el.style.padding = '8px 11px';
+      el.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:2px"><b style="color:#2E3A4B">CMPGestão' + (NO_GESTAO ? '' : ' · jus.br') + '</b><span data-a="min" title="Minimizar" style="cursor:pointer;color:#8a93a2;font-weight:700;padding:0 3px">▁</span></div>'
         + '<div style="color:' + cor + ';font-weight:600">' + estado + '</div>'
         + (origem ? '<div style="color:#697180;font-size:11px">via ' + origem + '</div>' : '')
         + '<div style="margin-top:5px"><button data-a="go" style="cursor:pointer;border:1px solid #cfe0f2;background:#eef4fb;color:#185FA5;border-radius:7px;padding:3px 8px;font-size:11px">sincronizar agora</button></div>';
