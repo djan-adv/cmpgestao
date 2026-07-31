@@ -94,6 +94,8 @@ export async function POST(request) {
     confirmarEventoId: (body.confirmar_evento ? Number(body.confirmar_evento) : null) || null,
     // reenvio deliberado (botão "reenviar aviso"): pula a trava de repetição do dia
     dedup: !body.forcar,
+    // arquivos escolhidos pelo advogado (ex.: a sentença) — [{filename, content_base64}]
+    anexos: Array.isArray(body.anexos) ? body.anexos : [],
   })
   if (r.erro) return Response.json({ erro: r.erro, repetido: r.repetido }, { status: r.status || 500 })
 

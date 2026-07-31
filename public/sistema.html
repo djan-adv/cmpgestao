@@ -10133,6 +10133,11 @@ async function desativarAcompanhamento(){
   <div id="atz-divulg-box" style="margin-top:8px;font-size:13px">
     <label style="cursor:pointer"><input type="checkbox" id="atz-divulg-on" onchange="_atzAplicarDivulgacao()"> 📢 Anexar divulgação das áreas de atuação (opcional — não marque se não for um bom momento para o cliente)</label>
   </div>
+  <div id="atz-anexos-box" style="margin-top:8px;font-size:13px">
+    <label style="cursor:pointer;font-weight:600;color:#22405f">📎 Anexar arquivo(s) ao e-mail (opcional — ex.: a sentença, um comprovante)</label><br>
+    <input type="file" id="atz-anexos" multiple style="margin-top:4px">
+    <div class="note" id="atz-anexos-info" style="font-size:11px;margin-top:2px">PDF, imagem ou Word — até 9 MB por arquivo (só no envio pelo "Enviar agora (contato@)").</div>
+  </div>
   <div id="atz-envio-bar" style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
     <button class="btn" style="background:#0F6E56;color:#fff" onclick="enviarAgoraAtualizacao()" title="Envia direto pelo contato@cmpadvogados.com.br (requer o envio pelo servidor ativado)">Enviar agora (contato@)</button>
     <button class="btn ghost" onclick="abrirNoGmail()">Abrir no Gmail</button>
@@ -10167,20 +10172,35 @@ function _teorDaData(pubs, dataISO){
 /* EXTRAI o corpo do ATO (cru) do teor: joga fora o cabeçalho institucional/partes e a
    assinatura, e começa no ato — de preferência no dispositivo (o que foi decidido) ou na
    ordem/intimação. Se não houver corpo reconhecível (só cabeçalho/certidão), devolve ''. */
+/* o cabeçalho do DJEN costuma declarar o TIPO do ato logo no início (às vezes
+   seguido de "||", às vezes não) — ex.: "SENTENÇA - || Vistos, etc.". Esse tipo
+   é o sinal MAIS confiável de que houve sentença/acórdão: o teor publicado é,
+   com frequência, só um TRECHO/resumo do documento (não o inteiro teor), então
+   o dispositivo final ("julgo procedente"...) pode nem aparecer no texto —
+   sem capturar o tipo aqui, esses casos caem no "houve movimentação genérica". */
+function _tipoDoCabecalho(t){
+  var cab=String(t||'').slice(0,60).toUpperCase();
+  if(/SENTEN[ÇC]A/.test(cab)) return 'sentenca';
+  if(/AC[ÓO]RD[ÃA]O/.test(cab)) return 'acordao';
+  if(/DECIS[ÃA]O\b/.test(cab)) return 'decisao';
+  if(/DESPACHO/.test(cab)) return 'despacho';
+  return '';
+}
 function _extraiAto(texto){
-  var t=String(texto||'').replace(/\s+/g,' ').trim(); if(!t) return '';
+  var t=String(texto||'').replace(/\s+/g,' ').trim(); if(!t) return {tipo:'',ato:''};
+  var tipo=_tipoDoCabecalho(t);
   t=t.replace(/^[^|]{0,80}\|\|\s*/,''); /* marcador "SENTENÇA - ||" etc. */
   /* prioridade 1: dispositivo/resultado; prioridade 2: ordens/intimações/despacho */
   var DISPOS=/\b(ante o exposto|isto posto|posto isso|diante do exposto|pelo exposto|ao teor do exposto|julgo|decido|homologo|homologa|condeno|decreto|extingo|defiro|indefiro|dou provimento|nego (provimento|seguimento))\b/i;
   var ORDENS=/\b(intimo|intima-?se|intimem-?se|intime-?se|fica(m)? (a parte|intimad|o autor|a autora)|notifico|notifique-?se|cientifico|vistos|trata-se|cuida-se|dispenso o relat|dispensad[oa] o relat|designo|redesigno|determino|recebo|conhe[çc]o|expe[çc]a-se|cite-?se|manifeste-?se|aguarde-?se|arquive|suspend|convert)\b/i;
   var m1=t.match(DISPOS), m2=t.match(ORDENS);
-  var idx=(m1?m1.index:-1); if(idx<0 && m2) idx=m2.index; if(idx<0) return '';
+  var idx=(m1?m1.index:-1); if(idx<0 && m2) idx=m2.index; if(idx<0) return {tipo:tipo,ato:''};
   t=t.slice(idx);
   /* corta a assinatura/rodapé do cartório */
   t=t.replace(/\b(de ordem\b|documento (datado|assinado)|assinad[oa] eletronicamente|analista\/t[ée]cnico judici).*$/i,'');
   t=t.replace(/\b[A-ZÀ-Ÿ][A-ZÀ-Ÿ ]{3,}\s*,\s*\d{1,2}\s+de\s+[a-zç]+\s+de\s+\d{4}\b.*$/i,'');
   t=t.replace(/Processo\s*(n[ºo°.]*)?\s*[-:]?\s*[\d.\-\/]{5,}/gi,'').replace(/\s+/g,' ').trim();
-  return t.length>=20?t:'';
+  return {tipo:tipo, ato:(t.length>=20?t:'')};
 }
 /* TRADUZ o ato para o cliente: "INTIMO a parte autora" -> "Você foi intimado(a)", etc. */
 function _humanizaAto(t){
@@ -10196,10 +10216,10 @@ function _humanizaAto(t){
 }
 /* devolve {ato: corpo cru p/ classificar, cli: versão traduzida p/ o cliente} */
 function _resumeParaCliente(texto, maxLen){
-  var ato=_extraiAto(texto); if(!ato) return {ato:'',cli:''};
-  var cli=_humanizaAto(ato); maxLen=maxLen||340;
+  var ex=_extraiAto(texto); if(!ex.ato) return {tipo:ex.tipo, ato:'', cli:''};
+  var cli=_humanizaAto(ex.ato); maxLen=maxLen||340;
   if(cli.length>maxLen){ var corte=cli.slice(0,maxLen).lastIndexOf('. '); cli=(corte>maxLen*0.5)?cli.slice(0,corte+1):(cli.slice(0,maxLen).replace(/\s+\S*$/,'')+'…'); }
-  return {ato:ato, cli:cli};
+  return {tipo:ex.tipo, ato:ex.ato, cli:cli};
 }
 /* limpeza leve para o NOME do movimento (não passa pelo extrator de ato) */
 function _limpaNome(s, maxLen){ s=String(s||'').replace(/\s+/g,' ').trim(); maxLen=maxLen||240; if(s.length>maxLen) s=s.slice(0,maxLen).replace(/\s+\S*$/,'')+'…'; return s; }
@@ -10218,17 +10238,17 @@ function _nomeAcrescenta(nm){
    NÃO se repete, mesmo vindo em vários códigos do DataJud. Guarda o teor mais
    informativo do grupo e classifica pelo ATO (não pelo cabeçalho). */
 function _linhasAtualizacao(p, n){
-  var movsAll=_movsOficiais(p,80), pubs=pubsDoProcesso(p.numero||''), grupos=[], idx={}, primeiroAto='';
+  var movsAll=_movsOficiais(p,80), pubs=pubsDoProcesso(p.numero||''), grupos=[], idx={}, primeiroAto='', primeiroTipo='';
   for(var i=0;i<movsAll.length;i++){
     var m=movsAll[i], d=_atzDataBR(m.data);
     var r=_resumeParaCliente(_teorDaData(pubs, m.data)||m.texto||'', 340);
-    if(i===0) primeiroAto=r.ato; else if(!primeiroAto && r.ato) primeiroAto=r.ato;
+    if(i===0){ primeiroAto=r.ato; primeiroTipo=r.tipo; } else if(!primeiroAto && r.ato){ primeiroAto=r.ato; primeiroTipo=r.tipo; }
     var baseLabel=r.ato||_nomeMov(m.texto);          /* classifica pelo ATO, não pelo cabeçalho */
-    var label=explicaParaCliente(baseLabel);
+    var label=explicaParaCliente(baseLabel, r.tipo);
     var detalhe=r.cli;
     if(!detalhe){ var nm=_nomeMov(m.texto); if(nm && nm.length>12 && nm.length<120 && !/tribunal|poder judici|comarca|cep:\s*\d|cart[óo]rio/i.test(nm) && nm.toLowerCase()!==label.toLowerCase() && _nomeAcrescenta(nm)) detalhe=_limpaNome(nm,240); }
     var chave=(d||'')+'|'+label.toLowerCase();       /* 1 linha por DATA+TIPO: mesmo ato não repete */
-    if(idx[chave]==null){ idx[chave]=grupos.length; grupos.push({d:d,label:label,detalhe:detalhe||''}); }
+    if(idx[chave]==null){ idx[chave]=grupos.length; grupos.push({d:d,label:label,detalhe:detalhe||'',tipo:r.tipo}); }
     else { var g=grupos[idx[chave]]; if(detalhe && detalhe.length>(g.detalhe||'').length) g.detalhe=detalhe; }
   }
   var linhas=grupos.slice(0,n).map(function(g){
@@ -10236,10 +10256,11 @@ function _linhasAtualizacao(p, n){
     if(g.detalhe && g.detalhe.toLowerCase()!==g.label.toLowerCase()) linha+='\n   ↳ '+g.detalhe;
     return linha;
   });
-  return { linhas: linhas, primeiroAto: primeiroAto, primeiro: movsAll[0] };
+  var temSentencaOuAcordao=grupos.slice(0,n).some(function(g){return g.tipo==='sentenca'||g.tipo==='acordao';});
+  return { linhas: linhas, primeiroAto: primeiroAto, primeiroTipo: primeiroTipo, primeiro: movsAll[0], temSentencaOuAcordao: temSentencaOuAcordao };
 }
 /* descreve, para o cliente, O QUE aconteceu (status objetivo, em português simples) */
-function explicaParaCliente(texto){
+function explicaParaCliente(texto, tipo){
   var t=(texto||'').toLowerCase();
   /* ordem importa: casos específicos antes dos genéricos (ex.: "conclusos para
      sentença" e "cumprimento de sentença" NÃO são "sentença proferida"). */
@@ -10249,6 +10270,10 @@ function explicaParaCliente(texto){
   if(/ac[óo]rd[ãa]o|deram provimento|negaram provimento|nega-se provimento|d[áa]-se provimento/.test(t)) return 'O tribunal julgou o recurso (acórdão).';
   if(/embargos de declara/.test(t)) return 'Foram opostos embargos de declaração (pedido de esclarecimento/correção da decisão).';
   if(/senten[çc]a\s+(proferida|publicada|prolatada)|profiro\s+senten|julgo\s+(procedente|improcedente|parcialmente|extinto)|resolvo o m[ée]rito|\bcondeno\b|decreto\s+a/.test(t)) return 'Foi proferida a sentença (decisão do juiz sobre o mérito do processo).';
+  /* o texto (excerto do DJEN) pode não conter o dispositivo final — o cabeçalho
+     do documento ("SENTENÇA"/"ACÓRDÃO") é o sinal de reserva mais confiável */
+  if(tipo==='sentenca') return 'Foi proferida a sentença (decisão do juiz sobre o mérito do processo).';
+  if(tipo==='acordao') return 'O tribunal julgou o recurso (acórdão).';
   if(/contrarraz|contra-?raz/.test(t)) return 'Foi aberto prazo para contrarrazões ao recurso da parte contrária.';
   if(/apela[çc][ãa]o|agravo|\brecurso\b/.test(t)) return 'Houve movimentação relacionada a recurso.';
   if(/audi[êe]ncia|designa/.test(t)) return 'Houve movimentação sobre audiência (designação ou realização).';
@@ -10261,7 +10286,7 @@ function explicaParaCliente(texto){
   return 'Houve uma nova movimentação processual.';
 }
 /* explica, para o cliente, o QUE VEM A SEGUIR (próximos passos) a partir da última movimentação */
-function proximosPassosCliente(texto){
+function proximosPassosCliente(texto, tipo){
   var t=(texto||'').toLowerCase();
   if(/tr[âa]nsito em julgado/.test(t)) return 'Como a decisão já é definitiva, vamos iniciar a próxima fase (execução/cumprimento) para efetivar o resultado. O escritório conduzirá esse passo.';
   if(/conclus[oa]/.test(t)) return 'Os autos estão com o juiz aguardando decisão. Assim que houver a decisão, informaremos e indicaremos o passo seguinte.';
@@ -10269,6 +10294,8 @@ function proximosPassosCliente(texto){
   if(/ac[óo]rd[ãa]o|deram provimento|negaram provimento|nega-se provimento|d[áa]-se provimento/.test(t)) return 'Vamos analisar a decisão do tribunal e avaliar os próximos passos — eventual recurso ou início da execução, conforme o resultado.';
   if(/embargos de declara/.test(t)) return 'Aguardamos a análise dos embargos pelo juízo. Conforme a resposta, avaliaremos o próximo passo e o prazo de recurso.';
   if(/senten[çc]a\s+(proferida|publicada|prolatada)|profiro\s+senten|julgo\s+(procedente|improcedente|parcialmente|extinto)|resolvo o m[ée]rito|\bcondeno\b|decreto\s+a/.test(t)) return 'Vamos analisar a decisão com atenção e avaliar o cabimento de recurso dentro do prazo legal. O escritório cuidará disso e informará a melhor estratégia.';
+  if(tipo==='sentenca') return 'Vamos analisar a decisão com atenção e avaliar o cabimento de recurso dentro do prazo legal. O escritório cuidará disso e informará a melhor estratégia.';
+  if(tipo==='acordao') return 'Vamos analisar a decisão do tribunal e avaliar os próximos passos — eventual recurso ou início da execução, conforme o resultado.';
   if(/contrarraz|contra-?raz/.test(t)) return 'Vamos apresentar a resposta ao recurso da parte contrária dentro do prazo. Depois, o processo segue para nova análise do tribunal.';
   if(/apela[çc][ãa]o|agravo|\brecurso\b/.test(t)) return 'Vamos analisar o recurso e nos manifestar no prazo. O processo seguirá para reanálise e avisaremos a decisão.';
   if(/audi[êe]ncia|designa/.test(t)) return 'Vamos nos preparar para a audiência. Se for necessária a sua presença ou de testemunhas, entraremos em contato com antecedência para confirmar.';
@@ -10369,17 +10396,28 @@ function _gerarRascunhoAtualizacao(){
     var res=_linhasAtualizacao(p,n);
     var linhas=res.linhas;
     var basePassos=res.primeiroAto||(res.primeiro&&res.primeiro.texto)||'';
-    var passos=basePassos?proximosPassosCliente(basePassos):'';
+    var passos=basePassos?proximosPassosCliente(basePassos, res.primeiroTipo):'';
     var provs=(typeof _providenciasDoEscritorio==='function')?_providenciasDoEscritorio(p,6):[];
     var blocoProv=provs.length?('Providências já adotadas pelo escritório:\n'+provs.join('\n')+'\n\n'):'';
+    /* houve sentença/acórdão nas movimentações mostradas: o teor publicado pelo
+       DJEN costuma ser só um trecho (raramente traz o resultado final), então
+       deixamos um lembrete visível para o advogado preencher o resultado real
+       antes de enviar — e um convite a anexar a peça (veja "📎" abaixo). */
+    var blocoResumo='';
+    if(res.temSentencaOuAcordao){
+      var rotuloTipo=(res.primeiroTipo==='acordao')?'do acórdão':'da sentença';
+      blocoResumo='⚠ [PREENCHA ANTES DE ENVIAR — resumo do resultado '+rotuloTipo+': pedido julgado procedente, improcedente ou parcialmente procedente; valor da condenação, se houver. Aproveite para anexar o documento — veja "📎 Anexar arquivo(s)" abaixo.]\n\n';
+    }
     corpo='Prezado(a)'+(nome?(' '+nome):' cliente')+',\n\n'
       +'Segue a atualização do seu processo nº '+p.numero+':\n\n'
       +(linhas.length?linhas.join('\n\n'):'• Sem movimentações oficiais recentes registradas.')+'\n\n'
+      +blocoResumo
       +blocoProv
       +(passos?('Resumo e próximos passos:\n'+passos+'\n\nNo momento, você não precisa tomar nenhuma providência — o escritório está cuidando de tudo e avisará caso seja necessário algo de sua parte.\n\n'):'')
       +'Seguimos acompanhando o processo e comunicaremos as próximas movimentações.\n\n'
       +assinatura+_msgAcompProcCliente();
-    assunto='Atualização do seu processo — [Ref: '+p.numero+']';
+    var assuntoTipo=res.temSentencaOuAcordao?((res.primeiroTipo==='acordao')?'Acórdão no seu processo':'Sentença no seu processo'):'Atualização do seu processo';
+    assunto=assuntoTipo+' — [Ref: '+p.numero+']';
   }
   var el=document.getElementById('atz-corpo'); if(el) el.value=corpo;
   var as=document.getElementById('atz-assunto'); if(as) as.value=assunto;
@@ -10508,6 +10546,7 @@ async function enviarEmailVara(o){
   if(o.cc) corpo.cc=o.cc;
   if(o.inReplyTo) corpo.in_reply_to=o.inReplyTo;
   if(o.responderId) corpo.responder_id=o.responderId;
+  if(o.anexos&&o.anexos.length) corpo.anexos=o.anexos;
   var tok=await docToken();
   var r=await fetch('/api/enviar-email',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify(corpo)});
   var j=await r.json().catch(function(){return {};});
@@ -10798,6 +10837,7 @@ function abrirEmailVara(p, email, assunto, corpo){
   document.getElementById('atz-email').value=email||'';
   document.getElementById('atz-assunto').value=assunto||'';
   document.getElementById('atz-corpo').value=corpo||'';
+  var _fxA=document.getElementById('atz-anexos'); if(_fxA) _fxA.value='';
   /* pré-preenche o e-mail do cliente (da ficha) para a cópia opcional */
   try{
     var emailCli=(String(p.ctl||'').split(/[,;\n]+/).map(function(s){return s.trim();}).filter(function(t){return /@/.test(t);})[0])||'';
@@ -10820,6 +10860,7 @@ async function abrirAtualizarCliente(numero){
   /* e-mail: primeiro o da FICHA (contatos_livres, ex.: puxado da procuração); cadastro é reserva */
   var emailFicha=(String(p.ctl||'').split(/[,;\n]+/).map(function(s){return s.trim();}).filter(function(t){return /@/.test(t);})[0])||'';
   document.getElementById('atz-email').value=emailFicha;
+  var _fxB=document.getElementById('atz-anexos'); if(_fxB) _fxB.value='';
   document.getElementById('modal-atualizar').classList.remove('hidden');
   _atzModo();
   try{
@@ -10848,6 +10889,24 @@ function copiarAtualizacao(){
   var txt=(document.getElementById('atz-assunto').value||'')+'\n\n'+(document.getElementById('atz-corpo').value||'');
   try{ navigator.clipboard.writeText(txt); alert('Texto copiado. Cole no seu e-mail e envie.'); }catch(e){ alert('Não foi possível copiar automaticamente — selecione o texto e copie manualmente.'); }
 }
+/* lê os arquivos escolhidos em #atz-anexos e devolve [{filename, content_base64}] —
+   9 MB por arquivo (limite comum de anexo de e-mail); acima disso, aborta com aviso
+   em vez de mandar um e-mail gigante que o SMTP provavelmente vai recusar. */
+function _atzLerAnexos(){
+  var inp=document.getElementById('atz-anexos');
+  var arquivos=(inp&&inp.files)?Array.prototype.slice.call(inp.files):[];
+  if(!arquivos.length) return Promise.resolve([]);
+  var MAXB=9*1024*1024;
+  for(var i=0;i<arquivos.length;i++){ if(arquivos[i].size>MAXB){ alert('O arquivo "'+arquivos[i].name+'" tem mais de 9 MB — escolha um arquivo menor ou envie por outro meio.'); return Promise.reject(new Error('anexo grande demais')); } }
+  return Promise.all(arquivos.map(function(f){
+    return new Promise(function(resolve,reject){
+      var r=new FileReader();
+      r.onload=function(){ var b64=String(r.result||'').split(',')[1]||''; resolve({filename:f.name, content_base64:b64}); };
+      r.onerror=function(){ reject(new Error('falha ao ler '+f.name)); };
+      r.readAsDataURL(f);
+    });
+  }));
+}
 /* envia DIRETO pelo servidor (contato@cmpadvogados.com.br) — resolve o remetente
    e usa e-mail HTML com logo. Requer o Passo 2 ativado no VPS (SMTP + nodemailer). */
 async function enviarAgoraAtualizacao(){
@@ -10865,18 +10924,20 @@ async function enviarAgoraAtualizacao(){
         if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(ccCli)){ alert('Marque a cópia ao cliente com um e-mail válido (ou desmarque a caixa).'); return; } }
     }
   }catch(e){}
-  if(!confirm('Enviar agora para '+email+(ccCli?('\ncom CÓPIA para o cliente: '+ccCli):'')+'\npelo contato@cmpadvogados.com.br?')) return;
+  var anexos;
+  try{ anexos=await _atzLerAnexos(); }catch(e){ return; } /* arquivo grande demais já avisou — não segue */
+  if(!confirm('Enviar agora para '+email+(ccCli?('\ncom CÓPIA para o cliente: '+ccCli):'')+(anexos.length?('\ncom '+anexos.length+' anexo(s)'):'')+'\npelo contato@cmpadvogados.com.br?')) return;
   try{
     var tok=await docToken();
     var numero=(window.__atzCtx&&window.__atzCtx.p&&window.__atzCtx.p.numero)||'';
     /* e-mail à vara/cartório passa pelo horário de envio (08h comum/trabalhista,
        10h federal) — fora dele, o sistema oferece agendar */
     if((window.__atzCtx&&window.__atzCtx.vara)||_ehEmailVara(email)){
-      var rv=await enviarEmailVara({para:email,cc:(ccCli||''),assunto:assunto,corpo:corpo,numero:numero});
+      var rv=await enviarEmailVara({para:email,cc:(ccCli||''),assunto:assunto,corpo:corpo,numero:numero,anexos:anexos});
       if(rv.cancelado) return;
       if(!rv.ok){ alert('Não enviou: '+rv.erro+'\n\nSe o envio pelo servidor ainda não foi ativado, use "Abrir no Gmail" por enquanto.'); return; }
       if(rv.agendado){
-        alert('📮 Na fila — sai '+rv.slotTxt+' para '+email+'.\n\nPode acompanhar ou cancelar em "Fila de e-mails".');
+        alert('📮 Na fila — sai '+rv.slotTxt+' para '+email+'.'+(anexos.length?'\n\n⚠ Anexos NÃO acompanham e-mails agendados — envie-os separadamente quando sair, ou use "Enviar agora mesmo assim".':'')+'\n\nPode acompanhar ou cancelar em "Fila de e-mails".');
         try{ if(typeof logEvent==='function') logEvent('email_scheduled','processo',numero||null,{para:email,enviar_em:rv.enviar_em&&rv.enviar_em.toISOString()}); }catch(e){}
         await registrarEnvioAtualizacao(true,rv.slotTxt);
         fecharAtualizar(); return;
@@ -10886,7 +10947,7 @@ async function enviarAgoraAtualizacao(){
       await registrarEnvioAtualizacao(true);
       fecharAtualizar(); return;
     }
-    var r=await fetch('/api/enviar-email',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({para:email,assunto:assunto,corpo:corpo,numero:numero,cc:(ccCli||undefined)})});
+    var r=await fetch('/api/enviar-email',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({para:email,assunto:assunto,corpo:corpo,numero:numero,cc:(ccCli||undefined),anexos:(anexos.length?anexos:undefined)})});
     var j=await r.json().catch(function(){return {};});
     if(!r.ok||j.erro){ alert('Não enviou: '+(j.erro||('HTTP '+r.status))+'\n\nSe o envio pelo servidor ainda não foi ativado, use "Abrir no Gmail" por enquanto.'); return; }
     var _cs=j.copiado_enviados;
