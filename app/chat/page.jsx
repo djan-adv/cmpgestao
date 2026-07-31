@@ -87,6 +87,23 @@ export default function ChatMobile() {
     return () => { ativo = false; sub && sub.subscription && sub.subscription.unsubscribe() }
   }, [])
 
+  // ---------- mantém a sessão viva mesmo com o app em segundo plano ----------
+  // No celular (instalado na tela de início), o sistema operacional "congela" a
+  // aba quando você troca de app ou bloqueia a tela — o timer de renovação do
+  // token do Supabase para junto. Sem isso, ao reabrir horas depois o token
+  // pode já estar vencido demais para renovar sozinho, e o app pede login de
+  // novo. startAutoRefresh()/stopAutoRefresh() é a recomendação oficial do
+  // Supabase para apps mobile: renova assim que a tela volta a ficar visível.
+  useEffect(() => {
+    function aoMudarVisibilidade() {
+      if (document.visibilityState === 'visible') supabase.auth.startAutoRefresh()
+      else supabase.auth.stopAutoRefresh()
+    }
+    aoMudarVisibilidade()
+    document.addEventListener('visibilitychange', aoMudarVisibilidade)
+    return () => document.removeEventListener('visibilitychange', aoMudarVisibilidade)
+  }, [])
+
   async function entrar(e) {
     e && e.preventDefault()
     setErroLogin(''); setEntrando(true)
