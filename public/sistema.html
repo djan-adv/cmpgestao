@@ -6970,19 +6970,44 @@ async function pubExcluir(id){
   renderPublicacoes();
 }
 /* ===== Proteção contra a seta "voltar" do navegador (e o botão lateral do mouse):
-   numa página única, o Voltar saía do site e DERRUBAVA a ficha no meio da edição.
-   Agora: Voltar com ficha aberta = volta à lista (dentro do sistema); Voltar nas
-   demais telas = segura na página. Fechar/recarregar com edição aberta pede
-   confirmação. ===== */
+   numa página única, o Voltar saía do site direto. Agora cada troca de tela
+   (go()) empilha um estado do navegador; Voltar desempilha e mostra a tela
+   anterior de DENTRO do sistema (Painel/Processos/CRM/…, inclusive a ficha do
+   processo) — não só quando saía de uma ficha, como antes. Só quando não há
+   mais tela anterior (a primeira tela depois do login) é que Voltar segura em
+   vez de sair — igual já fazia antes nas telas que não eram a ficha. Com
+   modal/ficha em edição aberta, sempre segura (evita perder o que estava
+   sendo editado). Fechar/recarregar com edição aberta pede confirmação. ===== */
+window.__telaPilha=window.__telaPilha||[];
+(function(){
+  if(window.__goHistWrapped || typeof go!=='function') return;
+  window.__goHistWrapped=true;
+  var _goOrig=go;
+  window.go=function(s){
+    var topo=window.__telaPilha[window.__telaPilha.length-1];
+    if(s!==topo){
+      window.__telaPilha.push(s);
+      try{ history.pushState({cmp:1},''); }catch(e){}
+    }
+    return _goOrig(s);
+  };
+})();
 try{
   history.pushState({cmp:1},'');
   window.addEventListener('popstate', function(){
-    history.pushState({cmp:1},'');
     try{
-      var sec=document.querySelector('section[id^="s-"]:not(.hidden)');
       /* com modal/cartão aberto, não navega — só segura a saída */
-      if(document.getElementById('modal-atudados')||document.querySelector('.overlay:not(.hidden)')) return;
-      if(sec&&sec.id==='s-proc-det'&&typeof go==='function') go(window.__voltarPara||'processos');
+      if(document.getElementById('modal-atudados')||document.querySelector('.overlay:not(.hidden)')){
+        history.pushState({cmp:1},''); return;
+      }
+      if(window.__telaPilha.length>1){
+        window.__telaPilha.pop();
+        var anterior=window.__telaPilha[window.__telaPilha.length-1];
+        history.pushState({cmp:1},'');
+        if(typeof go==='function') go(anterior);
+      } else {
+        history.pushState({cmp:1},'');
+      }
     }catch(e){}
   });
   window.addEventListener('beforeunload', function(e){
