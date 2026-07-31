@@ -13523,6 +13523,13 @@ async function monitTrazerAssessoria(id){
   var pin=null;            // processo fixado nesta conversa: {id, rotulo} — tudo que se envia vai marcado a ele
   var respondendoA=null;   // {id, texto, autor} — mensagem sendo respondida (estilo WhatsApp)
   var procNomeCache={};    // id do processo -> rótulo (para o chip "🔗 ...")
+  var PALETA_CORES=['#8a3b8f','#1f7a44','#185FA5','#b5342b','#6d4aa8','#0b7285','#7a4b00','#c2185b'];
+  function _corPara(id){
+    var p=porId[id];
+    if(p&&p.cor_chat) return p.cor_chat;
+    var s=0; for(var i=0;i<String(id||'').length;i++) s=(s+String(id).charCodeAt(i))%99999;
+    return PALETA_CORES[s%PALETA_CORES.length];
+  }
   function esperaSessao(){ if(window.__sb && window.__sb.auth){ iniciar(); } else { setTimeout(esperaSessao,800); } }
   function h(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
   function hora(iso){ try{ var d=new Date(iso); return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }catch(e){ return ''; } }
@@ -13537,7 +13544,9 @@ async function monitTrazerAssessoria(id){
       '<div id="cmp-chat-bar" style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:rgba(250,240,170,.97);border:1px solid #e0d9a0;border-bottom:none;border-radius:12px 12px 0 0;cursor:pointer;box-shadow:0 -2px 14px rgba(0,0,0,.10)">'
       +'<b style="color:#1b1b1b">💬 Chat da equipe</b>'
       +'<span id="cmp-chat-badge" style="display:none;background:#b5342b;color:#fff;border-radius:10px;font-size:11px;font-weight:700;padding:1px 7px"></span>'
-      +'<button id="cmp-chat-min" title="Minimizar" style="margin-left:auto;border:0;background:transparent;color:#5a5326;font-weight:700;font-size:15px;line-height:1;cursor:pointer;padding:2px 4px">▁</button></div>'
+      +'<button id="cmp-chat-cor" title="Escolher minha cor no chat" style="margin-left:auto;border:0;background:transparent;font-size:15px;line-height:1;cursor:pointer;padding:2px 4px">🎨</button>'
+      +'<button id="cmp-chat-min" title="Minimizar" style="border:0;background:transparent;color:#5a5326;font-weight:700;font-size:15px;line-height:1;cursor:pointer;padding:2px 4px">▁</button></div>'
+      +'<div id="cmp-chat-corpicker" style="display:none;padding:8px 10px;border-bottom:1px solid #e6dfae;background:#fffdf0"></div>'
       +'<div id="cmp-chat-corpo" style="display:none;background:rgba(255,250,205,.94);border:1px solid #e0d9a0;border-top:none;backdrop-filter:blur(2px);box-shadow:0 -2px 14px rgba(0,0,0,.10)">'
       +'<div id="cmp-chat-pinbar" style="padding:7px 10px;border-bottom:1px solid #e6dfae;font-size:12px"></div>'
       +'<div id="cmp-chat-msgs" style="height:250px;overflow:auto;padding:10px 12px;line-height:1.45"></div>'
@@ -13551,6 +13560,7 @@ async function monitTrazerAssessoria(id){
     /* a barra só ABRE; fechar é exclusividade do botão minimizar */
     d.querySelector('#cmp-chat-bar').onclick=function(){ abrir(); };
     d.querySelector('#cmp-chat-min').onclick=function(ev){ ev.stopPropagation(); alternar(); };
+    d.querySelector('#cmp-chat-cor').onclick=function(ev){ ev.stopPropagation(); alternarSeletorCor(); };
     d.querySelector('#cmp-chat-env').onclick=enviar;
     var t=d.querySelector('#cmp-chat-txt');
     t.onkeydown=function(e){ if(e.key==='Enter'){ e.preventDefault(); enviar(); } };
@@ -13618,6 +13628,24 @@ async function monitTrazerAssessoria(id){
   }
   function fixar(id, rotulo){ pin={id:id,rotulo:rotulo}; pintarPin(); pintar(); }
   function desfixar(){ pin=null; pintarPin(); pintar(); }
+
+  /* ---- cor da pessoa no chat: escolhida uma vez, vale em qualquer aparelho ---- */
+  function alternarSeletorCor(){
+    var el=document.getElementById('cmp-chat-corpicker'); if(!el) return;
+    if(el.style.display==='none'||!el.style.display){
+      el.style.display='block';
+      el.innerHTML='<div style="font-size:11.5px;color:#6b6540;margin-bottom:5px">Sua cor no chat (as outras pessoas veem assim):</div>'
+        +'<div style="display:flex;gap:6px;flex-wrap:wrap">'+PALETA_CORES.map(function(c){
+          var sel=(porId[eu]&&porId[eu].cor_chat)===c;
+          return '<span onclick="__cmpChat.escolherCor(\''+c+'\')" style="width:24px;height:24px;border-radius:50%;background:'+c+';cursor:pointer;display:inline-block;border:'+(sel?'3px solid #1b1b1b':'2px solid #fff')+';box-shadow:0 0 0 1px #ccc"></span>';
+        }).join('')+'</div>';
+    } else { el.style.display='none'; }
+  }
+  async function escolherCor(cor){
+    if(porId[eu]) porId[eu].cor_chat=cor;
+    pintar(); alternarSeletorCor();
+    try{ await window.__sb.from('usuarios').update({cor_chat:cor}).eq('id',eu); }catch(e){}
+  }
   function responderA(id){
     var m=msgs.find(function(x){return x.id===id;}); if(!m) return;
     respondendoA={id:m.id, texto:m.texto, autor:(m.autor_id===eu?'você':(nomeDe(m.autor_id)||m.autor_nome||'colega'))};
@@ -13664,9 +13692,10 @@ async function monitTrazerAssessoria(id){
         citada='<div style="border-left:3px solid #c9c08a;padding-left:7px;margin-bottom:4px;color:#7a7550;font-size:12px">'+(origAutor?('<b>'+h(origAutor)+'</b><br>'):'')+h(String(origTxt).slice(0,140))+'</div>';
       }
       var chipProc=m.processo_id?('<div style="margin-top:3px;font-size:10.5px;color:#7a5b00">🔗 '+h(_procRotuloPorId(m.processo_id))+'</div>'):'';
+      var corAutor=_corPara(m.autor_id);
       return '<div style="margin:0 0 7px;'+(meu?'text-align:right':'')+'">'
-        +'<div style="display:inline-block;max-width:88%;text-align:left;background:'+(meu?'#fff6c9':'#fffdf3')+';border:1px solid '+(priv?'#d9b64c':'#e6dfae')+';border-radius:9px;padding:6px 9px">'
-        +'<div style="font-size:11px;color:#6b6540;font-weight:700">'+h(quem)+h(alvo)+' · '+hora(m.criado_em)+(priv?' 🔒':'')+' <a onclick="__cmpChat.responderA('+m.id+')" title="Responder" style="cursor:pointer;color:#8a8355;font-weight:400;margin-left:4px">↩</a></div>'
+        +'<div style="display:inline-block;max-width:88%;text-align:left;background:'+(meu?'#fff6c9':'#fffdf3')+';border:1px solid '+(priv?'#d9b64c':'#e6dfae')+';border-left:4px solid '+corAutor+';border-radius:9px;padding:6px 9px">'
+        +'<div style="font-size:11px;color:'+corAutor+';font-weight:700">'+h(quem)+h(alvo)+' · <span style="color:#6b6540;font-weight:400">'+hora(m.criado_em)+(priv?' 🔒':'')+'</span> <a onclick="__cmpChat.responderA('+m.id+')" title="Responder" style="cursor:pointer;color:#8a8355;font-weight:400;margin-left:4px">↩</a></div>'
         +citada
         +'<div style="white-space:pre-wrap;word-break:break-word">'+h(m.texto)+'</div>'
         +chipProc+'</div></div>';
@@ -13682,7 +13711,7 @@ async function monitTrazerAssessoria(id){
 
   async function carregarPessoas(){
     try{
-      var r=await window.__sb.from('usuarios').select('id,nome').order('nome');
+      var r=await window.__sb.from('usuarios').select('id,nome,cor_chat').order('nome');
       var todos=r.data||[];
       porId={}; todos.forEach(function(u){ porId[u.id]=u; });
       if(eu && porId[eu] && porId[eu].nome) euNome=porId[eu].nome;
@@ -13749,7 +13778,7 @@ async function monitTrazerAssessoria(id){
   }
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',esperaSessao); else esperaSessao();
   /* ponte para os onclick inline (o dock inteiro vive numa closure) */
-  window.__cmpChat={responderA:responderA, cancelarResposta:cancelarResposta, abrirBusca:abrirBusca, fixar:fixar, desfixar:desfixar};
+  window.__cmpChat={responderA:responderA, cancelarResposta:cancelarResposta, abrirBusca:abrirBusca, fixar:fixar, desfixar:desfixar, escolherCor:escolherCor};
 })();
 
 /* ===== Histórico do chat sobre o processo (painel amarelo na ficha) =====
@@ -13782,15 +13811,21 @@ async function renderChatDoProcesso(processoId, mostrarArquivadas){
       var qc=await window.__sb.from('chat_mensagens').select('id,texto,autor_id').in('id',respIds);
       (qc.data||[]).forEach(function(c){ citadas[c.id]=c; ids[c.autor_id]=1; });
     }
-    var nomes={};
-    try{ var qn=await window.__sb.from('usuarios').select('id,nome').in('id',Object.keys(ids)); (qn.data||[]).forEach(function(u){ nomes[u.id]=u.nome; }); }catch(e){}
+    var nomes={}, cores={};
+    var PALETA_CORES=['#8a3b8f','#1f7a44','#185FA5','#b5342b','#6d4aa8','#0b7285','#7a4b00','#c2185b'];
+    function _corDe(id){
+      if(cores[id]) return cores[id];
+      var s=0; for(var i=0;i<String(id||'').length;i++) s=(s+String(id).charCodeAt(i))%99999;
+      return PALETA_CORES[s%PALETA_CORES.length];
+    }
+    try{ var qn=await window.__sb.from('usuarios').select('id,nome,cor_chat').in('id',Object.keys(ids)); (qn.data||[]).forEach(function(u){ nomes[u.id]=u.nome; if(u.cor_chat) cores[u.id]=u.cor_chat; }); }catch(e){}
     function linha(m, arquivada){
-      var quem=nomes[m.autor_id]||'colega';
+      var quem=nomes[m.autor_id]||'colega'; var corAutor=_corDe(m.autor_id);
       var cit=m.respondendo_a&&citadas[m.respondendo_a]?citadas[m.respondendo_a]:null;
       var citHtml=cit?('<div style="border-left:3px solid #d9b64c;padding-left:8px;margin-bottom:5px;color:#7a7550;font-size:12.5px"><b>'+_cpEsc(nomes[cit.autor_id]||'colega')+'</b><br>'+_cpEsc(cit.texto)+'</div>'):'';
       var btn=arquivada?('<a onclick="_cpDesarquivar(\''+processoId+'\','+m.id+')" style="cursor:pointer;color:#185FA5;font-size:11.5px">↩ desarquivar</a>'):('<a onclick="_cpArquivar(\''+processoId+'\','+m.id+')" style="cursor:pointer;color:#8a6d00;font-size:11.5px">📥 arquivar</a>');
-      return '<div style="border:1px solid '+(arquivada?'#eef1f5':'#e6dfae')+';background:'+(arquivada?'#f7f8fa':'#fffdf3')+';border-radius:9px;padding:8px 10px;margin-bottom:8px'+(arquivada?';opacity:.75':'')+'">'
-        +'<div style="display:flex;justify-content:space-between;gap:8px;align-items:start"><b style="color:var(--navy);font-size:12.5px">'+_cpEsc(quem)+'</b><span class="note" style="font-size:11px;white-space:nowrap">'+_cpHora(m.criado_em)+'</span></div>'
+      return '<div style="border:1px solid '+(arquivada?'#eef1f5':'#e6dfae')+';border-left:4px solid '+corAutor+';background:'+(arquivada?'#f7f8fa':'#fffdf3')+';border-radius:9px;padding:8px 10px;margin-bottom:8px'+(arquivada?';opacity:.75':'')+'">'
+        +'<div style="display:flex;justify-content:space-between;gap:8px;align-items:start"><b style="color:'+corAutor+';font-size:12.5px">'+_cpEsc(quem)+'</b><span class="note" style="font-size:11px;white-space:nowrap">'+_cpHora(m.criado_em)+'</span></div>'
         +citHtml+'<div style="margin:3px 0;white-space:pre-wrap;word-break:break-word;font-size:13px">'+_cpEsc(m.texto)+'</div>'
         +'<div style="text-align:right">'+btn+'</div></div>';
     }
