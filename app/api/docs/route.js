@@ -232,6 +232,9 @@ export async function POST(request) {
     const tipo = ext === '.pdf' ? 'application/pdf'
       : ext === '.doc' ? 'application/msword'
       : ext === '.docx' ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      : ext === '.xls' ? 'application/vnd.ms-excel'
+      : ext === '.xlsx' ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      : ext === '.csv' ? 'text/csv'
       : /\.(png|jpe?g|gif|webp)$/.test(ext) ? ('image/' + ext.replace('.', '').replace('jpg', 'jpeg'))
       : 'application/octet-stream'
     let buf
