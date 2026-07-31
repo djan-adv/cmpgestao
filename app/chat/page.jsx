@@ -22,6 +22,7 @@ function horaCurta(iso) {
 function rotuloProcesso(p) {
   return (p.cliente_nome || p.numero || 'processo') + (p.numero ? (' — ' + p.numero) : '')
 }
+const PALETA_CORES = ['#8a3b8f', '#1f7a44', '#185FA5', '#b5342b', '#6d4aa8', '#0b7285', '#7a4b00', '#c2185b']
 
 export default function ChatMobile() {
   const [carregando, setCarregando] = useState(true)
@@ -41,6 +42,7 @@ export default function ChatMobile() {
   const [buscaAberta, setBuscaAberta] = useState(false)
   const [buscaTxt, setBuscaTxt] = useState('')
   const [buscaResultados, setBuscaResultados] = useState([])
+  const [seletorCor, setSeletorCor] = useState(false)
   const procNomesRef = useRef({})
   const [procTick, setProcTick] = useState(0) // só para forçar repintar quando um nome chega
   const scrollRef = useRef(null)
@@ -73,7 +75,7 @@ export default function ChatMobile() {
   // ---------- pessoas (nomes reais — nunca confiar em autor_nome da mensagem) ----------
   useEffect(() => {
     if (!euId) return
-    supabase.from('usuarios').select('id,nome').order('nome').then(({ data }) => {
+    supabase.from('usuarios').select('id,nome,cor_chat').order('nome').then(({ data }) => {
       const todos = data || []
       const mapa = {}; todos.forEach(u => { mapa[u.id] = u })
       setPorId(mapa)
@@ -81,6 +83,16 @@ export default function ChatMobile() {
     })
   }, [euId])
   const nomeDe = useCallback((id) => (porId[id] && porId[id].nome) || '', [porId])
+  const corDe = useCallback((id) => {
+    if (porId[id] && porId[id].cor_chat) return porId[id].cor_chat
+    let s = 0; const str = String(id || ''); for (let i = 0; i < str.length; i++) s = (s + str.charCodeAt(i)) % 99999
+    return PALETA_CORES[s % PALETA_CORES.length]
+  }, [porId])
+  async function escolherCor(cor) {
+    setPorId(m => ({ ...m, [euId]: { ...(m[euId] || {}), cor_chat: cor } }))
+    setSeletorCor(false)
+    try { await supabase.from('usuarios').update({ cor_chat: cor }).eq('id', euId) } catch { }
+  }
 
   // ---------- mensagens ----------
   const carregar = useCallback(async () => {
@@ -199,8 +211,20 @@ export default function ChatMobile() {
       <div style={{ background: VERDE_ESCURO, color: '#fff', padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
         <div style={{ fontWeight: 700, fontSize: 16 }}>{alvo ? alvo.nome : '👥 Todos (equipe)'}</div>
         <button onClick={() => { setBuscaAberta(true); buscarProcessos('') }} title="Falar sobre um processo" style={{ marginLeft: 'auto', background: 'rgba(255,255,255,.15)', border: 0, color: '#fff', borderRadius: 8, padding: '6px 10px', fontSize: 13, cursor: 'pointer' }}>🔍 processo</button>
+        <button onClick={() => setSeletorCor(s => !s)} title="Escolher minha cor" style={{ background: 'rgba(255,255,255,.15)', border: 0, color: '#fff', borderRadius: 8, padding: '6px 10px', fontSize: 13, cursor: 'pointer' }}>🎨</button>
         <button onClick={sair} title="Sair" style={{ background: 'rgba(255,255,255,.15)', border: 0, color: '#fff', borderRadius: 8, padding: '6px 10px', fontSize: 13, cursor: 'pointer' }}>Sair</button>
       </div>
+
+      {seletorCor && (
+        <div style={{ background: '#fff', borderBottom: '1px solid #ddd', padding: '10px 12px', flexShrink: 0 }}>
+          <div style={{ fontSize: 12.5, color: '#556', marginBottom: 6 }}>Sua cor no chat (as outras pessoas veem assim):</div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {PALETA_CORES.map(c => (
+              <span key={c} onClick={() => escolherCor(c)} style={{ width: 28, height: 28, borderRadius: '50%', background: c, cursor: 'pointer', display: 'inline-block', border: (porId[euId] && porId[euId].cor_chat) === c ? '3px solid #222' : '2px solid #fff', boxShadow: '0 0 0 1px #ccc' }} />
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* seletor de conversa (Todos / colegas) */}
       <div style={{ display: 'flex', gap: 6, padding: '8px 10px', overflowX: 'auto', background: '#fff', borderBottom: '1px solid #ddd', flexShrink: 0 }}>
@@ -224,10 +248,11 @@ export default function ChatMobile() {
         {visiveis.map(m => {
           const meu = m.autor_id === euId
           const cit = m.respondendo_a ? msgs.find(x => x.id === m.respondendo_a) : null
+          const corAutor = corDe(m.autor_id)
           return (
             <div key={m.id} style={{ display: 'flex', justifyContent: meu ? 'flex-end' : 'flex-start', marginBottom: 8 }}>
-              <div style={{ maxWidth: '82%', background: meu ? BOLHA_MINHA : '#fff', borderRadius: 9, padding: '7px 9px', boxShadow: '0 1px 1px rgba(0,0,0,.08)', position: 'relative' }}>
-                {!meu && <div style={{ fontSize: 11.5, fontWeight: 700, color: VERDE_ESCURO, marginBottom: 2 }}>{nomeDe(m.autor_id) || 'colega'}</div>}
+              <div style={{ maxWidth: '82%', background: meu ? BOLHA_MINHA : '#fff', borderLeft: '4px solid ' + corAutor, borderRadius: 9, padding: '7px 9px', boxShadow: '0 1px 1px rgba(0,0,0,.08)', position: 'relative' }}>
+                {!meu && <div style={{ fontSize: 11.5, fontWeight: 700, color: corAutor, marginBottom: 2 }}>{nomeDe(m.autor_id) || 'colega'}</div>}
                 {cit && (
                   <div style={{ borderLeft: '3px solid ' + VERDE, background: 'rgba(0,0,0,.04)', borderRadius: 4, padding: '4px 7px', marginBottom: 4, fontSize: 12, color: '#556' }}>
                     <b>{cit.autor_id === euId ? 'você' : (nomeDe(cit.autor_id) || 'colega')}</b><br />{cit.texto.slice(0, 120)}
