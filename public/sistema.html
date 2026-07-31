@@ -13516,7 +13516,7 @@ async function monitTrazerAssessoria(id){
    a quem é destinatário. ===================================================================== */
 (function(){
   var LIDO='cmp_chat_lido', MIN='cmp_chat_min';
-  var eu=null, euNome='', ultimoId=0, pessoas=[], msgs=[], pronto=false;
+  var eu=null, euNome='', ultimoId=0, pessoas=[], porId={}, msgs=[], pronto=false;
   function esperaSessao(){ if(window.__sb && window.__sb.auth){ iniciar(); } else { setTimeout(esperaSessao,800); } }
   function h(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
   function hora(iso){ try{ var d=new Date(iso); return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }catch(e){ return ''; } }
@@ -13578,7 +13578,7 @@ async function monitTrazerAssessoria(id){
     el.innerHTML=msgs.map(function(m){
       var meu=(m.autor_id===eu);
       var priv=!!m.para_id;
-      var quem=meu?'você':(m.autor_nome||'colega');
+      var quem=meu?'você':(nomeDe(m.autor_id)||m.autor_nome||'colega');
       var alvo=priv?(meu?(' → '+(nomeDe(m.para_id)||'privado')):' (privado p/ você)'):'';
       return '<div style="margin:0 0 7px;'+(meu?'text-align:right':'')+'">'
         +'<div style="display:inline-block;max-width:88%;text-align:left;background:'+(meu?'#fff6c9':'#fffdf3')+';border:1px solid '+(priv?'#d9b64c':'#e6dfae')+';border-radius:9px;padding:6px 9px">'
@@ -13587,12 +13587,20 @@ async function monitTrazerAssessoria(id){
     }).join('');
     rolar();
   }
-  function nomeDe(id){ var p=pessoas.find(function(x){return x.id===id;}); return p?p.nome:''; }
+  /* nome pelo autor_id, resolvido AGORA a partir do banco — nunca confia no
+     autor_nome gravado na mensagem (foi ele que causou o bug: se a página de
+     quem mandou ainda não tinha carregado o nome de verdade no #who-name,
+     salvava o nome ERRADO na mensagem). Assim, até mensagens antigas com o
+     nome errado gravado passam a exibir certo, porque o nome vem do cadastro. */
+  function nomeDe(id){ var p=porId[id]; return p?p.nome:''; }
 
   async function carregarPessoas(){
     try{
       var r=await window.__sb.from('usuarios').select('id,nome').order('nome');
-      pessoas=(r.data||[]).filter(function(u){ return u.id!==eu; });
+      var todos=r.data||[];
+      porId={}; todos.forEach(function(u){ porId[u.id]=u; });
+      if(eu && porId[eu] && porId[eu].nome) euNome=porId[eu].nome;
+      pessoas=todos.filter(function(u){ return u.id!==eu; });
       var s=document.getElementById('cmp-chat-para'); if(!s) return;
       s.innerHTML='<option value="">👥 Todos</option>'+pessoas.map(function(p){ return '<option value="'+p.id+'">🔒 '+h((p.nome||'').split(' ')[0])+'</option>'; }).join('');
     }catch(e){}
@@ -13637,9 +13645,13 @@ async function monitTrazerAssessoria(id){
     try{
       var u=await window.__sb.auth.getUser();
       eu=u&&u.data&&u.data.user&&u.data.user.id; if(!eu){ pronto=false; setTimeout(esperaSessao,2000); return; }
-      euNome=((document.getElementById('who-name')||{}).textContent||'').trim()||((u.data.user.email||'').split('@')[0]);
+      /* nome provisório (some assim que carregarPessoas() resolver o nome real
+         do banco — nunca lemos #who-name aqui: na hora em que a página abre,
+         esse campo pode ainda estar com o texto fixo do HTML, de outra pessoa,
+         e não com o nome de quem está logado agora) */
+      euNome=(u.data.user.email||'').split('@')[0];
     }catch(e){ pronto=false; setTimeout(esperaSessao,2000); return; }
-    montar(); await carregarPessoas(); await carregar();
+    await carregarPessoas(); montar(); await carregar();
     try{
       window.__sb.channel('chat-cmp')
         .on('postgres_changes',{event:'INSERT',schema:'public',table:'chat_mensagens'},function(p){ chegou(p.new); })
