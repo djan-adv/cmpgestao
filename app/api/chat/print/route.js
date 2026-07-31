@@ -1,10 +1,12 @@
-// Upload de "print" (captura de tela) pro chat interno da equipe.
+// Upload de anexo (print, PDF, Word, planilha, qualquer arquivo) pro chat
+// interno da equipe.
 //
-// A imagem NÃO entra na tabela chat_mensagens (ficaria pesada e bagunçaria o
+// O arquivo NÃO entra na tabela chat_mensagens (ficaria pesado e bagunçaria o
 // histórico) — sobe pro Storage 'capturas' (mesmo bucket já usado pelos
 // anexos de histórico/lead) e vira uma linha em `anexos`. O cliente grava a
-// mensagem do chat com um texto curto ("📷 print enviado") + o id do anexo
-// devolvido aqui, e mostra a imagem via /api/anexo (rota já existente).
+// mensagem do chat com um texto curto ("📷 print enviado" ou "📎 nome.ext") +
+// o id do anexo devolvido aqui, e mostra/baixa o arquivo via /api/anexo (rota
+// já existente) — imagem mostra inline, o resto vira um link pra abrir/baixar.
 //
 //   POST /api/chat/print   (Authorization: Bearer <jwt>)
 //   body: { nome, tipo, b64 }   -> { ok:true, id }
@@ -15,7 +17,7 @@ import crypto from 'crypto'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
 
-const MAX_BYTES = 8 * 1024 * 1024
+const MAX_BYTES = 15 * 1024 * 1024
 
 function admin() {
   return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } })
@@ -31,14 +33,13 @@ export async function POST(request) {
 
   let body
   try { body = await request.json() } catch (e) { return Response.json({ erro: 'json inválido' }, { status: 400 }) }
-  const tipo = String(body.tipo || '')
-  if (!/^image\//.test(tipo)) return Response.json({ erro: 'só imagens são aceitas' }, { status: 400 })
+  const tipo = String(body.tipo || 'application/octet-stream')
   const b64 = String(body.b64 || '')
   if (!b64) return Response.json({ erro: 'arquivo vazio' }, { status: 400 })
   let buf
   try { buf = Buffer.from(b64, 'base64') } catch (e) { return Response.json({ erro: 'base64 inválido' }, { status: 400 }) }
   if (!buf.length) return Response.json({ erro: 'arquivo vazio' }, { status: 400 })
-  if (buf.length > MAX_BYTES) return Response.json({ erro: 'imagem maior que 8 MB' }, { status: 400 })
+  if (buf.length > MAX_BYTES) return Response.json({ erro: 'arquivo maior que 15 MB' }, { status: 400 })
 
   const sb = admin()
   const perfil = await sb.from('usuarios').select('escritorio_id,nome').eq('id', user.id).single()

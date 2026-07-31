@@ -13716,9 +13716,11 @@ async function monitTrazerAssessoria(id){
   function montar(){
     if(document.getElementById('cmp-chat')) return;
     var d=document.createElement('div'); d.id='cmp-chat';
-    d.style.cssText='position:fixed;right:16px;bottom:0;width:390px;max-width:94vw;z-index:95;font-family:inherit;font-size:13px;color:#1b1b1b';
+    var tam=_tamSalvo();
+    d.style.cssText='position:fixed;right:16px;bottom:0;width:'+(tam?tam.w:390)+'px;max-width:94vw;z-index:95;font-family:inherit;font-size:13px;color:#1b1b1b';
     d.innerHTML=
       '<div id="cmp-chat-bar" style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:rgba(250,240,170,.97);border:1px solid #e0d9a0;border-bottom:none;border-radius:12px 12px 0 0;cursor:pointer;box-shadow:0 -2px 14px rgba(0,0,0,.10)">'
+      +'<span id="cmp-chat-resize" title="Arraste para aumentar o chat (para cima e para o lado)" style="cursor:nwse-resize;color:#8a8355;padding:2px 4px;user-select:none;touch-action:none;font-size:14px">⤡</span>'
       +'<b style="color:#1b1b1b">💬 Chat da equipe</b>'
       +'<span id="cmp-chat-badge" style="display:none;background:#b5342b;color:#fff;border-radius:10px;font-size:11px;font-weight:700;padding:1px 7px"></span>'
       +'<button id="cmp-chat-cor" title="Escolher minha cor no chat" style="margin-left:auto;border:0;background:transparent;font-size:15px;line-height:1;cursor:pointer;padding:2px 4px">🎨</button>'
@@ -13726,13 +13728,13 @@ async function monitTrazerAssessoria(id){
       +'<div id="cmp-chat-corpicker" style="display:none;padding:8px 10px;border-bottom:1px solid #e6dfae;background:#fffdf0"></div>'
       +'<div id="cmp-chat-corpo" style="display:none;background:rgba(255,250,205,.94);border:1px solid #e0d9a0;border-top:none;backdrop-filter:blur(2px);box-shadow:0 -2px 14px rgba(0,0,0,.10)">'
       +'<div id="cmp-chat-pinbar" style="padding:7px 10px;border-bottom:1px solid #e6dfae;font-size:12px"></div>'
-      +'<div id="cmp-chat-msgs" style="height:250px;overflow:auto;padding:10px 12px;line-height:1.45"></div>'
+      +'<div id="cmp-chat-msgs" style="height:'+(tam?tam.h:250)+'px;overflow:auto;padding:10px 12px;line-height:1.45"></div>'
       +'<div id="cmp-chat-reply" style="display:none;padding:6px 10px;border-top:1px solid #e6dfae;background:#fdf6d8;font-size:12px"></div>'
       +'<div style="display:flex;gap:6px;padding:8px;border-top:1px solid #e0d9a0;align-items:center">'
       +'<select id="cmp-chat-para" title="Para quem vai a mensagem" style="max-width:120px;font-size:12px;padding:6px;border:1px solid #d8d093;border-radius:7px;background:#fffdf0;color:#1b1b1b"><option value="">👥 Todos</option></select>'
       +'<input id="cmp-chat-txt" placeholder="escreva, tecle Enter ou cole um print…" style="flex:1;font-size:13px;padding:7px 9px;border:1px solid #d8d093;border-radius:7px;background:#fffdf0;color:#1b1b1b">'
-      +'<button id="cmp-chat-print" title="Enviar print (ou cole com Ctrl+V no campo de texto)" style="border:0;background:transparent;font-size:16px;cursor:pointer;padding:4px 6px">📷</button>'
-      +'<input type="file" id="cmp-chat-printfile" accept="image/*" style="display:none">'
+      +'<button id="cmp-chat-print" title="Anexar arquivo (print, PDF, Word, planilha… ou cole um print com Ctrl+V no campo de texto)" style="border:0;background:transparent;font-size:16px;cursor:pointer;padding:4px 6px">📎</button>'
+      +'<input type="file" id="cmp-chat-printfile" style="display:none">'
       +'<button id="cmp-chat-env" style="border:0;background:#5a5326;color:#fff;border-radius:7px;padding:7px 11px;font-weight:700;cursor:pointer">➤</button>'
       +'</div></div>';
     document.body.appendChild(d);
@@ -13740,19 +13742,48 @@ async function monitTrazerAssessoria(id){
     d.querySelector('#cmp-chat-bar').onclick=function(){ abrir(); };
     d.querySelector('#cmp-chat-min').onclick=function(ev){ ev.stopPropagation(); alternar(); };
     d.querySelector('#cmp-chat-cor').onclick=function(ev){ ev.stopPropagation(); alternarSeletorCor(); };
+    d.querySelector('#cmp-chat-resize').addEventListener('pointerdown', function(ev){ ev.stopPropagation(); iniciarResize(ev); });
     d.querySelector('#cmp-chat-env').onclick=enviar;
     d.querySelector('#cmp-chat-print').onclick=function(){ document.getElementById('cmp-chat-printfile').click(); };
-    d.querySelector('#cmp-chat-printfile').onchange=function(e){ var f=e.target.files&&e.target.files[0]; e.target.value=''; if(f) enviarPrint(f); };
+    d.querySelector('#cmp-chat-printfile').onchange=function(e){ var f=e.target.files&&e.target.files[0]; e.target.value=''; if(f) enviarAnexo(f); };
     var t=d.querySelector('#cmp-chat-txt');
     t.onkeydown=function(e){ if(e.key==='Enter'){ e.preventDefault(); enviar(); } };
     t.onfocus=marcarLido;
     t.addEventListener('paste', function(e){
       var cd=e.clipboardData; if(!cd) return;
-      var files=Array.prototype.filter.call(cd.files||[], function(f){ return /^image\//.test(f.type); });
-      if(files.length){ e.preventDefault(); enviarPrint(files[0]); }
+      var files=Array.prototype.slice.call(cd.files||[]);
+      if(files.length){ e.preventDefault(); enviarAnexo(files[0]); }
     });
     pintarPin(); pintarReply();
     if(minimizado()) fechar(); else abrir(true);
+  }
+  /* tamanho do chat (largura e altura da área de mensagens) escolhido pelo
+     usuário arrastando o "⤡" — fica salvo por aparelho, então cada um pode
+     deixar o chat maior sem afetar os outros. */
+  var TAM_KEY='cmp_chat_tam';
+  function _tamSalvo(){ try{ var s=JSON.parse(localStorage.getItem(TAM_KEY)||'null'); if(s&&s.w>=320&&s.h>=150) return s; }catch(e){} return null; }
+  function _tamSalvar(w,h){ try{ localStorage.setItem(TAM_KEY,JSON.stringify({w:w,h:h})); }catch(e){} }
+  function iniciarResize(ev){
+    var d=document.getElementById('cmp-chat'), msgsEl=document.getElementById('cmp-chat-msgs');
+    if(!d||!msgsEl) return;
+    var startX=ev.clientX, startY=ev.clientY;
+    var startW=d.getBoundingClientRect().width, startH=msgsEl.getBoundingClientRect().height;
+    var MINW=320, MAXW=Math.round(window.innerWidth*0.94);
+    var MINH=150, MAXH=Math.round(window.innerHeight*0.8);
+    document.body.style.userSelect='none';
+    function mover(e){
+      var w=Math.min(MAXW,Math.max(MINW, startW+(startX-e.clientX)));
+      var hh=Math.min(MAXH,Math.max(MINH, startH+(startY-e.clientY)));
+      d.style.width=w+'px'; msgsEl.style.height=hh+'px';
+    }
+    function soltar(){
+      document.removeEventListener('pointermove',mover);
+      document.removeEventListener('pointerup',soltar);
+      document.body.style.userSelect='';
+      _tamSalvar(parseInt(d.style.width,10)||390, parseInt(msgsEl.style.height,10)||250);
+    }
+    document.addEventListener('pointermove',mover);
+    document.addEventListener('pointerup',soltar);
   }
   function abrir(semSalvar){
     var c=document.getElementById('cmp-chat-corpo'); if(!c) return;
@@ -13879,13 +13910,20 @@ async function monitTrazerAssessoria(id){
       }
       var chipProc=m.processo_id?('<div style="margin-top:3px;font-size:10.5px;color:#7a5b00">🔗 '+h(_procRotuloPorId(m.processo_id))+'</div>'):'';
       var corAutor=_corPara(m.autor_id);
-      var imgHtml=m.imagem_anexo_id?('<div style="margin-top:4px"><img src="/api/anexo?id='+encodeURIComponent(m.imagem_anexo_id)+'&jwt='+encodeURIComponent(chatJwt)+'" style="max-width:220px;max-height:220px;border-radius:6px;cursor:pointer;display:block" onclick="window.open(this.src,\'_blank\')" title="Abrir em tamanho maior"></div>'):'';
+      var anexoHtml='';
+      if(m.imagem_anexo_id){
+        var ehImg=!m.anexo_tipo||/^image\//.test(m.anexo_tipo);
+        var srcAnexo='/api/anexo?id='+encodeURIComponent(m.imagem_anexo_id)+'&jwt='+encodeURIComponent(chatJwt);
+        anexoHtml=ehImg
+          ?('<div style="margin-top:4px"><img src="'+srcAnexo+'" style="max-width:220px;max-height:220px;border-radius:6px;cursor:pointer;display:block" onclick="window.open(this.src,\'_blank\')" title="Abrir em tamanho maior"></div>')
+          :('<div style="margin-top:4px"><a href="'+srcAnexo+'" target="_blank" style="display:inline-flex;align-items:center;gap:5px;background:#fff3b0;border:1px solid #d9b64c;border-radius:7px;padding:4px 9px;color:#5a4a00;text-decoration:none;font-size:12px">📎 '+h(m.anexo_nome||'anexo')+'</a></div>');
+      }
       return '<div style="margin:0 0 7px;'+(meu?'text-align:right':'')+'">'
         +'<div style="display:inline-block;max-width:88%;text-align:left;background:'+(meu?'#fff6c9':'#fffdf3')+';border:1px solid '+(priv?'#d9b64c':'#e6dfae')+';border-left:4px solid '+corAutor+';border-radius:9px;padding:6px 9px">'
         +'<div style="font-size:11px;color:'+corAutor+';font-weight:700">'+h(quem)+h(alvo)+' · <span style="color:#6b6540;font-weight:400">'+hora(m.criado_em)+(priv?' 🔒':'')+'</span> <a onclick="__cmpChat.responderA('+m.id+')" title="Responder" style="cursor:pointer;color:#8a8355;font-weight:400;margin-left:4px">↩</a></div>'
         +citada
         +'<div style="white-space:pre-wrap;word-break:break-word">'+h(m.texto)+'</div>'
-        +imgHtml
+        +anexoHtml
         +chipProc+'</div></div>';
     }).join('');
     rolar();
@@ -13978,26 +14016,31 @@ async function monitTrazerAssessoria(id){
   async function _atualizaChatJwt(){
     try{ var s=await window.__sb.auth.getSession(); chatJwt=(s&&s.data&&s.data.session&&s.data.session.access_token)||chatJwt; }catch(e){}
   }
-  /* envia um "print" (screenshot): sobe a imagem (fora do chat_mensagens, que
-     ficaria pesado) e grava a mensagem com texto curto + o id do anexo */
-  async function enviarPrint(file){
+  /* envia um anexo (print ou qualquer arquivo): sobe o arquivo (fora do
+     chat_mensagens, que ficaria pesado) e grava a mensagem com texto curto +
+     o id do anexo. imagem_anexo_id guarda o id em qualquer caso (o nome é
+     antigo, de quando só existia print) — anexo_tipo/anexo_nome dizem se é
+     imagem (mostra inline) ou outro arquivo (mostra como link). */
+  async function enviarAnexo(file){
     if(!file) return;
-    if(file.size>8*1024*1024){ alert('Esse print tem mais de 8 MB — reduza e tente de novo.'); return; }
+    if(file.size>15*1024*1024){ alert('Esse arquivo tem mais de 15 MB — reduza e tente de novo.'); return; }
+    var ehImagem=/^image\//.test(file.type||'');
     try{
       var b64=await new Promise(function(resolve,reject){ var r=new FileReader(); r.onload=function(){ resolve(String(r.result||'').split(',')[1]||''); }; r.onerror=reject; r.readAsDataURL(file); });
       await _atualizaChatJwt();
-      var up=await fetch('/api/chat/print',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+chatJwt},body:JSON.stringify({nome:file.name||'print.png',tipo:file.type||'image/png',b64:b64})});
+      var up=await fetch('/api/chat/print',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+chatJwt},body:JSON.stringify({nome:file.name||(ehImagem?'print.png':'arquivo'),tipo:file.type||'application/octet-stream',b64:b64})});
       var j=await up.json().catch(function(){return {};});
-      if(!up.ok||j.erro){ alert('Não deu pra enviar o print: '+(j.erro||('HTTP '+up.status))); return; }
+      if(!up.ok||j.erro){ alert('Não deu pra enviar o anexo: '+(j.erro||('HTTP '+up.status))); return; }
       var para=(document.getElementById('cmp-chat-para')||{}).value||null;
       var respId=respondendoA?respondendoA.id:null;
       var procId=pin?pin.id:null;
-      var r=await window.__sb.from('chat_mensagens').insert({texto:'📷 print enviado', para_id:para||null, autor_nome:euNome, respondendo_a:respId, processo_id:procId, imagem_anexo_id:j.id}).select('*').single();
+      var texto=ehImagem?'📷 print enviado':('📎 '+(file.name||'arquivo enviado'));
+      var r=await window.__sb.from('chat_mensagens').insert({texto:texto, para_id:para||null, autor_nome:euNome, respondendo_a:respId, processo_id:procId, imagem_anexo_id:j.id, anexo_nome:file.name||null, anexo_tipo:file.type||null}).select('*').single();
       if(r.error){ alert('Não enviou: '+r.error.message); return; }
       cancelarResposta();
       chegou(r.data);
-      _notificarPush('📷 print enviado', para);
-    }catch(e){ alert('Erro ao enviar o print: '+(e&&e.message||e)); }
+      _notificarPush(texto, para);
+    }catch(e){ alert('Erro ao enviar o anexo: '+(e&&e.message||e)); }
   }
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',esperaSessao); else esperaSessao();
   /* ponte para os onclick inline (o dock inteiro vive numa closure) */
@@ -14047,12 +14090,19 @@ async function renderChatDoProcesso(processoId, mostrarArquivadas){
       var quem=nomes[m.autor_id]||'colega'; var corAutor=_corDe(m.autor_id);
       var cit=m.respondendo_a&&citadas[m.respondendo_a]?citadas[m.respondendo_a]:null;
       var citHtml=cit?('<div style="border-left:3px solid #d9b64c;padding-left:8px;margin-bottom:5px;color:#7a7550;font-size:12.5px"><b>'+_cpEsc(nomes[cit.autor_id]||'colega')+'</b><br>'+_cpEsc(cit.texto)+'</div>'):'';
-      var imgHtml=m.imagem_anexo_id?('<div style="margin:4px 0"><img src="/api/anexo?id='+encodeURIComponent(m.imagem_anexo_id)+'&jwt='+encodeURIComponent(_cpJwt)+'" style="max-width:220px;max-height:220px;border-radius:6px;cursor:pointer;display:block" onclick="window.open(this.src,\'_blank\')" title="Abrir em tamanho maior"></div>'):'';
+      var anexoHtml='';
+      if(m.imagem_anexo_id){
+        var ehImg=!m.anexo_tipo||/^image\//.test(m.anexo_tipo);
+        var srcAnexo='/api/anexo?id='+encodeURIComponent(m.imagem_anexo_id)+'&jwt='+encodeURIComponent(_cpJwt);
+        anexoHtml=ehImg
+          ?('<div style="margin:4px 0"><img src="'+srcAnexo+'" style="max-width:220px;max-height:220px;border-radius:6px;cursor:pointer;display:block" onclick="window.open(this.src,\'_blank\')" title="Abrir em tamanho maior"></div>')
+          :('<div style="margin:4px 0"><a href="'+srcAnexo+'" target="_blank" style="display:inline-flex;align-items:center;gap:5px;background:#fff3b0;border:1px solid #d9b64c;border-radius:7px;padding:4px 9px;color:#5a4a00;text-decoration:none;font-size:12px">📎 '+_cpEsc(m.anexo_nome||'anexo')+'</a></div>');
+      }
       var btn=arquivada?('<a onclick="_cpDesarquivar(\''+processoId+'\','+m.id+')" style="cursor:pointer;color:#185FA5;font-size:11.5px">↩ desarquivar</a>'):('<a onclick="_cpArquivar(\''+processoId+'\','+m.id+')" style="cursor:pointer;color:#8a6d00;font-size:11.5px">📥 arquivar</a>');
       return '<div style="border:1px solid '+(arquivada?'#eef1f5':'#e6dfae')+';border-left:4px solid '+corAutor+';background:'+(arquivada?'#f7f8fa':'#fffdf3')+';border-radius:9px;padding:8px 10px;margin-bottom:8px'+(arquivada?';opacity:.75':'')+'">'
         +'<div style="display:flex;justify-content:space-between;gap:8px;align-items:start"><b style="color:'+corAutor+';font-size:12.5px">'+_cpEsc(quem)+'</b><span class="note" style="font-size:11px;white-space:nowrap">'+_cpHora(m.criado_em)+'</span></div>'
         +citHtml+'<div style="margin:3px 0;white-space:pre-wrap;word-break:break-word;font-size:13px">'+_cpEsc(m.texto)+'</div>'
-        +imgHtml
+        +anexoHtml
         +'<div style="text-align:right">'+btn+'</div></div>';
     }
     var html=ativos.map(function(m){ return linha(m,false); }).join('');
