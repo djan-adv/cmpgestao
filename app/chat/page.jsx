@@ -24,6 +24,29 @@ function rotuloProcesso(p) {
 }
 const PALETA_CORES = ['#8a3b8f', '#1f7a44', '#185FA5', '#b5342b', '#6d4aa8', '#0b7285', '#7a4b00', '#c2185b']
 
+// VAPID public key vem em base64url — o Push API exige Uint8Array
+function chaveVapidParaBytes(base64url) {
+  const pad = '='.repeat((4 - (base64url.length % 4)) % 4)
+  const base64 = (base64url + pad).replace(/-/g, '+').replace(/_/g, '/')
+  const bruto = atob(base64)
+  const bytes = new Uint8Array(bruto.length)
+  for (let i = 0; i < bruto.length; i++) bytes[i] = bruto.charCodeAt(i)
+  return bytes
+}
+async function chamarPush(acao, extra) {
+  try {
+    const { data } = await supabase.auth.getSession()
+    const token = data && data.session && data.session.access_token
+    if (!token) return null
+    const r = await fetch('/api/chat/push', {
+      method: acao === 'get' ? 'GET' : 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: acao === 'get' ? undefined : JSON.stringify({ acao, ...extra }),
+    })
+    return await r.json()
+  } catch (e) { return null }
+}
+
 export default function ChatMobile() {
   const [carregando, setCarregando] = useState(true)
   const [user, setUser] = useState(null)
@@ -43,6 +66,7 @@ export default function ChatMobile() {
   const [buscaTxt, setBuscaTxt] = useState('')
   const [buscaResultados, setBuscaResultados] = useState([])
   const [seletorCor, setSeletorCor] = useState(false)
+  const [pushEstado, setPushEstado] = useState('verificando') // verificando | indisponivel | desativado | ativando | ativado
   const procNomesRef = useRef({})
   const [procTick, setProcTick] = useState(0) // só para forçar repintar quando um nome chega
   const scrollRef = useRef(null)
@@ -92,6 +116,38 @@ export default function ChatMobile() {
     setPorId(m => ({ ...m, [euId]: { ...(m[euId] || {}), cor_chat: cor } }))
     setSeletorCor(false)
     try { await supabase.from('usuarios').update({ cor_chat: cor }).eq('id', euId) } catch { }
+  }
+
+  // ---------- alarme (push notification) ----------
+  useEffect(() => {
+    if (!euId) return
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) { setPushEstado('indisponivel'); return }
+    navigator.serviceWorker.register('/chat-sw.js', { scope: '/' }).then(async (reg) => {
+      const sub = await reg.pushManager.getSubscription()
+      setPushEstado(sub ? 'ativado' : 'desativado')
+    }).catch(() => setPushEstado('indisponivel'))
+  }, [euId])
+
+  async function ativarAlarme() {
+    if (pushEstado === 'ativado') return
+    setPushEstado('ativando')
+    try {
+      const permissao = await Notification.requestPermission()
+      if (permissao !== 'granted') { setPushEstado('desativado'); alert('Permissão negada. Pra ativar depois, habilite notificações deste site nas configurações do navegador.'); return }
+      const chave = await chamarPush('get')
+      if (!chave || !chave.publicKey) { setPushEstado('indisponivel'); return }
+      const reg = await navigator.serviceWorker.register('/chat-sw.js', { scope: '/' })
+      await navigator.serviceWorker.ready
+      let sub = await reg.pushManager.getSubscription()
+      if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: chaveVapidParaBytes(chave.publicKey) })
+      await chamarPush('subscribe', { subscription: sub.toJSON() })
+      setPushEstado('ativado')
+    } catch (e) { setPushEstado('desativado'); alert('Não deu pra ativar o alarme: ' + (e && e.message || e)) }
+  }
+
+  function notificarEnvio(payload) {
+    // dispara e esquece — não deve travar/atrasar o envio da mensagem
+    chamarPush('notificar', { autor_id: euId, autor_nome: payload.autor_nome, texto: payload.texto, para_id: payload.para_id })
   }
 
   // ---------- mensagens ----------
@@ -177,6 +233,7 @@ export default function ChatMobile() {
     if (r.error) { alert('Não enviou: ' + r.error.message); setTexto(t); return }
     setMsgs(cur => cur.some(m => m.id === r.data.id) ? cur : [...cur, r.data])
     if (r.data.id > ultimoIdRef.current) ultimoIdRef.current = r.data.id
+    notificarEnvio(payload)
   }
 
   // ---------------- telas ----------------
@@ -211,6 +268,12 @@ export default function ChatMobile() {
       <div style={{ background: VERDE_ESCURO, color: '#fff', padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
         <div style={{ fontWeight: 700, fontSize: 16 }}>{alvo ? alvo.nome : '👥 Todos (equipe)'}</div>
         <button onClick={() => { setBuscaAberta(true); buscarProcessos('') }} title="Falar sobre um processo" style={{ marginLeft: 'auto', background: 'rgba(255,255,255,.15)', border: 0, color: '#fff', borderRadius: 8, padding: '6px 10px', fontSize: 13, cursor: 'pointer' }}>🔍 processo</button>
+        {pushEstado !== 'indisponivel' && (
+          <button onClick={ativarAlarme} disabled={pushEstado === 'ativando' || pushEstado === 'verificando'} title={pushEstado === 'ativado' ? 'Alarme ativado — você recebe notificação mesmo com o app fechado' : 'Ativar alarme (notificação no celular)'}
+            style={{ background: pushEstado === 'ativado' ? 'rgba(255,255,255,.3)' : 'rgba(255,255,255,.15)', border: 0, color: '#fff', borderRadius: 8, padding: '6px 10px', fontSize: 13, cursor: pushEstado === 'ativando' ? 'default' : 'pointer' }}>
+            {pushEstado === 'ativado' ? '🔔 ativado' : pushEstado === 'ativando' ? '🔔 …' : '🔕 ativar alarme'}
+          </button>
+        )}
         <button onClick={() => setSeletorCor(s => !s)} title="Escolher minha cor" style={{ background: 'rgba(255,255,255,.15)', border: 0, color: '#fff', borderRadius: 8, padding: '6px 10px', fontSize: 13, cursor: 'pointer' }}>🎨</button>
         <button onClick={sair} title="Sair" style={{ background: 'rgba(255,255,255,.15)', border: 0, color: '#fff', borderRadius: 8, padding: '6px 10px', fontSize: 13, cursor: 'pointer' }}>Sair</button>
       </div>

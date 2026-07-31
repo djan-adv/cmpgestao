@@ -13745,6 +13745,15 @@ async function monitTrazerAssessoria(id){
       (r.data||[]).forEach(chegou);
     }catch(e){}
   }
+  async function _notificarPush(texto, paraId){
+    /* dispara e esquece — alarme (push) pro celular; nunca deve travar o envio */
+    try{
+      var s=await window.__sb.auth.getSession();
+      var token=s&&s.data&&s.data.session&&s.data.session.access_token; if(!token) return;
+      fetch('/api/chat/push',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},
+        body:JSON.stringify({acao:'notificar', autor_id:eu, autor_nome:euNome, texto:texto, para_id:paraId||null})}).catch(function(){});
+    }catch(e){}
+  }
   async function enviar(){
     var t=document.getElementById('cmp-chat-txt'); if(!t) return;
     var texto=(t.value||'').trim(); if(!texto) return;
@@ -13755,6 +13764,7 @@ async function monitTrazerAssessoria(id){
     var r=await window.__sb.from('chat_mensagens').insert({texto:texto, para_id:para||null, autor_nome:euNome, respondendo_a:respId, processo_id:procId}).select('*').single();
     if(r.error){ alert('Não enviou: '+r.error.message); t.value=texto; return; }
     chegou(r.data);
+    _notificarPush(texto, para);
   }
 
   async function iniciar(){
