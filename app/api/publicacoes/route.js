@@ -116,19 +116,24 @@ export async function GET(request) {
   const resultado = {}
   for (const [chave, site] of Object.entries(SITES)) {
     const { posts, via } = await lerPostsPublicos(site)
-    let novos = 0
-    for (const p of posts) {
-      if (!p.titulo) continue
-      const up = await db.from('publicacoes').upsert({
-        site: chave, wp_post_id: p.wp_post_id, titulo: p.titulo, link: p.link,
-        resumo: p.resumo || null, status: 'publicado', origem: 'importado',
-        publicado_em: p.publicado_em, atualizado_em: new Date().toISOString(),
-      }, { onConflict: 'site,wp_post_id' }).select('id')
-      if (!up.error) novos++
+    const linhas = posts.filter(p => p.titulo).map(p => ({
+      site: chave, wp_post_id: p.wp_post_id, titulo: p.titulo, link: p.link,
+      resumo: p.resumo || null, status: 'publicado', origem: 'importado',
+      publicado_em: p.publicado_em, atualizado_em: new Date().toISOString(),
+    }))
+    let gravados = 0, erro = null
+    // grava em lotes; o erro NÃO pode ficar mudo (foi assim que a 1ª importação
+    // "concluiu" sem salvar nada por causa do índice parcial)
+    for (let i = 0; i < linhas.length; i += 50) {
+      const up = await db.from('publicacoes')
+        .upsert(linhas.slice(i, i + 50), { onConflict: 'site,wp_post_id' }).select('id')
+      if (up.error) { erro = up.error.message; break }
+      gravados += (up.data || []).length
     }
-    resultado[chave] = { via, lidos: posts.length, gravados: novos }
+    resultado[chave] = { via, lidos: linhas.length, gravados, ...(erro ? { erro } : {}) }
   }
-  return Response.json({ ok: true, resultado })
+  const falhou = Object.values(resultado).find(r => r.erro)
+  return Response.json({ ok: !falhou, resultado, ...(falhou ? { erro: 'Falha ao gravar: ' + falhou.erro } : {}) })
 }
 
 export async function POST(request) {
