@@ -112,7 +112,7 @@ function esc(s) {
 // ou { erro, status, repetido }. Nunca lança.
 // confirmarEventoId: id do evento da agenda — liga o botão "✅ Confirmo presença"
 // dentro do e-mail; o clique do cliente confirma o evento sozinho.
-export async function enviarEmailCore({ para, cc, assunto, corpo, numero, dedup = true, inReplyTo = '', confirmarEventoId = null }) {
+export async function enviarEmailCore({ para, cc, assunto, corpo, numero, dedup = true, inReplyTo = '', confirmarEventoId = null, anexos = [] }) {
   const host = process.env.SMTP_HOST
   const port = parseInt(process.env.SMTP_PORT || '465', 10)
   const smtpUser = process.env.SMTP_USER
@@ -164,6 +164,18 @@ export async function enviarEmailCore({ para, cc, assunto, corpo, numero, dedup 
       logoTag = '<img src="cid:logocmp" alt="Crispim Mendonça e Pinheiro Advogados" style="height:56px;margin-bottom:6px">'
     }
   } catch (e) {}
+
+  // anexos escolhidos pelo advogado (ex.: a sentença, um comprovante) — vêm em
+  // base64 do navegador. 9 MB por arquivo: acima disso o SMTP costuma recusar.
+  const MAX_ANEXO = 9 * 1024 * 1024
+  for (const a of (Array.isArray(anexos) ? anexos : [])) {
+    if (!a || !a.filename || !a.content_base64) continue
+    let buf
+    try { buf = Buffer.from(String(a.content_base64), 'base64') } catch (e) { continue }
+    if (!buf.length) continue
+    if (buf.length > MAX_ANEXO) return { erro: 'o anexo "' + a.filename + '" passa de 9 MB — escolha um arquivo menor.', status: 400 }
+    attachments.push({ filename: String(a.filename).slice(0, 180), content: buf })
+  }
 
   // rastreio: pixel de abertura + (se for aviso de audiência) botão de confirmar
   const tokenRastreio = await criarRastreio({ para, numero, assunto, eventoId: confirmarEventoId })
