@@ -390,7 +390,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
       </div>
       <div id="crm-contatos">
         <div class="kpis" id="crm-kpis"></div>
-        <div class="searchbar"><input id="buscaCli" placeholder="Buscar por nome, tipo, telefone, origem..." oninput="renderContatos()"><span class="note" id="cli-count" style="align-self:center"></span><button class="btn sm" style="background:#6d28a8;color:#fff;border-color:#6d28a8;line-height:1.15;padding:5px 12px;text-align:center" onclick="mesclarContatos()" title="Marque 2+ contatos da mesma pessoa (nas caixinhas): você escolhe o nome que fica e todos os processos desse cliente são sincronizados">⛒ Mesclar<br><span style="font-size:9px;font-weight:400;opacity:.85">sincroniza por cliente</span></button><select id="ordCli" onchange="renderContatos()" style="font-size:12px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--bg)" title="Ordenar a lista de contatos"><option value="az">Ordenar: A → Z</option><option value="proc">Mais processos ativos</option></select><button class="btn sm" style="margin-left:auto" onclick="novoContato()">+ Novo contato</button></div>
+        <div class="searchbar"><input id="buscaCli" placeholder="Buscar por nome, tipo, telefone, origem..." oninput="renderContatos()"><span class="note" id="cli-count" style="align-self:center"></span><button class="btn sm" style="background:#185FA5;color:#fff;border-color:#185FA5;line-height:1.15;padding:5px 12px;text-align:center" onclick="abrirContatosSemelhantes()" title="Agrupa contatos com nome, telefone ou e-mail parecidos — acha os candidatos a mesclar pra você">🔍 Achar semelhantes <span id="csm-badge" style="display:none;font-size:9px;font-weight:700;background:#fff;color:#185FA5;border-radius:9px;padding:0 6px;margin-left:2px"></span></button><button class="btn sm" style="background:#6d28a8;color:#fff;border-color:#6d28a8;line-height:1.15;padding:5px 12px;text-align:center" onclick="mesclarContatos()" title="Marque 2+ contatos da mesma pessoa (nas caixinhas): você escolhe o nome que fica e todos os processos desse cliente são sincronizados">⛒ Mesclar<br><span style="font-size:9px;font-weight:400;opacity:.85">sincroniza por cliente</span></button><select id="ordCli" onchange="renderContatos()" style="font-size:12px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--bg)" title="Ordenar a lista de contatos"><option value="az">Ordenar: A → Z</option><option value="proc">Mais processos ativos</option></select><button class="btn sm" style="margin-left:auto" onclick="novoContato()">+ Novo contato</button></div>
         <div class="card"><table><thead><tr><th style="width:30px" title="Marque 2+ da mesma pessoa e clique em Mesclar"></th><th>Nome</th><th>Tipo</th><th>Telefone</th><th>E-mail</th><th>Origem</th><th>Proc.</th><th>Editar</th><th>Excluir</th></tr></thead><tbody id="crm-body"></tbody></table></div>
       </div>
       <div id="crm-captacao" class="hidden">
@@ -2311,6 +2311,7 @@ function renderContatos(){
   document.getElementById("cli-count").textContent=f.length+" contatos";
   var ativos=LEADS.filter(function(l){return l.estagio!=="ganho"&&l.estagio!=="perdido";}).length;
   document.getElementById("crm-kpis").innerHTML=kpi("contatos",CONTATOS.length)+kpi("clientes",CONTATOS.filter(function(c){return c.tipo==="cliente";}).length)+kpi("leads ativos",ativos)+kpi("origem que + converte","Indicação");
+  try{ atualizaBadgeSemelhantes(); }catch(e){}
   var b=document.getElementById("crm-body");b.innerHTML="";
   f.slice(0,300).forEach(function(c){var tr=document.createElement("tr");
     tr.innerHTML='<td style="text-align:center"><input type="checkbox" class="cmerge" data-id="'+c.id+'"></td><td><b>'+esc(nomeBonito(c.nome))+'</b> '+chipsFor(c.labels)+'</td><td><span class="b '+(c.tipo==="lead"?"warn":"ok")+'">'+esc(c.tipo)+'</span></td><td>'+esc(c.tel)+_extrasChip(c,'telefones',c.tel)+'</td><td>'+esc(c.email)+_extrasChip(c,'emails',c.email)+'</td><td>'+esc(c.origem)+'</td><td>'+((c.proc>0)?'<a href="#" onclick="verProcessosDoContato('+c.id+');return false;" style="font-weight:700;color:var(--gold);text-decoration:none;border-bottom:1px dotted var(--gold);cursor:pointer" title="Ver os processos deste contato">'+c.proc+'</a>':'')+'</td><td><button class="btn sm ghost" onclick="editarContato('+c.id+')">Editar</button></td><td><button class="btn sm ghost" style="color:var(--danger)" onclick="excluirContato('+c.id+')">Excluir</button></td>';
@@ -3803,10 +3804,14 @@ function _mgLido(campo, itens){
   var i=r?parseInt(r.value,10):0;
   return (itens[i]||itens[0]).v;
 }
-function mesclarContatos(){
-  var checks=Array.prototype.slice.call(document.querySelectorAll('.cmerge:checked'));
-  if(checks.length<2){ alert('Marque 2 ou mais contatos (a mesma pessoa) nas caixinhas para mesclar.'); return; }
-  var ids=checks.map(function(x){ return parseInt(x.getAttribute('data-id'),10); });
+function mesclarContatos(idsForce){
+  var ids;
+  if(idsForce && idsForce.length){ ids=idsForce.slice(); }
+  else {
+    var checks=Array.prototype.slice.call(document.querySelectorAll('.cmerge:checked'));
+    if(checks.length<2){ alert('Marque 2 ou mais contatos (a mesma pessoa) nas caixinhas para mesclar.'); return; }
+    ids=checks.map(function(x){ return parseInt(x.getAttribute('data-id'),10); });
+  }
   var sel=ids.map(function(id){ return (CONTATOS||[]).find(function(c){return c.id===id;}); }).filter(Boolean);
   if(sel.length<2){ return; }
   /* sugestão: o nome mais completo (mais longo) — mas VOCÊ escolhe (ou digita um limpo) */
@@ -3838,7 +3843,8 @@ function mesclarContatos(){
     ((emails.length>1||tels.length>1)?('<div style="background:#e9f6f0;border:1px solid #bfe3d1;border-radius:9px;padding:9px 11px;margin-top:10px;font-size:12.5px;color:#0f5c46;line-height:1.5"><b>✓ Nada é apagado.</b> Todos os '+emails.length+' e-mail(s) e '+tels.length+' telefone(s) ficam guardados na ficha do contato. A escolha acima define apenas <b>qual é o principal</b> — o que o boleto e os e-mails do sistema usam.</div>'):'')+
     '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px"><button class="btn sm ghost" onclick="document.getElementById(\'merge-ov\').remove()">Cancelar</button><button class="btn sm gold" id="mg-ok">✓ Mesclar e sincronizar processos</button></div>'+
   '</div>';
-  ov.onclick=function(e){ if(e.target===ov) ov.remove(); };
+  ov.onmousedown=function(e){ ov.__bd=(e.target===ov); };
+  ov.onclick=function(e){ if(e.target===ov&&ov.__bd) ov.remove(); };
   document.body.appendChild(ov);
   document.getElementById('mg-ok').onclick=function(){
     var r=document.querySelector('input[name="mg-nome"]:checked'); var nomeFinal='';
@@ -3917,6 +3923,62 @@ async function _mesclarExec(sel, nomeFinal, emailFinal, telFinal, todosEmails, t
       +(procsRenomeados?('\n'+procsRenomeados+' processo(s) sincronizado(s) com o nome escolhido.'):'')
       +'\n\nGuardados na ficha: '+((reg.emails||[]).length)+' e-mail(s) e '+((reg.telefones||[]).length)+' telefone(s). Nada foi apagado.');
   }catch(e){ alert('Erro ao mesclar: '+(e&&e.message||e)); }
+}
+/* ===== Achar contatos semelhantes (candidatos a mesclar) =====
+   Mesma lógica de união por chave compartilhada já usada nos leads duplicados
+   (_grposLeadsDup): agrupa quem tem o MESMO telefone, MESMO e-mail, ou nome
+   parecido (normalizado e sem letra dobrada — "Belarmino" ≈ "Bellarmino").
+   Só sugere — nada é mesclado sem o usuário confirmar no diálogo de sempre. */
+function _grposContatosSemelhantes(){
+  seedContatos();
+  var ativos=(CONTATOS||[]).filter(function(c){ return c && c.nome && c.nome!=='—'; });
+  ativos.forEach(function(c){
+    var chaves=[]; var tel=_telDig(c.tel); if(tel) chaves.push('tel:'+tel);
+    var em=String(c.email||'').trim().toLowerCase(); if(em&&em!=='—') chaves.push('em:'+em);
+    var nk=(typeof _atdColapsa==='function')?_atdColapsa(normClienteNome(c.nome)):normClienteNome(c.nome);
+    if(nk && nk.split(' ').filter(Boolean).length>=2) chaves.push('nm:'+nk);
+    c.__chaves=chaves;
+  });
+  var pai={}; function acha(k){ while(pai[k]&&pai[k]!==k){ k=pai[k]; } return k; }
+  ativos.forEach(function(c){ (c.__chaves||[]).forEach(function(k){ if(!(k in pai)) pai[k]=k; }); });
+  ativos.forEach(function(c){ var ks=c.__chaves||[]; for(var i=1;i<ks.length;i++){ pai[acha(ks[i])]=acha(ks[0]); } c.__raiz=(ks.length?acha(ks[0]):('id:'+c.id)); });
+  var g={}; ativos.forEach(function(c){ (g[c.__raiz]=g[c.__raiz]||[]).push(c); });
+  return Object.keys(g).map(function(k){return g[k];}).filter(function(arr){return arr.length>1;});
+}
+function atualizaBadgeSemelhantes(){
+  try{ var g=_grposContatosSemelhantes(); var b=document.getElementById('csm-badge'); if(b){ if(g.length){ b.style.display=''; b.textContent=g.length; } else b.style.display='none'; } }catch(e){}
+}
+function fecharContatosSemelhantes(){ var m=document.getElementById('modal-csem'); if(m) m.remove(); }
+function abrirContatosSemelhantes(){
+  fecharContatosSemelhantes();
+  var g=_grposContatosSemelhantes();
+  g.forEach(function(arr){ arr.sort(function(a,b){ return (b.proc||0)-(a.proc||0) || String(a.nome||'').length-String(b.nome||'').length; }); });
+  window.__gruposCSem=g;
+  var ov=document.createElement('div'); ov.id='modal-csem';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(20,28,40,.5);z-index:9000;overflow:auto';
+  var corpo=!g.length
+    ? '<div class="note">Nenhum contato parecido encontrado — nomes, telefones e e-mails não batem entre nenhum par.</div>'
+    : g.map(function(arr,gi){
+        var linhas=arr.map(function(c,i){
+          return '<div style="font-size:12.5px;padding:2px 0;color:'+(i===0?'#0F6E56':'#5d6673')+'">'+(i===0?'★ ':'• ')+esc(nomeBonito(c.nome))+' <span class="note">'+esc(c.tipo||'')+(c.tel&&c.tel!=='—'?(' · '+esc(c.tel)):'')+(c.email&&c.email!=='—'?(' · '+esc(c.email)):'')+(c.proc?(' · '+c.proc+' processo'+(c.proc>1?'s':'')):'')+'</span></div>';
+        }).join('');
+        return '<div style="border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:10px">'
+          +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:5px"><b>'+arr.length+' contatos parecidos</b><button class="btn sm gold" onclick="mesclarGrupoContatos('+gi+')">Mesclar este grupo</button></div>'
+          +linhas+'</div>';
+      }).join('');
+  ov.innerHTML='<div style="background:#fff;border-radius:12px;max-width:640px;width:96vw;margin:4vh auto;max-height:88vh;overflow:auto;padding:18px 20px">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:4px"><h3 style="margin:0">🔍 Contatos parecidos</h3><button class="btn sm ghost" onclick="fecharContatosSemelhantes()">✕ fechar</button></div>'
+    +'<p class="note" style="margin:0 0 10px">Agrupados por telefone, e-mail ou nome iguais/parecidos. Clique em <b>Mesclar este grupo</b> para abrir a mesclagem de sempre (você ainda escolhe o nome, e-mail e telefone que ficam).</p>'
+    +corpo+'</div>';
+  ov.onmousedown=function(e){ ov.__bd=(e.target===ov); };
+  ov.onclick=function(e){ if(e.target===ov&&ov.__bd) fecharContatosSemelhantes(); };
+  document.body.appendChild(ov);
+}
+function mesclarGrupoContatos(gi){
+  var g=window.__gruposCSem; if(!g||!g[gi]) return;
+  var ids=g[gi].map(function(c){ return c.id; });
+  fecharContatosSemelhantes();
+  mesclarContatos(ids);
 }
 function novoContato(){editarContato(null);}
 function editarContato(id){seedContatos();var c=id?CONTATOS.find(function(x){return x.id===id;}):{id:null,nome:"",tipo:"cliente",tel:"",email:"",origem:"",proc:0};window._cedit=c;
@@ -4770,7 +4832,8 @@ async function jusbrDiag(numero){
     var txt=JSON.stringify({processo_campos:d.processo_campos,processo_hrefs:d.processo_hrefs,doc0:(d.amostra_crua&&d.amostra_crua[0])},null,1);
     var ov=document.createElement('div'); ov.style.cssText='position:fixed;inset:0;background:rgba(20,28,40,.6);z-index:99;display:flex;align-items:center;justify-content:center;padding:20px';
     ov.innerHTML='<div style="background:#fff;border-radius:12px;max-width:680px;width:100%;padding:16px"><b>Diagnóstico do 1º documento</b><p class="note" style="margin:4px 0">Copie e mande para o Claude:</p><textarea readonly style="width:100%;height:320px;font-family:monospace;font-size:11px">'+esc(txt)+'</textarea><div style="margin-top:8px;text-align:right"><button class="btn sm" onclick="this.closest(\'div[style*=fixed]\').remove()">fechar</button></div></div>';
-    ov.onclick=function(e){ if(e.target===ov) ov.remove(); };
+    ov.onmousedown=function(e){ ov.__bd=(e.target===ov); };
+  ov.onclick=function(e){ if(e.target===ov&&ov.__bd) ov.remove(); };
     document.body.appendChild(ov);
     try{ ov.querySelector('textarea').select(); }catch(e){}
   }catch(e){ alert('Falha no diag: '+(e&&e.message||e)); }
@@ -4819,7 +4882,8 @@ function jusbrViewer(url,nome){
     +'<button class="btn sm" style="background:#185FA5;color:#fff" onclick="_jbvSalvarPasta(this)" title="Salvar uma cópia na pasta &quot;Sentenças e Acórdãos&quot; do processo">📁 Salvar em Sentenças e Acórdãos</button></div>'
     +'<button class="btn sm" onclick="var v=document.getElementById(\'jusbr-viewer\');if(v)v.remove()">✕ Fechar</button></div>'
     +'<iframe id="jusbr-viewer-frame" style="flex:1;width:100%;border:0;background:#fff;border-radius:8px"></iframe>';
-  ov.onclick=function(e){ if(e.target===ov) ov.remove(); };
+  ov.onmousedown=function(e){ ov.__bd=(e.target===ov); };
+  ov.onclick=function(e){ if(e.target===ov&&ov.__bd) ov.remove(); };
   document.body.appendChild(ov);
   document.getElementById('jusbr-viewer-frame').src=url;
 }
@@ -8027,7 +8091,8 @@ function editarPartesContatos(){
     +campo('Contato 4',toks[3]||'','edt-c4','telefone ou e-mail')
     +'<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px"><button class="btn sm ghost" onclick="document.getElementById(\'edt-modal\').remove()">Cancelar</button><button class="btn sm" onclick="salvarPartesContatos()">Salvar</button></div>';
   ov.appendChild(bx);
-  ov.onclick=function(e){ if(e.target===ov) ov.remove(); };
+  ov.onmousedown=function(e){ ov.__bd=(e.target===ov); };
+  ov.onclick=function(e){ if(e.target===ov&&ov.__bd) ov.remove(); };
   document.body.appendChild(ov);
   var pc=document.getElementById('edt-cli'); if(pc) pc.focus();
 }
@@ -8299,7 +8364,8 @@ async function abrirAtualizarDados(){
     +'<p class="note" style="font-size:11px;margin:8px 0 0">Os itens marcados entram na ficha e no cadastro de Contatos (CPF/CNPJ por autor; e-mail e telefone no 1º autor). Nada é sobrescrito sem estar marcado aqui.</p>'
     +'<div style="margin-top:14px;display:flex;justify-content:flex-end;gap:8px"><button class="btn ghost" onclick="fecharAtualizarDados()">Cancelar</button><button class="btn" id="atd-aplicar" onclick="aplicarAtualizarDados()">Salvar tudo</button></div>'
     +'</div>';
-  ov.onclick=function(e){ if(e.target===ov) fecharAtualizarDados(); };
+  ov.onmousedown=function(e){ ov.__bd=(e.target===ov); };
+  ov.onclick=function(e){ if(e.target===ov&&ov.__bd) fecharAtualizarDados(); };
   document.body.appendChild(ov);
   document.getElementById('atd-cliente').value=p.cliente||'';
   document.getElementById('atd-oponente').value=p.oponente||'';
@@ -8456,8 +8522,8 @@ async function _atdExtrair(p, dig){
     if(completou){ var stEl=document.getElementById('atd-status'); if(stEl) stEl.innerHTML='✓ O nome do card ('+esc(seed)+') foi <b>completado</b> para <b>'+esc(melhor)+'</b> a partir dos documentos — confira e ajuste se preciso.'; }
     /* render contatos */
     var ctlAtual=String(p.ctl||'').toLowerCase();
-    fill('atd-emails', acc.emails.length?acc.emails.map(function(e2){ var ja=ctlAtual.indexOf(String(e2).toLowerCase())>=0; return '<label style="display:flex;gap:6px;align-items:center;margin:0 0 4px;font-size:13px;cursor:pointer"><input type="checkbox" '+(ja?'':'checked')+' data-v="'+esc(e2)+'" style="width:auto">'+esc(e2)+(ja?' <span class="note" style="font-size:10.5px">(já na ficha)</span>':'')+'</label>'; }).join(''):'<span class="note">nenhum</span>');
-    fill('atd-tels', acc.tels.length?acc.tels.map(function(t2){ var ja=ctlAtual.replace(/\D/g,'').indexOf(String(t2).replace(/\D/g,''))>=0&&String(t2).replace(/\D/g,'').length>=8; return '<label style="display:flex;gap:6px;align-items:center;margin:0 0 4px;font-size:13px;cursor:pointer"><input type="checkbox" '+(ja?'':'checked')+' data-v="'+esc(t2)+'" style="width:auto">'+esc(t2)+(ja?' <span class="note" style="font-size:10.5px">(já na ficha)</span>':'')+'</label>'; }).join(''):'<span class="note">nenhum</span>');
+    fill('atd-emails', acc.emails.length?acc.emails.map(function(e2){ var ja=ctlAtual.indexOf(String(e2).toLowerCase())>=0; return '<label style="display:flex;gap:6px;align-items:center;margin:0 0 4px;font-size:13px;cursor:pointer"><input type="checkbox" data-v="'+esc(e2)+'" style="width:auto">'+esc(e2)+(ja?' <span class="note" style="font-size:10.5px">(já na ficha)</span>':'')+'</label>'; }).join(''):'<span class="note">nenhum</span>');
+    fill('atd-tels', acc.tels.length?acc.tels.map(function(t2){ var ja=ctlAtual.replace(/\D/g,'').indexOf(String(t2).replace(/\D/g,''))>=0&&String(t2).replace(/\D/g,'').length>=8; return '<label style="display:flex;gap:6px;align-items:center;margin:0 0 4px;font-size:13px;cursor:pointer"><input type="checkbox" data-v="'+esc(t2)+'" style="width:auto">'+esc(t2)+(ja?' <span class="note" style="font-size:10.5px">(já na ficha)</span>':'')+'</label>'; }).join(''):'<span class="note">nenhum</span>');
     if(!completou) setSt('Lido de: <b>'+esc(_uniq(acc.fontes).slice(0,5).join(' · ')||'histórico')+'</b>. Use <b>→ autor</b> / <b>→ réu</b> em cada nome, ajuste os CPFs e clique em <b>Salvar tudo</b>.');
   }catch(e){ setSt('Erro ao ler documentos: '+esc((e&&e.message)||String(e))+' — dá para editar manualmente acima.'); }
 }
@@ -8715,7 +8781,8 @@ function _modalConfirmProcuracao(rel, emails, tels, cortou){
   html+= tels.length? tels.map(function(t){return linha(t,'tel',tels.length===1);}).join('') : '<div class="note">Nenhum telefone encontrado.</div>';
   html+='<div class="note" style="margin-top:8px">Slots livres: '+livres+'/4. Só slots vazios são preenchidos; nada é sobrescrito.</div>';
   html+='<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px"><button class="btn sm ghost" onclick="document.getElementById(\'pcr-modal\').remove()">Cancelar</button><button class="btn sm" onclick="_confirmarProcuracao()">Adicionar aos contatos</button></div>';
-  bx.innerHTML=html; ov.appendChild(bx); ov.onclick=function(e){ if(e.target===ov) ov.remove(); };
+  bx.innerHTML=html; ov.appendChild(bx); ov.onmousedown=function(e){ ov.__bd=(e.target===ov); };
+  ov.onclick=function(e){ if(e.target===ov&&ov.__bd) ov.remove(); };
   document.body.appendChild(ov);
 }
 function _confirmarProcuracao(){
@@ -8779,7 +8846,8 @@ function _peticaoCoworkModal(pedido){
     +'<textarea id="pet-cw-txt" readonly style="width:100%;min-height:190px;font-size:13px;padding:10px;border:1px solid #e6e8ec;border-radius:8px;font-family:inherit">'+esc(pedido)+'</textarea>'
     +'<div style="display:flex;gap:8px;margin-top:10px;justify-content:flex-end"><button class="btn ghost" onclick="var e=document.getElementById(\''+id+'\');if(e)e.remove()">Fechar</button><button class="btn" onclick="var t=document.getElementById(\'pet-cw-txt\');t.select();try{document.execCommand(\'copy\');}catch(e){};this.textContent=\'Copiado ✓\'">Copiar</button></div>'
     +'</div>';
-  ov.onclick=function(e){ if(e.target===ov) ov.remove(); };
+  ov.onmousedown=function(e){ ov.__bd=(e.target===ov); };
+  ov.onclick=function(e){ if(e.target===ov&&ov.__bd) ov.remove(); };
   document.body.appendChild(ov);
 }
 function _peticaoOverlay(msg){
@@ -12674,7 +12742,8 @@ function abrirProtocolarPeticao(numero){
       +'<input type="checkbox" id="proto-ok"><span style="font-size:12.5px;color:#2E3A4B"><b>Conferi a peça inteira.</b> Não há recados, campos a preencher, comentários nem destaques pendentes.</span></label>'
     +'<div class="foot" style="margin-top:14px"><button class="btn ghost" onclick="document.getElementById(\'proto-modal\').remove()">Cancelar</button><button class="btn" style="background:#7b1e3a;border-color:#7b1e3a" onclick="salvarProtocolarPeticao(\''+esc(numero)+'\',this)">Anexar e criar prazo</button></div>'
     +'</div>';
-  ov.onclick=function(e){ if(e.target===ov) ov.remove(); };
+  ov.onmousedown=function(e){ ov.__bd=(e.target===ov); };
+  ov.onclick=function(e){ if(e.target===ov&&ov.__bd) ov.remove(); };
   document.body.appendChild(ov);
 }
 function _protoModo(){
@@ -12834,7 +12903,8 @@ async function protoMarcarProtocolada(id){
     +'<div class="note" style="margin:3px 0 0">Guardado na pasta <b>Protocolos</b> dos Documentos do processo e disponível por um ícone aqui.</div>'
     +'<div class="foot" style="margin-top:14px"><button class="btn ghost" onclick="document.getElementById(\'proto-conf\').remove()">Cancelar</button><button class="btn" style="background:#0F6E56;border-color:#0F6E56" onclick="_protoConfirmar(\''+x.id+'\',this)">Confirmar protocolo</button></div>'
     +'</div>';
-  ov.onclick=function(e){ if(e.target===ov) ov.remove(); };
+  ov.onmousedown=function(e){ ov.__bd=(e.target===ov); };
+  ov.onclick=function(e){ if(e.target===ov&&ov.__bd) ov.remove(); };
   document.body.appendChild(ov);
 }
 async function _protoConfirmar(id,btn){
@@ -13267,7 +13337,8 @@ function _devModal(html,j){
   var rodape=j?('<button class="btn" onclick="_devSalvar()">💾 guardar na pasta do processo</button>'):'';
   ov.innerHTML='<div style="background:#fff;border-radius:12px;padding:20px;max-width:720px;width:100%;max-height:88vh;overflow:auto;font-size:14px;color:#1e2733">'+html
     +'<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;flex-wrap:wrap"><button class="btn ghost" onclick="var e=document.getElementById(\'dev-dossie\');if(e)e.remove()">Fechar</button>'+rodape+'</div></div>';
-  ov.onclick=function(e){ if(e.target===ov) ov.remove(); };
+  ov.onmousedown=function(e){ ov.__bd=(e.target===ov); };
+  ov.onclick=function(e){ if(e.target===ov&&ov.__bd) ov.remove(); };
   document.body.appendChild(ov);
   window.__devDossie=j||null;
 }
@@ -13308,7 +13379,8 @@ async function abrirContaIA(){
   var ov=document.createElement('div'); ov.id=id;
   ov.style.cssText='position:fixed;inset:0;background:rgba(20,26,38,.55);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px';
   ov.innerHTML='<div style="background:#fff;border-radius:12px;padding:20px;max-width:560px;width:100%;font-size:14px;color:#1e2733"><div class="note">Carregando…</div></div>';
-  ov.onclick=function(e){ if(e.target===ov) ov.remove(); };
+  ov.onmousedown=function(e){ ov.__bd=(e.target===ov); };
+  ov.onclick=function(e){ if(e.target===ov&&ov.__bd) ov.remove(); };
   document.body.appendChild(ov);
   var caixa=ov.firstChild;
   try{
