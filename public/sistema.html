@@ -1881,11 +1881,12 @@ function abrir(i){
        boleto prontos em 3 cliques, tudo pré-preenchido com o que a ficha já sabe */
     (_ehCasoProc(p)?('<div style="margin-top:10px;background:#eef7f1;border:1px solid #cfe8db;border-radius:10px;padding:8px 12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
       +'<b style="color:#0F6E56;font-size:12.5px">🚀 Cliente novo:</b>'
-      +'<button class="btn sm" style="background:#f7f3e8;color:#8a6d00;border:1px solid #e8dcbb;font-weight:700" onclick="abrirAssinatura(\''+p.numero+'\')" title="Gera o link da procuração já com nome, e-mail, WhatsApp, processo e finalidade preenchidos — o cliente completa o resto e assina">✍ 1. Procuração</button>'
+      +'<button class="btn sm" style="background:#f7f3e8;color:#8a6d00;border:1px solid #e8dcbb;font-weight:700" onclick="abrirGerarProcuracao(\''+p.numero+'\')" title="O sistema já monta a procuração pronta (Word + PDF, padrão CMP) com nome/CPF/e-mail/telefone que já tem — só falta o endereço">✍ 1. Gerar procuração</button>'
+      +'<button class="btn sm ghost" style="font-weight:700" onclick="abrirAssinatura(\''+p.numero+'\')" title="Gera o link da procuração já com nome, e-mail, WhatsApp, processo e finalidade preenchidos — o cliente completa o resto e assina eletronicamente à distância">✍ 1b. p/ cliente assinar</button>'
       +'<button class="btn sm" style="background:#eef3fa;color:#185FA5;border:1px solid #cfe0f2;font-weight:700" onclick="kitContrato()" title="Sobe o contrato (PDF/Word) para assinatura eletrônica, já com o cliente como 1º signatário">📄 2. Contrato p/ assinar</button>'
       +'<button class="btn sm" style="background:#fdeef2;color:#c2185b;border:1px solid #f2c9d6;font-weight:700" onclick="gerarBoletoNovoDoProcesso()" title="Emite o 1º boleto (à vista ou parcelado — as parcelas seguintes saem sozinhas todo mês)">💳 3. Boleto/parcelas</button>'
       +'<span class="note" style="font-size:11px">tudo sai pré-preenchido; assinou → cai na pasta e no histórico sozinho</span></div>'):'')+
-    '<div style="margin-top:10px"><button class="btn sm" onclick="novaTarefaDoProcesso()">+ Nova tarefa</button> <button class="btn sm cmp-only" style="background:#7b1e3a;color:#fff;border:1px solid #7b1e3a;font-weight:700;font-size:11px;line-height:1.18;white-space:normal;text-align:left;padding:4px 10px;vertical-align:middle" onclick="abrirProtocolarPeticao(\''+p.numero+'\')" title="Guarda a peça no sistema com prazo fatal e alerta — pronta para protocolo (PDF) ou aguardando ajuste (Word). O protocolo em si é feito no jus.br.">&#128228; Subir petição<br>para protocolo</button> <button class="btn sm" style="background:#eef4fb;color:#185FA5;border:1px solid #cfe0f2;font-weight:700" onclick="abrirTribunal(\''+p.numero+'\')" title="Abrir o sistema do tribunal (PJe/e-SAJ/Projudi) no grau deste processo — o número é copiado para você colar na busca">&#9878; Abrir no tribunal</button> <button id="btn-atualizar-cli" class="btn sm cmp-only" style="background:#eaf4f4;color:#0b7285;border:1px solid #cfe6e6;font-weight:700" onclick="abrirAtualizarCliente(\''+p.numero+'\')" title="E-mail de atualização ao cliente — informar movimentação, pedir providência, ou ativar o acompanhamento semanal automático">&#9993; Atualizar cliente</button> <button class="btn sm cmp-only" style="background:#f7f3e8;color:#8a6d00;border:1px solid #e8dcbb;font-weight:700" onclick="abrirAssinatura(\''+p.numero+'\')" title="Gerar procuração ou documento para assinatura eletrônica, já com o cliente deste processo no contexto">&#9997; Procuração</button>'+((typeof _ehCasoProc==='function'&&_ehCasoProc(p))?' <button class="btn sm cmp-only" style="background:#f3eaf7;color:#6d28a8;border:1px solid #ddc9ea;font-weight:700" onclick="monitorarAcoesCliente()" title="Testar: buscar no DJEN ações NOVAS (últimos 3 meses) que citem o nome deste cliente — inclui trabalhista. Não busca por CNPJ (a API do CNJ não permite).">&#128269; Monitorar ações novas</button>':'')+'</div>'+
+    '<div style="margin-top:10px"><button class="btn sm" onclick="novaTarefaDoProcesso()">+ Nova tarefa</button> <button class="btn sm cmp-only" style="background:#7b1e3a;color:#fff;border:1px solid #7b1e3a;font-weight:700;font-size:11px;line-height:1.18;white-space:normal;text-align:left;padding:4px 10px;vertical-align:middle" onclick="abrirProtocolarPeticao(\''+p.numero+'\')" title="Guarda a peça no sistema com prazo fatal e alerta — pronta para protocolo (PDF) ou aguardando ajuste (Word). O protocolo em si é feito no jus.br.">&#128228; Subir petição<br>para protocolo</button> <button class="btn sm" style="background:#eef4fb;color:#185FA5;border:1px solid #cfe0f2;font-weight:700" onclick="abrirTribunal(\''+p.numero+'\')" title="Abrir o sistema do tribunal (PJe/e-SAJ/Projudi) no grau deste processo — o número é copiado para você colar na busca">&#9878; Abrir no tribunal</button> <button id="btn-atualizar-cli" class="btn sm cmp-only" style="background:#eaf4f4;color:#0b7285;border:1px solid #cfe6e6;font-weight:700" onclick="abrirAtualizarCliente(\''+p.numero+'\')" title="E-mail de atualização ao cliente — informar movimentação, pedir providência, ou ativar o acompanhamento semanal automático">&#9993; Atualizar cliente</button> <button class="btn sm cmp-only" style="background:#f7f3e8;color:#8a6d00;border:1px solid #e8dcbb;font-weight:700" onclick="abrirGerarProcuracao(\''+p.numero+'\')" title="Gera a procuração pronta (Word + PDF, padrão CMP) com os dados que o sistema já tem — só pede o que faltar">&#9997; Gerar procuração</button> <button class="btn sm cmp-only ghost" style="font-weight:700" onclick="abrirAssinatura(\''+p.numero+'\')" title="Gerar link de procuração para o CLIENTE preencher o que faltar e assinar eletronicamente à distância">&#128231; p/ assinatura eletrônica</button>'+((typeof _ehCasoProc==='function'&&_ehCasoProc(p))?' <button class="btn sm cmp-only" style="background:#f3eaf7;color:#6d28a8;border:1px solid #ddc9ea;font-weight:700" onclick="monitorarAcoesCliente()" title="Testar: buscar no DJEN ações NOVAS (últimos 3 meses) que citem o nome deste cliente — inclui trabalhista. Não busca por CNPJ (a API do CNJ não permite).">&#128269; Monitorar ações novas</button>':'')+'</div>'+
     /* ponto 12: bloco de processos vinculados no canto inferior direito da aba (perto do botão Encerrar) */
     '<div id="proc-vinculados-rodape" style="position:absolute;bottom:12px;right:14px;max-width:60%;display:flex;gap:6px;flex-wrap:wrap;align-items:center;justify-content:flex-end;font-size:12px"></div>'+
     '</div>';
@@ -6606,6 +6607,40 @@ function renderProc(){
   <textarea id="dil-msg" rows="9" style="width:100%;box-sizing:border-box"></textarea>
   <div style="margin-top:12px;display:flex;gap:8px"><button class="btn" onclick="salvarDiligencia()">Salvar diligência</button><button class="btn ghost" onclick="fecharDilig()">Cancelar</button></div>
 </div></div>
+<div id="modal-procuracao" class="overlay hidden"><div class="modal" style="max-width:660px">
+  <h2>Gerar procuração</h2>
+  <div id="proc-status" class="note" style="margin:0 0 10px"></div>
+  <label>Cláusula de honorários</label>
+  <select id="proc-modelo" class="btn sm" style="display:block;width:100%;margin:4px 0 12px;box-sizing:border-box">
+    <option value="sem">Sem percentual (a combinar à parte)</option>
+    <option value="10">10% do valor obtido</option>
+    <option value="20">20% do valor obtido</option>
+    <option value="30" selected>30% do valor obtido</option>
+  </select>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 10px">
+    <div><label>Nome completo</label><input id="proc-nome" style="width:100%;box-sizing:border-box"></div>
+    <div><label>CPF</label><input id="proc-cpf" style="width:100%;box-sizing:border-box"></div>
+    <div><label>Nacionalidade</label><input id="proc-nacionalidade" style="width:100%;box-sizing:border-box" value="Brasileiro(a)"></div>
+    <div><label>Estado civil</label>
+      <select id="proc-estadocivil" style="width:100%;box-sizing:border-box">
+        <option value="">selecione…</option>
+        <option>Solteiro(a)</option><option>Casado(a)</option><option>Divorciado(a)</option><option>Viúvo(a)</option><option>União estável</option>
+      </select>
+    </div>
+    <div><label>E-mail</label><input id="proc-email" style="width:100%;box-sizing:border-box"></div>
+    <div><label>Telefone</label><input id="proc-telefone" style="width:100%;box-sizing:border-box"></div>
+    <div><label>CEP</label><input id="proc-cep" style="width:100%;box-sizing:border-box" onblur="_procBuscarCep()"></div>
+    <div><label>Número</label><input id="proc-numero" style="width:100%;box-sizing:border-box"></div>
+    <div style="grid-column:1/-1"><label>Rua</label><input id="proc-rua" style="width:100%;box-sizing:border-box"></div>
+    <div><label>Bairro</label><input id="proc-bairro" style="width:100%;box-sizing:border-box"></div>
+    <div><label>Cidade</label><input id="proc-cidade" style="width:100%;box-sizing:border-box"></div>
+    <div><label>UF</label><input id="proc-uf" style="width:100%;box-sizing:border-box" maxlength="2"></div>
+  </div>
+  <div style="margin-top:12px;display:flex;gap:8px">
+    <button id="proc-btn-gerar" class="btn" onclick="gerarProcuracaoAuto()">Gerar procuração (Word + PDF)</button>
+    <button class="btn ghost" onclick="fecharModalProcuracao()">Cancelar</button>
+  </div>
+</div></div>
 <script>
 function go(s){
   ["painel","triagem","agenda","processos","proc-det","crm","etiquetas","procedimentos","diligencias"].forEach(function(id){var e=document.getElementById("s-"+id);if(e)e.classList.add("hidden")});
@@ -10054,6 +10089,181 @@ function kitContrato(){
   try{ var em=_emailClienteDoProc(p); if(em) q.push('email='+encodeURIComponent(em)); }catch(e){}
   if(p.numero) q.push('processo='+encodeURIComponent(p.numero));
   window.open('/assinatura/avulso'+(q.length?('?'+q.join('&')):''),'_blank');
+}
+/* ===== Gerar procuração automática (Word + PDF) — no padrão CMP, salva direto
+   na pasta do processo. Diferente do "✍ Procuração" acima (que abre o link de
+   assinatura eletrônica pro CLIENTE preencher e assinar sozinho): aqui o
+   sistema já monta o documento pronto, puxando nome/CPF/e-mail/telefone do que
+   já está cadastrado — só pede o que realmente falta (o endereço, que hoje não
+   fica salvo em canto nenhum) e guarda isso em `contatos` pra não perguntar de
+   novo na próxima peça (inclusive o contrato de honorários). ===== */
+var PROC_OUTORGADO='<b>Djan Henrique Mendonça do Nascimento</b>, brasileiro, casado, advogado, inscrito na OAB/PB n. 5.219-A, e os integrantes da sociedade <b>CRISPIM, MENDONÇA E PINHEIRO ADVOGADOS</b>, registrada na Ordem dos Advogados do Brasil, seccional da Paraíba sob o número OAB/PB 2200042, e no CNPJ 45.487.942/0001-84, com sede na Rua Abelardo da Silva Guimarães Barreto, 51, sala 604-C edf. Alliance Plaza Business, CEP 58046-110, Altiplano Cabo Branco, João Pessoa/PB, e-mail: djan.adv@gmail.com';
+var PROC_PODERES='A outorgante nomeia o outorgado como seu procurador, conferindo-lhe poderes amplos e ilimitados para representá-lo em juízo ou fora dele, outorgando-lhe ainda os especiais poderes para receber citação, de concordar, acordar, confessar, discordar, receber e dar quitação, desistir, transigir, firmar compromissos, reconhecer a procedência do pedido, receber, dar quitação, executar e fazer cumprir decisões e títulos judiciais e extrajudiciais, levantar alvarás judiciais extraídos em nome do outorgante, substabelecer com ou sem reserva os poderes conferidos pelo presente mandato.';
+function _procEsc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+function _procClausulaHTML(tipo){
+  var PCT={'10':['10','dez por cento'],'20':['20','vinte por cento'],'30':['30','trinta por cento']};
+  var p=PCT[tipo]; if(!p) return '';
+  return '<p><b>Cláusula Contratual</b> – pelos serviços prestados o outorgado receberá a título de honorários o percentual de <b>'+p[0]+'% ('+p[1]+')</b> do valor obtido com a ação, podendo requer ao juízo da causa que lhe pague diretamente os valores destacados do montante principal.</p>';
+}
+/* corpo do documento (sem o wrapper de página) — reaproveitado no .doc e no PDF */
+function _procuracaoCorpoHTML(d, tipo){
+  var end='rua '+_procEsc(d.rua)+', nº '+_procEsc(d.numero)+', '+_procEsc(d.bairro)+', '+_procEsc(d.cidade)+'/'+_procEsc(d.uf)+', CEP '+_procEsc(d.cep);
+  return '<h1 style="text-align:center;font-size:14pt;font-weight:bold;margin:0 0 16pt;text-transform:uppercase">Procuração</h1>'
+    +'<p><b>Outorgante:</b> '+_procEsc(d.nome)+', '+_procEsc(d.nacionalidade)+', '+_procEsc(d.estadoCivil)+', inscrito(a) no CPF de nº '+_procEsc(d.cpf)+', residente e domiciliado(a) na '+end+', com e-mail: '+_procEsc(d.email)+(d.telefone?(', e contato: '+_procEsc(d.telefone)):'')+'.</p>'
+    +'<p><b>Outorgado:</b> '+PROC_OUTORGADO+'.</p>'
+    +'<p><b>Poderes:</b> '+PROC_PODERES+'</p>'
+    +_procClausulaHTML(tipo)
+    +'<p style="text-align:center;margin-top:16pt">'+_procEsc(d.cidade)+'/'+_procEsc(d.uf)+', '+new Date().toLocaleDateString('pt-BR',{day:'2-digit',month:'long',year:'numeric'})+'.</p>'
+    +'<div style="text-align:center;margin-top:34pt">_________________________________________<br>'+_procEsc(d.nome)+'</div>'
+    +'<p style="text-align:center;margin-top:20pt;font-size:9pt;color:#555">0800 591 7259 | contato@cmpadvogados.com.br</p>';
+}
+function _procDocWord(corpoHTML){
+  return '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word">'
+    +'<head><meta charset="utf-8"><title>Procuração</title>'
+    +'<style>body{font-family:\'Barlow\',\'Calibri\',\'Segoe UI\',sans-serif;font-size:12pt;line-height:1.5;margin:2.5cm}p{text-align:justify;margin:0 0 10pt}</style></head><body>'
+    +'<div style="text-align:left;margin-bottom:14pt"><img src="'+location.origin+'/logo_cmp_full.png" style="max-height:50px"></div>'
+    +corpoHTML+'</body></html>';
+}
+function _ensureHtml2Canvas(){
+  return new Promise(function(res,rej){
+    if(window.html2canvas) return res(window.html2canvas);
+    var s=document.createElement('script'); s.src='https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+    s.onload=function(){ window.html2canvas?res(window.html2canvas):rej(new Error('html2canvas não carregou')); };
+    s.onerror=function(){ rej(new Error('falha ao carregar html2canvas')); };
+    document.head.appendChild(s);
+  });
+}
+function _ensureJsPDF(){
+  return new Promise(function(res,rej){
+    if(window.jspdf) return res(window.jspdf);
+    var s=document.createElement('script'); s.src='https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+    s.onload=function(){ window.jspdf?res(window.jspdf):rej(new Error('jsPDF não carregou')); };
+    s.onerror=function(){ rej(new Error('falha ao carregar jsPDF')); };
+    document.head.appendChild(s);
+  });
+}
+/* abre o modal já com nome/e-mail/telefone/CPF puxados do processo (o CPF, se
+   não tiver em `contatos`, é buscado nos documentos já anexados — mesma busca
+   usada em "Nova cobrança"); o que faltar (endereço, em geral) fica em branco
+   pro usuário completar. */
+async function abrirGerarProcuracao(numero){
+  var digs=String(numero||'').replace(/\D/g,'');
+  var p=(typeof atual!=='undefined'&&atual&&String(atual.numero||'').replace(/\D/g,'')===digs)?atual:(((typeof DADOS!=='undefined'&&DADOS.processos)||[]).filter(function(x){return String(x.numero||'').replace(/\D/g,'')===digs;})[0]||{});
+  window.__procCtx={numero:numero, p:p};
+  var m=document.getElementById('modal-procuracao'); if(!m) return; m.classList.remove('hidden');
+  var st=document.getElementById('proc-status');
+  if(st){ st.textContent='Carregando dados do cliente…'; st.style.color='var(--muted)'; }
+  var nome1=(typeof _partesSplit==='function'?(_partesSplit(p.cliente)[0]||''):String(p.cliente||''));
+  document.getElementById('proc-nome').value=nome1;
+  var em=''; try{ em=(typeof _emailClienteDoProc==='function')?_emailClienteDoProc(p):''; }catch(e){}
+  var tel=''; try{ (typeof splitCtlTokens==='function'?splitCtlTokens(p.ctl||''):[]).some(function(t){ if(!/@/.test(t)&&String(t).replace(/\D/g,'').length>=10){ tel=t; return true; } return false; }); }catch(e){}
+  document.getElementById('proc-email').value=em;
+  document.getElementById('proc-telefone').value=tel;
+  document.getElementById('proc-cpf').value=''; document.getElementById('proc-cep').value='';
+  document.getElementById('proc-rua').value=''; document.getElementById('proc-numero').value='';
+  document.getElementById('proc-bairro').value=''; document.getElementById('proc-cidade').value=''; document.getElementById('proc-uf').value='';
+  document.getElementById('proc-nacionalidade').value='Brasileiro(a)';
+  document.getElementById('proc-estadocivil').value='';
+  document.getElementById('proc-modelo').value='30';
+  try{
+    var sb=window.__sb;
+    var rc=await sb.from('contatos').select('*').ilike('nome', nome1).limit(1);
+    var ct=(rc.data||[])[0];
+    if(ct){
+      if(ct.cpf_cnpj) document.getElementById('proc-cpf').value=ct.cpf_cnpj;
+      if(ct.email && !em) document.getElementById('proc-email').value=ct.email;
+      if(ct.telefone && !tel) document.getElementById('proc-telefone').value=ct.telefone;
+      if(ct.endereco_rua) document.getElementById('proc-rua').value=ct.endereco_rua;
+      if(ct.endereco_numero) document.getElementById('proc-numero').value=ct.endereco_numero;
+      if(ct.endereco_bairro) document.getElementById('proc-bairro').value=ct.endereco_bairro;
+      if(ct.endereco_cidade) document.getElementById('proc-cidade').value=ct.endereco_cidade;
+      if(ct.endereco_uf) document.getElementById('proc-uf').value=ct.endereco_uf;
+      if(ct.endereco_cep) document.getElementById('proc-cep').value=ct.endereco_cep;
+      if(ct.nacionalidade) document.getElementById('proc-nacionalidade').value=ct.nacionalidade;
+      if(ct.estado_civil) document.getElementById('proc-estadocivil').value=ct.estado_civil;
+    }
+  }catch(e){}
+  if(!document.getElementById('proc-cpf').value){
+    try{ var r=await _cpfDoProcesso(p); if(r&&r.cpf) document.getElementById('proc-cpf').value=r.cpf; }catch(e){}
+  }
+  if(st){ st.textContent='Confira os dados — o que faltar (geralmente o endereço), preencha abaixo.'; st.style.color='var(--muted)'; }
+}
+function fecharModalProcuracao(){ var m=document.getElementById('modal-procuracao'); if(m) m.classList.add('hidden'); }
+async function _procBuscarCep(){
+  var cepEl=document.getElementById('proc-cep'); var cep=(cepEl.value||'').replace(/\D/g,'');
+  if(cep.length!==8) return;
+  var st=document.getElementById('proc-status');
+  try{
+    var r=await fetch('https://viacep.com.br/ws/'+cep+'/json/'); var d=await r.json();
+    if(d.erro){ if(st){ st.textContent='CEP não encontrado.'; st.style.color='#b5342b'; } return; }
+    if(d.logradouro && !document.getElementById('proc-rua').value) document.getElementById('proc-rua').value=d.logradouro;
+    if(d.bairro && !document.getElementById('proc-bairro').value) document.getElementById('proc-bairro').value=d.bairro;
+    if(d.localidade) document.getElementById('proc-cidade').value=d.localidade;
+    if(d.uf) document.getElementById('proc-uf').value=d.uf;
+  }catch(e){}
+}
+async function gerarProcuracaoAuto(){
+  var ctx=window.__procCtx; if(!ctx) return;
+  var p=ctx.p;
+  var d={
+    nome:_v('proc-nome'), cpf:_v('proc-cpf'), nacionalidade:_v('proc-nacionalidade'), estadoCivil:_v('proc-estadocivil'),
+    email:_v('proc-email'), telefone:_v('proc-telefone'), cep:_v('proc-cep'), rua:_v('proc-rua'), numero:_v('proc-numero'),
+    bairro:_v('proc-bairro'), cidade:_v('proc-cidade'), uf:_v('proc-uf')
+  };
+  var tipo=_v('proc-modelo')||'sem';
+  var st=document.getElementById('proc-status');
+  if(!d.nome||!d.cpf||!d.rua||!d.numero||!d.bairro||!d.cidade||!d.uf||!d.cep||!d.estadoCivil){
+    if(st){ st.textContent='Preencha nome, CPF, estado civil e o endereço completo antes de gerar.'; st.style.color='#b5342b'; }
+    return;
+  }
+  var btn=document.getElementById('proc-btn-gerar');
+  if(btn){ btn.disabled=true; btn.textContent='Gerando…'; }
+  if(st){ st.textContent='Gerando o Word e o PDF…'; st.style.color='var(--muted)'; }
+  try{
+    var dig=(typeof _docChaveProcObj==='function')?_docChaveProcObj(p):'';
+    if(!dig) throw new Error('Salve o processo/caso primeiro.');
+    var tok=await docToken();
+    var corpo=_procuracaoCorpoHTML(d, tipo);
+    var rotulo='Procuração'+(tipo==='sem'?'':(' '+tipo+'%'));
+    var docHtml=_procDocWord(corpo);
+    var b64doc=btoa(unescape(encodeURIComponent(docHtml)));
+    var rDoc=await fetch('/api/docs',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},
+      body:JSON.stringify({path:dig+'/'+rotulo+'.doc', b64:b64doc})});
+    if(!rDoc.ok) throw new Error('falha ao salvar o Word (HTTP '+rDoc.status+')');
+    await _ensureHtml2Canvas(); var jspdfLib=await _ensureJsPDF();
+    var off=document.createElement('div');
+    off.style.cssText='position:fixed;left:-9999px;top:0;width:740px;background:#fff;padding:40px;font-family:Barlow,Arial,sans-serif;font-size:12pt;line-height:1.5;color:#1c1c1c;text-align:justify';
+    off.innerHTML='<div style="margin-bottom:14pt"><img src="/logo_cmp_full.png" style="max-height:50px" crossorigin="anonymous"></div>'+corpo;
+    document.body.appendChild(off);
+    await new Promise(function(r){ setTimeout(r,80); });
+    var canvas=await window.html2canvas(off, {scale:2, backgroundColor:'#ffffff', useCORS:true});
+    document.body.removeChild(off);
+    var jsPDF=jspdfLib.jsPDF;
+    var pdf=new jsPDF('p','mm','a4');
+    var pw=pdf.internal.pageSize.getWidth(), ph=pdf.internal.pageSize.getHeight();
+    var w=pw, h=canvas.height*pw/canvas.width;
+    if(h>ph){ w=canvas.width*ph/canvas.height; h=ph; }
+    pdf.addImage(canvas.toDataURL('image/jpeg',0.92),'JPEG',(pw-w)/2,0,w,h);
+    var blobPdf=pdf.output('blob');
+    var bufPdf=new Uint8Array(await blobPdf.arrayBuffer());
+    var sPdf=''; for(var k=0;k<bufPdf.length;k+=0x8000){ sPdf+=String.fromCharCode.apply(null, bufPdf.subarray(k,Math.min(k+0x8000,bufPdf.length))); }
+    var rPdf=await fetch('/api/docs',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},
+      body:JSON.stringify({path:dig+'/'+rotulo+'.pdf', b64:btoa(sPdf)})});
+    if(!rPdf.ok) throw new Error('falha ao salvar o PDF (HTTP '+rPdf.status+')');
+    /* guarda o que faltava (endereço/nacionalidade/estado civil/CPF) pra não perguntar de novo */
+    try{
+      var reg={endereco_rua:d.rua, endereco_numero:d.numero, endereco_bairro:d.bairro, endereco_cidade:d.cidade, endereco_uf:d.uf, endereco_cep:d.cep, nacionalidade:d.nacionalidade, estado_civil:d.estadoCivil, cpf_cnpj:d.cpf};
+      if(d.email) reg.email=d.email; if(d.telefone) reg.telefone=d.telefone;
+      var sb2=window.__sb;
+      var rc2=await sb2.from('contatos').select('id').ilike('nome', d.nome).limit(1);
+      if(rc2.data&&rc2.data[0]) await sb2.from('contatos').update(reg).eq('id', rc2.data[0].id);
+      else { reg.nome=d.nome; reg.tipo='cliente'; await sb2.from('contatos').insert(reg); }
+    }catch(e){}
+    if(st){ st.textContent='✓ Procuração gerada e salva na pasta do processo!'; st.style.color='#0F6E56'; }
+    try{ if(typeof carregarDocs==='function' && typeof atual!=='undefined' && atual) carregarDocs(atual.numero,'','proc'); }catch(e){}
+    setTimeout(fecharModalProcuracao, 1400);
+  }catch(e){ if(st){ st.textContent='Erro: '+(e&&e.message||e); st.style.color='#b5342b'; } }
+  finally{ if(btn){ btn.disabled=false; btn.textContent='Gerar procuração (Word + PDF)'; } }
 }
 /* Abre o assinador com os dados do contato aberto no CRM (nome/e-mail/telefone). */
 function assinaturaDoContato(){
