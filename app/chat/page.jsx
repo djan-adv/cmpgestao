@@ -44,6 +44,7 @@ export default function ChatMobile() {
   const procNomesRef = useRef({})
   const [procTick, setProcTick] = useState(0) // só para forçar repintar quando um nome chega
   const scrollRef = useRef(null)
+  const inputRef = useRef(null)
   const ultimoIdRef = useRef(0)
 
   const euId = user && user.id
@@ -141,13 +142,11 @@ export default function ChatMobile() {
   }
   function fixarProcesso(p) { setPin({ id: p.id, rotulo: rotuloProcesso(p) }); setBuscaAberta(false); setBuscaTxt(''); setBuscaResultados([]) }
 
-  function _detectaCNJ(txt) {
-    const m = String(txt || '').match(/\d{7}-?\d{2}\.?\d{4}\.?\d\.?\d{2}\.?\d{4}/)
-    return m ? m[0] : ''
-  }
+  // vai direto pro campo de digitar — nada se abre por cima roubando o foco/tela.
+  // Quem quiser vincular a um processo toca em "🔍 processo" por conta própria.
   function responderA(m) {
     setRespondendoA({ id: m.id, texto: m.texto, autor: m.autor_id === euId ? 'você' : (nomeDe(m.autor_id) || 'colega') })
-    if (!pin) { setBuscaAberta(true); buscarProcessos(_detectaCNJ(m.texto)) }
+    if (inputRef.current) inputRef.current.focus()
   }
 
   async function enviar(e) {
@@ -256,7 +255,7 @@ export default function ChatMobile() {
 
       {/* campo de digitar */}
       <form onSubmit={enviar} style={{ display: 'flex', gap: 8, padding: '8px 10px', background: '#fff', borderTop: '1px solid #ddd', flexShrink: 0, paddingBottom: 'max(8px, env(safe-area-inset-bottom))' }}>
-        <input value={texto} onChange={e => setTexto(e.target.value)} placeholder="Mensagem" autoComplete="off"
+        <input ref={inputRef} value={texto} onChange={e => setTexto(e.target.value)} placeholder="Mensagem" autoComplete="off"
           style={{ flex: 1, border: '1px solid #ddd', borderRadius: 20, padding: '11px 14px', fontSize: 15 }} />
         <button type="submit" style={{ width: 44, height: 44, borderRadius: '50%', border: 0, background: VERDE, color: '#fff', fontSize: 18, cursor: 'pointer', flexShrink: 0 }}>➤</button>
       </form>
