@@ -6,7 +6,8 @@
 //
 // Segurança:
 //  - exige usuário autenticado (JWT do Supabase);
-//  - exige que o e-mail do usuário esteja na lista DEPLOY_ALLOW (coordenador);
+//  - exige que o usuário seja coordenador (e-mail em DEPLOY_ALLOW, OU sócio na
+//    tabela usuarios com nome Djan/Jader/Eduarda — ver podePublicar);
 //  - só executa um git pull no diretório fixo do projeto — nada de comando arbitrário.
 
 import { createClient } from '@supabase/supabase-js'
@@ -20,8 +21,21 @@ export const maxDuration = 60
 const REPO_DIR = '/opt/cmpgestao'
 const STATE_FILE = path.join(REPO_DIR, '.deploy-build.state')
 const LOG_FILE = path.join(REPO_DIR, '.deploy-build.log')
-// e-mails autorizados a publicar (coordenador). Pode acrescentar outros depois.
+// e-mails autorizados a publicar (coordenador), além de quem estiver como sócio
+// na tabela usuarios com um desses nomes — mesmo critério já usado em
+// /api/acessos e /api/convite (assim Jader e Maria Eduarda também publicam).
 const DEPLOY_ALLOW = ['djan.adv@gmail.com']
+const DEPLOY_NOMES = [/djan/i, /jader/i, /eduarda/i]
+async function podePublicar(user) {
+  const email = String((user && user.email) || '').toLowerCase()
+  if (DEPLOY_ALLOW.map(e => e.toLowerCase()).includes(email)) return true
+  try {
+    const sbA = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } })
+    const { data } = await sbA.from('usuarios').select('nome,papel').eq('id', user.id).maybeSingle()
+    if (!data || data.papel !== 'socio') return false
+    return DEPLOY_NOMES.some(rx => rx.test(String(data.nome || '')))
+  } catch (e) { return false }
+}
 
 // Recompila o servidor em segundo plano (npm install se preciso -> npm run build ->
 // pm2 restart) e registra o estado em .deploy-build.state (building/done/error).
@@ -71,8 +85,7 @@ function run(cmd) {
 export async function POST(request) {
   const user = await usuario(request)
   if (!user) return Response.json({ erro: 'não autenticado' }, { status: 401 })
-  const email = String((user.email || '')).toLowerCase()
-  if (!DEPLOY_ALLOW.map(e => e.toLowerCase()).includes(email)) {
+  if (!(await podePublicar(user))) {
     return Response.json({ erro: 'sem permissão para publicar' }, { status: 403 })
   }
 
@@ -139,8 +152,7 @@ export async function GET(request) {
   if (searchParams.get('novidades') !== null) {
     const user = await usuario(request)
     if (!user) return Response.json({ erro: 'não autenticado' }, { status: 401 })
-    const email = String((user.email || '')).toLowerCase()
-    if (!DEPLOY_ALLOW.map(e => e.toLowerCase()).includes(email)) return Response.json({ erro: 'sem permissão' }, { status: 403 })
+    if (!(await podePublicar(user))) return Response.json({ erro: 'sem permissão' }, { status: 403 })
     await run('git fetch origin main 2>&1')
     const cur = await run('git rev-parse --short HEAD')
     const log = await run("git log --pretty=format:'%h|@|%s' HEAD..origin/main")
