@@ -10179,7 +10179,11 @@ function _teorDaData(pubs, dataISO){
    o dispositivo final ("julgo procedente"...) pode nem aparecer no texto —
    sem capturar o tipo aqui, esses casos caem no "houve movimentação genérica". */
 function _tipoDoCabecalho(t){
-  var cab=String(t||'').slice(0,60).toUpperCase();
+  /* o cabeçalho real do DJEN é "Poder Judiciário... Vara... Processo nº...
+     AUTOR: ... REU: ..." antes de declarar o tipo — com várias partes, isso
+     passa fácil de 200 caracteres. 400 dá folga sem chegar ao corpo (o
+     relatório só começa depois de "Vistos"/"Trata-se", ainda mais adiante). */
+  var cab=String(t||'').slice(0,400).toUpperCase();
   if(/SENTEN[ÇC]A/.test(cab)) return 'sentenca';
   if(/AC[ÓO]RD[ÃA]O/.test(cab)) return 'acordao';
   if(/DECIS[ÃA]O\b/.test(cab)) return 'decisao';
@@ -10196,8 +10200,12 @@ function _extraiAto(texto){
   var m1=t.match(DISPOS), m2=t.match(ORDENS);
   var idx=(m1?m1.index:-1); if(idx<0 && m2) idx=m2.index; if(idx<0) return {tipo:tipo,ato:''};
   t=t.slice(idx);
-  /* corta a assinatura/rodapé do cartório */
-  t=t.replace(/\b(de ordem\b|documento (datado|assinado)|assinad[oa] eletronicamente|analista\/t[ée]cnico judici).*$/i,'');
+  /* corta a assinatura/rodapé do cartório — CUIDADO: "de ordem" sozinho é
+     perigoso demais (corta o DISPOSITIVO inteiro): "de ordem pública/social"
+     é linguagem jurídica comum em MÉRITO de sentença (ex.: CDC, Lei 4.591/64),
+     nada a ver com o "de ordem do MM. Juiz" do rodapé do cartório. Só corta
+     quando vem seguido de referência à autoridade (o padrão real do rodapé). */
+  t=t.replace(/\b(de ordem (d[oa]s?|do\(a\))\s*(mm\.?|merit[íi]ss[ei]m|ju[íi]z|ju[íi]zo|autoridade)|documento (datado|assinado)|assinad[oa] eletronicamente|analista\/t[ée]cnico judici).*$/i,'');
   t=t.replace(/\b[A-ZÀ-Ÿ][A-ZÀ-Ÿ ]{3,}\s*,\s*\d{1,2}\s+de\s+[a-zç]+\s+de\s+\d{4}\b.*$/i,'');
   t=t.replace(/Processo\s*(n[ºo°.]*)?\s*[-:]?\s*[\d.\-\/]{5,}/gi,'').replace(/\s+/g,' ').trim();
   return {tipo:tipo, ato:(t.length>=20?t:'')};
