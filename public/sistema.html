@@ -390,7 +390,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
       </div>
       <div id="crm-contatos">
         <div class="kpis" id="crm-kpis"></div>
-        <div class="searchbar"><input id="buscaCli" placeholder="Buscar por nome, tipo, telefone, origem..." oninput="renderContatos()"><span class="note" id="cli-count" style="align-self:center"></span><button class="btn sm" style="background:#6d28a8;color:#fff;border-color:#6d28a8;line-height:1.15;padding:5px 12px;text-align:center" onclick="mesclarContatos()" title="Marque 2+ contatos da mesma pessoa (nas caixinhas): você escolhe o nome que fica e todos os processos desse cliente são sincronizados">⛒ Mesclar<br><span style="font-size:9px;font-weight:400;opacity:.85">sincroniza por cliente</span></button><select id="ordCli" onchange="renderContatos()" style="font-size:12px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--bg)" title="Ordenar a lista de contatos"><option value="az">Ordenar: A → Z</option><option value="proc">Mais processos ativos</option></select><button class="btn sm" style="margin-left:auto" onclick="novoContato()">+ Novo contato</button></div>
+        <div class="searchbar"><input id="buscaCli" placeholder="Buscar por nome, tipo, telefone, origem..." oninput="renderContatos()"><span class="note" id="cli-count" style="align-self:center"></span><button class="btn sm" style="background:#185FA5;color:#fff;border-color:#185FA5;line-height:1.15;padding:5px 12px;text-align:center" onclick="abrirContatosSemelhantes()" title="Agrupa contatos com nome, telefone ou e-mail parecidos — acha os candidatos a mesclar pra você">🔍 Achar semelhantes <span id="csm-badge" style="display:none;font-size:9px;font-weight:700;background:#fff;color:#185FA5;border-radius:9px;padding:0 6px;margin-left:2px"></span></button><button class="btn sm" style="background:#6d28a8;color:#fff;border-color:#6d28a8;line-height:1.15;padding:5px 12px;text-align:center" onclick="mesclarContatos()" title="Marque 2+ contatos da mesma pessoa (nas caixinhas): você escolhe o nome que fica e todos os processos desse cliente são sincronizados">⛒ Mesclar<br><span style="font-size:9px;font-weight:400;opacity:.85">sincroniza por cliente</span></button><select id="ordCli" onchange="renderContatos()" style="font-size:12px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--bg)" title="Ordenar a lista de contatos"><option value="az">Ordenar: A → Z</option><option value="proc">Mais processos ativos</option></select><button class="btn sm" style="margin-left:auto" onclick="novoContato()">+ Novo contato</button></div>
         <div class="card"><table><thead><tr><th style="width:30px" title="Marque 2+ da mesma pessoa e clique em Mesclar"></th><th>Nome</th><th>Tipo</th><th>Telefone</th><th>E-mail</th><th>Origem</th><th>Proc.</th><th>Editar</th><th>Excluir</th></tr></thead><tbody id="crm-body"></tbody></table></div>
       </div>
       <div id="crm-captacao" class="hidden">
@@ -2311,6 +2311,7 @@ function renderContatos(){
   document.getElementById("cli-count").textContent=f.length+" contatos";
   var ativos=LEADS.filter(function(l){return l.estagio!=="ganho"&&l.estagio!=="perdido";}).length;
   document.getElementById("crm-kpis").innerHTML=kpi("contatos",CONTATOS.length)+kpi("clientes",CONTATOS.filter(function(c){return c.tipo==="cliente";}).length)+kpi("leads ativos",ativos)+kpi("origem que + converte","Indicação");
+  try{ atualizaBadgeSemelhantes(); }catch(e){}
   var b=document.getElementById("crm-body");b.innerHTML="";
   f.slice(0,300).forEach(function(c){var tr=document.createElement("tr");
     tr.innerHTML='<td style="text-align:center"><input type="checkbox" class="cmerge" data-id="'+c.id+'"></td><td><b>'+esc(nomeBonito(c.nome))+'</b> '+chipsFor(c.labels)+'</td><td><span class="b '+(c.tipo==="lead"?"warn":"ok")+'">'+esc(c.tipo)+'</span></td><td>'+esc(c.tel)+_extrasChip(c,'telefones',c.tel)+'</td><td>'+esc(c.email)+_extrasChip(c,'emails',c.email)+'</td><td>'+esc(c.origem)+'</td><td>'+((c.proc>0)?'<a href="#" onclick="verProcessosDoContato('+c.id+');return false;" style="font-weight:700;color:var(--gold);text-decoration:none;border-bottom:1px dotted var(--gold);cursor:pointer" title="Ver os processos deste contato">'+c.proc+'</a>':'')+'</td><td><button class="btn sm ghost" onclick="editarContato('+c.id+')">Editar</button></td><td><button class="btn sm ghost" style="color:var(--danger)" onclick="excluirContato('+c.id+')">Excluir</button></td>';
@@ -3803,10 +3804,14 @@ function _mgLido(campo, itens){
   var i=r?parseInt(r.value,10):0;
   return (itens[i]||itens[0]).v;
 }
-function mesclarContatos(){
-  var checks=Array.prototype.slice.call(document.querySelectorAll('.cmerge:checked'));
-  if(checks.length<2){ alert('Marque 2 ou mais contatos (a mesma pessoa) nas caixinhas para mesclar.'); return; }
-  var ids=checks.map(function(x){ return parseInt(x.getAttribute('data-id'),10); });
+function mesclarContatos(idsForce){
+  var ids;
+  if(idsForce && idsForce.length){ ids=idsForce.slice(); }
+  else {
+    var checks=Array.prototype.slice.call(document.querySelectorAll('.cmerge:checked'));
+    if(checks.length<2){ alert('Marque 2 ou mais contatos (a mesma pessoa) nas caixinhas para mesclar.'); return; }
+    ids=checks.map(function(x){ return parseInt(x.getAttribute('data-id'),10); });
+  }
   var sel=ids.map(function(id){ return (CONTATOS||[]).find(function(c){return c.id===id;}); }).filter(Boolean);
   if(sel.length<2){ return; }
   /* sugestão: o nome mais completo (mais longo) — mas VOCÊ escolhe (ou digita um limpo) */
@@ -3918,6 +3923,62 @@ async function _mesclarExec(sel, nomeFinal, emailFinal, telFinal, todosEmails, t
       +(procsRenomeados?('\n'+procsRenomeados+' processo(s) sincronizado(s) com o nome escolhido.'):'')
       +'\n\nGuardados na ficha: '+((reg.emails||[]).length)+' e-mail(s) e '+((reg.telefones||[]).length)+' telefone(s). Nada foi apagado.');
   }catch(e){ alert('Erro ao mesclar: '+(e&&e.message||e)); }
+}
+/* ===== Achar contatos semelhantes (candidatos a mesclar) =====
+   Mesma lógica de união por chave compartilhada já usada nos leads duplicados
+   (_grposLeadsDup): agrupa quem tem o MESMO telefone, MESMO e-mail, ou nome
+   parecido (normalizado e sem letra dobrada — "Belarmino" ≈ "Bellarmino").
+   Só sugere — nada é mesclado sem o usuário confirmar no diálogo de sempre. */
+function _grposContatosSemelhantes(){
+  seedContatos();
+  var ativos=(CONTATOS||[]).filter(function(c){ return c && c.nome && c.nome!=='—'; });
+  ativos.forEach(function(c){
+    var chaves=[]; var tel=_telDig(c.tel); if(tel) chaves.push('tel:'+tel);
+    var em=String(c.email||'').trim().toLowerCase(); if(em&&em!=='—') chaves.push('em:'+em);
+    var nk=(typeof _atdColapsa==='function')?_atdColapsa(normClienteNome(c.nome)):normClienteNome(c.nome);
+    if(nk && nk.split(' ').filter(Boolean).length>=2) chaves.push('nm:'+nk);
+    c.__chaves=chaves;
+  });
+  var pai={}; function acha(k){ while(pai[k]&&pai[k]!==k){ k=pai[k]; } return k; }
+  ativos.forEach(function(c){ (c.__chaves||[]).forEach(function(k){ if(!(k in pai)) pai[k]=k; }); });
+  ativos.forEach(function(c){ var ks=c.__chaves||[]; for(var i=1;i<ks.length;i++){ pai[acha(ks[i])]=acha(ks[0]); } c.__raiz=(ks.length?acha(ks[0]):('id:'+c.id)); });
+  var g={}; ativos.forEach(function(c){ (g[c.__raiz]=g[c.__raiz]||[]).push(c); });
+  return Object.keys(g).map(function(k){return g[k];}).filter(function(arr){return arr.length>1;});
+}
+function atualizaBadgeSemelhantes(){
+  try{ var g=_grposContatosSemelhantes(); var b=document.getElementById('csm-badge'); if(b){ if(g.length){ b.style.display=''; b.textContent=g.length; } else b.style.display='none'; } }catch(e){}
+}
+function fecharContatosSemelhantes(){ var m=document.getElementById('modal-csem'); if(m) m.remove(); }
+function abrirContatosSemelhantes(){
+  fecharContatosSemelhantes();
+  var g=_grposContatosSemelhantes();
+  g.forEach(function(arr){ arr.sort(function(a,b){ return (b.proc||0)-(a.proc||0) || String(a.nome||'').length-String(b.nome||'').length; }); });
+  window.__gruposCSem=g;
+  var ov=document.createElement('div'); ov.id='modal-csem';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(20,28,40,.5);z-index:9000;overflow:auto';
+  var corpo=!g.length
+    ? '<div class="note">Nenhum contato parecido encontrado — nomes, telefones e e-mails não batem entre nenhum par.</div>'
+    : g.map(function(arr,gi){
+        var linhas=arr.map(function(c,i){
+          return '<div style="font-size:12.5px;padding:2px 0;color:'+(i===0?'#0F6E56':'#5d6673')+'">'+(i===0?'★ ':'• ')+esc(nomeBonito(c.nome))+' <span class="note">'+esc(c.tipo||'')+(c.tel&&c.tel!=='—'?(' · '+esc(c.tel)):'')+(c.email&&c.email!=='—'?(' · '+esc(c.email)):'')+(c.proc?(' · '+c.proc+' processo'+(c.proc>1?'s':'')):'')+'</span></div>';
+        }).join('');
+        return '<div style="border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:10px">'
+          +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:5px"><b>'+arr.length+' contatos parecidos</b><button class="btn sm gold" onclick="mesclarGrupoContatos('+gi+')">Mesclar este grupo</button></div>'
+          +linhas+'</div>';
+      }).join('');
+  ov.innerHTML='<div style="background:#fff;border-radius:12px;max-width:640px;width:96vw;margin:4vh auto;max-height:88vh;overflow:auto;padding:18px 20px">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:4px"><h3 style="margin:0">🔍 Contatos parecidos</h3><button class="btn sm ghost" onclick="fecharContatosSemelhantes()">✕ fechar</button></div>'
+    +'<p class="note" style="margin:0 0 10px">Agrupados por telefone, e-mail ou nome iguais/parecidos. Clique em <b>Mesclar este grupo</b> para abrir a mesclagem de sempre (você ainda escolhe o nome, e-mail e telefone que ficam).</p>'
+    +corpo+'</div>';
+  ov.onmousedown=function(e){ ov.__bd=(e.target===ov); };
+  ov.onclick=function(e){ if(e.target===ov&&ov.__bd) fecharContatosSemelhantes(); };
+  document.body.appendChild(ov);
+}
+function mesclarGrupoContatos(gi){
+  var g=window.__gruposCSem; if(!g||!g[gi]) return;
+  var ids=g[gi].map(function(c){ return c.id; });
+  fecharContatosSemelhantes();
+  mesclarContatos(ids);
 }
 function novoContato(){editarContato(null);}
 function editarContato(id){seedContatos();var c=id?CONTATOS.find(function(x){return x.id===id;}):{id:null,nome:"",tipo:"cliente",tel:"",email:"",origem:"",proc:0};window._cedit=c;
