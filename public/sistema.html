@@ -13735,8 +13735,12 @@ var PRD_TIPOS_FIXOS=['peticao_inicial','contestacao','agravo','contrarrazoes','r
    (fechar negócio no CRM, gerar contrato, publicar/editar no portal de
    notícias), sem precisar criar uma tarefa manual com o título batendo. */
 function _prdPontosEvento(ev){
-  if(ev.event_type==='task_completed'||ev.event_type==='hearing_completed') return _prdPontosTarefa(ev);
   var md=ev.metadata||{};
+  /* tarefa da agenda com tipo "Reunião" (t-tipo=reuniao) concluída — conta
+     como atendimento/reunião com cliente direto pelo tipo, sem depender do
+     título bater com o rótulo do peso */
+  if(ev.event_type==='task_completed' && md.tipo==='reuniao') return (PRD_PESOS['atendimento_reuniao_cliente']||{}).pontos||0;
+  if(ev.event_type==='task_completed'||ev.event_type==='hearing_completed') return _prdPontosTarefa(ev);
   if(ev.event_type==='case_registered' && md.origem==='crm') return (PRD_PESOS['crm_fechado']||{}).pontos||0;
   if(ev.event_type==='document_generated' && md.tipo==='contrato') return (PRD_PESOS['contrato_confeccionado']||{}).pontos||0;
   if(ev.event_type==='noticia_publicada') return (PRD_PESOS['publicacoes_portal_de_noticias']||{}).pontos||0;
