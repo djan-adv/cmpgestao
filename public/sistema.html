@@ -675,6 +675,22 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
 </main>
 </div>
 
+<div id="modal-pub-editar" class="overlay hidden"><div class="modal" style="max-width:760px">
+  <h2>Editar publicação</h2>
+  <div id="pub-ed-status" class="note" style="margin:0 0 10px"></div>
+  <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px">
+    <div><label style="font-size:12px;font-weight:600;color:var(--muted)">Título</label><input id="pub-ed-titulo" style="width:100%;box-sizing:border-box"></div>
+    <div><label style="font-size:12px;font-weight:600;color:var(--muted)">Site</label><input id="pub-ed-site" style="width:100%;box-sizing:border-box" disabled></div>
+    <div><label style="font-size:12px;font-weight:600;color:var(--muted)">Tema</label><input id="pub-ed-tema" style="width:100%;box-sizing:border-box"></div>
+  </div>
+  <label style="font-size:12px;font-weight:600;color:var(--muted);margin-top:8px;display:block">Conteúdo (HTML) <span class="note" style="font-size:11px">— o mesmo que está no site: use &lt;p&gt;, &lt;h2&gt;, &lt;ul&gt;/&lt;li&gt;, &lt;strong&gt;/&lt;em&gt;</span></label>
+  <textarea id="pub-ed-corpo" style="width:100%;box-sizing:border-box;min-height:260px;font-family:ui-monospace,Menlo,monospace;font-size:12.5px"></textarea>
+  <div style="margin-top:10px;display:flex;gap:8px;justify-content:flex-end">
+    <button class="btn ghost sm" onclick="fecharModalPubEditar()">Cancelar</button>
+    <button id="pub-ed-btn" class="btn sm" onclick="pubSalvarEdicao()">Salvar alterações</button>
+  </div>
+</div></div>
+
 <div id="modal-tarefa" class="overlay hidden">
   <div class="modal">
     <h2>Nova tarefa</h2>
@@ -6981,7 +6997,7 @@ async function renderPublicacoes(){
   try{
     var q=await window.__sb.from('publicacoes').select('*').order('publicado_em',{ascending:false,nullsFirst:true}).order('criado_em',{ascending:false}).limit(500);
     if(q.error){ el.innerHTML='<div class="note" style="color:#b5342b">Erro: '+finEsc(q.error.message)+'</div>'; return; }
-    var rows=q.data||[];
+    var rows=q.data||[]; window.PUB_ROWS_CACHE=rows;
     var chip=function(n,rot){ return '<span style="background:#eef4fb;color:#22405f;border-radius:16px;padding:5px 12px;font-size:13px"><b>'+n+'</b> '+rot+'</span>'; };
     var pubN=rows.filter(function(x){return x.status==='publicado';}).length;
     var rasN=rows.filter(function(x){return x.status!=='publicado';}).length;
@@ -6992,7 +7008,7 @@ async function renderPublicacoes(){
     rows.forEach(function(x){
       var st=x.status==='publicado'?'<span style="color:#0F6E56;font-weight:700">✓ publicado</span>':(x.status==='erro'?('<span style="color:#b5342b;font-weight:700" title="'+finEsc(x.erro||'')+'">erro</span>'):'<span style="color:#8a6d00;font-weight:700">rascunho</span>');
       var dt=(x.publicado_em||x.criado_em)?String(x.publicado_em||x.criado_em).slice(0,10).split('-').reverse().join('/'):'—';
-      var acoes='';
+      var acoes='<button class="btn sm ghost" style="font-size:11px" onclick="pubEditar(\''+x.id+'\')" title="Editar título e texto direto pelo portal — se já estiver publicado, atualiza o post no site">editar</button> ';
       if(x.status!=='publicado') acoes+='<button class="btn sm" style="font-size:11px;background:#0F6E56;color:#fff;border:1px solid #0F6E56" onclick="pubPublicar(\''+x.id+'\',this)">publicar</button> <button class="btn sm ghost" style="font-size:11px;color:#b5342b" onclick="pubExcluir(\''+x.id+'\')">excluir</button>';
       html+='<tr style="border-top:1px solid #e5e9ef">'
         +'<td style="padding:7px 10px 7px 0;font-weight:600;color:var(--navy)">'+(x.link?('<a href="'+finEsc(x.link)+'" target="_blank" style="color:var(--navy)">'+finEsc(x.titulo)+'</a>'):finEsc(x.titulo))+'</td>'
@@ -7068,6 +7084,53 @@ async function pubExcluir(id){
   var r=await window.__sb.from('publicacoes').delete().eq('id',id).neq('status','publicado');
   if(r&&r.error){ alert('Erro: '+r.error.message); return; }
   renderPublicacoes();
+}
+/* edita a publicação direto pelo portal — se já estiver publicada, busca o
+   texto de verdade no WordPress (o extrato importado só guarda um resumo) e,
+   ao salvar, atualiza o post lá também (mesma senha de aplicativo do Publicar) */
+async function pubEditar(id){
+  window.__pubEdId=id;
+  var m=document.getElementById('modal-pub-editar'); if(!m) return; m.classList.remove('hidden');
+  var st=document.getElementById('pub-ed-status');
+  document.getElementById('pub-ed-titulo').value='';
+  document.getElementById('pub-ed-tema').value='';
+  document.getElementById('pub-ed-corpo').value='';
+  document.getElementById('pub-ed-site').value='';
+  if(st){ st.textContent='Carregando o conteúdo atual…'; st.style.color='var(--muted)'; }
+  try{
+    var linha=(PUB_ROWS_CACHE||[]).find(function(x){return String(x.id)===String(id);})||{};
+    document.getElementById('pub-ed-site').value=PUB_SITES[linha.site]||linha.site||'';
+    document.getElementById('pub-ed-tema').value=linha.tema||'';
+    var tok=await docToken();
+    var r=await fetch('/api/publicacoes',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({acao:'conteudo',id:id})});
+    var j=await r.json();
+    if(!r.ok||j.erro){ if(st){ st.textContent='Não deu pra carregar o conteúdo: '+(j.erro||('HTTP '+r.status)); st.style.color='#b5342b'; } return; }
+    document.getElementById('pub-ed-titulo').value=j.titulo||linha.titulo||'';
+    document.getElementById('pub-ed-corpo').value=j.conteudo_html||'';
+    if(st){ st.textContent=linha.status==='publicado'?'Editando o post JÁ publicado — ao salvar, atualiza direto no site.':'Editando o rascunho (ainda não publicado).'; st.style.color='var(--muted)'; }
+  }catch(e){ if(st){ st.textContent='Erro: '+(e&&e.message||e); st.style.color='#b5342b'; } }
+}
+function fecharModalPubEditar(){ var m=document.getElementById('modal-pub-editar'); if(m) m.classList.add('hidden'); }
+async function pubSalvarEdicao(){
+  var id=window.__pubEdId; if(!id) return;
+  var titulo=(document.getElementById('pub-ed-titulo').value||'').trim();
+  var corpo=document.getElementById('pub-ed-corpo').value||'';
+  var tema=(document.getElementById('pub-ed-tema').value||'').trim();
+  var st=document.getElementById('pub-ed-status');
+  if(!titulo){ if(st){ st.textContent='Informe o título.'; st.style.color='#b5342b'; } return; }
+  var btn=document.getElementById('pub-ed-btn');
+  if(btn){ btn.disabled=true; btn.textContent='Salvando…'; }
+  if(st){ st.textContent='Salvando…'; st.style.color='var(--muted)'; }
+  try{
+    var tok=await docToken();
+    var r=await fetch('/api/publicacoes',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({acao:'editar',id:id,titulo:titulo,conteudo_html:corpo,tema:tema})});
+    var j=await r.json();
+    if(!r.ok||j.erro){ if(st){ st.textContent='Não salvou: '+(j.erro||('HTTP '+r.status)); st.style.color='#b5342b'; } return; }
+    if(st){ st.textContent='✓ Salvo!'; st.style.color='#0F6E56'; }
+    renderPublicacoes();
+    setTimeout(fecharModalPubEditar, 900);
+  }catch(e){ if(st){ st.textContent='Erro: '+(e&&e.message||e); st.style.color='#b5342b'; } }
+  finally{ if(btn){ btn.disabled=false; btn.textContent='Salvar alterações'; } }
 }
 /* ===== Proteção contra a seta "voltar" do navegador (e o botão lateral do mouse):
    numa página única, o Voltar saía do site direto. Agora cada troca de tela
