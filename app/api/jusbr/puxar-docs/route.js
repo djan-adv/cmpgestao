@@ -9,6 +9,7 @@
 // Aberta (sem login) para rodar no crontab; não expõe o token.
 
 import { jusbrAdmin, getFreshToken, tipoRealDoArquivo, ESCRITORIO_CMP } from '../lib.js'
+import { camposConteudo } from '../guardar.js'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -139,7 +140,9 @@ export async function GET(request) {
       const linha = {
         escritorio_id: ESCRITORIO_CMP, processo_numero: numero, doc_uuid: d.uuid,
         doc_nome: d.nome, doc_tipo: r.tipo, tamanho: r.buf.length,
-        conteudo_b64: r.buf.toString('base64'), baixado_por: 'robo',
+        baixado_por: 'robo',
+        // conteúdo vai para o disco do VPS; o banco fica só com o caminho
+        ...camposConteudo(numero, d.nome, d.uuid, r.buf),
       }
       if (ehDocLeve(d.nome)) linha.expira_em = '2999-12-31T00:00:00.000Z' // permanente (coluna NOT NULL)
       const ins = await sb.from('jusbr_arquivos').insert(linha).select('id').single()
@@ -177,7 +180,7 @@ export async function GET(request) {
         if (!d.uuid) continue
         const r = await baixarDoc(token, numero, d)
         if (r.erro) { rel.pulados++; if (r.erro === 'expirado') { total = maxTotal; break } continue }
-        const linha = { escritorio_id: ESCRITORIO_CMP, processo_numero: numero, doc_uuid: d.uuid, doc_nome: d.nome, doc_tipo: r.tipo, tamanho: r.buf.length, conteudo_b64: r.buf.toString('base64'), baixado_por: 'robo' }
+        const linha = { escritorio_id: ESCRITORIO_CMP, processo_numero: numero, doc_uuid: d.uuid, doc_nome: d.nome, doc_tipo: r.tipo, tamanho: r.buf.length, baixado_por: 'robo', ...camposConteudo(numero, d.nome, d.uuid, r.buf) }
         if (ehDocLeve(d.nome)) linha.expira_em = '2999-12-31T00:00:00.000Z' // permanente (coluna NOT NULL)
         const ins = await sb.from('jusbr_arquivos').insert(linha).select('id').single()
         if (!ins.error) { baix++; total++; rel.baixados++ }

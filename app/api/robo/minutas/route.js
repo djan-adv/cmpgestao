@@ -309,14 +309,15 @@ async function faseDossie(sb) {
   }
   if (arquivos.length < DOSSIE_MAX_DOCS) {
     const { data: doJus } = await sb.from('jusbr_arquivos')
-      .select('doc_nome,doc_tipo,conteudo_b64').eq('escritorio_id', ESCRITORIO_CMP)
+      .select('doc_nome,doc_tipo,conteudo_b64,caminho_disco').eq('escritorio_id', ESCRITORIO_CMP)
       .eq('processo_numero', proc.numero).order('baixado_em', { ascending: false }).limit(30)
     const ordenados = (doJus || []).sort((a, b) => pontua(b.doc_nome) - pontua(a.doc_nome))
     for (const d of ordenados) {
       if (arquivos.length >= DOSSIE_MAX_DOCS) break
       if (usados.has(semAcento(d.doc_nome))) continue // já veio da pasta do processo
+      // depois da faxina o conteúdo fica no disco; o banco guarda só o caminho
       let data
-      try { data = Buffer.from(d.conteudo_b64, 'base64') } catch (e) { continue }
+      try { data = d.conteudo_b64 ? Buffer.from(d.conteudo_b64, 'base64') : fs.readFileSync(d.caminho_disco) } catch (e) { continue }
       if (!data.length || bytes + data.length > DOSSIE_MAX_BYTES) continue
       const name = 'documentos/' + limpaNome(d.doc_nome)
       arquivos.push({ name, data }); listaDocs.push({ name, origem: 'baixado do jus.br' })
