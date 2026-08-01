@@ -312,7 +312,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
           <div class="switch"><button id="tg-mes" onclick="setTarView('mes')">Mês</button><button id="tg-semana" class="on" onclick="setTarView('semana')">Semana</button><button id="tg-lista" onclick="setTarView('lista')">Lista</button></div>
           <label style="margin:0;color:var(--muted);font-size:13px">Responsável:</label>
           <select id="tar-resp" style="width:auto" onchange="setTarResp(this.value)"><option>Todos</option><option>Djan</option><option>Maria Rita</option><option>Jader Pinheiro</option><option>Maria Eduarda</option><option>Estagiário(a)</option></select>
-          <label style="margin:0;color:var(--muted);font-size:13px"><input type="checkbox" id="tar-ocultar-concl" onchange="renderTarefasView()"> ocultar concluídas</label>
+          <label style="margin:0;color:var(--muted);font-size:13px"><input type="checkbox" id="tar-ocultar-concl" checked onchange="renderTarefasView()"> ocultar concluídas</label>
           <label style="margin:0;color:var(--muted);font-size:13px" title="Não há expediente forense nem audiência no fim de semana — ocultando, os cinco dias úteis ficam com colunas largas"><input type="checkbox" id="tar-ocultar-fds" checked onchange="setTarFds(!this.checked)"> ocultar sábados e domingos</label>
           <button class="btn sm ghost" style="margin-left:auto;font-size:12px" onclick="repararAgendamentosSemTarefa()" title="Traz para cá os agendamentos que você corrigiu de audiência para tarefa/prazo mas que ficaram só na aba Reuniões e audiências">&#8635; trazer agendamentos corrigidos</button>
         </div>
@@ -2576,7 +2576,11 @@ function persisteKanban(a){
     if(a.dbid){ /* já existe no banco: atualiza */
       /* `tipo` PRECISA entrar aqui: sem ele, corrigir "audiência → tarefa" mudava
          só a memória e voltava ao errado no próximo carregamento. */
-      sb.from('kanban_tarefas').update({coluna:a.col,titulo:a.titulo,resp:(a.resp||null),data:(a.data||null),prazo:(a.prazo||null),tipo:(a.tipoForm||null)}).eq('id',a.dbid).then(function(r){ if(r&&r.error) console.warn('kanban update:',r.error.message); });
+      /* atrasada:false — qualquer persistência aqui é ação deliberada do usuário
+         (arrastar, editar, concluir), então o chip de "adiada automaticamente"
+         some: quem mexeu por último foi gente, não o robô do sábado */
+      sb.from('kanban_tarefas').update({coluna:a.col,titulo:a.titulo,resp:(a.resp||null),data:(a.data||null),prazo:(a.prazo||null),tipo:(a.tipoForm||null),atrasada:false}).eq('id',a.dbid).then(function(r){ if(r&&r.error) console.warn('kanban update:',r.error.message); });
+      a.atrasada=false;
     } else { /* novo: insere e guarda o dbid */
       sb.auth.getUser().then(function(ug){ return sb.from('usuarios').select('escritorio_id').eq('id',ug.data.user.id).single(); }).then(function(pf){
         var esc=pf&&pf.data&&pf.data.escritorio_id; if(!esc) return;
@@ -5183,6 +5187,7 @@ function _tarChipHTML(a){
   var title=(a.titulo||'')+(partes?(' — '+partes):'')+(numFmt?(' · '+numFmt):'')+' (clique para abrir a atividade)';
   var estilo='cursor:pointer;display:flex;align-items:flex-start;gap:5px;'+(concl?'opacity:.55;':'');
   var risco=concl?'text-decoration:line-through;':'';
+  var chipAtraso=(a.atrasada&&!concl)?'<span title="adiada automaticamente — não foi concluída até sexta" style="flex-shrink:0;background:rgba(236,64,122,.16);color:#ad1457;border-radius:9px;font-size:9px;font-weight:800;letter-spacing:.02em;padding:1px 6px;margin-top:1px;white-space:nowrap">atraso</span>':'';
   return '<div class="cev tar3 '+(a.prazo?'vm':'nt')+'" style="'+estilo+'" title="'+esc(title)+'">'
     +'<span onclick="event.stopPropagation();toggleConcluirTarefa('+a.id+')" title="'+(concl?'Reabrir':'Concluir')+'" style="cursor:pointer;flex-shrink:0;margin-top:1px;width:13px;height:13px;border:1.5px solid currentColor;border-radius:3px;display:inline-flex;align-items:center;justify-content:center;font-size:9px;line-height:1">'+(concl?'✓':'')+'</span>'
     +'<span class="tar3-txt" style="'+risco+'" onclick="event.stopPropagation();abrirTarefaKanban('+a.id+')">'
@@ -5190,6 +5195,7 @@ function _tarChipHTML(a){
       +'<span class="l2">'+esc(partes||'—')+'</span>'
       +'<span class="l3">'+esc(a.titulo||'—')+'</span>'
     +'</span>'
+    +chipAtraso
     +'</div>';
 }
 function renderTarefasMes(){
@@ -5505,9 +5511,9 @@ function toggleConcluirTarefa(id){
     }catch(eAg){ console.log('agenda: '+(eAg&&eAg.message||eAg)); }
     /* carrega as tarefas do Kanban do banco (kanban_tarefas). Se a tabela não existir, ignora e usa o seed. */
     try{
-      var kt=await sb.from('kanban_tarefas').select('id,titulo,cliente,numero,coluna,resp,data,prazo,tipo').limit(3000);
+      var kt=await sb.from('kanban_tarefas').select('id,titulo,cliente,numero,coluna,resp,data,prazo,tipo,atrasada').limit(3000);
       if(!kt.error && kt.data){
-        window.__KANDB=kt.data.map(function(t,i){ return {id:9000+i,dbid:t.id,titulo:t.titulo||'',cliente:t.cliente||'',numero:t.numero||'—',col:t.coluna||'distribuir',resp:t.resp||'',data:t.data||'',prazo:t.prazo||'',tipoForm:t.tipo||''}; });
+        window.__KANDB=kt.data.map(function(t,i){ return {id:9000+i,dbid:t.id,titulo:t.titulo||'',cliente:t.cliente||'',numero:t.numero||'—',col:t.coluna||'distribuir',resp:t.resp||'',data:t.data||'',prazo:t.prazo||'',tipoForm:t.tipo||'',atrasada:!!t.atrasada}; });
         KAN=null; initKanban();
         var __ag=document.getElementById('s-agenda'); if(__ag && !__ag.classList.contains('hidden') && typeof renderAgendaView==='function') renderAgendaView();
         if(typeof renderPainelTarefasEtiquetas==='function') renderPainelTarefasEtiquetas();
