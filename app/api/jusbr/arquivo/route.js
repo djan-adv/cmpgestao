@@ -3,6 +3,7 @@
 // Devolve o PDF guardado (jusbr_arquivos). Aceita o JWT no header ou na query
 // (a query é útil para abrir o PDF direto numa nova aba / <embed>).
 
+import fs from 'fs'
 import { createClient } from '@supabase/supabase-js'
 import { tipoRealDoArquivo, pdfDeTexto } from '../lib.js'
 
@@ -28,10 +29,15 @@ export async function GET(request) {
   if (!(u && u.data && u.data.user)) return Response.json({ erro: 'não autenticado' }, { status: 401 })
 
   const sb = admin()
-  const { data } = await sb.from('jusbr_arquivos').select('doc_nome,doc_tipo,conteudo_b64').eq('escritorio_id', ESCRITORIO_CMP).eq('id', id).maybeSingle()
-  if (!data || !data.conteudo_b64) return Response.json({ erro: 'arquivo não encontrado (pode ter expirado)' }, { status: 404 })
+  const { data } = await sb.from('jusbr_arquivos').select('doc_nome,doc_tipo,conteudo_b64,caminho_disco').eq('escritorio_id', ESCRITORIO_CMP).eq('id', id).maybeSingle()
+  if (!data) return Response.json({ erro: 'arquivo não encontrado (pode ter expirado)' }, { status: 404 })
 
-  let buf = Buffer.from(data.conteudo_b64, 'base64')
+  // depois da faxina o conteúdo mora no disco do VPS e o banco guarda só o
+  // caminho; arquivos ainda não migrados continuam vindo do conteudo_b64.
+  let buf = null
+  if (data.conteudo_b64) buf = Buffer.from(data.conteudo_b64, 'base64')
+  else if (data.caminho_disco) { try { buf = fs.readFileSync(data.caminho_disco) } catch (e) { buf = null } }
+  if (!buf || !buf.length) return Response.json({ erro: 'arquivo não encontrado (pode ter expirado)' }, { status: 404 })
   // O rótulo guardado não é confiável: o PDPJ manda TEXTO puro dizendo que é PDF,
   // e o navegador responde "Falha ao carregar o documento PDF". Vale o conteúdo.
   let tipo = tipoRealDoArquivo(buf, data.doc_tipo, data.doc_nome)

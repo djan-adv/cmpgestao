@@ -5,6 +5,7 @@
 
 import { createClient } from '@supabase/supabase-js'
 import { getFreshToken, ehFaltaDeAcessoAoProcesso, tipoRealDoArquivo } from '../lib.js'
+import { camposConteudo } from '../guardar.js'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -142,7 +143,9 @@ export async function POST(request) {
   const linhaArq = {
     escritorio_id: ESCRITORIO_CMP, processo_numero: numero, doc_uuid: uuid,
     doc_nome: nome, doc_tipo: tipoFinal, tamanho: buf.length,
-    conteudo_b64: buf.toString('base64'), baixado_por: String(user.email || ''),
+    baixado_por: String(user.email || ''),
+    // conteúdo vai para o disco do VPS; o banco fica só com o caminho
+    ...camposConteudo(numero, nome, uuid, buf),
   }
   if (ehLeve) linhaArq.expira_em = '2999-12-31T00:00:00.000Z' // permanente (coluna é NOT NULL)
   const { data: ins, error } = await sb.from('jusbr_arquivos').insert(linhaArq).select('id,doc_nome,doc_tipo,tamanho').single()

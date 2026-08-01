@@ -38,6 +38,12 @@ const JOBS = [
   { nome: 'monit_cobrar', rotulo: 'Monitoramento — cobrança', url: '/api/monitoramento/robo?tarefa=cobrar', diario_hora: 6 },
   { nome: 'monit_varrer', rotulo: 'Monitoramento — varredura', url: '/api/monitoramento/robo?tarefa=varrer', semanal_dias: [1, 5], hora: 8 },
   { nome: 'inpi_varrer', rotulo: 'INPI — RPI de marcas', url: '/api/inpi/robo?tarefa=varrer', semanal_dias: [2], hora: 9 },
+  // agenda: tarefa não concluída até sexta vira segunda seguinte, marcada como atrasada
+  { nome: 'agenda_adiar', rotulo: 'Agenda — adiar tarefas atrasadas pra segunda', url: '/api/agenda/adiar-atrasadas', semanal_dias: [6], hora: 6 },
+  // tira os PDFs do jus.br de dentro do banco (vão pro disco) e apaga o cache
+  // vencido. Sem isso a tabela jusbr_arquivos cresce sem parar e estoura o
+  // Supabase — foi o que aconteceu em agosto/2026 (1,3 GB num plano de 500 MB).
+  { nome: 'jusbr_arquivar', rotulo: 'jus.br — tirar arquivos do banco e faxinar cache', url: '/api/jusbr/arquivar', cada_min: 10, timeout_ms: 280000 },
   // fila de e-mails com hora marcada (horário da vara: 08h comum/trabalhista, 10h federal).
   // De 5 em 5 min para o e-mail sair perto do minuto marcado, não meia hora depois.
   { nome: 'email_fila', rotulo: 'E-mails — fila com hora marcada', url: '/api/cron/email-fila', cada_min: 5 },
