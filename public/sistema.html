@@ -5946,7 +5946,7 @@ async function gerarCasoNovoCliente(){
   /* grava no banco (tolerante) */
   try{ var sb=window.__sb; if(sb){ var ug=await sb.auth.getUser(); var pf=await sb.from('usuarios').select('escritorio_id').eq('id',ug.data.user.id).single(); var esc=pf&&pf.data&&pf.data.escritorio_id;
     if(esc){ var ins=await sb.from('processos').insert({escritorio_id:esc,numero:num,cliente_nome:cli||null,oponente:op||null,assunto:(assunto||peca)||null,status:'Administrativo',fonte:'caso'}).select('id').single(); if(ins&&ins.data){ novo._id=ins.data.id;
-      try{ if(typeof logEvent==='function') logEvent('case_registered','processo',num,{modo:'caso'}); }catch(eLg){}
+      try{ if(typeof logEvent==='function') logEvent('case_registered','processo',num,{modo:'caso',origem:'crm'}); }catch(eLg){}
       if(obs) await sb.from('andamentos').insert({processo_id:ins.data.id,data:isoDia,texto:'[Cadastro manual] '+obs,fonte:'manual'});
       await sb.from('andamentos').insert({processo_id:ins.data.id,data:isoDia,texto:pedido,fonte:'manual'}); }
       else if(ins&&ins.error){ window.__cadErro=ins.error.message; }
@@ -7075,7 +7075,7 @@ async function pubPublicar(id, btn){
     var r=await fetch('/api/publicacoes',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({acao:'publicar',id:id})});
     var j=await r.json();
     if(!r.ok||j.erro) alert('Não publicou: '+(j.erro||r.status));
-    else alert('✓ Publicado!\n\n'+(j.link||''));
+    else{ alert('✓ Publicado!\n\n'+(j.link||'')); try{ if(typeof logEvent==='function') logEvent('noticia_publicada','publicacao',id,{acao:'publicar'}); }catch(eLg){} }
   }catch(e){ alert('Erro: '+(e&&e.message||e)); }
   renderPublicacoes();
 }
@@ -7127,6 +7127,13 @@ async function pubSalvarEdicao(){
     var j=await r.json();
     if(!r.ok||j.erro){ if(st){ st.textContent='Não salvou: '+(j.erro||('HTTP '+r.status)); st.style.color='#b5342b'; } return; }
     if(st){ st.textContent='✓ Salvo!'; st.style.color='#0F6E56'; }
+    /* pontua só quando edita um post JÁ publicado no site (trabalho de verdade
+       no ar) — salvar rascunho várias vezes não deve gerar pontos repetidos;
+       o rascunho já pontua quando publicado, em pubPublicar() */
+    try{
+      var linhaEd=(window.PUB_ROWS_CACHE||[]).find(function(x){return String(x.id)===String(id);});
+      if(linhaEd && linhaEd.status==='publicado' && typeof logEvent==='function') logEvent('noticia_publicada','publicacao',id,{acao:'editar'});
+    }catch(eLg){}
     renderPublicacoes();
     setTimeout(fecharModalPubEditar, 900);
   }catch(e){ if(st){ st.textContent='Erro: '+(e&&e.message||e); st.style.color='#b5342b'; } }
@@ -10623,6 +10630,7 @@ async function gerarContratoAuto(){
       if(rc2.data&&rc2.data[0]) await sb2.from('contatos').update(reg).eq('id', rc2.data[0].id);
       else { reg.nome=d.nome; reg.tipo='cliente'; await sb2.from('contatos').insert(reg); }
     }catch(e){}
+    try{ if(typeof logEvent==='function') logEvent('document_generated','processo',dig,{tipo:'contrato'}); }catch(eLg){}
     if(st){ st.textContent='✓ Contrato gerado e salvo na pasta do processo!'; st.style.color='#0F6E56'; }
     try{ if(typeof carregarDocs==='function' && typeof atual!=='undefined' && atual) carregarDocs(atual.numero,'','proc'); }catch(e){}
     setTimeout(fecharModalContrato, 1400);
@@ -13681,10 +13689,16 @@ function _prdCfg(chave,def){ var v=(PRD_CFG||{})[chave]; return (v==null||v===''
 async function _prdCarrega(){
   var sb=window.__sb; if(!sb) return;
   var per=(document.getElementById('prd-periodo')||{}).value||'30';
-  var d0=new Date();
-  if(per==='hoje'){ d0.setHours(0,0,0,0); } else { d0=new Date(Date.now()-parseInt(per,10)*86400000); }
+  var d0=new Date(), d1=null;
+  if(per==='hoje'){ d0.setHours(0,0,0,0); }
+  else if(/^\d{4}-\d{2}$/.test(per)){ /* mês calendário, ex.: "2026-08" */
+    var mm=per.split('-'); d0=new Date(+mm[0],(+mm[1])-1,1); d1=new Date(+mm[0],(+mm[1]),1);
+  } else { d0=new Date(Date.now()-parseInt(per,10)*86400000); }
+  var qEvt=sb.from('activity_events').select('user_id,user_nome,event_type,entity_type,entity_id,occurred_at,metadata').gte('occurred_at',d0.toISOString());
+  if(d1) qEvt=qEvt.lt('occurred_at',d1.toISOString());
+  qEvt=qEvt.order('occurred_at',{ascending:true}).limit(20000);
   var rs=await Promise.all([
-    sb.from('activity_events').select('user_id,user_nome,event_type,entity_type,entity_id,occurred_at,metadata').gte('occurred_at',d0.toISOString()).order('occurred_at',{ascending:true}).limit(20000),
+    qEvt,
     PRD_PESOS?null:sb.from('task_weights').select('tipo,rotulo,pontos'),
     PRD_CFG?null:sb.from('produtividade_config').select('chave,valor')
   ].filter(Boolean));
@@ -13716,6 +13730,18 @@ function _prdPontosTarefa(ev){
   return parseFloat(_prdCfg('peso_default','1'))||1;
 }
 var PRD_TIPOS_FIXOS=['peticao_inicial','contestacao','agravo','contrarrazoes','recurso','calculos','correcao_endereco_gratuidade'];
+/* pontos de QUALQUER evento (não só tarefa concluída) — alguns tipos de peso
+   viram ponto sozinhos, direto do evento que o próprio sistema já registra
+   (fechar negócio no CRM, gerar contrato, publicar/editar no portal de
+   notícias), sem precisar criar uma tarefa manual com o título batendo. */
+function _prdPontosEvento(ev){
+  if(ev.event_type==='task_completed'||ev.event_type==='hearing_completed') return _prdPontosTarefa(ev);
+  var md=ev.metadata||{};
+  if(ev.event_type==='case_registered' && md.origem==='crm') return (PRD_PESOS['crm_fechado']||{}).pontos||0;
+  if(ev.event_type==='document_generated' && md.tipo==='contrato') return (PRD_PESOS['contrato_confeccionado']||{}).pontos||0;
+  if(ev.event_type==='noticia_publicada') return (PRD_PESOS['publicacoes_portal_de_noticias']||{}).pontos||0;
+  return 0;
+}
 /* tempo ativo derivado: soma janelas entre eventos consecutivos, descartando
    pausas > IDLE_TIMEOUT — exceto pausa seguida de entrega (task_completed),
    que conta como trabalho fora do sistema ("tempo em entregável"). */
@@ -13739,8 +13765,23 @@ function _prdToggleConfig(){
   var g=document.getElementById('prd-cfg-toggle'); if(g) g.classList.toggle('active',abrir);
   if(abrir){ try{ renderProdutividadeConfig(); }catch(e){} box.scrollIntoView({behavior:'smooth',block:'nearest'}); }
 }
+/* acrescenta ao seletor de período os últimos 12 meses calendário (ex.:
+   "agosto/2026"), pra ver o placar mês a mês — além dos filtros por dias
+   corridos que já existiam. Roda uma vez só (guardado por atributo). */
+function _prdPopulaMeses(){
+  var sel=document.getElementById('prd-periodo'); if(!sel||sel.getAttribute('data-meses')) return;
+  sel.setAttribute('data-meses','1');
+  var MESN=['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+  var opts='', d=new Date(), ano=d.getFullYear(), mes=d.getMonth()+1;
+  for(var i=0;i<12;i++){
+    var m=mes-i, a=ano; while(m<=0){ m+=12; a--; }
+    opts+='<option value="'+a+'-'+String(m).padStart(2,'0')+'">'+MESN[m-1]+'/'+a+'</option>';
+  }
+  sel.insertAdjacentHTML('beforeend','<optgroup label="Mês calendário">'+opts+'</optgroup>');
+}
 async function renderProdutividade(){
   var cards=document.getElementById('prd-cards'); if(!cards) return;
+  _prdPopulaMeses();
   cards.innerHTML='<div class="note">Carregando eventos…</div>';
   try{ await _prdCarrega(); }catch(e){ cards.innerHTML='<div class="note">Falha ao carregar: '+String(e&&e.message||e)+'</div>'; return; }
   var evs=PRD_EVT||[];
@@ -13759,7 +13800,7 @@ async function renderProdutividade(){
   Object.keys(por).forEach(function(uid){
     var u=por[uid]; var c={}; var pontos=0; var boletosEmit=0, boletosEnv=0;
     u.evs.forEach(function(e){ c[e.event_type]=(c[e.event_type]||0)+1;
-      if(e.event_type==='task_completed'||e.event_type==='hearing_completed') pontos+=_prdPontosTarefa(e);
+      pontos+=_prdPontosEvento(e);
       if(e.event_type==='boleto_issued') boletosEmit++;
       if(e.event_type==='boleto_sent') boletosEnv++;
     });
