@@ -374,7 +374,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
       </div>
     </section>
     <section id="s-processos" class="hidden">
-      <div class="searchbar"><input id="busca" placeholder="Buscar por cliente, número, oponente ou assunto..." oninput="renderProc()"><select id="ordena" onchange="renderProc()" class="btn sm sb-sel" style="margin-left:8px;max-width:120px"><option value="">Novos Protocolos</option><option value="az">Cliente (A→Z)</option><option value="za">Cliente (Z→A)</option><option value="data_desc">Movimentação mais recente</option><option value="parados">Parados (mov. mais antiga)</option><option value="valor">Valor da causa (maior→menor)</option></select><select id="filtroEtq" onchange="renderProc()" class="btn sm sb-sel" style="margin-left:8px;max-width:112px"><option value="">Todas as etiquetas</option></select><select id="porPagina" onchange="renderProc()" class="btn sm sb-sel" style="margin-left:8px;max-width:76px"><option value="20">20 por página</option><option value="40">40</option><option value="60">60</option><option value="80">80</option><option value="100">100</option><option value="todos" selected>Todos</option></select><span class="note" id="proc-count" style="align-self:center"></span><button id="btn-atu-todos" class="btn sm sb-btn" style="margin-left:auto" onclick="atualizarTodosProcessos()" title="Buscar no DJEN as publicações novas de TODOS os processos (últimos 7 dias, pelas OABs do escritório)">↻ Atualizar todos</button><button class="btn sm gold sb-btn" style="margin-left:8px" onclick="abrirBusca()">+ Cadastrar por número <span style="font-weight:400;font-size:10px;opacity:.8">(pesquisa pelo djen)</span></button><button class="btn sm sb-btn" style="margin-left:8px;background:var(--navy);color:#fff;border-color:var(--navy)" onclick="abrirCadManual()">+ Cadastrar manual / caso</button><button class="btn sm sb-btn" style="margin-left:8px;background:#0F6E56;color:#fff;border-color:#0F6E56" onclick="abrirSyncPastas()" title="Enviar de uma vez uma pasta com vários processos — o sistema reconhece cada subpasta e manda para o processo certo">&#8645; Sincronizar pasta</button></div>
+      <div class="searchbar"><input id="busca" placeholder="Buscar por cliente, número, oponente ou assunto..." oninput="renderProc()"><select id="ordena" onchange="renderProc()" class="btn sm sb-sel" style="margin-left:8px;max-width:120px"><option value="">Novos Protocolos</option><option value="az">Cliente (A→Z)</option><option value="za">Cliente (Z→A)</option><option value="data_desc">Movimentação mais recente</option><option value="parados">Parados (mov. mais antiga)</option><option value="valor">Valor da causa (maior→menor)</option></select><select id="filtroEtq" onchange="renderProc()" class="btn sm sb-sel" style="margin-left:8px;max-width:112px"><option value="">Todas as etiquetas</option></select><select id="porPagina" onchange="renderProc()" class="btn sm sb-sel" style="margin-left:8px;max-width:76px"><option value="20">20 por página</option><option value="40">40</option><option value="60">60</option><option value="80">80</option><option value="100">100</option><option value="todos" selected>Todos</option></select><span class="note" id="proc-count" style="align-self:center"></span><span class="note" id="proc-espaco" style="align-self:center;margin-left:10px;cursor:pointer" onclick="carregarEspacoDocs(true)" title="Espaço que os documentos ocupam no servidor (VPS) — clique para recalcular"></span><button id="btn-atu-todos" class="btn sm sb-btn" style="margin-left:auto" onclick="atualizarTodosProcessos()" title="Buscar no DJEN as publicações novas de TODOS os processos (últimos 7 dias, pelas OABs do escritório)">↻ Atualizar todos</button><button class="btn sm gold sb-btn" style="margin-left:8px" onclick="abrirBusca()">+ Cadastrar por número <span style="font-weight:400;font-size:10px;opacity:.8">(pesquisa pelo djen)</span></button><button class="btn sm sb-btn" style="margin-left:8px;background:var(--navy);color:#fff;border-color:var(--navy)" onclick="abrirCadManual()">+ Cadastrar manual / caso</button><button class="btn sm sb-btn" style="margin-left:8px;background:#0F6E56;color:#fff;border-color:#0F6E56" onclick="abrirSyncPastas()" title="Enviar de uma vez uma pasta com vários processos — o sistema reconhece cada subpasta e manda para o processo certo">&#8645; Sincronizar pasta</button></div>
       <div class="card"><table><thead><tr><th style="width:26%;cursor:pointer;user-select:none" onclick="ordenarCliente()" title="Clique para ordenar por cliente (A→Z / Z→A)">Cliente <span id="cli-sort-arrow" style="font-size:10px;color:var(--muted)"></span></th><th style="width:150px">Processo</th><th style="width:22%">Assunto</th><th style="width:170px;cursor:pointer;user-select:none" onclick="ordenarMov()" title="Clique para ordenar pela data da última movimentação (mais recente ↔ mais antiga)">Última movimentação <span id="mov-sort-arrow" style="font-size:10px;color:var(--muted)"></span></th><th style="width:96px;cursor:pointer;user-select:none" onclick="ordenarParado()" title="Clique para ordenar por dias parado (mais ↔ menos)">Parado há <span id="par-sort-arrow" style="font-size:10px;color:var(--muted)"></span></th><th style="width:104px;cursor:pointer;user-select:none" onclick="toggleStatusFiltro()" title="Clique para alternar: todos → julgados → não julgados">Status <span id="st-filtro-lbl" style="font-size:10px;color:var(--muted);font-weight:400"></span></th><th style="width:110px;cursor:pointer;user-select:none" onclick="ordenarPrazoToggle()" title="Clique para ordenar pelo prazo fatal (mais próximo ↔ mais distante)">Prazo fatal <span id="prazo-sort-arrow" style="font-size:10px;color:var(--muted)"></span></th><th style="width:58px;text-align:center;cursor:pointer;user-select:none" onclick="ordenarDocs()" title="Clique para ordenar pelo tamanho dos documentos no servidor (maior ↔ menor)">Docs <span id="docs-sort-arrow" style="font-size:10px;color:var(--muted)"></span></th></tr></thead><tbody id="proc-body"></tbody></table></div><div id="proc-pager" style="display:flex;gap:6px;align-items:center;justify-content:center;padding:14px;flex-wrap:wrap"></div>
     </section>
 
@@ -6463,6 +6463,38 @@ function _pintaCenso(dig){ var el=document.getElementById('doc-'+dig); if(!el) r
   if(c.n>0){ el.style.color='#C9A227'; el.innerHTML='📁<div class="note" style="margin:2px 0 0;font-size:10px;color:#8a6d1a;font-weight:700">'+_fmtMB(c.bytes)+'</div>'; }
   else { el.style.color='#d3d8e0'; el.innerHTML='📂<div class="note" style="margin:2px 0 0;font-size:10px;color:#b9c0ca">vazio</div>'; }
 }
+/* Somatório de TODOS os documentos no servidor + espaço livre do VPS.
+   Depois da faxina do banco as peças do jus.br passaram a morar no disco, então
+   saber quanto já ocupa (e quanto ainda cabe) virou informação de rotina.
+   Custa uma varredura de todas as pastas: roda uma vez e fica em cache; clicar
+   no selo recalcula. */
+async function carregarEspacoDocs(forcar){
+  var el=document.getElementById('proc-espaco'); if(!el) return;
+  if(window.__espacoDocs && !forcar){ _pintaEspaco(window.__espacoDocs); return; }
+  el.textContent='· somando documentos…';
+  try{
+    var tok=await docToken();
+    var r=await fetch('/api/docs?espaco=1',{headers:{Authorization:'Bearer '+tok}});
+    var j=await r.json();
+    if(!j||j.erro){ el.textContent=''; return; }
+    window.__espacoDocs=j; _pintaEspaco(j);
+  }catch(e){ el.textContent=''; }
+}
+function _pintaEspaco(j){
+  var el=document.getElementById('proc-espaco'); if(!el) return;
+  var txt='· '+(j.gb>=1?(j.gb+' GB'):Math.round((j.bytes||0)/1048576)+' MB')+' em documentos';
+  var cor='';
+  if(j.disco){
+    txt+=' · '+j.disco.livre_gb+' GB livres no servidor';
+    /* o disco do VPS é finito e agora recebe também as peças do jus.br: avisa
+       antes de encher, não depois */
+    if(j.disco.livre_gb<2){ cor='#b5342b'; txt+=' ⚠'; }
+    else if(j.disco.usado_pct>=85){ cor='#8a6d1a'; }
+  }
+  el.textContent=txt;
+  el.style.color=cor||'';
+  el.style.fontWeight=cor?'700':'';
+}
 async function carregarCensoVisivel(rows){
   try{
     var faltam=[]; (rows||[]).forEach(function(p){ var d=String(p.numero||'').replace(/\D/g,''); if(d.length>=16){ if(window.__censoDoc[d]) _pintaCenso(d); else faltam.push(d); } });
@@ -6582,6 +6614,7 @@ function renderProc(){
     b.appendChild(tr);
   });
   carregarCensoVisivel(rows);
+  carregarEspacoDocs();
   var pager=document.getElementById("proc-pager");
   if(pager){
     var h='';

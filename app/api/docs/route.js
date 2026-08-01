@@ -92,6 +92,30 @@ export async function GET(request) {
 
   // censo: ?censo=<digitos,digitos,...> -> { counts: { digitos: qtdArquivos } }
   // (usado para apontar processos SEM documentos no servidor)
+  // espaço: ?espaco=1 -> quanto os documentos ocupam no VPS, no total, e quanto
+  // ainda cabe no disco. Nasceu da faxina do banco: as peças do jus.br saíram do
+  // Supabase e vieram para cá, então passou a importar saber o tamanho daqui.
+  if (searchParams.get('espaco') != null) {
+    let arquivos = 0, bytes = 0, processos = 0
+    try {
+      for (const d of fs.readdirSync(ROOT, { withFileTypes: true })) {
+        if (!d.isDirectory()) continue
+        processos++
+        const r = censoProc(path.join(ROOT, d.name), 0)
+        arquivos += r.n; bytes += r.bytes
+      }
+    } catch (e) { return Response.json({ erro: 'não consegui ler ' + ROOT }, { status: 500 }) }
+    let disco = null
+    try {
+      const s = fs.statfsSync(ROOT)
+      disco = { livre_bytes: s.bavail * s.bsize, total_bytes: s.blocks * s.bsize }
+      disco.livre_gb = +(disco.livre_bytes / 1073741824).toFixed(2)
+      disco.total_gb = +(disco.total_bytes / 1073741824).toFixed(2)
+      disco.usado_pct = Math.round(100 * (1 - disco.livre_bytes / disco.total_bytes))
+    } catch (e) {}
+    return Response.json({ ok: true, processos, arquivos, bytes, gb: +(bytes / 1073741824).toFixed(2), disco })
+  }
+
   const censo = searchParams.get('censo')
   if (censo) {
     const nums = [...new Set(String(censo).split(',').map(s => s.replace(/\D/g, '')).filter(s => s.length >= 16))].slice(0, 500)
