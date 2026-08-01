@@ -7,6 +7,14 @@
 //        -> publica um rascunho no site escolhido via REST do WordPress, com a
 //           SENHA DE APLICATIVO guardada em app_secrets (só o servidor lê):
 //           chave 'wordpress_djan' / 'wordpress_cmp' = {"usuario":"...","senha":"..."}
+//   POST /api/publicacoes {acao:'conteudo', id}
+//        -> busca o conteúdo (título + HTML) de um post JÁ publicado direto no
+//           WordPress (o extrato importado só guarda um resumo) — usada para
+//           preencher o formulário de edição com o texto de verdade.
+//   POST /api/publicacoes {acao:'editar', id, titulo, conteudo_html, tema}
+//        -> edita direto pelo portal: se já está publicado, atualiza o post
+//           no WordPress (mesma senha de aplicativo); se é rascunho, só
+//           atualiza aqui mesmo (ainda não existe lá).
 //
 // Instagram fica DE FORA por decisão do escritório (30/07/2026).
 
@@ -46,6 +54,13 @@ const SITES = {
 
 function svc() {
   return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } })
+}
+// credencial do WordPress (senha de aplicativo) do site — guardada em app_secrets
+async function credencialWP(site) {
+  const { data: sec } = await svc().from('app_secrets').select('valor').eq('chave', site.secret).maybeSingle()
+  const cred = sec && sec.valor
+  if (!cred || !cred.usuario || !cred.senha) return null
+  return 'Basic ' + Buffer.from(cred.usuario + ':' + cred.senha).toString('base64')
 }
 async function usuario(request) {
   const jwt = (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '')
@@ -175,13 +190,10 @@ export async function POST(request) {
     const site = SITES[row.site]
     if (!site) return Response.json({ erro: 'Site inválido: ' + row.site }, { status: 400 })
 
-    // credencial do WordPress (senha de aplicativo) — guardada em app_secrets
-    const { data: sec } = await svc().from('app_secrets').select('valor').eq('chave', site.secret).maybeSingle()
-    const cred = sec && sec.valor
-    if (!cred || !cred.usuario || !cred.senha) {
+    const auth = await credencialWP(site)
+    if (!auth) {
       return Response.json({ erro: 'Falta a senha de aplicativo do ' + site.rotulo + '. Crie em wp-admin → Usuários → Perfil → Senhas de aplicativo ("CMPGestão") e me envie para eu guardar no cofre do servidor (app_secrets: ' + site.secret + ').' }, { status: 503 })
     }
-    const auth = 'Basic ' + Buffer.from(cred.usuario + ':' + cred.senha).toString('base64')
     let r, j
     try {
       r = await fetch(site.base + '/wp-json/wp/v2/posts', {
@@ -208,6 +220,67 @@ export async function POST(request) {
       publicado_em: new Date().toISOString(), atualizado_em: new Date().toISOString(),
     }).eq('id', row.id)
     return Response.json({ ok: true, link: j.link, wp_post_id: j.id })
+  }
+
+  if (body.acao === 'conteudo') {
+    const { data: row, error } = await db.from('publicacoes').select('*').eq('id', String(body.id || '')).single()
+    if (error || !row) return Response.json({ erro: 'Publicação não encontrada.' }, { status: 404 })
+    // rascunho ainda não publicado: o texto já está aqui mesmo, não tem nada pra buscar no WP
+    if (!row.wp_post_id) return Response.json({ ok: true, titulo: row.titulo, conteudo_html: row.conteudo_html || '' })
+    const site = SITES[row.site]
+    if (!site) return Response.json({ erro: 'Site inválido: ' + row.site }, { status: 400 })
+    const auth = await credencialWP(site)
+    try {
+      // context=edit devolve title.raw/content.raw (o HTML de verdade, sem os filtros de exibição do tema)
+      const r = await fetch(site.base + '/wp-json/wp/v2/posts/' + row.wp_post_id + '?context=edit', {
+        headers: { ...(auth ? { Authorization: auth } : {}), 'User-Agent': 'Mozilla/5.0 (CMPGestao)' }, cache: 'no-store',
+      })
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok) return Response.json({ erro: 'O ' + site.rotulo + ' recusou (' + r.status + '): ' + ((j && j.message) || 'sem detalhe') }, { status: 502 })
+      const titulo = (j.title && (j.title.raw || j.title.rendered)) || row.titulo
+      const conteudo_html = (j.content && (j.content.raw || j.content.rendered)) || row.conteudo_html || ''
+      return Response.json({ ok: true, titulo, conteudo_html })
+    } catch (e) {
+      return Response.json({ erro: 'Falha ao buscar o conteúdo no ' + site.rotulo + ': ' + ((e && e.message) || e) }, { status: 502 })
+    }
+  }
+
+  if (body.acao === 'editar') {
+    const { data: row, error } = await db.from('publicacoes').select('*').eq('id', String(body.id || '')).single()
+    if (error || !row) return Response.json({ erro: 'Publicação não encontrada.' }, { status: 404 })
+    const titulo = String(body.titulo || '').trim()
+    const conteudo_html = String(body.conteudo_html || '')
+    const tema = body.tema != null ? String(body.tema).trim() : row.tema
+    if (!titulo) return Response.json({ erro: 'Informe o título.' }, { status: 400 })
+    // ainda é rascunho (nunca foi publicado): só atualiza aqui, não existe post no WP pra editar
+    if (!row.wp_post_id) {
+      const up = await db.from('publicacoes').update({ titulo, conteudo_html, tema: tema || null, atualizado_em: new Date().toISOString() }).eq('id', row.id)
+      if (up.error) return Response.json({ erro: up.error.message }, { status: 500 })
+      return Response.json({ ok: true })
+    }
+    const site = SITES[row.site]
+    if (!site) return Response.json({ erro: 'Site inválido: ' + row.site }, { status: 400 })
+    const auth = await credencialWP(site)
+    if (!auth) return Response.json({ erro: 'Falta a senha de aplicativo do ' + site.rotulo + ' (app_secrets: ' + site.secret + ').' }, { status: 503 })
+    let r, j
+    try {
+      r = await fetch(site.base + '/wp-json/wp/v2/posts/' + row.wp_post_id, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: auth, 'User-Agent': 'Mozilla/5.0 (CMPGestao)' },
+        body: JSON.stringify({
+          title: titulo, content: conteudo_html, excerpt: stripHtml(conteudo_html).slice(0, 200),
+          ...(categoriaDe(tema) ? { categories: [categoriaDe(tema)] } : {}),
+        }),
+      })
+      j = await r.json().catch(() => ({}))
+    } catch (e) {
+      return Response.json({ erro: 'Falha ao falar com o ' + site.rotulo + ': ' + ((e && e.message) || e) }, { status: 502 })
+    }
+    if (!r.ok || !j.id) return Response.json({ erro: 'O ' + site.rotulo + ' recusou (' + r.status + '): ' + ((j && j.message) || 'sem detalhe') }, { status: 502 })
+    await db.from('publicacoes').update({
+      titulo, conteudo_html, tema: tema || null, link: j.link || row.link, erro: null, atualizado_em: new Date().toISOString(),
+    }).eq('id', row.id)
+    return Response.json({ ok: true, link: j.link || row.link })
   }
 
   return Response.json({ erro: 'ação desconhecida' }, { status: 400 })
