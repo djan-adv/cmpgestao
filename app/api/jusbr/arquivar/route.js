@@ -26,7 +26,18 @@ export const maxDuration = 300
 const ESCRITORIO_CMP = '908f77fc-19f5-4d86-9576-f5590af09e0a'
 const LOTE_PADRAO = 40
 
-function admin() { return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } }) }
+// IMPORTANTE: cache: 'no-store'. Sem isto o Next.js guarda a resposta da LISTA e
+// devolve a mesma leitura antiga em toda rodada — foi o que travou a migração de
+// 01/08: os 40 maiores foram migrados na primeira volta e, dali em diante, a lista
+// cacheada seguia entregando esses mesmos 40 (agora já sem conteúdo), dando
+// "sem conteúdo para migrar" 40 vezes e zero progresso por mais de um dia.
+// (O mesmo já tinha mordido a sessão do jus.br — ver comentário em ../lib.js.)
+function admin() {
+  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { persistSession: false },
+    global: { fetch: (input, init) => fetch(input, { ...(init || {}), cache: 'no-store' }) },
+  })
+}
 
 export async function GET(request) {
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) return Response.json({ erro: 'falta service key' }, { status: 500 })
@@ -38,15 +49,17 @@ export async function GET(request) {
   // quanto ainda falta (para o painel saber quando acabou)
   const { count: faltam } = await sb.from('jusbr_arquivos')
     .select('id', { count: 'exact', head: true })
-    .eq('escritorio_id', ESCRITORIO_CMP).not('conteudo_b64', 'is', null)
+    .eq('escritorio_id', ESCRITORIO_CMP).not('conteudo_b64', 'is', null).is('caminho_disco', null)
 
   // Só a LISTA (sem o conteúdo). Puxar 40 arquivos de uma vez traria centenas de
   // MB para a memória de uma tacada — tem vídeo de 60 MB aqui dentro — e derrubaria
   // o processo no VPS. O conteúdo vem depois, UM DE CADA VEZ.
   // Maiores primeiro: libera espaço mais rápido.
+  // O `caminho_disco is null` é cinto e suspensório: quem já está no disco NUNCA
+  // pode voltar para a lista, nem que uma leitura velha escape em algum ponto.
   const { data: linhas, error } = await sb.from('jusbr_arquivos')
     .select('id,processo_numero,doc_nome,tamanho')
-    .eq('escritorio_id', ESCRITORIO_CMP).not('conteudo_b64', 'is', null)
+    .eq('escritorio_id', ESCRITORIO_CMP).not('conteudo_b64', 'is', null).is('caminho_disco', null)
     .order('tamanho', { ascending: false, nullsFirst: false })
     .limit(limite)
   if (error) return Response.json({ erro: error.message }, { status: 500 })
