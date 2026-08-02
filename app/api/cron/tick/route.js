@@ -34,6 +34,10 @@ const JOBS = [
   { nome: 'notificar_jader', rotulo: 'Notificações do Jader', url: '/api/notificar-jader', cada_min: 15 },
   { nome: 'djen', rotulo: 'DJEN — publicações do dia', url: '/api/cron/djen', diario_hora: 5 },
   { nome: 'jusbr_docs', rotulo: 'jus.br — puxar documentos', url: '/api/jusbr/puxar-docs', diario_hora: 6 },
+  // MOVIMENTOS (conclusão, juntada) não saem no DJEN — só na consulta do PDPJ.
+  // Antes isso dependia de alguém clicar em "↻ atualizar" na ficha, e processo
+  // que ninguém abria ficava meses desatualizado. Roda em rodízio, lote pequeno.
+  { nome: 'jusbr_movimentos', rotulo: 'jus.br — movimentos (todos os graus)', url: '/api/jusbr/movimentos/robo', cada_min: 15, timeout_ms: 280000 },
   { nome: 'protocolo_conferir', rotulo: 'Petições — conferir protocolo', url: '/api/jusbr/conferir-protocolo', cada_min: 120 },
   { nome: 'monit_cobrar', rotulo: 'Monitoramento — cobrança', url: '/api/monitoramento/robo?tarefa=cobrar', diario_hora: 6 },
   { nome: 'monit_varrer', rotulo: 'Monitoramento — varredura', url: '/api/monitoramento/robo?tarefa=varrer', semanal_dias: [1, 5], hora: 8 },
