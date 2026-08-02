@@ -1,0 +1,21 @@
+# Agendamentos (cron) do VPS Hostinger para o CMP Gestão
+# ============================================================================
+# Cópia de SEGURANÇA das linhas do crontab. Objetivo: se alguém abrir
+# `crontab -e` por engano e apagar/mexer numa linha, dá para conferir e
+# restaurar exatamente o que devia estar aqui, sem depender só da memória.
+#
+# Depois de qualquer mudança real no crontab do VPS, atualize este arquivo
+# também (e faça commit) — ele só serve de espelho se estiver em dia.
+#
+# Para aplicar no VPS: `crontab -e` e cole as linhas (ajustando SEU_USUARIO).
+# Para conferir o que está rodando de fato: `crontab -l`
+# ============================================================================
+
+# 03:00 — dump do banco (Supabase), 30 dias de retenção, copia para nuvem
+0 3 * * * /home/SEU_USUARIO/backup-supabase.sh >> /home/SEU_USUARIO/cmp-backups/backup.log 2>&1
+
+# 03:15 — sincroniza os documentos do disco (/opt/cmpdocs) para a nuvem
+15 3 * * * /home/SEU_USUARIO/backup-cmpdocs.sh >> /home/SEU_USUARIO/cmp-backups/backup-docs.log 2>&1
+
+# (adicione aqui qualquer outra linha de cron do sistema, para manter este
+# arquivo como o retrato fiel e completo do que deve estar agendado)
