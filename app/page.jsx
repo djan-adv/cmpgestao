@@ -33,10 +33,10 @@ export default function Login() {
         <div style={{ fontSize: 15, fontWeight: 700, color: NAVY }}>CMP<span style={{ color: GOLD }}>Gestão</span></div>
         <div style={{ fontSize: 13, color: '#697180', marginBottom: 22 }}>Acesse o painel do seu escritório</div>
         <label style={{ fontSize: 12, color: '#697180', display: 'block', textAlign: 'left' }}>E-mail</label>
-        <input value={email} onChange={e => setEmail(e.target.value)} type="email" required
+        <input value={email} onChange={e => setEmail(e.target.value)} type="email" name="email" id="email" autoComplete="username" required
           style={{ width: '100%', padding: 10, margin: '4px 0 14px', border: '1px solid #e4e8ef', borderRadius: 8, boxSizing: 'border-box' }} />
         <label style={{ fontSize: 12, color: '#697180', display: 'block', textAlign: 'left' }}>Senha</label>
-        <input value={senha} onChange={e => setSenha(e.target.value)} type="password" required
+        <input value={senha} onChange={e => setSenha(e.target.value)} type="password" name="password" id="password" autoComplete="current-password" required
           style={{ width: '100%', padding: 10, margin: '4px 0 18px', border: '1px solid #e4e8ef', borderRadius: 8, boxSizing: 'border-box' }} />
         {erro && <div style={{ color: '#b5342b', fontSize: 13, marginBottom: 12, textAlign: 'left' }}>{erro}</div>}
         <button disabled={carregando} type="submit"
