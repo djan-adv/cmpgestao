@@ -5,7 +5,7 @@
 #  - Gera um dump DATADO por execução (cada arquivo = um ponto de restauração)
 #  - Formato "custom" do PostgreSQL (compactado e restaurável com pg_restore)
 #  - Mantém os últimos RETENCAO_DIAS dias (limpa os mais antigos)
-#  - Envia uma cópia para o OneDrive usando rclone (opcional, se configurado)
+#  - Envia uma cópia para o Google Drive usando rclone (opcional, se configurado)
 # ============================================================================
 set -euo pipefail
 
@@ -14,8 +14,8 @@ CONF_DIR="${HOME}/.config/cmp-backup"
 ENV_FILE="${CONF_DIR}/db.env"          # deve conter: SUPABASE_DB_URL=postgres://...
 BACKUP_DIR="${HOME}/cmp-backups"        # onde os dumps ficam guardados no VPS
 RETENCAO_DIAS=30                        # quantos pontos de restauração manter
-RCLONE_REMOTE="onedrive"               # nome do remote configurado no rclone
-RCLONE_DEST="Sistema/backups"          # pasta de destino dentro do OneDrive
+RCLONE_REMOTE="gdrive"                 # nome do remote configurado no rclone
+RCLONE_DEST="Sistema/backups"          # pasta de destino dentro do Google Drive
 # ---------------------------------------------------------------------------
 
 if [ ! -f "$ENV_FILE" ]; then
@@ -47,13 +47,13 @@ echo "[$(date '+%F %T')] Dump OK ($(du -h "$OUT" | cut -f1))"
 # --- Retenção local: apaga dumps mais antigos que RETENCAO_DIAS dias ---
 find "$BACKUP_DIR" -name 'cmpgestao_*.dump' -type f -mtime +"${RETENCAO_DIAS}" -delete
 
-# --- Cópia para o OneDrive (só se o rclone estiver configurado) ---
+# --- Cópia para o Google Drive (só se o rclone estiver configurado) ---
 if command -v rclone >/dev/null 2>&1 && rclone listremotes | grep -q "^${RCLONE_REMOTE}:"; then
-  echo "[$(date '+%F %T')] Enviando ao OneDrive ${RCLONE_REMOTE}:${RCLONE_DEST}"
+  echo "[$(date '+%F %T')] Enviando ao Google Drive ${RCLONE_REMOTE}:${RCLONE_DEST}"
   rclone copy "$OUT" "${RCLONE_REMOTE}:${RCLONE_DEST}"
-  # espelha a retenção no OneDrive também
+  # espelha a retenção no Drive também
   rclone delete "${RCLONE_REMOTE}:${RCLONE_DEST}" --min-age "${RETENCAO_DIAS}d" --include 'cmpgestao_*.dump' || true
-  echo "[$(date '+%F %T')] Cópia no OneDrive concluída."
+  echo "[$(date '+%F %T')] Cópia no Google Drive concluída."
 else
   echo "AVISO: rclone não configurado — backup ficou SÓ no VPS ($BACKUP_DIR)." >&2
 fi
