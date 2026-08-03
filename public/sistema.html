@@ -251,6 +251,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
       <!-- lotes personalizados: só aparecem dentro da área de Processos (igual Inove/Encerrados/James) -->
       <div id="proc-subnav-lotes" style="display:none"></div>
       <a data-s="emails" onclick="go('emails')" title="Respostas das varas, cartórios e clientes — cada uma já lançada no histórico do processo"><span class="ic">✉</span> E-mails <span id="nav-n-email" style="margin-left:auto;font-size:10.5px;background:#C9A227;color:#22405f;border-radius:10px;padding:1px 7px;font-weight:800;display:none"></span></a>
+      <a data-s="chats" onclick="go('chats')" title="Todas as conversas num lugar só: os clientes pelo app (por processo) e a equipe"><span class="ic">💬</span> Chats <span id="nav-n-chats" style="margin-left:auto;font-size:10.5px;background:#25D366;color:#0b3b1e;border-radius:10px;padding:1px 7px;font-weight:800;display:none"></span></a>
       <a data-s="diligencias" onclick="go('diligencias')"><span class="ic">◔</span> Diligências</a>
       <a data-s="relatorio" onclick="go('relatorio')"><span class="ic">◫</span> Relatório mensal</a>
       <a data-s="publicacoes" class="cmp-only" onclick="go('publicacoes')" title="Portal de notícias: extrato dos artigos dos sites, rascunhos e publicação direta no WordPress (sem navegador)"><span class="ic">📰</span> Publicações</a>
@@ -560,6 +561,53 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
   </div>
   </div>
 </section>
+<!-- CHATS: todas as conversas num lugar só, no formato do WhatsApp Web —
+     lista à esquerda, conversa aberta à direita. Junta os clientes (app, por
+     processo) e a equipe (grupo e reservado com cada colega). -->
+<section id="s-chats" class="hidden">
+  <div class="card" style="padding:0;overflow:hidden">
+    <div id="wa-wrap" style="display:flex;height:calc(100vh - 190px);min-height:460px">
+      <!-- coluna das conversas -->
+      <div id="wa-lista" style="width:330px;min-width:250px;border-right:1px solid var(--line);display:flex;flex-direction:column;background:#fff">
+        <div style="padding:10px 12px;border-bottom:1px solid var(--line);background:#f6f8fb">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+            <b style="font-size:14px;color:var(--navy)">💬 Conversas</b>
+            <span id="wa-total" class="note" style="font-size:11px;margin:0"></span>
+            <button class="btn sm ghost" style="margin-left:auto;font-size:11px" onclick="waCarregar(true)" title="Atualizar">↻</button>
+          </div>
+          <input id="wa-busca" placeholder="Buscar cliente, processo ou colega…" oninput="waRenderLista()" style="font-size:13px;padding:7px 10px">
+          <div style="display:flex;gap:5px;margin-top:7px;flex-wrap:wrap">
+            <button class="btn sm" id="wa-f-tudo" style="font-size:11px" onclick="waFiltro('tudo')">Tudo</button>
+            <button class="btn sm ghost" id="wa-f-naolidas" style="font-size:11px" onclick="waFiltro('naolidas')">Não lidas</button>
+            <button class="btn sm ghost" id="wa-f-clientes" style="font-size:11px" onclick="waFiltro('clientes')">Clientes</button>
+            <button class="btn sm ghost" id="wa-f-equipe" style="font-size:11px" onclick="waFiltro('equipe')">Equipe</button>
+          </div>
+        </div>
+        <div id="wa-convs" style="flex:1;overflow-y:auto"></div>
+      </div>
+      <!-- conversa aberta -->
+      <div id="wa-conversa" style="flex:1;display:flex;flex-direction:column;background:#efeae2;min-width:0">
+        <div id="wa-vazio" style="flex:1;display:flex;align-items:center;justify-content:center;flex-direction:column;color:#6b7484;text-align:center;padding:24px">
+          <div style="font-size:44px;margin-bottom:8px">💬</div>
+          <div style="font-size:15px;font-weight:600;color:var(--navy)">Escolha uma conversa</div>
+          <div style="font-size:12.5px;margin-top:4px;max-width:330px">À esquerda estão os clientes que têm o app (uma conversa por processo) e as conversas da equipe. Tudo o que você escrever aqui fica gravado no processo.</div>
+        </div>
+        <div id="wa-aberta" style="display:none;flex:1;flex-direction:column;min-height:0">
+          <div id="wa-cab" style="background:#f6f8fb;border-bottom:1px solid var(--line);padding:9px 14px;display:flex;align-items:center;gap:10px"></div>
+          <div id="wa-msgs" style="flex:1;overflow-y:auto;padding:14px 16px;background:#efeae2"></div>
+          <div id="wa-anx" style="display:none;background:#eef4fb;border-top:1px solid var(--line);padding:7px 12px;font-size:12.5px;align-items:center;gap:8px"></div>
+          <div style="display:flex;gap:6px;padding:9px 12px;border-top:1px solid var(--line);background:#f6f8fb;align-items:center">
+            <input type="file" id="wa-file" style="display:none">
+            <button id="wa-clip" title="Anexar documento, foto, PDF ou áudio" style="width:34px;height:38px;border:none;background:none;font-size:18px;cursor:pointer;color:#5f6b7a">📎</button>
+            <textarea id="wa-txt" placeholder="Escreva a mensagem…" style="flex:1;resize:none;height:40px;border:1px solid #cfd6e0;border-radius:20px;padding:9px 14px;font-family:inherit;font-size:13.5px"></textarea>
+            <button id="wa-env" style="width:40px;height:40px;border:none;border-radius:50%;background:#25D366;color:#fff;font-size:17px;cursor:pointer">➤</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
 <section id="s-emails" class="hidden">
   <div class="card">
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
@@ -7019,11 +7067,11 @@ function go(s){
 function go(s){
   try{ localStorage.setItem('cmp_secao', s); if(s!=='proc-det') localStorage.removeItem('cmp_proc'); }catch(e){}
   var showId=(s==='contatos')?'crm':s;
-  ["painel","triagem","agenda","processos","proc-det","crm","financeiro","etiquetas","procedimentos","diligencias","relatorio","publicacoes","encerrados","inove","james","cadastros","fases","sugestoes","lote","produtividade","monitoramento","robos","emails"].forEach(function(id){var e=document.getElementById("s-"+id);if(e)e.classList.add("hidden")});
+  ["painel","triagem","agenda","processos","proc-det","crm","financeiro","etiquetas","procedimentos","diligencias","relatorio","publicacoes","encerrados","inove","james","cadastros","fases","sugestoes","lote","produtividade","monitoramento","robos","emails","chats"].forEach(function(id){var e=document.getElementById("s-"+id);if(e)e.classList.add("hidden")});
   var sec=document.getElementById("s-"+showId); if(sec) sec.classList.remove("hidden");
   document.querySelectorAll("#nav a").forEach(function(a){a.classList.remove("active")});
   var link=document.querySelector('#nav a[data-s="'+s+'"]');if(link)link.classList.add("active");
-  var t={painel:"Painel",triagem:"Publicações",agenda:"Agenda — Kanban (etapas CMP)",processos:"Processos",crm:"Comercial",financeiro:"Financeiro — cobranças e recebimentos",contatos:"Contatos",procedimentos:"Procedimentos CMP",etiquetas:"Etiquetas","proc-det":"Processo",diligencias:"Diligências",emails:"E-mails — respostas recebidas",relatorio:"Relatório mensal para clientes",encerrados:"Processos encerrados",inove:"Processos Inove (terceiros)",james:"Processos contra James Laurence",cadastros:"Cadastros — Tribunais de Justiça",inovesol:"Solicitar novas funcionalidades",fases:"Revisar fases dos processos",produtividade:"Produtividade e auditoria de logins"};
+  var t={painel:"Painel",triagem:"Publicações",agenda:"Agenda — Kanban (etapas CMP)",processos:"Processos",crm:"Comercial",financeiro:"Financeiro — cobranças e recebimentos",contatos:"Contatos",procedimentos:"Procedimentos CMP",etiquetas:"Etiquetas","proc-det":"Processo",diligencias:"Diligências",emails:"E-mails — respostas recebidas",chats:"Chats — clientes e equipe",relatorio:"Relatório mensal para clientes",encerrados:"Processos encerrados",inove:"Processos Inove (terceiros)",james:"Processos contra James Laurence",cadastros:"Cadastros — Tribunais de Justiça",inovesol:"Solicitar novas funcionalidades",fases:"Revisar fases dos processos",produtividade:"Produtividade e auditoria de logins"};
   /* sub-pastas de Processos (Inove/Encerrados/James/lotes personalizados): só
      aparecem dentro da área de Processos (inclusive ao abrir um lote específico) */
   try{
@@ -7049,6 +7097,7 @@ function go(s){
   if(s==="monitoramento" && typeof renderMonitoramento==='function')renderMonitoramento();
   if(s==="robos" && typeof renderRobos==='function')renderRobos();if(s==="robos" && typeof renderEstagiario==='function')renderEstagiario();
   if(s==="emails" && typeof renderEmails==='function')renderEmails();
+  if(s==="chats" && typeof waCarregar==='function')waCarregar(true);
   if(s==="relatorio" && typeof renderRelatorioMensal==='function')renderRelatorioMensal();
   if(s==="publicacoes" && typeof renderPublicacoes==='function'){renderPublicacoes(); var _t2=document.getElementById("scr-title"); if(_t2)_t2.textContent="Publicações — portal de notícias";}
   try{ var _cfgP=document.getElementById('btn-cfg-proc'); if(_cfgP) _cfgP.style.display=(s==='processos')?'inline-block':'none'; }catch(e){}
@@ -16055,6 +16104,271 @@ function exportarProdutividadeCSV(){
         } else if(tent>60){ clearInterval(t); }
       },700);
     }catch(e){}
+  }
+
+  /* ============================================================================
+     TELA "CHATS" — todas as conversas num lugar só, no formato do WhatsApp Web.
+     Junta duas origens que antes viviam separadas:
+       • CLIENTE (app)  → portal_chat, uma conversa por processo
+       • EQUIPE         → chat_mensagens, o grupo e o reservado com cada colega
+     A lista à esquerda mostra a última mensagem e as não lidas; a conversa abre à
+     direita, com anexo e envio. É a mesma base do dock e da janela do processo, só
+     que reunida — o que for lido aqui conta como lido lá.
+     ============================================================================ */
+  var WA={ convs:[], aberta:null, filtro:'tudo', timer:null, ultimo:0, anexo:null, pessoas:{}, eu:null };
+
+  function waTempo(iso){
+    if(!iso) return '';
+    var d=new Date(iso), h=new Date();
+    var mesmoDia=d.toDateString()===h.toDateString();
+    if(mesmoDia) return hhmm(iso);
+    var ontem=new Date(h); ontem.setDate(h.getDate()-1);
+    if(d.toDateString()===ontem.toDateString()) return 'ontem';
+    return ('0'+d.getDate()).slice(-2)+'/'+('0'+(d.getMonth()+1)).slice(-2);
+  }
+  function waIniciais(nome){
+    var p=String(nome||'?').trim().split(/\s+/);
+    return ((p[0]||'?')[0]+((p.length>1?p[p.length-1]:'')[0]||'')).toUpperCase();
+  }
+  function waCor(chave){
+    var s=String(chave||''), n=0; for(var i=0;i<s.length;i++) n=(n*31+s.charCodeAt(i))%360;
+    return 'hsl('+n+',42%,45%)';
+  }
+
+  /* ---------- monta a lista de conversas ---------- */
+  window.waCarregar=async function(mostrarCarregando){
+    var box=document.getElementById('wa-convs'); if(!box) return;
+    if(mostrarCarregando && !WA.convs.length) box.innerHTML='<div class="note" style="padding:16px">Carregando conversas…</div>';
+    waLigarControles();
+    var s=S(); if(!s) return;
+    var me=await eu(); if(!me) return; WA.eu=me;
+    var up=await s.from('usuarios').select('id,nome').eq('escritorio_id',me.escritorio_id);
+    WA.pessoas={}; (up.data||[]).forEach(function(u){ WA.pessoas[u.id]={nome:u.nome||'Colega'}; });
+
+    var convs=[];
+    // --- clientes (app), agrupado por processo ---
+    var pc=await s.from('portal_chat').select('id,processo_id,autor_tipo,autor_nome,texto,anexo_nome,criado_em,lida_escritorio').order('id',{ascending:false}).limit(600);
+    var porProc={};
+    (pc.data||[]).forEach(function(m){
+      var c=porProc[m.processo_id];
+      if(!c){ c=porProc[m.processo_id]={tipo:'cliente',id:'c:'+m.processo_id,procId:m.processo_id,ultima:m,naoLidas:0,nome:''}; }
+      if(m.autor_tipo==='cliente' && !m.lida_escritorio) c.naoLidas++;
+    });
+    // processos que já têm acesso ao app mas ainda sem conversa entram como "sem mensagem"
+    var ac=await s.from('portal_acesso_processos').select('processo_id,acesso_id').limit(400);
+    (ac.data||[]).forEach(function(g){ if(!porProc[g.processo_id]) porProc[g.processo_id]={tipo:'cliente',id:'c:'+g.processo_id,procId:g.processo_id,ultima:null,naoLidas:0,nome:''}; });
+    Object.keys(porProc).forEach(function(pid){
+      var c=porProc[pid], p=procDe(pid);
+      c.nome=(p&&p.cliente)||(c.ultima&&c.ultima.autor_nome)||'Cliente';
+      c.sub=p?('Proc '+numCurto(p.numero)):'processo';
+      c.quando=c.ultima?c.ultima.criado_em:null;
+      convs.push(c);
+    });
+
+    // --- equipe: o grupo e o reservado com cada colega ---
+    var cm=await s.from('chat_mensagens').select('id,autor_id,autor_nome,para_id,texto,anexo_nome,criado_em').order('id',{ascending:false}).limit(400);
+    var msgs=(cm.data||[]);
+    var lidoEm=localStorage.getItem('cmp_chat_lido')||'';
+    var grupo=msgs.filter(function(m){ return !m.para_id; });
+    convs.push({tipo:'equipe',id:'e:todos',paraId:null,nome:'👥 Equipe — todos',sub:'grupo do escritório',
+      ultima:grupo[0]||null, quando:grupo[0]?grupo[0].criado_em:null,
+      naoLidas:grupo.filter(function(m){ return m.autor_id!==me.id && (!lidoEm || m.criado_em>lidoEm); }).length});
+    Object.keys(WA.pessoas).forEach(function(uid){
+      if(uid===me.id) return;
+      var priv=msgs.filter(function(m){ return m.para_id && ((m.autor_id===uid&&m.para_id===me.id)||(m.autor_id===me.id&&m.para_id===uid)); });
+      if(!priv.length) return;
+      convs.push({tipo:'equipe',id:'e:'+uid,paraId:uid,nome:(WA.pessoas[uid]&&WA.pessoas[uid].nome)||'Colega',sub:'conversa reservada',
+        ultima:priv[0], quando:priv[0].criado_em,
+        naoLidas:priv.filter(function(m){ return m.autor_id===uid && (!lidoEm || m.criado_em>lidoEm); }).length});
+    });
+
+    convs.sort(function(a,b){ return String(b.quando||'').localeCompare(String(a.quando||'')); });
+    WA.convs=convs;
+    waRenderLista();
+    waPintarBadgeNav();
+    if(WA.aberta){ var ainda=convs.find(function(c){return c.id===WA.aberta.id;}); if(ainda) waPuxarMensagens(false); }
+  };
+
+  window.waFiltro=function(f){
+    WA.filtro=f;
+    ['tudo','naolidas','clientes','equipe'].forEach(function(k){
+      var b=document.getElementById('wa-f-'+k); if(b) b.className='btn sm'+(k===f?'':' ghost');
+    });
+    waRenderLista();
+  };
+
+  window.waRenderLista=function(){
+    var box=document.getElementById('wa-convs'); if(!box) return;
+    var q=((document.getElementById('wa-busca')||{}).value||'').toLowerCase().trim();
+    var lista=WA.convs.filter(function(c){
+      if(WA.filtro==='naolidas' && !c.naoLidas) return false;
+      if(WA.filtro==='clientes' && c.tipo!=='cliente') return false;
+      if(WA.filtro==='equipe' && c.tipo!=='equipe') return false;
+      if(q){ var alvo=(c.nome+' '+(c.sub||'')+' '+((c.ultima&&c.ultima.texto)||'')).toLowerCase(); if(alvo.indexOf(q)<0) return false; }
+      return true;
+    });
+    var tot=document.getElementById('wa-total');
+    if(tot){ var nl=WA.convs.reduce(function(a,c){return a+(c.naoLidas||0);},0); tot.textContent=lista.length+' conversa'+(lista.length===1?'':'s')+(nl?(' · '+nl+' não lida'+(nl===1?'':'s')):''); }
+    if(!lista.length){ box.innerHTML='<div class="note" style="padding:16px">Nenhuma conversa aqui.</div>'; return; }
+    box.innerHTML=lista.map(function(c){
+      var prev=c.ultima?((c.ultima.autor_tipo==='escritorio'||c.ultima.autor_id===(WA.eu&&WA.eu.id)?'✓ ':'')+
+        escx(String(c.ultima.texto||(c.ultima.anexo_nome?('📎 '+c.ultima.anexo_nome):'')||'').slice(0,52))):'<i style="color:#98a1ad">sem mensagens ainda</i>';
+      var sel=(WA.aberta&&WA.aberta.id===c.id);
+      return '<div class="wa-item" data-id="'+c.id+'" style="display:flex;gap:10px;padding:10px 12px;cursor:pointer;border-bottom:1px solid #f0f3f7;'+(sel?'background:#e8f0fb':'')+'">'+
+        '<div style="width:38px;height:38px;border-radius:50%;flex:none;background:'+waCor(c.nome)+';color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700">'+
+          (c.tipo==='cliente'?'📱':waIniciais(c.nome))+'</div>'+
+        '<div style="flex:1;min-width:0">'+
+          '<div style="display:flex;align-items:center;gap:6px"><b style="font-size:13px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escx(c.nome)+'</b>'+
+          '<span style="font-size:10.5px;color:#8a92a0;flex:none">'+waTempo(c.quando)+'</span></div>'+
+          '<div style="font-size:11.5px;color:#8a92a0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escx(c.sub||'')+'</div>'+
+          '<div style="display:flex;align-items:center;gap:6px"><span style="font-size:12px;color:#5f6b7a;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+prev+'</span>'+
+          (c.naoLidas?('<b style="background:#25D366;color:#fff;border-radius:10px;min-width:18px;height:18px;line-height:18px;text-align:center;font-size:11px;padding:0 5px;flex:none">'+c.naoLidas+'</b>'):'')+'</div>'+
+        '</div></div>';
+    }).join('');
+    Array.prototype.forEach.call(box.querySelectorAll('.wa-item'),function(el){
+      el.onclick=function(){ waAbrir(el.getAttribute('data-id')); };
+    });
+  };
+
+  function waPintarBadgeNav(){
+    var b=document.getElementById('nav-n-chats'); if(!b) return;
+    var n=WA.convs.reduce(function(a,c){return a+(c.naoLidas||0);},0);
+    if(n){ b.textContent=n; b.style.display='inline-block'; } else b.style.display='none';
+  }
+
+  /* ---------- abre a conversa ---------- */
+  window.waAbrir=async function(id){
+    var c=WA.convs.find(function(x){return x.id===id;}); if(!c) return;
+    WA.aberta=c; WA.ultimo=0; WA.anexo=null; waPintarAnexo();
+    document.getElementById('wa-vazio').style.display='none';
+    var ab=document.getElementById('wa-aberta'); ab.style.display='flex';
+    var p=(c.tipo==='cliente')?procDe(c.procId):null;
+    document.getElementById('wa-cab').innerHTML=
+      '<div style="width:34px;height:34px;border-radius:50%;background:'+waCor(c.nome)+';color:#fff;display:flex;align-items:center;justify-content:center;font-size:12.5px;font-weight:700">'+
+        (c.tipo==='cliente'?'📱':waIniciais(c.nome))+'</div>'+
+      '<div style="flex:1;min-width:0"><b style="font-size:14px">'+escx(c.nome)+'</b>'+
+        '<div style="font-size:11.5px;color:#6b7484">'+escx(c.sub||'')+(c.tipo==='cliente'?' · a conversa fica gravada no processo':'')+'</div></div>'+
+      (p?('<button class="btn sm ghost" style="font-size:11px" onclick="irParaProcesso(\''+escx(p.numero)+'\')">abrir ficha</button>'):'');
+    document.getElementById('wa-msgs').innerHTML='<div class="note" style="text-align:center">Carregando…</div>';
+    waRenderLista();
+    await waPuxarMensagens(true);
+    if(WA.timer) clearInterval(WA.timer);
+    WA.timer=setInterval(function(){ if(!document.getElementById('s-chats').classList.contains('hidden')) waPuxarMensagens(false); },7000);
+    var tx=document.getElementById('wa-txt'); if(tx) tx.focus();
+  };
+
+  async function waPuxarMensagens(primeira){
+    var c=WA.aberta; if(!c) return;
+    var s=S(); if(!s) return;
+    var box=document.getElementById('wa-msgs'); if(!box) return;
+    try{ var tk=await jwtCli(); window.__jwtAnexo=tk; }catch(e){}
+    var ms=[];
+    if(c.tipo==='cliente'){
+      var q=s.from('portal_chat').select('id,autor_tipo,autor_nome,texto,criado_em,anexo_id,anexo_nome,anexo_tipo,anexo_tamanho').eq('processo_id',c.procId).order('id',{ascending:true});
+      if(WA.ultimo>0) q=q.gt('id',WA.ultimo); else q=q.limit(300);
+      var r=await q; ms=(r.data||[]).map(function(m){ return {id:m.id,meu:(m.autor_tipo==='escritorio'),quem:m.autor_nome,texto:m.texto,criado_em:m.criado_em,anexo_id:m.anexo_id,anexo_nome:m.anexo_nome,anexo_tipo:m.anexo_tipo,anexo_tamanho:m.anexo_tamanho}; });
+      if(ms.length) { try{ await s.from('portal_chat').update({lida_escritorio:true}).eq('processo_id',c.procId).eq('autor_tipo','cliente').eq('lida_escritorio',false); }catch(e){} c.naoLidas=0; }
+    } else {
+      var q2=s.from('chat_mensagens').select('id,autor_id,autor_nome,para_id,texto,criado_em,imagem_anexo_id,anexo_nome,anexo_tipo').order('id',{ascending:true});
+      if(WA.ultimo>0) q2=q2.gt('id',WA.ultimo); else q2=q2.limit(300);
+      var r2=await q2;
+      var meId=WA.eu&&WA.eu.id;
+      ms=(r2.data||[]).filter(function(m){
+        if(c.paraId) return (m.para_id===c.paraId&&m.autor_id===meId)||(m.para_id===meId&&m.autor_id===c.paraId);
+        return !m.para_id;
+      }).map(function(m){ return {id:m.id,meu:(m.autor_id===meId),quem:m.autor_nome||((WA.pessoas[m.autor_id]||{}).nome),texto:m.texto,criado_em:m.criado_em,anexo_id:m.imagem_anexo_id,anexo_nome:m.anexo_nome,anexo_tipo:m.anexo_tipo}; });
+      if(ms.length){ try{ localStorage.setItem('cmp_chat_lido', new Date().toISOString()); }catch(e){} c.naoLidas=0; }
+      // o id do polling tem de andar mesmo quando a mensagem é de outra conversa
+      var maiorGeral=(r2.data||[]).reduce(function(a,m){ return m.id>a?m.id:a; },WA.ultimo);
+      if(maiorGeral>WA.ultimo) WA.ultimo=maiorGeral;
+    }
+    if(primeira){ box.innerHTML = ms.length?'':'<div class="note" style="text-align:center">Nenhuma mensagem ainda — escreva a primeira.</div>'; }
+    ms.forEach(function(m){ waDesenha(m); if(m.id>WA.ultimo) WA.ultimo=m.id; });
+    if(ms.length){ box.scrollTop=box.scrollHeight; waPintarBadgeNav(); waRenderLista(); }
+  }
+
+  function waDesenha(m){
+    var box=document.getElementById('wa-msgs'); if(!box) return;
+    var d=document.createElement('div');
+    d.style.cssText='display:flex;margin-bottom:8px;'+(m.meu?'justify-content:flex-end':'justify-content:flex-start');
+    var anx='';
+    if(m.anexo_id){
+      var url='/api/anexo?id='+m.anexo_id+'&jwt='+encodeURIComponent(window.__jwtAnexo||'');
+      if(/^image\//i.test(m.anexo_tipo||'')) anx='<a href="'+url+'" target="_blank" rel="noopener"><img src="'+url+'" alt="" style="max-width:230px;border-radius:7px;display:block;margin-bottom:3px"></a>';
+      else if(/^audio\//i.test(m.anexo_tipo||'')) anx='<audio controls preload="none" src="'+url+'" style="max-width:230px;margin-bottom:3px"></audio>';
+      else anx='<a href="'+url+'" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:6px;text-decoration:none;color:inherit;background:rgba(0,0,0,.07);border-radius:7px;padding:5px 7px;margin-bottom:3px">'+
+        '<span style="font-size:16px">'+icoArq(m.anexo_tipo,m.anexo_nome)+'</span><b style="font-size:11.5px;word-break:break-word">'+escx(m.anexo_nome||'arquivo')+'</b></a>';
+    }
+    d.innerHTML='<div style="max-width:72%;padding:7px 10px;border-radius:9px;white-space:pre-line;word-break:break-word;font-size:13.5px;box-shadow:0 1px 1px rgba(0,0,0,.10);'+
+      (m.meu?'background:#d9fdd3':'background:#fff')+'">'+
+      (!m.meu&&m.quem?('<div style="font-size:10.5px;color:'+waCor(m.quem)+';font-weight:700;margin-bottom:1px">'+escx(m.quem)+'</div>'):'')+
+      anx+(m.texto?escx(m.texto):'')+
+      '<div style="font-size:10px;color:#667781;text-align:right;margin-top:2px">'+hhmm(m.criado_em)+'</div></div>';
+    box.appendChild(d);
+  }
+
+  /* ---------- anexo e envio ---------- */
+  function waPintarAnexo(){
+    var b=document.getElementById('wa-anx'); if(!b) return;
+    if(!WA.anexo){ b.style.display='none'; b.innerHTML=''; return; }
+    b.style.display='flex';
+    b.innerHTML='<span style="font-size:15px">'+icoArq(WA.anexo.tipo,WA.anexo.nome)+'</span>'+
+      '<span style="flex:1;min-width:0;word-break:break-word">'+escx(WA.anexo.nome)+'</span>'+
+      '<button onclick="waTirarAnexo()" style="border:none;background:none;color:#b5342b;font-weight:700;cursor:pointer;font-size:14px">✕</button>';
+  }
+  window.waTirarAnexo=function(){ WA.anexo=null; waPintarAnexo(); };
+  function waLerArquivo(f, nomeAlt){
+    if(f.size>MAX_ANEXO){ alert('O arquivo passa de 15 MB — escolha um menor.'); return; }
+    var fr=new FileReader();
+    fr.onload=function(){ var s=String(fr.result||''), v=s.indexOf(',');
+      WA.anexo={nome:(nomeAlt||f.name||'arquivo'), tipo:(f.type||'application/octet-stream'), b64:(v>=0?s.slice(v+1):s)}; waPintarAnexo(); };
+    fr.readAsDataURL(f);
+  }
+  window.waEnviar=async function(){
+    var c=WA.aberta; if(!c) return;
+    var t=document.getElementById('wa-txt'); var texto=(t.value||'').trim(); var arq=WA.anexo;
+    if(!texto && !arq) return;
+    t.value=''; WA.anexo=null; waPintarAnexo();
+    try{
+      if(c.tipo==='cliente'){
+        var ok=await enviarMsg(c.procId, texto, arq);
+        if(!ok){ t.value=texto; WA.anexo=arq; waPintarAnexo(); return; }
+      } else {
+        var s=S(), me=WA.eu;
+        var anexo=null;
+        if(arq){
+          var tok=await jwtCli();
+          var up=await fetch('/api/chat/print',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},
+            body:JSON.stringify({nome:arq.nome,tipo:arq.tipo,b64:arq.b64})}).then(function(r){return r.json();});
+          if(!(up&&up.ok&&up.id)) throw new Error((up&&up.erro)||'falha ao subir o arquivo');
+          anexo={imagem_anexo_id:up.id, anexo_nome:arq.nome, anexo_tipo:arq.tipo};
+        }
+        var r=await s.from('chat_mensagens').insert(Object.assign({texto:(texto||null),para_id:(c.paraId||null),autor_nome:(me.nome||'')},anexo||{})).select('*').single();
+        if(r.error) throw new Error(r.error.message);
+        try{ var tk2=await jwtCli();
+          fetch('/api/chat/push',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tk2},
+            body:JSON.stringify({acao:'notificar',autor_id:me.id,autor_nome:me.nome,texto:(texto||('📎 '+((arq&&arq.nome)||'arquivo'))),para_id:(c.paraId||null)})}).catch(function(){});
+        }catch(e){}
+        waDesenha({id:r.data.id,meu:true,quem:me.nome,texto:r.data.texto,criado_em:r.data.criado_em,anexo_id:r.data.imagem_anexo_id,anexo_nome:r.data.anexo_nome,anexo_tipo:r.data.anexo_tipo});
+        if(r.data.id>WA.ultimo) WA.ultimo=r.data.id;
+        var bx=document.getElementById('wa-msgs'); bx.scrollTop=bx.scrollHeight;
+      }
+      waCarregar(false);
+    }catch(e){ alert('Não foi possível enviar: '+((e&&e.message)||e)); t.value=texto; WA.anexo=arq; waPintarAnexo(); }
+  };
+
+  /* liga os controles da tela assim que ela existe no DOM */
+  function waLigarControles(){
+    var env=document.getElementById('wa-env'); if(!env||env.__lig) return; env.__lig=1;
+    env.onclick=function(){ waEnviar(); };
+    document.getElementById('wa-clip').onclick=function(){ document.getElementById('wa-file').click(); };
+    document.getElementById('wa-file').onchange=function(){ var f=this.files&&this.files[0]; this.value=''; if(f) waLerArquivo(f); };
+    var tx=document.getElementById('wa-txt');
+    tx.addEventListener('keydown',function(ev){ if(ev.key==='Enter'&&!ev.shiftKey){ ev.preventDefault(); waEnviar(); } });
+    tx.addEventListener('paste',function(ev){
+      var it=(ev.clipboardData&&ev.clipboardData.items)||[];
+      for(var i=0;i<it.length;i++){ if(it[i].type&&it[i].type.indexOf('image')===0){ var f=it[i].getAsFile(); if(f){ ev.preventDefault(); waLerArquivo(f,'print.png'); return; } } }
+    });
   }
 
   /* ------------------------- arranque ------------------------- */
