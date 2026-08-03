@@ -94,6 +94,24 @@ async function emailCredenciais({ nome, email, senha, numero, novoProcesso }) {
   })
 }
 
+// Mesma informação do e-mail, no jeito do WhatsApp: curto, com emoji e sem
+// parágrafo longo. O texto volta pronto para o navegador abrir o wa.me.
+function textoWhatsapp({ nome, email, senha, novoProcesso }) {
+  const primeiro = String(nome || '').trim().split(/\s+/)[0] || ''
+  return (
+    'Olá' + (primeiro ? ', ' + primeiro : '') + '! 👋\n\n' +
+    (novoProcesso
+      ? 'Liberamos mais um processo no seu acesso ao aplicativo do escritório.'
+      : 'Seu acesso ao aplicativo do escritório está pronto.') + '\n\n' +
+    '🔗 ' + URL_PUBLICA + '/portal.html\n' +
+    '👤 Login: ' + email + '\n' +
+    (senha ? ('🔑 Senha: ' + senha + '\n') : '🔑 Senha: a que você já usa (se esqueceu, avise que enviamos outra)\n') +
+    '\nNo aplicativo você acompanha as movimentações, vê os documentos oficiais (despachos, sentenças e acordos), as petições que protocolamos e o contato do cartório da Vara — e fala com a gente pelo chat de dentro do processo.\n\n' +
+    '📲 Para deixar como aplicativo no celular: abra o link e toque em "Instalar o aplicativo". No iPhone, use Compartilhar ➜ "Adicionar à Tela de Início".\n\n' +
+    '🔒 O acesso é pessoal — não compartilhe. Por segurança, o uso em muitos aparelhos diferentes bloqueia o acesso.'
+  )
+}
+
 export async function POST(request) {
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
     return Response.json({ erro: 'Servidor sem SUPABASE_SERVICE_ROLE_KEY.' }, { status: 500 })
@@ -170,6 +188,25 @@ export async function POST(request) {
     // grant explícito deste processo (vale para o 2º autor sem cadastro)
     await sb.from('portal_acesso_processos').upsert({ acesso_id: acessoId, processo_id: p.id }, { onConflict: 'acesso_id,processo_id' })
 
+    // Entrega por WhatsApp: não manda e-mail, devolve o texto pronto para o
+    // navegador abrir a conversa. Se o acesso já existia, a senha atual não é
+    // conhecida (fica só o hash) — o texto sai sem senha e o painel oferece o
+    // botão de senha nova. Guarda também o telefone no cadastro do contato.
+    if (String(body.canal || 'email') === 'whatsapp') {
+      const fone = digitos(body.whatsapp || '')
+      if (contatoId && fone.length >= 10) {
+        try {
+          const { data: c } = await sb.from('contatos').select('id,telefone').eq('id', contatoId).maybeSingle()
+          if (c && !String(c.telefone || '').trim()) await sb.from('contatos').update({ telefone: String(body.whatsapp || '').trim() }).eq('id', contatoId)
+        } catch (e) {}
+      }
+      return Response.json({
+        ok: true, criado, canal: 'whatsapp', senha,
+        texto: textoWhatsapp({ nome, email, senha, novoProcesso: !criado }),
+        acessos: await statusDoProcesso(sb, p),
+      })
+    }
+
     const env = await emailCredenciais({ nome, email, senha, numero: digitos(p.numero), novoProcesso: !criado })
     if (env && env.erro) {
       return Response.json({
@@ -183,9 +220,17 @@ export async function POST(request) {
 
   /* ---------- ações sobre um acesso existente ---------- */
   const acessoId = String(body.acesso_id || '')
-  if (['reenviar', 'desbloquear', 'revogar', 'reativar'].includes(acao)) {
+  if (['reenviar', 'senha_whatsapp', 'desbloquear', 'revogar', 'reativar'].includes(acao)) {
     const { data: a } = await sb.from('portal_acessos').select('*').eq('id', acessoId).eq('escritorio_id', quem.escritorio_id).maybeSingle()
     if (!a) return Response.json({ erro: 'Acesso não encontrado.' }, { status: 404 })
+
+    // senha nova para mandar pelo WhatsApp — o texto volta pronto, sem e-mail
+    if (acao === 'senha_whatsapp') {
+      const senha = gerarSenha()
+      await sb.from('portal_acessos').update({ senha_hash: hashSenha(senha), senha_enviada_em: new Date().toISOString(), ativo: true }).eq('id', a.id)
+      await sb.from('portal_sessoes').delete().eq('acesso_id', a.id)   // senha nova derruba sessão antiga
+      return Response.json({ ok: true, senha, texto: textoWhatsapp({ nome: a.nome, email: a.email, senha, novoProcesso: false }) })
+    }
 
     if (acao === 'reenviar') {
       const senha = gerarSenha()

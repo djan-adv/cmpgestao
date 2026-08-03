@@ -15071,14 +15071,16 @@ function exportarProdutividadeCSV(){
       '<div class="note" style="margin-bottom:10px">Processo '+escx((p&&p.numero)||'')+' — '+escx((p&&p.cliente)||'')+'. O login vale para TODOS os processos do cliente (aparecem em cards no app). Cada autor do processo pode ter o próprio login (ex.: casal = 2 logins). No 5º aparelho diferente o acesso bloqueia sozinho.</div>'+
       '<div id="appcli-lista"><div class="note">Carregando…</div></div>'+
       '<div style="border-top:1px solid #e2e7ee;margin-top:12px;padding-top:12px">'+
-        '<b style="font-size:13px;color:#2E3A4B">Enviar acesso por e-mail</b>'+
+        '<b style="font-size:13px;color:#2E3A4B">Enviar acesso ao cliente</b>'+
         '<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">'+
           '<input id="appcli-nome" placeholder="Nome do cliente/autor" style="flex:1;min-width:170px">'+
-          '<input id="appcli-email" placeholder="E-mail do cliente" type="email" style="flex:1;min-width:190px">'+
+          '<input id="appcli-email" placeholder="E-mail do cliente (é o login)" type="email" style="flex:1;min-width:190px">'+
+          '<input id="appcli-zap" placeholder="WhatsApp (DDD + número)" inputmode="tel" style="flex:1;min-width:150px">'+
         '</div>'+
         '<div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap">'+
-          '<button id="appcli-btn-enviar" class="btn sm" style="background:#0F6E56;color:#fff;font-weight:700" onclick="appCliConceder(\''+procId+'\')">&#128233; Criar login e enviar por e-mail</button>'+
-          '<span class="note" style="font-size:11px">A senha é gerada na hora e vai no e-mail (com o passo a passo de instalar na tela do celular).</span>'+
+          '<button id="appcli-btn-enviar" class="btn sm" style="background:#0F6E56;color:#fff;font-weight:700" onclick="appCliConceder(\''+procId+'\',\'email\')">&#128233; Criar login e enviar por e-mail</button>'+
+          '<button id="appcli-btn-zap" class="btn sm" style="background:#25D366;color:#fff;font-weight:700" onclick="appCliConceder(\''+procId+'\',\'whatsapp\')" title="Cria o login e abre o WhatsApp com a mensagem pronta (link, login e senha)">&#128241; Criar e enviar por WhatsApp</button>'+
+          '<span class="note" style="font-size:11px">A senha é gerada na hora. O e-mail é sempre o login — o WhatsApp é só o meio de entregar.</span>'+
         '</div>'+
         '<div id="appcli-avis" class="note" style="margin-top:8px"></div>'+
       '</div></div>';
@@ -15086,18 +15088,46 @@ function exportarProdutividadeCSV(){
     document.body.appendChild(veu);
     var pv=procDe(procId);
     if(pv&&pv.cliente){ var inN=document.getElementById('appcli-nome'); if(inN&&!inN.value) inN.value=pv.cliente; }
-    var s=S();
-    if(s){
-      s.from('processos').select('cliente_id').eq('id',procId).maybeSingle().then(function(r){
-        var cid=r&&r.data&&r.data.cliente_id; if(!cid) return;
-        s.from('contatos').select('email,emails').eq('id',cid).maybeSingle().then(function(q){
-          var e=(q&&q.data&&(q.data.email||((q.data.emails||[])[0])))||'';
-          var inp=document.getElementById('appcli-email'); if(inp&&!inp.value&&e) inp.value=e;
-        });
-      });
-    }
+    appCliPreencherContato(procId);
     appCliRenderLista(procId);
   };
+  /* preenche e-mail e WhatsApp a partir do cadastro do contato do processo */
+  function appCliPreencherContato(procId){
+    var s=S(); if(!s) return;
+    s.from('processos').select('cliente_id,cliente_nome').eq('id',procId).maybeSingle().then(function(r){
+      var cid=r&&r.data&&r.data.cliente_id;
+      var nome=r&&r.data&&r.data.cliente_nome;
+      function usar(c){
+        if(!c) return;
+        var e=c.email||((c.emails||[])[0])||'';
+        var t=c.telefone||((c.telefones||[])[0])||'';
+        var ie=document.getElementById('appcli-email'); if(ie&&!ie.value&&e) ie.value=e;
+        var iz=document.getElementById('appcli-zap'); if(iz&&!iz.value&&t) iz.value=t;
+      }
+      if(cid){ s.from('contatos').select('email,emails,telefone,telefones').eq('id',cid).maybeSingle().then(function(q){ usar(q&&q.data); }); return; }
+      // processo sem cliente_id: procura o contato pelo nome do cliente
+      if(nome){ s.from('contatos').select('email,emails,telefone,telefones').ilike('nome',String(nome).trim()).limit(1)
+        .then(function(q){ usar(q&&q.data&&q.data[0]); }); }
+    });
+  }
+
+  /* número no formato que o wa.me aceita: só dígitos, com o 55 do Brasil */
+  function foneWa(bruto){
+    var d=String(bruto||'').replace(/\D/g,'');
+    if(!d) return '';
+    if(d.length>=12 && d.indexOf('55')===0) return d;      // já veio com o país
+    if(d.length===10||d.length===11) return '55'+d;        // DDD + número
+    if(d.length===8||d.length===9) return '';              // sem DDD: não dá para montar
+    return d;
+  }
+  function abrirWhats(numero, texto){
+    var n=foneWa(numero);
+    var url = n ? ('https://wa.me/'+n+'?text='+encodeURIComponent(texto))
+                : ('https://wa.me/?text='+encodeURIComponent(texto));  // sem número: escolhe o contato no WhatsApp
+    window.open(url,'_blank','noopener');
+    return !!n;
+  }
+
   window.appCliRenderLista=function(procId){
     admin({acao:'status',processo_id:procId}).then(function(d){
       STATUS_CACHE[procId]=(d&&d.ok&&d.acessos)||[];
@@ -15117,6 +15147,7 @@ function exportarProdutividadeCSV(){
             (a.ultimo_login_em?(' · último acesso '+ddmmhh(a.ultimo_login_em)):(a.senha_enviada_em?(' · senha enviada '+ddmmhh(a.senha_enviada_em)):''))+'</div>'+
           '<div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">'+
             '<button class="btn sm ghost" style="font-size:11px" onclick="appCliAcao(\''+procId+'\',\''+a.id+'\',\'reenviar\')" title="Gera senha NOVA e envia por e-mail (derruba a sessão antiga)">&#128260; nova senha por e-mail</button>'+
+            '<button class="btn sm" style="font-size:11px;background:#25D366;color:#fff;font-weight:700" onclick="appCliSenhaWhats(\''+procId+'\',\''+a.id+'\')" title="Gera senha NOVA e abre o WhatsApp com a mensagem pronta (derruba a sessão antiga)">&#128241; nova senha por WhatsApp</button>'+
             (a.estado==='bloqueado'?('<button class="btn sm" style="font-size:11px;background:#b5342b;color:#fff" onclick="appCliAcao(\''+procId+'\',\''+a.id+'\',\'desbloquear\')">&#128275; desbloquear aparelhos</button>'):'')+
             (a.estado==='revogado'?('<button class="btn sm ghost" style="font-size:11px" onclick="appCliAcao(\''+procId+'\',\''+a.id+'\',\'reativar\')">reativar</button>')
                                   :('<button class="btn sm ghost" style="font-size:11px;color:#b5342b" onclick="if(confirm(\'Revogar o acesso de '+escx(a.email)+' ao app?\'))appCliAcao(\''+procId+'\',\''+a.id+'\',\'revogar\')">revogar</button>'))+
@@ -15131,18 +15162,42 @@ function exportarProdutividadeCSV(){
       appCliRenderLista(procId);
     });
   };
-  window.appCliConceder=function(procId){
-    var n=document.getElementById('appcli-nome'), e=document.getElementById('appcli-email'), av=document.getElementById('appcli-avis'), bt=document.getElementById('appcli-btn-enviar');
-    var nome=(n&&n.value||'').trim(), email=(e&&e.value||'').trim();
+  window.appCliConceder=function(procId, canal){
+    canal=canal||'email';
+    var n=document.getElementById('appcli-nome'), e=document.getElementById('appcli-email'),
+        z=document.getElementById('appcli-zap'), av=document.getElementById('appcli-avis');
+    var bt=document.getElementById(canal==='whatsapp'?'appcli-btn-zap':'appcli-btn-enviar');
+    var rotulo=(canal==='whatsapp')?'&#128241; Criar e enviar por WhatsApp':'&#128233; Criar login e enviar por e-mail';
+    var nome=(n&&n.value||'').trim(), email=(e&&e.value||'').trim(), zap=(z&&z.value||'').trim();
     if(!nome||nome.length<3){ if(av) av.textContent='Informe o nome.'; return; }
-    if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ if(av) av.textContent='E-mail inválido.'; return; }
-    if(bt){ bt.disabled=true; bt.textContent='Enviando…'; }
-    admin({acao:'conceder',processo_id:procId,nome:nome,email:email}).then(function(d){
-      if(bt){ bt.disabled=false; bt.innerHTML='&#128233; Criar login e enviar por e-mail'; }
-      if(av) av.textContent=(d&&d.ok)?(d.aviso||'Acesso enviado por e-mail para '+email+' ✔'):('Erro: '+((d&&d.erro)||'falhou'));
+    if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ if(av) av.textContent='Informe o e-mail do cliente — ele é o login do app, mesmo enviando por WhatsApp.'; return; }
+    if(bt){ bt.disabled=true; bt.textContent=(canal==='whatsapp')?'Criando…':'Enviando…'; }
+    admin({acao:'conceder',processo_id:procId,nome:nome,email:email,canal:canal,whatsapp:zap}).then(function(d){
+      if(bt){ bt.disabled=false; bt.innerHTML=rotulo; }
+      if(!(d&&d.ok)){ if(av) av.textContent='Erro: '+((d&&d.erro)||'falhou'); return; }
+      if(canal==='whatsapp'){
+        var comNumero=abrirWhats(zap, d.texto||'');
+        if(av) av.innerHTML = (d.senha
+            ? ('Login criado. Senha <b>'+escx(d.senha)+'</b> — a mensagem abriu no WhatsApp'+(comNumero?'':' (escolha o contato lá, o número não foi informado)')+'.')
+            : ('Este cliente <b>já tinha acesso</b> — o processo foi liberado nele. A mensagem abriu no WhatsApp <b>sem senha</b> (a antiga continua valendo). Se ele não lembra, use “nova senha por WhatsApp” acima.'));
+      } else {
+        if(av) av.textContent=(d.aviso||'Acesso enviado por e-mail para '+email+' ✔');
+      }
       appCliRenderLista(procId);
       if(FICHA_PROC&&FICHA_PROC._id===procId) fichaConversa(procId);
-    }).catch(function(){ if(bt){ bt.disabled=false; bt.innerHTML='&#128233; Criar login e enviar por e-mail'; } if(av) av.textContent='Falha de conexão.'; });
+    }).catch(function(){ if(bt){ bt.disabled=false; bt.innerHTML=rotulo; } if(av) av.textContent='Falha de conexão.'; });
+  };
+  window.appCliSenhaWhats=function(procId, acessoId){
+    var av=document.getElementById('appcli-avis');
+    if(!confirm('Gerar uma senha NOVA e abrir o WhatsApp com a mensagem pronta?\n\nA senha atual deixa de valer e o cliente sai do app até entrar com a nova.')) return;
+    if(av) av.textContent='Gerando senha…';
+    var z=document.getElementById('appcli-zap');
+    admin({acao:'senha_whatsapp',acesso_id:acessoId}).then(function(d){
+      if(!(d&&d.ok)){ if(av) av.textContent='Erro: '+((d&&d.erro)||'falhou'); return; }
+      var comNumero=abrirWhats((z&&z.value)||'', d.texto||'');
+      if(av) av.innerHTML='Senha nova: <b>'+escx(d.senha||'')+'</b> — mensagem aberta no WhatsApp'+(comNumero?'':' (escolha o contato lá)')+'.';
+      appCliRenderLista(procId);
+    }).catch(function(){ if(av) av.textContent='Falha de conexão.'; });
   };
 
   /* ------------------------- alerta no chat aberto ------------------------- */
