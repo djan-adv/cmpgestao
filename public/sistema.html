@@ -6531,6 +6531,35 @@ function _numFichaHTML(p){
     '<button id="btn-transf-proc" class="btn sm gold" style="font-size:11px;padding:4px 10px" onclick="transformarEmProcesso()" title="nº CNJ: vira processo e busca as movimentações no DJEN. CNPJ: fica como identificação do caso (assessoria).">✓ Usar este número</button>'+
     '</span>';
 }
+/* A pasta de documentos é endereçada pelo NÚMERO (dígitos do CNJ, ou 'caso-<id>'
+   quando não há). Mudar o número, portanto, muda o endereço da pasta: quando um
+   caso virava processo no protocolo, a ficha passava a apontar para uma pasta
+   nova e vazia e os documentos pareciam ter sumido — estavam intactos no disco,
+   sob a chave antiga, só que invisíveis. Aqui a pasta acompanha o número. */
+async function _moverPastaDocs(chaveAntiga, chaveNova){
+  chaveAntiga=String(chaveAntiga||''); chaveNova=String(chaveNova||'');
+  if(!chaveAntiga || !chaveNova || chaveAntiga===chaveNova) return null;
+  try{
+    var tok=await docToken();
+    var r=await fetch('/api/docs',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},
+      body:JSON.stringify({op:'rechave', de:chaveAntiga, para:chaveNova})});
+    var d=await r.json().catch(function(){ return null; });
+    if(!r.ok) throw new Error((d&&d.erro)||('HTTP '+r.status));
+    return d;
+  }catch(e){
+    /* falha aqui NÃO pode passar batido: são os documentos do processo */
+    alert('ATENÇÃO: o número foi alterado, mas não consegui mover a pasta de documentos.\n\n'+((e&&e.message)||e)+
+          '\n\nOs arquivos NÃO foram apagados — continuam guardados sob a identificação anterior ('+chaveAntiga+'). Avise o suporte para mover.');
+    return null;
+  }
+}
+/* chave da pasta a partir de um número (mesma regra do _docChaveProc) */
+function _chavePasta(numero, id){
+  var dig=String(numero||'').replace(/\D/g,'');
+  if(dig) return dig;
+  var i=id?String(id).replace(/[^a-zA-Z0-9-]/g,''):'';
+  return i?('caso-'+i):'';
+}
 /* pega o número digitado: CNJ (20 díg.) grava e busca no DJEN; CNPJ (14 díg.) vira a
    identificação do CASO (assessoria — continua fora do DJEN). */
 async function transformarEmProcesso(){
@@ -6549,8 +6578,10 @@ async function transformarEmProcesso(){
       if(sbC&&atual._id){ var rC=await sbC.from('processos').update({numero:cnpj}).eq('id',atual._id);
         if(rC&&rC.error){ alert('Não foi possível salvar: '+rC.error.message); atual.numero=antigoC; if(btnC){btnC.disabled=false;btnC.textContent='✓ Usar este número';} return; } }
     }catch(e){ alert('Erro ao salvar: '+(e&&e.message||e)); atual.numero=antigoC; if(btnC){btnC.disabled=false;btnC.textContent='✓ Usar este número';} return; }
+    var movC=await _moverPastaDocs(_chavePasta(antigoC, atual._id), _chavePasta(cnpj, atual._id));
     var iC=(DADOS.processos||[]).indexOf(atual); if(iC>=0) abrir(iC);
-    alert('✓ CNPJ salvo como identificação do caso.\nA pasta "Documentos do processo" passa a usar esse CNPJ.');
+    alert('✓ CNPJ salvo como identificação do caso.'+
+      ((movC&&movC.movidos)?('\n\n'+movC.movidos+' item(ns) da pasta de documentos foram levados junto.'):''));
     return;
   }
   var numFmt=dig.replace(/^(\d{7})(\d{2})(\d{4})(\d)(\d{2})(\d{4})$/,'$1-$2.$3.$4.$5.$6');
@@ -6565,6 +6596,10 @@ async function transformarEmProcesso(){
     if(sb&&atual._id){ var r=await sb.from('processos').update({numero:numFmt, fonte:(atual.fonte||'manual')}).eq('id',atual._id);
       if(r&&r.error){ alert('Não foi possível salvar o número: '+r.error.message); atual.numero=antigo; if(btn){btn.disabled=false;btn.textContent='⇅ Transformar em processo';} return; } }
   }catch(e){ alert('Erro ao salvar: '+(e&&e.message||e)); atual.numero=antigo; if(btn){btn.disabled=false;btn.textContent='⇅ Transformar em processo';} return; }
+  /* a pasta de documentos vai junto ANTES de reabrir a ficha, senão o painel
+     lista a pasta nova (vazia) e o susto acontece de novo */
+  var mov=await _moverPastaDocs(_chavePasta(antigo, atual._id), _chavePasta(numFmt, atual._id));
+  if(mov&&mov.movidos) alert('✓ Transformado em processo.\n\n'+mov.movidos+' item(ns) da pasta de documentos foram levados para a pasta do novo número.');
   /* reabre a ficha já como processo (número copiável) e puxa o DJEN */
   var i=(DADOS.processos||[]).indexOf(atual); if(i>=0) abrir(i);
   try{ if(typeof atualizarHistorico==='function') await atualizarHistorico(); }catch(e){}
