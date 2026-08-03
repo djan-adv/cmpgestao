@@ -44,11 +44,15 @@
   .abas{display:flex;background:#f6f8fb;border-bottom:1px solid var(--line);position:sticky;
         top:calc(64px + env(safe-area-inset-top));z-index:29;overflow-x:auto;scrollbar-width:none}
   .abas::-webkit-scrollbar{display:none}
-  .abas button{flex:1 0 auto;min-width:104px;padding:13px 12px;font-size:15.5px;font-weight:600;
-               color:var(--muted);border-bottom:3px solid transparent;white-space:nowrap}
+  /* as quatro abas precisam caber juntas na tela do celular, senão "Documentos"
+     fica cortado: sem largura mínima, folga pequena e fonte que encolhe no aperto */
+  .abas button{flex:1 1 auto;min-width:0;padding:13px 5px;font-size:14px;font-weight:600;
+               color:var(--muted);border-bottom:3px solid transparent;white-space:nowrap;letter-spacing:-.15px}
   .abas button.on{color:var(--navy);border-bottom-color:var(--navy)}
-  .abas button .b{display:inline-block;min-width:17px;padding:0 5px;height:17px;line-height:17px;
-                  border-radius:9px;background:var(--gold);color:#fff;font-size:11px;font-weight:700;margin-left:4px}
+  .abas button .b{display:inline-block;min-width:16px;padding:0 4px;height:16px;line-height:16px;
+                  border-radius:8px;background:var(--gold);color:#fff;font-size:10.5px;font-weight:700;margin-left:3px}
+  @media (max-width:359px){ .abas button{font-size:12.5px;padding:12px 3px} }
+  @media (min-width:600px){ .abas button{font-size:15.5px;padding:13px 12px} }
 
   .wrap{max-width:760px;margin:0 auto;padding:14px 14px 40px}
 
