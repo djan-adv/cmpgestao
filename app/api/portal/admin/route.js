@@ -94,21 +94,30 @@ async function emailCredenciais({ nome, email, senha, numero, novoProcesso }) {
   })
 }
 
-// Mesma informação do e-mail, no jeito do WhatsApp: curto, com emoji e sem
-// parágrafo longo. O texto volta pronto para o navegador abrir o wa.me.
+// O WhatsApp do computador recebe o texto do link em UCS-2: tudo que passa de
+// U+FFFF — ou seja, todo emoji colorido — chega como "�" na conversa (acento passa
+// numa boa, porque cabe em 2 bytes). Por isso a mensagem usa negrito do próprio
+// WhatsApp (*assim*) no lugar de ícones, e esta peneira impede que um emoji volte a
+// entrar por descuido numa edição futura.
+function semAstral(t) {
+  return String(t || '').replace(/[\u{10000}-\u{10FFFF}]/gu, '')
+}
+
+// Mesma informação do e-mail, no jeito do WhatsApp: curto e sem parágrafo longo.
+// O texto volta pronto para o navegador abrir o wa.me.
 function textoWhatsapp({ nome, email, senha, novoProcesso }) {
   const primeiro = String(nome || '').trim().split(/\s+/)[0] || ''
-  return (
-    'Olá' + (primeiro ? ', ' + primeiro : '') + '! 👋\n\n' +
+  return semAstral(
+    'Olá' + (primeiro ? ', ' + primeiro : '') + '!\n\n' +
     (novoProcesso
       ? 'Liberamos mais um processo no seu acesso ao aplicativo do escritório.'
       : 'Seu acesso ao aplicativo do escritório está pronto.') + '\n\n' +
-    '🔗 ' + URL_PUBLICA + '/portal.html\n' +
-    '👤 Login: ' + email + '\n' +
-    (senha ? ('🔑 Senha: ' + senha + '\n') : '🔑 Senha: a que você já usa (se esqueceu, avise que enviamos outra)\n') +
+    '*Endereço:* ' + URL_PUBLICA + '/portal.html\n' +
+    '*Login:* ' + email + '\n' +
+    (senha ? ('*Senha:* ' + senha + '\n') : '*Senha:* a que você já usa (se esqueceu, avise que enviamos outra)\n') +
     '\nNo aplicativo você acompanha as movimentações, vê os documentos oficiais (despachos, sentenças e acordos), as petições que protocolamos e o contato do cartório da Vara — e fala com a gente pelo chat de dentro do processo.\n\n' +
-    '📲 Para deixar como aplicativo no celular: abra o link e toque em "Instalar o aplicativo". No iPhone, use Compartilhar ➜ "Adicionar à Tela de Início".\n\n' +
-    '🔒 O acesso é pessoal — não compartilhe. Por segurança, o uso em muitos aparelhos diferentes bloqueia o acesso.'
+    'Para deixar como aplicativo no celular: abra o endereço e toque em "Instalar o aplicativo". No iPhone, use Compartilhar e depois "Adicionar à Tela de Início".\n\n' +
+    'O acesso é pessoal — não compartilhe. Por segurança, o uso em muitos aparelhos diferentes bloqueia o acesso.'
   )
 }
 
