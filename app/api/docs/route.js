@@ -116,6 +116,26 @@ export async function GET(request) {
     return Response.json({ ok: true, processos, arquivos, bytes, gb: +(bytes / 1073741824).toFixed(2), disco })
   }
 
+  // Pastas ÓRFÃS: ficaram para trás quando o número do processo mudou (caso que
+  // virou processo judicial, antes da op 'rechave' existir). Só leitura — serve
+  // para achar documentos que a ficha deixou de mostrar.
+  if (searchParams.get('orfas')) {
+    const orfas = []
+    try {
+      for (const d of fs.readdirSync(ROOT, { withFileTypes: true })) {
+        if (!d.isDirectory()) continue
+        const nome = d.name
+        const soDigitos = /^\d+$/.test(nome)
+        // chave normal de processo tem 20 dígitos; o resto é caso/CNPJ/legado
+        if (soDigitos && nome.length === 20) continue
+        const r = censoProc(path.join(ROOT, nome), 0)
+        if (r.n > 0) orfas.push({ chave: nome, arquivos: r.n, bytes: r.bytes })
+      }
+    } catch (e) { return Response.json({ erro: 'não consegui ler ' + ROOT }, { status: 500 }) }
+    orfas.sort((a, b) => b.arquivos - a.arquivos)
+    return Response.json({ ok: true, orfas })
+  }
+
   const censo = searchParams.get('censo')
   if (censo) {
     const nums = [...new Set(String(censo).split(',').map(s => s.replace(/\D/g, '')).filter(s => s.length >= 16))].slice(0, 500)
@@ -202,6 +222,47 @@ export async function POST(request) {
     fs.renameSync(full, dest)
     if (info) { delete m[nome]; gravarMeta(procDir, m) }
     return Response.json({ ok: true, restaurado: path.relative(ROOT, dest) })
+  }
+
+  // Trocar a CHAVE da pasta do processo (ex.: caso vira processo judicial).
+  //
+  // Os documentos são guardados em ROOT/<chave>, e a chave é o número: dígitos do
+  // CNJ quando há processo, senão 'caso-<id>' ou o CNPJ. Quando um caso virava
+  // processo, o número mudava e a chave junto — a pasta antiga continuava no
+  // disco, intacta, mas a ficha passava a olhar para uma pasta nova e vazia. Do
+  // lado de quem usa, os documentos "sumiam" no momento do protocolo.
+  //
+  // Nada é apagado aqui: renomeia a pasta, e quando o destino já existe move item
+  // a item, preservando o que estiver lá.
+  if (b.op === 'rechave') {
+    const de = String(b.de || '').replace(/[^a-zA-Z0-9-]/g, '')
+    const para = String(b.para || '').replace(/[^a-zA-Z0-9-]/g, '')
+    if (!de || !para) return Response.json({ erro: 'informe as duas chaves' }, { status: 400 })
+    if (de === para) return Response.json({ ok: true, movidos: 0, nada: true })
+    const dirDe = path.join(ROOT, de), dirPara = path.join(ROOT, para)
+    if (!dirDe.startsWith(ROOT) || !dirPara.startsWith(ROOT)) return Response.json({ erro: 'chave inválida' }, { status: 400 })
+    if (!fs.existsSync(dirDe) || !fs.statSync(dirDe).isDirectory()) return Response.json({ ok: true, movidos: 0, nada: true })
+
+    if (!fs.existsSync(dirPara)) {
+      fs.mkdirSync(path.dirname(dirPara), { recursive: true })
+      fs.renameSync(dirDe, dirPara)
+      const n = contaArquivos(dirPara, 0)
+      return Response.json({ ok: true, movidos: n, modo: 'renomeou' })
+    }
+    let movidos = 0
+    for (const d of fs.readdirSync(dirDe, { withFileTypes: true })) {
+      let alvo = path.join(dirPara, d.name)
+      if (fs.existsSync(alvo)) {
+        // nunca sobrescrever: o arquivo que já estava no destino é preservado
+        const ext = path.extname(d.name), base = path.basename(d.name, ext)
+        alvo = path.join(dirPara, base + ' (do caso)' + ext)
+        let i = 2
+        while (fs.existsSync(alvo)) { alvo = path.join(dirPara, base + ' (do caso ' + i + ')' + ext); i++ }
+      }
+      try { fs.renameSync(path.join(dirDe, d.name), alvo); movidos++ } catch (e) {}
+    }
+    try { if (!fs.readdirSync(dirDe).length) fs.rmdirSync(dirDe) } catch (e) {}
+    return Response.json({ ok: true, movidos, modo: 'mesclou' })
   }
 
   // renomear arquivo/pasta (mesmo diretório)
