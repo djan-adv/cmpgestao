@@ -14711,13 +14711,20 @@ async function monitTrazerAssessoria(id){
     bolha.style.boxShadow='0 0 0 3px rgba(201,162,39,.55)';
     setTimeout(function(){ bolha.style.background=antes.bg; bolha.style.boxShadow=antes.sh; }, 1500);
   };
+  /* ATENÇÃO ao 'window.' daqui: este módulo tem uma função abrir(semSalvar)
+     própria, que abre o painel do chat. Chamar 'abrir(i)' aqui dentro pega a
+     LOCAL, não a global abrir(i) que abre a ficha do processo — era por isso que
+     clicar no número do processo não fazia nada além de reabrir o chat. */
   window._chatAbrirProc=function(id){
+    /* No celular o chat cobre a tela: sem recolher, a ficha abre atrás dele e
+       parece que o clique não fez nada. */
+    try{ fechar(); }catch(e){}
     var lst=((typeof DADOS!=='undefined'&&DADOS.processos)||[]);
     var i=lst.findIndex(function(x){return x._id===id;});
-    if(i>=0 && typeof abrir==='function'){ abrir(i); return; }
+    if(i>=0 && typeof window.abrir==='function'){ window.abrir(i); return; }
     var info=procNomeCache[id];
-    if(info && info.numero && typeof irParaCaso==='function'){ irParaCaso(info.numero); return; }
-    if(typeof go==='function') go('processos');
+    if(info && info.numero && typeof window.irParaCaso==='function'){ window.irParaCaso(info.numero); return; }
+    if(typeof window.go==='function') window.go('processos');
   };
   function pintar(){
     var el=document.getElementById('cmp-chat-msgs'); if(!el) return;
