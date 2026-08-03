@@ -89,6 +89,40 @@ async function docsDoProcesso(sb, p) {
   return { oficiais, peticoes }
 }
 
+/* Processo VINCULADO (ex.: a ação principal que decide o caso de todos os clientes
+   contra a mesma construtora). O cliente acompanha os andamentos e os documentos
+   oficiais dele DENTRO do próprio processo, sem entrar na ficha do vinculado — que
+   costuma ser de outro titular e tem o chat de outro cliente. É o que mantém o app
+   vivo quando o processo do cliente está suspenso esperando essa ação. */
+function numerosVinculados(p) {
+  const v = Array.isArray(p && p.vinculados) ? p.vinculados : []
+  return v.map(n => digitos(n)).filter(d => d.length >= 10).slice(0, 3)
+}
+async function vinculadosDoProcesso(sb, p) {
+  const digs = numerosVinculados(p)
+  if (!digs.length) return []
+  const { data: vps } = await sb.from('processos')
+    .select('id,numero,classe,assunto,foro,orgao,status,escritorio_id')
+    .eq('escritorio_id', p.escritorio_id).in('numero_digitos', digs)
+  const saida = []
+  for (const v of (vps || [])) {
+    const { data: ands } = await sb.from('andamentos')
+      .select('id,data,texto').eq('processo_id', v.id).in('fonte', FONTES_OFICIAIS)
+      .order('data', { ascending: false }).order('id', { ascending: false }).limit(60)
+    const docs = await docsDoProcesso(sb, v)
+    saida.push({
+      numero: v.numero,
+      titulo: v.assunto || v.classe || 'Ação judicial',
+      foro: v.foro || v.orgao,
+      movimentacoes: ands || [],
+      // só os documentos oficiais (já públicos); as petições do vinculado são da
+      // ficha de outro titular e não entram aqui
+      documentos: docs.oficiais,
+    })
+  }
+  return saida
+}
+
 /* contato do cartório da vara — melhor esforço a partir do cadastro do escritório */
 function normaliza(s) {
   return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9ª ]+/g, ' ').replace(/\s+/g, ' ').trim()
@@ -218,7 +252,7 @@ export async function POST(request) {
     const todosIds = await processosPermitidos(sb, acesso)
     if (!todosIds.length) return Response.json({ ok: true, nome: acesso.nome || '', processos: [] })
     const { data: brutos } = await sb.from('processos')
-      .select('id,numero,classe,assunto,foro,orgao,fase,status,distribuido_em,valor_causa,ultima_movimentacao,oponente,cliente_nome')
+      .select('id,numero,classe,assunto,foro,orgao,fase,status,distribuido_em,valor_causa,ultima_movimentacao,oponente,cliente_nome,vinculados')
       .in('id', todosIds).order('ultima_movimentacao', { ascending: false, nullsFirst: false })
     // processo encerrado não vai para o app do cliente — a lista mostra o que está em
     // andamento. (Filtrado aqui, e não na consulta, para não derrubar status vazio.)
@@ -234,12 +268,38 @@ export async function POST(request) {
       .select('processo_id').in('processo_id', ids).eq('autor_tipo', 'escritorio').eq('lida_cliente', false).limit(1000)
     const badge = {}
     for (const n of (naoLidas || [])) badge[n.processo_id] = (badge[n.processo_id] || 0) + 1
+
+    // Movimentação do processo VINCULADO também vai para o card: quando o processo
+    // do cliente está suspenso esperando a ação principal, é lá que a coisa anda —
+    // sem isso o app pareceria parado justamente para quem mais espera notícia.
+    const digsVinc = new Set()
+    procs.forEach(p => numerosVinculados(p).forEach(d => digsVinc.add(d)))
+    const vincDoProc = {}
+    if (digsVinc.size) {
+      const { data: vps } = await sb.from('processos').select('id,numero,numero_digitos')
+        .eq('escritorio_id', acesso.escritorio_id).in('numero_digitos', Array.from(digsVinc))
+      if (vps && vps.length) {
+        const { data: vmovs } = await sb.rpc('portal_ultima_mov', { p_ids: vps.map(v => v.id) })
+        const ultimaV = {}
+        for (const m of (vmovs || [])) if (!ultimaV[m.processo_id]) ultimaV[m.processo_id] = m
+        const porDig = {}
+        vps.forEach(v => { porDig[v.numero_digitos] = v })
+        procs.forEach(p => {
+          const d = numerosVinculados(p).find(x => porDig[x])
+          const v = d && porDig[d]
+          const m = v && ultimaV[v.id]
+          if (v && m) vincDoProc[p.id] = { numero: v.numero, data: m.data, texto: String(m.texto || '').slice(0, 200) }
+        })
+      }
+    }
+
     const lista = (procs || []).map(p => ({
       id: p.id, numero: p.numero,
       titulo: p.assunto || p.classe || 'Ação judicial',
       classe: p.classe, foro: p.foro || p.orgao, fase: p.fase, status: p.status || 'ativo',
       cliente: p.cliente_nome, oponente: p.oponente,
       ultima: ultima[p.id] ? { data: ultima[p.id].data, texto: String(ultima[p.id].texto || '').slice(0, 220) } : null,
+      vinculado: vincDoProc[p.id] || null,
       nao_lidas: badge[p.id] || 0,
     }))
     return Response.json({ ok: true, nome: acesso.nome || '', processos: lista })
@@ -254,7 +314,9 @@ export async function POST(request) {
     const { data: ands } = await sb.from('andamentos')
       .select('id,data,texto,fonte').eq('processo_id', id).in('fonte', FONTES_OFICIAIS)
       .order('data', { ascending: false }).order('id', { ascending: false }).limit(300)
-    const [docs, cart] = await Promise.all([docsDoProcesso(sb, p), cartorioDaVara(sb, p)])
+    const [docs, cart, vinculados] = await Promise.all([
+      docsDoProcesso(sb, p), cartorioDaVara(sb, p), vinculadosDoProcesso(sb, p),
+    ])
     const [papelAtivo, papelPassivo] = papeisDaClasse(p.classe, p.assunto, p.fase)
     const partes = [
       { papel: papelAtivo, nome: p.cliente_nome || (acesso.nome || 'Você'), voce: true },
@@ -274,6 +336,7 @@ export async function POST(request) {
       movimentacoes: ands || [],
       documentos: docs,
       cartorio: cart,
+      vinculados,
       chat_nao_lidas: count || 0,
     })
   }
@@ -350,6 +413,14 @@ export async function GET(request) {
 
   const [tipo, id] = doc.split(':')
   const permitidos = await processosPermitidos(sb, acesso)
+  // números que este acesso pode abrir documento: os processos dele + os vinculados
+  // (a ação principal em que ele é credor), cujos atos oficiais já são públicos
+  const { data: meusProcs } = await sb.from('processos').select('id,numero,vinculados').in('id', permitidos)
+  const numerosOk = new Set()
+  ;(meusProcs || []).forEach(p => {
+    numerosOk.add(digitos(p.numero))
+    numerosVinculados(p).forEach(d => numerosOk.add(d))
+  })
 
   /* peça oficial do jus.br */
   if (tipo === 'jusbr') {
@@ -357,10 +428,10 @@ export async function GET(request) {
       .select('processo_numero,doc_nome,doc_tipo,conteudo_b64,caminho_disco')
       .eq('id', id).eq('escritorio_id', acesso.escritorio_id).maybeSingle()
     if (!data) return Response.json({ erro: 'Documento não encontrado (pode ter expirado).' }, { status: 404 })
-    // o documento precisa ser de um processo que este acesso enxerga
-    const { data: procs } = await sb.from('processos').select('id,numero').in('id', permitidos)
-    const dono = (procs || []).find(p => p.numero === data.processo_numero || digitos(p.numero) === digitos(data.processo_numero))
-    if (!dono) return Response.json({ erro: 'Documento não disponível para este acesso.' }, { status: 403 })
+    // o documento precisa ser de um processo que este acesso enxerga (ou do vinculado)
+    if (!numerosOk.has(digitos(data.processo_numero))) {
+      return Response.json({ erro: 'Documento não disponível para este acesso.' }, { status: 403 })
+    }
     if (!RE_OFICIAL.test((data.doc_tipo || '') + ' ' + (data.doc_nome || ''))) {
       return Response.json({ erro: 'Documento não disponível no portal.' }, { status: 403 })
     }
