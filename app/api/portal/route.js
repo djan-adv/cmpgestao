@@ -215,11 +215,16 @@ export async function POST(request) {
   }
 
   if (acao === 'meus') {
-    const ids = await processosPermitidos(sb, acesso)
-    if (!ids.length) return Response.json({ ok: true, nome: acesso.nome || '', processos: [] })
-    const { data: procs } = await sb.from('processos')
+    const todosIds = await processosPermitidos(sb, acesso)
+    if (!todosIds.length) return Response.json({ ok: true, nome: acesso.nome || '', processos: [] })
+    const { data: brutos } = await sb.from('processos')
       .select('id,numero,classe,assunto,foro,orgao,fase,status,distribuido_em,valor_causa,ultima_movimentacao,oponente,cliente_nome')
-      .in('id', ids).order('ultima_movimentacao', { ascending: false, nullsFirst: false })
+      .in('id', todosIds).order('ultima_movimentacao', { ascending: false, nullsFirst: false })
+    // processo encerrado não vai para o app do cliente — a lista mostra o que está em
+    // andamento. (Filtrado aqui, e não na consulta, para não derrubar status vazio.)
+    const procs = (brutos || []).filter(p => !/encerrad|arquivad|baixad/i.test(p.status || ''))
+    const ids = procs.map(p => p.id)
+    if (!ids.length) return Response.json({ ok: true, nome: acesso.nome || '', processos: [] })
     // última movimentação OFICIAL de cada processo (uma por processo, resolvido no banco)
     const { data: movs } = await sb.rpc('portal_ultima_mov', { p_ids: ids })
     const ultima = {}
