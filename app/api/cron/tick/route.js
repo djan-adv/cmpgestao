@@ -32,7 +32,10 @@ const JOBS = [
   // procuração/contrato assinado no assinador volta para a ficha (histórico + PDF na pasta)
   { nome: 'assinatura_sync', rotulo: 'Assinaturas — levar às fichas', url: '/api/assinatura/sync?rodar=1', cada_min: 30 },
   { nome: 'notificar_jader', rotulo: 'Notificações do Jader', url: '/api/notificar-jader', cada_min: 15 },
-  { nome: 'djen', rotulo: 'DJEN — publicações do dia', url: '/api/cron/djen', diario_hora: 5 },
+  // De 1x/dia às 5h para de 2 em 2 horas: o DJEN não fica completo de madrugada
+  // e uma única passada perdia o dia inteiro. A gravação é idempotente (dedup por
+  // texto+data), então repassar de hora em hora não duplica nada.
+  { nome: 'djen', rotulo: 'DJEN — publicações do dia', url: '/api/cron/djen', cada_min: 120 },
   { nome: 'jusbr_docs', rotulo: 'jus.br — puxar documentos', url: '/api/jusbr/puxar-docs', diario_hora: 6 },
   // MOVIMENTOS (conclusão, juntada) não saem no DJEN — só na consulta do PDPJ.
   // Antes isso dependia de alguém clicar em "↻ atualizar" na ficha, e processo

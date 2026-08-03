@@ -17,15 +17,21 @@ const DJEN = 'https://comunicaapi.pje.jus.br/api/v1/comunicacao'
 const iso = (d) => d.toISOString().slice(0, 10)
 const UA = 'Mozilla/5.0 (compatible; CMPGestao/1.0)'
 
-async function consultaDjen(numero, uf, dias) {
+// Toda falha de rede/HTTP é REGISTRADA, nunca engolida: sem isso, "a API do CNJ
+// está fora" e "hoje não houve publicação" produziam exatamente o mesmo relatório
+// (publicacoes: 0), e o robô parecia saudável enquanto não capturava nada.
+async function consultaDjen(numero, uf, dias, falhas) {
   const fim = new Date(), ini = new Date(Date.now() - dias * 86400000)
   let itens = [], pagina = 1
   while (pagina <= 10) {
     const url = `${DJEN}?numeroOab=${numero.replace(/\D/g, '')}&ufOab=${uf}&dataDisponibilizacaoInicio=${iso(ini)}&dataDisponibilizacaoFim=${iso(fim)}&meio=D&pagina=${pagina}&itensPorPagina=100`
     let r
-    try { r = await fetch(url, { headers: { Accept: 'application/json', 'User-Agent': UA }, signal: AbortSignal.timeout(25000) }) } catch (e) { break }
-    if (!r.ok) break
-    const d = await r.json()
+    try { r = await fetch(url, { headers: { Accept: 'application/json', 'User-Agent': UA }, signal: AbortSignal.timeout(25000) }) }
+    catch (e) { falhas.push({ alvo: `OAB ${numero}/${uf}`, pagina, erro: String((e && e.message) || e) }); break }
+    if (!r.ok) { falhas.push({ alvo: `OAB ${numero}/${uf}`, pagina, status: r.status }); break }
+    let d
+    try { d = await r.json() }
+    catch (e) { falhas.push({ alvo: `OAB ${numero}/${uf}`, pagina, erro: 'resposta não era JSON' }); break }
     const lote = d.items || d.content || d.comunicacoes || []
     if (!lote.length) break
     itens = itens.concat(lote)
@@ -37,20 +43,22 @@ async function consultaDjen(numero, uf, dias) {
 
 // Consulta o DJEN por NÚMERO do processo (usado nos processos da Inove, onde cada
 // processo tem um advogado diferente — não dá para buscar por OAB).
-async function consultaDjenNumero(numeroDigits, dias) {
+async function consultaDjenNumero(numeroDigits, dias, falhas) {
   const fim = new Date(), ini = new Date(Date.now() - dias * 86400000)
   const url = `${DJEN}?numeroProcesso=${numeroDigits}&dataDisponibilizacaoInicio=${iso(ini)}&dataDisponibilizacaoFim=${iso(fim)}&meio=D&pagina=1&itensPorPagina=100`
   try {
     const r = await fetch(url, { headers: { Accept: 'application/json', 'User-Agent': UA }, signal: AbortSignal.timeout(20000) })
-    if (!r.ok) return []
+    if (!r.ok) { falhas.push({ alvo: numeroDigits, status: r.status }); return [] }
     const d = await r.json()
     return d.items || d.content || d.comunicacoes || []
-  } catch (e) { return [] }
+  } catch (e) { falhas.push({ alvo: numeroDigits, erro: String((e && e.message) || e) }); return [] }
 }
 
 export async function GET(request) {
   const { searchParams } = new URL(request.url)
-  const dias = parseInt(searchParams.get('dias') || '2', 10) || 2
+  // Janela de 4 dias (era 2): cobre o fim de semana e feriado, e faz uma rodada
+  // que falhou se curar sozinha na seguinte em vez de deixar buraco permanente.
+  const dias = parseInt(searchParams.get('dias') || '4', 10) || 4
 
   if (searchParams.get('debug')) {
     const o = OABS[1]
@@ -66,8 +74,14 @@ export async function GET(request) {
   if (!url || !anon) return Response.json({ erro: 'faltam variáveis do Supabase' }, { status: 500 })
   const sb = createClient(url, anon, { auth: { persistSession: false } })
 
+  const falhas = []
   let pubs = []
-  for (const o of OABS) { const it = await consultaDjen(o.numero, o.uf, dias); pubs = pubs.concat(it) }
+  const porOab = {}
+  for (const o of OABS) {
+    const it = await consultaDjen(o.numero, o.uf, dias, falhas)
+    porOab[`${o.numero}/${o.uf}`] = it.length
+    pubs = pubs.concat(it)
+  }
 
   // Processos da Inove: consulta por NÚMERO (cada um tem advogado diferente).
   // Lê a lista dos números com a chave de serviço (se disponível) e junta às publicações.
@@ -80,10 +94,10 @@ export async function GET(request) {
       const nums = [...new Set((rows || []).map(r => String(r.numero || '').replace(/\D/g, '')).filter(n => n.length >= 16))]
       inoveNums = nums.length
       for (const dig of nums) {
-        const it = await consultaDjenNumero(dig, dias)
+        const it = await consultaDjenNumero(dig, dias, falhas)
         pubs = pubs.concat(it)
       }
-    } catch (e) { /* segue só com as OABs */ }
+    } catch (e) { falhas.push({ alvo: 'lista Inove', erro: String((e && e.message) || e) }) }
   }
 
   let inseridos = 0, jaTinha = 0, semProcesso = 0, erros = 0
@@ -98,5 +112,13 @@ export async function GET(request) {
     else if (res === 'existe') jaTinha++
     else semProcesso++
   }
-  return Response.json({ ok: true, oabs: OABS.length, inoveNums, publicacoes: pubs.length, inseridos, jaTinha, semProcesso, erros, dias })
+  // Se NENHUMA consulta trouxe nada e houve falha, isso não é "dia sem publicação":
+  // é o robô cego. Sai com ok:false para aparecer vermelho no painel de Robôs.
+  const cego = pubs.length === 0 && falhas.length > 0
+  return Response.json({
+    ok: !cego, ...(cego ? { alerta: 'nenhuma publicação lida E houve falha de consulta — verificar a API do CNJ' } : {}),
+    oabs: OABS.length, porOab, inoveNums, publicacoes: pubs.length,
+    inseridos, jaTinha, semProcesso, erros, dias,
+    falhas: falhas.slice(0, 12), n_falhas: falhas.length,
+  })
 }
