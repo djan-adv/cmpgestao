@@ -50,22 +50,19 @@ export function tokenDo(request) {
 
 export function digitos(s) { return String(s || '').replace(/\D/g, '') }
 
+// Movimentações que o cliente vê: só as de origem oficial. As fontes internas
+// ('manual', 'email', 'minuta', 'captura') guardam anotações do escritório — do tipo
+// "[MENSAGEM AGENDADA…]" ou a cópia do e-mail enviado — e NÃO podem ir para o app.
+export const FONTES_OFICIAIS = ['djen', 'datajud', 'jusbr', 'protocolo']
+
 /* ---------- quais processos um acesso enxerga ----------
-   união de: grants explícitos (portal_acesso_processos) + processos do contato
-   vinculado (cliente_id igual OU cliente_nome igual ao nome do contato). */
+   Resolvido no banco (função portal_processos_ids): grants explícitos +
+   processos do contato vinculado + processos cujo cliente_nome bate com o nome do
+   acesso, comparando sem acento e sem diferença de maiúsculas — muitos processos têm
+   cliente_id nulo e o nome aparece como "Mendonça" ou "Mendonca". Sempre restrito ao
+   escritório do acesso. */
 export async function processosPermitidos(sb, acesso) {
-  const ids = new Set()
-  const g = await sb.from('portal_acesso_processos').select('processo_id').eq('acesso_id', acesso.id)
-  ;(g.data || []).forEach(r => ids.add(r.processo_id))
-  if (acesso.contato_id) {
-    const c = await sb.from('contatos').select('id,nome').eq('id', acesso.contato_id).maybeSingle()
-    const q1 = await sb.from('processos').select('id').eq('escritorio_id', acesso.escritorio_id).eq('cliente_id', acesso.contato_id)
-    ;(q1.data || []).forEach(r => ids.add(r.id))
-    const nome = c.data && String(c.data.nome || '').trim()
-    if (nome) {
-      const q2 = await sb.from('processos').select('id').eq('escritorio_id', acesso.escritorio_id).ilike('cliente_nome', nome)
-      ;(q2.data || []).forEach(r => ids.add(r.id))
-    }
-  }
-  return Array.from(ids)
+  const { data, error } = await sb.rpc('portal_processos_ids', { p_acesso: acesso.id })
+  if (error || !data) return []
+  return data.map(r => (typeof r === 'string' ? r : r.processo_id)).filter(Boolean)
 }

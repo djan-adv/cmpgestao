@@ -42,23 +42,12 @@ function estadoDo(a) {
   return 'criado'
 }
 
-/* acessos que enxergam um processo: grant explícito OU contato do processo */
+/* acessos que enxergam um processo — mesma regra do portal (função no banco):
+   grant explícito, contato vinculado ou nome do cliente igual sem acento. */
 async function acessosDoProcesso(sb, p) {
-  const { data: todos } = await sb.from('portal_acessos').select('*').eq('escritorio_id', p.escritorio_id).limit(1000)
-  const { data: grants } = await sb.from('portal_acesso_processos').select('acesso_id').eq('processo_id', p.id)
-  const setGrant = new Set((grants || []).map(g => g.acesso_id))
-  const nomes = {}
-  const contatoIds = (todos || []).map(a => a.contato_id).filter(Boolean)
-  if (contatoIds.length) {
-    const { data: cts } = await sb.from('contatos').select('id,nome').in('id', contatoIds)
-    ;(cts || []).forEach(c => { nomes[c.id] = String(c.nome || '').trim().toLowerCase() })
-  }
-  const cliNome = String(p.cliente_nome || '').trim().toLowerCase()
-  return (todos || []).filter(a =>
-    setGrant.has(a.id) ||
-    (a.contato_id && a.contato_id === p.cliente_id) ||
-    (a.contato_id && cliNome && nomes[a.contato_id] === cliNome)
-  )
+  const { data, error } = await sb.rpc('portal_acessos_do_processo', { p_processo: p.id })
+  if (error || !data) return []
+  return data
 }
 
 async function statusDoProcesso(sb, p) {
@@ -135,11 +124,17 @@ export async function POST(request) {
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return Response.json({ erro: 'E-mail inválido.' }, { status: 400 })
     if (!nome || nome.length < 3) return Response.json({ erro: 'Informe o nome do cliente.' }, { status: 400 })
 
-    // vincula ao contato quando for o cliente principal do processo
+    // Vincula ao contato do escritório. O processo nem sempre tem cliente_id (os que
+    // vieram de importação/captura não têm), então, quando faltar, procuramos o
+    // contato pelo nome — sem acento e sem caixa — para o cliente ver TODOS os
+    // processos dele, não só este.
     let contatoId = String(body.contato_id || '') || null
-    if (!contatoId && p.cliente_id && p.cliente_nome &&
-        nome.toLowerCase() === String(p.cliente_nome).trim().toLowerCase()) {
-      contatoId = p.cliente_id
+    if (!contatoId) {
+      const { data: achado } = await sb.rpc('portal_contato_por_nome', {
+        p_escritorio: quem.escritorio_id,
+        p_nome: p.cliente_nome || nome,
+      })
+      if (achado) contatoId = achado
     }
     // guarda o e-mail no cadastro do contato se lá estiver vazio (ajuda o escritório)
     if (contatoId) {

@@ -23,7 +23,7 @@ import crypto from 'crypto'
 import fs from 'fs'
 import path from 'path'
 import { tipoRealDoArquivo, pdfDeTexto } from '../jusbr/lib.js'
-import { svc, confereSenha, sessao, tokenDo, digitos, processosPermitidos } from './lib.js'
+import { svc, confereSenha, sessao, tokenDo, digitos, processosPermitidos, FONTES_OFICIAIS } from './lib.js'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -220,10 +220,8 @@ export async function POST(request) {
     const { data: procs } = await sb.from('processos')
       .select('id,numero,classe,assunto,foro,orgao,fase,status,distribuido_em,valor_causa,ultima_movimentacao,oponente,cliente_nome')
       .in('id', ids).order('ultima_movimentacao', { ascending: false, nullsFirst: false })
-    // última movimentação (texto) de cada processo
-    const { data: movs } = await sb.from('andamentos')
-      .select('processo_id,data,texto').in('processo_id', ids)
-      .order('data', { ascending: false }).order('id', { ascending: false }).limit(Math.min(ids.length * 3, 900))
+    // última movimentação OFICIAL de cada processo (uma por processo, resolvido no banco)
+    const { data: movs } = await sb.rpc('portal_ultima_mov', { p_ids: ids })
     const ultima = {}
     for (const m of (movs || [])) if (!ultima[m.processo_id]) ultima[m.processo_id] = m
     // não lidas do chat (mensagens do escritório que o cliente ainda não viu)
@@ -249,7 +247,7 @@ export async function POST(request) {
     const { data: p } = await sb.from('processos').select('*').eq('id', id).maybeSingle()
     if (!p) return Response.json({ erro: 'Processo não encontrado.' }, { status: 404 })
     const { data: ands } = await sb.from('andamentos')
-      .select('id,data,texto,fonte').eq('processo_id', id)
+      .select('id,data,texto,fonte').eq('processo_id', id).in('fonte', FONTES_OFICIAIS)
       .order('data', { ascending: false }).order('id', { ascending: false }).limit(300)
     const [docs, cart] = await Promise.all([docsDoProcesso(sb, p), cartorioDaVara(sb, p)])
     const [papelAtivo, papelPassivo] = papeisDaClasse(p.classe, p.assunto, p.fase)
