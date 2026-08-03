@@ -165,6 +165,15 @@
 html[data-perfil="inove"] .brand{display:none!important}
 html[data-perfil="inove"] .brand-neutral{display:block!important}
 html[data-perfil="inove"] .cmp-only{display:none!important}
+/* Painel de ações da ficha: memória muscular. Os botões viviam numa fileira que
+   refluía — "Dar acesso ao app" vira "Acesso enviado — aguardando 1º login" e
+   empurrava os vizinhos para a linha de baixo, então cada processo mostrava a
+   barra num lugar diferente. Aqui são colunas FIXAS de largura igual: o rótulo
+   muda dentro da própria célula e nada mais se mexe. Em tela estreita rola na
+   horizontal em vez de quebrar linha, para a ordem nunca mudar. */
+#acoes-proc{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;overflow-x:auto}
+html[data-perfil="inove"] #acoes-proc{grid-template-columns:repeat(3,minmax(0,1fr))}
+#acoes-proc>.btn{width:100%;min-width:0;min-height:44px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;white-space:normal;line-height:1.15;font-size:11.5px;padding:6px 8px;font-weight:700}
 /* permissões: engrenagens/acessos/publicar só para coordenadores (Djan, Jader, M. Eduarda);
    estagiário não vê nada de configuração */
 html:not([data-papel="coord"]) .coord-only{display:none!important}
@@ -1909,13 +1918,23 @@ function abrir(i){
       +'<button class="btn sm ghost" style="font-weight:700" onclick="kitContrato()" title="Sobe um contrato já pronto (PDF/Word) para assinatura eletrônica, já com o cliente como 1º signatário">📄 2b. p/ assinar avulso</button>'
       +'<button class="btn sm" style="background:#fdeef2;color:#c2185b;border:1px solid #f2c9d6;font-weight:700" onclick="gerarBoletoNovoDoProcesso()" title="Emite o 1º boleto (à vista ou parcelado — as parcelas seguintes saem sozinhas todo mês)">💳 3. Boleto/parcelas</button>'
       +'<span class="note" style="font-size:11px">tudo sai pré-preenchido; assinou → cai na pasta e no histórico sozinho</span></div>'):'')+
-    '<div style="margin-top:10px"><button class="btn sm" onclick="novaTarefaDoProcesso()">+ Nova tarefa</button> <button class="btn sm" style="background:#eef4fb;color:#185FA5;border:1px solid #cfe0f2;font-weight:700" onclick="abrirTribunal(\''+p.numero+'\')" title="Abrir o sistema do tribunal (PJe/e-SAJ/Projudi) no grau deste processo — o número é copiado para você colar na busca">&#9878; Abrir no tribunal</button> <button id="btn-atualizar-cli" class="btn sm cmp-only" style="background:#eaf4f4;color:#0b7285;border:1px solid #cfe6e6;font-weight:700" onclick="abrirAtualizarCliente(\''+p.numero+'\')" title="E-mail de atualização ao cliente — informar movimentação, pedir providência, ou ativar o acompanhamento semanal automático">&#9993; Atualizar cliente</button>'+((typeof _ehCasoProc==='function'&&_ehCasoProc(p))?' <button class="btn sm cmp-only" style="background:#f3eaf7;color:#6d28a8;border:1px solid #ddc9ea;font-weight:700" onclick="monitorarAcoesCliente()" title="Testar: buscar no DJEN ações NOVAS (últimos 3 meses) que citem o nome deste cliente — inclui trabalhista. Não busca por CNPJ (a API do CNJ não permite).">&#128269; Monitorar ações novas</button>':'')+
-    ' <button id="btn-app-cli" class="btn sm cmp-only" style="background:#2E3A4B;color:#fff;border:1px solid #2E3A4B;font-weight:700" onclick="appCliAbrirPainel(\''+(p._id||'')+'\')" title="Portal do cliente (app): cria o login, envia a senha por e-mail e mostra se o cliente já entrou. Verde = cliente logado no app.">&#128242; Dar acesso ao app</button>'+
-    ' <button class="btn sm cmp-only" style="background:#fff8e6;color:#8a6d00;border:1px solid #e8dcbb;font-weight:700" onclick="appCliFalarComCliente(\''+(p._id||'')+'\')" title="Abre a janela de conversa com o cliente deste processo (aparece EMPILHADA acima do chat da equipe). Tudo fica gravado no processo.">&#128172; Falar com cliente</button>'+
-    '</div>'+
     /* ponto 12: bloco de processos vinculados no canto inferior direito da aba (perto do botão Encerrar) */
     '<div id="proc-vinculados-rodape" style="position:absolute;bottom:12px;right:14px;max-width:60%;display:flex;gap:6px;flex-wrap:wrap;align-items:center;justify-content:flex-end;font-size:12px"></div>'+
     '</div>';
+  /* Painel de ações — fica SEMPRE logo abaixo da ficha, em linha única e com
+     colunas de largura fixa (ver #acoes-proc no CSS). O botão condicional de
+     monitoramento vai numa segunda fileira, fora da grade, para não deslocar
+     os seis de cima nos processos em que aparece. */
+  html+='<div class="card" id="acoes-card" style="margin-top:12px;padding:10px 12px"><div id="acoes-proc">'
+    +'<button class="btn sm ghost" onclick="abrirAtualizarDados()" title="Um cartão só: lê os documentos e o histórico (nomes completos, CPF/CNPJ, e-mails, telefones), edita as partes, inverte polos e salva tudo de uma vez">&#128260; Atualizar dados<br><span style="font-weight:600;opacity:.75">(cliente, partes e contatos)</span></button>'
+    +'<button class="btn sm" onclick="novaTarefaDoProcesso()">+ Nova tarefa</button>'
+    +'<button class="btn sm" style="background:#eef4fb;color:#185FA5;border:1px solid #cfe0f2" onclick="abrirTribunal(\''+p.numero+'\')" title="Abrir o sistema do tribunal (PJe/e-SAJ/Projudi) no grau deste processo — o número é copiado para você colar na busca">&#9878; Abrir no tribunal</button>'
+    +'<button id="btn-atualizar-cli" class="btn sm cmp-only" style="background:#eaf4f4;color:#0b7285;border:1px solid #cfe6e6" onclick="abrirAtualizarCliente(\''+p.numero+'\')" title="E-mail de atualização ao cliente — informar movimentação, pedir providência, ou ativar o acompanhamento semanal automático">&#9993; Atualizar cliente</button>'
+    +'<button id="btn-app-cli" class="btn sm cmp-only" style="background:#2E3A4B;color:#fff;border:1px solid #2E3A4B" onclick="appCliAbrirPainel(\''+(p._id||'')+'\')" title="Portal do cliente (app): cria o login, envia a senha por e-mail e mostra se o cliente já entrou. Verde = cliente logado no app.">&#128242; Dar acesso ao app</button>'
+    +'<button class="btn sm cmp-only" style="background:#fff8e6;color:#8a6d00;border:1px solid #e8dcbb" onclick="appCliFalarComCliente(\''+(p._id||'')+'\')" title="Abre a janela de conversa com o cliente deste processo (aparece EMPILHADA acima do chat da equipe). Tudo fica gravado no processo.">&#128172; Falar com cliente</button>'
+    +'</div>'
+    +((typeof _ehCasoProc==='function'&&_ehCasoProc(p))?'<div style="margin-top:8px"><button class="btn sm cmp-only" style="background:#f3eaf7;color:#6d28a8;border:1px solid #ddc9ea;font-weight:700" onclick="monitorarAcoesCliente()" title="Testar: buscar no DJEN ações NOVAS (últimos 3 meses) que citem o nome deste cliente — inclui trabalhista. Não busca por CNPJ (a API do CNJ não permite).">&#128269; Monitorar ações novas</button></div>':'')
+    +'</div>';
   // dados do processo
   html+='<div class="card" id="card-dados-proc"><p class="sectlabel">Dados do processo</p><div style="font-size:13.5px;line-height:1.6;color:var(--ink)">'+
     (function(){
@@ -2310,9 +2329,7 @@ function _partesTopoHTML(p){
     +col('Autor — nosso cliente', autores, true, todosA.length-autores.length)
     +col('Réu — parte contrária', reus, false, todosR.length-reus.length)
     +'</div>'
-    +'<div style="margin-top:2px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">'
-    +'<button class="btn sm ghost" style="font-size:11.5px;padding:5px 12px;font-weight:700" onclick="abrirAtualizarDados()" title="Um cartão só: lê os documentos e o histórico (nomes completos, CPF/CNPJ, e-mails, telefones), edita as partes, inverte polos e salva tudo de uma vez">🔄 Atualizar dados (cliente, partes e contatos)</button>'
-    +'</div></div>';
+    +'</div>';
 }
 async function _preencherDocsPartes(){
   var slots=document.querySelectorAll('#partes-topo .parte-doc-slot'); if(!slots.length) return;
