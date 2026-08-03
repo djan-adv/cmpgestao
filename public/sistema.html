@@ -14519,6 +14519,9 @@ async function monitTrazerAssessoria(id){
     return '<div style="text-align:center;margin:9px 0 7px"><span style="display:inline-block;background:#f2ecc0;border:1px solid #ded6a0;color:#6b6540;'
       +'font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:2px 10px;border-radius:20px">'+h(r)+'</span></div>';
   }
+  /* O chat do cliente é outro módulo e precisa das mesmas faixas de data —
+     publicado aqui para os dois não saírem diferentes com o tempo. */
+  window.__cmpDia={ chave:_diaChave, rotulo:_diaRotulo, faixa:_faixaDia, dataHora:_dataHoraCompleta };
   function minimizado(){ try{ return localStorage.getItem(MIN)==='1'; }catch(e){ return false; } }
   function marcarLido(){ try{ localStorage.setItem(LIDO,new Date().toISOString()); }catch(e){} pintarBadge(); }
 
@@ -15152,37 +15155,90 @@ function exportarProdutividadeCSV(){
     });
   }
 
-  /* ------------------------- janela EMPILHADA acima do dock ------------------------- */
+  /* ------------------------- janela ARRASTÁVEL, ao lado do dock -------------------------
+     Antes ela era empilhada ACIMA do chat da equipe: bottom = altura do dock. Com o
+     chat da equipe aberto e alto, isso empurrava a janela do cliente para o topo da
+     tela, onde o X fica longe e atrapalha. Agora o padrão é ficar AO LADO, e a
+     pessoa pode arrastar para onde quiser pela barra de título — a posição fica
+     guardada. Duplo clique na barra devolve ao lugar padrão. */
+  var POSK='cmp_clichat_pos';
   function alturaDock(){
     try{ var d=document.getElementById('cmp-chat'); if(!d) return 0;
       var r=d.getBoundingClientRect(); return (r.height&&r.bottom>0)?r.height:0; }catch(e){ return 0; }
   }
+  function larguraDock(){
+    try{ var d=document.getElementById('cmp-chat'); if(!d) return 0;
+      var r=d.getBoundingClientRect(); return (r.width&&r.bottom>0)?r.width:0; }catch(e){ return 0; }
+  }
+  function _posSalva(){ try{ var s=localStorage.getItem(POSK); return s?JSON.parse(s):null; }catch(e){ return null; } }
+  function _salvaPos(l,t){ try{ localStorage.setItem(POSK,JSON.stringify({left:l,top:t})); }catch(e){} }
+  /* Prende na tela: janela arrastada para fora vira janela perdida, sem como
+     trazer de volta a não ser limpando o navegador. */
+  function _prende(w,l,t){
+    var r=w.getBoundingClientRect();
+    var maxL=Math.max(0, window.innerWidth - Math.min(r.width,window.innerWidth) - 4);
+    var maxT=Math.max(0, window.innerHeight - 44);
+    return { left:Math.min(Math.max(0,l),maxL), top:Math.min(Math.max(0,t),maxT) };
+  }
+  function _aplicaPos(w,l,t){
+    var p=_prende(w,l,t);
+    w.style.left=p.left+'px'; w.style.top=p.top+'px';
+    w.style.right='auto'; w.style.bottom='auto';
+  }
   function posiciona(){
     var w=document.getElementById('cmp-clichat');
-    if(w) w.style.bottom=(alturaDock()+10)+'px';
+    if(w && w.style.display!=='none'){
+      var sp=_posSalva();
+      if(sp && typeof sp.left==='number'){ _aplicaPos(w,sp.left,sp.top); }
+      else{
+        w.style.left='auto'; w.style.top='auto'; w.style.bottom='0px';
+        /* Em tela estreita não cabe lado a lado; sobrepõe o dock, o que funciona
+           porque a janela do cliente tem z-index maior. */
+        w.style.right=(window.innerWidth<760 ? 8 : (larguraDock()+26))+'px';
+      }
+    }
     var a=document.getElementById('cmp-clialert');
-    if(a){ var extra=0; if(w){ extra=w.getBoundingClientRect().height+8; } a.style.bottom=(alturaDock()+10+extra)+'px'; }
+    if(a) a.style.bottom=(alturaDock()+10)+'px';
+  }
+  window.appCliSoltarPosicao=function(){ try{ localStorage.removeItem(POSK); }catch(e){} posiciona(); };
+  function _arrastavel(w,bar){
+    var ativo=false, dx=0, dy=0;
+    function ini(x,y){ var r=w.getBoundingClientRect(); dx=x-r.left; dy=y-r.top; ativo=true; document.body.style.userSelect='none'; }
+    function move(x,y){ if(ativo) _aplicaPos(w,x-dx,y-dy); }
+    function fim(){ if(!ativo) return; ativo=false; document.body.style.userSelect=''; var r=w.getBoundingClientRect(); _salvaPos(r.left,r.top); }
+    bar.addEventListener('mousedown',function(e){ if(e.target.closest('button')) return; ini(e.clientX,e.clientY); e.preventDefault(); });
+    window.addEventListener('mousemove',function(e){ if(ativo) move(e.clientX,e.clientY); });
+    window.addEventListener('mouseup',fim);
+    bar.addEventListener('touchstart',function(e){ if(e.target.closest('button')) return; var t=e.touches[0]; if(t) ini(t.clientX,t.clientY); },{passive:true});
+    window.addEventListener('touchmove',function(e){ if(!ativo) return; var t=e.touches[0]; if(t){ move(t.clientX,t.clientY); e.preventDefault(); } },{passive:false});
+    window.addEventListener('touchend',fim);
+    bar.addEventListener('dblclick',function(){ window.appCliSoltarPosicao(); });
   }
   function montarJanela(){
     if(document.getElementById('cmp-clichat')) return;
     var w=document.createElement('div'); w.id='cmp-clichat'; w.className='cmp-only';
-    w.style.cssText='position:fixed;right:16px;bottom:10px;width:310px;height:400px;max-height:70vh;background:#fff;border:1px solid #cfd6e0;border-radius:12px 12px 0 0;box-shadow:0 6px 22px rgba(20,30,45,.28);z-index:99990;display:flex;flex-direction:column;overflow:hidden;font-size:13.5px';
+    /* Mesma linguagem visual do chat da equipe (creme, bolhas, faixas de data).
+       A tarja azul de aviso continua: é ela que lembra, o tempo todo, que aqui o
+       CLIENTE lê o que for escrito — a diferença que realmente importa entre as
+       duas janelas agora que elas se parecem. */
+    w.style.cssText='position:fixed;right:16px;bottom:0;width:330px;height:420px;max-height:72vh;max-width:94vw;background:rgba(255,250,205,.97);border:1px solid #e0d9a0;border-radius:12px 12px 0 0;box-shadow:0 -2px 22px rgba(0,0,0,.18);z-index:99990;display:flex;flex-direction:column;overflow:hidden;font-size:13px;color:#1b1b1b';
     w.innerHTML=
-      '<div id="cmp-clichat-bar" style="background:#185FA5;color:#fff;padding:8px 10px;display:flex;align-items:center;gap:7px;cursor:default">'+
-        '<span style="font-size:15px">&#128242;</span><b id="cmp-clichat-tit" style="flex:1;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Cliente</b>'+
-        '<button id="cmp-clichat-ficha" title="Abrir a ficha do processo" style="background:none;border:none;color:#dbe7f5;cursor:pointer;font-size:13px">ficha</button>'+
-        '<button id="cmp-clichat-x" title="Fechar" style="background:none;border:none;color:#fff;cursor:pointer;font-size:16px;line-height:1">&#10005;</button>'+
+      '<div id="cmp-clichat-bar" title="Arraste para mover · duplo clique volta ao lugar" style="background:rgba(250,240,170,.97);border-bottom:1px solid #e6dfae;padding:8px 10px;display:flex;align-items:center;gap:7px;cursor:move;user-select:none;touch-action:none">'+
+        '<span style="font-size:15px">&#128242;</span><b id="cmp-clichat-tit" style="flex:1;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#1b1b1b">Cliente</b>'+
+        '<button id="cmp-clichat-ficha" title="Abrir a ficha do processo" style="background:none;border:none;color:#6b6540;cursor:pointer;font-size:12px;text-decoration:underline">ficha</button>'+
+        '<button id="cmp-clichat-x" title="Fechar" style="background:none;border:none;color:#5a5326;cursor:pointer;font-size:16px;line-height:1">&#10005;</button>'+
       '</div>'+
-      '<div id="cmp-clichat-info" style="background:#eef4fb;color:#4a5568;font-size:11px;padding:3px 10px">Conversa gravada no processo. O cliente vê pelo app.</div>'+
-      '<div id="cmp-clichat-msgs" style="flex:1;overflow-y:auto;padding:10px;background:#f4f7fb"></div>'+
-      '<div id="cmp-clichat-anx" style="display:none;background:#eef4fb;border-top:1px solid #e2e7ee;padding:6px 9px;font-size:12px;align-items:center;gap:7px"></div>'+
-      '<div style="display:flex;gap:5px;padding:8px;border-top:1px solid #e2e7ee;background:#fff;align-items:center">'+
+      '<div id="cmp-clichat-info" style="background:#eef4fb;color:#28415e;font-size:11px;padding:4px 10px;border-bottom:1px solid #d8e3f0">Conversa gravada no processo. O cliente vê pelo app.</div>'+
+      '<div id="cmp-clichat-msgs" style="flex:1;overflow-y:auto;padding:10px;background:rgba(255,250,205,.5)"></div>'+
+      '<div id="cmp-clichat-anx" style="display:none;background:#fffdf0;border-top:1px solid #e6dfae;padding:6px 9px;font-size:12px;align-items:center;gap:7px"></div>'+
+      '<div style="display:flex;gap:5px;padding:8px;border-top:1px solid #e6dfae;background:#fffdf3;align-items:center">'+
         '<input type="file" id="cmp-clichat-file" style="display:none">'+
-        '<button id="cmp-clichat-clip" title="Anexar documento, foto, PDF ou áudio" style="width:32px;height:36px;border:none;background:none;font-size:17px;cursor:pointer;color:#5f6b7a">&#128206;</button>'+
-        '<textarea id="cmp-clichat-txt" placeholder="Escreva ao cliente…" style="flex:1;resize:none;height:40px;border:1px solid #cfd6e0;border-radius:8px;padding:8px 10px;font-family:inherit;font-size:13px"></textarea>'+
+        '<button id="cmp-clichat-clip" title="Anexar documento, foto, PDF ou áudio" style="width:32px;height:36px;border:none;background:none;font-size:17px;cursor:pointer;color:#8a8355">&#128206;</button>'+
+        '<textarea id="cmp-clichat-txt" placeholder="Escreva ao cliente…" style="flex:1;resize:none;height:40px;border:1px solid #ded6a0;border-radius:8px;padding:8px 10px;font-family:inherit;font-size:13px;background:#fff"></textarea>'+
         '<button id="cmp-clichat-env" style="width:40px;border:none;border-radius:8px;background:#185FA5;color:#fff;font-size:16px;cursor:pointer">&#10148;</button>'+
       '</div>';
     document.body.appendChild(w);
+    _arrastavel(w, document.getElementById('cmp-clichat-bar'));
     document.getElementById('cmp-clichat-x').onclick=fecharJanela;
     document.getElementById('cmp-clichat-ficha').onclick=function(){ var p=procDe(JAN.procId); if(p&&typeof irParaProcesso==='function') irParaProcesso(p.numero); };
     document.getElementById('cmp-clichat-env').onclick=function(){ enviarDaJanela(); };
@@ -15247,24 +15303,43 @@ function exportarProdutividadeCSV(){
 
   function desenhaMsg(m){
     var box=document.getElementById('cmp-clichat-msgs'); if(!box) return;
+    /* Faixa de data entre os dias, as mesmas do chat da equipe. Como aqui as
+       mensagens são acrescentadas uma a uma (e não repintadas em bloco), o dia
+       corrente fica guardado em JAN.dia. */
+    var D=window.__cmpDia||{};
+    if(D.chave&&D.faixa){
+      var k=D.chave(m.criado_em);
+      if(k&&k!==JAN.dia){ JAN.dia=k; var fx=document.createElement('div'); fx.innerHTML=D.faixa(m.criado_em); box.appendChild(fx); }
+    }
     var cli=(m.autor_tipo==='cliente');
     var d=document.createElement('div');
-    d.style.cssText='display:flex;margin-bottom:8px;'+(cli?'justify-content:flex-start':'justify-content:flex-end');
-    d.innerHTML='<div style="max-width:85%;padding:7px 10px;border-radius:11px;white-space:pre-line;word-break:break-word;'+
-      (cli?'background:#fff;border:1px solid #cfe0f2;border-bottom-left-radius:3px':'background:#185FA5;color:#fff;border-bottom-right-radius:3px')+'">'+
-      (cli?('<div style="font-size:10.5px;color:#185FA5;font-weight:700">'+escx(m.autor_nome||'Cliente')+'</div>'):'')+
+    d.style.cssText='margin:0 0 7px;'+(cli?'':'text-align:right');
+    var titHora=D.dataHora?D.dataHora(m.criado_em):'';
+    d.innerHTML='<div style="display:inline-block;max-width:88%;text-align:left;background:'+(cli?'#fffdf3':'#fff6c9')+';'+
+      'border:1px solid #e6dfae;border-left:4px solid '+(cli?'#185FA5':'#8a8355')+';border-radius:9px;padding:6px 9px;white-space:pre-line;word-break:break-word">'+
+      '<div style="font-size:11px;font-weight:700;color:'+(cli?'#185FA5':'#8a8355')+'">'+escx(cli?(m.autor_nome||'Cliente'):'você')+
+      ' · <span title="'+escx(titHora)+'" style="color:#6b6540;font-weight:400">'+hhmm(m.criado_em)+'</span></div>'+
       anexoHTMLJan(m)+
-      (m.texto?escx(m.texto):'')+'<div style="font-size:10px;opacity:.65;text-align:right;margin-top:2px">'+hhmm(m.criado_em)+'</div></div>';
+      (m.texto?escx(m.texto):'')+'</div>';
     box.appendChild(d); box.scrollTop=box.scrollHeight;
   }
   function puxarJanela(primeira){
     if(!JAN.aberta||!JAN.procId) return;
     var s=S(); if(!s) return;
-    var q=s.from('portal_chat').select('id,autor_tipo,autor_nome,texto,criado_em,anexo_id,anexo_nome,anexo_tipo,anexo_tamanho').eq('processo_id',JAN.procId).order('id',{ascending:true});
-    if(JAN.ultimo>0) q=q.gt('id',JAN.ultimo); else q=q.limit(200);
+    var cols='id,autor_tipo,autor_nome,texto,criado_em,anexo_id,anexo_nome,anexo_tipo,anexo_tamanho';
+    var base=s.from('portal_chat').select(cols).eq('processo_id',JAN.procId);
+    /* Na primeira carga pega as MAIS RECENTES e inverte. Antes era
+       order(id asc).limit(200), que devolve as 200 mais ANTIGAS: numa conversa
+       longa a janela abria no começo de tudo e escondia o que acabara de chegar.
+       Depois disso o polling só busca o que veio após JAN.ultimo. */
+    var primeiraCarga=!(JAN.ultimo>0);
+    var q=primeiraCarga
+      ? base.order('id',{ascending:false}).limit(300)
+      : base.gt('id',JAN.ultimo).order('id',{ascending:true});
     // o token vai na URL do anexo (/api/anexo?jwt=) — pega antes de desenhar
     jwtCli().then(function(tok){ window.__jwtAnexo=tok; return q; }).then(function(r){
       var ms=r.data||[];
+      if(primeiraCarga) ms=ms.slice().reverse();
       if(primeira){ var box=document.getElementById('cmp-clichat-msgs'); if(box) box.innerHTML= ms.length?'':'<div style="text-align:center;color:#6b7484;font-size:11.5px;margin-top:10px">Nenhuma mensagem ainda — escreva a primeira. O cliente recebe pelo app.</div>'; }
       if(ms.length){ ms.forEach(function(m){ desenhaMsg(m); if(m.id>JAN.ultimo) JAN.ultimo=m.id; }); marcaLidas(JAN.procId); }
     });
@@ -15290,7 +15365,9 @@ function exportarProdutividadeCSV(){
     var acessos=STATUS_CACHE[procId]||[];
     var nome=(acessos[0]&&(acessos[0].nome||acessos[0].email))||(p&&p.cliente)||'Cliente';
     montarJanela();
-    JAN.aberta=true; JAN.procId=procId; JAN.numero=p?p.numero:''; JAN.nome=nome; JAN.ultimo=0;
+    /* JAN.dia zerado junto: a caixa é esvaziada ao abrir, então as faixas de data
+       precisam ser desenhadas de novo desde a primeira mensagem. */
+    JAN.aberta=true; JAN.procId=procId; JAN.numero=p?p.numero:''; JAN.nome=nome; JAN.ultimo=0; JAN.dia='';
     document.getElementById('cmp-clichat').style.display='flex';
     document.getElementById('cmp-clichat-tit').textContent=nome+' · Proc '+numCurto(JAN.numero||'—');
     document.getElementById('cmp-clichat-info').textContent= acessos.length
