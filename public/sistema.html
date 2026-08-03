@@ -14664,13 +14664,47 @@ async function monitTrazerAssessoria(id){
     var aberto=(document.getElementById('cmp-chat-corpo')||{}).style && document.getElementById('cmp-chat-corpo').style.display!=='none';
     if(n>0 && !aberto){ b.style.display='inline-block'; b.textContent=n; } else { b.style.display='none'; }
   }
-  function _procRotuloPorId(id){
+  /* O chip do chat dizia só "processo vinculado" e não servia para nada: quem lê
+     precisa saber DE QUAL processo se fala. O rótulo saía genérico sempre que o
+     processo não estivesse em DADOS.processos — encerrado, fora do filtro, ou a
+     lista ainda não carregada —, que é a maior parte das vezes. Agora, o que não
+     está na memória é buscado no banco em lote e o chip vira link. */
+  var procNomePend={};   // id -> true: já pedimos ao banco, não pedir de novo
+  function _procInfoPorId(id){
     if(procNomeCache[id]) return procNomeCache[id];
     var p=((typeof DADOS!=='undefined'&&DADOS.processos)||[]).find(function(x){return x._id===id;});
-    var r=p?rotuloProcesso(p):'';
-    if(r) procNomeCache[id]=r;
-    return r||'processo vinculado';
+    if(p){ procNomeCache[id]={numero:p.numero||'', cliente:p.cliente||''}; return procNomeCache[id]; }
+    return null;
   }
+  function _procRotuloPorId(id){
+    var i=_procInfoPorId(id); if(!i) return '';
+    var n=String(i.numero||'').trim(), c=String(i.cliente||'').trim();
+    return n ? (n+(c?(' — '+c):'')) : c;
+  }
+  /* Busca de uma vez os processos citados no chat que faltam, e repinta. A
+     segunda chamada não faz nada (tudo em cache ou pendente), então não há laço. */
+  async function _carregarProcsDoChat(ids){
+    var faltam=[];
+    ids.forEach(function(id){
+      if(!id || procNomePend[id] || _procInfoPorId(id)) return;
+      if(faltam.indexOf(id)<0) faltam.push(id);
+    });
+    if(!faltam.length) return;
+    faltam.forEach(function(id){ procNomePend[id]=true; });
+    try{
+      var r=await window.__sb.from('processos').select('id,numero,cliente_nome').in('id',faltam);
+      ((r&&r.data)||[]).forEach(function(p){ procNomeCache[p.id]={numero:p.numero||'', cliente:p.cliente_nome||''}; });
+    }catch(e){}
+    pintar();
+  }
+  window._chatAbrirProc=function(id){
+    var lst=((typeof DADOS!=='undefined'&&DADOS.processos)||[]);
+    var i=lst.findIndex(function(x){return x._id===id;});
+    if(i>=0 && typeof abrir==='function'){ abrir(i); return; }
+    var info=procNomeCache[id];
+    if(info && info.numero && typeof irParaCaso==='function'){ irParaCaso(info.numero); return; }
+    if(typeof go==='function') go('processos');
+  };
   function pintar(){
     var el=document.getElementById('cmp-chat-msgs'); if(!el) return;
     if(!msgs.length){ el.innerHTML='<div style="color:#6b6540;font-size:12px">Sem mensagens ainda. Escreva abaixo — vai para todo o escritório, ou escolha uma pessoa para conversa privada.</div>'; return; }
@@ -14686,7 +14720,13 @@ async function monitTrazerAssessoria(id){
         var origTxt=orig?orig.texto:'mensagem anterior';
         citada='<div style="border-left:3px solid #c9c08a;padding-left:7px;margin-bottom:4px;color:#7a7550;font-size:12px">'+(origAutor?('<b>'+h(origAutor)+'</b><br>'):'')+h(String(origTxt).slice(0,140))+'</div>';
       }
-      var chipProc=m.processo_id?('<div style="margin-top:3px;font-size:10.5px;color:#7a5b00">🔗 '+h(_procRotuloPorId(m.processo_id))+'</div>'):'';
+      var chipProc='';
+      if(m.processo_id){
+        var rotProc=_procRotuloPorId(m.processo_id);
+        chipProc='<div style="margin-top:3px;font-size:10.5px">'
+          +'<a onclick="_chatAbrirProc(\''+String(m.processo_id).replace(/'/g,'')+'\')" title="Abrir a ficha deste processo"'
+          +' style="cursor:pointer;color:#7a5b00;text-decoration:underline">🔗 '+h(rotProc||'abrir processo')+'</a></div>';
+      }
       var corAutor=_corPara(m.autor_id);
       var anexoHtml='';
       if(m.imagem_anexo_id){
@@ -14705,6 +14745,7 @@ async function monitTrazerAssessoria(id){
         +chipProc+'</div></div>';
     }).join('');
     rolar();
+    _carregarProcsDoChat(msgs.map(function(m){ return m.processo_id; }));
   }
   /* nome pelo autor_id, resolvido AGORA a partir do banco — nunca confia no
      autor_nome gravado na mensagem (foi ele que causou o bug: se a página de
