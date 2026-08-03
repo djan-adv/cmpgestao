@@ -204,15 +204,16 @@ export async function POST(request) {
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return Response.json({ erro: 'E-mail inválido.' }, { status: 400 })
     if (!nome || nome.length < 3) return Response.json({ erro: 'Informe o nome do cliente.' }, { status: 400 })
 
-    // Vincula ao contato do escritório. O processo nem sempre tem cliente_id (os que
-    // vieram de importação/captura não têm), então, quando faltar, procuramos o
-    // contato pelo nome — sem acento e sem caixa — para o cliente ver TODOS os
-    // processos dele, não só este.
+    // Vincula ao contato do escritório procurando pelo nome de QUEM VAI RECEBER o
+    // acesso — nunca pelo nome do cliente do processo. Num processo com dois autores
+    // os nomes são diferentes, e ligar ao contato errado faria a pessoa enxergar os
+    // processos do outro (foi assim que um acesso ficou apontando para o contato de
+    // outro cliente). Sem contato com esse nome, o acesso fica sem vínculo e vale só
+    // o nome do titular — que é o mais restrito.
     let contatoId = String(body.contato_id || '') || null
     if (!contatoId) {
       const { data: achado } = await sb.rpc('portal_contato_por_nome', {
-        p_escritorio: quem.escritorio_id,
-        p_nome: p.cliente_nome || nome,
+        p_escritorio: quem.escritorio_id, p_nome: nome,
       })
       if (achado) contatoId = achado
     }
