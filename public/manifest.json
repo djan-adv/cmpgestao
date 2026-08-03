@@ -1,0 +1,17 @@
+{
+  "name": "CMP Advogados — Portal do Cliente",
+  "short_name": "CMP Portal",
+  "description": "Acompanhe seus processos com o escritório Crispim Mendonça e Pinheiro Advogados.",
+  "id": "/portal.html",
+  "start_url": "/portal.html?fonte=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#2E3A4B",
+  "theme_color": "#2E3A4B",
+  "lang": "pt-BR",
+  "icons": [
+    { "src": "/icone-cmp-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/apple-touch-icon.png", "sizes": "180x180", "type": "image/png", "purpose": "any" }
+  ]
+}
