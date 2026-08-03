@@ -2232,11 +2232,11 @@ function _parteItemHTML(nome, autor){
      empatar em tamanho com o próprio CPF/CNPJ */
   var estNome=autor
     ? 'font-size:17px;font-weight:700;color:var(--navy);line-height:1.2'
-    : 'font-size:12px;font-weight:500;color:var(--ink);line-height:1.2';
-  var estDoc=autor ? 'font-size:11.5px' : 'font-size:10px';
-  return '<div style="margin:0 0 '+(autor?'8px':'6px')+'">'
+    : 'font-size:12px;font-weight:500;color:var(--ink);line-height:1.1';
+  var estDoc=autor ? 'font-size:11.5px;padding:1px 3px' : 'font-size:10px;line-height:1;padding:0 3px';
+  return '<div style="margin:0 0 '+(autor?'8px':'3px')+'">'
     +'<span onclick="copiarParte(this)" data-v="'+esc(nome)+'" title="Clique para copiar o nome" style="cursor:copy;border-radius:4px;padding:1px 3px;margin-left:-3px;'+estNome+'">'+esc(nome)+'</span>'
-    +'<br><span class="parte-doc-slot" data-nk="'+esc(nk)+'" data-nome="'+esc(nome)+'" onclick="if(this.getAttribute(\'data-v\'))copiarParte(this)" title="Clique para copiar" style="cursor:copy;'+estDoc+';color:var(--muted);opacity:.8;border-radius:4px;padding:1px 3px;margin-left:-3px"></span>'
+    +'<br><span class="parte-doc-slot" data-nk="'+esc(nk)+'" data-nome="'+esc(nome)+'" onclick="if(this.getAttribute(\'data-v\'))copiarParte(this)" title="Clique para copiar" style="cursor:copy;'+estDoc+';color:var(--muted);opacity:.8;border-radius:4px;margin-left:-3px"></span>'
     +'<a onclick="editarDocParte(this.getAttribute(\'data-nome\'))" data-nome="'+esc(nome)+'" title="Informar/corrigir o CPF ou CNPJ desta parte (grava no cadastro de Contatos)" style="cursor:pointer;color:#185FA5;font-size:11px;margin-left:5px">✎</a>'
     +'</div>';
 }
@@ -2302,7 +2302,7 @@ function _partesTopoHTML(p){
   var col=function(rot, itens, autor, sobra){
     return '<div><div style="font-size:10px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);margin-bottom:6px">'+rot+'</div>'
       +(itens.length?itens.map(function(n){ return _parteItemHTML(n, autor); }).join(''):'<div class="note">—</div>')
-      +(sobra>0?'<div class="note" style="font-size:11px">+ '+sobra+' outro(s) — veja em ✎ editar dados</div>':'')+'</div>';
+      +(sobra>0?'<div class="note" style="font-size:'+(autor?'11px':'10px')+';margin-top:'+(autor?'0':'2px')+'">+ '+sobra+' outro(s) — veja em ✎ editar dados</div>':'')+'</div>';
   };
   setTimeout(_preencherDocsPartes, 60);
   return '<div id="partes-topo">'
