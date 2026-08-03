@@ -1909,7 +1909,10 @@ function abrir(i){
       +'<button class="btn sm ghost" style="font-weight:700" onclick="kitContrato()" title="Sobe um contrato já pronto (PDF/Word) para assinatura eletrônica, já com o cliente como 1º signatário">📄 2b. p/ assinar avulso</button>'
       +'<button class="btn sm" style="background:#fdeef2;color:#c2185b;border:1px solid #f2c9d6;font-weight:700" onclick="gerarBoletoNovoDoProcesso()" title="Emite o 1º boleto (à vista ou parcelado — as parcelas seguintes saem sozinhas todo mês)">💳 3. Boleto/parcelas</button>'
       +'<span class="note" style="font-size:11px">tudo sai pré-preenchido; assinou → cai na pasta e no histórico sozinho</span></div>'):'')+
-    '<div style="margin-top:10px"><button class="btn sm" onclick="novaTarefaDoProcesso()">+ Nova tarefa</button> <button class="btn sm cmp-only" style="background:#7b1e3a;color:#fff;border:1px solid #7b1e3a;font-weight:700;font-size:11px;line-height:1.18;white-space:normal;text-align:left;padding:4px 10px;vertical-align:middle" onclick="abrirProtocolarPeticao(\''+p.numero+'\')" title="Guarda a peça no sistema com prazo fatal e alerta — pronta para protocolo (PDF) ou aguardando ajuste (Word). O protocolo em si é feito no jus.br.">&#128228; Subir petição<br>para protocolo</button> <button class="btn sm" style="background:#eef4fb;color:#185FA5;border:1px solid #cfe0f2;font-weight:700" onclick="abrirTribunal(\''+p.numero+'\')" title="Abrir o sistema do tribunal (PJe/e-SAJ/Projudi) no grau deste processo — o número é copiado para você colar na busca">&#9878; Abrir no tribunal</button> <button id="btn-atualizar-cli" class="btn sm cmp-only" style="background:#eaf4f4;color:#0b7285;border:1px solid #cfe6e6;font-weight:700" onclick="abrirAtualizarCliente(\''+p.numero+'\')" title="E-mail de atualização ao cliente — informar movimentação, pedir providência, ou ativar o acompanhamento semanal automático">&#9993; Atualizar cliente</button> <button class="btn sm cmp-only" style="background:#f7f3e8;color:#8a6d00;border:1px solid #e8dcbb;font-weight:700" onclick="abrirGerarProcuracao(\''+p.numero+'\')" title="Gera a procuração pronta (Word + PDF, padrão CMP) com os dados que o sistema já tem — só pede o que faltar">&#9997; Gerar procuração</button> <button class="btn sm cmp-only ghost" style="font-weight:700" onclick="abrirAssinatura(\''+p.numero+'\')" title="Gerar link de procuração para o CLIENTE preencher o que faltar e assinar eletronicamente à distância">&#128231; p/ assinatura eletrônica</button> <button class="btn sm cmp-only" style="background:#eef3fa;color:#185FA5;border:1px solid #cfe0f2;font-weight:700" onclick="abrirGerarContrato(\''+p.numero+'\')" title="Gera o contrato de honorários pronto (Word + PDF, padrão CMP) — pergunta objeto, honorários iniciais/parcelamento e percentual de êxito">&#128220; Gerar contrato</button>'+((typeof _ehCasoProc==='function'&&_ehCasoProc(p))?' <button class="btn sm cmp-only" style="background:#f3eaf7;color:#6d28a8;border:1px solid #ddc9ea;font-weight:700" onclick="monitorarAcoesCliente()" title="Testar: buscar no DJEN ações NOVAS (últimos 3 meses) que citem o nome deste cliente — inclui trabalhista. Não busca por CNPJ (a API do CNJ não permite).">&#128269; Monitorar ações novas</button>':'')+'</div>'+
+    '<div style="margin-top:10px"><button class="btn sm" onclick="novaTarefaDoProcesso()">+ Nova tarefa</button> <button class="btn sm cmp-only" style="background:#7b1e3a;color:#fff;border:1px solid #7b1e3a;font-weight:700;font-size:11px;line-height:1.18;white-space:normal;text-align:left;padding:4px 10px;vertical-align:middle" onclick="abrirProtocolarPeticao(\''+p.numero+'\')" title="Guarda a peça no sistema com prazo fatal e alerta — pronta para protocolo (PDF) ou aguardando ajuste (Word). O protocolo em si é feito no jus.br.">&#128228; Subir petição<br>para protocolo</button> <button class="btn sm" style="background:#eef4fb;color:#185FA5;border:1px solid #cfe0f2;font-weight:700" onclick="abrirTribunal(\''+p.numero+'\')" title="Abrir o sistema do tribunal (PJe/e-SAJ/Projudi) no grau deste processo — o número é copiado para você colar na busca">&#9878; Abrir no tribunal</button> <button id="btn-atualizar-cli" class="btn sm cmp-only" style="background:#eaf4f4;color:#0b7285;border:1px solid #cfe6e6;font-weight:700" onclick="abrirAtualizarCliente(\''+p.numero+'\')" title="E-mail de atualização ao cliente — informar movimentação, pedir providência, ou ativar o acompanhamento semanal automático">&#9993; Atualizar cliente</button> <button class="btn sm cmp-only" style="background:#f7f3e8;color:#8a6d00;border:1px solid #e8dcbb;font-weight:700" onclick="abrirGerarProcuracao(\''+p.numero+'\')" title="Gera a procuração pronta (Word + PDF, padrão CMP) com os dados que o sistema já tem — só pede o que faltar">&#9997; Gerar procuração</button> <button class="btn sm cmp-only ghost" style="font-weight:700" onclick="abrirAssinatura(\''+p.numero+'\')" title="Gerar link de procuração para o CLIENTE preencher o que faltar e assinar eletronicamente à distância">&#128231; p/ assinatura eletrônica</button> <button class="btn sm cmp-only" style="background:#eef3fa;color:#185FA5;border:1px solid #cfe0f2;font-weight:700" onclick="abrirGerarContrato(\''+p.numero+'\')" title="Gera o contrato de honorários pronto (Word + PDF, padrão CMP) — pergunta objeto, honorários iniciais/parcelamento e percentual de êxito">&#128220; Gerar contrato</button>'+((typeof _ehCasoProc==='function'&&_ehCasoProc(p))?' <button class="btn sm cmp-only" style="background:#f3eaf7;color:#6d28a8;border:1px solid #ddc9ea;font-weight:700" onclick="monitorarAcoesCliente()" title="Testar: buscar no DJEN ações NOVAS (últimos 3 meses) que citem o nome deste cliente — inclui trabalhista. Não busca por CNPJ (a API do CNJ não permite).">&#128269; Monitorar ações novas</button>':'')+
+    ' <button id="btn-app-cli" class="btn sm cmp-only" style="background:#2E3A4B;color:#fff;border:1px solid #2E3A4B;font-weight:700" onclick="appCliAbrirPainel(\''+(p._id||'')+'\')" title="Portal do cliente (app): cria o login, envia a senha por e-mail e mostra se o cliente já entrou. Verde = cliente logado no app.">&#128242; Dar acesso ao app</button>'+
+    ' <button class="btn sm cmp-only" style="background:#fff8e6;color:#8a6d00;border:1px solid #e8dcbb;font-weight:700" onclick="appCliFalarComCliente(\''+(p._id||'')+'\')" title="Abre a janela de conversa com o cliente deste processo (aparece EMPILHADA acima do chat da equipe). Tudo fica gravado no processo.">&#128172; Falar com cliente</button>'+
+    '</div>'+
     /* ponto 12: bloco de processos vinculados no canto inferior direito da aba (perto do botão Encerrar) */
     '<div id="proc-vinculados-rodape" style="position:absolute;bottom:12px;right:14px;max-width:60%;display:flex;gap:6px;flex-wrap:wrap;align-items:center;justify-content:flex-end;font-size:12px"></div>'+
     '</div>';
@@ -1955,6 +1958,9 @@ function abrir(i){
   // histórico do chat da equipe sobre este processo (respostas vinculadas no dock)
   html+='<div class="card" id="chatproc-card" style="background:#fffdf0;border-color:#e6dfae"><p class="sectlabel" style="display:flex;justify-content:space-between;align-items:center">💬 Histórico do chat sobre este processo<span id="chatproc-acoes"></span></p><div id="chatproc-corpo"><div class="note">Carregando…</div></div></div>';
   if(p._id) setTimeout(function(){ renderChatDoProcesso(p._id); }, 0);
+  // conversa com o CLIENTE pelo app (portal) — gravada no processo
+  html+='<div class="card cmp-only" id="clichat-card" style="background:#f4f9ff;border-color:#cfe0f2"><p class="sectlabel" style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">&#128242; Conversa com o cliente (app)<span id="clichat-status" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"></span></p><div id="clichat-corpo"><div class="note">Carregando…</div></div></div>';
+  if(p._id) setTimeout(function(){ if(typeof appCliFicha==='function') appCliFicha(p); }, 0);
   // documentos do jus.br (PDPJ) — puxa sob demanda a peça escolhida (some após 30 dias)
   try{ if(typeof carregarProtocolados==='function'){ carregarProtocolados(p.numero).then(function(){ try{ var bx=document.getElementById('proto-na-ficha'); if(bx) bx.innerHTML=protoBlocoHTML(p.numero); }catch(e){} }); } }catch(e){}
   var _pb=''; try{ _pb=(typeof protoBlocoHTML==='function')?protoBlocoHTML(p.numero):''; }catch(ePB){ _pb=''; }
@@ -14832,6 +14838,397 @@ function exportarProdutividadeCSV(){
   var blob=new Blob(['﻿'+head+'\n'+rows.join('\n')],{type:'text/csv;charset=utf-8'});
   var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='produtividade-eventos.csv'; a.click();
 }
+</script>
+
+<script>
+/* ============================================================================
+   APP DO CLIENTE (Portal) — integração no sistema
+   • Botão "📲 Dar acesso ao app" na ficha (muda de cor: enviado → logado → bloqueado)
+   • Janela "Falar com cliente" EMPILHADA acima do chat da equipe (dock)
+   • Alerta no chat aberto quando o cliente manda mensagem (realtime + varredura)
+   • Conversa gravada no processo (card na ficha) — tabela portal_chat
+   ============================================================================ */
+(function(){
+  var EU=null;                                   // {id, nome, escritorio_id}
+  var JAN={aberta:false, procId:null, esc:null, numero:'', nome:'', ultimo:0, timer:null, pos:null};
+  var STATUS_CACHE={};                           // processo_id -> acessos[]
+  var FICHA_PROC=null;                           // processo da ficha aberta (p)
+
+  function S(){ return window.__sb||null; }
+  function escx(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function hhmm(iso){ try{ var d=new Date(iso); return ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);}catch(e){return '';} }
+  function ddmmhh(iso){ try{ var d=new Date(iso); return ('0'+d.getDate()).slice(-2)+'/'+('0'+(d.getMonth()+1)).slice(-2)+' '+hhmm(iso);}catch(e){return '';} }
+  function procDe(id){ try{ return (DADOS.processos||[]).find(function(x){return x._id===id;})||null; }catch(e){ return null; } }
+  function numCurto(n){ n=String(n||''); return n.length>15?(n.slice(0,15)+'…'):n; }
+
+  function jwtCli(){ var s=S(); if(!s) return Promise.resolve('');
+    return s.auth.getSession().then(function(r){ return (r&&r.data&&r.data.session&&r.data.session.access_token)||''; }); }
+  function eu(){ if(EU) return Promise.resolve(EU); var s=S(); if(!s) return Promise.resolve(null);
+    return s.auth.getSession().then(function(r){ var u=r&&r.data&&r.data.session&&r.data.session.user; if(!u) return null;
+      return s.from('usuarios').select('id,nome,escritorio_id').eq('id',u.id).maybeSingle().then(function(q){
+        EU=(q&&q.data)?q.data:{id:u.id,nome:'',escritorio_id:null}; return EU; }); }); }
+  function admin(corpo){ return jwtCli().then(function(tok){
+    return fetch('/api/portal/admin',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},body:JSON.stringify(corpo)})
+      .then(function(r){ return r.json(); }); }); }
+
+  /* ------------------------- botão + card da ficha ------------------------- */
+  window.appCliFicha=function(p){
+    if(!p||!p._id) return;
+    FICHA_PROC=p;
+    pintaBotao(null);
+    admin({acao:'status',processo_id:p._id}).then(function(d){
+      STATUS_CACHE[p._id]=(d&&d.ok&&d.acessos)||[];
+      if(FICHA_PROC && FICHA_PROC._id===p._id){ pintaBotao(STATUS_CACHE[p._id]); fichaConversa(p._id); }
+    }).catch(function(){ if(FICHA_PROC && FICHA_PROC._id===p._id){ pintaBotao([]); fichaConversa(p._id); } });
+  };
+  function estadoGeral(acessos){
+    if(!acessos) return 'carregando';
+    var vivos=acessos.filter(function(a){return a.estado!=='revogado';});
+    if(!vivos.length) return 'nenhum';
+    if(vivos.some(function(a){return a.estado==='bloqueado';})) return 'bloqueado';
+    if(vivos.some(function(a){return a.estado==='logado';})) return 'logado';
+    return 'enviado';
+  }
+  function pintaBotao(acessos){
+    var b=document.getElementById('btn-app-cli'); if(!b) return;
+    var st=estadoGeral(acessos);
+    var css={carregando:['#eef1f5','#5f6b7a','#cfd6e0','&#128242; App do cliente…'],
+      nenhum:['#2E3A4B','#fff','#2E3A4B','&#128242; Dar acesso ao app'],
+      enviado:['#fdf3e7','#8a6d1a','#e8d9b0','&#128233; Acesso enviado — aguardando 1º login'],
+      logado:['#e5f4ed','#127a53','#bfe3d2','&#9989; Cliente logado no app'],
+      bloqueado:['#fbeceb','#b5342b','#f2c9c5','&#9940; App bloqueado (aparelhos) — resolver']}[st];
+    b.style.background=css[0]; b.style.color=css[1]; b.style.border='1px solid '+css[2]; b.innerHTML=css[3];
+  }
+  function fichaConversa(procId){
+    var corpo=document.getElementById('clichat-corpo'), st=document.getElementById('clichat-status');
+    if(!corpo) return;
+    var acessos=STATUS_CACHE[procId]||[];
+    if(st){
+      st.innerHTML = acessos.filter(function(a){return a.estado!=='revogado';}).map(function(a){
+        var cor={logado:'#e5f4ed;color:#127a53',enviado:'#fdf3e7;color:#8a6d1a',criado:'#fdf3e7;color:#8a6d1a',bloqueado:'#fbeceb;color:#b5342b'}[a.estado]||'#eef1f5;color:#5f6b7a';
+        var rot={logado:'logado',enviado:'aguardando 1º login',criado:'criado',bloqueado:'bloqueado'}[a.estado]||a.estado;
+        return '<span style="border-radius:20px;padding:2px 9px;font-size:11px;font-weight:600;background:'+cor+'" title="'+escx(a.email)+'">'+escx(a.nome||a.email)+' · '+rot+'</span>';
+      }).join('')
+      + ' <button class="btn sm ghost" style="font-size:11px" onclick="appCliAbrirPainel(\''+procId+'\')">gerenciar acesso</button>'
+      + ' <button class="btn sm" style="font-size:11px;background:#185FA5;color:#fff" onclick="appCliFalarComCliente(\''+procId+'\')">&#128488; abrir janela</button>';
+    }
+    var s=S(); if(!s){ corpo.innerHTML='<div class="note">Sem conexão com o banco.</div>'; return; }
+    s.from('portal_chat').select('id,autor_tipo,autor_nome,texto,criado_em').eq('processo_id',procId)
+      .order('id',{ascending:false}).limit(40).then(function(r){
+        if(!(FICHA_PROC&&FICHA_PROC._id===procId)) return;
+        var ms=(r.data||[]).slice().reverse();
+        var h= ms.length? ms.map(function(m){
+            var cli=(m.autor_tipo==='cliente');
+            return '<div style="margin:4px 0;font-size:13px"><span class="note" style="font-size:11px">'+ddmmhh(m.criado_em)+'</span> <b style="color:'+(cli?'#185FA5':'#0F6E56')+'">'+(cli?'&#128242; ':'')+escx(m.autor_nome||(cli?'Cliente':'Escritório'))+':</b> '+escx(m.texto)+'</div>';
+          }).join('')
+          : '<div class="note">Nenhuma mensagem ainda. '+(acessos.length?'O cliente já pode escrever pelo app.':'Dê acesso ao app para o cliente poder conversar por aqui.')+'</div>';
+        h+='<div style="display:flex;gap:6px;margin-top:8px"><input id="clichat-inp" placeholder="Responder ao cliente…" style="flex:1" onkeydown="if(event.key===\'Enter\')appCliEnviarDaFicha(\''+procId+'\')"><button class="btn sm" style="background:#185FA5;color:#fff" onclick="appCliEnviarDaFicha(\''+procId+'\')">Enviar</button></div>';
+        corpo.innerHTML=h;
+      });
+  }
+  window.appCliEnviarDaFicha=function(procId){
+    var i=document.getElementById('clichat-inp'); if(!i) return;
+    var texto=i.value.trim(); if(!texto) return; i.value='';
+    enviarMsg(procId, texto).then(function(ok){ if(ok) fichaConversa(procId); });
+  };
+
+  /* ------------------------- envio (escritório) ------------------------- */
+  function enviarMsg(procId, texto){
+    return eu().then(function(me){
+      if(!me){ alert('Faça login de novo.'); return false; }
+      var s=S();
+      function grava(esc){
+        return s.from('portal_chat').insert({
+          escritorio_id:esc, processo_id:procId, autor_tipo:'escritorio',
+          autor_id:me.id, autor_nome:me.nome||'Escritório', texto:texto,
+          lida_escritorio:true, lida_cliente:false
+        }).select('id,autor_tipo,autor_nome,texto,criado_em').single().then(function(r){
+          if(r.error){ alert('Não foi possível enviar: '+r.error.message); return false; }
+          admin({acao:'notificar_cliente',processo_id:procId,texto:texto}).catch(function(){});
+          if(JAN.aberta&&JAN.procId===procId){ desenhaMsg(r.data); if(r.data.id>JAN.ultimo) JAN.ultimo=r.data.id; }
+          return true;
+        });
+      }
+      if(me.escritorio_id) return grava(me.escritorio_id);
+      return s.from('processos').select('escritorio_id').eq('id',procId).maybeSingle().then(function(q){
+        return grava(q&&q.data&&q.data.escritorio_id);
+      });
+    });
+  }
+
+  /* ------------------------- janela EMPILHADA acima do dock ------------------------- */
+  function alturaDock(){
+    try{ var d=document.getElementById('cmp-chat'); if(!d) return 0;
+      var r=d.getBoundingClientRect(); return (r.height&&r.bottom>0)?r.height:0; }catch(e){ return 0; }
+  }
+  function posiciona(){
+    var w=document.getElementById('cmp-clichat');
+    if(w) w.style.bottom=(alturaDock()+10)+'px';
+    var a=document.getElementById('cmp-clialert');
+    if(a){ var extra=0; if(w){ extra=w.getBoundingClientRect().height+8; } a.style.bottom=(alturaDock()+10+extra)+'px'; }
+  }
+  function montarJanela(){
+    if(document.getElementById('cmp-clichat')) return;
+    var w=document.createElement('div'); w.id='cmp-clichat'; w.className='cmp-only';
+    w.style.cssText='position:fixed;right:16px;bottom:10px;width:310px;height:400px;max-height:70vh;background:#fff;border:1px solid #cfd6e0;border-radius:12px 12px 0 0;box-shadow:0 6px 22px rgba(20,30,45,.28);z-index:99990;display:flex;flex-direction:column;overflow:hidden;font-size:13.5px';
+    w.innerHTML=
+      '<div id="cmp-clichat-bar" style="background:#185FA5;color:#fff;padding:8px 10px;display:flex;align-items:center;gap:7px;cursor:default">'+
+        '<span style="font-size:15px">&#128242;</span><b id="cmp-clichat-tit" style="flex:1;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Cliente</b>'+
+        '<button id="cmp-clichat-ficha" title="Abrir a ficha do processo" style="background:none;border:none;color:#dbe7f5;cursor:pointer;font-size:13px">ficha</button>'+
+        '<button id="cmp-clichat-x" title="Fechar" style="background:none;border:none;color:#fff;cursor:pointer;font-size:16px;line-height:1">&#10005;</button>'+
+      '</div>'+
+      '<div id="cmp-clichat-info" style="background:#eef4fb;color:#4a5568;font-size:11px;padding:3px 10px">Conversa gravada no processo. O cliente vê pelo app.</div>'+
+      '<div id="cmp-clichat-msgs" style="flex:1;overflow-y:auto;padding:10px;background:#f4f7fb"></div>'+
+      '<div style="display:flex;gap:6px;padding:8px;border-top:1px solid #e2e7ee;background:#fff">'+
+        '<textarea id="cmp-clichat-txt" placeholder="Escreva ao cliente…" style="flex:1;resize:none;height:40px;border:1px solid #cfd6e0;border-radius:8px;padding:8px 10px;font-family:inherit;font-size:13px"></textarea>'+
+        '<button id="cmp-clichat-env" style="width:40px;border:none;border-radius:8px;background:#185FA5;color:#fff;font-size:16px;cursor:pointer">&#10148;</button>'+
+      '</div>';
+    document.body.appendChild(w);
+    document.getElementById('cmp-clichat-x').onclick=fecharJanela;
+    document.getElementById('cmp-clichat-ficha').onclick=function(){ var p=procDe(JAN.procId); if(p&&typeof irParaProcesso==='function') irParaProcesso(p.numero); };
+    document.getElementById('cmp-clichat-env').onclick=function(){ enviarDaJanela(); };
+    document.getElementById('cmp-clichat-txt').addEventListener('keydown',function(ev){
+      if(ev.key==='Enter'&&!ev.shiftKey){ ev.preventDefault(); enviarDaJanela(); }
+    });
+    if(!JAN.pos){ JAN.pos=setInterval(posiciona,1200); window.addEventListener('resize',posiciona); }
+    posiciona();
+  }
+  function desenhaMsg(m){
+    var box=document.getElementById('cmp-clichat-msgs'); if(!box) return;
+    var cli=(m.autor_tipo==='cliente');
+    var d=document.createElement('div');
+    d.style.cssText='display:flex;margin-bottom:8px;'+(cli?'justify-content:flex-start':'justify-content:flex-end');
+    d.innerHTML='<div style="max-width:85%;padding:7px 10px;border-radius:11px;white-space:pre-line;word-break:break-word;'+
+      (cli?'background:#fff;border:1px solid #cfe0f2;border-bottom-left-radius:3px':'background:#185FA5;color:#fff;border-bottom-right-radius:3px')+'">'+
+      (cli?('<div style="font-size:10.5px;color:#185FA5;font-weight:700">'+escx(m.autor_nome||'Cliente')+'</div>'):'')+
+      escx(m.texto)+'<div style="font-size:10px;opacity:.65;text-align:right;margin-top:2px">'+hhmm(m.criado_em)+'</div></div>';
+    box.appendChild(d); box.scrollTop=box.scrollHeight;
+  }
+  function puxarJanela(primeira){
+    if(!JAN.aberta||!JAN.procId) return;
+    var s=S(); if(!s) return;
+    var q=s.from('portal_chat').select('id,autor_tipo,autor_nome,texto,criado_em').eq('processo_id',JAN.procId).order('id',{ascending:true});
+    if(JAN.ultimo>0) q=q.gt('id',JAN.ultimo); else q=q.limit(200);
+    q.then(function(r){
+      var ms=r.data||[];
+      if(primeira){ var box=document.getElementById('cmp-clichat-msgs'); if(box) box.innerHTML= ms.length?'':'<div style="text-align:center;color:#6b7484;font-size:11.5px;margin-top:10px">Nenhuma mensagem ainda — escreva a primeira. O cliente recebe pelo app.</div>'; }
+      if(ms.length){ ms.forEach(function(m){ desenhaMsg(m); if(m.id>JAN.ultimo) JAN.ultimo=m.id; }); marcaLidas(JAN.procId); }
+    });
+  }
+  function marcaLidas(procId){
+    var s=S(); if(!s) return;
+    s.from('portal_chat').update({lida_escritorio:true}).eq('processo_id',procId)
+      .eq('autor_tipo','cliente').eq('lida_escritorio',false).then(function(){ varreAlerta(); });
+  }
+  function enviarDaJanela(){
+    var t=document.getElementById('cmp-clichat-txt'); if(!t) return;
+    var texto=t.value.trim(); if(!texto) return; t.value='';
+    enviarMsg(JAN.procId, texto).then(function(ok){
+      if(ok && FICHA_PROC && FICHA_PROC._id===JAN.procId) fichaConversa(JAN.procId);
+      if(!ok) t.value=texto;
+    });
+  }
+  function abrirJanela(procId){
+    if(!procId){ alert('Salve o processo no banco antes (ficha sem cadastro).'); return; }
+    var p=procDe(procId);
+    var acessos=STATUS_CACHE[procId]||[];
+    var nome=(acessos[0]&&(acessos[0].nome||acessos[0].email))||(p&&p.cliente)||'Cliente';
+    montarJanela();
+    JAN.aberta=true; JAN.procId=procId; JAN.numero=p?p.numero:''; JAN.nome=nome; JAN.ultimo=0;
+    document.getElementById('cmp-clichat').style.display='flex';
+    document.getElementById('cmp-clichat-tit').textContent=nome+' · Proc '+numCurto(JAN.numero||'—');
+    document.getElementById('cmp-clichat-info').textContent= acessos.length
+      ? 'Conversa gravada no processo. O cliente vê pelo app.'
+      : 'Cliente ainda SEM acesso ao app — dê o acesso para ele ver esta conversa.';
+    var box=document.getElementById('cmp-clichat-msgs'); if(box) box.innerHTML='<div style="text-align:center;color:#6b7484;font-size:11.5px;margin-top:10px">Carregando…</div>';
+    puxarJanela(true);
+    if(JAN.timer) clearInterval(JAN.timer);
+    JAN.timer=setInterval(function(){ puxarJanela(false); },7000);
+    posiciona();
+    setTimeout(function(){ var tx=document.getElementById('cmp-clichat-txt'); if(tx) tx.focus(); },150);
+  }
+  function fecharJanela(){
+    JAN.aberta=false; if(JAN.timer){ clearInterval(JAN.timer); JAN.timer=null; }
+    var w=document.getElementById('cmp-clichat'); if(w) w.style.display='none';
+    posiciona();
+  }
+  window.appCliFalarComCliente=function(procId){
+    if(!STATUS_CACHE[procId]){
+      admin({acao:'status',processo_id:procId}).then(function(d){ STATUS_CACHE[procId]=(d&&d.ok&&d.acessos)||[]; abrirJanela(procId); })
+        .catch(function(){ STATUS_CACHE[procId]=[]; abrirJanela(procId); });
+    } else abrirJanela(procId);
+  };
+
+  /* ------------------------- painel de acessos (modal) ------------------------- */
+  window.appCliAbrirPainel=function(procId){
+    if(!procId){ alert('Salve o processo no banco antes (ficha sem cadastro).'); return; }
+    var velho=document.getElementById('appcli-veu'); if(velho) velho.remove();
+    var p=procDe(procId);
+    var veu=document.createElement('div'); veu.id='appcli-veu';
+    veu.style.cssText='position:fixed;inset:0;background:rgba(20,28,40,.5);z-index:99995;display:flex;align-items:center;justify-content:center;padding:16px';
+    veu.innerHTML='<div style="background:#fff;border-radius:14px;max-width:560px;width:100%;max-height:86vh;overflow-y:auto;padding:20px 22px">'+
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px"><b style="font-size:16px;color:#2E3A4B">&#128242; Acesso do cliente ao app</b><span style="flex:1"></span><button onclick="document.getElementById(\'appcli-veu\').remove()" style="background:none;border:none;font-size:18px;cursor:pointer">&#10005;</button></div>'+
+      '<div class="note" style="margin-bottom:10px">Processo '+escx((p&&p.numero)||'')+' — '+escx((p&&p.cliente)||'')+'. O login vale para TODOS os processos do cliente (aparecem em cards no app). Cada autor do processo pode ter o próprio login (ex.: casal = 2 logins). No 5º aparelho diferente o acesso bloqueia sozinho.</div>'+
+      '<div id="appcli-lista"><div class="note">Carregando…</div></div>'+
+      '<div style="border-top:1px solid #e2e7ee;margin-top:12px;padding-top:12px">'+
+        '<b style="font-size:13px;color:#2E3A4B">Enviar acesso por e-mail</b>'+
+        '<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">'+
+          '<input id="appcli-nome" placeholder="Nome do cliente/autor" style="flex:1;min-width:170px">'+
+          '<input id="appcli-email" placeholder="E-mail do cliente" type="email" style="flex:1;min-width:190px">'+
+        '</div>'+
+        '<div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap">'+
+          '<button id="appcli-btn-enviar" class="btn sm" style="background:#0F6E56;color:#fff;font-weight:700" onclick="appCliConceder(\''+procId+'\')">&#128233; Criar login e enviar por e-mail</button>'+
+          '<span class="note" style="font-size:11px">A senha é gerada na hora e vai no e-mail (com o passo a passo de instalar na tela do celular).</span>'+
+        '</div>'+
+        '<div id="appcli-avis" class="note" style="margin-top:8px"></div>'+
+      '</div></div>';
+    veu.addEventListener('click',function(ev){ if(ev.target===veu) veu.remove(); });
+    document.body.appendChild(veu);
+    var pv=procDe(procId);
+    if(pv&&pv.cliente){ var inN=document.getElementById('appcli-nome'); if(inN&&!inN.value) inN.value=pv.cliente; }
+    var s=S();
+    if(s){
+      s.from('processos').select('cliente_id').eq('id',procId).maybeSingle().then(function(r){
+        var cid=r&&r.data&&r.data.cliente_id; if(!cid) return;
+        s.from('contatos').select('email,emails').eq('id',cid).maybeSingle().then(function(q){
+          var e=(q&&q.data&&(q.data.email||((q.data.emails||[])[0])))||'';
+          var inp=document.getElementById('appcli-email'); if(inp&&!inp.value&&e) inp.value=e;
+        });
+      });
+    }
+    appCliRenderLista(procId);
+  };
+  window.appCliRenderLista=function(procId){
+    admin({acao:'status',processo_id:procId}).then(function(d){
+      STATUS_CACHE[procId]=(d&&d.ok&&d.acessos)||[];
+      pintaBotao(STATUS_CACHE[procId]);
+      var el=document.getElementById('appcli-lista'); if(!el) return;
+      var acessos=STATUS_CACHE[procId];
+      if(!acessos.length){ el.innerHTML='<div class="note">Nenhum acesso criado ainda para este processo.</div>'; return; }
+      el.innerHTML=acessos.map(function(a){
+        var rot={logado:['&#9989; logado no app','#e5f4ed;color:#127a53'],enviado:['&#128233; enviado — aguardando 1º login','#fdf3e7;color:#8a6d1a'],criado:['criado','#fdf3e7;color:#8a6d1a'],bloqueado:['&#9940; BLOQUEADO ('+escx(a.bloqueio_motivo||'aparelhos')+')','#fbeceb;color:#b5342b'],revogado:['revogado','#eef1f5;color:#5f6b7a']}[a.estado]||[a.estado,'#eef1f5;color:#5f6b7a'];
+        return '<div style="border:1px solid #e2e7ee;border-radius:10px;padding:9px 11px;margin-bottom:7px">'+
+          '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'+
+            '<b style="font-size:13.5px">'+escx(a.nome||a.email)+'</b>'+
+            '<span style="border-radius:20px;padding:2px 9px;font-size:11px;font-weight:700;background:'+rot[1]+'">'+rot[0]+'</span>'+
+          '</div>'+
+          '<div class="note" style="font-size:11.5px;margin-top:2px">'+escx(a.email)+
+            (a.aparelhos?(' · '+a.aparelhos+' aparelho'+(a.aparelhos>1?'s':'')):'')+
+            (a.ultimo_login_em?(' · último acesso '+ddmmhh(a.ultimo_login_em)):(a.senha_enviada_em?(' · senha enviada '+ddmmhh(a.senha_enviada_em)):''))+'</div>'+
+          '<div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">'+
+            '<button class="btn sm ghost" style="font-size:11px" onclick="appCliAcao(\''+procId+'\',\''+a.id+'\',\'reenviar\')" title="Gera senha NOVA e envia por e-mail (derruba a sessão antiga)">&#128260; nova senha por e-mail</button>'+
+            (a.estado==='bloqueado'?('<button class="btn sm" style="font-size:11px;background:#b5342b;color:#fff" onclick="appCliAcao(\''+procId+'\',\''+a.id+'\',\'desbloquear\')">&#128275; desbloquear aparelhos</button>'):'')+
+            (a.estado==='revogado'?('<button class="btn sm ghost" style="font-size:11px" onclick="appCliAcao(\''+procId+'\',\''+a.id+'\',\'reativar\')">reativar</button>')
+                                  :('<button class="btn sm ghost" style="font-size:11px;color:#b5342b" onclick="if(confirm(\'Revogar o acesso de '+escx(a.email)+' ao app?\'))appCliAcao(\''+procId+'\',\''+a.id+'\',\'revogar\')">revogar</button>'))+
+          '</div></div>';
+      }).join('');
+    });
+  };
+  window.appCliAcao=function(procId,acessoId,acao){
+    var av=document.getElementById('appcli-avis'); if(av) av.textContent='Executando…';
+    admin({acao:acao,acesso_id:acessoId}).then(function(d){
+      if(av) av.textContent = (d&&d.ok)?((d.aviso)||'Feito!') : ('Erro: '+((d&&d.erro)||'falhou'));
+      appCliRenderLista(procId);
+    });
+  };
+  window.appCliConceder=function(procId){
+    var n=document.getElementById('appcli-nome'), e=document.getElementById('appcli-email'), av=document.getElementById('appcli-avis'), bt=document.getElementById('appcli-btn-enviar');
+    var nome=(n&&n.value||'').trim(), email=(e&&e.value||'').trim();
+    if(!nome||nome.length<3){ if(av) av.textContent='Informe o nome.'; return; }
+    if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ if(av) av.textContent='E-mail inválido.'; return; }
+    if(bt){ bt.disabled=true; bt.textContent='Enviando…'; }
+    admin({acao:'conceder',processo_id:procId,nome:nome,email:email}).then(function(d){
+      if(bt){ bt.disabled=false; bt.innerHTML='&#128233; Criar login e enviar por e-mail'; }
+      if(av) av.textContent=(d&&d.ok)?(d.aviso||'Acesso enviado por e-mail para '+email+' ✔'):('Erro: '+((d&&d.erro)||'falhou'));
+      appCliRenderLista(procId);
+      if(FICHA_PROC&&FICHA_PROC._id===procId) fichaConversa(procId);
+    }).catch(function(){ if(bt){ bt.disabled=false; bt.innerHTML='&#128233; Criar login e enviar por e-mail'; } if(av) av.textContent='Falha de conexão.'; });
+  };
+
+  /* ------------------------- alerta no chat aberto ------------------------- */
+  function pintaAlerta(porProc){
+    var ids=Object.keys(porProc);
+    var el=document.getElementById('cmp-clialert');
+    if(!ids.length){ if(el) el.remove(); return; }
+    if(!el){
+      el=document.createElement('div'); el.id='cmp-clialert'; el.className='cmp-only';
+      el.style.cssText='position:fixed;right:16px;bottom:10px;width:300px;z-index:99991;display:flex;flex-direction:column;gap:6px';
+      document.body.appendChild(el);
+    }
+    el.innerHTML=ids.map(function(pid){
+      var ms=porProc[pid]; var p=procDe(pid);
+      var nome=ms[0].autor_nome||'Cliente'; var num=(p&&p.numero)?numCurto(p.numero):'—';
+      return '<div data-pid="'+pid+'" style="background:#C9A227;color:#fff;border-radius:10px;padding:9px 12px;cursor:pointer;box-shadow:0 4px 14px rgba(120,90,10,.35);font-size:12.5px;display:flex;align-items:center;gap:7px">'+
+        '<span style="font-size:16px">&#128233;</span><span style="flex:1"><b>'+escx(nome)+'</b> · Proc '+escx(num)+'<br><span style="opacity:.9">'+escx(String(ms[0].texto||'').slice(0,60))+'…</span></span>'+
+        '<b style="background:#fff;color:#8a6d00;border-radius:10px;min-width:20px;height:20px;line-height:20px;text-align:center;font-size:11.5px">'+ms.length+'</b></div>';
+    }).join('');
+    Array.prototype.forEach.call(el.children,function(ch){
+      ch.onclick=function(){ var pid=ch.getAttribute('data-pid'); appCliFalarComCliente(pid); };
+    });
+    posiciona();
+  }
+  function varreAlerta(){
+    var s=S(); if(!s) return;
+    s.from('portal_chat').select('id,processo_id,autor_nome,texto,criado_em').eq('autor_tipo','cliente')
+      .eq('lida_escritorio',false).order('id',{ascending:false}).limit(30).then(function(r){
+        var porProc={};
+        (r.data||[]).forEach(function(m){ (porProc[m.processo_id]=porProc[m.processo_id]||[]).push(m); });
+        // não alertar o processo cuja janela está aberta (já está sendo lido)
+        if(JAN.aberta&&JAN.procId&&porProc[JAN.procId]) delete porProc[JAN.procId];
+        pintaAlerta(porProc);
+      });
+  }
+  function ligarRealtime(){
+    var s=S(); if(!s||!s.channel) return;
+    try{
+      s.channel('cmp-clichat').on('postgres_changes',{event:'INSERT',schema:'public',table:'portal_chat'},function(pl){
+        var m=pl&&pl.new; if(!m) return;
+        if(m.autor_tipo==='cliente'){
+          if(JAN.aberta&&JAN.procId===m.processo_id){ puxarJanela(false); }
+          else varreAlerta();
+          if(FICHA_PROC&&FICHA_PROC._id===m.processo_id) fichaConversa(m.processo_id);
+        }
+      }).subscribe();
+    }catch(e){}
+  }
+
+  /* ------------------------- link vindo do push (?proc=&clichat=1) ------------------------- */
+  function deepLink(){
+    try{
+      var q=new URLSearchParams(location.search);
+      var dig=String(q.get('proc')||'').replace(/\D/g,'');
+      if(!dig) return;
+      var tent=0;
+      var t=setInterval(function(){
+        tent++;
+        if(window.DADOS&&DADOS.processos&&DADOS.processos.length&&typeof irParaProcesso==='function'){
+          clearInterval(t);
+          try{ history.replaceState(null,'',location.pathname); }catch(e){}
+          irParaProcesso(dig);
+          if(q.get('clichat')==='1'){
+            var p=(DADOS.processos||[]).find(function(x){return String(x.numero||'').replace(/\D/g,'')===dig;});
+            if(p&&p._id) setTimeout(function(){ appCliFalarComCliente(p._id); },900);
+          }
+        } else if(tent>60){ clearInterval(t); }
+      },700);
+    }catch(e){}
+  }
+
+  /* ------------------------- arranque ------------------------- */
+  // o desktop também passa a RECEBER push (antes só disparava)
+  if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('/chat-sw.js'); }catch(e){} }
+  var boot=setInterval(function(){
+    if(!window.__sb) return;
+    clearInterval(boot);
+    eu().then(function(me){
+      if(!me) return;
+      varreAlerta();
+      setInterval(varreAlerta,25000);
+      ligarRealtime();
+      deepLink();
+    });
+  },600);
+})();
 </script>
 </body>
 </html>
