@@ -30,15 +30,18 @@ function pareceMov(o) {
   const temTexto = keys.some(k => /descri|nome|movimento|complement|titulo|texto|tipo/.test(k))
   return temData && temTexto
 }
-function coletaArraysMov(node, out, prof) {
+// Guardamos também sob QUAL chave o array apareceu. Sem isso não dá para
+// distinguir o array de movimentos do array de documentos — os dois têm data e
+// descrição, e pareceMov aceita os dois.
+function coletaArraysMov(node, out, prof, chave) {
   if (prof > 7 || !node || typeof node !== 'object') return
   if (Array.isArray(node)) {
     const bons = node.filter(pareceMov).length
-    if (node.length && bons >= Math.max(1, Math.floor(node.length * 0.5))) out.push(node)
-    for (const x of node) coletaArraysMov(x, out, prof + 1)
+    if (node.length && bons >= Math.max(1, Math.floor(node.length * 0.5))) out.push({ chave: chave || '', itens: node })
+    for (const x of node) coletaArraysMov(x, out, prof + 1, chave)
     return
   }
-  for (const k of Object.keys(node)) coletaArraysMov(node[k], out, prof + 1)
+  for (const k of Object.keys(node)) coletaArraysMov(node[k], out, prof + 1, k)
 }
 
 export function pega(o, res) {
@@ -109,22 +112,44 @@ export async function buscarProcesso(token, numero) {
 }
 
 // Extrai a lista de movimentos já normalizada e sem repetição interna.
+// Duas armadilhas, as duas vistas no 0802871-55.2021.8.15.2001:
+//
+// 1. Pegar só o MAIOR array. O array de documentos também tem data e descrição,
+//    então em processo com muita peça juntada (esse tem 67) o maior array é o de
+//    documentos e os movimentos eram jogados fora inteiros — o histórico ficava
+//    parado enquanto o jus.br já mostrava a remessa ao 2º grau.
+// 2. Pegar só UM array. Processo que subiu em grau de recurso passa a ter uma
+//    tramitação por grau, cada uma com sua lista; ficar com uma só perde a outra.
+//
+// Então: quando alguma chave se chama "movimento", usa TODAS as que se chamam
+// assim e ignora o resto. Só quando nenhuma se identifica é que caímos no palpite
+// pelo tamanho, que é o comportamento antigo.
 export function movimentosDoProcesso(proc) {
-  const arrays = []
-  coletaArraysMov(proc, arrays, 0)
-  arrays.sort((a, b) => b.length - a.length)
-  const lista = arrays[0] || []
+  const achados = []
+  coletaArraysMov(proc, achados, 0, '')
+  const nomeados = achados.filter(a => /moviment/i.test(a.chave))
+  const escolhidos = nomeados.length
+    ? nomeados
+    : achados.slice().sort((a, b) => b.itens.length - a.itens.length).slice(0, 1)
+
   const movs = []
   const vistos = new Set()
-  for (const m of lista) {
-    const n = normMov(m)
-    if (!n) continue
-    const k = (n.data || '') + '|' + n.texto.toLowerCase()
-    if (vistos.has(k)) continue
-    vistos.add(k)
-    movs.push(n)
+  for (const grupo of escolhidos) {
+    for (const m of grupo.itens) {
+      const n = normMov(m)
+      if (!n) continue
+      const k = (n.data || '') + '|' + n.texto.toLowerCase()
+      if (vistos.has(k)) continue
+      vistos.add(k)
+      movs.push(n)
+    }
   }
-  return { movs, arrays, lista }
+  const arrays = escolhidos.map(a => a.itens)
+  return {
+    movs, arrays, lista: arrays[0] || [],
+    chaves: escolhidos.map(a => a.chave),
+    chavesVistas: achados.map(a => a.chave + ':' + a.itens.length),
+  }
 }
 
 // Atualiza classe/assunto/vara/distribuição na ficha. Nunca bloqueia a

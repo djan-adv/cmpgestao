@@ -49,7 +49,7 @@ export async function POST(request) {
   }
   const proc = busca.proc
 
-  const { movs, arrays, lista } = movimentosDoProcesso(proc)
+  const { movs, arrays, lista, chaves, chavesVistas } = movimentosDoProcesso(proc)
 
   // atualiza os dados da ficha (classe/assunto/vara/distribuição) — faz o selo virar "vinculado"
   const { meta, atualizada } = await aplicarMeta(sb, numero, proc)
@@ -69,6 +69,8 @@ export async function POST(request) {
       topKeys: proc && typeof proc === 'object' ? Object.keys(proc).slice(0, 40) : [],
       tramitacaoAtualKeys: proc && proc.tramitacaoAtual ? Object.keys(proc.tramitacaoAtual).slice(0, 40) : [],
       arraysEncontrados: arrays.map(a => a.length),
+      chavesUsadas: chaves,
+      chavesVistas,
       amostraMov: lista.slice(0, 2),
     }
   }
