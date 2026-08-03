@@ -141,6 +141,59 @@ export async function POST(request) {
     return Response.json({ ok: true, acessos: await statusDoProcesso(sb, p) })
   }
 
+  /* ---------- e-mail e WhatsApp do cliente, para o painel já vir preenchido ---------- */
+  if (acao === 'contato_por_nome') {
+    const nome = String(body.nome || '').replace(/\s+/g, ' ').trim()
+    const procId = String(body.processo_id || '')
+    let contato = null
+    if (nome) {
+      const { data: cid } = await sb.rpc('portal_contato_por_nome', { p_escritorio: quem.escritorio_id, p_nome: nome })
+      if (cid) {
+        const { data: c } = await sb.from('contatos').select('id,nome,email,emails,telefone,telefones').eq('id', cid).maybeSingle()
+        contato = c || null
+      }
+    }
+    // sem contato pelo nome do autor, cai no cliente cadastrado no processo
+    if (!contato && procId) {
+      const { data: p } = await sb.from('processos').select('cliente_id').eq('id', procId).eq('escritorio_id', quem.escritorio_id).maybeSingle()
+      if (p && p.cliente_id) {
+        const { data: c } = await sb.from('contatos').select('id,nome,email,emails,telefone,telefones').eq('id', p.cliente_id).maybeSingle()
+        contato = c || null
+      }
+    }
+    if (!contato) return Response.json({ ok: true, contato: null })
+    const email = String(contato.email || (Array.isArray(contato.emails) ? contato.emails[0] : '') || '').trim()
+    const telefone = String(contato.telefone || (Array.isArray(contato.telefones) ? contato.telefones[0] : '') || '').trim()
+    return Response.json({ ok: true, contato: { nome: contato.nome, email, telefone } })
+  }
+
+  /* ---------- prévia: o que este login vai mostrar ---------- */
+  if (acao === 'previa') {
+    const nome = String(body.nome || '').replace(/\s+/g, ' ').trim()
+    const email = String(body.email || '').trim().toLowerCase()
+    if (!nome) return Response.json({ ok: true, processos: [] })
+    // se já existe acesso com esse e-mail, a prévia é o que ELE enxerga hoje
+    let linhas = null
+    if (email) {
+      const { data: a } = await sb.from('portal_acessos').select('id,escritorio_id').eq('email', email).maybeSingle()
+      if (a && a.escritorio_id === quem.escritorio_id) {
+        const { data: ids } = await sb.rpc('portal_processos_ids', { p_acesso: a.id })
+        const lista = (ids || []).map(r => (typeof r === 'string' ? r : r.processo_id)).filter(Boolean)
+        if (lista.length) {
+          const { data: ps } = await sb.from('processos').select('id,numero,cliente_nome,status')
+            .in('id', lista).order('ultima_movimentacao', { ascending: false, nullsFirst: false })
+          linhas = ps || []
+        } else linhas = []
+      }
+    }
+    if (!linhas) {
+      const { data } = await sb.rpc('portal_previa_por_nome', { p_escritorio: quem.escritorio_id, p_nome: nome })
+      linhas = data || []
+    }
+    const emAndamento = linhas.filter(p => !/encerrad|arquivad|baixad/i.test(p.status || ''))
+    return Response.json({ ok: true, processos: emAndamento, ocultos: linhas.length - emAndamento.length })
+  }
+
   /* ---------- dar acesso (o botão) ---------- */
   if (acao === 'conceder') {
     const { data: p } = await sb.from('processos').select('id,numero,cliente_id,cliente_nome,escritorio_id')

@@ -85,6 +85,9 @@
   .pcard .tt{color:var(--muted);font-size:13px}
   .pcard .ult{font-size:13.5px;margin-top:7px;color:var(--ink)}
   .pcard .ult b{font-weight:600}
+  .pcard .vinc{font-size:13px;margin-top:6px;padding:6px 9px;background:#f4f9ff;
+               border-left:3px solid var(--navy);border-radius:0 7px 7px 0;color:var(--ink)}
+  .pcard .vinc b{font-weight:600;color:var(--navy)}
   .chip{display:inline-block;font-size:11.5px;padding:2.5px 10px;border-radius:20px;
         background:var(--chipbg);color:var(--navy);font-weight:700;margin-top:8px}
   .chip.enc{background:#f3e9e8;color:var(--danger)}
@@ -101,6 +104,12 @@
         padding:9px 16px;border-radius:22px;font-size:13.5px;font-weight:600;margin:3px 4px}
   .rbtn.dourado{background:var(--gold)}
   .rbtn.claro{background:#fff;color:var(--navy);border:1.5px solid var(--navy)}
+  /* Instagram do escritório: só o ícone da rede, redondo e discreto */
+  .rlinha{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;align-items:center}
+  .rig{display:inline-flex;align-items:center;justify-content:center;width:38px;height:38px;
+       background:var(--navy);color:#fff;text-decoration:none;border-radius:50%;flex:none}
+  .rig svg{width:19px;height:19px}
+  .rig:active{background:var(--navy2)}
   #btn-instalar{display:none}
 
   /* ---------- ficha do processo ---------- */
@@ -162,6 +171,18 @@
                   background:#f6f8fb;border-top:1px solid var(--line)}
   #chat .escrever textarea{resize:none;height:46px;border-radius:23px;padding:12px 16px}
   #chat .escrever .env{width:46px;height:46px;border-radius:50%;background:var(--navy);color:#fff;font-size:19px;flex:none}
+  #chat .escrever .clip{width:44px;height:46px;font-size:21px;flex:none;color:var(--muted)}
+  #chat .escrever .clip:active{color:var(--navy)}
+  #chat-anexo-barra{background:#eef4fb;border-top:1px solid var(--line);padding:8px 12px;font-size:13px;
+                    display:flex;align-items:center;gap:8px}
+  #chat-anexo-barra .x{margin-left:auto;color:var(--danger);font-weight:700;font-size:16px;padding:0 6px}
+  .cmsg .anx{display:flex;align-items:center;gap:8px;text-decoration:none;color:inherit;
+             padding:7px 9px;border-radius:9px;background:rgba(255,255,255,.16);margin-top:2px}
+  .cmsg.eles .anx{background:#eef2f7;color:var(--ink)}
+  .cmsg .anx .ai{font-size:20px;flex:none}
+  .cmsg .anx .an{font-size:13px;font-weight:600;word-break:break-word;line-height:1.25}
+  .cmsg .anx .at{font-size:11px;opacity:.75}
+  .cmsg .foto{max-width:100%;border-radius:9px;display:block;margin-top:2px}
   .aviso-dia{ text-align:center;font-size:11.5px;color:var(--muted);margin:9px 0}
 
   /* ---------- modal (instalar no iPhone etc.) ---------- */
@@ -196,11 +217,12 @@
         Esqueceu a senha? Fale com o escritório que enviamos uma nova. Seus dados são tratados só para esta consulta (LGPD).</div>
     </div>
     <div class="rodape">
+      <button class="rbtn claro" id="btn-instalar" onclick="instalar()">📲 Instalar o aplicativo</button>
       <div class="t">Acompanhe o escritório:</div>
-      <a class="rbtn" href="https://instagram.com/cmpadvs" target="_blank" rel="noopener">Instagram @cmpadvs</a>
-      <a class="rbtn" href="https://instagram.com/djan.adv" target="_blank" rel="noopener">Instagram @djan.adv</a>
-      <a class="rbtn dourado" href="/areas-atuacao.html" target="_blank">Áreas de atuação</a>
-      <br><button class="rbtn claro" id="btn-instalar" onclick="instalar()">📲 Instalar o aplicativo</button>
+      <div class="rlinha">
+        <a class="rig" href="https://instagram.com/cmpadvs" target="_blank" rel="noopener" title="Instagram do escritório" aria-label="Instagram @cmpadvs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="5.5"/><circle cx="12" cy="12" r="4.2"/><circle cx="17.6" cy="6.4" r="1.15" fill="currentColor" stroke="none"/></svg></a>
+        <a class="rbtn dourado" href="/areas-atuacao.html" target="_blank">Áreas de atuação</a>
+      </div>
     </div>
   </div>
 </section>
@@ -218,12 +240,13 @@
     </div>
     <div id="cards"></div>
     <div class="rodape">
-      <div class="t">Acompanhe o escritório:</div>
-      <a class="rbtn" href="https://instagram.com/cmpadvs" target="_blank" rel="noopener">Instagram @cmpadvs</a>
-      <a class="rbtn" href="https://instagram.com/djan.adv" target="_blank" rel="noopener">Instagram @djan.adv</a>
-      <a class="rbtn dourado" href="/areas-atuacao.html" target="_blank">Áreas de atuação</a>
-      <br><button class="rbtn claro" id="btn-instalar2" style="display:none" onclick="instalar()">📲 Instalar o aplicativo</button>
-      <div class="t" style="margin-top:10px" id="push-linha"><button class="rbtn claro" onclick="ativarAvisos()">🔔 Ativar avisos no celular</button></div>
+      <button class="rbtn claro" id="btn-instalar2" style="display:none" onclick="instalar()">📲 Instalar o aplicativo</button>
+      <div class="t" style="margin-bottom:0" id="push-linha"><button class="rbtn claro" onclick="ativarAvisos()">🔔 Ativar avisos no celular</button></div>
+      <div class="t" style="margin-top:12px">Acompanhe o escritório:</div>
+      <div class="rlinha">
+        <a class="rig" href="https://instagram.com/cmpadvs" target="_blank" rel="noopener" title="Instagram do escritório" aria-label="Instagram @cmpadvs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="5.5"/><circle cx="12" cy="12" r="4.2"/><circle cx="17.6" cy="6.4" r="1.15" fill="currentColor" stroke="none"/></svg></a>
+        <a class="rbtn dourado" href="/areas-atuacao.html" target="_blank">Áreas de atuação</a>
+      </div>
     </div>
   </div>
 </section>
@@ -253,7 +276,10 @@
     <button class="ico vazio">⏻</button>
   </div>
   <div class="corpo" id="chat-corpo"></div>
+  <div id="chat-anexo-barra" class="hidden"></div>
   <div class="escrever">
+    <input type="file" id="chat-file" class="hidden" onchange="escolherAnexo(this)">
+    <button class="clip" onclick="document.getElementById('chat-file').click()" aria-label="Anexar arquivo" title="Anexar documento, foto, PDF ou áudio">📎</button>
     <textarea id="chat-txt" placeholder="Escreva sua mensagem…" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();enviarChat()}"></textarea>
     <button class="env" onclick="enviarChat()" aria-label="Enviar">➤</button>
   </div>
@@ -432,6 +458,7 @@ function renderCards(){
       '<div class="vs">'+esc(p.cliente||'Você')+' <span class="x">×</span> '+esc(p.oponente||'Parte contrária')+'</div>' +
       '<div class="tt">'+esc(limpaTitulo(p.titulo))+'</div>' +
       (p.ultima?('<div class="ult"><b>Última movimentação'+(p.ultima.data?(' — '+brData(p.ultima.data)):'')+':</b> '+esc(p.ultima.texto)+'…</div>'):'') +
+      (p.vinculado?('<div class="vinc"><b>Ação principal (nº '+esc(p.vinculado.numero)+')'+(p.vinculado.data?(' — '+brData(p.vinculado.data)):'')+':</b> '+esc(p.vinculado.texto)+'…</div>'):'') +
       '<div><span class="chip'+(enc?' enc':'')+'">'+esc(enc?'Encerrado':(p.fase||p.status||'Em andamento'))+'</span></div>';
     c.appendChild(d);
   });
@@ -490,6 +517,12 @@ function renderDetalhes(){
       '<div style="font-size:11.5px;color:var(--muted);margin-top:8px;font-style:italic">O cartório atende sobre andamentos do processo. Sobre a condução do caso, fale com o escritório pelo chat 💬.</div>' +
     '</div>';
   }
+  (ATUAL.vinculados||[]).forEach(function(v){
+    html += '<div class="sec" style="background:#f8fbff;border-color:#cfe0f2">' +
+      '<p class="lab" style="color:var(--navy)">Ação principal</p>' +
+      '<div style="font-size:14.5px">Este processo acompanha a ação de nº <b>'+esc(v.numero)+'</b>'+(v.foro?(', em trâmite na '+esc(v.foro)):'')+'.</div>' +
+      '<div style="font-size:12.5px;color:var(--muted);margin-top:5px">É nela que corre a discussão comum a todos os credores. As movimentações e os documentos dela aparecem nas abas <b>Movimentações</b> e <b>Documentos</b>, junto com os do seu processo.</div></div>';
+  });
   html += '<div class="sec" style="text-align:center;background:#fffdf3;border-color:#eadfae">' +
     '<div style="font-size:14px">Dúvidas sobre este processo?</div>' +
     '<button class="rbtn dourado" style="margin-top:8px" onclick="abrirChat()">💬 Falar com o escritório</button></div>';
@@ -517,9 +550,26 @@ function renderMovs(){
       '</div>';
   });
   html += '<div style="font-size:11.5px;color:var(--muted);font-style:italic;margin-top:8px">Exibido como consta nos autos. Para entender qualquer andamento, pergunte no chat 💬.</div></div>';
+  // movimentações da ação principal (processo vinculado) — é onde o caso anda
+  // quando o processo do cliente está suspenso esperando essa decisão
+  (ATUAL.vinculados||[]).forEach(function(v){
+    html += '<div class="sec" style="background:#f8fbff;border-color:#cfe0f2">' +
+      '<p class="lab" style="color:var(--navy)">Ação principal — processo nº '+esc(v.numero)+'</p>' +
+      '<div style="font-size:13px;color:var(--muted);margin-bottom:8px">'+esc(limpaTitulo(v.titulo))+(v.foro?(' · '+esc(v.foro)):'')+
+      '<br>Seu processo acompanha esta ação. As movimentações abaixo são dela.</div>';
+    if(!(v.movimentacoes||[]).length) html += '<div style="color:var(--muted);font-size:13.5px">Sem movimentações registradas ainda.</div>';
+    (v.movimentacoes||[]).slice(0,40).forEach(function(m,i){
+      var t=String(m.texto||''), longa=t.length>240;
+      html += '<div class="mov"><div class="dt">'+(brData(m.data)||'—')+'</div>' +
+        '<div class="tx'+(longa?' corta':'')+'" id="vm'+i+'">'+esc(t)+'</div>' +
+        (longa?('<button class="mais" onclick="verMaisV('+i+',this)">ver tudo ▾</button>'):'')+'</div>';
+    });
+    html += '</div>';
+  });
   $('proc-corpo').innerHTML = html;
 }
 function verMais(i,btn){ var el=$('mv'+i); if(!el) return; var aberto=!el.classList.contains('corta'); if(aberto){ el.classList.add('corta'); btn.textContent='ver tudo ▾'; } else { el.classList.remove('corta'); btn.textContent='recolher ▴'; } }
+function verMaisV(i,btn){ var el=$('vm'+i); if(!el) return; var aberto=!el.classList.contains('corta'); if(aberto){ el.classList.add('corta'); btn.textContent='ver tudo ▾'; } else { el.classList.remove('corta'); btn.textContent='recolher ▴'; } }
 function renderDocs(){
   var d = ATUAL.documentos||{oficiais:[],peticoes:[]};
   function linha(ic, nome, sub, url){
@@ -538,7 +588,18 @@ function renderDocs(){
     if(x.tem_arquivo) html += linha('📄', x.titulo, 'Protocolada em '+brData(x.data), '/api/portal?doc=peticao:'+x.id+'&t='+TOKEN);
     if(x.tem_comprovante) html += linha('🧾', 'Comprovante — '+x.titulo, brData(x.data), '/api/portal?doc=comprovante:'+x.id+'&t='+TOKEN);
   });
-  html += '</div><div class="sec" style="font-size:12.5px;color:var(--muted)">Documentos oficiais já públicos (despachos, decisões, sentenças, acordos) e as petições protocoladas pelo escritório. Toque para abrir o PDF.</div>';
+  html += '</div>';
+  // documentos oficiais da ação principal (processo vinculado)
+  (ATUAL.vinculados||[]).forEach(function(v){
+    if(!(v.documentos||[]).length) return;
+    html += '<div class="sec" style="background:#f8fbff;border-color:#cfe0f2">' +
+      '<p class="lab" style="color:var(--navy)">Documentos da ação principal — nº '+esc(v.numero)+'</p>';
+    v.documentos.forEach(function(x){
+      html += linha('⚖️', x.nome||x.tipo||'Documento', (x.tipo?x.tipo+' · ':'')+(x.data?brData(x.data):''), '/api/portal?doc=jusbr:'+x.id+'&t='+TOKEN);
+    });
+    html += '</div>';
+  });
+  html += '<div class="sec" style="font-size:12.5px;color:var(--muted)">Documentos oficiais já públicos (despachos, decisões, sentenças, acordos) e as petições protocoladas pelo escritório. Toque para abrir o PDF.</div>';
   $('proc-corpo').innerHTML = html;
 }
 
@@ -581,23 +642,89 @@ function puxarChat(primeira){
     }
   }).catch(function(){});
 }
+function iconeArquivo(tipo,nome){
+  var t=(tipo||'')+' '+(nome||'');
+  if(/image/i.test(tipo)) return '🖼️';
+  if(/audio|ogg|mp3|m4a|opus/i.test(t)) return '🎧';
+  if(/video|mp4|mov/i.test(t)) return '🎬';
+  if(/pdf/i.test(t)) return '📕';
+  if(/word|docx?|odt/i.test(t)) return '📘';
+  if(/sheet|excel|xlsx?|csv/i.test(t)) return '📗';
+  return '📎';
+}
+function tamanhoLegivel(b){
+  b=Number(b||0); if(!b) return '';
+  if(b<1024) return b+' B';
+  if(b<1048576) return Math.round(b/1024)+' KB';
+  return (b/1048576).toFixed(1).replace('.',',')+' MB';
+}
+function anexoHTML(m){
+  if(!m.anexo_id) return '';
+  var url='/api/portal?doc=anexo:'+m.anexo_id+'&t='+TOKEN;
+  if(/^image\//i.test(m.anexo_tipo||'')){
+    return '<a href="'+url+'" target="_blank" rel="noopener"><img class="foto" src="'+url+'" alt="'+esc(m.anexo_nome||'foto')+'"></a>';
+  }
+  if(/^audio\//i.test(m.anexo_tipo||'')){
+    return '<audio controls preload="none" src="'+url+'" style="max-width:100%;margin-top:3px"></audio>';
+  }
+  return '<a class="anx" href="'+url+'" target="_blank" rel="noopener">' +
+    '<span class="ai">'+iconeArquivo(m.anexo_tipo,m.anexo_nome)+'</span>' +
+    '<span><span class="an">'+esc(m.anexo_nome||'arquivo')+'</span>' +
+    '<br><span class="at">'+esc(tamanhoLegivel(m.anexo_tamanho))+' · toque para abrir</span></span></a>';
+}
 function desenhaMsg(m){
   var eu = m.autor_tipo==='cliente';
   var d=document.createElement('div'); d.className='cmsg '+(eu?'eu':'eles');
   d.innerHTML='<div class="bolha">'+(!eu?('<div class="quem">'+esc(m.autor_nome||'CMP Advogados')+'</div>'):'')+
-    esc(m.texto)+'<div class="hora">'+brHora(m.criado_em)+'</div></div>';
+    anexoHTML(m)+
+    (m.texto?esc(m.texto):'')+'<div class="hora">'+brHora(m.criado_em)+'</div></div>';
   $('chat-corpo').appendChild(d);
 }
+/* ---------- anexo do chat (documento, foto, PDF, áudio…) ---------- */
+var ANEXO=null;   // {nome, tipo, b64}
+var MAX_ANEXO_MB=15;
+function escolherAnexo(inp){
+  var f=inp.files && inp.files[0];
+  inp.value='';
+  if(!f) return;
+  if(f.size > MAX_ANEXO_MB*1024*1024){ toast('O arquivo passa de '+MAX_ANEXO_MB+' MB. Envie um menor.'); return; }
+  var fr=new FileReader();
+  fr.onload=function(){
+    var s=String(fr.result||''); var v=s.indexOf(',');
+    ANEXO={ nome:f.name||'arquivo', tipo:f.type||'application/octet-stream', b64:(v>=0?s.slice(v+1):s) };
+    pintarBarraAnexo();
+  };
+  fr.onerror=function(){ toast('Não consegui ler o arquivo.'); };
+  fr.readAsDataURL(f);
+}
+function pintarBarraAnexo(){
+  var b=$('chat-anexo-barra');
+  if(!ANEXO){ b.classList.add('hidden'); b.innerHTML=''; return; }
+  b.classList.remove('hidden');
+  b.innerHTML='<span style="font-size:18px">'+iconeArquivo(ANEXO.tipo,ANEXO.nome)+'</span>'+
+    '<span style="flex:1;min-width:0;word-break:break-word">'+esc(ANEXO.nome)+'</span>'+
+    '<button class="x" onclick="tirarAnexo()" aria-label="Remover anexo">✕</button>';
+}
+function tirarAnexo(){ ANEXO=null; pintarBarraAnexo(); }
+
 function enviarChat(){
   var t=$('chat-txt'); var texto=t.value.trim();
-  if(!texto) return;
-  t.value='';
-  api('chat_enviar',{processo_id:ATUAL_ID, texto:texto}).then(function(d){
+  if(!texto && !ANEXO) return;
+  var envio=ANEXO;
+  t.value=''; ANEXO=null; pintarBarraAnexo();
+  if(envio) toast('Enviando '+envio.nome+'…');
+  api('chat_enviar',{processo_id:ATUAL_ID, texto:texto, arquivo:envio}).then(function(d){
     if(caiuSessao(d)) return;
-    if(!d.ok){ toast(d.erro||'Não foi possível enviar. Tente de novo.'); t.value=texto; return; }
+    if(!d.ok){
+      toast(d.erro||'Não foi possível enviar. Tente de novo.');
+      t.value=texto; ANEXO=envio; pintarBarraAnexo(); return;
+    }
     desenhaMsg(d.mensagem); CHAT_ULTIMO=d.mensagem.id;
     var c=$('chat-corpo'); c.scrollTop=c.scrollHeight;
-  }).catch(function(){ toast('Falha de conexão — a mensagem não foi enviada.'); t.value=texto; });
+  }).catch(function(){
+    toast('Falha de conexão — a mensagem não foi enviada.');
+    t.value=texto; ANEXO=envio; pintarBarraAnexo();
+  });
 }
 
 /* ---------- instalar na tela de início ---------- */
