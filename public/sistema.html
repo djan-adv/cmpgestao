@@ -15079,11 +15079,13 @@ function exportarProdutividadeCSV(){
       '<div id="appcli-lista"><div class="note">Carregando…</div></div>'+
       '<div style="border-top:1px solid #e2e7ee;margin-top:12px;padding-top:12px">'+
         '<b style="font-size:13px;color:#2E3A4B">Enviar acesso ao cliente</b>'+
+        '<div id="appcli-autores"></div>'+
         '<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">'+
-          '<input id="appcli-nome" placeholder="Nome do cliente/autor" style="flex:1;min-width:170px">'+
-          '<input id="appcli-email" placeholder="E-mail do cliente (é o login)" type="email" style="flex:1;min-width:190px">'+
+          '<input id="appcli-nome" placeholder="Nome do cliente/autor" oninput="appCliPreviaAgenda()" style="flex:1;min-width:170px">'+
+          '<input id="appcli-email" placeholder="E-mail do cliente (é o login)" type="email" oninput="appCliPreviaAgenda()" style="flex:1;min-width:190px">'+
           '<input id="appcli-zap" placeholder="WhatsApp (DDD + número)" inputmode="tel" style="flex:1;min-width:150px">'+
         '</div>'+
+        '<div id="appcli-previa" class="note" style="margin-top:8px"></div>'+
         '<div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap">'+
           '<button id="appcli-btn-enviar" class="btn sm" style="background:#0F6E56;color:#fff;font-weight:700" onclick="appCliConceder(\''+procId+'\',\'email\')">&#128233; Criar login e enviar por e-mail</button>'+
           '<button id="appcli-btn-zap" class="btn sm" style="background:#25D366;color:#fff;font-weight:700" onclick="appCliConceder(\''+procId+'\',\'whatsapp\')" title="Cria o login e abre o WhatsApp com a mensagem pronta (link, login e senha)">&#128241; Criar e enviar por WhatsApp</button>'+
@@ -15093,10 +15095,23 @@ function exportarProdutividadeCSV(){
       '</div></div>';
     veu.addEventListener('click',function(ev){ if(ev.target===veu) veu.remove(); });
     document.body.appendChild(veu);
+    // processo de casal/litisconsórcio vem com os autores juntos ("A; B"): cada um
+    // precisa do PRÓPRIO login, então o painel pede para escolher de quem é este.
     var pv=procDe(procId);
-    if(pv&&pv.cliente){ var inN=document.getElementById('appcli-nome'); if(inN&&!inN.value) inN.value=pv.cliente; }
+    var autores=String((pv&&pv.cliente)||'').split(';').map(function(s){return s.trim();}).filter(function(s){return s.length>2;});
+    var inN=document.getElementById('appcli-nome');
+    if(inN&&!inN.value&&autores.length) inN.value=autores[0];
+    if(autores.length>1){
+      document.getElementById('appcli-autores').innerHTML=
+        '<div style="background:#fff8e6;border:1px solid #e8dcbb;border-radius:8px;padding:7px 10px;margin-top:8px;font-size:12px">'+
+        '<b>Este processo tem '+autores.length+' autores.</b> Cada um recebe o próprio login (e todos veem este processo). Fazendo o de: '+
+        autores.map(function(a,i){ return '<button class="btn sm '+(i?'ghost':'')+'" id="appcli-aut'+i+'" style="font-size:11px;margin:3px 3px 0 0" onclick="appCliEscolherAutor('+i+')">'+escx(a)+'</button>'; }).join('')+
+        '</div>';
+      window.__appcliAutores=autores;
+    } else { window.__appcliAutores=null; }
     appCliPreencherContato(procId);
     appCliRenderLista(procId);
+    appCliPreviaAgenda();
   };
   /* preenche e-mail e WhatsApp a partir do cadastro do contato do processo */
   function appCliPreencherContato(procId){
@@ -15133,6 +15148,56 @@ function exportarProdutividadeCSV(){
                 : ('https://wa.me/?text='+encodeURIComponent(texto));  // sem número: escolhe o contato no WhatsApp
     window.open(url,'_blank','noopener');
     return !!n;
+  }
+
+  window.appCliEscolherAutor=function(i){
+    var autores=window.__appcliAutores||[]; if(!autores[i]) return;
+    var inN=document.getElementById('appcli-nome'); if(inN) inN.value=autores[i];
+    autores.forEach(function(_,k){ var b=document.getElementById('appcli-aut'+k); if(b) b.className='btn sm'+(k===i?'':' ghost'); });
+    // e-mail/telefone são de cada pessoa: limpa para não mandar a senha de um ao outro
+    var ie=document.getElementById('appcli-email'); if(ie) ie.value='';
+    var iz=document.getElementById('appcli-zap'); if(iz) iz.value='';
+    appCliPreviaAgenda();
+  };
+
+  /* Conferência antes de enviar: mostra QUAIS processos aquele login vai exibir.
+     É o que pega homônimo — se listar processo de outra pessoa, dá para arrumar o
+     cadastro antes de o cliente entrar. */
+  var previaTimer=null;
+  window.appCliPreviaAgenda=function(){
+    if(previaTimer) clearTimeout(previaTimer);
+    previaTimer=setTimeout(appCliPrevia,600);
+  };
+  function appCliPrevia(){
+    var el=document.getElementById('appcli-previa'); if(!el) return;
+    var n=document.getElementById('appcli-nome'), e=document.getElementById('appcli-email');
+    var nome=(n&&n.value||'').trim(), email=(e&&e.value||'').trim();
+    if(nome.length<3){ el.innerHTML=''; return; }
+    el.innerHTML='<span style="color:#5f6b7a">Conferindo o que este login vai mostrar…</span>';
+    admin({acao:'previa',nome:nome,email:email}).then(function(d){
+      if(!(d&&d.ok)){ el.innerHTML=''; return; }
+      var ps=d.processos||[];
+      if(!ps.length){
+        el.innerHTML='<span style="color:#8a6d1a">⚠ Nenhum processo em andamento casou com este nome — o cliente só verá o processo desta ficha. Confira se o nome está igual ao do cadastro.</span>';
+        return;
+      }
+      var lista=ps.slice(0,8).map(function(p){
+        var outro = portalNomeDiferente(p.cliente_nome, nome);
+        return '<div style="padding:2px 0'+(outro?';color:#b5342b':'')+'">• '+escx(p.numero||'')+
+               (outro?(' <b>— cadastrado como “'+escx(p.cliente_nome||'')+'”</b>'):'')+'</div>';
+      }).join('');
+      el.innerHTML='<div style="background:#f4f9ff;border:1px solid #cfe0f2;border-radius:8px;padding:8px 10px">'+
+        '<b style="color:#185FA5">Este login vai mostrar '+ps.length+' processo'+(ps.length>1?'s':'')+'</b>'+
+        (d.ocultos?(' <span style="color:#5f6b7a">(+'+d.ocultos+' encerrado'+(d.ocultos>1?'s':'')+', que não aparecem)</span>'):'')+
+        '<div style="margin-top:4px;font-size:11.5px">'+lista+(ps.length>8?('<div style="color:#5f6b7a">… e mais '+(ps.length-8)+'</div>'):'')+'</div>'+
+        '<div style="font-size:11px;color:#5f6b7a;margin-top:5px">Confira antes de enviar: em vermelho, processos cujo titular está cadastrado com nome diferente.</div></div>';
+    }).catch(function(){ el.innerHTML=''; });
+  }
+  // compara ignorando acento/caixa e aceitando o autor dentro de "A; B"
+  function portalNomeDiferente(clienteNome, nome){
+    function norm(s){ return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/\s+/g,' ').trim(); }
+    var alvo=norm(nome);
+    return !String(clienteNome||'').split(';').some(function(p){ return norm(p)===alvo; });
   }
 
   window.appCliRenderLista=function(procId){
