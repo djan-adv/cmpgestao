@@ -32,6 +32,7 @@ const DOCS_ROOT = '/opt/cmpdocs'
 const MAX_APARELHOS = 4         // o 5º aparelho diferente bloqueia o acesso
 const SESSAO_DIAS = 60
 const MAX_TEXTO_CHAT = 4000
+const MAX_ANEXO = 15 * 1024 * 1024   // mesmo teto do chat da equipe
 
 /* ---------- trava simples contra chute de senha (por processo do Node) ---------- */
 const _tentativas = new Map()
@@ -345,7 +346,7 @@ export async function POST(request) {
     const pid = String(body.processo_id || '')
     const ids = await processosPermitidos(sb, acesso)
     if (!ids.includes(pid)) return Response.json({ erro: 'Processo não disponível.' }, { status: 403 })
-    let q = sb.from('portal_chat').select('id,autor_tipo,autor_nome,texto,criado_em').eq('processo_id', pid).order('id', { ascending: true })
+    let q = sb.from('portal_chat').select('id,autor_tipo,autor_nome,texto,criado_em,anexo_id,anexo_nome,anexo_tipo,anexo_tamanho').eq('processo_id', pid).order('id', { ascending: true })
     const desde = parseInt(body.desde_id || 0, 10)
     if (desde > 0) q = q.gt('id', desde); else q = q.limit(200)
     const { data: msgs } = await q
@@ -360,17 +361,44 @@ export async function POST(request) {
   if (acao === 'chat_enviar') {
     const pid = String(body.processo_id || '')
     const texto = String(body.texto || '').trim().slice(0, MAX_TEXTO_CHAT)
-    if (!texto) return Response.json({ erro: 'Escreva a mensagem.' }, { status: 400 })
+    const arq = body.arquivo || null
+    if (!texto && !arq) return Response.json({ erro: 'Escreva a mensagem ou anexe um arquivo.' }, { status: 400 })
     const ids = await processosPermitidos(sb, acesso)
     if (!ids.includes(pid)) return Response.json({ erro: 'Processo não disponível.' }, { status: 403 })
     const { data: p } = await sb.from('processos').select('id,numero,escritorio_id').eq('id', pid).maybeSingle()
-    const ins = await sb.from('portal_chat').insert({
+
+    // anexo (Word, PDF, foto, áudio…): sobe para o Storage e vira linha em `anexos`,
+    // igual ao chat da equipe — a mensagem guarda só a referência.
+    let anexo = null
+    if (arq) {
+      let buf
+      try { buf = Buffer.from(String(arq.b64 || ''), 'base64') } catch (e) { buf = null }
+      if (!buf || !buf.length) return Response.json({ erro: 'Arquivo vazio ou inválido.' }, { status: 400 })
+      if (buf.length > MAX_ANEXO) return Response.json({ erro: 'O arquivo passa de 15 MB — envie um menor.' }, { status: 400 })
+      const tipo = String(arq.tipo || 'application/octet-stream').slice(0, 120)
+      const nome = String(arq.nome || 'arquivo').slice(0, 180)
+      const ext = ((nome.match(/\.(\w{1,8})$/) || [])[1] || (tipo.split('/')[1] || 'bin')).replace(/[^a-z0-9]/gi, '').slice(0, 8) || 'bin'
+      const caminho = 'portal/' + acesso.escritorio_id + '/' + pid + '/' + crypto.randomUUID() + '.' + ext
+      const up = await sb.storage.from('capturas').upload(caminho, buf, { contentType: tipo, upsert: false })
+      if (up.error) return Response.json({ erro: 'Não foi possível enviar o arquivo. Tente de novo.' }, { status: 500 })
+      const insA = await sb.from('anexos').insert({
+        escritorio_id: acesso.escritorio_id, origem: 'portal', processo_numero: (p && p.numero) || null,
+        nome, tipo, tamanho: buf.length, path: caminho, criado_por: acesso.nome || acesso.email,
+      }).select('id').single()
+      if (insA.error) {
+        try { await sb.storage.from('capturas').remove([caminho]) } catch (e) {}
+        return Response.json({ erro: 'Não foi possível guardar o arquivo. Tente de novo.' }, { status: 500 })
+      }
+      anexo = { anexo_id: insA.data.id, anexo_nome: nome, anexo_tipo: tipo, anexo_tamanho: buf.length }
+    }
+
+    const ins = await sb.from('portal_chat').insert(Object.assign({
       escritorio_id: acesso.escritorio_id, processo_id: pid, acesso_id: acesso.id,
-      autor_tipo: 'cliente', autor_nome: acesso.nome || acesso.email, texto,
+      autor_tipo: 'cliente', autor_nome: acesso.nome || acesso.email, texto: texto || null,
       lida_cliente: true, lida_escritorio: false,
-    }).select('id,autor_tipo,autor_nome,texto,criado_em').single()
+    }, anexo || {})).select('id,autor_tipo,autor_nome,texto,criado_em,anexo_id,anexo_nome,anexo_tipo,anexo_tamanho').single()
     if (ins.error) return Response.json({ erro: 'Falha ao enviar. Tente de novo.' }, { status: 500 })
-    avisarEscritorio(sb, acesso, p || { numero: '' }, texto)   // sem await — resposta rápida
+    avisarEscritorio(sb, acesso, p || { numero: '' }, texto || ('anexo: ' + (anexo ? anexo.anexo_nome : '')))
     return Response.json({ ok: true, mensagem: ins.data })
   }
 
@@ -448,6 +476,28 @@ export async function GET(request) {
       headers: {
         'Content-Type': mime,
         'Content-Disposition': (dl ? 'attachment' : 'inline') + '; filename="' + nome + (/\.\w+$/.test(nome) ? '' : '.pdf') + '"',
+        'Cache-Control': 'private, max-age=300',
+      },
+    })
+  }
+
+  /* anexo do chat (o que o cliente mandou e o que o escritório respondeu) */
+  if (tipo === 'anexo') {
+    // o anexo só abre se estiver numa mensagem de um processo que este acesso enxerga
+    const { data: msg } = await sb.from('portal_chat').select('processo_id').eq('anexo_id', id).limit(1).maybeSingle()
+    if (!msg || !permitidos.includes(msg.processo_id)) {
+      return Response.json({ erro: 'Arquivo não disponível para este acesso.' }, { status: 403 })
+    }
+    const { data: meta } = await sb.from('anexos').select('nome,tipo,path').eq('id', id).eq('escritorio_id', acesso.escritorio_id).maybeSingle()
+    if (!meta || !meta.path) return Response.json({ erro: 'Arquivo não encontrado.' }, { status: 404 })
+    const baixa = await sb.storage.from('capturas').download(meta.path)
+    if (baixa.error || !baixa.data) return Response.json({ erro: 'Falha ao ler o arquivo.' }, { status: 502 })
+    const buf = Buffer.from(await baixa.data.arrayBuffer())
+    const nome = (meta.nome || 'anexo').replace(/[^\w.\- ]+/g, '_')
+    return new Response(buf, {
+      headers: {
+        'Content-Type': meta.tipo || 'application/octet-stream',
+        'Content-Disposition': (dl ? 'attachment' : 'inline') + '; filename="' + nome + '"',
         'Cache-Control': 'private, max-age=300',
       },
     })

@@ -165,6 +165,18 @@
                   background:#f6f8fb;border-top:1px solid var(--line)}
   #chat .escrever textarea{resize:none;height:46px;border-radius:23px;padding:12px 16px}
   #chat .escrever .env{width:46px;height:46px;border-radius:50%;background:var(--navy);color:#fff;font-size:19px;flex:none}
+  #chat .escrever .clip{width:44px;height:46px;font-size:21px;flex:none;color:var(--muted)}
+  #chat .escrever .clip:active{color:var(--navy)}
+  #chat-anexo-barra{background:#eef4fb;border-top:1px solid var(--line);padding:8px 12px;font-size:13px;
+                    display:flex;align-items:center;gap:8px}
+  #chat-anexo-barra .x{margin-left:auto;color:var(--danger);font-weight:700;font-size:16px;padding:0 6px}
+  .cmsg .anx{display:flex;align-items:center;gap:8px;text-decoration:none;color:inherit;
+             padding:7px 9px;border-radius:9px;background:rgba(255,255,255,.16);margin-top:2px}
+  .cmsg.eles .anx{background:#eef2f7;color:var(--ink)}
+  .cmsg .anx .ai{font-size:20px;flex:none}
+  .cmsg .anx .an{font-size:13px;font-weight:600;word-break:break-word;line-height:1.25}
+  .cmsg .anx .at{font-size:11px;opacity:.75}
+  .cmsg .foto{max-width:100%;border-radius:9px;display:block;margin-top:2px}
   .aviso-dia{ text-align:center;font-size:11.5px;color:var(--muted);margin:9px 0}
 
   /* ---------- modal (instalar no iPhone etc.) ---------- */
@@ -256,7 +268,10 @@
     <button class="ico vazio">⏻</button>
   </div>
   <div class="corpo" id="chat-corpo"></div>
+  <div id="chat-anexo-barra" class="hidden"></div>
   <div class="escrever">
+    <input type="file" id="chat-file" class="hidden" onchange="escolherAnexo(this)">
+    <button class="clip" onclick="document.getElementById('chat-file').click()" aria-label="Anexar arquivo" title="Anexar documento, foto, PDF ou áudio">📎</button>
     <textarea id="chat-txt" placeholder="Escreva sua mensagem…" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();enviarChat()}"></textarea>
     <button class="env" onclick="enviarChat()" aria-label="Enviar">➤</button>
   </div>
@@ -590,23 +605,89 @@ function puxarChat(primeira){
     }
   }).catch(function(){});
 }
+function iconeArquivo(tipo,nome){
+  var t=(tipo||'')+' '+(nome||'');
+  if(/image/i.test(tipo)) return '🖼️';
+  if(/audio|ogg|mp3|m4a|opus/i.test(t)) return '🎧';
+  if(/video|mp4|mov/i.test(t)) return '🎬';
+  if(/pdf/i.test(t)) return '📕';
+  if(/word|docx?|odt/i.test(t)) return '📘';
+  if(/sheet|excel|xlsx?|csv/i.test(t)) return '📗';
+  return '📎';
+}
+function tamanhoLegivel(b){
+  b=Number(b||0); if(!b) return '';
+  if(b<1024) return b+' B';
+  if(b<1048576) return Math.round(b/1024)+' KB';
+  return (b/1048576).toFixed(1).replace('.',',')+' MB';
+}
+function anexoHTML(m){
+  if(!m.anexo_id) return '';
+  var url='/api/portal?doc=anexo:'+m.anexo_id+'&t='+TOKEN;
+  if(/^image\//i.test(m.anexo_tipo||'')){
+    return '<a href="'+url+'" target="_blank" rel="noopener"><img class="foto" src="'+url+'" alt="'+esc(m.anexo_nome||'foto')+'"></a>';
+  }
+  if(/^audio\//i.test(m.anexo_tipo||'')){
+    return '<audio controls preload="none" src="'+url+'" style="max-width:100%;margin-top:3px"></audio>';
+  }
+  return '<a class="anx" href="'+url+'" target="_blank" rel="noopener">' +
+    '<span class="ai">'+iconeArquivo(m.anexo_tipo,m.anexo_nome)+'</span>' +
+    '<span><span class="an">'+esc(m.anexo_nome||'arquivo')+'</span>' +
+    '<br><span class="at">'+esc(tamanhoLegivel(m.anexo_tamanho))+' · toque para abrir</span></span></a>';
+}
 function desenhaMsg(m){
   var eu = m.autor_tipo==='cliente';
   var d=document.createElement('div'); d.className='cmsg '+(eu?'eu':'eles');
   d.innerHTML='<div class="bolha">'+(!eu?('<div class="quem">'+esc(m.autor_nome||'CMP Advogados')+'</div>'):'')+
-    esc(m.texto)+'<div class="hora">'+brHora(m.criado_em)+'</div></div>';
+    anexoHTML(m)+
+    (m.texto?esc(m.texto):'')+'<div class="hora">'+brHora(m.criado_em)+'</div></div>';
   $('chat-corpo').appendChild(d);
 }
+/* ---------- anexo do chat (documento, foto, PDF, áudio…) ---------- */
+var ANEXO=null;   // {nome, tipo, b64}
+var MAX_ANEXO_MB=15;
+function escolherAnexo(inp){
+  var f=inp.files && inp.files[0];
+  inp.value='';
+  if(!f) return;
+  if(f.size > MAX_ANEXO_MB*1024*1024){ toast('O arquivo passa de '+MAX_ANEXO_MB+' MB. Envie um menor.'); return; }
+  var fr=new FileReader();
+  fr.onload=function(){
+    var s=String(fr.result||''); var v=s.indexOf(',');
+    ANEXO={ nome:f.name||'arquivo', tipo:f.type||'application/octet-stream', b64:(v>=0?s.slice(v+1):s) };
+    pintarBarraAnexo();
+  };
+  fr.onerror=function(){ toast('Não consegui ler o arquivo.'); };
+  fr.readAsDataURL(f);
+}
+function pintarBarraAnexo(){
+  var b=$('chat-anexo-barra');
+  if(!ANEXO){ b.classList.add('hidden'); b.innerHTML=''; return; }
+  b.classList.remove('hidden');
+  b.innerHTML='<span style="font-size:18px">'+iconeArquivo(ANEXO.tipo,ANEXO.nome)+'</span>'+
+    '<span style="flex:1;min-width:0;word-break:break-word">'+esc(ANEXO.nome)+'</span>'+
+    '<button class="x" onclick="tirarAnexo()" aria-label="Remover anexo">✕</button>';
+}
+function tirarAnexo(){ ANEXO=null; pintarBarraAnexo(); }
+
 function enviarChat(){
   var t=$('chat-txt'); var texto=t.value.trim();
-  if(!texto) return;
-  t.value='';
-  api('chat_enviar',{processo_id:ATUAL_ID, texto:texto}).then(function(d){
+  if(!texto && !ANEXO) return;
+  var envio=ANEXO;
+  t.value=''; ANEXO=null; pintarBarraAnexo();
+  if(envio) toast('Enviando '+envio.nome+'…');
+  api('chat_enviar',{processo_id:ATUAL_ID, texto:texto, arquivo:envio}).then(function(d){
     if(caiuSessao(d)) return;
-    if(!d.ok){ toast(d.erro||'Não foi possível enviar. Tente de novo.'); t.value=texto; return; }
+    if(!d.ok){
+      toast(d.erro||'Não foi possível enviar. Tente de novo.');
+      t.value=texto; ANEXO=envio; pintarBarraAnexo(); return;
+    }
     desenhaMsg(d.mensagem); CHAT_ULTIMO=d.mensagem.id;
     var c=$('chat-corpo'); c.scrollTop=c.scrollHeight;
-  }).catch(function(){ toast('Falha de conexão — a mensagem não foi enviada.'); t.value=texto; });
+  }).catch(function(){
+    toast('Falha de conexão — a mensagem não foi enviada.');
+    t.value=texto; ANEXO=envio; pintarBarraAnexo();
+  });
 }
 
 /* ---------- instalar na tela de início ---------- */
