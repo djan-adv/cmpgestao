@@ -1549,7 +1549,7 @@ async function renderAlertasDiligencias(){
       var proc=(DADOS.processos||[]).filter(function(x){return x.numero===num;})[0];
       var teveMov=false;
       if(proc){ var base=new Date(d.criado_em).getTime();
-        (proc.hist_full||[]).forEach(function(a){ if((a.f==='djen'||a.f==='datajud')&&a.data){ var tt=new Date(String(a.data).slice(0,10)+'T00:00:00').getTime(); if(tt>base) teveMov=true; } }); }
+        (proc.hist_full||[]).forEach(function(a){ if((a.f==='djen'||a.f==='datajud'||a.f==='jusbr')&&a.data){ var tt=new Date(String(a.data).slice(0,10)+'T00:00:00').getTime(); if(tt>base) teveMov=true; } }); }
       if(teveMov && !d.data_retorno){ retorno.push({num:num,cli:pr.cliente_nome}); return; }
       var ref=new Date(d.ultima_cobranca||d.criado_em).getTime();
       var dias=Math.floor((agora-ref)/86400000);
