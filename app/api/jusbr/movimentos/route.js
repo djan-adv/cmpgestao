@@ -49,10 +49,10 @@ export async function POST(request) {
   }
   const proc = busca.proc
 
-  const { movs, arrays, lista, chaves, chavesVistas } = movimentosDoProcesso(proc)
+  const { movs, arrays, lista, chaves, chavesVistas } = movimentosDoProcesso(busca.procs)
 
   // atualiza os dados da ficha (classe/assunto/vara/distribuição) — faz o selo virar "vinculado"
-  const { meta, atualizada } = await aplicarMeta(sb, numero, proc)
+  const { meta, trilha, origem, atual, atualizada } = await aplicarMeta(sb, numero, busca.procs)
 
   const g = await gravarMovimentos(sb, numero, movs, 'jusbr')
 
@@ -63,6 +63,7 @@ export async function POST(request) {
     ok: true, numero, movimentos: movs.length,
     novos: g.inseridos, jaTinha: g.jaTinha, semProcesso: g.semProcesso, erros: g.erros,
     ficha_atualizada: atualizada, meta,
+    tramitacoes: trilha, origem, local_atual: atual,
   }
   if (body.debug) {
     out.diag = {

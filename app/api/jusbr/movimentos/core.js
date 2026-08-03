@@ -107,8 +107,59 @@ export async function buscarProcesso(token, numero) {
   }
   if (!resp.ok) return { erro: 'PDPJ recusou (HTTP ' + resp.status + ')', motivo: 'http', status: resp.status }
 
-  const proc = Array.isArray(data && data.content) ? data.content[0] : (Array.isArray(data) ? data[0] : data)
-  return { proc }
+  // O PDPJ devolve UM item de 'content' por tramitação — processo que subiu em
+  // grau de recurso vem com dois. Ficar com content[0], como fazíamos, jogava um
+  // grau inteiro fora: o histórico do 2º grau simplesmente nunca chegava.
+  const procs = Array.isArray(data && data.content) ? data.content
+    : (Array.isArray(data) ? data : (data ? [data] : []))
+  return { proc: procs[0], procs }
+}
+
+// —— tramitações: por onde o processo passou e onde ele está agora ——
+// A ficha mostrava só um órgão, e como aplicarMeta lia a tramitação ATUAL, a
+// subida ao 2º grau ia sobrescrever "13ª Vara Cível" por "1ª Câmara Cível" e a
+// vara de origem se perdia — justamente a que o cliente pergunta e para onde os
+// autos voltam depois do recurso.
+export function normTramitacao(t, pai) {
+  if (!t || typeof t !== 'object') return null
+  const fonte = [t, pai || {}]
+  const busca = (cams) => { for (const o of fonte) { const v = pega(o, cams); if (v != null && v !== '') return v } return null }
+  const orgao = busca(['orgaoJulgador.nome', 'orgaoJulgador.descricao', 'orgaoJulgador.nomeOrgao', 'orgaoJulgador'])
+  if (!orgao || typeof orgao === 'object') return null
+  const grau = busca(['grau.nome', 'grau.descricao', 'grau.codigo', 'grau', 'instancia'])
+  const tribunal = busca(['tribunal.sigla', 'tribunal.nome', 'siglaTribunal'])
+  const classe = busca(['classe.descricao', 'classeProcessual.descricao', 'classeJudicial.descricao'])
+  const desdeRaw = busca(['dataDistribuicao', 'dataAjuizamento', 'distribuicao.data', 'dataHoraDistribuicao'])
+  const desde = desdeRaw ? String(desdeRaw).slice(0, 10) : null
+  const txt = (v) => (v == null || typeof v === 'object') ? null : String(v).trim().slice(0, 200) || null
+  return { grau: txt(grau), orgao: txt(orgao), tribunal: txt(tribunal), classe: txt(classe), desde }
+}
+
+// Devolve a trilha ordenada da mais ANTIGA para a mais NOVA.
+export function tramitacoesDoProcesso(procs) {
+  const lista = Array.isArray(procs) ? procs : [procs]
+  const out = []
+  const vistos = new Set()
+  for (const p of lista) {
+    if (!p || typeof p !== 'object') continue
+    const cands = []
+    if (p.tramitacaoAtual) cands.push(p.tramitacaoAtual)
+    if (Array.isArray(p.tramitacoes)) cands.push(...p.tramitacoes)
+    if (!cands.length) cands.push(p)
+    for (const c of cands) {
+      const n = normTramitacao(c, p)
+      if (!n) continue
+      const k = (n.grau || '') + '|' + n.orgao.toLowerCase()
+      if (vistos.has(k)) continue
+      vistos.add(k)
+      out.push(n)
+    }
+  }
+  // Só reordena quando TODAS têm data. Misturar datado com não datado inventaria
+  // uma cronologia que não existe; sem isso, a ordem em que o PDPJ devolveu já é
+  // a ordem de tramitação.
+  if (out.length > 1 && out.every(t => t.desde)) out.sort((a, b) => a.desde < b.desde ? -1 : 1)
+  return out
 }
 
 // Extrai a lista de movimentos já normalizada e sem repetição interna.
@@ -124,9 +175,9 @@ export async function buscarProcesso(token, numero) {
 // Então: quando alguma chave se chama "movimento", usa TODAS as que se chamam
 // assim e ignora o resto. Só quando nenhuma se identifica é que caímos no palpite
 // pelo tamanho, que é o comportamento antigo.
-export function movimentosDoProcesso(proc) {
+export function movimentosDoProcesso(procOuLista) {
   const achados = []
-  coletaArraysMov(proc, achados, 0, '')
+  for (const p of (Array.isArray(procOuLista) ? procOuLista : [procOuLista])) coletaArraysMov(p, achados, 0, '')
   const nomeados = achados.filter(a => /moviment/i.test(a.chave))
   const escolhidos = nomeados.length
     ? nomeados
@@ -154,20 +205,43 @@ export function movimentosDoProcesso(proc) {
 
 // Atualiza classe/assunto/vara/distribuição na ficha. Nunca bloqueia a
 // importação dos movimentos — é enfeite, o histórico é o que importa.
-export async function aplicarMeta(sb, numero, proc) {
-  const meta = extraiMeta(proc)
+export async function aplicarMeta(sb, numero, procs) {
+  const lista = Array.isArray(procs) ? procs : [procs]
+  const meta = extraiMeta(lista[0])
+  const trilha = tramitacoesDoProcesso(lista)
+  const origem = trilha[0] || null
+  const atual = trilha[trilha.length - 1] || null
   try {
     const patch = {}
     if (meta.classe) patch.classe = String(meta.classe).slice(0, 200)
     if (meta.assunto) patch.assunto = String(meta.assunto).slice(0, 200)
-    if (meta.orgao) { patch.orgao = String(meta.orgao).slice(0, 200); patch.foro = String(meta.orgao).slice(0, 200) }
     if (meta.distribuido) { const d = String(meta.distribuido).slice(0, 10); if (/^\d{4}-\d{2}-\d{2}$/.test(d)) patch.distribuido_em = d }
+
+    if (trilha.length) {
+      patch.tramitacoes = trilha
+      if (atual) { patch.orgao_atual = atual.orgao; patch.grau_atual = atual.grau || null }
+    }
+
+    // A vara de ORIGEM só é escrita quando a ficha ainda não tem nenhuma. Antes
+    // gravávamos a tramitação atual por cima toda vez, o que (a) apagaria a vara
+    // de origem assim que o processo subisse e (b) desfazia a correção manual
+    // feita no ✎ da ficha a cada rodada do robô.
+    const orgOrigem = (origem && origem.orgao) || meta.orgao
+    if (orgOrigem) {
+      const at = await sb.from('processos').select('id,orgao,foro').eq('numero_digitos', numero).limit(1)
+      const linha = at && at.data && at.data[0]
+      if (linha && !String(linha.orgao || '').trim() && !String(linha.foro || '').trim()) {
+        patch.orgao = String(orgOrigem).slice(0, 200)
+        patch.foro = String(orgOrigem).slice(0, 200)
+      }
+    }
+
     if (Object.keys(patch).length) {
       const upd = await sb.from('processos').update(patch).eq('numero_digitos', numero).select('id')
-      if (!upd.error && upd.data && upd.data.length) return { meta, atualizada: true }
+      if (!upd.error && upd.data && upd.data.length) return { meta, trilha, origem, atual, atualizada: true }
     }
   } catch (e) { /* não bloqueia a importação de movimentos */ }
-  return { meta, atualizada: false }
+  return { meta, trilha, origem, atual, atualizada: false }
 }
 
 // Grava os movimentos via robot_add_andamento_fonte — dedup por (data, texto).

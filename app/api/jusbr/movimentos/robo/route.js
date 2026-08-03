@@ -96,8 +96,8 @@ export async function GET(request) {
       continue
     }
 
-    const { movs } = movimentosDoProcesso(busca.proc)
-    await aplicarMeta(sb, numero, busca.proc)
+    const { movs } = movimentosDoProcesso(busca.procs)
+    await aplicarMeta(sb, numero, busca.procs)
     const g = await gravarMovimentos(sb, numero, movs, 'jusbr')
 
     rel.novos += g.inseridos
