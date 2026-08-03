@@ -249,6 +249,24 @@
       </div>
     </div>
   </div>
+  <button class="fab" onclick="abrirEscolhaChat()" aria-label="Falar com o escritório" title="Falar com o escritório">💬<span class="fb hidden" id="fab-badge-home"></span></button>
+</section>
+
+<!-- ==================== ESCOLHER SOBRE QUAL PROCESSO FALAR ====================
+     O acesso é um só por pessoa, mas a conversa é gravada POR PROCESSO — é o que
+     mantém cada assunto no histórico certo. Quem tem mais de um processo precisa
+     dizer de qual se trata antes de escrever; por isso a tela mostra as partes e
+     o número, e não só o número, que ninguém decora. -->
+<section id="escolha" class="hidden">
+  <div class="topo">
+    <button class="ico" onclick="voltarHome()" aria-label="Voltar">‹</button>
+    <div class="tit">Falar com o escritório</div>
+    <button class="ico vazio">⏻</button>
+  </div>
+  <div class="wrap">
+    <p style="font-size:13.5px;margin:0 2px 12px;color:var(--ink)">Sobre qual processo você quer falar?</p>
+    <div id="escolha-lista"></div>
+  </div>
 </section>
 
 <!-- ==================== PROCESSO ==================== -->
@@ -377,7 +395,7 @@ function caiuSessao(d){
 
 /* ---------- telas ---------- */
 function mostra(tela){
-  ['login','home','proc','chat'].forEach(function(t){ $(t).classList.add('hidden'); });
+  ['login','home','escolha','proc','chat'].forEach(function(t){ $(t).classList.add('hidden'); });
   $(tela).classList.remove('hidden');
   window.scrollTo(0,0);
 }
@@ -443,6 +461,14 @@ function renderCards(){
     c.innerHTML='<div class="vazio">Nenhum processo liberado neste acesso ainda.<br>Fale com o escritório.</div>';
     return;
   }
+  /* O 💬 da home fala por TODOS os processos, então o contador soma todos —
+     senão o cliente com três processos veria zero e não saberia que há resposta
+     esperando em um deles. */
+  (function(){
+    var tot=0; PROCESSOS.forEach(function(p){ tot+=(p.nao_lidas||0); });
+    var b=$('fab-badge-home');
+    if(b){ if(tot>0){ b.textContent=tot>99?'99+':String(tot); b.classList.remove('hidden'); } else b.classList.add('hidden'); }
+  })();
   if(PROCESSOS.length>1){
     var h=document.createElement('div');
     h.style.cssText='font-size:13.5px;margin:0 2px 10px;color:var(--ink)';
@@ -464,6 +490,24 @@ function renderCards(){
   });
 }
 function voltarHome(){ ATUAL=null; ATUAL_ID=''; entrarNaHome(); }
+/* Entrada do chat pela home. Com um processo só não faz sentido perguntar nada —
+   vai direto para a conversa; abrirProc(id,true) já abre o processo e o chat. */
+function abrirEscolhaChat(){
+  if(!PROCESSOS.length){ alert('Nenhum processo liberado neste acesso ainda. Fale com o escritório.'); return; }
+  if(PROCESSOS.length===1){ abrirProc(PROCESSOS[0].id,true); return; }
+  mostra('escolha');
+  var c=$('escolha-lista'); c.innerHTML='';
+  PROCESSOS.forEach(function(p){
+    var d=document.createElement('div'); d.className='pcard';
+    d.onclick=(function(id){ return function(){ abrirProc(id,true); }; })(p.id);
+    d.innerHTML =
+      (p.nao_lidas?('<div class="badge">'+p.nao_lidas+'</div>'):'') +
+      '<div class="vs">'+esc(p.cliente||'Você')+' <span class="x">×</span> '+esc(p.oponente||'Parte contrária')+'</div>' +
+      '<div class="num">Processo nº '+esc(p.numero||'—')+'</div>' +
+      (p.titulo?('<div class="tt">'+esc(limpaTitulo(p.titulo))+'</div>'):'');
+    c.appendChild(d);
+  });
+}
 
 /* ---------- ficha do processo (abas) ---------- */
 function abrirProc(id, irParaChat){

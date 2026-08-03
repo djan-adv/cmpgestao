@@ -14639,7 +14639,13 @@ async function monitTrazerAssessoria(id){
       +'<span id="cmp-chat-resize" title="Arraste para aumentar o chat (para cima e para o lado)" style="cursor:nwse-resize;color:#8a8355;padding:2px 4px;user-select:none;touch-action:none;font-size:14px">⤡</span>'
       +'<b style="color:#1b1b1b">💬 Chat da equipe</b>'
       +'<span id="cmp-chat-badge" style="display:none;background:#b5342b;color:#fff;border-radius:10px;font-size:11px;font-weight:700;padding:1px 7px"></span>'
-      +'<button id="cmp-chat-sino" title="Ativar o alarme no celular para as mensagens da equipe" style="margin-left:auto;border:0;background:transparent;font-size:15px;line-height:1;cursor:pointer;padding:2px 4px">🔕</button>'
+      /* Entrada para a lista de conversas com clientes. Fica aqui, na barra que
+         está sempre visível, porque antes só dava para chegar à conversa pela
+         ficha de UM processo — sem lugar nenhum que mostrasse quem está falando
+         com o escritório agora. */
+      +'<button id="cmp-chat-cliconv" title="Conversas com clientes" style="margin-left:auto;border:0;background:transparent;font-size:15px;line-height:1;cursor:pointer;padding:2px 4px;position:relative">📨'
+      +'<span id="cmp-chat-cliconv-b" style="display:none;position:absolute;top:-2px;right:-4px;background:#b5342b;color:#fff;border-radius:9px;font-size:9.5px;font-weight:700;padding:0 4px;line-height:14px"></span></button>'
+      +'<button id="cmp-chat-sino" title="Ativar o alarme no celular para as mensagens da equipe" style="border:0;background:transparent;font-size:15px;line-height:1;cursor:pointer;padding:2px 4px">🔕</button>'
       +'<button id="cmp-chat-cor" title="Escolher minha cor no chat" style="border:0;background:transparent;font-size:15px;line-height:1;cursor:pointer;padding:2px 4px">🎨</button>'
       +'<button id="cmp-chat-min" title="Minimizar" style="border:0;background:transparent;color:#5a5326;font-weight:700;font-size:15px;line-height:1;cursor:pointer;padding:2px 4px">▁</button></div>'
       +'<div id="cmp-chat-corpicker" style="display:none;padding:8px 10px;border-bottom:1px solid #e6dfae;background:#fffdf0"></div>'
@@ -14659,6 +14665,10 @@ async function monitTrazerAssessoria(id){
     d.querySelector('#cmp-chat-bar').onclick=function(){ abrir(); };
     d.querySelector('#cmp-chat-min').onclick=function(ev){ ev.stopPropagation(); alternar(); };
     d.querySelector('#cmp-chat-cor').onclick=function(ev){ ev.stopPropagation(); alternarSeletorCor(); };
+    d.querySelector('#cmp-chat-cliconv').onclick=function(ev){
+      ev.stopPropagation();
+      if(typeof window.appCliListaConversas==='function') window.appCliListaConversas();
+    };
     d.querySelector('#cmp-chat-sino').onclick=function(ev){ ev.stopPropagation(); ativarAlarmeEquipe(); };
     conferirAlarmeEquipe();
     d.querySelector('#cmp-chat-resize').addEventListener('pointerdown', function(ev){ ev.stopPropagation(); iniciarResize(ev); });
@@ -15395,14 +15405,18 @@ function exportarProdutividadeCSV(){
     w.style.cssText='position:fixed;right:16px;bottom:0;width:330px;height:420px;max-height:72vh;max-width:94vw;background:rgba(255,250,205,.97);border:1px solid #e0d9a0;border-radius:12px 12px 0 0;box-shadow:0 -2px 22px rgba(0,0,0,.18);z-index:99990;display:flex;flex-direction:column;overflow:hidden;font-size:13px;color:#1b1b1b';
     w.innerHTML=
       '<div id="cmp-clichat-bar" title="Arraste para mover · duplo clique volta ao lugar" style="background:rgba(250,240,170,.97);border-bottom:1px solid #e6dfae;padding:8px 10px;display:flex;align-items:center;gap:7px;cursor:move;user-select:none;touch-action:none">'+
+        '<button id="cmp-clichat-voltar" title="Voltar à lista de conversas" style="display:none;background:none;border:none;color:#5a5326;cursor:pointer;font-size:16px;line-height:1;padding:0 2px">&#8249;</button>'+
         '<span style="font-size:15px">&#128242;</span><b id="cmp-clichat-tit" style="flex:1;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#1b1b1b">Cliente</b>'+
         '<button id="cmp-clichat-ficha" title="Abrir a ficha do processo" style="background:none;border:none;color:#6b6540;cursor:pointer;font-size:12px;text-decoration:underline">ficha</button>'+
         '<button id="cmp-clichat-x" title="Fechar" style="background:none;border:none;color:#5a5326;cursor:pointer;font-size:16px;line-height:1">&#10005;</button>'+
       '</div>'+
       '<div id="cmp-clichat-info" style="background:#eef4fb;color:#28415e;font-size:11px;padding:4px 10px;border-bottom:1px solid #d8e3f0">Conversa gravada no processo. O cliente vê pelo app.</div>'+
+      '<div id="cmp-clichat-busca" style="display:none;padding:6px 8px;border-bottom:1px solid #e6dfae;background:#fffdf3">'+
+        '<input id="cmp-clichat-busca-txt" placeholder="Buscar cliente ou nº do processo…" style="width:100%;box-sizing:border-box;border:1px solid #ded6a0;border-radius:8px;padding:6px 9px;font-family:inherit;font-size:12px;background:#fff">'+
+      '</div>'+
       '<div id="cmp-clichat-msgs" style="flex:1;overflow-y:auto;padding:10px;background:rgba(255,250,205,.5)"></div>'+
       '<div id="cmp-clichat-anx" style="display:none;background:#fffdf0;border-top:1px solid #e6dfae;padding:6px 9px;font-size:12px;align-items:center;gap:7px"></div>'+
-      '<div style="display:flex;gap:5px;padding:8px;border-top:1px solid #e6dfae;background:#fffdf3;align-items:center">'+
+      '<div id="cmp-clichat-rodape" style="display:flex;gap:5px;padding:8px;border-top:1px solid #e6dfae;background:#fffdf3;align-items:center">'+
         '<input type="file" id="cmp-clichat-file" style="display:none">'+
         '<button id="cmp-clichat-clip" title="Anexar documento, foto, PDF ou áudio" style="width:32px;height:36px;border:none;background:none;font-size:17px;cursor:pointer;color:#8a8355">&#128206;</button>'+
         '<textarea id="cmp-clichat-txt" placeholder="Escreva ao cliente…" style="flex:1;resize:none;height:40px;border:1px solid #ded6a0;border-radius:8px;padding:8px 10px;font-family:inherit;font-size:13px;background:#fff"></textarea>'+
@@ -15411,6 +15425,8 @@ function exportarProdutividadeCSV(){
     document.body.appendChild(w);
     _arrastavel(w, document.getElementById('cmp-clichat-bar'));
     document.getElementById('cmp-clichat-x').onclick=fecharJanela;
+    document.getElementById('cmp-clichat-voltar').onclick=function(){ window.appCliListaConversas(); };
+    document.getElementById('cmp-clichat-busca-txt').addEventListener('input',function(){ pintaLista(); });
     document.getElementById('cmp-clichat-ficha').onclick=function(){ var p=procDe(JAN.procId); if(p&&typeof irParaProcesso==='function') irParaProcesso(p.numero); };
     document.getElementById('cmp-clichat-env').onclick=function(){ enviarDaJanela(); };
     document.getElementById('cmp-clichat-txt').addEventListener('keydown',function(ev){
@@ -15530,6 +15546,110 @@ function exportarProdutividadeCSV(){
       if(!ok){ t.value=texto; ANEXO_JAN=arq; pintarAnexoJan(); }
     });
   }
+  /* ------------------------- lista de conversas (estilo WhatsApp) -------------------------
+     Até aqui só se chegava à conversa pela ficha de UM processo. Quem quisesse
+     saber "quem falou comigo hoje" não tinha para onde olhar, e cliente com mais
+     de um processo tem uma conversa por processo — invisíveis todas, a não ser
+     que se abrisse ficha por ficha. Esta é a tela inicial da janela. */
+  var LISTA=[];
+  function _iniciais(n){
+    var ps=String(n||'').trim().split(/\s+/).filter(Boolean);
+    if(!ps.length) return '?';
+    return (ps[0][0]+(ps.length>1?ps[ps.length-1][0]:'')).toUpperCase();
+  }
+  function _modo(m){
+    JAN.modo=m;
+    var lista=(m==='lista'), g=function(id){ return document.getElementById(id); };
+    var v=g('cmp-clichat-voltar'), f=g('cmp-clichat-ficha'), i=g('cmp-clichat-info'),
+        r=g('cmp-clichat-rodape'), a=g('cmp-clichat-anx'), b=g('cmp-clichat-busca');
+    if(v) v.style.display=lista?'none':'';
+    if(f) f.style.display=lista?'none':'';
+    if(i) i.style.display=lista?'none':'';
+    if(r) r.style.display=lista?'none':'flex';
+    if(b) b.style.display=lista?'':'none';
+    if(a&&lista) a.style.display='none';
+  }
+  window.appCliListaConversas=function(){
+    montarJanela();
+    var w=document.getElementById('cmp-clichat'); if(w) w.style.display='flex';
+    if(JAN.timer){ clearInterval(JAN.timer); JAN.timer=null; }
+    JAN.aberta=false; JAN.procId=null;
+    _modo('lista');
+    document.getElementById('cmp-clichat-tit').textContent='Conversas com clientes';
+    var box=document.getElementById('cmp-clichat-msgs');
+    if(box) box.innerHTML='<div style="text-align:center;color:#6b6540;font-size:11.5px;margin-top:10px">Carregando…</div>';
+    posiciona();
+    carregarLista();
+  };
+  function carregarLista(){
+    var s=S(); if(!s) return;
+    /* Uma varredura das mensagens mais recentes, agrupada por processo. Como vem
+       em ordem decrescente, a PRIMEIRA de cada processo já é a última da conversa.
+       O teto de 800 limita a "conversas recentes" — conversa parada há muito tempo
+       pode ficar de fora, e é por isso que o rodapé avisa. */
+    s.from('portal_chat').select('id,processo_id,autor_tipo,autor_nome,texto,anexo_nome,criado_em,lida_escritorio')
+     .order('id',{ascending:false}).limit(800).then(function(r){
+       if(JAN.modo!=='lista') return;
+       var conv={};
+       (r.data||[]).forEach(function(m){
+         var c=conv[m.processo_id];
+         if(!c) c=conv[m.processo_id]={pid:m.processo_id, ultima:m, naoLidas:0, nomeCli:''};
+         if(m.autor_tipo==='cliente'){
+           if(!c.nomeCli) c.nomeCli=m.autor_nome||'';
+           if(!m.lida_escritorio) c.naoLidas++;
+         }
+       });
+       LISTA=Object.keys(conv).map(function(k){ return conv[k]; })
+              .sort(function(a,b){ return b.ultima.id-a.ultima.id; });
+       pintaLista();
+     });
+  }
+  function pintaLista(){
+    var box=document.getElementById('cmp-clichat-msgs'); if(!box) return;
+    var filtro=((document.getElementById('cmp-clichat-busca-txt')||{}).value||'').toLowerCase().trim();
+    var D=window.__cmpDia||{};
+    var arr=LISTA.filter(function(c){
+      if(!filtro) return true;
+      var p=procDe(c.pid);
+      return ((c.nomeCli||(p&&p.cliente)||'')+' '+((p&&p.numero)||'')).toLowerCase().indexOf(filtro)>=0;
+    });
+    if(!arr.length){
+      box.innerHTML='<div style="text-align:center;color:#6b6540;font-size:11.5px;margin-top:14px">'
+        +(filtro?'Nenhuma conversa com esse nome ou número.':'Nenhuma conversa com cliente ainda.')+'</div>';
+      return;
+    }
+    box.innerHTML=arr.map(function(c){
+      var p=procDe(c.pid);
+      var nome=c.nomeCli||(p&&p.cliente)||'Cliente';
+      var num=(p&&p.numero)?numCurto(p.numero):'—';
+      var dia=D.rotulo?D.rotulo(c.ultima.criado_em):'';
+      var quando=(dia==='hoje')?hhmm(c.ultima.criado_em):dia;
+      var pre=c.ultima.texto||(c.ultima.anexo_nome?('📎 '+c.ultima.anexo_nome):'');
+      var meu=(c.ultima.autor_tipo!=='cliente');
+      return '<div data-pid="'+escx(c.pid)+'" style="display:flex;gap:8px;align-items:center;padding:8px 4px;border-bottom:1px solid #ece5b8;cursor:pointer">'
+        +'<div style="width:31px;height:31px;border-radius:50%;background:#e6dfae;color:#5a5326;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:11.5px;flex:none">'+escx(_iniciais(nome))+'</div>'
+        +'<div style="flex:1;min-width:0">'
+          +'<div style="display:flex;gap:6px;align-items:baseline"><b style="flex:1;min-width:0;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+escx(nome)+'</b>'
+          +'<span style="font-size:10px;color:#8a8355;white-space:nowrap">'+escx(quando)+'</span></div>'
+          +'<div style="font-size:10.5px;color:#8a8355;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Proc '+escx(num)+'</div>'
+          +'<div style="font-size:11.5px;color:#5a5326;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'
+            +(meu?'<span style="color:#8a8355">você: </span>':'')+escx(String(pre).slice(0,80))+'</div>'
+        +'</div>'
+        +(c.naoLidas?('<b style="background:#b5342b;color:#fff;border-radius:10px;min-width:19px;height:19px;line-height:19px;text-align:center;font-size:11px;padding:0 5px;flex:none">'+c.naoLidas+'</b>'):'')
+        +'</div>';
+    }).join('')
+      +'<div style="text-align:center;color:#8a8355;font-size:10px;padding:8px 4px">Conversas recentes. Uma linha por processo — cliente com mais de um processo aparece uma vez em cada.</div>';
+    Array.prototype.forEach.call(box.children,function(ch){
+      var pid=ch.getAttribute&&ch.getAttribute('data-pid');
+      if(pid) ch.onclick=function(){ window.appCliFalarComCliente(pid); };
+    });
+  }
+  function atualizaBadgeConv(n){
+    var b=document.getElementById('cmp-chat-cliconv-b'); if(!b) return;
+    if(n>0){ b.style.display='inline-block'; b.textContent=n>99?'99+':String(n); }
+    else b.style.display='none';
+  }
+
   function abrirJanela(procId){
     if(!procId){ alert('Salve o processo no banco antes (ficha sem cadastro).'); return; }
     var p=procDe(procId);
@@ -15539,6 +15659,7 @@ function exportarProdutividadeCSV(){
     /* JAN.dia zerado junto: a caixa é esvaziada ao abrir, então as faixas de data
        precisam ser desenhadas de novo desde a primeira mensagem. */
     JAN.aberta=true; JAN.procId=procId; JAN.numero=p?p.numero:''; JAN.nome=nome; JAN.ultimo=0; JAN.dia='';
+    _modo('conversa');
     document.getElementById('cmp-clichat').style.display='flex';
     document.getElementById('cmp-clichat-tit').textContent=nome+' · Proc '+numCurto(JAN.numero||'—');
     document.getElementById('cmp-clichat-info').textContent= acessos.length
@@ -15814,24 +15935,35 @@ function exportarProdutividadeCSV(){
       el.style.cssText='position:fixed;right:16px;bottom:10px;width:300px;z-index:99991;display:flex;flex-direction:column;gap:6px';
       document.body.appendChild(el);
     }
+    /* No máximo 4 balões: com o limite antigo de 30 mensagens isso raramente
+       aparecia, mas agora que a varredura lê 200 uma manhã movimentada viraria
+       uma coluna de balões cobrindo a tela. O resto vai para a lista do 📨. */
+    var resto=ids.length-4; if(resto>0) ids=ids.slice(0,4);
     el.innerHTML=ids.map(function(pid){
       var ms=porProc[pid]; var p=procDe(pid);
       var nome=ms[0].autor_nome||'Cliente'; var num=(p&&p.numero)?numCurto(p.numero):'—';
       return '<div data-pid="'+pid+'" style="background:#C9A227;color:#fff;border-radius:10px;padding:9px 12px;cursor:pointer;box-shadow:0 4px 14px rgba(120,90,10,.35);font-size:12.5px;display:flex;align-items:center;gap:7px">'+
         '<span style="font-size:16px">&#128233;</span><span style="flex:1"><b>'+escx(nome)+'</b> · Proc '+escx(num)+'<br><span style="opacity:.9">'+escx(String(ms[0].texto||'').slice(0,60))+'…</span></span>'+
         '<b style="background:#fff;color:#8a6d00;border-radius:10px;min-width:20px;height:20px;line-height:20px;text-align:center;font-size:11.5px">'+ms.length+'</b></div>';
-    }).join('');
+    }).join('')
+      +(resto>0?('<div onclick="appCliListaConversas()" style="background:#8a6d00;color:#fff;border-radius:10px;padding:6px 12px;cursor:pointer;font-size:11.5px;text-align:center">+'+resto+' outra(s) conversa(s) — ver todas</div>'):'');
     Array.prototype.forEach.call(el.children,function(ch){
-      ch.onclick=function(){ var pid=ch.getAttribute('data-pid'); appCliFalarComCliente(pid); };
+      var pid=ch.getAttribute('data-pid'); if(!pid) return;
+      ch.onclick=function(){ appCliFalarComCliente(pid); };
     });
     posiciona();
   }
   function varreAlerta(){
     var s=S(); if(!s) return;
     s.from('portal_chat').select('id,processo_id,autor_nome,texto,criado_em').eq('autor_tipo','cliente')
-      .eq('lida_escritorio',false).order('id',{ascending:false}).limit(30).then(function(r){
+      .eq('lida_escritorio',false).order('id',{ascending:false}).limit(200).then(function(r){
         var porProc={};
         (r.data||[]).forEach(function(m){ (porProc[m.processo_id]=porProc[m.processo_id]||[]).push(m); });
+        /* O contador do botão 📨 conta TUDO que está sem ler, inclusive o do
+           processo aberto — o balão é que não deve reaparecer para quem já está
+           lendo aquela conversa. */
+        atualizaBadgeConv((r.data||[]).length);
+        if(JAN.modo==='lista') carregarLista();
         // não alertar o processo cuja janela está aberta (já está sendo lido)
         if(JAN.aberta&&JAN.procId&&porProc[JAN.procId]) delete porProc[JAN.procId];
         pintaAlerta(porProc);
