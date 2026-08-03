@@ -55,7 +55,10 @@ function papeisDaClasse(classe, assunto, fase) {
 }
 
 /* documentos oficiais (já públicos) — filtro sobre as peças do jus.br */
-const RE_OFICIAL = /(senten|despach|decis|ac[óo]rd|acordo|homolog|ata\s+de\s+audi|alvar|embargos de declara[çc][ãa]o acolhid)/i
+// Confere com o acervo real: pega sentença, despacho, decisão, acórdão, acordo,
+// homologação, ata/termo de audiência (onde o acordo é lavrado) e alvará; deixa de
+// fora petição de terceiro, intimação, mandado, certidão, ato ordinatório, procuração.
+const RE_OFICIAL = /(senten|despach|decis|ac[óo]rd|acordo|homolog|(ata|termo)\s+d[aeo]s?\s+audi|alvar)/i
 
 async function docsDoProcesso(sb, p) {
   const chaves = [p.numero, digitos(p.numero)].filter(Boolean)
