@@ -15841,6 +15841,7 @@ function exportarProdutividadeCSV(){
     // processo de casal/litisconsórcio vem com os autores juntos ("A; B"): cada um
     // precisa do PRÓPRIO login, então o painel pede para escolher de quem é este.
     window.__appcliProc=procId;
+    window.__appcliProcId=procId;   /* a prévia precisa saber de QUAL ficha veio */
     var pv=procDe(procId);
     var autores=String((pv&&pv.cliente)||'').split(';').map(function(s){return s.trim();}).filter(function(s){return s.length>2;});
     var inN=document.getElementById('appcli-nome');
@@ -15951,24 +15952,40 @@ function exportarProdutividadeCSV(){
     var nome=(n&&n.value||'').trim(), email=(e&&e.value||'').trim();
     if(nome.length<3){ el.innerHTML=''; return; }
     el.innerHTML='<span style="color:#5f6b7a">Conferindo o que este login vai mostrar…</span>';
-    admin({acao:'previa',nome:nome,email:email}).then(function(d){
+    admin({acao:'previa',nome:nome,email:email,processo_id:(window.__appcliProcId||'')}).then(function(d){
+      /* Erro de consulta agora aparece como erro. Antes caia no mesmo aviso de
+         "nenhum processo casou", que mandava conferir o cadastro e escondia a
+         falha real. */
+      if(d&&d.erro){ el.innerHTML='<span style="color:#b5342b">Nao consegui conferir agora: '+escx(d.erro)+'</span>'; return; }
       if(!(d&&d.ok)){ el.innerHTML=''; return; }
       var ps=d.processos||[];
+      var esteId=(d.este_processo&&d.este_processo.id)||'';
+      var parec=d.parecidos||[];
+      /* Sugestao de cadastro divergente: nao entra sozinha na lista porque incluir
+         por semelhanca mostraria a um cliente o processo de um homonimo. */
+      var aviso = parec.length
+        ? '<div style="margin-top:6px;background:#fff8e6;border:1px solid #e8dcbb;border-radius:7px;padding:6px 9px;font-size:11px;color:#8a6d1a">'
+          +'⚠ Há '+parec.length+' processo'+(parec.length>1?'s':'')+' com nome PARECIDO, que não entra'+(parec.length>1?'m':'')+' automaticamente porque o cadastro está escrito diferente:'
+          +parec.slice(0,4).map(function(p){ return '<div style="padding:1px 0">• '+escx(p.numero||'')+' — "'+escx(p.cliente_nome||'')+'"</div>'; }).join('')
+          +'<div style="margin-top:3px">Para incluir, acerte o nome no cadastro do processo.</div></div>'
+        : '';
       if(!ps.length){
-        el.innerHTML='<span style="color:#8a6d1a">⚠ Nenhum processo em andamento casou com este nome — o cliente só verá o processo desta ficha. Confira se o nome está igual ao do cadastro.</span>';
+        el.innerHTML='<span style="color:#8a6d1a">⚠ Não consegui casar este nome com nenhum processo em andamento. Confira se está igual ao cadastro.</span>'+aviso;
         return;
       }
       var lista=ps.slice(0,8).map(function(p){
         var outro = portalNomeDiferente(p.cliente_nome, nome);
+        var eEste = (p.id===esteId);
         return '<div style="padding:2px 0'+(outro?';color:#b5342b':'')+'">• '+escx(p.numero||'')+
+               (eEste?' <b style="color:#0F6E56">(este processo)</b>':'')+
                (outro?(' <b>— cadastrado como “'+escx(p.cliente_nome||'')+'”</b>'):'')+'</div>';
       }).join('');
       el.innerHTML='<div style="background:#f4f9ff;border:1px solid #cfe0f2;border-radius:8px;padding:8px 10px">'+
         '<b style="color:#185FA5">Este login vai mostrar '+ps.length+' processo'+(ps.length>1?'s':'')+'</b>'+
         (d.ocultos?(' <span style="color:#5f6b7a">(+'+d.ocultos+' encerrado'+(d.ocultos>1?'s':'')+', que não aparecem)</span>'):'')+
         '<div style="margin-top:4px;font-size:11.5px">'+lista+(ps.length>8?('<div style="color:#5f6b7a">… e mais '+(ps.length-8)+'</div>'):'')+'</div>'+
-        '<div style="font-size:11px;color:#5f6b7a;margin-top:5px">Confira antes de enviar: em vermelho, processos cujo titular está cadastrado com nome diferente.</div></div>';
-    }).catch(function(){ el.innerHTML=''; });
+        '<div style="font-size:11px;color:#5f6b7a;margin-top:5px">Confira antes de enviar: em vermelho, processos cujo titular está cadastrado com nome diferente.</div></div>'+aviso;
+    }).catch(function(er){ el.innerHTML='<span style="color:#b5342b">Não consegui conferir agora: '+escx((er&&er.message)||er)+'</span>'; });
   }
   // compara ignorando acento/caixa e aceitando o autor dentro de "A; B"
   function portalNomeDiferente(clienteNome, nome){
