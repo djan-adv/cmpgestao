@@ -149,7 +149,7 @@ export async function POST(request) {
       } catch (e) {}
     }
 
-    const { data: existente } = await sb.from('portal_acessos').select('*').ilike('email', email).maybeSingle()
+    const { data: existente } = await sb.from('portal_acessos').select('*').eq('email', email).maybeSingle()
     let acessoId, senha = null, criado = false
     if (existente) {
       if (existente.escritorio_id !== quem.escritorio_id) {

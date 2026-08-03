@@ -600,7 +600,7 @@ function ativarAvisos(){
   }
   Notification.requestPermission().then(function(perm){
     if(perm!=='granted'){ toast('Sem permissão de notificação — ative nas configurações do navegador.'); return; }
-    navigator.serviceWorker.register('/portal-sw.js');
+    navigator.serviceWorker.register('/portal-sw.js',{scope:'/portal.html'});
     navigator.serviceWorker.ready.then(function(reg){
       fetch('/api/portal?push=key').then(function(r){return r.json();}).then(function(d){
         if(!d||!d.ok){ toast('Avisos indisponíveis no momento.'); return; }
@@ -616,8 +616,9 @@ function ativarAvisos(){
 
 /* ---------- arranque ---------- */
 (function(){
-  // service worker (instalabilidade + push)
-  if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('/portal-sw.js'); }catch(e){} }
+  // service worker (instalabilidade + push) — escopo restrito ao portal para
+  // NUNCA substituir o service worker do chat da equipe (escopo /) no mesmo navegador
+  if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('/portal-sw.js',{scope:'/portal.html'}); }catch(e){} }
   if(ehIos() && !emApp()) mostrarBotaoInstalar();   // iPhone: sempre com passo a passo
   if(TOKEN){ entrarNaHome(); } else { mostra('login'); }
 })();

@@ -163,7 +163,7 @@ export async function POST(request) {
     if (!podeTentar(ip + '|' + email)) {
       return Response.json({ erro: 'Muitas tentativas. Aguarde 10 minutos e tente de novo.' }, { status: 429 })
     }
-    const { data: a } = await sb.from('portal_acessos').select('*').ilike('email', email).maybeSingle()
+    const { data: a } = await sb.from('portal_acessos').select('*').eq('email', email).maybeSingle()
     if (!a || !confereSenha(senha, a.senha_hash)) {
       marcaTentativa(ip + '|' + email)
       return Response.json({ erro: 'E-mail ou senha incorretos. Confira os dados que o escritório enviou por e-mail.' }, { status: 401 })
