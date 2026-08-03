@@ -14697,6 +14697,20 @@ async function monitTrazerAssessoria(id){
     }catch(e){}
     pintar();
   }
+  /* Rola a lista até a mensagem respondida e a destaca por um instante. Sem o
+     destaque, a rolagem sozinha deixa o leitor sem saber qual das mensagens
+     visíveis é a original. */
+  window._chatIrParaMsg=function(id){
+    var el=document.getElementById('cmp-chat-msg-'+id);
+    var cont=document.getElementById('cmp-chat-msgs');
+    if(!el||!cont) return;
+    cont.scrollTop=Math.max(0, el.offsetTop-cont.offsetTop-20);
+    var bolha=el.querySelector('.cmp-chat-bolha')||el;
+    var antes={bg:bolha.style.background, sh:bolha.style.boxShadow};
+    bolha.style.background='#ffe89a';
+    bolha.style.boxShadow='0 0 0 3px rgba(201,162,39,.55)';
+    setTimeout(function(){ bolha.style.background=antes.bg; bolha.style.boxShadow=antes.sh; }, 1500);
+  };
   window._chatAbrirProc=function(id){
     var lst=((typeof DADOS!=='undefined'&&DADOS.processos)||[]);
     var i=lst.findIndex(function(x){return x._id===id;});
@@ -14718,7 +14732,10 @@ async function monitTrazerAssessoria(id){
         var orig=msgs.find(function(x){return x.id===m.respondendo_a;});
         var origAutor=orig?(orig.autor_id===eu?'você':(nomeDe(orig.autor_id)||orig.autor_nome||'colega')):'';
         var origTxt=orig?orig.texto:'mensagem anterior';
-        citada='<div style="border-left:3px solid #c9c08a;padding-left:7px;margin-bottom:4px;color:#7a7550;font-size:12px">'+(origAutor?('<b>'+h(origAutor)+'</b><br>'):'')+h(String(origTxt).slice(0,140))+'</div>';
+        /* Clicar na citação leva à mensagem original. Só vira link quando ela
+           está na lista carregada — senão o clique não teria para onde ir. */
+        var citClic=orig?(' onclick="_chatIrParaMsg('+orig.id+')" title="Ir para a mensagem respondida" style="cursor:pointer;'):' style="';
+        citada='<div'+citClic+'border-left:3px solid #c9c08a;padding-left:7px;margin-bottom:4px;color:#7a7550;font-size:12px">'+(origAutor?('<b>'+h(origAutor)+'</b><br>'):'')+h(String(origTxt).slice(0,140))+'</div>';
       }
       var chipProc='';
       if(m.processo_id){
@@ -14736,8 +14753,8 @@ async function monitTrazerAssessoria(id){
           ?('<div style="margin-top:4px"><img src="'+srcAnexo+'" style="max-width:220px;max-height:220px;border-radius:6px;cursor:pointer;display:block" onclick="window.open(this.src,\'_blank\')" title="Abrir em tamanho maior"></div>')
           :('<div style="margin-top:4px"><a href="'+srcAnexo+'" target="_blank" style="display:inline-flex;align-items:center;gap:5px;background:#fff3b0;border:1px solid #d9b64c;border-radius:7px;padding:4px 9px;color:#5a4a00;text-decoration:none;font-size:12px">📎 '+h(m.anexo_nome||'anexo')+'</a></div>');
       }
-      return '<div style="margin:0 0 7px;'+(meu?'text-align:right':'')+'">'
-        +'<div style="display:inline-block;max-width:88%;text-align:left;background:'+(meu?'#fff6c9':'#fffdf3')+';border:1px solid '+(priv?'#d9b64c':'#e6dfae')+';border-left:4px solid '+corAutor+';border-radius:9px;padding:6px 9px">'
+      return '<div id="cmp-chat-msg-'+m.id+'" style="margin:0 0 7px;'+(meu?'text-align:right':'')+'">'
+        +'<div class="cmp-chat-bolha" style="display:inline-block;max-width:88%;text-align:left;background:'+(meu?'#fff6c9':'#fffdf3')+';border:1px solid '+(priv?'#d9b64c':'#e6dfae')+';border-left:4px solid '+corAutor+';border-radius:9px;padding:6px 9px">'
         +'<div style="font-size:11px;color:'+corAutor+';font-weight:700">'+h(quem)+h(alvo)+' · <span style="color:#6b6540;font-weight:400">'+hora(m.criado_em)+(priv?' 🔒':'')+'</span> <a onclick="__cmpChat.responderA('+m.id+')" title="Responder" style="cursor:pointer;color:#8a8355;font-weight:400;margin-left:4px">↩</a></div>'
         +citada
         +'<div style="white-space:pre-wrap;word-break:break-word">'+h(m.texto)+'</div>'
