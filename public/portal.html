@@ -104,6 +104,13 @@
         padding:9px 16px;border-radius:22px;font-size:13.5px;font-weight:600;margin:3px 4px}
   .rbtn.dourado{background:var(--gold)}
   .rbtn.claro{background:#fff;color:var(--navy);border:1.5px solid var(--navy)}
+  /* Instagram: o ícone da rede, estreito — o @ fica ao lado em corpo menor, porque
+     são duas contas diferentes e só o desenho não distinguiria uma da outra */
+  .rlinha{display:flex;flex-wrap:wrap;gap:7px;justify-content:center;align-items:center}
+  .rig{display:inline-flex;align-items:center;gap:5px;background:var(--navy);color:#fff;
+       text-decoration:none;padding:7px 12px 7px 9px;border-radius:22px;font-size:12.5px;font-weight:600}
+  .rig svg{width:17px;height:17px;flex:none}
+  .rig:active{background:var(--navy2)}
   #btn-instalar{display:none}
 
   /* ---------- ficha do processo ---------- */
@@ -212,10 +219,12 @@
     </div>
     <div class="rodape">
       <div class="t">Acompanhe o escritório:</div>
-      <a class="rbtn" href="https://instagram.com/cmpadvs" target="_blank" rel="noopener">Instagram @cmpadvs</a>
-      <a class="rbtn" href="https://instagram.com/djan.adv" target="_blank" rel="noopener">Instagram @djan.adv</a>
-      <a class="rbtn dourado" href="/areas-atuacao.html" target="_blank">Áreas de atuação</a>
-      <br><button class="rbtn claro" id="btn-instalar" onclick="instalar()">📲 Instalar o aplicativo</button>
+      <div class="rlinha">
+        <a class="rig" href="https://instagram.com/cmpadvs" target="_blank" rel="noopener" title="Instagram do escritório" aria-label="Instagram @cmpadvs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="5.5"/><circle cx="12" cy="12" r="4.2"/><circle cx="17.6" cy="6.4" r="1.15" fill="currentColor" stroke="none"/></svg>@cmpadvs</a>
+        <a class="rig" href="https://instagram.com/djan.adv" target="_blank" rel="noopener" title="Instagram do Dr. Djan" aria-label="Instagram @djan.adv"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="5.5"/><circle cx="12" cy="12" r="4.2"/><circle cx="17.6" cy="6.4" r="1.15" fill="currentColor" stroke="none"/></svg>@djan.adv</a>
+        <a class="rbtn dourado" href="/areas-atuacao.html" target="_blank">Áreas de atuação</a>
+      </div>
+      <div style="margin-top:7px"><button class="rbtn claro" id="btn-instalar" onclick="instalar()">📲 Instalar o aplicativo</button></div>
     </div>
   </div>
 </section>
@@ -234,10 +243,12 @@
     <div id="cards"></div>
     <div class="rodape">
       <div class="t">Acompanhe o escritório:</div>
-      <a class="rbtn" href="https://instagram.com/cmpadvs" target="_blank" rel="noopener">Instagram @cmpadvs</a>
-      <a class="rbtn" href="https://instagram.com/djan.adv" target="_blank" rel="noopener">Instagram @djan.adv</a>
-      <a class="rbtn dourado" href="/areas-atuacao.html" target="_blank">Áreas de atuação</a>
-      <br><button class="rbtn claro" id="btn-instalar2" style="display:none" onclick="instalar()">📲 Instalar o aplicativo</button>
+      <div class="rlinha">
+        <a class="rig" href="https://instagram.com/cmpadvs" target="_blank" rel="noopener" title="Instagram do escritório" aria-label="Instagram @cmpadvs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="5.5"/><circle cx="12" cy="12" r="4.2"/><circle cx="17.6" cy="6.4" r="1.15" fill="currentColor" stroke="none"/></svg>@cmpadvs</a>
+        <a class="rig" href="https://instagram.com/djan.adv" target="_blank" rel="noopener" title="Instagram do Dr. Djan" aria-label="Instagram @djan.adv"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="5.5"/><circle cx="12" cy="12" r="4.2"/><circle cx="17.6" cy="6.4" r="1.15" fill="currentColor" stroke="none"/></svg>@djan.adv</a>
+        <a class="rbtn dourado" href="/areas-atuacao.html" target="_blank">Áreas de atuação</a>
+      </div>
+      <div style="margin-top:7px"><button class="rbtn claro" id="btn-instalar2" style="display:none" onclick="instalar()">📲 Instalar o aplicativo</button></div>
       <div class="t" style="margin-top:10px" id="push-linha"><button class="rbtn claro" onclick="ativarAvisos()">🔔 Ativar avisos no celular</button></div>
     </div>
   </div>
