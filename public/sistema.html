@@ -9339,6 +9339,106 @@ async function garanteTarefaAta(p,isoAudiencia){
     console.log('CMPGestao: tarefa automática de ATA criada para '+p.numero+' em '+alvo+'.');
   }catch(e){ console.warn('garanteTarefaAta:',e); }
 }
+/* ============================================================================
+   ATIVIDADES PRÉ-DEFINIDAS DA AUDIÊNCIA (como era no Astrea)
+   Marcar audiência não é um compromisso só — puxa um pacote de trabalho. Toda vez
+   que uma audiência é agendada (pelo robô do histórico ou pelo botão), o sistema
+   passa a criar de uma vez:
+     1. a própria audiência (evento da agenda — feito por quem chama)
+     2. PREPARAR: avisar cliente e testemunhas, conferir documentos (D-7)
+     3. AVISAR O CLIENTE: e-mail + chat no app (no dia)
+     4. LEMBRETE da véspera (D-1)
+     5. buscar a ATA no dia seguinte (D+1)
+   Cada uma só é criada se ainda não existir — a conferência é feita no banco, não
+   só na memória, porque no boot o Kanban pode não ter carregado ainda.
+   ============================================================================ */
+function _diasAntesISO(iso, dias){
+  try{ var d=new Date(iso+'T12:00:00'); d.setDate(d.getDate()-dias); return d.toISOString().slice(0,10); }catch(e){ return iso; }
+}
+function _naoAntesDeHoje(iso){
+  var hoje=new Date().toISOString().slice(0,10);
+  return (iso<hoje)?hoje:iso;
+}
+/* cria uma tarefa do Kanban se ainda não houver outra igual (mesmo processo, mesma
+   data, título parecido). `marca` é o trecho usado para reconhecer a repetida. */
+async function garanteTarefaProc(p, titulo, dataISO, tipoForm, marca, resp){
+  try{
+    if(!p||!dataISO) return false;
+    window.__tarefasFeitas=window.__tarefasFeitas||{};
+    var chave=String(p.numero||'')+'|'+dataISO+'|'+marca;
+    if(window.__tarefasFeitas[chave]) return false; window.__tarefasFeitas[chave]=1;
+    if(!KAN) initKanban();
+    var rx=new RegExp(marca.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i');
+    var ja=(KAN||[]).some(function(t){ return t && String(t.numero||'')===String(p.numero||'') && rx.test(t.titulo||'') && (t.data===dataISO||t.prazo===dataISO); });
+    if(ja) return false;
+    try{
+      var sbT=window.__sb;
+      if(sbT){ var q=await sbT.from('kanban_tarefas').select('id').eq('numero',p.numero).eq('data',dataISO).ilike('titulo','%'+marca+'%').limit(1);
+        if(q&&q.data&&q.data.length) return false; }
+    }catch(eQ){}
+    var nova={id:5000+(KAN?KAN.length:0),titulo:titulo,cliente:(p.cliente||p.numero),numero:p.numero,
+              col:'distribuir',resp:(resp||''),data:dataISO,prazo:dataISO,tipoForm:(tipoForm||'tarefa')};
+    KAN.push(nova); persisteKanban(nova);
+    return true;
+  }catch(e){ console.warn('garanteTarefaProc:',e); return false; }
+}
+/* manda o aviso da audiência pelo CHAT DO APP — só se o cliente tiver acesso.
+   Devolve {enviado, motivo} para o chamador contar o que foi feito. */
+async function avisoAudienciaApp(p, iso, hora, tipo){
+  try{
+    if(!p||!p._id) return {enviado:false, motivo:'sem_id'};
+    var s=window.__sb; if(!s) return {enviado:false, motivo:'sem_sessao'};
+    var ses=await s.auth.getSession();
+    var tok=ses&&ses.data&&ses.data.session&&ses.data.session.access_token; if(!tok) return {enviado:false,motivo:'sem_sessao'};
+    var r=await fetch('/api/portal/admin',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},
+      body:JSON.stringify({acao:'avisar_audiencia_app',processo_id:p._id,data:iso,hora:hora||'',tipo:tipo||'designacao'})});
+    var d=await r.json();
+    return {enviado:!!(d&&d.enviado), motivo:(d&&d.motivo)||'', clientes:(d&&d.clientes)||[]};
+  }catch(e){ return {enviado:false, motivo:'erro'}; }
+}
+/* o pacote inteiro. Devolve um resumo em texto do que criou, para o alert do botão. */
+async function criarAtividadesAudiencia(p, iso, hora, opts){
+  opts=opts||{};
+  var feitas=[], horaTxt=(hora&&hora!=='Dia todo')?(' às '+hora):'';
+  var dbr=String(iso).split('-').reverse().join('/');
+  var tipoAud=(typeof _tipoAudienciaTexto==='function')?_tipoAudienciaTexto(p,iso):'';
+  var testemunhas=(tipoAud==='instrucao')?' (levar testemunhas)':(tipoAud==='conciliacao'?' (sem testemunhas)':'');
+
+  // 1) a audiência propriamente dita — o compromisso do dia, na lista de tarefas
+  if(await garanteTarefaProc(p,'AUDIÊNCIA '+dbr+horaTxt+' — comparecer'+testemunhas,iso,'audiencia','AUDIÊNCIA '+dbr,'Djan'))
+    feitas.push('audiência no dia '+dbr);
+
+  // 2) preparação, uma semana antes (nunca antes de hoje)
+  var prep=_naoAntesDeHoje(_diasAntesISO(iso,7));
+  if(await garanteTarefaProc(p,'Preparar audiência de '+dbr+' — falar com cliente e testemunhas, conferir documentos',prep,'tarefa','Preparar audiência de '+dbr))
+    feitas.push('preparação em '+prep.split('-').reverse().join('/'));
+
+  // 3) aviso ao cliente (o e-mail sai sozinho abaixo; a tarefa fica para conferir)
+  if(await garanteTarefaProc(p,'Avisar cliente da audiência de '+dbr+' — conferir se recebeu e confirmou',_naoAntesDeHoje(_diasAntesISO(iso,7)),'tarefa','Avisar cliente da audiência de '+dbr))
+    feitas.push('aviso ao cliente');
+
+  // 4) lembrete da véspera
+  var vesp=_naoAntesDeHoje(_diasAntesISO(iso,1));
+  if(await garanteTarefaProc(p,'LEMBRETE: audiência amanhã ('+dbr+horaTxt+') — confirmar cliente e testemunhas',vesp,'tarefa','LEMBRETE: audiência amanhã ('+dbr))
+    feitas.push('lembrete da véspera');
+
+  // 5) buscar a ATA no dia seguinte (trabalhista já tinha; agora vale para todos)
+  var ata=_diaSeguinteISO(iso);
+  if(await garanteTarefaProc(p,'Buscar e ler a ATA da audiência (prazos e acordos) — enviar ata/resumo ao cliente',ata,'prazo','ata da audi'))
+    feitas.push('buscar a ATA em '+ata.split('-').reverse().join('/'));
+
+  var resumo=feitas.length?('\n+ atividades criadas: '+feitas.join('; ')+'.'):'';
+
+  // aviso ao cliente: e-mail de sempre + chat no app (quando ele tem acesso)
+  if(opts.avisarCliente!==false){
+    try{ await avisoAudienciaCliente(p, iso, (hora||'09:00'), 'designacao'); }catch(e){}
+    var app=await avisoAudienciaApp(p, iso, hora||'', 'designacao');
+    if(app.enviado) resumo+='\n+ aviso enviado no app do cliente ('+(app.clientes||[]).join(', ')+').';
+    else if(app.motivo==='sem_acesso') resumo+='\n• o cliente ainda NÃO tem acesso ao app — use "📲 Dar acesso ao app" na ficha.';
+  }
+  return resumo;
+}
+
 /* AGENDAMENTO AUTOMÁTICO: audiência futura encontrada no histórico vai DIRETO
    para a agenda, marcada como "agendada automaticamente pelo sistema".
    ANTI-DUPLICATA: se o processo JÁ tem evento naquela data, NADA é inserido —
@@ -9377,9 +9477,10 @@ async function varreAudienciasAuto(){
       if(w&&!w.error){
         criadas++;
         window.__AGDB.push({id:w.data&&w.data.id,data:c.a.iso,hora:(c.a.hora||'09:00'),tipo:'az',tt:tit,resp:'Djan',org:'auto-sistema',p:{numero:c.p.numero,cliente:c.p.cliente||''}});
-        garanteTarefaAta(c.p,c.a.iso);
+        criarAtividadesAudiencia(c.p, c.a.iso, (c.a.hora||''), {avisarCliente:false});
         /* aviso ao cliente NA DESIGNAÇÃO (quando entra na nossa agenda) */
         try{ await avisoAudienciaCliente(c.p, c.a.iso, (c.a.hora||'09:00'), 'designacao'); }catch(eAv){}
+        try{ await avisoAudienciaApp(c.p, c.a.iso, (c.a.hora||''), 'designacao'); }catch(eApp){}
       }
     }
     if(criadas){
@@ -9485,7 +9586,10 @@ async function varreAvisosVespera(){
     var evs=(window.__AGDB||[]).filter(function(e){ return e && e.data===amanha && (e.tipo==='az'||/audi[êe]ncia/i.test(e.tt||'')); });
     for(var i=0;i<evs.length;i++){ var e=evs[i]; var dig=String((e.p&&e.p.numero)||'').replace(/\D/g,''); if(!dig) continue;
       var p=(DADOS.processos||[]).find(function(x){ return String(x.numero||'').replace(/\D/g,'')===dig; });
-      if(p) await avisoAudienciaCliente(p, e.data, e.hora, 'vespera');
+      if(p){
+        await avisoAudienciaCliente(p, e.data, e.hora, 'vespera');
+        try{ await avisoAudienciaApp(p, e.data, e.hora, 'vespera'); }catch(eA){}   // e no app, se ele tiver
+      }
     }
   }catch(e){ console.warn('varreAvisosVespera:',e); }
 }
@@ -9514,11 +9618,11 @@ async function gravarAudienciaSug(iso,hora,tipo){
     if(w.error){ alert('Erro ao gravar: '+w.error.message); return; }
     window.__AGDB=window.__AGDB||[]; window.__AGDB.push({id:w.data&&w.data.id,data:iso,hora:(hora||'09:00'),tipo:'az',tt:tit,resp:'Djan',p:{numero:atual.numero,cliente:atual.cliente||''}});
     AGENDA=null; try{ initAgenda(); }catch(e){}
-    var avisoAta='';
-    if(_ehTrabalhista(atual.numero)){ garanteTarefaAta(atual,iso); avisoAta='\n+ tarefa automática criada: buscar a ATA no dia seguinte (trabalhista).'; }
-    var avC=''; try{ var em=_emailClienteDoProc(atual); if(em){ await avisoAudienciaCliente(atual, iso, (hora||'09:00'), 'designacao'); avC='\n+ aviso enviado ao cliente ('+em+').'; } }catch(e){}
+    var avC=''; try{ var em=_emailClienteDoProc(atual); if(em) avC='\n+ aviso enviado por e-mail ao cliente ('+em+').'; }catch(e){}
+    var resumo=await criarAtividadesAudiencia(atual, iso, (hora||''));
     renderAudienciaSugestao();
-    alert('✓ Audiência gravada na agenda: '+iso.split('-').reverse().join('/')+(hora?(' às '+hora):'')+'.'+avisoAta+avC);
+    try{ if(typeof renderKanban==='function') renderKanban(); }catch(e){}
+    alert('✓ Audiência gravada na agenda: '+iso.split('-').reverse().join('/')+(hora?(' às '+hora):'')+'.'+resumo+avC);
   }catch(e){ alert('Erro: '+(e&&e.message||e)); }
 }
 function editarObservacoes(){
@@ -14532,7 +14636,8 @@ async function monitTrazerAssessoria(id){
       +'<span id="cmp-chat-resize" title="Arraste para aumentar o chat (para cima e para o lado)" style="cursor:nwse-resize;color:#8a8355;padding:2px 4px;user-select:none;touch-action:none;font-size:14px">⤡</span>'
       +'<b style="color:#1b1b1b">💬 Chat da equipe</b>'
       +'<span id="cmp-chat-badge" style="display:none;background:#b5342b;color:#fff;border-radius:10px;font-size:11px;font-weight:700;padding:1px 7px"></span>'
-      +'<button id="cmp-chat-cor" title="Escolher minha cor no chat" style="margin-left:auto;border:0;background:transparent;font-size:15px;line-height:1;cursor:pointer;padding:2px 4px">🎨</button>'
+      +'<button id="cmp-chat-sino" title="Ativar o alarme no celular para as mensagens da equipe" style="margin-left:auto;border:0;background:transparent;font-size:15px;line-height:1;cursor:pointer;padding:2px 4px">🔕</button>'
+      +'<button id="cmp-chat-cor" title="Escolher minha cor no chat" style="border:0;background:transparent;font-size:15px;line-height:1;cursor:pointer;padding:2px 4px">🎨</button>'
       +'<button id="cmp-chat-min" title="Minimizar" style="border:0;background:transparent;color:#5a5326;font-weight:700;font-size:15px;line-height:1;cursor:pointer;padding:2px 4px">▁</button></div>'
       +'<div id="cmp-chat-corpicker" style="display:none;padding:8px 10px;border-bottom:1px solid #e6dfae;background:#fffdf0"></div>'
       +'<div id="cmp-chat-corpo" style="display:none;background:rgba(255,250,205,.94);border:1px solid #e0d9a0;border-top:none;backdrop-filter:blur(2px);box-shadow:0 -2px 14px rgba(0,0,0,.10)">'
@@ -14551,6 +14656,8 @@ async function monitTrazerAssessoria(id){
     d.querySelector('#cmp-chat-bar').onclick=function(){ abrir(); };
     d.querySelector('#cmp-chat-min').onclick=function(ev){ ev.stopPropagation(); alternar(); };
     d.querySelector('#cmp-chat-cor').onclick=function(ev){ ev.stopPropagation(); alternarSeletorCor(); };
+    d.querySelector('#cmp-chat-sino').onclick=function(ev){ ev.stopPropagation(); ativarAlarmeEquipe(); };
+    conferirAlarmeEquipe();
     d.querySelector('#cmp-chat-resize').addEventListener('pointerdown', function(ev){ ev.stopPropagation(); iniciarResize(ev); });
     d.querySelector('#cmp-chat-env').onclick=enviar;
     d.querySelector('#cmp-chat-print').onclick=function(){ document.getElementById('cmp-chat-printfile').click(); };
@@ -14846,6 +14953,70 @@ async function monitTrazerAssessoria(id){
       (r.data||[]).forEach(chegou);
     }catch(e){}
   }
+  /* ---------- alarme (push) da equipe ----------
+     O alarme só toca em aparelho INSCRITO (chat_push_subs). Até aqui a inscrição só
+     existia no /chat do celular, então quem usava o sistema no computador nunca
+     recebia — e, sem ninguém inscrito, mensagem nenhuma alarmava. Este sino inscreve
+     o aparelho onde ele for tocado (computador ou celular). */
+  function _sino(){ return document.getElementById('cmp-chat-sino'); }
+  function _pintarSino(estado){
+    var b=_sino(); if(!b) return;
+    var m={ativado:['🔔','Alarme ligado neste aparelho — toque para desligar'],
+           desativado:['🔕','ATIVAR o alarme no celular/computador para as mensagens da equipe'],
+           indisponivel:['🔕','Este navegador não permite alarme'],
+           trabalhando:['⏳','Ativando…']}[estado]||['🔕',''];
+    b.textContent=m[0]; b.title=m[1]; b.dataset.estado=estado;
+  }
+  function _b64u8(s){ var p='='.repeat((4-s.length%4)%4); var b=(s+p).replace(/-/g,'+').replace(/_/g,'/');
+    var raw=atob(b), arr=new Uint8Array(raw.length); for(var i=0;i<raw.length;i++)arr[i]=raw.charCodeAt(i); return arr; }
+  async function conferirAlarmeEquipe(){
+    if(!('serviceWorker' in navigator)||!('PushManager' in window)){ _pintarSino('indisponivel'); return; }
+    if(Notification.permission==='denied'){ _pintarSino('indisponivel'); return; }
+    try{
+      var reg=await navigator.serviceWorker.register('/chat-sw.js');
+      var sub=await reg.pushManager.getSubscription();
+      _pintarSino(sub?'ativado':'desativado');
+    }catch(e){ _pintarSino('desativado'); }
+  }
+  async function ativarAlarmeEquipe(){
+    var b=_sino(); if(!b) return;
+    if(b.dataset.estado==='indisponivel'){ alert('Este navegador não permite alarme. No iPhone, adicione o sistema à Tela de Início antes.'); return; }
+    if(b.dataset.estado==='ativado'){ await desligarAlarmeEquipe(); return; }
+    _pintarSino('trabalhando');
+    try{
+      var perm=await Notification.requestPermission();
+      if(perm!=='granted'){ _pintarSino('desativado'); alert('Sem permissão de notificação — libere nas configurações do navegador para este site.'); return; }
+      var r=await fetch('/api/chat/push',{cache:'no-store'}); var k=await r.json();
+      if(!(k&&k.ok&&k.publicKey)) throw new Error('servidor sem chave de alarme');
+      var reg=await navigator.serviceWorker.register('/chat-sw.js');
+      await navigator.serviceWorker.ready;
+      var sub=await reg.pushManager.getSubscription();
+      if(!sub) sub=await reg.pushManager.subscribe({userVisibleOnly:true, applicationServerKey:_b64u8(k.publicKey)});
+      var s=await window.__sb.auth.getSession();
+      var tok=s&&s.data&&s.data.session&&s.data.session.access_token;
+      var res=await fetch('/api/chat/push',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},
+        body:JSON.stringify({acao:'subscribe', subscription:sub.toJSON()})});
+      var j=await res.json();
+      if(!(j&&j.ok)) throw new Error((j&&j.erro)||'falha ao gravar a inscrição');
+      _pintarSino('ativado');
+      alert('🔔 Alarme ligado neste aparelho. Você passa a receber as mensagens da equipe mesmo com o sistema fechado.');
+    }catch(e){ _pintarSino('desativado'); alert('Não consegui ligar o alarme: '+((e&&e.message)||e)); }
+  }
+  async function desligarAlarmeEquipe(){
+    try{
+      var reg=await navigator.serviceWorker.getRegistration('/chat-sw.js');
+      var sub=reg&&await reg.pushManager.getSubscription();
+      if(sub){
+        var s=await window.__sb.auth.getSession();
+        var tok=s&&s.data&&s.data.session&&s.data.session.access_token;
+        await fetch('/api/chat/push',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},
+          body:JSON.stringify({acao:'unsubscribe', endpoint:sub.endpoint})});
+        await sub.unsubscribe();
+      }
+    }catch(e){}
+    _pintarSino('desativado');
+  }
+
   async function _notificarPush(texto, paraId){
     /* dispara e esquece — alarme (push) pro celular; nunca deve travar o envio */
     try{
