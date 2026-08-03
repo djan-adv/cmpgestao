@@ -218,7 +218,7 @@ export async function POST(request) {
     const todosIds = await processosPermitidos(sb, acesso)
     if (!todosIds.length) return Response.json({ ok: true, nome: acesso.nome || '', processos: [] })
     const { data: brutos } = await sb.from('processos')
-      .select('id,numero,classe,assunto,foro,orgao,fase,status,distribuido_em,valor_causa,ultima_movimentacao,oponente,cliente_nome')
+      .select('id,numero,classe,assunto,foro,orgao,orgao_atual,grau_atual,tramitacoes,fase,status,distribuido_em,valor_causa,ultima_movimentacao,oponente,cliente_nome')
       .in('id', todosIds).order('ultima_movimentacao', { ascending: false, nullsFirst: false })
     // processo encerrado não vai para o app do cliente — a lista mostra o que está em
     // andamento. (Filtrado aqui, e não na consulta, para não derrubar status vazio.)
@@ -268,6 +268,8 @@ export async function POST(request) {
       dados: {
         id: p.id, numero: p.numero, classe: p.classe, assunto: p.assunto,
         foro: p.foro, orgao: p.orgao, fase: p.fase, status: p.status || 'ativo',
+        orgao_atual: p.orgao_atual, grau_atual: p.grau_atual,
+        tramitacoes: Array.isArray(p.tramitacoes) ? p.tramitacoes : [],
         distribuido_em: p.distribuido_em, valor_causa: p.valor_causa, ultima_movimentacao: p.ultima_movimentacao,
       },
       partes,
