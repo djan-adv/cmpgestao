@@ -1901,7 +1901,11 @@ function abrir(i){
   // cabeçalho: partes em duas colunas fixas (Autor | Réu) com CPF/CNPJ abaixo do nome,
   // e botões de edição SEMPRE no mesmo lugar (memória visual das fichas)
   var _semBanco=(!p._id && (p.ehCaso || p.fonte==='caso' || p.fonte==='manual'));
-  html+='<div class="card" style="position:relative">'+honQuadroHTML(p)
+  /* flow-root: o quadro de honorários é float:right e, quando fica mais alto que
+     o cabeçalho, transbordava o card — o painel de ações abaixo (uma grade, que
+     não sobrepõe float) encolhia para caber ao lado. Contido aqui, o quadro fica
+     sempre DENTRO da ficha e nada mais é empurrado. */
+  html+='<div class="card" style="position:relative;display:flow-root">'+honQuadroHTML(p)
     +(_semBanco?'<div style="margin:0 0 10px;background:#fdecea;border:1px solid #f2b8b3;border-radius:8px;padding:7px 10px;font-size:12.5px;color:#b3261e"><b>⚠ Este cadastro ainda não está gravado no banco</b> — documentos, boletos e robôs não funcionam até salvar. <button class="btn sm" style="margin-left:8px;font-size:11px;background:#b3261e;color:#fff;border:1px solid #b3261e" onclick="salvarFichaNoBanco()">Salvar agora</button></div>':'')
     +_partesTopoHTML(p)+
     '<div class="subhead" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">'+_numFichaHTML(p)+
@@ -9803,13 +9807,15 @@ function honQuadroHTML(p){
     if(tem) out+=honVerbaRow(rot,valCampo,p[valCampo],pctCampo,pctCampo?p[pctCampo]:null,showPct&&!!pctCampo);
     else chips.push([rot,valCampo]);
   }
-  /* resumo em linguagem clara do que o cliente contratou: valor fixo + % do êxito */
+  /* Resumo do que o cliente contratou. Só entra com o que NÃO aparece logo abaixo:
+     o valor fixo já sai na linha "Contratual" e o percentual já sai nela quando o
+     quadro está no modo "R$ + %". Repetir o mesmo número três vezes no mesmo
+     quadro só atrapalha a leitura. */
   (function(){
-    var cv=_hv(p.hon_val_contratual);
     var cp=(p.hon_pct_contratual!=null&&p.hon_pct_contratual!=='')?Number(p.hon_pct_contratual):null;
-    if(cv>0||cp){
+    if(cp && !showPct){
       out+='<div style="font-size:11px;color:#0F6E56;background:#eaf6ef;border-radius:8px;padding:4px 9px;margin:0 0 7px;line-height:1.35"><b>Contratado:</b> '
-        +(cv>0?('R$ '+hFmt(cv)):'')+(cv>0&&cp?' + ':'')+(cp?(String(cp).replace('.',',')+'% do êxito'):'')+'</div>';
+        +String(cp).replace('.',',')+'% do êxito</div>';
     }
   })();
   verba('Contratual','hon_val_contratual','hon_pct_contratual',true);
@@ -9822,7 +9828,11 @@ function honQuadroHTML(p){
   /* condenação: some quando não há (o quadro fica só com o que existe) */
   var temCond=_hv(p.valor_condenacao)!==0||window.__honShow.valor_condenacao;
   var totAdv=_hv(p.hon_val_contratual)+_hv(p.hon_val_sucumbencia)+(trab?0:_hv(p.hon_val_execucao))+((!trab&&!james)?_hv(p.hon_pro_labore):0);
-  if(totAdv>0){
+  /* o total só informa alguma coisa quando há mais de uma verba: com uma só ele
+     repete, palavra por palavra, a linha imediatamente acima */
+  var nVerbas=[_hv(p.hon_val_contratual),_hv(p.hon_val_sucumbencia),(trab?0:_hv(p.hon_val_execucao)),((!trab&&!james)?_hv(p.hon_pro_labore):0)]
+    .filter(function(v){ return v!==0; }).length;
+  if(totAdv>0 && nVerbas>1){
     out+=div;
     out+='<div style="display:flex;justify-content:space-between;gap:8px;line-height:1.5"><b style="color:var(--navy);font-size:12px">TOTAL DO ADVOGADO</b><b style="color:var(--navy);white-space:nowrap">R$ '+hFmt(totAdv)+'</b></div>';
   }
@@ -9848,15 +9858,17 @@ function honQuadroHTML(p){
     +'<div style="display:flex;justify-content:space-between;gap:8px"><span style="color:var(--muted)">Faturado</span><b id="hon-faturado-auto" style="color:#0F6E56;font-size:11.5px;white-space:nowrap" title="Boletos emitidos para este processo na aba Financeiro (cancelados não contam)">…</b></div>'
     +'<div id="hon-fat-detalhe" style="font-size:10.5px;color:var(--muted);line-height:1.45"></div>'
     +'</div>';
-  /* rodapé: quando foi a última atualização monetária e o botão de refazer */
+  /* rodapé: quando foi a última atualização monetária e o botão de refazer.
+     Sem data registrada não se escreve nada — o próprio botão ⟳ já diz o que
+     fazer, e a frase ocupava duas linhas em todo processo ainda não atualizado. */
   var atzTxt=p.hon_atualizado_em
     ? ('atualizado em <b>'+String(p.hon_atualizado_em).slice(0,10).split('-').reverse().join('/')+'</b>'+(p.hon_indice?(' · '+esc(p.hon_indice)):''))
-    : 'valores sem atualização registrada';
-  out+='<div style="margin-top:6px;display:flex;justify-content:space-between;align-items:center;gap:6px">'
-    +'<span class="note" style="margin:0;font-size:10px;line-height:1.3">'+atzTxt+'</span>'
+    : '';
+  out+='<div style="margin-top:6px;display:flex;justify-content:'+(atzTxt?'space-between':'flex-end')+';align-items:center;gap:6px">'
+    +(atzTxt?'<span class="note" style="margin:0;font-size:10px;line-height:1.3">'+atzTxt+'</span>':'')
     +'<button class="btn sm ghost" style="font-size:10.5px;padding:2px 8px;white-space:nowrap" onclick="abrirAtualizacaoHon()" title="Corrige todos os valores pelo índice (INPC/IPCA/IGP-M, sugerido pela sentença) + juros de mora — busca os índices oficiais do Banco Central">⟳ atualizar</button>'
     +'</div>';
-  out+='<div style="margin-top:7px"><button class="btn sm" style="width:100%;background:#FE3E6D;border-color:#FE3E6D;color:#fff;font-weight:700" onclick="boletoDoProcesso()" title="Se já há boletos deste processo, reenvia o mais recente por e-mail; se não há, abre a criação de um novo boleto já vinculado a este processo">💳 Gerar boleto</button></div>';
+  out+='<div style="margin-top:6px"><button class="btn sm" style="width:100%;background:#FE3E6D;border-color:#FE3E6D;color:#fff;font-weight:700;font-size:11.5px;padding:4px 10px" onclick="boletoDoProcesso()" title="Se já há boletos deste processo, reenvia o mais recente por e-mail; se não há, abre a criação de um novo boleto já vinculado a este processo">💳 Gerar boleto</button></div>';
   out+='</div>';
   return out;
 }
@@ -9997,7 +10009,9 @@ async function _preencheFaturadoAuto(){
       var contratadoC=Math.round(_hv(p.hon_val_contratual)*100);
       if(contratadoC>0){
         var aFat=contratadoC-tot;
-        if(aFat>0) linhas.push('a faturar do contratado: <b>'+reais(aFat)+'</b> (de '+reais(contratadoC)+')');
+        /* o "(de X)" só faz sentido quando já houve faturamento parcial — sem
+           boleto nenhum, aFat É o contratado e a frase repetia o mesmo valor */
+        if(aFat>0) linhas.push('a faturar do contratado: <b>'+reais(aFat)+'</b>'+(tot>0?(' (de '+reais(contratadoC)+')'):''));
         else if(bols.length) linhas.push('contratado ('+reais(contratadoC)+') já faturado por completo'+(aFat<0?' — excedente de '+reais(-aFat)+' (êxito/outras verbas)':''));
       }
       det.innerHTML=linhas.join('<br>');
