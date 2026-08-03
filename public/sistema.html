@@ -14488,6 +14488,37 @@ async function monitTrazerAssessoria(id){
   function esperaSessao(){ if(window.__sb && window.__sb.auth){ iniciar(); } else { setTimeout(esperaSessao,800); } }
   function h(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
   function hora(iso){ try{ var d=new Date(iso); return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }catch(e){ return ''; } }
+  /* Só a hora não localiza nada: "11:24" pode ser de hoje ou de três semanas
+     atrás, e o chat guarda o histórico todo. Faixa de data separando os dias,
+     como no WhatsApp. */
+  var _MESES=['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+  function _diaChave(iso){ try{ var d=new Date(iso); return d.getFullYear()+'-'+d.getMonth()+'-'+d.getDate(); }catch(e){ return ''; } }
+  function _diaRotulo(iso){
+    var d; try{ d=new Date(iso); }catch(e){ return ''; }
+    if(!d || isNaN(d.getTime())) return '';
+    var hoje=new Date(); hoje.setHours(0,0,0,0);
+    var alvo=new Date(d.getFullYear(),d.getMonth(),d.getDate());
+    var dif=Math.round((hoje-alvo)/86400000);
+    if(dif===0) return 'hoje';
+    if(dif===1) return 'ontem';
+    /* Dentro da semana o nome do dia basta e lê melhor que a data cheia. */
+    if(dif>1 && dif<7) return ['domingo','segunda-feira','terça-feira','quarta-feira','quinta-feira','sexta-feira','sábado'][alvo.getDay()];
+    var r=alvo.getDate()+' de '+_MESES[alvo.getMonth()];
+    return alvo.getFullYear()===hoje.getFullYear() ? r : (r+' de '+alvo.getFullYear());
+  }
+  /* Data cheia no title da hora: a faixa dá o dia, mas quem rolou até o meio da
+     conversa às vezes quer conferir sem procurar a faixa acima. */
+  function _dataHoraCompleta(iso){
+    var d; try{ d=new Date(iso); }catch(e){ return ''; }
+    if(!d || isNaN(d.getTime())) return '';
+    var p=function(n){ return String(n).padStart(2,'0'); };
+    return p(d.getDate())+'/'+p(d.getMonth()+1)+'/'+d.getFullYear()+' às '+p(d.getHours())+':'+p(d.getMinutes());
+  }
+  function _faixaDia(iso){
+    var r=_diaRotulo(iso); if(!r) return '';
+    return '<div style="text-align:center;margin:9px 0 7px"><span style="display:inline-block;background:#f2ecc0;border:1px solid #ded6a0;color:#6b6540;'
+      +'font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:2px 10px;border-radius:20px">'+h(r)+'</span></div>';
+  }
   function minimizado(){ try{ return localStorage.getItem(MIN)==='1'; }catch(e){ return false; } }
   function marcarLido(){ try{ localStorage.setItem(LIDO,new Date().toISOString()); }catch(e){} pintarBadge(); }
 
@@ -14729,7 +14760,8 @@ async function monitTrazerAssessoria(id){
   function pintar(){
     var el=document.getElementById('cmp-chat-msgs'); if(!el) return;
     if(!msgs.length){ el.innerHTML='<div style="color:#6b6540;font-size:12px">Sem mensagens ainda. Escreva abaixo — vai para todo o escritório, ou escolha uma pessoa para conversa privada.</div>'; return; }
-    el.innerHTML=msgs.map(function(m){
+    el.innerHTML=msgs.map(function(m,_i){
+      var faixa=(_i===0 || _diaChave(m.criado_em)!==_diaChave(msgs[_i-1].criado_em)) ? _faixaDia(m.criado_em) : '';
       var meu=(m.autor_id===eu);
       var priv=!!m.para_id;
       var quem=meu?'você':(nomeDe(m.autor_id)||m.autor_nome||'colega');
@@ -14760,9 +14792,9 @@ async function monitTrazerAssessoria(id){
           ?('<div style="margin-top:4px"><img src="'+srcAnexo+'" style="max-width:220px;max-height:220px;border-radius:6px;cursor:pointer;display:block" onclick="window.open(this.src,\'_blank\')" title="Abrir em tamanho maior"></div>')
           :('<div style="margin-top:4px"><a href="'+srcAnexo+'" target="_blank" style="display:inline-flex;align-items:center;gap:5px;background:#fff3b0;border:1px solid #d9b64c;border-radius:7px;padding:4px 9px;color:#5a4a00;text-decoration:none;font-size:12px">📎 '+h(m.anexo_nome||'anexo')+'</a></div>');
       }
-      return '<div id="cmp-chat-msg-'+m.id+'" style="margin:0 0 7px;'+(meu?'text-align:right':'')+'">'
+      return faixa+'<div id="cmp-chat-msg-'+m.id+'" style="margin:0 0 7px;'+(meu?'text-align:right':'')+'">'
         +'<div class="cmp-chat-bolha" style="display:inline-block;max-width:88%;text-align:left;background:'+(meu?'#fff6c9':'#fffdf3')+';border:1px solid '+(priv?'#d9b64c':'#e6dfae')+';border-left:4px solid '+corAutor+';border-radius:9px;padding:6px 9px">'
-        +'<div style="font-size:11px;color:'+corAutor+';font-weight:700">'+h(quem)+h(alvo)+' · <span style="color:#6b6540;font-weight:400">'+hora(m.criado_em)+(priv?' 🔒':'')+'</span> <a onclick="__cmpChat.responderA('+m.id+')" title="Responder" style="cursor:pointer;color:#8a8355;font-weight:400;margin-left:4px">↩</a></div>'
+        +'<div style="font-size:11px;color:'+corAutor+';font-weight:700">'+h(quem)+h(alvo)+' · <span title="'+h(_dataHoraCompleta(m.criado_em))+'" style="color:#6b6540;font-weight:400">'+hora(m.criado_em)+(priv?' 🔒':'')+'</span><a onclick="__cmpChat.responderA('+m.id+')" title="Responder" style="cursor:pointer;color:#8a8355;font-weight:400;margin-left:4px">↩</a></div>'
         +citada
         +'<div style="white-space:pre-wrap;word-break:break-word">'+h(m.texto)+'</div>'
         +anexoHtml
