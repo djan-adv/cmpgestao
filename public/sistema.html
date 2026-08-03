@@ -7919,6 +7919,46 @@ function _docChaveProc(numero){
   var id=(typeof atual!=='undefined'&&atual&&atual._id)?String(atual._id).replace(/[^a-zA-Z0-9-]/g,''):'';
   return id?('caso-'+id):'';
 }
+/* Documentos guardados sob uma identificação ANTERIOR do processo.
+   Enquanto a pasta não acompanhava a mudança de número (caso que virou processo
+   no protocolo), os arquivos ficavam órfãos no disco: intactos, mas invisíveis
+   na ficha. Aqui eles voltam a aparecer, com um botão para trazê-los de volta —
+   sem precisar de comando nem de suporte. */
+async function _orfasDocs(force){
+  if(window.__orfasCache && !force) return window.__orfasCache;
+  try{
+    var tok=await docToken();
+    var r=await fetch('/api/docs?orfas=1',{headers:{Authorization:'Bearer '+tok}});
+    var j=await r.json().catch(function(){ return null; });
+    window.__orfasCache=(j&&j.orfas)||[];
+  }catch(e){ window.__orfasCache=[]; }
+  return window.__orfasCache;
+}
+async function _avisoDocsOrfaos(el, escopo, sub, digAtual, numero){
+  if(escopo!=='proc' || sub) return;
+  if(typeof atual==='undefined' || !atual || !atual._id) return;
+  var chaveCaso='caso-'+String(atual._id).replace(/[^a-zA-Z0-9-]/g,'');
+  if(chaveCaso===digAtual) return;                 /* ainda é caso: a pasta é essa mesmo */
+  var orfas=await _orfasDocs(false);
+  var achou=(orfas||[]).find(function(o){ return o.chave===chaveCaso; });
+  if(!achou) return;
+  var box=document.createElement('div');
+  box.style.cssText='background:#fff8e6;border:1px solid #e8dcbb;border-radius:9px;padding:9px 11px;margin-bottom:8px;font-size:12.5px;color:#6b5410';
+  box.innerHTML='<b>'+achou.arquivos+' documento(s) guardado(s) antes deste processo ganhar número.</b>'+
+    '<div style="margin-top:2px;font-size:11.5px">Ficaram na identificação anterior do caso e por isso não apareciam aqui. Nada foi apagado.</div>';
+  var bt=document.createElement('button');
+  bt.className='btn sm'; bt.style.cssText='margin-top:7px;background:#8a6d00;color:#fff;border:none';
+  bt.textContent='Trazer estes documentos para cá';
+  bt.onclick=async function(){
+    bt.disabled=true; bt.textContent='trazendo…';
+    var d=await _moverPastaDocs(chaveCaso, digAtual);
+    window.__orfasCache=null;
+    if(d) alert('✓ '+(d.movidos||0)+' item(ns) trazidos para a pasta deste processo.');
+    carregarDocs(numero, '', 'proc');
+  };
+  box.appendChild(bt);
+  el.insertBefore(box, el.firstChild);
+}
 async function carregarDocs(numero, sub, escopo){
   escopo=escopo||'proc'; var E=_docEsc(escopo);
   var el=document.getElementById(E.panel); if(!el) return;
@@ -7944,6 +7984,7 @@ async function carregarDocs(numero, sub, escopo){
       var c2=String(a.nome).localeCompare(String(b.nome),'pt'); return sort==='za'?-c2:c2;
     });
     el.innerHTML='';
+    _avisoDocsOrfaos(el, escopo, sub, dig, numero);
     /* barra: voltar (esq) + ordenar (dir) */
     var bar=document.createElement('div'); bar.style.cssText='display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap';
     var left=document.createElement('div');
