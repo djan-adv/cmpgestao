@@ -15196,6 +15196,7 @@ function exportarProdutividadeCSV(){
           '<input id="appcli-email" placeholder="E-mail do cliente (é o login)" type="email" oninput="appCliPreviaAgenda()" style="flex:1;min-width:190px">'+
           '<input id="appcli-zap" placeholder="WhatsApp (DDD + número)" inputmode="tel" style="flex:1;min-width:150px">'+
         '</div>'+
+        '<div id="appcli-contatos" style="margin-top:6px"></div>'+
         '<div id="appcli-previa" class="note" style="margin-top:8px"></div>'+
         '<div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap">'+
           '<button id="appcli-btn-enviar" class="btn sm" style="background:#0F6E56;color:#fff;font-weight:700" onclick="appCliConceder(\''+procId+'\',\'email\')">&#128233; Criar login e enviar por e-mail</button>'+
@@ -15208,6 +15209,7 @@ function exportarProdutividadeCSV(){
     document.body.appendChild(veu);
     // processo de casal/litisconsórcio vem com os autores juntos ("A; B"): cada um
     // precisa do PRÓPRIO login, então o painel pede para escolher de quem é este.
+    window.__appcliProc=procId;
     var pv=procDe(procId);
     var autores=String((pv&&pv.cliente)||'').split(';').map(function(s){return s.trim();}).filter(function(s){return s.length>2;});
     var inN=document.getElementById('appcli-nome');
@@ -15224,24 +15226,55 @@ function exportarProdutividadeCSV(){
     appCliRenderLista(procId);
     appCliPreviaAgenda();
   };
-  /* preenche e-mail e WhatsApp a partir do cadastro do contato do processo */
+  /* E-mail e WhatsApp do cliente: a fonte que vale é o CONTATO DA FICHA (os chips
+     📞/✉ do topo, campo contatos_livres). Como o processo pode ter mais de um autor,
+     não dá para adivinhar de quem é cada um — o painel mostra TODOS e você escolhe
+     com um toque; o primeiro já entra preenchido para o caso comum de um autor só. */
+  function _ctlDaFicha(procId){
+    var p=procDe(procId);
+    var toks=String((p&&p.ctl)||'').split(/[,;\n]+/).map(function(s){return s.trim();}).filter(Boolean);
+    return {
+      emails: toks.filter(function(t){ return /@/.test(t); }),
+      fones:  toks.filter(function(t){ return !/@/.test(t) && String(t).replace(/\D/g,'').length>=10; })
+    };
+  }
+  function _porVazio(id, valor){
+    var el=document.getElementById(id);
+    if(el && !el.value && valor) { el.value=valor; return true; }
+    return false;
+  }
+  window.appCliUsarContato=function(campo, valor){
+    var el=document.getElementById(campo==='email'?'appcli-email':'appcli-zap');
+    if(el){ el.value=valor; el.focus(); }
+    if(campo==='email') appCliPreviaAgenda();
+  };
+  function pintarContatosFicha(emails, fones){
+    var el=document.getElementById('appcli-contatos'); if(!el) return;
+    if(!emails.length && !fones.length){
+      el.innerHTML='<span class="note" style="font-size:11px">Nenhum telefone ou e-mail nesta ficha — preencha acima (e vale cadastrar nos contatos do processo).</span>';
+      return;
+    }
+    el.innerHTML='<span class="note" style="font-size:11px">Contatos desta ficha (toque para usar):</span> '+
+      emails.map(function(e){ return '<button class="btn sm ghost" style="font-size:11px;margin:3px 3px 0 0" onclick="appCliUsarContato(\'email\',\''+escx(e).replace(/'/g,"\\'")+'\')">&#9993; '+escx(e)+'</button>'; }).join('')+
+      fones.map(function(f){ return '<button class="btn sm ghost" style="font-size:11px;margin:3px 3px 0 0" onclick="appCliUsarContato(\'zap\',\''+escx(f).replace(/'/g,"\\'")+'\')">&#128241; '+escx(f)+'</button>'; }).join('');
+  }
   function appCliPreencherContato(procId){
-    var s=S(); if(!s) return;
-    s.from('processos').select('cliente_id,cliente_nome').eq('id',procId).maybeSingle().then(function(r){
-      var cid=r&&r.data&&r.data.cliente_id;
-      var nome=r&&r.data&&r.data.cliente_nome;
-      function usar(c){
-        if(!c) return;
-        var e=c.email||((c.emails||[])[0])||'';
-        var t=c.telefone||((c.telefones||[])[0])||'';
-        var ie=document.getElementById('appcli-email'); if(ie&&!ie.value&&e) ie.value=e;
-        var iz=document.getElementById('appcli-zap'); if(iz&&!iz.value&&t) iz.value=t;
-      }
-      if(cid){ s.from('contatos').select('email,emails,telefone,telefones').eq('id',cid).maybeSingle().then(function(q){ usar(q&&q.data); }); return; }
-      // processo sem cliente_id: procura o contato pelo nome do cliente
-      if(nome){ s.from('contatos').select('email,emails,telefone,telefones').ilike('nome',String(nome).trim()).limit(1)
-        .then(function(q){ usar(q&&q.data&&q.data[0]); }); }
-    });
+    var da=_ctlDaFicha(procId);
+    _porVazio('appcli-email', da.emails[0]);
+    _porVazio('appcli-zap', da.fones[0]);
+    pintarContatosFicha(da.emails, da.fones);
+    // o cadastro de contatos entra como complemento: se tiver e-mail/telefone que
+    // não está na ficha, vira mais uma opção para escolher
+    var n=document.getElementById('appcli-nome');
+    admin({acao:'contato_por_nome', nome:(n&&n.value)||'', processo_id:procId}).then(function(d){
+      var c=d&&d.ok&&d.contato; if(!c) return;
+      var emails=da.emails.slice(), fones=da.fones.slice();
+      if(c.email && emails.indexOf(c.email)<0) emails.push(c.email);
+      if(c.telefone && fones.indexOf(c.telefone)<0) fones.push(c.telefone);
+      _porVazio('appcli-email', c.email);
+      _porVazio('appcli-zap', c.telefone);
+      pintarContatosFicha(emails, fones);
+    }).catch(function(){});
   }
 
   /* número no formato que o wa.me aceita: só dígitos, com o 55 do Brasil */
@@ -15265,9 +15298,11 @@ function exportarProdutividadeCSV(){
     var autores=window.__appcliAutores||[]; if(!autores[i]) return;
     var inN=document.getElementById('appcli-nome'); if(inN) inN.value=autores[i];
     autores.forEach(function(_,k){ var b=document.getElementById('appcli-aut'+k); if(b) b.className='btn sm'+(k===i?'':' ghost'); });
-    // e-mail/telefone são de cada pessoa: limpa para não mandar a senha de um ao outro
+    // e-mail/telefone são de cada pessoa: limpa e reoferece os contatos da ficha,
+    // para você escolher o que é do autor escolhido (não mandar a senha de um ao outro)
     var ie=document.getElementById('appcli-email'); if(ie) ie.value='';
     var iz=document.getElementById('appcli-zap'); if(iz) iz.value='';
+    if(window.__appcliProc) appCliPreencherContato(window.__appcliProc);
     appCliPreviaAgenda();
   };
 
