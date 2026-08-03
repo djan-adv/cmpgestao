@@ -318,6 +318,79 @@ export async function POST(request) {
     }
   }
 
+  /* ---------- aviso de AUDIÊNCIA pelo chat do app ----------
+     Só sai se o cliente realmente tem acesso ao app (conta ativa e não bloqueada);
+     senão devolve o motivo, e o escritório segue pelo e-mail/WhatsApp de sempre.
+     A trava contra repetição é a mesma tabela do aviso por e-mail
+     (avisos_audiencia, único por processo+data+tipo), aqui com tipo 'app'. */
+  if (acao === 'avisar_audiencia_app') {
+    const { data: p } = await sb.from('processos').select('id,numero,cliente_id,cliente_nome,escritorio_id')
+      .eq('id', String(body.processo_id || '')).eq('escritorio_id', quem.escritorio_id).maybeSingle()
+    if (!p) return Response.json({ erro: 'Processo não encontrado.' }, { status: 404 })
+
+    const acessos = (await acessosDoProcesso(sb, p)).filter(a => a.ativo && !a.bloqueado_em)
+    if (!acessos.length) return Response.json({ ok: true, enviado: false, motivo: 'sem_acesso' })
+    const logados = acessos.filter(a => a.primeiro_login_em)
+
+    const data = String(body.data || '').slice(0, 10)
+    const hora = String(body.hora || '').slice(0, 8)
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(data)) return Response.json({ erro: 'data inválida' }, { status: 400 })
+    const marcador = String(body.tipo || 'designacao') === 'vespera' ? 'app_vespera' : 'app'
+
+    const mk = await sb.from('avisos_audiencia').insert({
+      escritorio_id: p.escritorio_id, processo_numero: p.numero,
+      data_audiencia: data, tipo: marcador, email: acessos[0].email,
+    }).select('id').single()
+    if (mk.error) return Response.json({ ok: true, enviado: false, motivo: 'ja_avisado' })
+
+    const dbr = data.split('-').reverse().join('/')
+    const horaTxt = (hora && hora !== 'Dia todo') ? (' às ' + hora) : ''
+    const texto = String(body.texto || '').trim() || (
+      marcador === 'app_vespera'
+        ? ('Lembrete: sua audiência no processo nº ' + p.numero + ' é AMANHÃ, dia ' + dbr + horaTxt + '.\n\n' +
+           'Sua presença é obrigatória. Qualquer dúvida, responda por aqui mesmo.')
+        : ('Foi designada audiência no seu processo nº ' + p.numero + ': dia ' + dbr + horaTxt + '.\n\n' +
+           'Sua presença é obrigatória. Vamos entrar em contato antes da data para combinar os detalhes — e faremos um novo aviso na véspera.\n\n' +
+           'Qualquer dúvida, é só responder aqui neste chat.')
+    )
+
+    const ins = await sb.from('portal_chat').insert({
+      escritorio_id: p.escritorio_id, processo_id: p.id, autor_tipo: 'escritorio',
+      autor_id: quem.id, autor_nome: quem.nome || 'CMP Advogados', texto,
+      lida_escritorio: true, lida_cliente: false,
+    }).select('id').single()
+    if (ins.error) {
+      try { await sb.from('avisos_audiencia').delete().eq('id', mk.data.id) } catch (e) {}
+      return Response.json({ erro: ins.error.message }, { status: 500 })
+    }
+
+    // push no celular do cliente (melhor esforço)
+    try {
+      const { data: v } = await sb.from('app_secrets').select('valor').eq('chave', 'vapid_chat').maybeSingle()
+      if (v && v.valor) {
+        webpush.setVapidDetails('mailto:contato@cmpadvogados.com.br', v.valor.public, v.valor.private)
+        const { data: subs } = await sb.from('portal_push_subs').select('*').in('acesso_id', acessos.map(a => a.id))
+        const payload = JSON.stringify({
+          titulo: 'CMP Advogados — audiência ' + (marcador === 'app_vespera' ? 'amanhã' : 'designada'),
+          corpo: 'Processo ' + p.numero + ' · ' + dbr + horaTxt,
+          url: '/portal.html?proc=' + p.id,
+        })
+        const mortos = []
+        await Promise.all((subs || []).map(async (s) => {
+          try { await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth_key } }, payload) }
+          catch (e) { if (e && (e.statusCode === 404 || e.statusCode === 410)) mortos.push(s.endpoint) }
+        }))
+        if (mortos.length) { try { await sb.from('portal_push_subs').delete().in('endpoint', mortos) } catch (e) {} }
+      }
+    } catch (e) {}
+
+    return Response.json({
+      ok: true, enviado: true,
+      clientes: acessos.map(a => a.nome || a.email),
+      logados: logados.length, total: acessos.length,
+    })
+  }
+
   /* ---------- push no celular do cliente após resposta do escritório ---------- */
   if (acao === 'notificar_cliente') {
     const { data: p } = await sb.from('processos').select('id,numero,cliente_id,cliente_nome,escritorio_id')
