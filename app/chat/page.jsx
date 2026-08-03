@@ -164,9 +164,17 @@ export default function ChatMobile() {
     } catch (e) { setPushEstado('desativado'); alert('Não deu pra ativar o alarme: ' + (e && e.message || e)) }
   }
 
-  function notificarEnvio(payload) {
+  async function notificarEnvio(payload) {
     // dispara e esquece — não deve travar/atrasar o envio da mensagem
-    chamarPush('notificar', { autor_id: euId, autor_nome: payload.autor_nome, texto: payload.texto, para_id: payload.para_id })
+    // origem_endpoint: a inscrição DESTE aparelho, para o alarme tocar nos outros
+    // aparelhos da pessoa (o computador, por exemplo) mas não neste
+    let origem = ''
+    try {
+      const reg = await navigator.serviceWorker.getRegistration()
+      const sub = reg && await reg.pushManager.getSubscription()
+      origem = (sub && sub.endpoint) || ''
+    } catch (e) {}
+    chamarPush('notificar', { autor_id: euId, autor_nome: payload.autor_nome, texto: payload.texto, para_id: payload.para_id, origem_endpoint: origem })
   }
 
   // ---------- mensagens ----------

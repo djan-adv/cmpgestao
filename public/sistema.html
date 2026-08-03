@@ -15154,13 +15154,24 @@ async function monitTrazerAssessoria(id){
     _pintarSino('desativado');
   }
 
+  /* endpoint da inscrição DESTE aparelho — vai junto no disparo para o servidor não
+     alarmar quem acabou de escrever (mas alarmar os outros aparelhos da pessoa) */
+  async function _meuEndpoint(){
+    try{
+      if(!('serviceWorker' in navigator)) return '';
+      var reg=await navigator.serviceWorker.getRegistration();
+      var sub=reg&&await reg.pushManager.getSubscription();
+      return (sub&&sub.endpoint)||'';
+    }catch(e){ return ''; }
+  }
   async function _notificarPush(texto, paraId){
     /* dispara e esquece — alarme (push) pro celular; nunca deve travar o envio */
     try{
       var s=await window.__sb.auth.getSession();
       var token=s&&s.data&&s.data.session&&s.data.session.access_token; if(!token) return;
+      var origem=await _meuEndpoint();
       fetch('/api/chat/push',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},
-        body:JSON.stringify({acao:'notificar', autor_id:eu, autor_nome:euNome, texto:texto, para_id:paraId||null})}).catch(function(){});
+        body:JSON.stringify({acao:'notificar', autor_id:eu, autor_nome:euNome, texto:texto, para_id:paraId||null, origem_endpoint:origem})}).catch(function(){});
     }catch(e){}
   }
   async function enviar(){
@@ -16368,9 +16379,10 @@ function exportarProdutividadeCSV(){
         }
         var r=await s.from('chat_mensagens').insert(Object.assign({texto:(texto||null),para_id:(c.paraId||null),autor_nome:(me.nome||'')},anexo||{})).select('*').single();
         if(r.error) throw new Error(r.error.message);
-        try{ var tk2=await jwtCli();
+        try{ var tk2=await jwtCli(), origem='';
+          try{ var reg=await navigator.serviceWorker.getRegistration(); var sb2=reg&&await reg.pushManager.getSubscription(); origem=(sb2&&sb2.endpoint)||''; }catch(eo){}
           fetch('/api/chat/push',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tk2},
-            body:JSON.stringify({acao:'notificar',autor_id:me.id,autor_nome:me.nome,texto:(texto||('📎 '+((arq&&arq.nome)||'arquivo'))),para_id:(c.paraId||null)})}).catch(function(){});
+            body:JSON.stringify({acao:'notificar',autor_id:me.id,autor_nome:me.nome,texto:(texto||('📎 '+((arq&&arq.nome)||'arquivo'))),para_id:(c.paraId||null),origem_endpoint:origem})}).catch(function(){});
         }catch(e){}
         waDesenha({id:r.data.id,meu:true,quem:me.nome,texto:r.data.texto,criado_em:r.data.criado_em,anexo_id:r.data.imagem_anexo_id,anexo_nome:r.data.anexo_nome,anexo_tipo:r.data.anexo_tipo});
         if(r.data.id>WA.ultimo) WA.ultimo=r.data.id;

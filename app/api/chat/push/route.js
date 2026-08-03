@@ -70,18 +70,25 @@ export async function POST(request) {
     if (!v) return Response.json({ ok: true, enviados: 0 }) // push não configurado — não trava o chat
     webpush.setVapidDetails('mailto:contato@cmpadvogados.com.br', v.public, v.private)
 
+    // Quem recebe: os colegas E OS OUTROS APARELHOS DE QUEM ESCREVEU. Antes o autor
+    // era excluído inteiro, então quem manda do computador nunca via a mensagem
+    // chegar no próprio celular — e é assim que a pessoa testa. O aparelho que
+    // enviou é o único descartado, pela sua própria inscrição (origem_endpoint).
     const admin = svc()
     let destinatarios = []
     if (body.para_id) {
-      destinatarios = [body.para_id]
+      destinatarios = [body.para_id, user.id]
     } else {
       const { data: eu } = await admin.from('usuarios').select('escritorio_id').eq('id', user.id).single()
       const { data: todos } = await admin.from('usuarios').select('id').eq('escritorio_id', eu && eu.escritorio_id)
-      destinatarios = (todos || []).map(u => u.id).filter(id => id !== user.id)
+      destinatarios = (todos || []).map(u => u.id)
     }
+    destinatarios = [...new Set(destinatarios.filter(Boolean))]
     if (!destinatarios.length) return Response.json({ ok: true, enviados: 0 })
 
-    const { data: subs } = await admin.from('chat_push_subs').select('*').in('user_id', destinatarios)
+    const origem = String(body.origem_endpoint || '')
+    const { data: todasSubs } = await admin.from('chat_push_subs').select('*').in('user_id', destinatarios)
+    const subs = (todasSubs || []).filter(s => s.endpoint !== origem)
     const titulo = body.para_id ? ('🔒 ' + (body.autor_nome || 'Colega')) : ('💬 ' + (body.autor_nome || 'Colega'))
     const payload = JSON.stringify({ titulo, corpo: String(body.texto || '').slice(0, 140), url: '/chat' })
 
