@@ -171,13 +171,15 @@ export async function POST(request) {
   if (acao === 'previa') {
     const nome = String(body.nome || '').replace(/\s+/g, ' ').trim()
     const email = String(body.email || '').trim().toLowerCase()
+    const procId = String(body.processo_id || '').trim()
     if (!nome) return Response.json({ ok: true, processos: [] })
     // se já existe acesso com esse e-mail, a prévia é o que ELE enxerga hoje
     let linhas = null
     if (email) {
       const { data: a } = await sb.from('portal_acessos').select('id,escritorio_id').eq('email', email).maybeSingle()
       if (a && a.escritorio_id === quem.escritorio_id) {
-        const { data: ids } = await sb.rpc('portal_processos_ids', { p_acesso: a.id })
+        const { data: ids, error: eIds } = await sb.rpc('portal_processos_ids', { p_acesso: a.id })
+        if (eIds) return Response.json({ erro: 'Falha ao consultar os processos deste acesso: ' + eIds.message }, { status: 500 })
         const lista = (ids || []).map(r => (typeof r === 'string' ? r : r.processo_id)).filter(Boolean)
         if (lista.length) {
           const { data: ps } = await sb.from('processos').select('id,numero,cliente_nome,status')
@@ -187,11 +189,52 @@ export async function POST(request) {
       }
     }
     if (!linhas) {
-      const { data } = await sb.rpc('portal_previa_por_nome', { p_escritorio: quem.escritorio_id, p_nome: nome })
+      // Erro aqui NÃO pode virar lista vazia: a tela dizia "nenhum processo casou
+      // com este nome" e mandava conferir o cadastro, culpando o nome por uma
+      // falha que era de consulta.
+      const { data, error } = await sb.rpc('portal_previa_por_nome', { p_escritorio: quem.escritorio_id, p_nome: nome })
+      if (error) return Response.json({ erro: 'Falha ao conferir os processos deste nome: ' + error.message }, { status: 500 })
       linhas = data || []
     }
+
+    // O processo DESTA ficha entra sempre: é ele que o botão vai liberar, case o
+    // nome ou não. Antes a prévia só mostrava o resultado da busca por nome, e um
+    // nome gravado diferente fazia a tela parecer dizer que este processo ficaria
+    // de fora — quando ele é justamente o único garantido.
+    let esteProcesso = null
+    if (procId) {
+      const { data: p0 } = await sb.from('processos').select('id,numero,cliente_nome,status')
+        .eq('id', procId).eq('escritorio_id', quem.escritorio_id).maybeSingle()
+      if (p0) {
+        esteProcesso = { id: p0.id, numero: p0.numero }
+        if (!linhas.some(x => x.id === p0.id)) linhas = [p0, ...linhas]
+      }
+    }
+
     const emAndamento = linhas.filter(p => !/encerrad|arquivad|baixad/i.test(p.status || ''))
-    return Response.json({ ok: true, processos: emAndamento, ocultos: linhas.length - emAndamento.length })
+
+    // Nome PARECIDO (não idêntico): o casamento automático é por igualdade exata,
+    // então "LORENA GABRIELA PINHEIRO DOS" — nome truncado na importação — não casa
+    // com "Lorena Gabriela Pinheiro dos Santos" e o processo fica fora sem aviso.
+    // Só sugerimos para conferência; incluir por semelhança arriscaria mostrar a um
+    // cliente o processo de um homônimo.
+    let parecidos = []
+    try {
+      const duasPalavras = nome.split(' ').slice(0, 2).join(' ')
+      if (duasPalavras.length >= 6) {
+        const { data: simil } = await sb.from('processos').select('id,numero,cliente_nome,status')
+          .eq('escritorio_id', quem.escritorio_id).ilike('cliente_nome', '%' + duasPalavras + '%').limit(20)
+        const jaTem = new Set(linhas.map(x => x.id))
+        parecidos = (simil || [])
+          .filter(p => !jaTem.has(p.id) && !/encerrad|arquivad|baixad/i.test(p.status || ''))
+          .map(p => ({ id: p.id, numero: p.numero, cliente_nome: p.cliente_nome }))
+      }
+    } catch (e) { /* sugestão é acessório: nunca derruba a prévia */ }
+
+    return Response.json({
+      ok: true, processos: emAndamento, ocultos: linhas.length - emAndamento.length,
+      este_processo: esteProcesso, parecidos,
+    })
   }
 
   /* ---------- dar acesso (o botão) ---------- */
