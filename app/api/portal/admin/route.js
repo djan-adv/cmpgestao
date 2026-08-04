@@ -44,6 +44,27 @@ function estadoDo(a) {
 
 /* acessos que enxergam um processo — mesma regra do portal (função no banco):
    grant explícito, contato vinculado ou nome do cliente igual sem acento. */
+// Tira da lista de destinatários o acesso do app do cliente que pertence a
+// alguém do PRÓPRIO escritório.
+//
+// O caso real: djanhenrique@gmail.com tem acesso ao app do cliente e um aparelho
+// inscrito. Quando o escritório mandava mensagem no processo, o push saía para os
+// aparelhos daquele acesso — ou seja, o autor recebia alarme da mensagem que ele
+// mesmo acabara de escrever. Ele já vê a mensagem no sistema; avisar de novo no
+// celular é só barulho.
+//
+// A comparação é por e-mail porque acesso do cliente e usuário do escritório são
+// cadastros separados, sem chave comum.
+async function semQuemEscreveu(sb, acessos, escritorioId) {
+  try {
+    if (!acessos || !acessos.length) return acessos || []
+    const { data: equipe } = await sb.from('usuarios').select('email').eq('escritorio_id', escritorioId)
+    const daCasa = new Set((equipe || []).map(u => String(u.email || '').trim().toLowerCase()).filter(Boolean))
+    if (!daCasa.size) return acessos
+    return acessos.filter(a => !daCasa.has(String(a.email || '').trim().toLowerCase()))
+  } catch (e) { return acessos }   // falha aberta: melhor avisar demais que de menos
+}
+
 async function acessosDoProcesso(sb, p) {
   const { data, error } = await sb.rpc('portal_acessos_do_processo', { p_processo: p.id })
   if (error || !data) return []
@@ -467,8 +488,9 @@ export async function POST(request) {
     if (!(v && v.valor)) return Response.json({ ok: true, enviados: 0 })
     webpush.setVapidDetails('mailto:contato@cmpadvogados.com.br', v.valor.public, v.valor.private)
     const acessos = await acessosDoProcesso(sb, p)
-    const ids = acessos.filter(a => a.ativo && !a.bloqueado_em).map(a => a.id)
-    if (!ids.length) return Response.json({ ok: true, enviados: 0 })
+    const vivos = acessos.filter(a => a.ativo && !a.bloqueado_em)
+    const ids = (await semQuemEscreveu(sb, vivos, p.escritorio_id)).map(a => a.id)
+    if (!ids.length) return Response.json({ ok: true, enviados: 0, motivo: 'sem destinatário além de quem escreveu' })
     const { data: subs } = await sb.from('portal_push_subs').select('*').in('acesso_id', ids)
     const payload = JSON.stringify({
       titulo: 'CMP Advogados — mensagem no seu processo',

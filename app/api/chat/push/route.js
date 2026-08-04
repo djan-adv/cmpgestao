@@ -77,9 +77,21 @@ export async function POST(request) {
     } else {
       const { data: eu } = await admin.from('usuarios').select('escritorio_id').eq('id', user.id).single()
       const { data: todos } = await admin.from('usuarios').select('id').eq('escritorio_id', eu && eu.escritorio_id)
-      destinatarios = (todos || []).map(u => u.id).filter(id => id !== user.id)
+      destinatarios = (todos || []).map(u => u.id)
     }
-    if (!destinatarios.length) return Response.json({ ok: true, enviados: 0 })
+
+    // Ninguém é avisado da própria mensagem.
+    //
+    // O filtro estava só no ramo do broadcast; o envio privado montava
+    // destinatarios=[para_id] e ia direto, sem olhar quem escreveu. Agora a regra
+    // é uma só, depois dos dois ramos — é o ponto por onde TODOS os caminhos
+    // passam (chat da equipe no sistema, app /chat, e o que vier depois), então
+    // não dá para um caminho novo esquecer dela.
+    //
+    // Filtrar por user_id e não por aparelho é o que importa: quem escreve no
+    // computador não pode receber alarme no próprio celular.
+    destinatarios = destinatarios.filter(id => id && id !== user.id)
+    if (!destinatarios.length) return Response.json({ ok: true, enviados: 0, motivo: 'sem destinatário além do autor' })
 
     const { data: subs } = await admin.from('chat_push_subs').select('*').in('user_id', destinatarios)
     const titulo = body.para_id ? ('🔒 ' + (body.autor_nome || 'Colega')) : ('💬 ' + (body.autor_nome || 'Colega'))
