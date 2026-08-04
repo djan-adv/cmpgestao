@@ -1,6 +1,8 @@
 # Migração do Assinador — juntar os dois bancos e derrubar US$ 10/mês
 
-**Status:** planejado, nada executado. Levantamento feito em 04/08/2026.
+**Status:** passo 0 decidido, passo 1 em andamento. Levantamento feito em 04/08/2026.
+As decisões do passo 0 e as correções ao inventário estão na **seção 10**, no fim
+deste arquivo — leia antes de executar qualquer passo.
 
 Este arquivo existe para que a obra possa ser executada em qualquer sessão nova
 sem refazer o levantamento. Leia daqui, não do zero.
@@ -231,11 +233,15 @@ assinatura** e avisar os signatários se houver risco de janela.
 
 O passo 0 é decisão, não código. Não avance sem ele.
 
-- [ ] **0.** Responder as 3 perguntas da seção 4.5 (as 6 contas, o `is_admin()`, a
-      conta de serviço) e decidir o destino do site antigo (seção 7a).
-- [ ] **1.** Dump completo do projeto antigo (banco + os 43 objetos de storage +
+- [x] **0.** ~~Responder as 3 perguntas da seção 4.5~~ e ~~decidir o destino do site
+      antigo~~ — **decidido em 04/08/2026, ver seção 10.**
+- [~] **1.** Dump completo do projeto antigo (banco + os 43 objetos de storage +
       código das 7 edge functions) guardado fora da Supabase. É a única rede de
       segurança — não dá para despausar o que foi apagado.
+      - [x] código das edge functions → `ops/backup-assinador/edge-functions/`
+            (6 de 7; a `app` não é recuperável, ver seção 10)
+      - [ ] banco + storage → rodar `ops/backup-assinador.sh` no VPS.
+            Roteiro em `ops/COMO-BACKUP-ASSINADOR.md`.
 - [ ] **2.** Criar schema `assinatura` e o role `assinatura_app` no banco do Gestão.
 - [ ] **3.** Migrar as 4 tabelas com os **mesmos IDs e tokens**. Não migrar igreja.
 - [ ] **4.** Recriar as 16 funções (17 menos `igreja_registrar_clique`) e as RLS.
@@ -262,3 +268,52 @@ se fabrica o bug difícil de achar.
 
 **Ordem recomendada:** Inove primeiro (schema novo, não toca em nada existente),
 assinador depois.
+
+## 10. Decisões do passo 0 e correções ao inventário (04/08/2026)
+
+### 10.1 As quatro decisões
+
+1. **Os 6 logins do assinador não migram.** Nenhum dado aponta para eles
+   (`documentos.criado_por` está NULL nas 7 linhas) e o `is_admin()` antigo só
+   reconhecia 2 dos 6 e-mails. Quem precisar do módulo entra pelo login do
+   Gestão. Jaline ainda não tem login no Gestão e vai criar depois; novas
+   pessoas entram do mesmo jeito.
+2. **`is_admin()` passa a ser "existe em `public.usuarios`"** — não uma lista de
+   e-mails. Isso já é o comportamento efetivo de hoje (a API interna valida a
+   sessão do Gestão e opera com a chave secreta, então a lista antiga não
+   restringia nada) e resolve sozinho a entrada de gente nova.
+3. **A conta de serviço sai.** Remover `SIGN_SERVICE_ACCOUNT_EMAIL` e
+   `SIGN_SERVICE_ACCOUNT_SENHA` **e** a linha `sign_service_account` da tabela
+   `app_secrets` do Gestão — o plano original só mencionava as duas variáveis,
+   mas `credenciaisServico()` em `app/api/assinatura/route.js` cai nesse segundo
+   lugar quando as variáveis faltam.
+4. **Site antigo `djan.app.br/link/`: redirect 301** para `/assinar` e
+   `/assinar-doc`, preservando `d=` e `s=`. Inclui trocar o link fixo dentro da
+   edge function `enviar-lembretes`.
+
+### 10.2 Correções ao inventário
+
+- **A edge function `app` não é recuperável.** A API responde
+  `Failed to retrieve function bundle`. É a única sem `entrypoint_path` e sem
+  `ezbr_sha256` na listagem — deploy de 02/07/2026 em formato que o painel já não
+  serve. Nada no CMPGestão a chama; o bucket público `app` guarda
+  `assinar.html`, `config.js` e `painel.html`, então ela provavelmente servia as
+  telas do site antigo. **Decidido: não migrar.** O passo 6 passa a ser
+  "deployar 6 edge functions", não 7.
+- **Os secrets das edge functions não estão em backup nenhum** e a Supabase não
+  deixa relê-los. `CMP_EMAIL_PASS` é o crítico (não tem padrão no código; sem
+  ela nenhum e-mail sai). Confirmar antes do passo 11.
+- **Existe uma 8ª tabela de igreja**, `igreja_inscricoes`, que a seção 4.1 não
+  listou. Lixo igual às outras 7.
+- **`documentos.criado_por` tem FK para `auth.users(id)`** com
+  `ON DELETE SET NULL`. Os valores são todos NULL, então não bloqueia a
+  migração — mas a FK tem de ser recriada apontando para o `auth.users` do
+  Gestão, não copiada às cegas.
+- **`is_admin()` não tem `search_path` nem é `SECURITY DEFINER`** (só `STABLE`).
+  Ao reescrever no passo 4, definir `search_path` explícito.
+- **Buraco de segurança que NÃO deve ser replicado no passo 5:** as policies de
+  storage do projeto antigo deixam `anon` inserir e atualizar objetos em
+  `documentos` e `assinaturas` sem checar dono (`documentos_insert_anon`,
+  `assinatura_insert_anon`, e `arquivos_update` incluindo `anon`). Hoje isso está
+  num banco isolado; replicado no banco do Gestão, vira porta aberta ao lado dos
+  processos. Fechar ao recriar, não copiar.
