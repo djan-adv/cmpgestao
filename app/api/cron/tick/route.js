@@ -42,6 +42,13 @@ const JOBS = [
   // que ninguém abria ficava meses desatualizado. Roda em rodízio, lote pequeno.
   { nome: 'jusbr_movimentos', rotulo: 'jus.br — movimentos (todos os graus)', url: '/api/jusbr/movimentos/robo', cada_min: 15, timeout_ms: 280000 },
   { nome: 'protocolo_conferir', rotulo: 'Petições — conferir protocolo', url: '/api/jusbr/conferir-protocolo', cada_min: 120 },
+  // Avisos de audiência no app do cliente. Saíam de varreduras no NAVEGADOR
+  // (varreAudienciasAuto / varreAvisosVespera, na carga do sistema): quem não
+  // abrisse a tela no dia certo não avisava ninguém. O planejador olha a agenda e
+  // enfileira; a entrega roda curto, que é o que permite avisar 30 e 10 minutos
+  // antes sem o planejador rodar a cada minuto.
+  { nome: 'audiencias_planejar', rotulo: 'Audiências — planejar avisos do app', url: '/api/cron/audiencias', cada_min: 60 },
+  { nome: 'avisos_app', rotulo: 'Audiências — enviar avisos no app', url: '/api/cron/avisos-app', cada_min: 5 },
   { nome: 'monit_cobrar', rotulo: 'Monitoramento — cobrança', url: '/api/monitoramento/robo?tarefa=cobrar', diario_hora: 6 },
   { nome: 'monit_varrer', rotulo: 'Monitoramento — varredura', url: '/api/monitoramento/robo?tarefa=varrer', semanal_dias: [1, 5], hora: 8 },
   { nome: 'inpi_varrer', rotulo: 'INPI — RPI de marcas', url: '/api/inpi/robo?tarefa=varrer', semanal_dias: [2], hora: 9 },
