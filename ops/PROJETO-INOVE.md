@@ -195,6 +195,48 @@ Referência do volume atual: 63 linhas, **R$ 348.446,97** recebidos em 56 proces
 Onde couber, ler de `processos.hon_per_fixado / hon_per_recebido / hon_per_areceber`
 em vez de duplicar.
 
+## 7b. Duas descobertas ao criar as views — decidir antes do passo 5
+
+### a) Só 7 dos 42 processos têm documento baixado
+
+```
+processos da Inove                                42
+com algum documento em jusbr_arquivos              7
+com documento que passa no filtro de peça oficial  2
+```
+
+Contra 2.693 documentos no acervo total — quase todos são de processos do escritório,
+não da Inove. Abrir o portal hoje mostraria prateleira vazia.
+
+**Consequência:** antes de liberar o acesso, rodar a carga do jus.br
+(`app/api/jusbr/puxar-docs/`) para os 35 processos que faltam. É trabalho de máquina,
+mas depende da sessão do jus.br ativa — ver `ops/JUSBR-RENOVACAO-AUTOMATICA.md`.
+
+### b) O filtro de peça oficial não serve para perito
+
+`RE_OFICIAL` foi escrito para o **cliente** ver o andamento do próprio processo:
+sentença, despacho, decisão, acórdão, acordo, homologação, ata de audiência, alvará.
+Corta de 321 para 63 nos processos da Inove.
+
+Só que perito não acompanha — ele **produz o laudo**. Precisa de quesitos, petições
+das partes, impugnação de honorários, proposta, documentos técnicos juntados. Nada
+disso passa naquele filtro.
+
+O pedido original foi explícito: *"não podemos deixar de ter acesso a documentos do
+jus.br, cadastre como se fossem meus se for o caso"*.
+
+**Pendente de decisão** (a view `inove.v_documentos` está com o filtro restrito por
+enquanto, que é o lado seguro):
+
+| Opção | Efeito |
+|---|---|
+| Liberar tudo dos 42 processos | 321 documentos. É o que a perícia exige na prática |
+| Filtro ampliado para perícia | Acrescenta laudo, quesito, impugnação, proposta, honorário, petição, perícia |
+| Manter o filtro de cliente | 63 documentos. Seguro, mas provavelmente inútil para o trabalho deles |
+
+Vale lembrar que a tarja e o `inove.log_documentos` valem para qualquer uma das três —
+o que muda é o tamanho da prateleira, não o rastreamento.
+
 ## 8. Documentos do jus.br
 
 Servidos por rota própria (`/api/inove?doc=…`), **nunca** direto do Supabase — mesmo
@@ -233,8 +275,12 @@ Gestão responde.
       Migrations `inove_schema_inicial`, `inove_role_app`, `inove_policies_app`.
 - [x] **2.** Semear as 57 situações e os 9 quesitos, extraídos da planilha por script.
 - [ ] **2b.** Definir a senha do `inove_app` e a `INOVE_DB_URL` na VPS (seção 4).
-- [ ] **3.** Criar o contato "INOVE CONSULTORIA ATUARIAL LTDA - EPP" e vincular os 42
-      processos por grant.
+- [x] **3.** Pontes de leitura `inove.v_processos` (42) e `inove.v_documentos`, mais a
+      tabela `inove.chat`. Migration `inove_views_e_chat`.
+      Grant de processos por acesso **não é necessário**: a Inove é um cliente só, e o
+      conjunto visível é `processos where inove = true`. Contato no CRM também não —
+      fica para quando houver necessidade comercial.
+- [ ] **3b.** Decidir o filtro de documentos e rodar a carga do jus.br (seção 7b).
 - [ ] **4.** Rota `/api/inove` — sessão, processos, etiquetas, financeiro, chat.
 - [ ] **5.** Entrega de documento com tarja e log.
 - [ ] **6.** Avisos de LGPD e registro de aceite.
