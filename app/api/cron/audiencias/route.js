@@ -1,0 +1,135 @@
+// Robô que PLANEJA os avisos de audiência no app do cliente.
+//
+//   GET /api/cron/audiencias           → enfileira o que faltar
+//   GET /api/cron/audiencias?dias=15   → olha mais longe (padrão: 10 dias)
+//   GET /api/cron/audiencias?debug=1   → detalha cada audiência vista
+//
+// Antes, os avisos saíam de duas varreduras no NAVEGADOR (varreAudienciasAuto e
+// varreAvisosVespera, na carga do sistema). Quem não abrisse o sistema no dia
+// certo simplesmente não avisava o cliente — audiência às 9h de segunda dependia
+// de alguém ter aberto a tela no domingo. Agora é robô.
+//
+// Ele só ENFILEIRA (avisos_app_fila) com hora marcada; quem dispara é o
+// /api/cron/avisos-app, que roda curto. É essa separação que permite avisar 30 e
+// 10 minutos antes mesmo com este robô rodando de hora em hora.
+
+import { createClient } from '@supabase/supabase-js'
+
+export const dynamic = 'force-dynamic'
+export const fetchCache = 'force-no-store'
+export const revalidate = 0
+export const maxDuration = 120
+
+function admin() {
+  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } })
+}
+
+// O Brasil não tem mais horário de verão desde 2019, então o fuso é fixo. Sem
+// isto os avisos sairiam 3 horas fora — o de 10 minutos antes chegaria depois da
+// audiência ter começado.
+const BR = '-03:00'
+function instante(dataISO, hora) {
+  const h = /^\d{1,2}:\d{2}/.test(String(hora || '')) ? String(hora).slice(0, 5) : '09:00'
+  const d = new Date(`${dataISO}T${h.padStart(5, '0')}:00${BR}`)
+  return isNaN(d.getTime()) ? null : d
+}
+function iso(d) { return d.toISOString() }
+function brData(s) { return String(s).split('-').reverse().join('/') }
+
+// Link da sala virtual, procurado no histórico do processo. A mesma ideia do
+// _achaLinkAudiencia da tela, mas aqui no servidor: o aviso de 10 minutos antes
+// só serve se levar o link junto.
+const PROVEDORES = /(zoom\.us|meet\.google|teams\.microsoft|teams\.live|webex|whereby|jitsi|gov\.br|jus\.br|cisco)/i
+function achaLink(textos) {
+  for (const t of textos) {
+    const txt = String(t || '')
+    if (!/audi[êe]ncia|videoconfer|sala virtual|telepresen|link/i.test(txt)) continue
+    const m = txt.match(/https?:\/\/[^\s<>"')]+/g)
+    if (!m) continue
+    for (const u of m) {
+      const url = u.replace(/[.,;)]+$/, '')
+      if (PROVEDORES.test(url)) return url
+    }
+  }
+  return null
+}
+
+export async function GET(request) {
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) return Response.json({ erro: 'falta service key' }, { status: 500 })
+  const { searchParams } = new URL(request.url)
+  const dias = Math.max(1, Math.min(60, parseInt(searchParams.get('dias') || '10', 10) || 10))
+  const debug = !!searchParams.get('debug')
+  const sb = admin()
+
+  const hoje = new Date()
+  const ini = new Date(hoje.getTime() - 86400000)   // ontem, para pegar audiência de hoje cedo
+  const fim = new Date(hoje.getTime() + dias * 86400000)
+  const dISO = (d) => d.toISOString().slice(0, 10)
+
+  const ag = await sb.from('agenda_eventos')
+    .select('id,escritorio_id,data,hora,tipo,titulo,processo_numero')
+    .gte('data', dISO(ini)).lte('data', dISO(fim))
+    .order('data', { ascending: true }).limit(500)
+  if (ag.error) return Response.json({ erro: ag.error.message }, { status: 500 })
+
+  const audiencias = (ag.data || []).filter(e =>
+    e && e.processo_numero && (e.tipo === 'az' || /audi[êe]ncia/i.test(e.titulo || '')))
+
+  const rel = { ok: true, audiencias: audiencias.length, enfileirados: 0, jaTinha: 0, semProcesso: 0, passou: 0, erros: 0, detalhe: [] }
+  const agora = Date.now()
+
+  for (const e of audiencias) {
+    const quando = instante(e.data, e.hora)
+    if (!quando) { rel.erros++; continue }
+
+    const dig = String(e.processo_numero || '').replace(/\D/g, '')
+    const pr = await sb.from('processos').select('id,numero,escritorio_id').eq('numero_digitos', dig).maybeSingle()
+    const p = pr && pr.data
+    if (!p) { rel.semProcesso++; if (debug) rel.detalhe.push({ numero: e.processo_numero, erro: 'processo não cadastrado' }); continue }
+
+    // link só é procurado quando há t10 a enfileirar — evita ler o histórico à toa
+    let link = null
+    const t10 = new Date(quando.getTime() - 10 * 60000)
+    if (t10.getTime() > agora) {
+      const an = await sb.from('andamentos').select('texto').eq('processo_id', p.id).order('data', { ascending: false }).limit(120)
+      link = achaLink(((an && an.data) || []).map(x => x.texto))
+    }
+
+    const hTxt = (e.hora && e.hora !== 'Dia todo') ? (' às ' + String(e.hora).slice(0, 5)) : ''
+    const base = { escritorio_id: p.escritorio_id || e.escritorio_id, processo_id: p.id, processo_numero: p.numero, data_audiencia: e.data, hora_audiencia: e.hora || null, url: '/portal.html?proc=' + p.id }
+
+    // Véspera às 9h da manhã do dia anterior: cedo o bastante para o cliente se
+    // organizar, tarde o bastante para não acordar ninguém.
+    const vesp = new Date(quando.getTime())
+    vesp.setUTCDate(vesp.getUTCDate() - 1)
+    const vespera = instante(dISO(new Date(vesp.getTime())), '09:00')
+
+    const etapas = [
+      { etapa: 'vespera', quando: vespera, titulo: 'Sua audiência é amanhã', corpo: 'Processo ' + p.numero + ' — ' + brData(e.data) + hTxt + '. Qualquer dúvida, fale com o escritório pelo app.' },
+      { etapa: 't30', quando: new Date(quando.getTime() - 30 * 60000), titulo: 'Sua audiência é em 30 minutos', corpo: 'Processo ' + p.numero + hTxt + '. Prepare-se: documento com foto em mãos e um lugar silencioso.' },
+      { etapa: 't10', quando: t10, titulo: 'Sua audiência começa em 10 minutos', corpo: link ? ('Toque aqui para entrar na sala. Processo ' + p.numero + hTxt + '.') : ('Processo ' + p.numero + hTxt + '. Se for por videoconferência, use o link que a vara enviou.') },
+    ]
+
+    for (const et of etapas) {
+      if (!et.quando) continue
+      // já passou da hora: não enfileira. Aviso atrasado é pior que aviso nenhum —
+      // o cliente receberia "sua audiência é em 30 minutos" depois dela acabar.
+      if (et.quando.getTime() <= agora) { rel.passou++; continue }
+      const linha = Object.assign({}, base, {
+        etapa: et.etapa, enviar_em: iso(et.quando), titulo: et.titulo, corpo: et.corpo,
+        url: (et.etapa === 't10' && link) ? link : base.url,
+      })
+      const ins = await sb.from('avisos_app_fila').insert(linha)
+      if (ins.error) {
+        // 23505 = já enfileirado numa rodada anterior; é o caso normal
+        if (String(ins.error.code) === '23505' || /duplicate key/i.test(ins.error.message || '')) rel.jaTinha++
+        else { rel.erros++; if (debug) rel.detalhe.push({ numero: p.numero, etapa: et.etapa, erro: ins.error.message }) }
+      } else {
+        rel.enfileirados++
+        if (debug) rel.detalhe.push({ numero: p.numero, etapa: et.etapa, enviar_em: iso(et.quando), comLink: !!(et.etapa === 't10' && link) })
+      }
+    }
+  }
+
+  return Response.json(rel)
+}

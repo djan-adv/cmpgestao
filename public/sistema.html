@@ -15569,6 +15569,33 @@ function exportarProdutividadeCSV(){
   };
 
   /* ------------------------- envio (escritório) ------------------------- */
+  /* Rótulo pelo nome do arquivo: minuta de petição, despacho/sentença ou
+     documento. É palpite pelo nome, então quando não reconhece fica no genérico
+     em vez de afirmar o que não sabe. */
+  function _tipoDocEnviado(nome){
+    var n=String(nome||'').toLowerCase();
+    if(/peti[çc]|minuta|inicial|contesta|r[ée]plica|recurso|apela|embarg|agravo|manifesta|contrarraz/.test(n)) return 'cópia de minuta de petição';
+    if(/despach|senten|decis|ac[óo]rd[ãa]o|ata\b|intima|liminar/.test(n)) return 'cópia de despacho/sentença';
+    return 'cópia de documento';
+  }
+  async function _registraEnvioAoCliente(procId, nomeArq){
+    try{
+      var s=S(); if(!s) return;
+      var q=await s.from('processos').select('numero_digitos').eq('id',procId).maybeSingle();
+      var dig=(q&&q.data&&q.data.numero_digitos)||'';
+      if(!dig) return;
+      await s.rpc('robot_add_andamento_fonte',{
+        p_num:dig,
+        p_data:new Date().toISOString().slice(0,10),
+        p_texto:'[App] '+_tipoDocEnviado(nomeArq)+' enviada ao cliente — '+String(nomeArq).slice(0,120),
+        p_fonte:'app'
+      });
+      /* se a ficha deste processo estiver aberta, o histórico já mostra a linha */
+      if(typeof atual!=='undefined' && atual && atual._id===procId && typeof atualizarHistorico==='function'){
+        try{ if(typeof renderHistorico==='function') renderHistorico(); }catch(e){}
+      }
+    }catch(e){ /* o registro é acessório: nunca impede o envio ao cliente */ }
+  }
   function enviarMsg(procId, texto, arquivo){
     return eu().then(function(me){
       if(!me){ alert('Faça login de novo.'); return false; }
@@ -15593,6 +15620,10 @@ function exportarProdutividadeCSV(){
         }, anexo||{})).select('id,autor_tipo,autor_nome,texto,criado_em,anexo_id,anexo_nome,anexo_tipo,anexo_tamanho').single().then(function(r){
           if(r.error){ alert('Não foi possível enviar: '+r.error.message); return false; }
           admin({acao:'notificar_cliente',processo_id:procId,texto:(texto||('Arquivo: '+((anexo&&anexo.anexo_nome)||'anexo')))}).catch(function(){});
+          /* Documento que NÓS mandamos deixa rastro no nosso histórico. O que o
+             cliente manda não entra aqui de propósito: fica na conversa, que é
+             onde ele pertence — histórico do processo não é transcrição de chat. */
+          if(anexo && anexo.anexo_nome) _registraEnvioAoCliente(procId, anexo.anexo_nome);
           if(JAN.aberta&&JAN.procId===procId){ desenhaMsg(r.data); if(r.data.id>JAN.ultimo) JAN.ultimo=r.data.id; }
           return true;
         });
