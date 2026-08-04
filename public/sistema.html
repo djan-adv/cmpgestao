@@ -2394,7 +2394,45 @@ function _parteItemHTML(nome, autor){
     +'<span onclick="copiarParte(this)" data-v="'+esc(nome)+'" title="Clique para copiar o nome" style="cursor:copy;border-radius:4px;padding:1px 3px;margin-left:-3px;'+estNome+'">'+esc(nome)+'</span>'
     +'<br><span class="parte-doc-slot" data-nk="'+esc(nk)+'" data-nome="'+esc(nome)+'" onclick="if(this.getAttribute(\'data-v\'))copiarParte(this)" title="Clique para copiar" style="cursor:copy;'+estDoc+';color:var(--muted);opacity:.8;border-radius:4px;margin-left:-3px"></span>'
     +'<a onclick="editarDocParte(this.getAttribute(\'data-nome\'))" data-nome="'+esc(nome)+'" title="Informar/corrigir o CPF ou CNPJ desta parte (grava no cadastro de Contatos)" style="cursor:pointer;color:#185FA5;font-size:11px;margin-left:5px">✎</a>'
+    +(autor?_contatoParteHTML(nome):'')
     +'</div>';
+}
+/* Contatos DESTA parte, logo abaixo do nome. Num litisconsórcio ("A; B; C") o
+   contato solto do processo não diz de quem é — e o escritório acaba ligando
+   para o número do irmão achando que é do cliente. */
+function _contatosDaParte(nome){
+  if(!atual||!atual.ctlp) return [];
+  var v=atual.ctlp[normClienteNome(nome)];
+  return Array.isArray(v)?v.filter(Boolean):[];
+}
+function _contatoParteHTML(nome){
+  var lista=_contatosDaParte(nome);
+  var chips=lista.map(function(t){
+    var eMail=/@/.test(t);
+    var alvo=eMail?('https://mail.google.com/mail/?view=cm&fs=1&to='+encodeURIComponent(t))
+                  :('https://wa.me/'+(function(d){ d=t.replace(/\D/g,''); return d.length<=11?('55'+d):d; })());
+    return '<a href="'+esc(alvo)+'" target="_blank" title="'+(eMail?'Escrever e-mail':'Abrir no WhatsApp')+'" '
+      +'style="text-decoration:none;font-size:10.5px;color:'+(eMail?'#185FA5':'#127a53')+';background:'+(eMail?'#e9f1f9':'#e9f5ef')
+      +';border-radius:10px;padding:1px 7px;margin-right:4px;display:inline-block">'+(eMail?'✉ ':'📞 ')+esc(t)+'</a>';
+  }).join('');
+  return '<div style="margin:2px 0 0 -3px;line-height:1.5">'+chips
+    +'<a onclick="editarContatoParte(this.getAttribute(\'data-nome\'))" data-nome="'+esc(nome)+'" '
+    +'title="Telefone/e-mail desta parte especificamente" '
+    +'style="cursor:pointer;color:var(--muted);font-size:10.5px;border-bottom:1px dotted #c8cfd8">'
+    +(lista.length?'✎ contato':'+ contato desta parte')+'</a></div>';
+}
+async function editarContatoParte(nome){
+  if(!atual) return;
+  var nk=normClienteNome(nome), atuais=_contatosDaParte(nome);
+  var v=window.prompt('Telefone(s) e/ou e-mail(s) de '+nome+', separados por vírgula.\nDeixe vazio para limpar.', atuais.join(', '));
+  if(v===null) return;
+  var lista=v.split(/[,;\n]+/).map(function(t){return t.trim();}).filter(Boolean).slice(0,4);
+  var mapa=Object.assign({}, atual.ctlp||{});
+  if(lista.length) mapa[nk]=lista; else delete mapa[nk];
+  var w=await window.__sb.from('processos').update({contatos_partes:(Object.keys(mapa).length?mapa:null)}).eq('id',atual._id);
+  if(w.error){ alert('Erro ao salvar: '+w.error.message); return; }
+  atual.ctlp=mapa;
+  var idx=DADOS.processos.indexOf(atual); if(idx>=0) abrir(idx);
 }
 /* informa/corrige o CPF/CNPJ de uma parte — grava no cadastro de Contatos
    (cria o contato se ainda não existir) e repinta o card */
@@ -5626,7 +5664,7 @@ function toggleConcluirTarefa(id){
     DADOS.processos=rows.map(function(p){
       var hf=[]; /* históricos chegam em segundo plano — ver carregarHistoricosFundo */
       var vinc=Array.isArray(p.vinculados)?p.vinculados:(p.vinculados?[].concat(p.vinculados):[]);
-      return {_id:p.id, cliente:p.cliente_nome||'', numero:p.numero, oponente:p.oponente||'', tipo:p.assunto||'', classe:p.classe||'', orgao:p.orgao||'', orgao_atual:p.orgao_atual||'', grau_atual:p.grau_atual||'', tramitacoes:(Array.isArray(p.tramitacoes)?p.tramitacoes:[]), distribuido_em:(p.distribuido_em||null), foro:p.foro||'', status:p.status||'', data:fmtData(p.ultima_movimentacao), hist:'', causa:fmtCausa(p.valor_causa), hist_full:hf, ctl:p.contatos_livres||'', hon_faturado:(p.hon_faturado!=null?p.hon_faturado:0), hon_afaturar:(p.hon_afaturar!=null?p.hon_afaturar:0), hon_pct_contratual:(p.hon_pct_contratual!=null?p.hon_pct_contratual:null), hon_pct_sucumbencia:(p.hon_pct_sucumbencia!=null?p.hon_pct_sucumbencia:null), hon_pct_execucao:(p.hon_pct_execucao!=null?p.hon_pct_execucao:null), hon_pct_ma_fe:(p.hon_pct_ma_fe!=null?p.hon_pct_ma_fe:null), hon_pro_labore:(p.hon_pro_labore!=null?p.hon_pro_labore:0), valor_condenacao:(p.valor_condenacao!=null?p.valor_condenacao:0), hon_val_contratual:(p.hon_val_contratual!=null?p.hon_val_contratual:null), hon_val_sucumbencia:(p.hon_val_sucumbencia!=null?p.hon_val_sucumbencia:null), hon_val_execucao:(p.hon_val_execucao!=null?p.hon_val_execucao:null), hon_modo:(p.hon_modo||null), hon_atualizado_em:(p.hon_atualizado_em||null), hon_indice:(p.hon_indice||null), suspenso:(p.suspenso===true), vinculados:vinc, fora_inove:!!p.fora_inove, inove:(p.inove===true), fonte:p.fonte||'', ehCaso:(p.fonte==='caso'), fase_manual:(p.fase||''), observacoes:(p.observacoes||''), lote_id:(p.lote_id||null), valor_alvara_escritorio:(p.valor_alvara_escritorio!=null?p.valor_alvara_escritorio:null), alvara_valor_confirmado:(p.alvara_valor_confirmado!=null?p.alvara_valor_confirmado:null), alvara_data_deposito:(p.alvara_data_deposito||null), alvara_nf_status:(p.alvara_nf_status||null), alvara_nf_numero:(p.alvara_nf_numero||null)};
+      return {_id:p.id, cliente:p.cliente_nome||'', numero:p.numero, oponente:p.oponente||'', tipo:p.assunto||'', classe:p.classe||'', orgao:p.orgao||'', orgao_atual:p.orgao_atual||'', grau_atual:p.grau_atual||'', tramitacoes:(Array.isArray(p.tramitacoes)?p.tramitacoes:[]), distribuido_em:(p.distribuido_em||null), foro:p.foro||'', status:p.status||'', data:fmtData(p.ultima_movimentacao), hist:'', causa:fmtCausa(p.valor_causa), hist_full:hf, ctl:p.contatos_livres||'', ctlp:(p.contatos_partes&&typeof p.contatos_partes==='object'?p.contatos_partes:{}), hon_faturado:(p.hon_faturado!=null?p.hon_faturado:0), hon_afaturar:(p.hon_afaturar!=null?p.hon_afaturar:0), hon_pct_contratual:(p.hon_pct_contratual!=null?p.hon_pct_contratual:null), hon_pct_sucumbencia:(p.hon_pct_sucumbencia!=null?p.hon_pct_sucumbencia:null), hon_pct_execucao:(p.hon_pct_execucao!=null?p.hon_pct_execucao:null), hon_pct_ma_fe:(p.hon_pct_ma_fe!=null?p.hon_pct_ma_fe:null), hon_pro_labore:(p.hon_pro_labore!=null?p.hon_pro_labore:0), valor_condenacao:(p.valor_condenacao!=null?p.valor_condenacao:0), hon_val_contratual:(p.hon_val_contratual!=null?p.hon_val_contratual:null), hon_val_sucumbencia:(p.hon_val_sucumbencia!=null?p.hon_val_sucumbencia:null), hon_val_execucao:(p.hon_val_execucao!=null?p.hon_val_execucao:null), hon_modo:(p.hon_modo||null), hon_atualizado_em:(p.hon_atualizado_em||null), hon_indice:(p.hon_indice||null), suspenso:(p.suspenso===true), vinculados:vinc, fora_inove:!!p.fora_inove, inove:(p.inove===true), fonte:p.fonte||'', ehCaso:(p.fonte==='caso'), fase_manual:(p.fase||''), observacoes:(p.observacoes||''), lote_id:(p.lote_id||null), valor_alvara_escritorio:(p.valor_alvara_escritorio!=null?p.valor_alvara_escritorio:null), alvara_valor_confirmado:(p.alvara_valor_confirmado!=null?p.alvara_valor_confirmado:null), alvara_data_deposito:(p.alvara_data_deposito||null), alvara_nf_status:(p.alvara_nf_status||null), alvara_nf_numero:(p.alvara_nf_numero||null)};
     });
     if(DADOS.kpis){ DADOS.kpis.total=DADOS.processos.length; }
     /* mostra a tela JÁ — a lista não depende de históricos/triagem/agenda */
@@ -8591,13 +8629,18 @@ function renderCtlChips(){
   el.appendChild(ed);
   /* sem contato na ficha? se o MESMO cliente tem contato em outro processo,
      oferece puxar (homônimo é raríssimo aqui) — 1 clique, pede confirmação */
-  if(!toks.length && atual.cliente){
-    var achados=_contatosDeOutrosProcessos(atual.cliente);
-    if(achados.length){
+  /* A oferta só aparecia com a ficha VAZIA. Com um e-mail aqui e dois no outro
+     processo do mesmo cliente, ela nunca aparecia — e o contato ficava faltando
+     sem ninguém perceber. Agora vale sempre que houver algo LÁ que não está
+     AQUI, e o botão diz quantos são. */
+  if(atual.cliente){
+    var jaAqui={}; toks.forEach(function(t){ jaAqui[_chaveCtl(t)]=1; });
+    var faltam=_contatosDeOutrosProcessos(atual.cliente).filter(function(t){ return !jaAqui[_chaveCtl(t)]; });
+    if(faltam.length){
       var pull=document.createElement('button');
       pull.style.cssText='background:#eaf4f4;color:#0b7285;border:1px solid #cfe6e6;border-radius:16px;padding:4px 10px;font-size:12px;cursor:pointer;font-weight:700';
-      pull.textContent='📥 puxar contato do cliente (em outros processos)';
-      pull.title='Copiar telefone/e-mail que já constam em outros processos do mesmo cliente';
+      pull.textContent='📥 puxar '+faltam.length+' contato'+(faltam.length>1?'s':'')+' de outros processos deste cliente';
+      pull.title=faltam.join('\n');
       pull.onclick=_puxarContatoDoCliente;
       el.appendChild(pull);
     }
@@ -8605,6 +8648,9 @@ function renderCtlChips(){
   /* "Puxar nome" e "Puxar contato" foram unificados no botão "🔄 Atualizar dados
      do cliente" do topo da ficha (lê nome + e-mail + telefone dos documentos) */
 }
+/* Chave de comparação: e-mail bate por texto, telefone só pelos dígitos — assim
+   "(83) 99999-0000" e "83999990000" contam como o mesmo contato. */
+function _chaveCtl(t){ var v=String(t||'').trim(); return /@/.test(v)?v.toLowerCase():v.replace(/\D/g,''); }
 /* contatos (tel/e-mail) que já constam em OUTROS processos do mesmo cliente */
 function _contatosDeOutrosProcessos(nome){
   var alvo=(typeof normClienteNome==='function')?normClienteNome(nome||''):String(nome||'').toLowerCase().trim();
@@ -8626,7 +8672,7 @@ async function _puxarContatoDoCliente(){
   if(!achados.length){ alert('Não encontrei telefone/e-mail em outros processos deste cliente.'); return; }
   if(!confirm('Usar estes contatos de outros processos de '+(atual.cliente||'')+'?\n\n'+achados.join('\n'))) return;
   var atuais=String(atual.ctl||'').split(/[,;\n]+/).map(function(s){return s.trim();}).filter(Boolean);
-  var seen={}, fin=[]; atuais.concat(achados).forEach(function(t){ var k=t.toLowerCase().replace(/\s+/g,''); if(!seen[k]){ seen[k]=1; fin.push(t); } });
+  var seen={}, fin=[]; atuais.concat(achados).forEach(function(t){ var k=_chaveCtl(t); if(k&&!seen[k]){ seen[k]=1; fin.push(t); } });
   var novo=fin.join(', ');
   try{ if(window.__sb && atual._id){ var w=await window.__sb.from('processos').update({contatos_livres:novo}).eq('id',atual._id); if(w&&w.error){ alert('Erro ao salvar: '+w.error.message); return; } } }catch(e){ alert('Erro de rede.'); return; }
   atual.ctl=novo; renderCtlChips();
@@ -8711,6 +8757,38 @@ async function editarCtl(){
   var w=await sb.from('processos').update({contatos_livres:novo||null}).eq('id',atual._id);
   if(w.error){ alert('Erro ao salvar: '+w.error.message); return; }
   atual.ctl=novo; renderCtlChips();
+  await _ofereceReplicarCtl(novos);
+}
+/* Contato é do CLIENTE, não do processo: quem cadastra o e-mail num processo
+   quase sempre quer que valha para os outros do mesmo cliente. Pergunta uma vez,
+   e só quando há de fato outro processo em que aquele contato falta. */
+async function _ofereceReplicarCtl(novos){
+  try{
+    if(!atual||!atual.cliente||!novos||!novos.length) return;
+    var alvo=normClienteNome(atual.cliente);
+    var irmaos=(DADOS.processos||[]).filter(function(p){
+      if(!p||p===atual||!p.cliente) return false;
+      if(normClienteNome(p.cliente)!==alvo) return false;
+      var tem={}; String(p.ctl||'').split(/[,;\n]+/).forEach(function(t){ t=t.trim(); if(t) tem[_chaveCtl(t)]=1; });
+      return novos.some(function(n){ return !tem[_chaveCtl(n)]; });
+    });
+    if(!irmaos.length) return;
+    if(!window.confirm(atual.cliente+' tem mais '+irmaos.length+' processo'+(irmaos.length>1?'s':'')+' sem '
+       +(novos.length>1?'estes contatos':'este contato')+'.\n\n'+novos.join('\n')+'\n\nAplicar '
+       +(irmaos.length>1?'a todos eles':'a ele')+' também?')) return;
+    var sb=window.__sb, erros=0;
+    for(var i=0;i<irmaos.length;i++){
+      var p=irmaos[i];
+      var seen={}, fin=[];
+      String(p.ctl||'').split(/[,;\n]+/).map(function(t){return t.trim();}).filter(Boolean)
+        .concat(novos).forEach(function(t){ var k=_chaveCtl(t); if(k&&!seen[k]){ seen[k]=1; fin.push(t); } });
+      fin=fin.slice(0,4);   // mesmo limite de 4 da ficha
+      var r=await sb.from('processos').update({contatos_livres:fin.join(', ')||null}).eq('id',p._id);
+      if(r.error) erros++; else p.ctl=fin.join(', ');
+    }
+    alert(erros?('Apliquei em '+(irmaos.length-erros)+' de '+irmaos.length+' — '+erros+' falharam.')
+               :('✓ Contato aplicado em mais '+irmaos.length+' processo'+(irmaos.length>1?'s':'')+' de '+atual.cliente+'.'));
+  }catch(e){ /* replicar é conveniência: nunca desfaz o que já foi salvo aqui */ }
 }
 /* ===== Puxar contato da procuração (PDF.js, client-side) ===== */
 function _ensurePdfJs(){
