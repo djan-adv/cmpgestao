@@ -55,10 +55,21 @@ function pega(o, nomes, padrao) {
   return padrao === undefined ? null : padrao
 }
 
+// Telefone vem com o DDD em campo separado em algumas fontes e colado em outras.
+// Junta os dois quando estiverem separados, senão sai "99999999" sem DDD — que
+// não serve para ligar nem para o WhatsApp.
+function umTelefone(o, sufixo) {
+  const ddd = pega(o, ['ddd_' + sufixo, 'ddd' + sufixo])
+  const num = pega(o, ['ddd_telefone_' + sufixo, 'telefone_' + sufixo, 'telefone' + sufixo, sufixo === '1' ? 'telefone' : null].filter(Boolean))
+  if (!num) return null
+  const d = String(num).replace(/\D/g, '')
+  if (!d) return null
+  const comDDD = (ddd && !d.startsWith(String(ddd).replace(/\D/g, ''))) ? (String(ddd).replace(/\D/g, '') + d) : d
+  return comDDD.length >= 10 ? comDDD : null
+}
 function telefone(o) {
-  const t = [pega(o, ['ddd_telefone_1', 'telefone1', 'telefone']), pega(o, ['ddd_telefone_2', 'telefone2'])]
-    .filter(Boolean).map(x => String(x).trim())
-  return t.length ? t : null
+  const t = [umTelefone(o, '1'), umTelefone(o, '2')].filter(Boolean)
+  return t.length ? Array.from(new Set(t)) : null
 }
 
 function endereco(o) {
@@ -91,7 +102,18 @@ function cnaesSecundarios(o) {
     .filter(c => c.codigo || c.descricao)
 }
 
-function normaliza(o, fonte) {
+// Algumas fontes devolvem contato e endereço aninhados em "estabelecimento" em
+// vez de na raiz. Achatar antes de ler evita ficha sem telefone só por causa do
+// formato — foi exatamente o que aconteceu com o primeiro caso aberto por CNPJ.
+function achata(o) {
+  if (!o || typeof o !== 'object') return o
+  const est = o.estabelecimento
+  if (est && typeof est === 'object' && !Array.isArray(est)) return Object.assign({}, est, o, { __aninhado: true })
+  return o
+}
+
+function normaliza(bruto, fonte) {
+  const o = achata(bruto)
   const doc = soDigitos(pega(o, ['cnpj', 'estabelecimento'], '')) || null
   return {
     fonte,
@@ -119,8 +141,29 @@ function normaliza(o, fonte) {
     uf: pega(o, ['uf']),
     cep: pega(o, ['cep']),
     telefones: telefone(o),
-    email: pega(o, ['email', 'correio_eletronico']),
+    email: pega(o, ['email', 'correio_eletronico', 'e_mail', 'email_contato']),
     socios: socios(o),
+  }
+}
+
+// Quando telefone ou e-mail saem vazios, é preciso saber se a Receita não tem o
+// dado ou se o campo mudou de nome. Isto lista as chaves da resposta que cheiram
+// a contato/endereço e diz o que veio em cada uma — uma chamada resolve, em vez
+// de adivinhar nome de campo.
+function diagnostica(cru, ficha) {
+  const raiz = achata(cru) || {}
+  const alvo = /(mail|fone|telefon|ddd|contato|logradouro|numero|bairro|cep|municipio|uf|complement)/i
+  const chaves = {}
+  for (const k of Object.keys(raiz)) {
+    if (!alvo.test(k)) continue
+    const v = raiz[k]
+    if (v && typeof v === 'object') continue
+    chaves[k] = (v === null || v === undefined || String(v).trim() === '') ? '(vazio)' : String(v).slice(0, 60)
+  }
+  return {
+    aninhadoEmEstabelecimento: !!raiz.__aninhado,
+    faltando: ['telefones', 'email', 'endereco'].filter(c => !ficha[c] || (Array.isArray(ficha[c]) && !ficha[c].length)),
+    chavesDeContatoNaFonte: chaves,
   }
 }
 
@@ -164,7 +207,7 @@ export async function GET(request) {
     try {
       const { normal, cru } = await busca(f.url, f.nome, doc)
       if (searchParams.get('cru')) return Response.json({ ok: true, fonte: f.nome, cru })
-      return Response.json({ ok: true, ficha: normal, cru, tentativas: falhas })
+      return Response.json({ ok: true, ficha: normal, cru, tentativas: falhas, diagnostico: diagnostica(cru, normal) })
     } catch (e) {
       falhas.push({ fonte: f.nome, erro: String((e && e.message) || e) })
       // CNPJ inexistente é a mesma resposta em qualquer fonte: não adianta insistir
