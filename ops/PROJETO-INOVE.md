@@ -293,14 +293,70 @@ Gestão responde.
       conjunto visível é `processos where inove = true`. Contato no CRM também não —
       fica para quando houver necessidade comercial.
 - [ ] **3b.** Decidir o filtro de documentos e rodar a carga do jus.br (seção 7b).
-- [ ] **4.** Rota `/api/inove` — sessão, processos, etiquetas, financeiro, chat.
-- [ ] **5.** Entrega de documento com tarja e log.
-- [ ] **6.** Avisos de LGPD e registro de aceite.
+- [x] **4.** Rota `/api/inove` — sessão, processos, etiquetas, financeiro, chat,
+      cadastro de processo, gestão dos acessos. Ver seção 13.
+- [x] **5.** Entrega de documento com tarja e log (`GET /api/inove?doc=…`).
+- [x] **6.** Aviso de LGPD por dia e registro de aceite.
 - [ ] **7.** Reescrever `public/inove.html`: fase → etiquetas, aba Financeiro, chat na
       sidebar, "Plano" fora, tela de gestão dos 5 acessos com o do desenvolvedor
       oculto.
 - [ ] **8.** Teto de 62 processos com alerta dos dois lados.
 - [ ] **9.** Dump diário do schema `inove` no `ops/backup-supabase.sh`.
+
+## 13. A rota — o que já está escrito
+
+```
+app/api/inove/lib.js   conexão (pg + role inove_app), senha scrypt, sessão,
+                       tarja, leitura de documento, log, alerta
+app/api/inove/route.js as ações
+scripts/inove-acesso.mjs  criar/trocar senha/ativar acesso pela linha de comando
+```
+
+### Ações
+
+| Ação | O que faz |
+|---|---|
+| `login` / `sair` | sessão de 30 dias, trava de 10 tentativas por 10 min |
+| `meus` | os 42 processos, com Situação, Quesitos e contagem de peças |
+| `processo` | ficha + movimentações oficiais + documentos + etiquetas |
+| `etiquetas` / `etiquetar` | as duas dimensões; trocar substitui, nunca acumula |
+| `cadastrar_processo` | via função do banco, com o teto de 62 aplicado lá dentro |
+| `atualizar` | dispara `puxar-docs` do jus.br com a sessão do escritório |
+| `financeiro` / `financeiro_salvar` | lista com totais e gravação |
+| `chat` / `chat_enviar` | por processo ou conversa geral |
+| `acessos` / `acesso_criar` / `acesso_editar` / `acesso_desativar` | limite de 5; o acesso `oculto` não aparece nem conta |
+| `lgpd_aceitar` | grava o aceite do dia |
+| `GET ?doc=&t=` | entrega o arquivo já carimbado, gravando quem abriu |
+
+### Duas decisões dentro do código que valem registro
+
+**PDF que o `pdf-lib` não consegue reabrir não é entregue.** Cifrado ou malformado,
+a rota devolve erro em vez de servir sem tarja — uma cópia anônima circulando é pior
+que um documento que não abriu. O log registra a tentativa.
+
+**O primeiro acesso nasce pelo script, não pela tela.** A tela de acessos exige estar
+logado, e não haveria quem criasse o primeiro. Depois do primeiro, a Inove administra
+os cinco sozinha.
+
+```bash
+cd /opt/cmpgestao
+node scripts/inove-acesso.mjs criar "Nome da Pessoa" pessoa@inove.com.br
+node scripts/inove-acesso.mjs criar "Djan (dev)" djan.adv@gmail.com --oculto
+node scripts/inove-acesso.mjs listar
+```
+
+A senha é gerada e mostrada uma vez; no banco fica só o hash scrypt.
+
+## 14. O que falta
+
+- [ ] `INOVE_DB_URL` no `.env` da VPS e `npm install` (o `pg` entrou no `package.json`).
+- [ ] Testar a conexão como `inove_app` a partir da VPS — nunca foi executada.
+- [ ] Criar o primeiro acesso pelo script.
+- [ ] Passo 7: reescrever `public/inove.html` (fase → etiquetas, aba Financeiro, chat
+      na barra lateral, "Plano" fora, tela dos 5 acessos).
+- [ ] Rodar a carga do jus.br nos **35 processos sem nenhum documento** — hoje só 7
+      dos 42 têm arquivo, e o portal abriria quase vazio.
+- [ ] Passo 9: dump diário do schema `inove` no `ops/backup-supabase.sh`.
 
 ## 11. Ideias levantadas, ainda não aprovadas
 
