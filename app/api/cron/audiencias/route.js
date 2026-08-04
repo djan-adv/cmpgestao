@@ -28,6 +28,28 @@ function admin() {
 // isto os avisos sairiam 3 horas fora — o de 10 minutos antes chegaria depois da
 // audiência ter começado.
 const BR = '-03:00'
+
+// Silêncio noturno: nada sai para o cliente antes das 06:00 nem depois das 18:30.
+export const JANELA_INI = 6 * 60          // 06:00
+export const JANELA_FIM = 18 * 60 + 30    // 18:30
+// minutos desde a meia-noite, no horário de Brasília
+function minutosBR(d) {
+  const local = new Date(d.getTime() - 3 * 3600000)
+  return local.getUTCHours() * 60 + local.getUTCMinutes()
+}
+function dentroDaJanela(d) {
+  const m = minutosBR(d)
+  return m >= JANELA_INI && m <= JANELA_FIM
+}
+// Empurra para as 06:00 do próximo dia permitido. Só faz sentido para aviso que
+// continua útil depois (véspera); o de 30/10 minutos, atrasado, não serve.
+function proximaJanela(d) {
+  const local = new Date(d.getTime() - 3 * 3600000)
+  const m = local.getUTCHours() * 60 + local.getUTCMinutes()
+  if (m < JANELA_INI) local.setUTCHours(6, 0, 0, 0)
+  else { local.setUTCDate(local.getUTCDate() + 1); local.setUTCHours(6, 0, 0, 0) }
+  return new Date(local.getTime() + 3 * 3600000)
+}
 function instante(dataISO, hora) {
   const h = /^\d{1,2}:\d{2}/.test(String(hora || '')) ? String(hora).slice(0, 5) : '09:00'
   const d = new Date(`${dataISO}T${h.padStart(5, '0')}:00${BR}`)
@@ -35,6 +57,14 @@ function instante(dataISO, hora) {
 }
 function iso(d) { return d.toISOString() }
 function brData(s) { return String(s).split('-').reverse().join('/') }
+// 11 processos estão gravados com o número sem pontuação. Na tela o fmtCNJ
+// disfarça, mas o aviso vai para o CLIENTE — e "08264547920268150001" não é
+// número de processo para ninguém.
+function fmtCNJ(n) {
+  const d = String(n == null ? '' : n).replace(/\D/g, '')
+  if (d.length !== 20) return String(n == null ? '' : n)
+  return d.slice(0, 7) + '-' + d.slice(7, 9) + '.' + d.slice(9, 13) + '.' + d.slice(13, 14) + '.' + d.slice(14, 16) + '.' + d.slice(16)
+}
 
 // Link da sala virtual, procurado no histórico do processo. A mesma ideia do
 // _achaLinkAudiencia da tela, mas aqui no servidor: o aviso de 10 minutos antes
@@ -96,6 +126,7 @@ export async function GET(request) {
     }
 
     const hTxt = (e.hora && e.hora !== 'Dia todo') ? (' às ' + String(e.hora).slice(0, 5)) : ''
+    const numTxt = fmtCNJ(p.numero)
     const base = { escritorio_id: p.escritorio_id || e.escritorio_id, processo_id: p.id, processo_numero: p.numero, data_audiencia: e.data, hora_audiencia: e.hora || null, url: '/portal.html?proc=' + p.id }
 
     // Véspera às 9h da manhã do dia anterior: cedo o bastante para o cliente se
@@ -105,18 +136,28 @@ export async function GET(request) {
     const vespera = instante(dISO(new Date(vesp.getTime())), '09:00')
 
     const etapas = [
-      { etapa: 'vespera', quando: vespera, titulo: 'Sua audiência é amanhã', corpo: 'Processo ' + p.numero + ' — ' + brData(e.data) + hTxt + '. Qualquer dúvida, fale com o escritório pelo app.' },
-      { etapa: 't30', quando: new Date(quando.getTime() - 30 * 60000), titulo: 'Sua audiência é em 30 minutos', corpo: 'Processo ' + p.numero + hTxt + '. Prepare-se: documento com foto em mãos e um lugar silencioso.' },
-      { etapa: 't10', quando: t10, titulo: 'Sua audiência começa em 10 minutos', corpo: link ? ('Toque aqui para entrar na sala. Processo ' + p.numero + hTxt + '.') : ('Processo ' + p.numero + hTxt + '. Se for por videoconferência, use o link que a vara enviou.') },
+      { etapa: 'vespera', quando: vespera, titulo: 'Sua audiência é amanhã', corpo: 'Processo ' + numTxt + ' — ' + brData(e.data) + hTxt + '. Qualquer dúvida, fale com o escritório pelo app.' },
+      { etapa: 't30', quando: new Date(quando.getTime() - 30 * 60000), titulo: 'Sua audiência é em 30 minutos', corpo: 'Processo ' + numTxt + hTxt + '. Prepare-se: documento com foto em mãos e um lugar silencioso.' },
+      { etapa: 't10', quando: t10, titulo: 'Sua audiência começa em 10 minutos', corpo: link ? ('Toque aqui para entrar na sala. Processo ' + numTxt + hTxt + '.') : ('Processo ' + numTxt + hTxt + '. Se for por videoconferência, use o link que a vara enviou.') },
     ]
 
     for (const et of etapas) {
       if (!et.quando) continue
+      let quandoEnviar = et.quando
+      // Silêncio noturno. A véspera é lembrete e pode esperar: vai para as 06:00
+      // do próximo dia permitido. Os de 30 e 10 minutos estão amarrados à hora da
+      // audiência — adiar não faz sentido e mandar fora de hora, também. Então
+      // esses simplesmente não saem (audiência às 5h ou às 20h não existe na
+      // prática; se existir, o aviso por e-mail continua valendo).
+      if (!dentroDaJanela(quandoEnviar)) {
+        if (et.etapa === 'vespera') quandoEnviar = proximaJanela(quandoEnviar)
+        else { rel.foraDaJanela = (rel.foraDaJanela || 0) + 1; continue }
+      }
       // já passou da hora: não enfileira. Aviso atrasado é pior que aviso nenhum —
       // o cliente receberia "sua audiência é em 30 minutos" depois dela acabar.
-      if (et.quando.getTime() <= agora) { rel.passou++; continue }
+      if (quandoEnviar.getTime() <= agora) { rel.passou++; continue }
       const linha = Object.assign({}, base, {
-        etapa: et.etapa, enviar_em: iso(et.quando), titulo: et.titulo, corpo: et.corpo,
+        etapa: et.etapa, enviar_em: iso(quandoEnviar), titulo: et.titulo, corpo: et.corpo,
         url: (et.etapa === 't10' && link) ? link : base.url,
       })
       const ins = await sb.from('avisos_app_fila').insert(linha)
@@ -126,7 +167,7 @@ export async function GET(request) {
         else { rel.erros++; if (debug) rel.detalhe.push({ numero: p.numero, etapa: et.etapa, erro: ins.error.message }) }
       } else {
         rel.enfileirados++
-        if (debug) rel.detalhe.push({ numero: p.numero, etapa: et.etapa, enviar_em: iso(et.quando), comLink: !!(et.etapa === 't10' && link) })
+        if (debug) rel.detalhe.push({ numero: p.numero, etapa: et.etapa, enviar_em: iso(quandoEnviar), adiado: quandoEnviar.getTime() !== et.quando.getTime(), comLink: !!(et.etapa === 't10' && link) })
       }
     }
   }

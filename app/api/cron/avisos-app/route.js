@@ -22,6 +22,18 @@ export const maxDuration = 60
 const LOTE = 10
 const MAX_TENTATIVAS = 3
 
+// Silêncio noturno: nada chega ao cliente antes das 06:00 nem depois das 18:30.
+// A checagem existe TAMBÉM aqui, e não só no planejador, de propósito: se o robô
+// ficar fora do ar e voltar às 4h da manhã, ele encontra a fila vencida e
+// dispararia tudo de uma vez na cabeça do cliente. Aqui ele espera amanhecer.
+const JANELA_INI = 6 * 60
+const JANELA_FIM = 18 * 60 + 30
+function foraDoHorario(d) {
+  const local = new Date(d.getTime() - 3 * 3600000)   // Brasília, sem horário de verão
+  const m = local.getUTCHours() * 60 + local.getUTCMinutes()
+  return m < JANELA_INI || m > JANELA_FIM
+}
+
 function admin() {
   return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } })
 }
@@ -31,6 +43,10 @@ export async function GET(request) {
   const { searchParams } = new URL(request.url)
   const limite = Math.max(1, Math.min(LOTE, parseInt(searchParams.get('limite') || String(LOTE), 10) || LOTE))
   const sb = admin()
+
+  if (foraDoHorario(new Date()) && !searchParams.get('forcar')) {
+    return Response.json({ ok: true, enviados: 0, silencio: true, motivo: 'fora da janela 06:00–18:30' })
+  }
 
   // item preso em 'enviando' (queda no meio do envio) volta para a fila depois de
   // 10 minutos, senão ficaria parado para sempre
