@@ -12810,20 +12810,135 @@ function renderProcVinculados(){
   var elr=document.getElementById('proc-vinculados-rodape'); if(elr) elr.innerHTML='';
 }
 function _sanitizeProcNum(s){ return String(s||'').trim(); }
-function adicionarProcVinculado(){
+/* Acha um processo já cadastrado pelos DÍGITOS — a base tem número com e sem
+   pontuação, então comparar o texto cru não serve. */
+function _achaProcPorDigitos(dig){
+  dig=String(dig||'').replace(/\D/g,''); if(!dig) return null;
+  return (DADOS.processos||[]).find(function(x){ return String(x.numero||'').replace(/\D/g,'')===dig; })||null;
+}
+/* Vincula do OUTRO lado. Vínculo só de ida é meia informação: quem abrisse o
+   cumprimento provisório não veria o processo de origem. */
+async function _vinculaDeVolta(procAlvo, numeroDaFicha){
+  try{
+    var sb=window.__sb; if(!sb||!procAlvo||!procAlvo._id) return;
+    var lista=Array.isArray(procAlvo.vinculados)?procAlvo.vinculados.slice():[];
+    var jaTem=lista.some(function(x){ return String(x).replace(/\D/g,'')===String(numeroDaFicha).replace(/\D/g,''); });
+    if(jaTem) return;
+    lista.push(numeroDaFicha);
+    lista=lista.slice(0,3);
+    var r=await sb.from('processos').update({vinculados:lista}).eq('id',procAlvo._id);
+    if(!r.error) procAlvo.vinculados=lista;
+  }catch(e){ console.warn('vínculo de volta:',e&&e.message||e); }
+}
+async function adicionarProcVinculado(){
   if(!atual) return;
   var n=prompt('Cole o número do processo vinculado:'); if(!n||!n.trim()) return;
   if(!atual.vinculados) atual.vinculados=[];
   var dig=_sanitizeProcNum(n);
   var soDigitos=dig.replace(/\D/g,'');
   if(soDigitos.length<15){ alert('Número de processo parece incompleto. Cole o número completo (padrão CNJ).'); return; }
-  if(atual.vinculados.indexOf(dig)>-1){ alert('Este processo já está vinculado.'); return; }
+  if(atual.vinculados.some(function(x){ return String(x).replace(/\D/g,'')===soDigitos; })){ alert('Este processo já está vinculado.'); return; }
   if(atual.vinculados.length>=3){ alert('Limite de 3 processos vinculados por ficha.'); return; }
-  atual.vinculados.push(dig); renderProcVinculados(); persisteVinculados();
+  if(soDigitos===String(atual.numero||'').replace(/\D/g,'')){ alert('Um processo não se vincula a si mesmo.'); return; }
+
+  var alvo=_achaProcPorDigitos(soDigitos);
+
+  /* A tela carrega no máximo 3000 processos: não estar na lista NÃO quer dizer
+     que não exista no banco. Sem esta consulta, um processo antigo viraria
+     duplicata silenciosa. */
+  if(!alvo){
+    try{
+      var sbq=window.__sb;
+      if(sbq){
+        var q=await sbq.from('processos').select('id,numero,cliente_nome,oponente,vinculados').eq('numero_digitos',soDigitos).limit(1);
+        if(!q.error&&q.data&&q.data[0]){
+          var d0=q.data[0];
+          alvo={_id:d0.id, numero:d0.numero, cliente:d0.cliente_nome||'', oponente:d0.oponente||'',
+                vinculados:(Array.isArray(d0.vinculados)?d0.vinculados:[])};
+        }
+      }
+    }catch(eQ){ console.warn('busca do vinculado no banco:',eQ&&eQ.message||eQ); }
+  }
+
+  /* Não cadastrado ainda: oferece criar aproveitando o que esta ficha já sabe.
+     É o caso do cumprimento provisório — mesmo cliente, mesma parte contrária,
+     mesmos contatos —, e antes exigia sair da ficha, ir ao painel de processos e
+     digitar tudo de novo. */
+  if(!alvo){
+    var resumo='O processo '+fmtCNJ(soDigitos)+' ainda não está cadastrado.\n\nCadastrar agora aproveitando os dados desta ficha?\n\n'
+      +'Cliente: '+(atual.cliente||'—')+'\n'
+      +'Parte contrária: '+(atual.oponente||'—')+'\n'
+      +(atual.ctl?('Contatos: '+atual.ctl+'\n'):'')
+      +'\nO vínculo fica gravado nos DOIS processos.';
+    if(!window.confirm(resumo)) return;
+    alvo=await _criarVinculadoDaFicha(soDigitos);
+    if(!alvo) return;   /* a falha já foi avisada lá dentro */
+  }
+
+  atual.vinculados.push(dig);
+  renderProcVinculados();
+  persisteVinculados();
+  await _vinculaDeVolta(alvo, atual.numero);
 }
-function removerProcVinculado(n){
+/* Cria o processo vinculado herdando o que a ficha atual já tem. Não copia
+   histórico nem honorários: são do processo de origem, e trazê-los faria a ficha
+   nova nascer mentindo. */
+async function _criarVinculadoDaFicha(soDigitos){
+  try{
+    var sb=window.__sb; if(!sb){ alert('Sem conexão com o banco.'); return null; }
+    var ug=await sb.auth.getUser();
+    var pf=await sb.from('usuarios').select('escritorio_id').eq('id',ug.data.user.id).single();
+    var esc=pf&&pf.data&&pf.data.escritorio_id;
+    if(!esc){ alert('Seu usuário está sem escritório vinculado — não consegui cadastrar.'); return null; }
+    var novoNum=fmtCNJ(soDigitos);
+    var linha={
+      escritorio_id:esc, numero:novoNum,
+      cliente_nome:(atual.cliente||null), oponente:(atual.oponente||null),
+      status:(atual.status||'Ativo 1º Grau'), fonte:'manual',
+      vinculados:[atual.numero],
+      contatos_livres:(atual.ctl||null),
+      lote_id:(atual.lote_id||null),
+    };
+    if(atual.ctlp&&Object.keys(atual.ctlp).length) linha.contatos_partes=atual.ctlp;
+    if(atual.receita_doc) linha.receita_doc=atual.receita_doc;
+    var ins=await sb.from('processos').insert(linha).select('id').single();
+    if(ins.error||!ins.data){ alert('Não consegui cadastrar: '+((ins.error&&ins.error.message)||'erro desconhecido')); return null; }
+
+    /* deixa registrado de onde veio — daqui a um ano ninguém lembra */
+    try{
+      await sb.from('andamentos').insert({processo_id:ins.data.id, data:new Date().toISOString().slice(0,10),
+        texto:'[Cadastro] Processo criado a partir do vínculo com '+atual.numero+' — cliente, parte contrária e contatos herdados daquela ficha.', fonte:'manual'});
+    }catch(eA){}
+
+    var novo={_id:ins.data.id, cliente:(atual.cliente||''), numero:novoNum, oponente:(atual.oponente||''),
+      tipo:'', classe:'', orgao:'', orgao_atual:'', grau_atual:'', tramitacoes:[], distribuido_em:null,
+      foro:'', status:linha.status, data:'', hist:'', causa:'0,00', hist_full:[],
+      ctl:(atual.ctl||''), ctlp:(atual.ctlp||{}), receita_doc:(atual.receita_doc||''),
+      hon_faturado:0, hon_afaturar:0, vinculados:[atual.numero],
+      fonte:'manual', ehCaso:false, lote_id:(atual.lote_id||null)};
+    /* entra na lista em memória para o "↗" abrir sem precisar recarregar a página */
+    (DADOS.processos||[]).push(novo);
+    try{ if(typeof logEvent==='function') logEvent('case_registered','processo',novoNum,{modo:'vinculado',origem:atual.numero}); }catch(eL){}
+    return novo;
+  }catch(e){ alert('Falha ao cadastrar: '+((e&&e.message)||e)); return null; }
+}
+async function removerProcVinculado(n){
   if(!atual||!atual.vinculados) return;
-  atual.vinculados=atual.vinculados.filter(function(x){return x!==n;}); renderProcVinculados(); persisteVinculados();
+  var dig=String(n).replace(/\D/g,'');
+  atual.vinculados=atual.vinculados.filter(function(x){return x!==n;});
+  renderProcVinculados(); persisteVinculados();
+  /* desfaz o outro lado também: vínculo pela metade confunde mais que não ter */
+  try{
+    var outro=_achaProcPorDigitos(dig), sb=window.__sb;
+    if(outro&&outro._id&&sb&&Array.isArray(outro.vinculados)){
+      var meu=String(atual.numero||'').replace(/\D/g,'');
+      var lista=outro.vinculados.filter(function(x){ return String(x).replace(/\D/g,'')!==meu; });
+      if(lista.length!==outro.vinculados.length){
+        var r=await sb.from('processos').update({vinculados:lista}).eq('id',outro._id);
+        if(!r.error) outro.vinculados=lista;
+      }
+    }
+  }catch(e){ console.warn('desvincular do outro lado:',e&&e.message||e); }
 }
 /* ponto 12: persiste os vinculados no banco. Requer coluna processos.vinculados (jsonb ou text[]).
    Se a coluna não existir, o erro é silenciado e a vinculação continua válida na tela. */
