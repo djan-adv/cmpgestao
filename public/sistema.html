@@ -15812,14 +15812,29 @@ function exportarProdutividadeCSV(){
             return '<div style="margin:4px 0;font-size:13px"><span class="note" style="font-size:11px">'+ddmmhh(m.criado_em)+'</span> <b style="color:'+(cli?'#185FA5':'#0F6E56')+'">'+(cli?'&#128242; ':'')+escx(m.autor_nome||(cli?'Cliente':'Escritório'))+':</b> '+escx(m.texto||'')+anx+'</div>';
           }).join('')
           : '<div class="note">Nenhuma mensagem ainda. '+(acessos.length?'O cliente já pode escrever pelo app.':'Dê acesso ao app para o cliente poder conversar por aqui.')+'</div>';
-        h+='<div style="display:flex;gap:6px;margin-top:8px"><input id="clichat-inp" placeholder="Responder ao cliente…" style="flex:1" onkeydown="if(event.key===\'Enter\')appCliEnviarDaFicha(\''+procId+'\')"><button class="btn sm" style="background:#185FA5;color:#fff" onclick="appCliEnviarDaFicha(\''+procId+'\')">Enviar</button></div>';
+        /* anexo direto da ficha: mandar documento ao cliente exigia abrir a
+           janela do chat. O leitor e o estado são os MESMOS da janela, então o
+           arquivo escolhido aqui aparece lá e vice-versa. */
+        h+='<div id="clichat-anx-ficha" style="display:none;align-items:center;gap:7px;margin-top:8px;background:#eef4fa;border:1px solid #d6e3f0;border-radius:8px;padding:6px 9px;font-size:11.5px"></div>';
+        h+='<div style="display:flex;gap:6px;margin-top:8px;align-items:center">'
+          +'<input type="file" id="clichat-file" style="display:none" onchange="appCliAnexoDaFicha(this)">'
+          +'<button class="btn sm ghost" title="Enviar documento ao cliente (PDF, imagem, Word…)" onclick="document.getElementById(\'clichat-file\').click()" style="font-size:15px;padding:4px 9px">&#128206;</button>'
+          +'<input id="clichat-inp" placeholder="Responder ao cliente…" style="flex:1" onkeydown="if(event.key===\'Enter\')appCliEnviarDaFicha(\''+procId+'\')">'
+          +'<button class="btn sm" style="background:#185FA5;color:#fff" onclick="appCliEnviarDaFicha(\''+procId+'\')">Enviar</button></div>';
         corpo.innerHTML=h;
       });
   }
   window.appCliEnviarDaFicha=function(procId){
     var i=document.getElementById('clichat-inp'); if(!i) return;
-    var texto=i.value.trim(); if(!texto) return; i.value='';
-    enviarMsg(procId, texto).then(function(ok){ if(ok) fichaConversa(procId); });
+    var texto=(i.value||'').trim(), arq=ANEXO_JAN;
+    /* só texto vazio E sem anexo é que não vale enviar — documento sozinho vale */
+    if(!texto && !arq) return;
+    i.value=''; ANEXO_JAN=null; pintarAnexoJan();
+    enviarMsg(procId, texto, arq).then(function(ok){
+      if(ok) fichaConversa(procId);
+      /* falhou: devolve texto e anexo para o usuário não reescolher o arquivo */
+      else { var i2=document.getElementById('clichat-inp'); if(i2) i2.value=texto; ANEXO_JAN=arq; pintarAnexoJan(); }
+    });
   };
 
   /* ------------------------- envio (escritório) ------------------------- */
@@ -16020,14 +16035,25 @@ function exportarProdutividadeCSV(){
     fr.onerror=function(){ alert('Não consegui ler o arquivo.'); };
     fr.readAsDataURL(f);
   }
+  /* Pinta o anexo escolhido nos DOIS pontos de envio — janela e ficha. O estado
+     é um só (ANEXO_JAN): se fossem separados, escolher na ficha e enviar pela
+     janela mandaria o arquivo errado. */
   function pintarAnexoJan(){
-    var b=document.getElementById('cmp-clichat-anx'); if(!b) return;
-    if(!ANEXO_JAN){ b.style.display='none'; b.innerHTML=''; return; }
-    b.style.display='flex';
-    b.innerHTML='<span style="font-size:15px">'+icoArq(ANEXO_JAN.tipo,ANEXO_JAN.nome)+'</span>'+
-      '<span style="flex:1;min-width:0;word-break:break-word">'+escx(ANEXO_JAN.nome)+'</span>'+
-      '<button onclick="appCliTirarAnexo()" title="Remover" style="border:none;background:none;color:#b5342b;font-weight:700;cursor:pointer;font-size:14px">&#10005;</button>';
+    ['cmp-clichat-anx','clichat-anx-ficha'].forEach(function(id){
+      var b=document.getElementById(id); if(!b) return;
+      if(!ANEXO_JAN){ b.style.display='none'; b.innerHTML=''; return; }
+      b.style.display='flex';
+      b.innerHTML='<span style="font-size:15px">'+icoArq(ANEXO_JAN.tipo,ANEXO_JAN.nome)+'</span>'+
+        '<span style="flex:1;min-width:0;word-break:break-word">'+escx(ANEXO_JAN.nome)+' <span style="opacity:.7">('+escx(tamArq(Math.round(String(ANEXO_JAN.b64||'').length*3/4)))+')</span></span>'+
+        '<button onclick="appCliTirarAnexo()" title="Remover" style="border:none;background:none;color:#b5342b;font-weight:700;cursor:pointer;font-size:14px">&#10005;</button>';
+    });
   }
+  /* escolha de arquivo feita a partir da ficha */
+  window.appCliAnexoDaFicha=function(inp){
+    var f=inp&&inp.files&&inp.files[0]; if(!f) return;
+    lerAnexo(f);
+    inp.value='';   /* permite reescolher o MESMO arquivo depois de remover */
+  };
   window.appCliTirarAnexo=function(){ ANEXO_JAN=null; pintarAnexoJan(); };
 
   function anexoHTMLJan(m){
