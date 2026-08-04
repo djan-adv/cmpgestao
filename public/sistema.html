@@ -301,7 +301,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
 
     <section id="s-agenda" class="hidden">
       <div class="agtools">
-        <div class="switch"><button id="sw-tar" class="on" onclick="setViewAg('tarefas')">Prazos e tarefas</button><button id="sw-ag" onclick="setViewAg('agenda')">Reuniões e audiências</button><button id="sw-kan" onclick="setViewAg('kanban')">Kanban</button></div>
+        <div class="switch"><button id="sw-tar" class="on" onclick="setViewAg('tarefas')">Prazos e tarefas</button><button id="sw-ag" onclick="setViewAg('agenda')">Reuniões e audiências</button><button id="sw-auto" onclick="setViewAg('auto')" title="Tarefas que o sistema criou sozinho a partir das audiências — ficam fora da agenda de prazos para não competir com o que você agendou">🤖 Automáticas</button><button id="sw-kan" onclick="setViewAg('kanban')">Kanban</button></div>
         <button class="btn sm" style="margin-left:auto" onclick="abrirNovaTarefa()">+ Nova tarefa</button>
         <div class="legend" id="legenda-agenda"><span class="lg"><i class="dot az"></i>Audiência / Reunião</span><span class="lg"><i class="dot am"></i>Manifestação</span><span class="lg"><i class="dot vm"></i>Prazo importante</span></div>
         <div class="legend" id="legenda-tarefas" style="display:none"><span class="lg"><i style="display:inline-block;width:11px;height:11px;border-radius:3px;background:rgba(24,95,165,.16);border:1px solid rgba(24,95,165,.32);margin-right:5px;vertical-align:-1px"></i>Prazo</span><span class="lg"><i style="display:inline-block;width:11px;height:11px;border-radius:3px;background:rgba(109,122,140,.11);border:1px solid rgba(109,122,140,.22);margin-right:5px;vertical-align:-1px"></i>Tarefa</span></div>
@@ -2708,7 +2708,7 @@ function persisteKanban(a){
     } else { /* novo: insere e guarda o dbid */
       sb.auth.getUser().then(function(ug){ return sb.from('usuarios').select('escritorio_id').eq('id',ug.data.user.id).single(); }).then(function(pf){
         var esc=pf&&pf.data&&pf.data.escritorio_id; if(!esc) return;
-        return sb.from('kanban_tarefas').insert({escritorio_id:esc,titulo:a.titulo,cliente:a.cliente,numero:a.numero,coluna:a.col,resp:(a.resp||null),data:(a.data||null),prazo:(a.prazo||null),tipo:(a.tipoForm||null),descricao:(a.descricao||null),local:(a.local||null),origem:'sistema'}).select('id').single();
+        return sb.from('kanban_tarefas').insert({escritorio_id:esc,titulo:a.titulo,cliente:a.cliente,numero:a.numero,coluna:a.col,resp:(a.resp||null),data:(a.data||null),prazo:(a.prazo||null),tipo:(a.tipoForm||null),descricao:(a.descricao||null),local:(a.local||null),origem:(a.origem||'sistema')}).select('id').single();
       }).then(function(r){ if(r&&r.data&&r.data.id) a.dbid=r.data.id; }).catch(function(e){ console.warn('kanban insert:',e&&e.message||e); });
     }
   }catch(e){ console.warn('persisteKanban:',e); }
@@ -3274,16 +3274,27 @@ function setViewAg(v){VIEWAG=v;
   document.getElementById("sw-ag").classList.toggle("on",v==="agenda");
   document.getElementById("sw-kan").classList.toggle("on",v==="kanban");
   var swt=document.getElementById("sw-tar"); if(swt) swt.classList.toggle("on",v==="tarefas");
+  var swa=document.getElementById("sw-auto"); if(swa) swa.classList.toggle("on",v==="auto");
   document.getElementById("view-agenda").classList.toggle("hidden",v!=="agenda");
   document.getElementById("view-kanban").classList.toggle("hidden",v!=="kanban");
-  var vt=document.getElementById("view-tarefas"); if(vt) vt.classList.toggle("hidden",v!=="tarefas");
+  /* a aba Automáticas reaproveita a MESMA tela de tarefas — muda só o que entra
+     na lista (ver _tarefaAuto/_visivelNaAgenda), então não há tela nova a manter */
+  var vt=document.getElementById("view-tarefas"); if(vt) vt.classList.toggle("hidden",!(v==="tarefas"||v==="auto"));
   /* cada aba tem a sua legenda: a de prazos usa a paleta sóbria, a de audiências as cores cheias */
   var lgA=document.getElementById("legenda-agenda"), lgT=document.getElementById("legenda-tarefas");
   if(lgA) lgA.style.display=(v==="tarefas")?"none":"";
   if(lgT) lgT.style.display=(v==="tarefas")?"":"none";
   renderAgendaView();
 }
-function renderAgendaView(){ if(VIEWAG==="kanban")renderKanban(); else if(VIEWAG==="tarefas")renderTarefasView(); else renderAgViewInner(); }
+function renderAgendaView(){ if(VIEWAG==="kanban")renderKanban(); else if(VIEWAG==="tarefas"||VIEWAG==="auto")renderTarefasView(); else renderAgViewInner(); }
+/* Tarefa que o sistema criou sozinho a partir de uma audiência (preparar, avisar
+   cliente, lembrete de véspera, buscar a ATA). São úteis, mas são MUITAS por
+   audiência e afogavam a agenda de prazos — que é onde ficam os prazos de
+   verdade. A AUDIÊNCIA em si não é marcada, então continua aparecendo normal. */
+function _tarefaAuto(t){ return !!t && String(t.org||'')==='auto-audiencia'; }
+/* Regra única de quem aparece: a aba Automáticas mostra só as automáticas; todas
+   as outras telas mostram todo o resto. */
+function _visivelNaAgenda(t){ return (VIEWAG==='auto') ? _tarefaAuto(t) : !_tarefaAuto(t); }
 /* chave estável de um evento (para ocultar itens SEM id — ex.: carga do Astrea) */
 function _agChave(e){ return String(e.data||'')+'|'+String(e.hora||'')+'|'+String(e.tt||'').slice(0,80); }
 function initAgenda(){
@@ -5249,6 +5260,10 @@ function tarefasFiltradas(){
   var oc=document.getElementById('tar-ocultar-concl');
   var ocultar=oc&&oc.checked;
   return (KAN||[]).filter(function(a){
+    /* Uma audiência gera cinco tarefas (preparar, avisar cliente, lembrete de
+       véspera, comparecer, buscar a ATA). Somadas, afogavam a agenda de prazos —
+       que é onde ficam os prazos de verdade. Vão para a aba "🤖 Automáticas". */
+    if(!_visivelNaAgenda(a)) return false;
     if(tarResp!=='Todos'){ var r=(a.resp||''); if(r.split(' ')[0].toLowerCase()!==tarResp.split(' ')[0].toLowerCase()) return false; }
     if(ocultar && _tarConcluida(a)) return false;
     return true;
@@ -5655,9 +5670,9 @@ function toggleConcluirTarefa(id){
     }catch(eAg){ console.log('agenda: '+(eAg&&eAg.message||eAg)); }
     /* carrega as tarefas do Kanban do banco (kanban_tarefas). Se a tabela não existir, ignora e usa o seed. */
     try{
-      var kt=await sb.from('kanban_tarefas').select('id,titulo,cliente,numero,coluna,resp,data,prazo,tipo,descricao,local,atrasada').limit(3000);
+      var kt=await sb.from('kanban_tarefas').select('id,titulo,cliente,numero,coluna,resp,data,prazo,tipo,descricao,local,origem,atrasada').limit(3000);
       if(!kt.error && kt.data){
-        window.__KANDB=kt.data.map(function(t,i){ return {id:9000+i,dbid:t.id,titulo:t.titulo||'',cliente:t.cliente||'',numero:t.numero||'—',col:t.coluna||'distribuir',resp:t.resp||'',data:t.data||'',prazo:t.prazo||'',tipoForm:t.tipo||'',descricao:t.descricao||'',local:t.local||'',atrasada:!!t.atrasada}; });
+        window.__KANDB=kt.data.map(function(t,i){ return {id:9000+i,dbid:t.id,titulo:t.titulo||'',cliente:t.cliente||'',numero:t.numero||'—',col:t.coluna||'distribuir',resp:t.resp||'',data:t.data||'',prazo:t.prazo||'',tipoForm:t.tipo||'',descricao:t.descricao||'',local:t.local||'',org:t.origem||'',atrasada:!!t.atrasada}; });
         KAN=null; initKanban();
         var __ag=document.getElementById('s-agenda'); if(__ag && !__ag.classList.contains('hidden') && typeof renderAgendaView==='function') renderAgendaView();
         if(typeof renderPainelTarefasEtiquetas==='function') renderPainelTarefasEtiquetas();
@@ -9581,7 +9596,7 @@ function _naoAntesDeHoje(iso){
 }
 /* cria uma tarefa do Kanban se ainda não houver outra igual (mesmo processo, mesma
    data, título parecido). `marca` é o trecho usado para reconhecer a repetida. */
-async function garanteTarefaProc(p, titulo, dataISO, tipoForm, marca, resp){
+async function garanteTarefaProc(p, titulo, dataISO, tipoForm, marca, resp, origem){
   try{
     if(!p||!dataISO) return false;
     window.__tarefasFeitas=window.__tarefasFeitas||{};
@@ -9597,7 +9612,8 @@ async function garanteTarefaProc(p, titulo, dataISO, tipoForm, marca, resp){
         if(q&&q.data&&q.data.length) return false; }
     }catch(eQ){}
     var nova={id:5000+(KAN?KAN.length:0),titulo:titulo,cliente:(p.cliente||p.numero),numero:p.numero,
-              col:'distribuir',resp:(resp||''),data:dataISO,prazo:dataISO,tipoForm:(tipoForm||'tarefa')};
+              col:'distribuir',resp:(resp||''),data:dataISO,prazo:dataISO,tipoForm:(tipoForm||'tarefa'),
+              origem:(origem||'sistema'), org:(origem||'sistema')};
     KAN.push(nova); persisteKanban(nova);
     return true;
   }catch(e){ console.warn('garanteTarefaProc:',e); return false; }
@@ -9630,21 +9646,21 @@ async function criarAtividadesAudiencia(p, iso, hora, opts){
 
   // 2) preparação, uma semana antes (nunca antes de hoje)
   var prep=_naoAntesDeHoje(_diasAntesISO(iso,7));
-  if(await garanteTarefaProc(p,'Preparar audiência de '+dbr+' — falar com cliente e testemunhas, conferir documentos',prep,'tarefa','Preparar audiência de '+dbr))
+  if(await garanteTarefaProc(p,'Preparar audiência de '+dbr+' — falar com cliente e testemunhas, conferir documentos',prep,'tarefa','Preparar audiência de '+dbr,'','auto-audiencia'))
     feitas.push('preparação em '+prep.split('-').reverse().join('/'));
 
   // 3) aviso ao cliente (o e-mail sai sozinho abaixo; a tarefa fica para conferir)
-  if(await garanteTarefaProc(p,'Avisar cliente da audiência de '+dbr+' — conferir se recebeu e confirmou',_naoAntesDeHoje(_diasAntesISO(iso,7)),'tarefa','Avisar cliente da audiência de '+dbr))
+  if(await garanteTarefaProc(p,'Avisar cliente da audiência de '+dbr+' — conferir se recebeu e confirmou',_naoAntesDeHoje(_diasAntesISO(iso,7)),'tarefa','Avisar cliente da audiência de '+dbr,'','auto-audiencia'))
     feitas.push('aviso ao cliente');
 
   // 4) lembrete da véspera
   var vesp=_naoAntesDeHoje(_diasAntesISO(iso,1));
-  if(await garanteTarefaProc(p,'LEMBRETE: audiência amanhã ('+dbr+horaTxt+') — confirmar cliente e testemunhas',vesp,'tarefa','LEMBRETE: audiência amanhã ('+dbr))
+  if(await garanteTarefaProc(p,'LEMBRETE: audiência amanhã ('+dbr+horaTxt+') — confirmar cliente e testemunhas',vesp,'tarefa','LEMBRETE: audiência amanhã ('+dbr,'','auto-audiencia'))
     feitas.push('lembrete da véspera');
 
   // 5) buscar a ATA no dia seguinte (trabalhista já tinha; agora vale para todos)
   var ata=_diaSeguinteISO(iso);
-  if(await garanteTarefaProc(p,'Buscar e ler a ATA da audiência (prazos e acordos) — enviar ata/resumo ao cliente',ata,'prazo','ata da audi'))
+  if(await garanteTarefaProc(p,'Buscar e ler a ATA da audiência (prazos e acordos) — enviar ata/resumo ao cliente',ata,'prazo','ata da audi','','auto-audiencia'))
     feitas.push('buscar a ATA em '+ata.split('-').reverse().join('/'));
 
   var resumo=feitas.length?('\n+ atividades criadas: '+feitas.join('; ')+'.'):'';
