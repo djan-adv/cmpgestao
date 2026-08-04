@@ -77,7 +77,21 @@ export async function GET(request) {
 
     try {
       const { data: acessos } = await sb.rpc('portal_acessos_do_processo', { p_processo: it.processo_id })
-      const ids = (acessos || []).filter(a => a.ativo && !a.bloqueado_em).map(a => a.id)
+      let vivos = (acessos || []).filter(a => a.ativo && !a.bloqueado_em)
+
+      // Aviso de MENSAGEM adiado pelo silêncio noturno não pode voltar para quem
+      // escreveu: há gente do escritório com acesso ao app do cliente (mesmo
+      // e-mail nos dois cadastros), e essa pessoa receberia alarme da própria
+      // mensagem. O aviso de AUDIÊNCIA continua indo para todos — se ela é parte
+      // no processo, o lembrete serve para ela também.
+      if (String(it.etapa || '').startsWith('chat:')) {
+        try {
+          const { data: equipe } = await sb.from('usuarios').select('email').eq('escritorio_id', it.escritorio_id)
+          const daCasa = new Set((equipe || []).map(u => String(u.email || '').trim().toLowerCase()).filter(Boolean))
+          if (daCasa.size) vivos = vivos.filter(a => !daCasa.has(String(a.email || '').trim().toLowerCase()))
+        } catch (e) { /* falha aberta: melhor avisar demais que de menos */ }
+      }
+      const ids = vivos.map(a => a.id)
       if (!ids.length) {
         await sb.from('avisos_app_fila').update({ status: 'sem_destino', erro: 'cliente sem acesso ativo ao app', enviado_em: new Date().toISOString() }).eq('id', it.id)
         rel.semDestino++

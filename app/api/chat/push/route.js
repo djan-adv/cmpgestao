@@ -70,21 +70,34 @@ export async function POST(request) {
     if (!v) return Response.json({ ok: true, enviados: 0 }) // push não configurado — não trava o chat
     webpush.setVapidDetails('mailto:contato@cmpadvogados.com.br', v.public, v.private)
 
-    // Quem recebe: os colegas E OS OUTROS APARELHOS DE QUEM ESCREVEU. Antes o autor
-    // era excluído inteiro, então quem manda do computador nunca via a mensagem
-    // chegar no próprio celular — e é assim que a pessoa testa. O aparelho que
-    // enviou é o único descartado, pela sua própria inscrição (origem_endpoint).
+    // Quem recebe: só os OUTROS. Nada do que a pessoa escreve volta para ela.
+    //
+    // Isto REVERTE o commit 05cf422 ("alarme também nos outros aparelhos de quem
+    // escreve"), que mandava a mensagem para o próprio autor em outro aparelho —
+    // era útil para testar, mas na prática virou barulho: quem escreve no
+    // computador recebia alarme no celular da própria frase. Pedido do dono:
+    // alertar apenas mensagem de outra pessoa (colegas e clientes).
+    //
+    // origem_endpoint continua sendo descartado logo abaixo; agora é redundante
+    // para o autor, mas segue valendo se um dia o próprio voltar a ser destino.
     const admin = svc()
     let destinatarios = []
     if (body.para_id) {
-      destinatarios = [body.para_id, user.id]
+      destinatarios = [body.para_id]
     } else {
       const { data: eu } = await admin.from('usuarios').select('escritorio_id').eq('id', user.id).single()
       const { data: todos } = await admin.from('usuarios').select('id').eq('escritorio_id', eu && eu.escritorio_id)
       destinatarios = (todos || []).map(u => u.id)
     }
-    destinatarios = [...new Set(destinatarios.filter(Boolean))]
-    if (!destinatarios.length) return Response.json({ ok: true, enviados: 0 })
+    // A regra do autor fica DEPOIS dos dois ramos, no único ponto por onde todos
+    // os caminhos passam (chat da equipe no sistema, app /chat, e o que vier
+    // depois) — assim um caminho novo não tem como esquecer dela. Antes o filtro
+    // existia só no broadcast, e o envio privado ia direto.
+    //
+    // Filtrar por user_id e não por aparelho é o que importa: quem escreve no
+    // computador não pode receber alarme em NENHUM aparelho seu.
+    destinatarios = [...new Set(destinatarios.filter(id => id && id !== user.id))]
+    if (!destinatarios.length) return Response.json({ ok: true, enviados: 0, motivo: 'sem destinatário além do autor' })
 
     const origem = String(body.origem_endpoint || '')
     const { data: todasSubs } = await admin.from('chat_push_subs').select('*').in('user_id', destinatarios)
