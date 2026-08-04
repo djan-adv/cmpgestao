@@ -2411,15 +2411,27 @@ function _contatoParteHTML(nome){
     var eMail=/@/.test(t);
     var alvo=eMail?('https://mail.google.com/mail/?view=cm&fs=1&to='+encodeURIComponent(t))
                   :('https://wa.me/'+(function(d){ d=t.replace(/\D/g,''); return d.length<=11?('55'+d):d; })());
-    return '<a href="'+esc(alvo)+'" target="_blank" title="'+(eMail?'Escrever e-mail':'Abrir no WhatsApp')+'" '
+    var selo=_seloAppHTML(t);
+    return '<span style="display:inline-flex;flex-direction:column;align-items:flex-start;margin-right:4px;vertical-align:top">'
+      +'<a href="'+esc(alvo)+'" target="_blank" title="'+(eMail?'Escrever e-mail':'Abrir no WhatsApp')+'" '
       +'style="text-decoration:none;font-size:10.5px;color:'+(eMail?'#185FA5':'#127a53')+';background:'+(eMail?'#e9f1f9':'#e9f5ef')
-      +';border-radius:10px;padding:1px 7px;margin-right:4px;display:inline-block">'+(eMail?'✉ ':'📞 ')+esc(t)+'</a>';
+      +';border-radius:10px;padding:1px 7px;display:inline-block">'+(eMail?'✉ ':'📞 ')+esc(t)+'</a>'+selo+'</span>';
   }).join('');
   return '<div style="margin:2px 0 0 -3px;line-height:1.5">'+chips
     +'<a onclick="editarContatoParte(this.getAttribute(\'data-nome\'))" data-nome="'+esc(nome)+'" '
     +'title="Telefone/e-mail desta parte especificamente" '
     +'style="cursor:pointer;color:var(--muted);font-size:10.5px;border-bottom:1px dotted #c8cfd8">'
     +(lista.length?'✎ contato':'+ contato desta parte')+'</a></div>';
+}
+/* Repinta só os contatos de cada parte. Redesenhar a ficha inteira aqui faria a
+   tela piscar toda vez que o status do app chegasse. */
+function _repintaContatosPartes(){
+  var topo=document.getElementById('partes-topo'); if(!topo||!atual) return;
+  topo.querySelectorAll('a[data-nome]').forEach(function(a){
+    if(!/contato/.test(a.textContent||'')) return;
+    var box=a.parentElement; if(!box) return;
+    box.outerHTML=_contatoParteHTML(a.getAttribute('data-nome'));
+  });
 }
 async function editarContatoParte(nome){
   if(!atual) return;
@@ -8596,6 +8608,18 @@ function copiarNumero(el,num){
   if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(num).then(fim).catch(function(){ window.prompt('Copie o número:',num); }); }
   else { window.prompt('Copie o número:',num); }
 }
+/* "logado no app ✓" abaixo do e-mail que de fato entra no app. Com vários
+   autores e vários e-mails no mesmo processo, a lista sozinha não diz qual é —
+   e alguém acaba escrevendo para o endereço que ninguém abre. Metade da fonte do
+   chip (12px → 6px é ilegível, então 9px, que é o menor que ainda se lê). */
+function _seloAppHTML(email){
+  if(!atual||!/@/.test(String(email||''))) return '';
+  var est=(typeof window.appCliEstadoDoEmail==='function')?window.appCliEstadoDoEmail(atual._id,email):'';
+  if(est==='logado') return '<span style="font-size:9px;color:#3fae82;line-height:1.4;margin:1px 0 0 11px;white-space:nowrap">logado no app &#10003;</span>';
+  if(est==='enviado'||est==='criado') return '<span style="font-size:9px;color:#b9a25f;line-height:1.4;margin:1px 0 0 11px;white-space:nowrap">acesso enviado — sem 1&#186; login</span>';
+  if(est==='bloqueado') return '<span style="font-size:9px;color:#c98781;line-height:1.4;margin:1px 0 0 11px;white-space:nowrap">app bloqueado</span>';
+  return '';
+}
 /* contatos livres do processo: telefones e e-mails viram botões */
 function renderCtlChips(){
   var el=document.getElementById('ctl-chips'); if(!el||!atual) return; el.innerHTML='';
@@ -8620,6 +8644,15 @@ function renderCtlChips(){
     else { act.textContent='📲'; act.title='Abrir no WhatsApp';
       act.onclick=function(){ var d=t.replace(/\D/g,''); if(d.length<=11)d='55'+d; window.open('https://wa.me/'+d,'_blank'); }; }
     wrap.appendChild(act);
+    var selo=_seloAppHTML(t);
+    if(selo){
+      /* o selo vai ABAIXO do e-mail, então o chip inteiro passa a empilhar */
+      var caixa=document.createElement('span');
+      caixa.style.cssText='display:inline-flex;flex-direction:column;align-items:flex-start;margin-right:4px;vertical-align:top';
+      caixa.appendChild(wrap); caixa.insertAdjacentHTML('beforeend', selo);
+      el.appendChild(caixa);
+      return;
+    }
     el.appendChild(wrap);
   });
   var ed=document.createElement('button');
@@ -15584,6 +15617,15 @@ function exportarProdutividadeCSV(){
   var EU=null;                                   // {id, nome, escritorio_id}
   var JAN={aberta:false, procId:null, esc:null, numero:'', nome:'', ultimo:0, timer:null, pos:null};
   var STATUS_CACHE={};                           // processo_id -> acessos[]
+  /* Um processo pode ter vários autores e vários e-mails, e olhando a lista não
+     dá para saber qual deles é o que realmente entra no app. Isto responde por
+     e-mail, para a ficha marcar o certo. */
+  window.appCliEstadoDoEmail=function(procId, email){
+    var k=String(email||'').trim().toLowerCase(); if(!k) return '';
+    var a=(STATUS_CACHE[procId]||[]).filter(function(x){ return String(x.email||'').trim().toLowerCase()===k; })
+      .sort(function(x,y){ return (x.estado==='logado'?-1:0)-(y.estado==='logado'?-1:0); })[0];
+    return a?String(a.estado||''):'';
+  };
   var FICHA_PROC=null;                           // processo da ficha aberta (p)
 
   function S(){ return window.__sb||null; }
@@ -15610,7 +15652,12 @@ function exportarProdutividadeCSV(){
     pintaBotao(null);
     admin({acao:'status',processo_id:p._id}).then(function(d){
       STATUS_CACHE[p._id]=(d&&d.ok&&d.acessos)||[];
-      if(FICHA_PROC && FICHA_PROC._id===p._id){ pintaBotao(STATUS_CACHE[p._id]); fichaConversa(p._id); }
+      if(FICHA_PROC && FICHA_PROC._id===p._id){ pintaBotao(STATUS_CACHE[p._id]); fichaConversa(p._id);
+        /* o status chega DEPOIS da ficha desenhar; sem repintar, o selo "logado
+           no app" só apareceria ao reabrir o processo */
+        try{ if(typeof renderCtlChips==='function') renderCtlChips(); }catch(e){}
+        try{ if(typeof _repintaContatosPartes==='function') _repintaContatosPartes(); }catch(e){}
+      }
     }).catch(function(){ if(FICHA_PROC && FICHA_PROC._id===p._id){ pintaBotao([]); fichaConversa(p._id); } });
   };
   function estadoGeral(acessos){
