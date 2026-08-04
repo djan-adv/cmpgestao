@@ -439,6 +439,30 @@ export async function POST(request) {
     const { data: p } = await sb.from('processos').select('id,numero,cliente_id,cliente_nome,escritorio_id')
       .eq('id', String(body.processo_id || '')).eq('escritorio_id', quem.escritorio_id).maybeSingle()
     if (!p) return Response.json({ erro: 'Processo não encontrado.' }, { status: 404 })
+
+    /* Silêncio noturno: nada toca o celular do cliente antes das 06:00 nem
+       depois das 18:30. Fora da janela o aviso é ADIADO para as 06:00, não
+       descartado — a mensagem já está no app, mas sem o aviso o cliente só
+       descobriria por acaso. Quem entrega é o /api/cron/avisos-app. */
+    const agoraBR = new Date(Date.now() - 3 * 3600000)
+    const minBR = agoraBR.getUTCHours() * 60 + agoraBR.getUTCMinutes()
+    if (minBR < 6 * 60 || minBR > 18 * 60 + 30) {
+      const alvo = new Date(agoraBR.getTime())
+      if (minBR > 18 * 60 + 30) alvo.setUTCDate(alvo.getUTCDate() + 1)
+      alvo.setUTCHours(6, 0, 0, 0)
+      const enviarEm = new Date(alvo.getTime() + 3 * 3600000).toISOString()
+      try {
+        await sb.from('avisos_app_fila').insert({
+          escritorio_id: p.escritorio_id, processo_id: p.id, processo_numero: p.numero,
+          etapa: 'chat:' + Date.now() + ':' + String(p.id).slice(0, 8),
+          enviar_em: enviarEm,
+          titulo: 'mensagem no seu processo',
+          corpo: String(body.texto || 'Nova mensagem do escritório.').slice(0, 140),
+          url: '/portal.html?proc=' + p.id,
+        })
+      } catch (e) { /* fila é acessório: a mensagem já está gravada no chat */ }
+      return Response.json({ ok: true, enviados: 0, adiado_para: enviarEm })
+    }
     const { data: v } = await sb.from('app_secrets').select('valor').eq('chave', 'vapid_chat').maybeSingle()
     if (!(v && v.valor)) return Response.json({ ok: true, enviados: 0 })
     webpush.setVapidDetails('mailto:contato@cmpadvogados.com.br', v.valor.public, v.valor.private)
