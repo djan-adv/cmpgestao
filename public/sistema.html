@@ -270,7 +270,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
   </aside>
   <main class="main">
     <div class="topbar"><h1 id="scr-title">Painel</h1>
-      <div class="who">Logado: <b id="who-name">Djan Mendonça</b> <span id="who-pill" class="pill socio">sócio</span> <button id="btn-cfg-proc" class="btn sm ghost cmp-only coord-only" onclick="abrirConfig()" title="Configurações — lotes/pastas do menu" style="display:none;font-size:15px;line-height:1;padding:3px 9px;margin-left:8px">⚙</button> <button class="btn sm ghost" onclick="sairSistema()" title="Sair do sistema (encerra a sessão)" style="font-size:12px;margin-left:8px">Sair</button></div></div>
+      <div class="who">Logado: <b id="who-name">Djan Mendonça</b> <span id="who-pill" class="pill socio">sócio</span> <button id="btn-cfg-proc" class="btn sm ghost cmp-only coord-only" onclick="abrirConfig()" title="Configurações — lotes/pastas do menu" style="display:none;font-size:15px;line-height:1;padding:3px 9px;margin-left:8px">⚙</button> <button class="btn sm ghost" onclick="abrirMeusAparelhos()" title="Aparelhos onde seu acesso está registrado (até 3)" style="font-size:12px;margin-left:8px">📱 aparelhos</button> <button class="btn sm ghost" onclick="sairSistema()" title="Sair do sistema (encerra a sessão)" style="font-size:12px;margin-left:8px">Sair</button></div></div>
 
     <section id="s-painel">
       <div id="painel-hello"></div>
@@ -1085,21 +1085,75 @@ var KAN=null, atual=null, TRIAGEM=null, AGENDA=null, VIEWAG="tarefas", curY=__ho
 /* acesso único por login: o login mais recente assume; os anteriores são
    deslogados. Força cada sócio a ter o próprio acesso. Falha aberta (erro de
    rede não bloqueia ninguém). */
-function _bloquearAcessoDuplo(ondeStr){
-  try{ if(document.getElementById('acesso-duplo')) return;
-    var onde=ondeStr?('<div style="margin:10px 0;padding:8px 10px;background:#f3f7fb;border:1px solid #d9e6f2;border-radius:9px;font-size:13px;color:#345">Sessão ativa em: <b>'+esc(String(ondeStr))+'</b></div>'):'';
+/* Limite de aparelhos atingido. Diferente do bloqueio antigo, aqui NÃO se faz
+   signOut: a sessão continua válida, só falta liberar espaço. Deslogar seria
+   punir quem simplesmente trocou de celular. */
+function _bloquearLimiteAparelhos(lista){
+  try{
+    if(document.getElementById('acesso-duplo')) return;
+    var itens=(lista||[]).map(function(d){
+      var q=d.ultimo_uso?(' <span style="color:#8b95a3">— usado '+_hMuitoTempo(d.ultimo_uso)+'</span>'):'';
+      return '<li style="margin:4px 0"><button onclick="_liberarAparelho(\''+String(d.dispositivo_id).replace(/'/g,'')+'\')" '
+        +'style="background:#fff;border:1px solid #d9e6f2;border-radius:8px;padding:5px 9px;cursor:pointer;font-size:12.5px;width:100%;text-align:left">'
+        +'<b>'+esc(d.nome||'aparelho')+'</b>'+q+' <span style="color:#b5342b;font-weight:700">· remover</span></button></li>';
+    }).join('');
     var ov=document.createElement('div'); ov.id='acesso-duplo';
     ov.style.cssText='position:fixed;inset:0;background:rgba(20,28,40,.93);z-index:100000;display:flex;align-items:center;justify-content:center;padding:24px';
-    ov.innerHTML='<div style="background:#fff;border-radius:16px;max-width:440px;padding:26px;text-align:center;font-family:system-ui"><div style="font-size:40px">🔒</div><h2 style="color:#2E3A4B;margin:8px 0 4px">Acesso aberto em outro lugar</h2><p style="color:#5b6572;font-size:14px;line-height:1.55">Este login já está em uso em outro dispositivo. Por segurança, cada pessoa deve usar o <b>seu próprio acesso</b>.</p>'+onde+'<p style="color:#5b6572;font-size:13px;line-height:1.5">Se este é você, feche a outra janela. Se você é sócio(a) e ainda usa o login de outra pessoa, peça o <b>seu acesso</b> ao coordenador.</p><button onclick="location.replace(\'/\')" style="margin-top:12px;background:#0F6E56;color:#fff;border:0;border-radius:10px;padding:11px 22px;font-weight:700;cursor:pointer">Sair</button></div>';
+    ov.innerHTML='<div style="background:#fff;border-radius:16px;max-width:460px;padding:26px;font-family:system-ui">'
+      +'<div style="font-size:38px;text-align:center">📱</div>'
+      +'<h2 style="color:#2E3A4B;margin:8px 0 4px;text-align:center">Limite de aparelhos</h2>'
+      +'<p style="color:#5b6572;font-size:14px;line-height:1.55;text-align:center">Seu acesso já está registrado em 3 aparelhos. Remova um para usar este.</p>'
+      +'<ul style="list-style:none;padding:0;margin:14px 0">'+itens+'</ul>'
+      +'<p style="color:#8b95a3;font-size:12px;line-height:1.5;text-align:center">Cada pessoa deve usar o seu próprio acesso. Se você é sócio(a) e ainda usa o login de outra pessoa, peça o seu ao coordenador.</p>'
+      +'<div style="text-align:center"><button onclick="location.replace(\'/\')" style="margin-top:6px;background:#0F6E56;color:#fff;border:0;border-radius:10px;padding:11px 22px;font-weight:700;cursor:pointer">Sair</button></div></div>';
     document.body.appendChild(ov);
     try{ if(window.__sessaoGuard) clearInterval(window.__sessaoGuard); }catch(e){}
-    try{ window.__sb.auth.signOut(); }catch(e){}
   }catch(e){}
+}
+function _hMuitoTempo(iso){
+  try{
+    var m=Math.round((Date.now()-new Date(iso).getTime())/60000);
+    if(m<2) return 'agora';
+    if(m<60) return 'há '+m+' min';
+    var h=Math.round(m/60); if(h<24) return 'há '+h+'h';
+    var d=Math.round(h/24); return 'há '+d+' dia'+(d>1?'s':'');
+  }catch(e){ return ''; }
+}
+async function _liberarAparelho(devId){
+  try{
+    var ug=await window.__sb.auth.getUser(); var uid=ug&&ug.data&&ug.data.user&&ug.data.user.id;
+    if(!uid) return;
+    var r=await window.__sb.from('sessao_dispositivos').delete().eq('user_id',uid).eq('dispositivo_id',devId);
+    if(r.error){ alert('Não consegui remover: '+r.error.message); return; }
+    location.reload();
+  }catch(e){ alert('Falha: '+((e&&e.message)||e)); }
+}
+/* Lista dos aparelhos do usuário, para dar nome ou remover sem esperar bater no
+   limite. Chamada pela engrenagem. */
+async function abrirMeusAparelhos(){
+  try{
+    var ug=await window.__sb.auth.getUser(); var uid=ug&&ug.data&&ug.data.user&&ug.data.user.id;
+    if(!uid){ alert('Sessão não encontrada.'); return; }
+    var q=await window.__sb.from('sessao_dispositivos').select('dispositivo_id,nome,tipo,ultimo_uso').eq('user_id',uid).order('ultimo_uso',{ascending:false});
+    if(q.error){ alert('Erro: '+q.error.message); return; }
+    var linhas=(q.data||[]).map(function(d){
+      var eu=(d.dispositivo_id===window.__devId)?' (este)':'';
+      return '· '+(d.nome||'aparelho')+eu+' — usado '+_hMuitoTempo(d.ultimo_uso);
+    }).join('\n')||'(nenhum registrado ainda)';
+    var apelidoAtual=''; try{ apelidoAtual=localStorage.getItem('cmp_dev_nome')||''; }catch(e){}
+    var novo=window.prompt('Seus aparelhos ('+(q.data||[]).length+' de 3):\n\n'+linhas
+      +'\n\nApelido para ESTE aparelho (deixe vazio para usar só o automático):', apelidoAtual);
+    if(novo===null) return;
+    try{ if(novo.trim()) localStorage.setItem('cmp_dev_nome',novo.trim()); else localStorage.removeItem('cmp_dev_nome'); }catch(e){}
+    location.reload();
+  }catch(e){ alert('Falha: '+((e&&e.message)||e)); }
 }
 async function sairSistema(){
   if(!confirm('Sair do sistema?')) return;
   try{ if(window.__sessaoGuard) clearInterval(window.__sessaoGuard); }catch(e){}
-  try{ var ug=await window.__sb.auth.getUser(); var uid=ug&&ug.data&&ug.data.user&&ug.data.user.id; if(uid) await window.__sb.from('sessao_unica').delete().eq('user_id',uid); }catch(e){}
+  /* remove só ESTE aparelho: sair no computador não pode desregistrar o celular */
+  try{ var ug=await window.__sb.auth.getUser(); var uid=ug&&ug.data&&ug.data.user&&ug.data.user.id;
+    if(uid&&window.__devId) await window.__sb.from('sessao_dispositivos').delete().eq('user_id',uid).eq('dispositivo_id',window.__devId); }catch(e){}
   try{ if(typeof logEvent==='function') logEvent('logout','sessao',null,null); }catch(e){}
   try{ await window.__sb.auth.signOut(); }catch(e){}
   location.replace('/');
@@ -5694,28 +5748,87 @@ function toggleConcluirTarefa(id){
     var _dev=null; try{ _dev=localStorage.getItem('cmp_dev_id'); }catch(e){}
     if(!_dev){ _dev='dev_'+Math.random().toString(36).slice(2)+Date.now().toString(36); try{ localStorage.setItem('cmp_dev_id',_dev); }catch(e){} }
     window.__devId=_dev;
-    /* nome amigável DESTE computador (o navegador não lê o nome real da máquina/
-       certificado — segurança). Pergunta 1x e guarda. */
-    var _nome=null; try{ _nome=localStorage.getItem('cmp_dev_nome'); }catch(e){}
-    if(_nome==null){ try{ _nome=window.prompt('Dê um nome a ESTE computador (para identificar a sessão). Ex.: PC Djan — escritório','')||''; }catch(e){ _nome=''; } try{ localStorage.setItem('cmp_dev_nome',_nome); }catch(e){} }
-    var _uaCurto=(/edg/i.test(navigator.userAgent)?'Edge':/chrome/i.test(navigator.userAgent)?'Chrome':/firefox/i.test(navigator.userAgent)?'Firefox':/safari/i.test(navigator.userAgent)?'Safari':'navegador')+' · '+(navigator.platform||'');
-    var _disp=(_nome?(_nome+' ('+_uaCurto+')'):_uaCurto).slice(0,80);
-    var FRESH_MS=90000;
-    async function _hb(){ try{ await sb.from('sessao_unica').upsert({user_id:_uid,dispositivo_id:_dev,dispositivo:_disp,atualizado_em:new Date().toISOString()},{onConflict:'user_id'}); }catch(e){} }
-    var _cur=await sb.from('sessao_unica').select('dispositivo_id,dispositivo,atualizado_em').eq('user_id',_uid).maybeSingle();
-    if(_cur&&!_cur.error&&_cur.data&&_cur.data.dispositivo_id&&_cur.data.dispositivo_id!==_dev){
-      var _idade=Date.now()-new Date(_cur.data.atualizado_em||0).getTime();
-      if(_idade<FRESH_MS){ _bloquearAcessoDuplo(_cur.data.dispositivo); return; } /* incumbente vivo → bloqueia este novo */
-    }
-    await _hb(); /* reivindica e passa a ser o incumbente */
-    window.__sessaoGuard=setInterval(async function(){
+
+    /* Nome do aparelho SEM perguntar nada. O navegador não expõe o nome real da
+       máquina (o sistema operacional não deixa, por segurança), mas dá para
+       montar algo reconhecível a partir do que ele conta de si: tipo de
+       aparelho, sistema e navegador. "iPhone · Safari" e "Windows · Edge" são
+       suficientes para você saber qual é qual na lista.
+       Antes isto era um prompt() na primeira carga — e quem cancelasse ficava
+       com o aparelho sem nome para sempre. */
+    var _ua=navigator.userAgent||'';
+    var _movel=/Android|iPhone|iPad|iPod|Mobile/i.test(_ua);
+    var _tipo=/iPad|Tablet/i.test(_ua)?'tablet':(_movel?'celular':'computador');
+    var _so=/iPhone|iPad|iPod/i.test(_ua)?'iPhone/iPad':/Android/i.test(_ua)?'Android'
+           :/Windows/i.test(_ua)?'Windows':/Mac/i.test(_ua)?'Mac':/Linux/i.test(_ua)?'Linux':'';
+    var _nav=/Edg/i.test(_ua)?'Edge':/OPR|Opera/i.test(_ua)?'Opera':/Chrome/i.test(_ua)?'Chrome'
+           :/Firefox/i.test(_ua)?'Firefox':/Safari/i.test(_ua)?'Safari':'navegador';
+    var _auto=[_so,_nav].filter(Boolean).join(' · ')||'aparelho';
+    /* apelido dado pelo usuário (opcional) tem prioridade sobre o automático */
+    var _apelido=null; try{ _apelido=localStorage.getItem('cmp_dev_nome')||null; }catch(e){}
+    var _disp=((_apelido?(_apelido+' — '):'')+_auto).slice(0,80);
+    window.__devNome=_disp;
+
+    /* Limite de aparelhos por pessoa.
+       A trava antiga era de UM só: quem usa o sistema no computador e o chat no
+       celular era expulso o dia inteiro, porque o segundo derrubava o primeiro.
+       O objetivo dela — impedir que um login circule entre PESSOAS — continua
+       valendo, só que medido por número de aparelhos. Três cobre computador +
+       celular + notebook da mesma pessoa; login passado adiante no escritório
+       estoura o limite e volta a ser barrado. Falha aberta: se a consulta der
+       erro, o acesso passa. */
+    var MAX_APARELHOS=3;
+    async function _hb(){
       try{
-        var rr=await sb.from('sessao_unica').select('dispositivo_id,dispositivo').eq('user_id',_uid).maybeSingle();
-        if(rr&&!rr.error&&rr.data&&rr.data.dispositivo_id&&rr.data.dispositivo_id!==window.__devId){ _bloquearAcessoDuplo(rr.data.dispositivo); return; }
-        _hb();
+        await sb.from('sessao_dispositivos').upsert(
+          {user_id:_uid, dispositivo_id:_dev, nome:_disp, ua:_ua.slice(0,300), tipo:_tipo, ultimo_uso:new Date().toISOString()},
+          {onConflict:'user_id,dispositivo_id'});
       }catch(e){}
-    },30000);
+    }
+    var _lista=await sb.from('sessao_dispositivos').select('dispositivo_id,nome,ultimo_uso').eq('user_id',_uid).order('ultimo_uso',{ascending:false});
+    if(_lista&&!_lista.error&&Array.isArray(_lista.data)){
+      var _euJaEstou=_lista.data.some(function(d){ return d.dispositivo_id===_dev; });
+      if(!_euJaEstou && _lista.data.length>=MAX_APARELHOS){
+        /* Sem hora de validade aqui de propósito: aparelho registrado continua
+           valendo mesmo depois de dias parado. O que a trava antiga fazia — vagar
+           em 90s — é justamente o que derrubava o celular enquanto você usava o
+           computador. */
+        _bloquearLimiteAparelhos(_lista.data);
+        return;
+      }
+    }
+    await _hb();
+    /* O batimento agora só diz "este aparelho está vivo": não expulsa mais
+       ninguém. Serve para a lista mostrar qual foi usado por último. */
+    window.__sessaoGuard=setInterval(_hb, 120000);
   }catch(e){}
+
+  /* Renovação da sessão ao voltar para a aba.
+     O Supabase renova o token sozinho por um timer, mas o celular CONGELA a aba
+     em segundo plano: o timer não dispara, o token vence e, quando você volta ao
+     chat horas depois, cai na tela de login. No computador acontece o mesmo
+     quando a máquina hiberna.
+     Aqui a renovação é pedida no momento em que a aba volta a aparecer, que é
+     exatamente quando o token pode ter vencido sem ninguém perceber. */
+  try{
+    var _ultRenov=0;
+    async function _renovaSessao(){
+      if(Date.now()-_ultRenov < 60000) return;   /* evita rajada ao alternar abas */
+      _ultRenov=Date.now();
+      try{
+        var ss=await sb.auth.getSession();
+        var tok=ss&&ss.data&&ss.data.session;
+        if(!tok) return;                          /* sem sessão: o fluxo normal cuida */
+        var expEm=(tok.expires_at||0)*1000 - Date.now();
+        /* só renova se falta pouco (ou já venceu) — pedir à toa gasta chamada */
+        if(expEm < 5*60000) await sb.auth.refreshSession();
+      }catch(e){}
+    }
+    document.addEventListener('visibilitychange', function(){ if(!document.hidden) _renovaSessao(); });
+    window.addEventListener('focus', _renovaSessao);
+    window.addEventListener('online', _renovaSessao);
+  }catch(e){}
+
   function fmtData(iso){ if(!iso) return ''; var p=String(iso).slice(0,10).split('-'); return p.length===3?(p[2]+'/'+p[1]+'/'+p[0]):''; }
   function fmtCausa(v){ if(v==null||v==='') return '0,00'; var n=Number(v); if(isNaN(n)) return '0,00'; return n.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
   try{
