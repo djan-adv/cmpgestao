@@ -71,14 +71,65 @@ export function normMov(m) {
   return { data, texto: desc }
 }
 
+// Procura um NÓ pelo nome da chave em qualquer profundidade, o mais raso
+// primeiro (BFS).
+//
+// Por que existe: os MOVIMENTOS já eram achados por varredura da árvore
+// (coletaArraysMov), mas classe, assunto, órgão e distribuição eram lidos só de
+// caminhos fixos na raiz ou em tramitacaoAtual. Quando o PDPJ aninha esses dados
+// um nível diferente do esperado, o resultado é exatamente o que se viu no
+// 0826454-79.2026.8.15.0001: seis movimentos gravados e a ficha inteira em
+// branco — sem vara, sem classe, sem assunto, sem data de distribuição.
+//
+// BFS e não DFS de propósito: o órgão da raiz tem de ganhar do órgão que aparece
+// dentro de um movimento. Ramos de movimento são pulados — são os maiores do
+// documento e não têm o que interessa aqui.
+export function achaNo(raiz, nomes, maxProf = 6) {
+  const fila = [[raiz, 0]]
+  const vistos = new Set()
+  while (fila.length) {
+    const [o, prof] = fila.shift()
+    if (!o || typeof o !== 'object' || prof > maxProf || vistos.has(o)) continue
+    vistos.add(o)
+    if (!Array.isArray(o)) {
+      for (const n of nomes) {
+        const v = o[n]
+        if (v !== undefined && v !== null && v !== '') return v
+      }
+    }
+    for (const k of Object.keys(o)) {
+      if (/moviment/i.test(k)) continue
+      const v = o[k]
+      if (v && typeof v === 'object') fila.push([v, prof + 1])
+    }
+  }
+  return null
+}
+
+// Nó achado em profundidade → texto. Serve tanto para {nome:'…'} quanto para o
+// caso em que a própria chave já traz a string.
+function textoDoNo(no, campos) {
+  if (no == null) return null
+  if (typeof no !== 'object') return String(no).trim() || null
+  if (Array.isArray(no)) return textoDoNo(no[0], campos)
+  const v = pega(no, campos)
+  return v == null ? null : String(v).trim() || null
+}
+
 // dados da ficha a partir do JSON do PDPJ
 export function extraiMeta(proc) {
   const t = (proc && (proc.tramitacaoAtual || (Array.isArray(proc.tramitacoes) && proc.tramitacoes[0]))) || {}
   return {
-    classe: pega(proc, ['classe.descricao', 'classeProcessual.descricao', 'classeJudicial.descricao']) || pega(t, ['classe.descricao', 'classeProcessual.descricao']) || null,
-    assunto: pega(proc, ['assunto.descricao', 'assuntoPrincipal.descricao']) || (Array.isArray(proc && proc.assuntos) && proc.assuntos[0] && (proc.assuntos[0].descricao || proc.assuntos[0].nome)) || pega(t, ['assunto.descricao']) || (Array.isArray(t.assuntos) && t.assuntos[0] && (t.assuntos[0].descricao || t.assuntos[0].nome)) || null,
-    orgao: pega(proc, ['orgaoJulgador.nome', 'orgaoJulgador.descricao']) || pega(t, ['orgaoJulgador.nome', 'orgaoJulgador.descricao']) || null,
-    distribuido: pega(proc, ['dataAjuizamento', 'dataDistribuicao', 'distribuicao.data']) || pega(t, ['dataDistribuicao', 'dataAjuizamento']) || null,
+    /* caminho fixo primeiro (mais preciso); varredura da árvore como rede de
+       segurança, para a ficha não ficar em branco por causa de um nível a mais */
+    classe: pega(proc, ['classe.descricao', 'classeProcessual.descricao', 'classeJudicial.descricao']) || pega(t, ['classe.descricao', 'classeProcessual.descricao'])
+      || textoDoNo(achaNo(proc, ['classe', 'classeProcessual', 'classeJudicial']), ['descricao', 'nome']) || null,
+    assunto: pega(proc, ['assunto.descricao', 'assuntoPrincipal.descricao']) || (Array.isArray(proc && proc.assuntos) && proc.assuntos[0] && (proc.assuntos[0].descricao || proc.assuntos[0].nome)) || pega(t, ['assunto.descricao']) || (Array.isArray(t.assuntos) && t.assuntos[0] && (t.assuntos[0].descricao || t.assuntos[0].nome))
+      || textoDoNo(achaNo(proc, ['assunto', 'assuntoPrincipal', 'assuntos']), ['descricao', 'nome']) || null,
+    orgao: pega(proc, ['orgaoJulgador.nome', 'orgaoJulgador.descricao']) || pega(t, ['orgaoJulgador.nome', 'orgaoJulgador.descricao'])
+      || textoDoNo(achaNo(proc, ['orgaoJulgador', 'orgaoJulgadorOrigem', 'unidadeJudiciaria', 'orgao']), ['nome', 'descricao', 'nomeOrgao']) || null,
+    distribuido: pega(proc, ['dataAjuizamento', 'dataDistribuicao', 'distribuicao.data']) || pega(t, ['dataDistribuicao', 'dataAjuizamento'])
+      || achaNo(proc, ['dataAjuizamento', 'dataDistribuicao', 'dataHoraDistribuicao']) || null,
   }
 }
 
@@ -124,7 +175,13 @@ export function normTramitacao(t, pai) {
   if (!t || typeof t !== 'object') return null
   const fonte = [t, pai || {}]
   const busca = (cams) => { for (const o of fonte) { const v = pega(o, cams); if (v != null && v !== '') return v } return null }
-  const orgao = busca(['orgaoJulgador.nome', 'orgaoJulgador.descricao', 'orgaoJulgador.nomeOrgao', 'orgaoJulgador'])
+  let orgao = busca(['orgaoJulgador.nome', 'orgaoJulgador.descricao', 'orgaoJulgador.nomeOrgao', 'orgaoJulgador'])
+  /* mesma rede de segurança do extraiMeta: sem o órgão a tramitação inteira era
+     descartada, e com ela iam junto grau, tribunal e data */
+  if (!orgao || typeof orgao === 'object') {
+    orgao = textoDoNo(achaNo(t, ['orgaoJulgador', 'orgaoJulgadorOrigem', 'unidadeJudiciaria', 'orgao']), ['nome', 'descricao', 'nomeOrgao'])
+         || textoDoNo(achaNo(pai || {}, ['orgaoJulgador', 'orgaoJulgadorOrigem', 'unidadeJudiciaria', 'orgao']), ['nome', 'descricao', 'nomeOrgao'])
+  }
   if (!orgao || typeof orgao === 'object') return null
   const grau = busca(['grau.nome', 'grau.descricao', 'grau.codigo', 'grau', 'instancia'])
   const tribunal = busca(['tribunal.sigla', 'tribunal.nome', 'siglaTribunal'])
