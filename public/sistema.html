@@ -2860,6 +2860,62 @@ function sugestaoPara(txt){var t=(txt||"").toLowerCase();
   if(/manifest/.test(t))return {ativ:"Manifestar-se nos autos",prazo:15,tipo:"manifestacao"};
   if(/recurso|agravo/.test(t))return {ativ:"Analisar recurso e responder",prazo:15,tipo:"prazo"};
   return {ativ:"Analisar movimentação e definir providência",prazo:5,tipo:"tarefa"};}
+/* Botão "atualizar" da fila de triagem. Faz as DUAS coisas, e a ordem importa:
+   primeiro manda o robô do DJEN buscar no tribunal, depois recarrega a fila do
+   banco. Só recarregar mostraria de novo o que já estava lá; só rodar o robô
+   gravaria sem aparecer na tela. */
+async function atualizarPublicacoes(){
+  var b=document.getElementById('btn-pub-atualizar');
+  var antes=(PUBLICACOES||[]).length;
+  if(b){ b.disabled=true; b.innerHTML='&#8635; buscando no DJEN…'; }
+  try{
+    /* o robô pode demorar (vários tribunais); a fila é recarregada mesmo se ele
+       estourar o tempo, porque parte das publicações já terá sido gravada */
+    try{
+      await fetch('/api/cron/tick?rodar=djen',{cache:'no-store',signal:AbortSignal.timeout(120000)});
+    }catch(eR){ console.warn('robô djen:',eR&&eR.message||eR); }
+    if(b) b.innerHTML='&#8635; lendo a fila…';
+    var total=await recarregarPublicacoes();
+    var novas=total-antes;
+    /* recarregarPublicacoes re-renderiza a triagem, e renderTriagem REFAZ a barra
+       de botões — a referência de antes virou elemento órfão. Pega o novo. */
+    b=document.getElementById('btn-pub-atualizar');
+    if(b){ b.disabled=true; b.innerHTML=(novas>0?('&#10003; +'+novas+' nova'+(novas>1?'s':'')):'&#10003; sem novidade'); }
+    setTimeout(function(){ var x=document.getElementById('btn-pub-atualizar'); if(x){ x.innerHTML='&#8635; atualizar'; x.disabled=false; } },2600);
+  }catch(e){
+    var x=document.getElementById('btn-pub-atualizar');
+    if(x){ x.innerHTML='&#8635; atualizar'; x.disabled=false; }
+    alert('Não consegui atualizar: '+((e&&e.message)||e));
+  }
+}
+/* Carga das publicações da triagem. Era um trecho solto dentro do carregamento
+   geral, o que obrigava a recarregar a página inteira para ver publicação nova.
+   Extraída para função porque o botão "atualizar" precisa chamar só isto. */
+async function recarregarPublicacoes(){
+  var sb=window.__sb; if(!sb) return 0;
+  /* TODAS as publicações recentes não tratadas (não só as de hoje): janela de 90
+     dias de 'data', sem filtro de 'criado_em'. */
+  var dmin=new Date(Date.now()-90*86400000).toISOString().slice(0,10);
+  /* SÓ publicações do DJEN (que têm o teor) — sem o filtro, os milhares de
+     movimentos curtos do jus.br/datajud entopem o limite de 1000 e expulsam
+     as publicações: o histórico perde o "ver teor" e a triagem perde itens. */
+  var pr=await sb.from('andamentos').select('data,texto,criado_em,triada,processos(numero,cliente_nome,foro)').eq('fonte','djen').gte('data',dmin).order('data',{ascending:false}).limit(1000);
+  if(pr.error){ /* fallback: coluna 'triada' pode não existir ainda */ pr=await sb.from('andamentos').select('data,texto,criado_em,processos(numero,cliente_nome,foro)').eq('fonte','djen').gte('data',dmin).order('data',{ascending:false}).limit(1000); }
+  if(pr.error || !pr.data) return 0;
+  var UFJ={'15':'PB','25':'SE','05':'BA','17':'PE','06':'CE','13':'MG','19':'RJ','26':'SP','16':'PR','20':'RN','02':'AL','10':'MA','24':'SC','09':'GO','04':'AM','08':'ES','12':'AC','23':'RR'};
+  function tribDe(num){ var m=String(num||'').replace(/\D/g,''); if(m.length<16) return '';
+    var j=m.slice(13,14), tr=m.slice(14,16);
+    if(j==='8') return 'TJ'+(UFJ[tr]||''); if(j==='5') return 'TRT'+parseInt(tr,10); if(j==='4') return 'TRF'+parseInt(tr,10); return ''; }
+  PUBLICACOES=pr.data.filter(function(a){return a.processos && a.texto;}).map(function(a){
+    var tx=String(a.texto||'');
+    return {numero:a.processos.numero, cliente:a.processos.cliente_nome||'', ato:(tx.split(/\n/)[0]||'Publicação').slice(0,90), texto:tx, tribunal:tribDe(a.processos.numero), data:String(a.data||'').slice(0,10), prazo:null, triada:(a.triada===true)};
+  });
+  TRIAGEM=null; PUBIDX=null; if(typeof initTriagem==='function') initTriagem();
+  /* a tela pode já estar aberta — re-renderiza com o que chegou */
+  try{ var eT=document.getElementById('s-triagem'); if(eT&&!eT.classList.contains('hidden')&&typeof renderTriagem==='function') renderTriagem(); }catch(eRt){}
+  console.log('CMPGestao: '+PUBLICACOES.length+' publicações recentes na triagem.');
+  return PUBLICACOES.length;
+}
 function renderTriagem(){
   var tb=document.getElementById("triagem");tb.innerHTML="";
   var naoTratadas=TRIAGEM.filter(function(t){return !t.done});
@@ -2867,7 +2923,8 @@ function renderTriagem(){
   /* botões Fila / Tratadas no topo do painel */
   var barra=document.getElementById('triagem-abas');
   if(barra){
-    barra.innerHTML='<button class="btn sm '+(triagemAba==='fila'?'':'ghost')+'" onclick="setTriagemAba(\'fila\')">Fila ('+naoTratadas.length+')</button> '
+    barra.innerHTML='<button class="btn sm ghost" id="btn-pub-atualizar" onclick="atualizarPublicacoes()" title="Roda o robô do DJEN agora e recarrega a fila">&#8635; atualizar</button> '
+      +'<button class="btn sm '+(triagemAba==='fila'?'':'ghost')+'" onclick="setTriagemAba(\'fila\')">Fila ('+naoTratadas.length+')</button> '
       +'<button class="btn sm '+(triagemAba==='tratadas'?'':'ghost')+'" onclick="setTriagemAba(\'tratadas\')">Tratadas ('+tratadas.length+')</button>';
   }
   var lista=(triagemAba==='tratadas')?tratadas:naoTratadas;
@@ -5669,30 +5726,7 @@ function toggleConcluirTarefa(id){
     /* respostas por e-mail ainda não lidas → contador no menu */
     try{ if(typeof atualizaBadgeEmail==='function') atualizaBadgeEmail(); }catch(eBE){}
     /* publicações novas (robô DJEN) → fila de triagem */
-    try{
-      /* triagem: TODAS as publicações recentes não tratadas (não só as de hoje).
-         Amplia a janela para 90 dias de 'data' e remove o filtro de 'criado_em' de 24h. */
-      var dmin=new Date(Date.now()-90*86400000).toISOString().slice(0,10);
-      /* SÓ publicações do DJEN (que têm o teor) — sem o filtro, os milhares de
-         movimentos curtos do jus.br/datajud entopem o limite de 1000 e expulsam
-         as publicações: o histórico perde o "ver teor" e a triagem perde itens. */
-      var pr=await sb.from('andamentos').select('data,texto,criado_em,triada,processos(numero,cliente_nome,foro)').eq('fonte','djen').gte('data',dmin).order('data',{ascending:false}).limit(1000);
-      if(pr.error){ /* fallback: coluna 'triada' pode não existir ainda */ pr=await sb.from('andamentos').select('data,texto,criado_em,processos(numero,cliente_nome,foro)').eq('fonte','djen').gte('data',dmin).order('data',{ascending:false}).limit(1000); }
-      if(!pr.error && pr.data && pr.data.length){
-        var UFJ={'15':'PB','25':'SE','05':'BA','17':'PE','06':'CE','13':'MG','19':'RJ','26':'SP','16':'PR','20':'RN','02':'AL','10':'MA','24':'SC','09':'GO','04':'AM','08':'ES','12':'AC','23':'RR'};
-        function tribDe(num){ var m=String(num||'').replace(/\D/g,''); if(m.length<16) return '';
-          var j=m.slice(13,14), tr=m.slice(14,16);
-          if(j==='8') return 'TJ'+(UFJ[tr]||''); if(j==='5') return 'TRT'+parseInt(tr,10); if(j==='4') return 'TRF'+parseInt(tr,10); return ''; }
-        PUBLICACOES=pr.data.filter(function(a){return a.processos && a.texto;}).map(function(a){
-          var tx=String(a.texto||'');
-          return {numero:a.processos.numero, cliente:a.processos.cliente_nome||'', ato:(tx.split(/\n/)[0]||'Publicação').slice(0,90), texto:tx, tribunal:tribDe(a.processos.numero), data:String(a.data||'').slice(0,10), prazo:null, triada:(a.triada===true)};
-        });
-        TRIAGEM=null; PUBIDX=null; if(typeof initTriagem==='function') initTriagem();
-        /* a tela já foi mostrada antes desta consulta — se o usuário está na triagem, re-renderiza com os dados que chegaram */
-        try{ var eT=document.getElementById('s-triagem'); if(eT&&!eT.classList.contains('hidden')&&typeof renderTriagem==='function') renderTriagem(); }catch(eRt){}
-        console.log('CMPGestao: '+PUBLICACOES.length+' publicações recentes na triagem.');
-      }
-    }catch(e2){ console.log('pubs: '+(e2&&e2.message||e2)); }
+    try{ await recarregarPublicacoes(); }catch(e2){ console.log('pubs: '+(e2&&e2.message||e2)); }
     try{
       /* itens da agenda concluídos/excluídos sem id no banco (carga Astrea) — ficam ocultos */
       try{ var oc=await sb.from('agenda_ocultos').select('chave').limit(3000); if(!oc.error&&oc.data){ window.__AGOCULT={}; oc.data.forEach(function(x){ if(x&&x.chave) window.__AGOCULT[x.chave]=1; }); } }catch(eOc){}
