@@ -212,6 +212,19 @@ não da Inove. Abrir o portal hoje mostraria prateleira vazia.
 (`app/api/jusbr/puxar-docs/`) para os 35 processos que faltam. É trabalho de máquina,
 mas depende da sessão do jus.br ativa — ver `ops/JUSBR-RENOVACAO-AUTOMATICA.md`.
 
+### c) Quem aperta o botão "Atualizar" — resolvido
+
+O botão fica **no portal da Inove**, mas quem puxa é a sessão do jus.br do escritório.
+
+`/api/jusbr/puxar-docs` usa `getFreshToken()`, que lê o token guardado por escritório
+em `jusbr_sessao` — sincronizado pelo userscript do Djan. O próprio arquivo registra:
+*"não precisa de ninguém logado na hora"*. A Inove nunca encosta no certificado nem no
+token; só dispara o pedido.
+
+**Ponto de atenção:** o token dura ~8h. Se estiver vencido no clique, a busca falha.
+O botão então enfileira, avisa "vai atualizar assim que a sessão estiver ativa" e
+manda alerta ao escritório — em vez de devolver erro seco.
+
 ### b) O filtro de peça oficial não serve para perito
 
 `RE_OFICIAL` foi escrito para o **cliente** ver o andamento do próprio processo:
@@ -225,17 +238,16 @@ disso passa naquele filtro.
 O pedido original foi explícito: *"não podemos deixar de ter acesso a documentos do
 jus.br, cadastre como se fossem meus se for o caso"*.
 
-**Pendente de decisão** (a view `inove.v_documentos` está com o filtro restrito por
-enquanto, que é o lado seguro):
+**Decidido em 04/08/2026: liberar tudo dos 42 processos.** A view perdeu o filtro e
+passou de 63 para **321** documentos (migration `inove_docs_abertos`).
 
-| Opção | Efeito |
-|---|---|
-| Liberar tudo dos 42 processos | 321 documentos. É o que a perícia exige na prática |
-| Filtro ampliado para perícia | Acrescenta laudo, quesito, impugnação, proposta, honorário, petição, perícia |
-| Manter o filtro de cliente | 63 documentos. Seguro, mas provavelmente inútil para o trabalho deles |
+O controle não sai de cena — muda o tamanho da prateleira, não o rastreamento. A tarja
+com o e-mail de quem abriu e o `inove.log_documentos` valem para todos os 321.
 
-Vale lembrar que a tarja e o `inove.log_documentos` valem para qualquer uma das três —
-o que muda é o tamanho da prateleira, não o rastreamento.
+Os bytes saem por `inove.doc_conteudo(uuid)`, `security definer`: `conteudo_b64` e
+`caminho_disco` moram em `public.jusbr_arquivos`, onde o `inove_app` não tem nem deve
+ter privilégio. A função é a única fresta e confere sozinha se o documento é de
+processo da Inove — quem chama não escolhe o filtro.
 
 ## 8. Documentos do jus.br
 
