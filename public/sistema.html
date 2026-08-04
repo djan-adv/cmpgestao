@@ -3287,10 +3287,12 @@ function setViewAg(v){VIEWAG=v;
   renderAgendaView();
 }
 function renderAgendaView(){ if(VIEWAG==="kanban")renderKanban(); else if(VIEWAG==="tarefas"||VIEWAG==="auto")renderTarefasView(); else renderAgViewInner(); }
-/* Tarefa que o sistema criou sozinho a partir de uma audiência (preparar, avisar
-   cliente, lembrete de véspera, buscar a ATA). São úteis, mas são MUITAS por
-   audiência e afogavam a agenda de prazos — que é onde ficam os prazos de
-   verdade. A AUDIÊNCIA em si não é marcada, então continua aparecendo normal. */
+/* Tarefa que o sistema criou sozinho a partir de uma audiência: preparar, avisar
+   cliente, lembrete de véspera, comparecer e buscar a ATA. São úteis, mas são
+   CINCO por audiência e afogavam a agenda de prazos — que é onde ficam os prazos
+   de verdade. A audiência em si também entra aqui: ela já aparece na agenda de
+   Reuniões e audiências (vem de agenda_eventos), então repeti-la nos prazos era
+   contar a mesma coisa duas vezes. */
 function _tarefaAuto(t){ return !!t && String(t.org||'')==='auto-audiencia'; }
 /* Regra única de quem aparece: a aba Automáticas mostra só as automáticas; todas
    as outras telas mostram todo o resto. */
@@ -5261,8 +5263,9 @@ function tarefasFiltradas(){
   var ocultar=oc&&oc.checked;
   return (KAN||[]).filter(function(a){
     /* Uma audiência gera cinco tarefas (preparar, avisar cliente, lembrete de
-       véspera, comparecer, buscar a ATA). Somadas, afogavam a agenda de prazos —
-       que é onde ficam os prazos de verdade. Vão para a aba "🤖 Automáticas". */
+       véspera, comparecer, buscar a ATA). Todas saem daqui: a audiência já tem a
+       agenda de Reuniões e audiências, e as outras quatro vão para a aba
+       "🤖 Automáticas". Esta agenda fica só com prazo de verdade. */
     if(!_visivelNaAgenda(a)) return false;
     if(tarResp!=='Todos'){ var r=(a.resp||''); if(r.split(' ')[0].toLowerCase()!==tarResp.split(' ')[0].toLowerCase()) return false; }
     if(ocultar && _tarConcluida(a)) return false;
@@ -9641,7 +9644,7 @@ async function criarAtividadesAudiencia(p, iso, hora, opts){
   var testemunhas=(tipoAud==='instrucao')?' (levar testemunhas)':(tipoAud==='conciliacao'?' (sem testemunhas)':'');
 
   // 1) a audiência propriamente dita — o compromisso do dia, na lista de tarefas
-  if(await garanteTarefaProc(p,'AUDIÊNCIA '+dbr+horaTxt+' — comparecer'+testemunhas,iso,'audiencia','AUDIÊNCIA '+dbr,'Djan'))
+  if(await garanteTarefaProc(p,'AUDIÊNCIA '+dbr+horaTxt+' — comparecer'+testemunhas,iso,'audiencia','AUDIÊNCIA '+dbr,'Djan','auto-audiencia'))
     feitas.push('audiência no dia '+dbr);
 
   // 2) preparação, uma semana antes (nunca antes de hoje)
