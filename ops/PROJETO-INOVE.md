@@ -37,17 +37,17 @@ a Inove é **um único cliente**, não um escritório à parte.
 7. **Chat na barra lateral esquerda**, falando com o sistema como cliente. Qualquer
    pessoa logada no Gestão responde. Histórico igual aos chats de cliente.
 
-## 3. Decisão em aberto — resolver antes de codar
+## 3. Modelo de login — decidido
 
-### Modelo de login
+**Portal-style:** e-mail e senha em `inove.acessos`, sessão validada no servidor
+(`inove.sessoes`), navegador nunca fala com o Supabase. Mesmo desenho de
+`app/api/portal/`.
 
-| Opção | Como é | Consequência |
-|---|---|---|
-| **A. Portal-style (recomendado)** | E-mail e senha em tabela própria, sessão validada no servidor, navegador nunca fala com o Supabase | É o que sustenta a tarja e o log de acesso: todo documento passa por uma rota nossa. Exige migrar o login atual do `inove.html` |
-| **B. Supabase Auth atual** | Mantém o que já está no `inove.html` | Mais rápido, mas o navegador fala direto com o banco e o controle sobre documento fica frágil |
+É o que sustenta a tarja e o log: todo documento passa por rota nossa. Com Supabase
+Auth no navegador, quem tivesse a chave publishable pegaria o arquivo por fora da
+rota que carimba, e a tarja viraria decorativa.
 
-Sem a opção A, a tarja é contornável: quem tiver a chave publishable pega o arquivo
-por fora da rota que carimba.
+Custo aceito: migrar o login que hoje está no `inove.html`.
 
 ## 4. Isolamento — schema `inove`
 
@@ -64,15 +64,59 @@ banco cmpgestao (ndeqlyrydcijbgjiviuw)
 └── assinatura/   ← obra separada
 ```
 
-**Role dedicado `inove_app`:**
+**Role dedicado `inove_app`** — criado, com privilégio total no schema `inove` e
+**nenhum** no `public`. Verificado no banco:
 
-- `USAGE` + `ALL` no schema `inove`;
-- `SELECT` em exatamente duas views: os 42 processos e os documentos liberados;
-- **nenhum** privilégio de escrita em `public`;
-- `REVOKE ALL ON SCHEMA public FROM inove_app`.
+```
+has_table_privilege('inove_app','public.processos','select')      false
+has_table_privilege('inove_app','public.processos','update')      false
+has_table_privilege('inove_app','public.jusbr_arquivos','select') false
+has_table_privilege('inove_app','public.portal_acessos','select') false
+has_table_privilege('inove_app','inove.acessos','insert')         true
+```
 
-Um `delete` errado no código da Inove é barrado pelo Postgres, não pela disciplina de
-quem escreveu.
+Um `delete` errado no código da Inove é recusado pelo Postgres, não evitado pela
+disciplina de quem escreveu.
+
+### A pegadinha: service_role passa por cima disso
+
+**A rota `/api/inove` NÃO pode usar `SUPABASE_SERVICE_ROLE_KEY.`** A service role
+ignora RLS e tem privilégio sobre tudo — usá-la anula a barreira inteira e o
+argumento de não separar o banco cai junto.
+
+Por isso a rota conecta **direto no Postgres** como `inove_app`, via `pg`
+(dependência adicionada ao `package.json`) e a variável `INOVE_DB_URL`.
+
+O role nasceu **sem senha**, de propósito: ela não passa por arquivo do repositório
+nem por conversa. Para definir, no SQL Editor do Supabase:
+
+```sql
+alter role inove_app with password 'a-senha-que-voce-escolher';
+```
+
+E na VPS, no `.env` do projeto (nunca commitado):
+
+```
+INOVE_DB_URL=postgresql://inove_app.ndeqlyrydcijbgjiviuw:<senha>@aws-0-sa-east-1.pooler.supabase.com:6543/postgres
+```
+
+> O usuário do pooler leva o ref do projeto no nome (`inove_app.ndeqlyrydcijbgjiviuw`).
+> Conexão direta em `db.<ref>.supabase.co:5432` também serve, mas é IPv6 — confirmar
+> se a VPS alcança antes de optar por ela. O `ops/backup-supabase.sh` já conecta no
+> banco a partir da VPS; vale reaproveitar o formato que ali funciona.
+
+**Ainda não testado de ponta a ponta:** o teste de conectar como `inove_app` só pode
+ser feito depois da senha definida, a partir da VPS. A permissão já está conferida no
+banco; falta a conexão.
+
+### RLS nas tabelas do schema
+
+RLS ligada nas 8 tabelas, com uma política `inove_app_total` por tabela, restrita ao
+role `inove_app`. Assim `anon` e `authenticated` continuam trancados do lado de fora,
+que é o motivo de ter ligado a RLS.
+
+Não foi usado `BYPASSRLS` no role: é atributo global e valeria para qualquer tabela
+que alguém venha a conceder a ele no futuro.
 
 **Backup:** `ops/backup-supabase.sh` já faz `pg_dump` completo. Acrescentar um dump
 diário de `--schema=inove`, restaurável sozinho — é o único ponto em que projeto
@@ -184,9 +228,11 @@ Gestão responde.
 
 ## 10. Ordem de execução
 
-- [ ] **0.** Decidir o modelo de login (seção 3).
-- [ ] **1.** Criar schema `inove`, o role `inove_app` e as tabelas da seção 5.
-- [ ] **2.** Semear as 57 situações e os 9 quesitos.
+- [x] **0.** Decidir o modelo de login — portal-style (seção 3).
+- [x] **1.** Criar schema `inove`, o role `inove_app` e as tabelas da seção 5.
+      Migrations `inove_schema_inicial`, `inove_role_app`, `inove_policies_app`.
+- [x] **2.** Semear as 57 situações e os 9 quesitos, extraídos da planilha por script.
+- [ ] **2b.** Definir a senha do `inove_app` e a `INOVE_DB_URL` na VPS (seção 4).
 - [ ] **3.** Criar o contato "INOVE CONSULTORIA ATUARIAL LTDA - EPP" e vincular os 42
       processos por grant.
 - [ ] **4.** Rota `/api/inove` — sessão, processos, etiquetas, financeiro, chat.
