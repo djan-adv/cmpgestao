@@ -118,29 +118,39 @@ export function num(c, chave, padrao) {
    Carimba e-mail de quem abriu + data/hora, a 45°, em opacidade baixa, repetido em
    grade para cobrir a página inteira.
 
-   Duas escolhas de propósito:
+   Três escolhas de propósito:
    - o arquivo original em /opt/cmpdocs NÃO é tocado — a tarja é desenhada na hora da
      entrega, numa cópia em memória;
-   - o texto do documento continua selecionável e copiável, porque o carimbo é
-     desenhado por cima como conteúdo próprio e não rasteriza nem cobre a camada de
-     texto original.
+   - o texto do documento continua legível e selecionável;
+   - a tarja em si é marcada como Artifact (ISO 32000-1 §14.8.2.2 — a mesma
+     classificação usada para marca d'água, numeração de página, cabeçalho/rodapé),
+     envolvendo o desenho com os operadores BDC/EMC do PDF. Visores compatíveis
+     (Adobe, e o pdf.js que roda por trás do Chrome/Edge) excluem conteúdo marcado
+     como Artifact da extração de texto — então selecionar um parágrafo do documento
+     não arrasta mais o carimbo junto para o Word. Testado gerando um PDF e inflando
+     o content stream salvo: o bloco aparece como
+       /Artifact <</Type /Pagination /Subtype /Watermark>> BDC ... EMC
+     — que é a sintaxe exata do padrão. Antes disso, o carimbo era texto comum e
+     entrava em qualquer seleção que passasse perto — daí o problema relatado.
 
    Sobre o alcance, sem ilusão: a tarja não impede print de tela nem foto. Ela
    identifica a origem de um vazamento. Quem de fato responsabiliza é o
    inove.log_documentos. */
 export async function carimbarPdf(buf, etiqueta) {
-  const { PDFDocument, StandardFonts, rgb, degrees } = await import('pdf-lib')
+  const { PDFDocument, StandardFonts, rgb, degrees, PDFName, PDFOperator } = await import('pdf-lib')
   const doc = await PDFDocument.load(buf, { ignoreEncryption: true })
   const fonte = await doc.embedFont(StandardFonts.Helvetica)
   // a fonte padrão do pdf-lib é WinAnsi: troca o que não couber em vez de estourar
   const txt = String(etiqueta || '').replace(/[^\x20-\xFF]/g, '?')
   const TAM = 13
   const largura = fonte.widthOfTextAtSize(txt, TAM)
+  const propsArtefato = doc.context.obj({ Type: 'Pagination', Subtype: 'Watermark' })
 
   for (const pag of doc.getPages()) {
     const { width, height } = pag.getSize()
     const passoX = Math.max(largura * 0.85, 240)
     const passoY = 150
+    pag.pushOperators(PDFOperator.of('BDC', [PDFName.of('Artifact'), propsArtefato]))
     for (let y = -height; y < height * 1.4; y += passoY) {
       for (let x = -largura; x < width * 1.3; x += passoX) {
         pag.drawText(txt, {
@@ -153,8 +163,30 @@ export async function carimbarPdf(buf, etiqueta) {
         })
       }
     }
+    pag.pushOperators(PDFOperator.of('EMC', []))
   }
   return Buffer.from(await doc.save())
+}
+
+/* ---------- tarja diagonal em HTML ----------
+   Documentos que o jus.br devolve como HTML (petição, certidão) não passam pelo
+   pdf-lib — a tarja aqui é uma camada própria: position:fixed, pointer-events:none e
+   user-select:none, então o carimbo nunca entra na seleção nem no copiar/colar,
+   sem precisar de truque de marcação como no PDF (o problema nem existe em HTML). */
+export function carimbarHtml(html, etiqueta) {
+  const txt = String(etiqueta || '')
+  const escapado = txt.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+  const overlay = `
+<div aria-hidden="true" style="position:fixed;inset:0;z-index:2147483647;pointer-events:none;user-select:none;-webkit-user-select:none;overflow:hidden">
+  <div style="position:absolute;inset:-50%;display:flex;flex-wrap:wrap;align-content:space-around;justify-content:space-around;transform:rotate(-32deg);opacity:.16">
+    ${Array.from({ length: 60 }).map(() =>
+      `<span style="display:inline-block;margin:34px 46px;font:600 13px system-ui,sans-serif;color:#5a6472;white-space:nowrap">${escapado}</span>`
+    ).join('')}
+  </div>
+</div>`
+  if (/<body[\s>]/i.test(html)) return html.replace(/<body([^>]*)>/i, '<body$1>' + overlay)
+  // fragmento sem <html>/<body> ao redor (o formato mais comum vindo do jus.br)
+  return '<!doctype html><html><head><meta charset="utf-8"></head><body>' + overlay + html + '</body></html>'
 }
 
 /* ---------- leitura dos bytes de um documento ----------

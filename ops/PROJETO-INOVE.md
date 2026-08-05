@@ -406,6 +406,117 @@ existem na rota.
       `sistema.html`, senão as mensagens deles chegam e ninguém vê.
 - [ ] Passo 9: dump diário do schema `inove` no `ops/backup-supabase.sh`.
 
+## 13b. Correções de 05/08/2026 à tarde — testado com documento real
+
+Djan testou o portal no ar e trouxe 4 pontos, mais uma virada de decisão sobre o
+chat. Nesta ordem:
+
+**a) Botão de atualizar do jus.br — vira exclusivo do acesso oculto.** Existe agora
+`atualizar_todos`: varre os processos sem nenhum documento e dispara a busca em
+lote, em segundo plano (não bloqueia a resposta HTTP — 35 chamadas sequenciais ao
+jus.br não cabem numa única requisição sem arriscar timeout do proxy da VPS). Só
+aparece na tela para `acesso.oculto`, e o servidor confere de novo — a tela
+escondida não é a segurança, é só a UI.
+
+**b) A tarja atrapalhava copiar/colar.** Era esperado: a tarja era texto comum
+desenhado por cima, então qualquer seleção que passasse perto arrastava o carimbo
+junto. Corrigido marcando o carimbo como **Artifact** (ISO 32000-1 §14.8.2.2 — a
+mesma classificação de marca d'água/cabeçalho/rodapé), envolvendo o desenho com os
+operadores `BDC`/`EMC` do PDF via `pag.pushOperators(...)`. Testado gerando um PDF e
+inflando o content stream salvo: o bloco aparece como
+`/Artifact <</Type /Pagination /Subtype /Watermark>> BDC ... EMC` — a sintaxe exata
+do padrão. Visores compatíveis (Adobe, e o pdf.js por trás do Chrome/Edge) excluem
+conteúdo marcado como Artifact da extração de texto.
+**Não testado num navegador real** — só a estrutura do PDF foi verificada aqui.
+Confirmar depois de publicar: selecionar um parágrafo perto da tarja e colar no
+Word deve trazer só o texto do documento.
+
+**c) O "marcar o que baixar" do sistema.html** (checkboxes + zip/PDF único/soltos)
+não foi replicado como zip — geraria uma dependência nova (`archiver`/`jszip`) e
+mais um ciclo de `npm install` na VPS, logo depois da hora que já foi gasta com
+host/porta/`.env` duplicado. Em vez disso: checkbox por peça, "marcar todas" e
+"Baixar selecionadas" disparando downloads individuais em sequência (a cada
+400ms) pelo mesmo `/api/inove?doc=...&dl=1` que já existe. Resolve "escolher o que
+baixar"; não resolve "um arquivo só". Se valer a pena o zip de verdade, é obra à
+parte — avisar antes de instalar dependência nova.
+
+**d) A causa real do "html lê tudo errado" — achada e corrigida na raiz, não só
+escondendo o botão Abrir.** O documento era `Petição.html` (id `d4d925cb…`),
+conferido direto no banco: `doc_tipo` declarado pelo jus.br é `text/plain`
+(errado) e o conteúdo é um **fragmento HTML solto** — só `<p class="paragraph"
+...>`, sem `<html>`/`<body>` ao redor. `tipoRealDoArquivo()` em `app/api/jusbr/lib.js`
+só reconhecia HTML com `<!doctype html>`, `<html` ou `<body` — um fragmento não bate
+nenhum desses, cai no ramo de texto puro, e o navegador mostra a tag literalmente.
+Ampliado para reconhecer `<p`, `<div`, `<span`, `<table` soltos também. Esse bug
+existia desde antes da Inove — o Portal do Cliente nunca expôs porque o filtro de
+peça oficial exclui petição; abrir tudo para a Inove foi o que revelou.
+Como HTML nunca passava pela tarja, foi acrescentada `carimbarHtml()`: camada
+`position:fixed; pointer-events:none; user-select:none` — mais simples que o
+truque do PDF, porque em HTML o problema do item (b) nem existe. **"Abrir" volta a
+funcionar** para esses arquivos; não foi preciso removê-lo.
+
+## 13c. Chat — vira interno da Inove, não fala com o escritório
+
+Decisão revista: **as conversas são só entre as pessoas da Inove**, não chegam ao
+`sistema.html`. Ao testar, "a mensagem não chegou no gestão" — o comportamento
+estava certo desde o início pela intenção original (chat com "meu sistema"), mas
+depois de pensar Djan decidiu que não quer esse canal com o escritório.
+
+**Boa notícia: isso é MENOS trabalho, não mais.** A tabela `inove.chat` e as ações
+`chat`/`chat_enviar` já suportam múltiplas pessoas da Inove postando na mesma sala
+(geral ou por processo) e se vendo entre si — não há bug aí, só faltava mais de uma
+pessoa logada para testar. **Cancelado**: construir leitura do `inove.chat` no
+`sistema.html` (item que constava como pendência acima e tinha sido passado como
+tarefa 3 para a sessão da VPS antes desta correção — avisar lá se ela já começou).
+
+**Assentos: 5 → 10.** Alterado direto no banco (`inove.config.limite_acessos = 10`).
+
+**"Todas as funcionalidades que temos do chat"** — comparado com `chat_mensagens`
+(chat interno da equipe CMP): eles têm push notification (web-push/VAPID), anexo
+com imagem, responder a uma mensagem (thread), arquivar. O `inove.chat` já nasceu
+com as colunas de anexo prontas; **faltam** push, resposta a mensagem e arquivar —
+não construído ainda, é obra própria (push exige chave VAPID + service worker no
+`inove.html`, anexo exige endpoint de upload).
+
+**Sessões simultâneas por pessoa — pergunta em aberto, minha recomendação: 3.**
+Hoje `inove.sessoes` **não tem limite nenhum** — cada login insere uma sessão nova
+sem apagar as anteriores, então já é possível logar em quantos aparelhos quiser,
+sem controle. Isso não é o que foi pedido nem é seguro (não dá pra saber quantos
+aparelhos usam um acesso). Recomendo copiar o modelo que o próprio Gestão já usa
+para a equipe (`sessao_dispositivos`, commit "até 3 aparelhos por pessoa, sessão
+que sobrevive à aba congelada") — mesmo número, mesma lógica, já validada em
+produção. Precisa de `dispositivo_id` gerado no navegador (hoje `inove.sessoes.
+dispositivo` é só rótulo livre, não identifica o aparelho) e contagem de
+distintos no login, bloqueando ou derrubando o mais antigo no 4º.
+**Não implementado ainda** — depende da confirmação do número.
+
+## 14b. Pedido maior, ainda não escopado — RBAC por pessoa, documentos, kanban
+
+Chegou em bloco, precisa de planejamento antes de codar (é redesenho de escopo, não
+ajuste pontual):
+
+1. **Acesso por pessoa, não só por conta.** Hoje todo acesso ativo enxerga os
+   mesmos 42 processos (`inove.v_processos`, sem filtro por pessoa). Passa a ser:
+   maioria das pessoas só vê **o(s) processo(s) que é dela**; 2–3 "diretores" veem
+   todos. Precisa de uma tabela de vínculo pessoa↔processo (nos moldes de
+   `portal_acesso_processos`, que já existe para o cliente) e um flag de diretor em
+   `inove.acessos`, e toda consulta que hoje lê `v_processos` sem filtro passa a
+   filtrar por esse vínculo (exceto diretor).
+2. **Aba "Documentos do processo"** — diferente da lista de peças do jus.br que já
+   existe: é upload de arquivo PRÓPRIO da Inove (minuta antes de protocolar,
+   rascunho de laudo), não documento do tribunal. Precisa de tabela + bucket de
+   storage + endpoint de upload — não existe nada disso hoje no schema `inove`.
+3. **Tarefa do processo / Agenda de prazos / Kanban.** A tabela `inove_tarefas` já
+   existe no `public`, criada mas vazia e sem UI. Decidir: reaproveitar essa tabela
+   do `public` (aí precisa de uma view + função no molde do resto) ou criar
+   `inove.tarefas` própria, mais consistente com o isolamento que já existe.
+4. **Quadro de recados**, abaixo de Documentos do processo — mural por processo ou
+   geral? Não especificado; perguntar antes de desenhar a tabela.
+
+Nenhum dos 4 foi iniciado. São suficientes para uma rodada de planejamento própria
+— o RBAC por pessoa em especial muda o contrato de várias views e merece ser
+fechado antes de mexer no código, para não reescrever duas vezes.
+
 ## 11. Ideias levantadas, ainda não aprovadas
 
 1. Alerta de prazo disparado por etiqueta (`Intimado - Elaborar Laudo` há X dias).

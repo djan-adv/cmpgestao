@@ -69,7 +69,11 @@ export function tipoRealDoArquivo(buf, tipoDeclarado, nome) {
   const cabeca = buf.slice(0, 512).toString('utf8').trim().toLowerCase()
   if (cabeca.startsWith('%pdf')) return 'application/pdf'
   if (buf[0] === 0x50 && buf[1] === 0x4b) return /\.docx$/i.test(String(nome || '')) ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : 'application/zip'
-  if (cabeca.startsWith('<!doctype html') || cabeca.startsWith('<html') || (cabeca.startsWith('<') && cabeca.indexOf('<body') > -1)) return 'text/html'
+  // O jus.br também exporta "Petição.html" como FRAGMENTO solto — só <p>, <span>,
+  // sem <html>/<body> ao redor. Sem isto, esses arquivos caem no ramo de texto puro
+  // lá embaixo e o navegador mostra a tag literalmente em vez de renderizar.
+  if (cabeca.startsWith('<!doctype html') || cabeca.startsWith('<html')
+      || (cabeca.startsWith('<') && /<body[\s>]|<p[\s>]|<div[\s>]|<span[\s>]|<table[\s>]/.test(cabeca))) return 'text/html'
   if (/^image\//.test(decl) || /msword|officedocument|rtf/.test(decl)) return decl
   // sobrou texto: só é texto se for legível (senão é binário sem rótulo)
   const amostra = buf.slice(0, 2000).toString('utf8')

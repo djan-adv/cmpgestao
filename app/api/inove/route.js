@@ -13,6 +13,7 @@
 //   POST {acao:'etiquetar', processo_id, dimensao, etiqueta_id}
 //   POST {acao:'cadastrar_processo', numero, cliente, oponente, assunto}
 //   POST {acao:'atualizar', processo_id}              -> puxa documentos novos do jus.br
+//   POST {acao:'atualizar_todos'}                     -> idem, em lote (só acesso oculto)
 //   POST {acao:'financeiro'} / {acao:'financeiro_salvar', ...}
 //   POST {acao:'chat', processo_id, desde_id} / {acao:'chat_enviar', processo_id, texto}
 //   POST {acao:'acessos'} / {acao:'acesso_criar'|'acesso_editar'|'acesso_desativar'}
@@ -25,7 +26,7 @@
 
 import {
   q, q1, hashSenha, confereSenha, sessao, tokenDo, ip, podeTentar, marcaTentativa,
-  config, num, carimbarPdf, lerDocumento, logDoc, alertarEscritorio, erro, SESSAO_DIAS,
+  config, num, carimbarPdf, carimbarHtml, lerDocumento, logDoc, alertarEscritorio, erro, SESSAO_DIAS,
 } from './lib.js'
 import { tipoRealDoArquivo, pdfDeTexto } from '../jusbr/lib.js'
 import crypto from 'crypto'
@@ -85,7 +86,7 @@ export async function POST(request) {
           and criado_em >= date_trunc('day', now() at time zone 'America/Sao_Paulo')
         limit 1`, [a.id, c.lgpd_versao || '1'])
 
-    return Response.json({ ok: true, token, nome: a.nome || '', email: a.email, lgpd: !aceitou })
+    return Response.json({ ok: true, token, nome: a.nome || '', email: a.email, lgpd: !aceitou, oculto: !!a.oculto })
   }
 
   /* ---------- daqui pra baixo, tudo exige sessão ---------- */
@@ -199,6 +200,38 @@ export async function POST(request) {
         acesso.email + ' pediu atualização e a chamada falhou: ' + ((e && e.message) || e))
       return Response.json({ ok: false, aviso: 'Não foi possível falar com o jus.br agora. O escritório foi avisado.' })
     }
+  }
+
+  /* Atualização em lote — só o acesso oculto (o desenvolvedor) vê o botão, e o
+     servidor confere de novo aqui, não confia só na tela escondida. Roda em
+     segundo plano: 35 processos sequenciais no jus.br não cabem numa única
+     resposta HTTP sem arriscar timeout do proxy da VPS. A resposta volta na hora
+     dizendo quantos entraram na fila; o resultado chega por e-mail ao terminar. */
+  if (acao === 'atualizar_todos') {
+    if (!acesso.oculto) return erro('Ação restrita.', 403)
+    const alvo = await q(
+      `select p.id, p.numero from inove.v_processos p
+        where (select count(*) from inove.v_documentos d where d.processo_id = p.id) = 0`)
+    if (!alvo.length) return Response.json({ ok: true, iniciado: false, mensagem: 'Todos os processos já têm ao menos um documento.' })
+
+    const base = (process.env.PUBLIC_URL || 'https://gestao.cmpadvogados.com.br').replace(/\/+$/, '')
+    ;(async () => {
+      let ok = 0, falhou = 0
+      for (const p of alvo) {
+        try {
+          const r = await fetch(base + '/api/jusbr/puxar-docs?numero=' + encodeURIComponent(p.numero), { cache: 'no-store' })
+          const j = await r.json().catch(() => ({}))
+          if (r.ok && !j.erro) ok++; else falhou++
+        } catch (e) { falhou++ }
+        await new Promise(res => setTimeout(res, 1500)) // não martelar o jus.br
+      }
+      await alertarEscritorio(
+        'Inove: carga em lote concluída',
+        'Buscou peças em ' + alvo.length + ' processos que estavam sem nenhum documento.\n\n' +
+        'Conseguiu: ' + ok + ' · Falhou: ' + falhou + (falhou ? '\n\nOs que falharam provavelmente têm a sessão do jus.br vencida — sincronize o token e rode de novo.' : ''))
+    })()
+
+    return Response.json({ ok: true, iniciado: true, total: alvo.length })
   }
 
   /* ---------- etiquetas ---------- */
@@ -435,6 +468,10 @@ export async function GET(request) {
       // sem tarja: o log até registra, mas a cópia circularia anônima.
       return erro('Este documento não pôde ser preparado para exibição. O escritório foi avisado.', 502)
     }
+  } else if (mime === 'text/html') {
+    // petição/certidão que o jus.br devolve como HTML — carimba com uma camada
+    // própria (pointer-events:none) em vez do truque de Artifact do PDF.
+    try { buf = Buffer.from(carimbarHtml(buf.toString('utf8'), etiquetaTarja(acesso, d)), 'utf8') } catch (e) {}
   }
 
   const nome = (d.doc_nome || 'documento').replace(/[^\w.\- ]+/g, '_')
