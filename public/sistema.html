@@ -11831,7 +11831,7 @@ async function desativarAcompanhamento(){
     <button class="btn" style="background:#0F6E56;color:#fff" onclick="enviarResposta(this)">Enviar resposta</button>
   </div>
 </div></div>
-<div id="modal-hvara" class="overlay hidden"><div class="modal" style="max-width:520px">
+<div id="modal-hvara" class="overlay hidden" style="z-index:90"><div class="modal" style="max-width:520px">
   <h2>⏰ Horário de envio à vara</h2>
   <div id="hv-txt" style="font-size:13.5px;line-height:1.6;margin-bottom:12px"></div>
   <div class="foot" style="flex-wrap:wrap">
@@ -11888,6 +11888,7 @@ async function desativarAcompanhamento(){
     <input type="file" id="atz-anexos" multiple style="margin-top:4px">
     <div class="note" id="atz-anexos-info" style="font-size:11px;margin-top:2px">PDF, imagem ou Word — até 9 MB por arquivo (só no envio pelo "Enviar agora (contato@)").</div>
   </div>
+  <div id="atz-hvara" style="display:none;margin-top:10px;background:#f4f8fb;border:1px solid #cfe0ee;border-radius:10px;padding:12px 14px"></div>
   <div id="atz-envio-bar" style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
     <button class="btn" style="background:#0F6E56;color:#fff" onclick="enviarAgoraAtualizacao()" title="Envia direto pelo contato@cmpadvogados.com.br (requer o envio pelo servidor ativado)">Enviar agora (contato@)</button>
     <button class="btn ghost" onclick="abrirNoGmail()">Abrir no Gmail</button>
@@ -12245,15 +12246,50 @@ function _slotTxt(d){
 }
 /* pergunta agendar / enviar agora / cancelar — devolve 'agendar' | 'agora' | null */
 var _hvResolve=null;
-function _hvResp(v){ document.getElementById('modal-hvara').classList.add('hidden'); var f=_hvResolve; _hvResolve=null; if(f) f(v); }
-function _perguntaHorarioVara(numero,para){
+function _hvResp(v){
+  /* fecha os dois caminhos: o bloco dentro do painel e o overlay antigo */
+  var caixa=document.getElementById('atz-hvara'); if(caixa){ caixa.style.display='none'; caixa.innerHTML=''; }
+  var bar=document.getElementById('atz-envio-bar'); if(bar) bar.style.display='';
+  var ov=document.getElementById('modal-hvara'); if(ov) ov.classList.add('hidden');
+  var f=_hvResolve; _hvResolve=null; if(f) f(v);
+}
+/* Pergunta do horário da vara.
+   Ela era um SEGUNDO overlay (#modal-hvara). Como os dois usam .overlay com o
+   mesmo z-index:60, e o painel do e-mail (#modal-atualizar) vem DEPOIS no DOM,
+   a pergunta abria atrás dele: só aparecia quando se fechava o painel — que é
+   exatamente o que não se quer, porque fechar o painel é desistir do envio.
+   Agora, com o painel aberto, a pergunta é desenhada DENTRO dele, acima dos
+   botões. O overlay antigo só é usado quando a pergunta vem de outro lugar. */
+function _hvHTML(numero,para){
   var slot=_proximoSlotVara(numero), h=_horaEnvioVara(numero);
-  document.getElementById('hv-txt').innerHTML=
-    'Este e-mail vai para <b>'+esc(para||'a vara/cartório')+'</b>'+(numero?(' — processo '+esc(numero)):'')+'.<br><br>'
+  return 'Este e-mail vai para <b>'+esc(para||'a vara/cartório')+'</b>'+(numero?(' — processo '+esc(numero)):'')+'.<br><br>'
     +'Como é <b>'+esc(_justicaNome(numero))+'</b>, o horário de envio é <b>'+String(h).padStart(2,'0')+':00</b> — assim a mensagem chega no <b>topo da caixa</b> quando o servidor abre o expediente, em vez de afundar no meio do dia.<br><br>'
     +'<div style="background:#eaf5ef;border:1px solid #bfe0cf;border-radius:8px;padding:9px 11px"><b>Agendar para '+esc(_slotTxt(slot))+'</b><br><span class="note" style="font-size:11.5px">Fica na fila e sai sozinho. Dá para cancelar até lá.</span></div>';
-  var b=document.getElementById('hv-btn-ag'); if(b) b.textContent='Agendar para '+_slotTxt(slot);
-  document.getElementById('modal-hvara').classList.remove('hidden');
+}
+function _perguntaHorarioVara(numero,para){
+  var slot=_proximoSlotVara(numero);
+  var painel=document.getElementById('modal-atualizar');
+  var caixa=document.getElementById('atz-hvara');
+  var noPainel = painel && !painel.classList.contains('hidden') && caixa;
+
+  if(noPainel){
+    caixa.innerHTML='<div style="font-size:14px;font-weight:700;color:#22405f;margin-bottom:8px">⏰ Horário de envio à vara</div>'
+      +'<div style="font-size:13.5px;line-height:1.6">'+_hvHTML(numero,para)+'</div>'
+      +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">'
+      +'<button class="btn" style="background:#0F6E56;color:#fff" onclick="_hvResp(\'agendar\')">Agendar para '+esc(_slotTxt(slot))+'</button>'
+      +'<button class="btn ghost" onclick="_hvResp(\'agora\')" title="Ignora o horário e envia neste momento">Enviar agora mesmo assim</button>'
+      +'<button class="btn ghost" onclick="_hvResp(null)">Cancelar</button>'
+      +'</div>';
+    caixa.style.display='block';
+    /* os botões de envio saem de cena enquanto a escolha está na tela: dois
+       conjuntos de botões ao mesmo tempo é o que confunde */
+    var bar=document.getElementById('atz-envio-bar'); if(bar) bar.style.display='none';
+    try{ caixa.scrollIntoView({behavior:'smooth',block:'nearest'}); }catch(e){}
+  }else{
+    document.getElementById('hv-txt').innerHTML=_hvHTML(numero,para);
+    var b=document.getElementById('hv-btn-ag'); if(b) b.textContent='Agendar para '+_slotTxt(slot);
+    document.getElementById('modal-hvara').classList.remove('hidden');
+  }
   return new Promise(function(res){ _hvResolve=res; });
 }
 /* Põe na fila DIRETO no banco, sem passar pela rota de envio.
