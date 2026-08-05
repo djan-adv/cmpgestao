@@ -7,15 +7,40 @@
 # Depois de qualquer mudança real no crontab do VPS, atualize este arquivo
 # também (e faça commit) — ele só serve de espelho se estiver em dia.
 #
-# Para aplicar no VPS: `crontab -e` e cole as linhas (ajustando SEU_USUARIO).
-# Para conferir o que está rodando de fato: `crontab -l`
+# Para conferir o que está rodando de fato: `crontab -l` (usuário root)
 # ============================================================================
 
+# ----------------------------------------------------------------------------
+# INSTALADO — conferido com `crontab -l` do root em 05/08/2026.
+# Estas 5 linhas são o que está de fato agendado hoje.
+# ----------------------------------------------------------------------------
+
+# 05:00 — captura das publicações do DJEN (janela de 2 dias)
+0 5 * * * curl -s -m 300 "http://127.0.0.1:3000/api/cron/djen?dias=2" >> /var/log/cmp_djen.log 2>&1
+
+# a cada 2 min — conciliação automática dos recebimentos no Cora
+*/2 * * * * curl -s http://127.0.0.1:3000/api/cora/conciliar-auto >/dev/null 2>&1
+
+# a cada 15 min — fila de notificações do Jader
+*/15 * * * * curl -s http://127.0.0.1:3000/api/notificar-jader >/dev/null 2>&1
+
+# terças 09:00 — varredura da RPI (marcas do INPI)
+0 9 * * 2 curl -s "http://127.0.0.1:3000/api/inpi/robo?tarefa=varrer" >/dev/null 2>&1
+
+# 06:30 — robô diário que puxa documentos novos do jus.br
+30 6 * * * curl -s "http://127.0.0.1:3000/api/jusbr/puxar-docs" >/dev/null 2>&1
+
+# ----------------------------------------------------------------------------
+# NÃO INSTALADO — o backup diário nunca rodou nesta VPS.
+# Não basta colar estas linhas: elas falham todo dia enquanto faltar o
+# ~/.config/cmp-backup/db.env. Ver ops/COMO-CONFIGURAR-BACKUP.md ("Estado real
+# nesta VPS"), destravar a credencial, rodar o script UMA VEZ à mão, e só então
+# agendar. Os caminhos apontam para o repositório de propósito, para o script
+# não envelhecer numa cópia solta na home.
+# ----------------------------------------------------------------------------
+
 # 03:00 — dump do banco (Supabase), 30 dias de retenção, copia para nuvem
-0 3 * * * /home/SEU_USUARIO/backup-supabase.sh >> /home/SEU_USUARIO/cmp-backups/backup.log 2>&1
+# 0 3 * * * /opt/cmpgestao/ops/backup-supabase.sh >> /root/cmp-backups/backup.log 2>&1
 
 # 03:15 — sincroniza os documentos do disco (/opt/cmpdocs) para a nuvem
-15 3 * * * /home/SEU_USUARIO/backup-cmpdocs.sh >> /home/SEU_USUARIO/cmp-backups/backup-docs.log 2>&1
-
-# (adicione aqui qualquer outra linha de cron do sistema, para manter este
-# arquivo como o retrato fiel e completo do que deve estar agendado)
+# 15 3 * * * /opt/cmpgestao/ops/backup-cmpdocs.sh >> /root/cmp-backups/backup-docs.log 2>&1

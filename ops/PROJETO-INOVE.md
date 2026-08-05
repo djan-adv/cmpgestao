@@ -34,8 +34,10 @@ a Inove é **um único cliente**, não um escritório à parte.
 5. **5 acessos**, autogeridos por eles (criar, editar, desativar). O acesso do
    desenvolvedor fica **oculto** da lista.
 6. **Inove = um cliente só.**
-7. **Chat na barra lateral esquerda**, falando com o sistema como cliente. Qualquer
-   pessoa logada no Gestão responde. Histórico igual aos chats de cliente.
+7. **Chat na barra lateral esquerda.** **Revisto em 05/08/2026: o chat é conversa
+   interna da Inove — NÃO é espelhado no `sistema.html` do escritório.** A redação
+   anterior (falar com o sistema como cliente, qualquer pessoa logada no Gestão
+   responde) está cancelada; não reimplementar sem confirmar.
 
 ## 3. Modelo de login — decidido
 
@@ -397,14 +399,23 @@ existem na rota.
 - [x] `INOVE_DB_URL` no `.env.local` da VPS e `npm install` com o `pg`.
 - [x] **Conexão como `inove_app` validada da VPS** em 05/08/2026.
 - [x] Primeiro acesso criado (`Djan (dev)`, oculto).
-- [ ] Publicar: merge no `main`, `git pull`, `npm install`, `npm run build`, reiniciar.
-      A VPS hoje roda o `main`, então o portal novo ainda não está no ar.
+- [x] **Publicado em 05/08/2026.** `npm install`, `npm run build`,
+      `pm2 restart cmpgestao`. Conferido no ar: `inove.html` sem SDK do Supabase e
+      `/api/inove` respondendo pelo role `inove_app`.
 - [ ] Criar os acessos das pessoas da Inove (pelo script ou pela tela, já logado).
-- [ ] Rodar a carga do jus.br nos **35 processos sem nenhum documento** — hoje só 7
-      dos 42 têm arquivo, e o portal abre quase vazio.
-- [ ] Lado do escritório: mostrar `inove.chat` junto com os chats de cliente no
-      `sistema.html`, senão as mensagens deles chegam e ninguém vê.
+- [x] **Carga do jus.br feita em 05/08/2026.** De 7 para **41 dos 42** processos com
+      documento; 313 peças baixadas, acervo da Inove em **634**. Sobra
+      `00038151020158250001` (TJSE, 2º grau), que o PDPJ devolve com `docs:0` em duas
+      consultas separadas — não tem peça, não é falha.
+- [ ] **Completar a carga.** A rota tem teto de `porproc=10` e vários processos têm
+      mais de 100 peças (o maior, 229). Cada passada com `?numero=` traz as 10
+      seguintes ainda não guardadas, então o acervo inteiro exige repetir por
+      processo. **Ir devagar:** na primeira tentativa, 2s entre processos derrubou o
+      PDPJ em `HTTP 429` a partir do 26º; com 20–30s passou limpo.
+- [x] Chat: **decidido que fica só do lado da Inove** — ver a decisão 7 revista.
 - [ ] Passo 9: dump diário do schema `inove` no `ops/backup-supabase.sh`.
+      **Bloqueado:** o backup diário nunca foi instalado nesta VPS — o estado real
+      apurado está no fim de `ops/COMO-CONFIGURAR-BACKUP.md`.
 
 ## 13b. Correções de 05/08/2026 à tarde — testado com documento real
 
