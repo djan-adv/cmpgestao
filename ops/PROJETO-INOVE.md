@@ -97,22 +97,33 @@ alter role inove_app with password 'a-senha-que-voce-escolher';
 E na VPS, em **`/opt/cmpgestao/.env.local`** (nunca commitado):
 
 ```
-INOVE_DB_URL=postgresql://inove_app.ndeqlyrydcijbgjiviuw:<senha>@aws-1-sa-east-1.pooler.supabase.com:6543/postgres
+INOVE_DB_URL=postgresql://inove_app.ndeqlyrydcijbgjiviuw:<senha>@aws-1-sa-east-1.pooler.supabase.com:5432/postgres
 ```
 
-Três detalhes que custaram tempo na primeira vez:
+Quatro detalhes que custaram uma hora na primeira vez. Confira todos antes de
+concluir que a senha está errada — os quatro se disfarçam de erro de senha:
 
+- **Porta 5432, não 6543.** A 5432 do pooler é o *session mode*, que a documentação
+  indica para "persistent backend on IPv4-only networks" — que é o nosso caso, um
+  Next.js rodando como processo permanente com pool de conexões. A 6543 é
+  *transaction mode*, para serverless. Com a 6543 a autenticação falhava mesmo com a
+  senha certa.
 - **É `aws-1`, não `aws-0`.** Os dois hosts existem e respondem; o `aws-0` devolve
-  `tenant/user not found`, que parece erro de senha e não é. Projeto criado em
-  julho de 2026 fica no `aws-1`.
+  `tenant/user not found`, que parece erro de senha e não é. Projeto criado em julho
+  de 2026 fica no `aws-1`.
 - **O usuário leva o ref no nome:** `inove_app.ndeqlyrydcijbgjiviuw`. Só na conexão
   direta (`db.<ref>.supabase.co:5432`) é que o usuário é `inove_app` puro — e aquele
-  host só resolve em IPv6.
+  host resolve só em IPv6 e recusa conexão na 5432.
 - **Senha com `#`, `@`, `/` ou `:` precisa ser codificada** (`%23`, `%40`, `%2F`,
-  `%3A`), senão a URL quebra em silêncio.
+  `%3A`), senão a URL quebra em silêncio, com "Invalid URL" antes de qualquer rede.
 
-**Conexão validada em 05/08/2026:** `node scripts/inove-acesso.mjs listar` respondeu
-`Nenhum acesso cadastrado ainda.` a partir da VPS. O `inove_app` funciona.
+Cuidado também com **linha duplicada** no `.env.local`: sobrou uma de tentativa
+anterior e o arquivo passou a ter dois `INOVE_DB_URL`. O `dotenv` do Next.js usa a
+última; o script agora faz igual e avisa quando encontra repetição.
+
+**Validado de ponta a ponta em 05/08/2026.** `node scripts/inove-acesso.mjs criar
+"Djan (dev)" djan.adv@gmail.com --oculto` gravou em `inove.acessos` a partir da VPS.
+A cadeia VPS → `pg` → `inove_app` → schema `inove` funciona.
 
 ### RLS nas tabelas do schema
 
@@ -383,10 +394,12 @@ existem na rota.
 
 ## 15. O que falta
 
-- [ ] `INOVE_DB_URL` no `.env` da VPS e `npm install` (o `pg` entrou no `package.json`).
-- [ ] **Testar a conexão como `inove_app` a partir da VPS — nunca foi executada.**
-      Nada do que está escrito rodou contra o banco de verdade ainda.
-- [ ] Criar o primeiro acesso pelo script (é o teste da conexão).
+- [x] `INOVE_DB_URL` no `.env.local` da VPS e `npm install` com o `pg`.
+- [x] **Conexão como `inove_app` validada da VPS** em 05/08/2026.
+- [x] Primeiro acesso criado (`Djan (dev)`, oculto).
+- [ ] Publicar: merge no `main`, `git pull`, `npm install`, `npm run build`, reiniciar.
+      A VPS hoje roda o `main`, então o portal novo ainda não está no ar.
+- [ ] Criar os acessos das pessoas da Inove (pelo script ou pela tela, já logado).
 - [ ] Rodar a carga do jus.br nos **35 processos sem nenhum documento** — hoje só 7
       dos 42 têm arquivo, e o portal abre quase vazio.
 - [ ] Lado do escritório: mostrar `inove.chat` junto com os chats de cliente no
