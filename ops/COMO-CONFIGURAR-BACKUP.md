@@ -177,3 +177,61 @@ pg_restore --data-only --no-owner -t andamentos \
 | Banco (nuvem) | Google Drive `Sistema/backups` | diário 03:00 | 30 dias + histórico do Drive |
 | Documentos (VPS) | `/opt/cmpdocs` | ao vivo | — (é o original) |
 | Documentos (nuvem) | Google Drive `Sistema/backups/cmpdocs` | diário 03:15 | espelho contínuo |
+
+---
+
+## Estado real nesta VPS — apurado em 05/08/2026
+
+**O backup diário nunca rodou nesta máquina.** Não foi o cron que falhou: ele nunca
+chegou a ser criado. Levantamento item a item:
+
+| Item | Estado |
+|---|---|
+| `pg_dump` | ✅ instalado, 17.10 (bate com o Passo 1) |
+| `rclone` | ✅ instalado em 05/08/2026 (`apt install rclone`, v1.60.1) |
+| `~/cmp-backups/` | ✅ criada em 05/08/2026 (estava faltando) |
+| `~/.config/cmp-backup/` | ✅ existe — criada em **09/07/2026**, vazia desde então |
+| `~/.config/cmp-backup/db.env` | ❌ **não existe** — é o bloqueio |
+| Remote `gdrive` no rclone | ❌ não configurado (Passo 4 exige navegador) |
+| Linhas de cron do backup | ❌ **ausentes** do `crontab -l` do root |
+
+A pasta de config datada de 09/07 mostra que o Passo 2 foi começado naquele dia e
+parou antes de gravar a credencial. Daí em diante nada mais foi feito.
+
+### O que trava, exatamente
+
+`backup-supabase.sh` precisa de `SUPABASE_DB_URL` com credencial que leia o schema
+`public`. **Não existe nenhuma nesta máquina** — procurado em `.env.local`,
+`.env.local.save`, `~/.pgpass` e outras homes. O que há é:
+
+- `INOVE_DB_URL` → role `inove_app`, que **por construção não enxerga o `public`**
+  (ver `ops/PROJETO-INOVE.md`, seção 4). Um `pg_dump` com ela geraria um arquivo que
+  *parece* backup e não tem o Gestão dentro. **Não usar.**
+- `SUPABASE_SERVICE_ROLE_KEY` → chave da API REST, **não** é senha de Postgres.
+  O `pg_dump` não aceita.
+
+### Para destravar (duas coisas, independentes)
+
+1. **A credencial do banco** — sem ela não há dump nenhum. Pegue em Supabase →
+   Project Settings → Database → Connection string → **URI**, aba **Session pooler**
+   (porta 5432, IPv4). Na VPS:
+
+   ```bash
+   printf 'SUPABASE_DB_URL=postgresql://...\n' > ~/.config/cmp-backup/db.env
+   chmod 600 ~/.config/cmp-backup/db.env
+   /opt/cmpgestao/ops/backup-supabase.sh      # 1ª execução, valida o dump
+   ```
+
+   Alternativa, se preferir não pôr a senha do superusuário no disco: criar um role
+   dedicado só de leitura (`pg_read_all_data`) e usar a senha dele.
+
+2. **O Google Drive** — só afeta a *cópia na nuvem*; o dump local funciona sem isso
+   (o script avisa e segue). Exige `rclone authorize "drive"` **no seu PC**, porque a
+   VPS não tem navegador, e colar o token em `rclone config` aqui (Passo 4).
+
+> **O cron só deve ser criado depois da 1ª execução dar certo.** Agendar antes gera
+> uma falha silenciosa por dia e dá a impressão de que existe backup quando não
+> existe — que é exatamente o buraco que o incidente de 02/08 expôs.
+
+> **Atenção ao volume:** a primeira execução do `backup-cmpdocs.sh` sobe os **18 GB**
+> hoje em `/opt/cmpdocs` para o Drive. Conte com a banda e com o espaço na conta.

@@ -167,6 +167,11 @@
       <!-- PAINEL -->
       <section id="sec-painel">
         <div class="kpis" id="painel-kpis"></div>
+        <div id="painel-dev" class="card hidden" style="margin-top:14px;border-color:#e6d9b8;background:#fffdf7">
+          <p class="sectlabel" style="margin:0 0 6px">Só você vê isto</p>
+          <button class="btn gold sm" id="btn-atu-todos" onclick="atualizarTodos()">↻ Buscar peças no jus.br dos processos sem nenhum documento</button>
+          <span id="atu-todos-msg" class="note" style="margin-left:8px"></span>
+        </div>
         <div class="card" style="margin-top:14px">
           <p class="sectlabel">Onde os processos estão</p>
           <div id="painel-sit"><div class="note">Carregando…</div></div>
@@ -348,7 +353,7 @@ async function entrar(){
       body:JSON.stringify({acao:'login',email:email,senha:senha})});
     var j=await r.json();
     if(!r.ok){loginErr(j.erro||'Não foi possível entrar.');return;}
-    TOKEN=j.token; EU={nome:j.nome,email:j.email};
+    TOKEN=j.token; EU={nome:j.nome,email:j.email,oculto:!!j.oculto};
     try{ sessionStorage.setItem('inove_t',TOKEN); sessionStorage.setItem('inove_u',JSON.stringify(EU)); }catch(e){}
     if(j.lgpd) document.getElementById('modal-lgpd').classList.remove('hidden');
     await abrirApp();
@@ -374,6 +379,7 @@ async function abrirApp(){
   document.getElementById('ft-nm').textContent=EU.nome||'Perito';
   document.getElementById('ft-em').textContent=EU.email||'';
   document.getElementById('ft-av').textContent=((EU.nome||'I')[0]||'I').toUpperCase();
+  document.getElementById('painel-dev').classList.toggle('hidden',!EU.oculto);
   await carregarProc();
   await carregarEtq();
   ir('painel');
@@ -528,11 +534,17 @@ async function abrirProc(id){
     + '<div class="lgpd"><b>Uso restrito.</b> As peças abaixo estão sob sigilo. É proibido encaminhar ou divulgar a terceiros. '
     +   'Cada arquivo aberto sai carimbado com <b>'+esc(EU.email||'')+'</b> e o acesso fica registrado.</div>'
 
-    + '<p class="sectlabel">Peças do processo ('+(j.documentos||[]).length+')</p>'
+    + '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">'
+    +   '<p class="sectlabel" style="margin:0">Peças do processo ('+(j.documentos||[]).length+')</p>'
+    +   ((j.documentos||[]).length ? '<span style="display:flex;gap:8px;align-items:center">'
+        + '<label style="margin:0;display:flex;align-items:center;gap:5px;font-weight:400;font-size:12.5px;color:var(--muted)"><input type="checkbox" id="pd-todos" style="width:auto" onchange="marcarTodasPecas(this.checked)"> marcar todas</label>'
+        + '<button class="btn ghost sm" onclick="baixarSelecionadas()">Baixar selecionadas</button></span>' : '')
+    + '</div>'
     + ((j.documentos||[]).length
         ? '<div style="max-height:340px;overflow-y:auto"><table><tbody>'
           + j.documentos.map(function(d){
-              return '<tr><td>'+esc(d.doc_nome||'documento')+'<div class="note">'+fdata(d.baixado_em)+'</div></td>'
+              return '<tr><td style="width:26px"><input type="checkbox" class="pd-check" data-doc="'+d.id+'" style="width:auto"></td>'
+                + '<td>'+esc(d.doc_nome||'documento')+'<div class="note">'+fdata(d.baixado_em)+'</div></td>'
                 + '<td style="width:160px;text-align:right;white-space:nowrap">'
                 + '<a class="btn ghost sm" style="text-decoration:none" target="_blank" rel="noopener" href="'+link(d,false)+'">Abrir</a> '
                 + '<a class="btn ghost sm" style="text-decoration:none" href="'+link(d,true)+'">Baixar</a>'
@@ -576,6 +588,36 @@ async function atualizarProc(id){
     m.textContent=j.aviso||'Não foi possível agora.';
   }catch(e){ m.textContent=(e&&e.message)||'Falhou.'; }
   b.disabled=false; b.textContent='↻ Buscar peças novas no jus.br';
+}
+
+function marcarTodasPecas(v){
+  document.querySelectorAll('.pd-check').forEach(function(c){ c.checked=v; });
+}
+/* Baixa uma de cada vez, com um intervalo curto — sem servidor de zip, é o que dá
+   pra fazer sem acrescentar dependência nova no projeto (a VPS já levou uma hora
+   só pra aprender a conexão nova; não é hora de pedir mais um npm install). */
+function baixarSelecionadas(){
+  var ids=Array.prototype.slice.call(document.querySelectorAll('.pd-check:checked')).map(function(c){return c.getAttribute('data-doc');});
+  if(!ids.length){ alert('Marque ao menos uma peça.'); return; }
+  ids.forEach(function(id,i){
+    setTimeout(function(){
+      var a=document.createElement('a');
+      a.href='/api/inove?doc='+encodeURIComponent(id)+'&t='+encodeURIComponent(TOKEN)+'&dl=1';
+      a.download=''; document.body.appendChild(a); a.click(); a.remove();
+    }, i*400);
+  });
+}
+/* Só o acesso oculto vê o botão (painel-dev fica hidden pra todo o resto), mas o
+   servidor confere de novo em acesso.oculto — a tela escondida não é a segurança. */
+async function atualizarTodos(){
+  var b=document.getElementById('btn-atu-todos'), m=document.getElementById('atu-todos-msg');
+  b.disabled=true; m.textContent='Enviando…';
+  try{
+    var j=await api('atualizar_todos');
+    m.textContent = j.iniciado ? ('Iniciado para '+j.total+' processo(s). O resultado chega por e-mail.')
+      : (j.mensagem||'Nada para atualizar.');
+  }catch(e){ m.textContent=(e&&e.message)||'Falhou.'; }
+  b.disabled=false;
 }
 
 /* ================= financeiro ================= */
