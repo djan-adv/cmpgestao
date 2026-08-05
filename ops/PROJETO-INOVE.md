@@ -347,15 +347,45 @@ node scripts/inove-acesso.mjs listar
 
 A senha é gerada e mostrada uma vez; no banco fica só o hash scrypt.
 
-## 14. O que falta
+## 14. A página — reescrita
+
+`public/inove.html` foi refeito contra `/api/inove`. **Não carrega mais o SDK do
+Supabase nem a chave publishable** — sem isso não existe caminho para baixar peça por
+fora da rota que carimba, que é o que faz a tarja valer.
+
+Barra lateral: Painel · Processos · Financeiro · **Chat com o escritório** · Cadastros
+(Tribunais) · Solicitar funcionalidades · Acessos. **"Plano" saiu**, como pedido —
+nada ali sugere cobrança.
+
+O que mudou de comportamento:
+
+- **Fase deu lugar a duas listas** na ficha do processo: Situação e Quesitos. Trocar
+  substitui o valor daquela dimensão; o banco impede duas situações no mesmo processo.
+- **Aviso de LGPD** em dois lugares: modal no primeiro acesso do dia, com aceite
+  gravado, e faixa fixa acima da lista de peças, nomeando o e-mail que vai no carimbo.
+- **Chat em dois níveis:** o geral na barra lateral e um por processo, dentro da
+  ficha. O contador da barra pisca em dourado quando há resposta não lida.
+- **Botão "Buscar peças novas no jus.br"** na ficha. Roda com a sessão do escritório;
+  se o token estiver vencido, avisa sem erro seco e manda alerta.
+- **Acessos:** eles criam, editam e desativam os 5. Ninguém desativa o próprio acesso.
+  O acesso `oculto` do desenvolvedor não aparece na lista nem conta na cota.
+- **Cadastros e Solicitações** foram preservados — trocar o login não podia custar
+  função que eles já tinham.
+
+Conferido: compila, o JavaScript da página passa no `node --check`, todo
+`getElementById` tem elemento correspondente, e as 20 ações chamadas pelo front
+existem na rota.
+
+## 15. O que falta
 
 - [ ] `INOVE_DB_URL` no `.env` da VPS e `npm install` (o `pg` entrou no `package.json`).
-- [ ] Testar a conexão como `inove_app` a partir da VPS — nunca foi executada.
-- [ ] Criar o primeiro acesso pelo script.
-- [ ] Passo 7: reescrever `public/inove.html` (fase → etiquetas, aba Financeiro, chat
-      na barra lateral, "Plano" fora, tela dos 5 acessos).
+- [ ] **Testar a conexão como `inove_app` a partir da VPS — nunca foi executada.**
+      Nada do que está escrito rodou contra o banco de verdade ainda.
+- [ ] Criar o primeiro acesso pelo script (é o teste da conexão).
 - [ ] Rodar a carga do jus.br nos **35 processos sem nenhum documento** — hoje só 7
-      dos 42 têm arquivo, e o portal abriria quase vazio.
+      dos 42 têm arquivo, e o portal abre quase vazio.
+- [ ] Lado do escritório: mostrar `inove.chat` junto com os chats de cliente no
+      `sistema.html`, senão as mensagens deles chegam e ninguém vê.
 - [ ] Passo 9: dump diário do schema `inove` no `ops/backup-supabase.sh`.
 
 ## 11. Ideias levantadas, ainda não aprovadas

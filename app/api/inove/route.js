@@ -368,6 +368,37 @@ export async function POST(request) {
     return Response.json({ ok: true, ativo: ativar })
   }
 
+  /* ---------- o que já existia no portal antigo, mantido ---------- */
+  if (acao === 'tribunais') {
+    const linhas = await q('select * from inove.v_tribunais order by uf, tribunal')
+    return Response.json({ ok: true, tribunais: linhas })
+  }
+
+  if (acao === 'tribunal_marcar') {
+    const ok = await q1('select inove.marcar_tribunal($1,$2,$3) as ok',
+      [String(body.id || ''), body.situacao || null, body.obs === undefined ? null : String(body.obs)])
+    if (!ok || !ok.ok) return erro('Tribunal não encontrado.', 404)
+    return Response.json({ ok: true })
+  }
+
+  if (acao === 'solicitacoes') {
+    const linhas = await q('select * from inove.v_solicitacoes order by criado_em desc limit 300')
+    return Response.json({ ok: true, solicitacoes: linhas })
+  }
+
+  if (acao === 'solicitar') {
+    try {
+      const r = await q1('select inove.pedir_funcionalidade($1,$2,$3) as id',
+        [String(body.titulo || ''), String(body.descricao || ''), acesso.nome || acesso.email])
+      await alertarEscritorio(
+        'Inove: novo pedido de funcionalidade',
+        (acesso.nome || acesso.email) + ' pediu: ' + String(body.titulo || '') + '\n\n' + String(body.descricao || ''))
+      return Response.json({ ok: true, id: r && r.id })
+    } catch (e) {
+      return erro('Não foi possível enviar: ' + ((e && e.message) || e))
+    }
+  }
+
   return erro('Ação desconhecida.')
 }
 
