@@ -302,7 +302,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
 
     <section id="s-agenda" class="hidden">
       <div class="agtools">
-        <div class="switch"><button id="sw-tar" class="on" onclick="setViewAg('tarefas')">Prazos e tarefas</button><button id="sw-ag" onclick="setViewAg('agenda')">Reuniões e audiências</button><button id="sw-auto" onclick="setViewAg('auto')" title="Tarefas que o sistema criou sozinho a partir das audiências — ficam fora da agenda de prazos para não competir com o que você agendou">🤖 Automáticas</button><button id="sw-dil" onclick="setViewAg('diligencias')" title="Só as diligências — o que precisa ser feito fora do processo (protocolo em balcão, cartório, cópia, certidão)">🔎 Diligências</button><button id="sw-kan" onclick="setViewAg('kanban')">Kanban</button></div>
+        <div class="switch"><button id="sw-tar" class="on" onclick="setViewAg('tarefas')">Prazos e tarefas<sup class="ag-cnt" id="cnt-tar"></sup></button><button id="sw-ag" onclick="setViewAg('agenda')">Reuniões e audiências<sup class="ag-cnt" id="cnt-ag"></sup></button><button id="sw-auto" onclick="setViewAg('auto')" title="Tarefas que o sistema criou sozinho a partir das audiências — ficam fora da agenda de prazos para não competir com o que você agendou">🤖 Automáticas<sup class="ag-cnt" id="cnt-auto"></sup></button><button id="sw-dil" onclick="setViewAg('diligencias')" title="Só as diligências — o que precisa ser feito fora do processo (protocolo em balcão, cartório, cópia, certidão)">🔎 Diligências<sup class="ag-cnt" id="cnt-dil"></sup></button><button id="sw-kan" onclick="setViewAg('kanban')">Kanban</button></div>
         <button class="btn sm" style="margin-left:auto" onclick="abrirNovaTarefa()">+ Nova tarefa</button>
         <div class="legend" id="legenda-agenda"><span class="lg"><i class="dot az"></i>Audiência / Reunião</span><span class="lg"><i class="dot am"></i>Manifestação</span><span class="lg"><i class="dot vm"></i>Prazo importante</span></div>
         <div class="legend" id="legenda-tarefas" style="display:none"><span class="lg"><i style="display:inline-block;width:11px;height:11px;border-radius:3px;background:rgba(24,95,165,.16);border:1px solid rgba(24,95,165,.32);margin-right:5px;vertical-align:-1px"></i>Prazo</span><span class="lg"><i style="display:inline-block;width:11px;height:11px;border-radius:3px;background:rgba(109,122,140,.11);border:1px solid rgba(109,122,140,.22);margin-right:5px;vertical-align:-1px"></i>Tarefa</span></div>
@@ -3496,7 +3496,37 @@ function setViewAg(v){VIEWAG=v;
   if(lgT) lgT.style.display=(v==="tarefas")?"":"none";
   renderAgendaView();
 }
-function renderAgendaView(){ if(VIEWAG==="kanban")renderKanban(); else if(VIEWAG==="tarefas"||VIEWAG==="auto"||VIEWAG==="diligencias")renderTarefasView(); else renderAgViewInner(); }
+/* Número no canto de cada aba: o que ainda precisa ser feito.
+   Conta HOJE e o que está EM ATRASO, não só o dia. Um prazo vencido é
+   justamente o que não pode ser esquecido — mostrar 0 num dia com cinco
+   atrasados desmontaria o propósito do aviso. Concluído nunca conta.
+   Audiência e reunião contam só o dia: a de ontem já passou, não há o que fazer. */
+function _contarAgendas(){
+  try{
+    if(!KAN) initKanban();
+    var hoje=_hojeISO(), c={tarefas:0,auto:0,diligencias:0,agenda:0}, atras={tarefas:0,auto:0,diligencias:0};
+    (KAN||[]).forEach(function(t){
+      if(!t||_tarConcluida(t)) return;
+      var d=String(t.prazo||t.data||'').slice(0,10); if(!d||d>hoje) return;
+      var alvo=_tarefaAuto(t)?'auto':(_tarefaDiligencia(t)?'diligencias':'tarefas');
+      c[alvo]++; if(d<hoje) atras[alvo]++;
+    });
+    if(!AGENDA) initAgenda();
+    (AGENDA||[]).forEach(function(e){ if(e&&String(e.data||'').slice(0,10)===hoje) c.agenda++; });
+    var põe=function(id,n,atrasados){
+      var el=document.getElementById(id); if(!el) return;
+      el.textContent=n>0?String(n):'';
+      el.title=n>0?(n+' a fazer'+(atrasados>0?(' — '+atrasados+' em atraso'):' hoje')):'';
+      /* atrasado é vermelho; só de hoje, âmbar — a cor diz a urgência sem abrir */
+      el.style.background=atrasados>0?'#b5342b':'#8a6d1a';
+    };
+    põe('cnt-tar', c.tarefas, atras.tarefas);
+    põe('cnt-auto', c.auto, atras.auto);
+    põe('cnt-dil', c.diligencias, atras.diligencias);
+    põe('cnt-ag', c.agenda, 0);
+  }catch(e){ console.warn('contagem das abas:',e&&e.message||e); }
+}
+function renderAgendaView(){ _contarAgendas(); if(VIEWAG==="kanban")renderKanban(); else if(VIEWAG==="tarefas"||VIEWAG==="auto"||VIEWAG==="diligencias")renderTarefasView(); else renderAgViewInner(); }
 /* Tarefa que o sistema criou sozinho a partir de uma audiência: preparar, avisar
    cliente, lembrete de véspera, comparecer e buscar a ATA. São úteis, mas são
    CINCO por audiência e afogavam a agenda de prazos — que é onde ficam os prazos
@@ -13291,6 +13321,10 @@ function setDilView(v){
     #s-triagem .card{overflow-x:visible}
     #s-triagem .sectlabel{white-space:normal;word-break:break-word}
     #s-triagem #triagem-abas{flex-wrap:wrap}
+    .ag-cnt{display:inline-block;min-width:16px;padding:0 4px;margin-left:5px;border-radius:9px;
+      background:#b5342b;color:#fff;font-size:10px;font-weight:700;line-height:16px;text-align:center;
+      vertical-align:super;position:relative;top:-2px}
+    .ag-cnt:empty{display:none}
     .tbl-triagem td[data-label="Classificar"] .btn{flex:1 1 auto;text-align:center;min-height:38px}
     .searchbar{flex-wrap:wrap} .searchbar input{max-width:none}
     .agtools{flex-wrap:wrap}
