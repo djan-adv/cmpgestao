@@ -302,7 +302,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
 
     <section id="s-agenda" class="hidden">
       <div class="agtools">
-        <div class="switch"><button id="sw-tar" class="on" onclick="setViewAg('tarefas')">Prazos e tarefas</button><button id="sw-ag" onclick="setViewAg('agenda')">Reuniões e audiências</button><button id="sw-auto" onclick="setViewAg('auto')" title="Tarefas que o sistema criou sozinho a partir das audiências — ficam fora da agenda de prazos para não competir com o que você agendou">🤖 Automáticas</button><button id="sw-kan" onclick="setViewAg('kanban')">Kanban</button></div>
+        <div class="switch"><button id="sw-tar" class="on" onclick="setViewAg('tarefas')">Prazos e tarefas</button><button id="sw-ag" onclick="setViewAg('agenda')">Reuniões e audiências</button><button id="sw-auto" onclick="setViewAg('auto')" title="Tarefas que o sistema criou sozinho a partir das audiências — ficam fora da agenda de prazos para não competir com o que você agendou">🤖 Automáticas</button><button id="sw-dil" onclick="setViewAg('diligencias')" title="Só as diligências — o que precisa ser feito fora do processo (protocolo em balcão, cartório, cópia, certidão)">🔎 Diligências</button><button id="sw-kan" onclick="setViewAg('kanban')">Kanban</button></div>
         <button class="btn sm" style="margin-left:auto" onclick="abrirNovaTarefa()">+ Nova tarefa</button>
         <div class="legend" id="legenda-agenda"><span class="lg"><i class="dot az"></i>Audiência / Reunião</span><span class="lg"><i class="dot am"></i>Manifestação</span><span class="lg"><i class="dot vm"></i>Prazo importante</span></div>
         <div class="legend" id="legenda-tarefas" style="display:none"><span class="lg"><i style="display:inline-block;width:11px;height:11px;border-radius:3px;background:rgba(24,95,165,.16);border:1px solid rgba(24,95,165,.32);margin-right:5px;vertical-align:-1px"></i>Prazo</span><span class="lg"><i style="display:inline-block;width:11px;height:11px;border-radius:3px;background:rgba(109,122,140,.11);border:1px solid rgba(109,122,140,.22);margin-right:5px;vertical-align:-1px"></i>Tarefa</span></div>
@@ -3484,18 +3484,19 @@ function setViewAg(v){VIEWAG=v;
   document.getElementById("sw-kan").classList.toggle("on",v==="kanban");
   var swt=document.getElementById("sw-tar"); if(swt) swt.classList.toggle("on",v==="tarefas");
   var swa=document.getElementById("sw-auto"); if(swa) swa.classList.toggle("on",v==="auto");
+  var swd=document.getElementById("sw-dil"); if(swd) swd.classList.toggle("on",v==="diligencias");
   document.getElementById("view-agenda").classList.toggle("hidden",v!=="agenda");
   document.getElementById("view-kanban").classList.toggle("hidden",v!=="kanban");
   /* a aba Automáticas reaproveita a MESMA tela de tarefas — muda só o que entra
      na lista (ver _tarefaAuto/_visivelNaAgenda), então não há tela nova a manter */
-  var vt=document.getElementById("view-tarefas"); if(vt) vt.classList.toggle("hidden",!(v==="tarefas"||v==="auto"));
+  var vt=document.getElementById("view-tarefas"); if(vt) vt.classList.toggle("hidden",!(v==="tarefas"||v==="auto"||v==="diligencias"));
   /* cada aba tem a sua legenda: a de prazos usa a paleta sóbria, a de audiências as cores cheias */
   var lgA=document.getElementById("legenda-agenda"), lgT=document.getElementById("legenda-tarefas");
   if(lgA) lgA.style.display=(v==="tarefas")?"none":"";
   if(lgT) lgT.style.display=(v==="tarefas")?"":"none";
   renderAgendaView();
 }
-function renderAgendaView(){ if(VIEWAG==="kanban")renderKanban(); else if(VIEWAG==="tarefas"||VIEWAG==="auto")renderTarefasView(); else renderAgViewInner(); }
+function renderAgendaView(){ if(VIEWAG==="kanban")renderKanban(); else if(VIEWAG==="tarefas"||VIEWAG==="auto"||VIEWAG==="diligencias")renderTarefasView(); else renderAgViewInner(); }
 /* Tarefa que o sistema criou sozinho a partir de uma audiência: preparar, avisar
    cliente, lembrete de véspera, comparecer e buscar a ATA. São úteis, mas são
    CINCO por audiência e afogavam a agenda de prazos — que é onde ficam os prazos
@@ -3503,9 +3504,21 @@ function renderAgendaView(){ if(VIEWAG==="kanban")renderKanban(); else if(VIEWAG
    Reuniões e audiências (vem de agenda_eventos), então repeti-la nos prazos era
    contar a mesma coisa duas vezes. */
 function _tarefaAuto(t){ return !!t && String(t.org||'')==='auto-audiencia'; }
-/* Regra única de quem aparece: a aba Automáticas mostra só as automáticas; todas
-   as outras telas mostram todo o resto. */
-function _visivelNaAgenda(t){ return (VIEWAG==='auto') ? _tarefaAuto(t) : !_tarefaAuto(t); }
+/* Diligência é o que se faz FORA do processo — protocolo em balcão, cartório,
+   cópia, certidão. O tipo já existia no formulário de tarefa; faltava um lugar
+   para elas viverem juntas. */
+function _tarefaDiligencia(t){ return !!t && String(t.tipoForm||'')==='diligencia'; }
+/* Regra única de quem aparece em cada agenda:
+     Automáticas → só as que o sistema criou sozinho
+     Diligências → só as do tipo diligência
+     Prazos e tarefas → todo o resto (sem automáticas, sem diligências)
+   Tirar as diligências dos prazos é o ponto: elas têm agenda própria agora, e
+   repeti-las nos prazos seria contar a mesma coisa duas vezes. */
+function _visivelNaAgenda(t){
+  if(VIEWAG==='auto') return _tarefaAuto(t);
+  if(VIEWAG==='diligencias') return _tarefaDiligencia(t) && !_tarefaAuto(t);
+  return !_tarefaAuto(t) && !_tarefaDiligencia(t);
+}
 /* chave estável de um evento (para ocultar itens SEM id — ex.: carga do Astrea) */
 function _agChave(e){ return String(e.data||'')+'|'+String(e.hora||'')+'|'+String(e.tt||'').slice(0,80); }
 function initAgenda(){
