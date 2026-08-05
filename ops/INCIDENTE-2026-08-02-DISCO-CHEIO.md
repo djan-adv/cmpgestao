@@ -64,16 +64,35 @@ o disco (WAL acumulado x dados x logs) antes de considerar o caso encerrado.
 |---|---|
 | Código | **Seguro** — GitHub, histórico completo |
 | Schema (tabelas, RLS, funções, triggers) | **Sem cópia no repositório** — não existe pasta `supabase/` nem nenhum arquivo `.sql`; a estrutura vive só no banco |
-| Dados | Depende do dump diário do VPS/OneDrive (`ops/backup-supabase.sh`) — **não verificado** |
+| Dados | Depende do dump diário do VPS/OneDrive (`ops/backup-supabase.sh`) — **não existe: ver verificação de 05/08/2026 abaixo** |
 | Storage (PDFs, documentos) | **Sem cópia** — o `pg_dump` salva tabelas, não os arquivos dos buckets |
-| Backup da Supabase | Indisponível: no plano Free não há restore pelo painel |
+| Backup da Supabase | ~~Indisponível: no plano Free não há restore pelo painel~~ — **desatualizado**: a org está no plano **Pro**, que inclui backup diário automático com 7 dias de retenção |
+
+## Verificação de 05/08/2026 — o backup local nunca existiu
+
+Checado na VPS, e as duas respostas vieram vazias:
+
+```
+crontab -l | grep -i backup     ->  (nada)
+ls -la ~/cmp-backups            ->  (não existe)
+cat ~/.config/cmp-backup/db.env ->  No such file or directory
+```
+
+O `ops/backup-supabase.sh` está no repositório, mas **nunca foi instalado nesta
+máquina**. Ele aborta na terceira linha justamente por falta do `db.env`, que é o
+Passo 2 do `ops/COMO-CONFIGURAR-BACKUP.md`.
+
+Ou seja: no dia do incidente, a linha "não verificado" da tabela acima era, na
+prática, "não existe". A única rede era — e é — o backup automático do plano Pro,
+que cobre 7 dias e não inclui os buckets do Storage.
 
 ## Lições / pendências depois que voltar
 
 - [ ] Versionar o schema no repositório (migrations), para deixar de depender do
       banco vivo como única fonte da estrutura.
 - [ ] Incluir os buckets do Storage na rotina de backup — hoje ficam de fora.
-- [ ] Conferir se o cron do `backup-supabase.sh` está mesmo rodando no VPS
-      (`ls -lh ~/cmp-backups/` e `tail ~/cmp-backups/backup.log`); ter o script
-      no repositório não prova que foi instalado.
+- [x] Conferir se o cron do `backup-supabase.sh` está mesmo rodando no VPS.
+      **Verificado em 05/08/2026: não está, e nunca esteve.** Ter o script no
+      repositório de fato não prova que foi instalado — era exatamente esse o risco.
+- [ ] Instalar o backup seguindo `ops/COMO-CONFIGURAR-BACKUP.md` (passos 1 a 4).
 - [ ] Monitorar o uso de disco do projeto e alertar antes de encher.
