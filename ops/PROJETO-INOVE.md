@@ -94,20 +94,25 @@ nem por conversa. Para definir, no SQL Editor do Supabase:
 alter role inove_app with password 'a-senha-que-voce-escolher';
 ```
 
-E na VPS, no `.env` do projeto (nunca commitado):
+E na VPS, em **`/opt/cmpgestao/.env.local`** (nunca commitado):
 
 ```
-INOVE_DB_URL=postgresql://inove_app.ndeqlyrydcijbgjiviuw:<senha>@aws-0-sa-east-1.pooler.supabase.com:6543/postgres
+INOVE_DB_URL=postgresql://inove_app.ndeqlyrydcijbgjiviuw:<senha>@aws-1-sa-east-1.pooler.supabase.com:6543/postgres
 ```
 
-> O usuário do pooler leva o ref do projeto no nome (`inove_app.ndeqlyrydcijbgjiviuw`).
-> Conexão direta em `db.<ref>.supabase.co:5432` também serve, mas é IPv6 — confirmar
-> se a VPS alcança antes de optar por ela. O `ops/backup-supabase.sh` já conecta no
-> banco a partir da VPS; vale reaproveitar o formato que ali funciona.
+Três detalhes que custaram tempo na primeira vez:
 
-**Ainda não testado de ponta a ponta:** o teste de conectar como `inove_app` só pode
-ser feito depois da senha definida, a partir da VPS. A permissão já está conferida no
-banco; falta a conexão.
+- **É `aws-1`, não `aws-0`.** Os dois hosts existem e respondem; o `aws-0` devolve
+  `tenant/user not found`, que parece erro de senha e não é. Projeto criado em
+  julho de 2026 fica no `aws-1`.
+- **O usuário leva o ref no nome:** `inove_app.ndeqlyrydcijbgjiviuw`. Só na conexão
+  direta (`db.<ref>.supabase.co:5432`) é que o usuário é `inove_app` puro — e aquele
+  host só resolve em IPv6.
+- **Senha com `#`, `@`, `/` ou `:` precisa ser codificada** (`%23`, `%40`, `%2F`,
+  `%3A`), senão a URL quebra em silêncio.
+
+**Conexão validada em 05/08/2026:** `node scripts/inove-acesso.mjs listar` respondeu
+`Nenhum acesso cadastrado ainda.` a partir da VPS. O `inove_app` funciona.
 
 ### RLS nas tabelas do schema
 
