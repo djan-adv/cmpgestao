@@ -254,7 +254,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
       <a data-s="chats" onclick="go('chats')" title="Todas as conversas num lugar só: os clientes pelo app (por processo) e a equipe"><span class="ic">💬</span> Chats <span id="nav-n-chats" style="margin-left:auto;font-size:10.5px;background:#25D366;color:#0b3b1e;border-radius:10px;padding:1px 7px;font-weight:800;display:none"></span></a>
       <a data-s="diligencias" onclick="go('diligencias')"><span class="ic">◔</span> Diligências</a>
       <a data-s="relatorio" onclick="go('relatorio')"><span class="ic">◫</span> Relatório mensal</a>
-      <a data-s="publicacoes" class="cmp-only" onclick="go('publicacoes')" title="Portal de notícias: extrato dos artigos dos sites, rascunhos e publicação direta no WordPress (sem navegador)"><span class="ic">📰</span> Publicações</a>
+      <a data-s="publicacoes" class="cmp-only" onclick="go('publicacoes')" title="Portal de notícias: extrato dos artigos dos sites, rascunhos e publicação direta no WordPress (sem navegador)"><span class="ic">📰</span> Postagens</a>
       <a data-s="crm" onclick="go('crm')"><span class="ic">▣</span> Comercial</a>
       <a data-s="financeiro" onclick="go('financeiro')"><span class="ic">＄</span> Financeiro</a>
       <a onclick="window.open('/assinatura','_blank')" title="Assinador de documentos do escritório — procurações e contratos com assinatura eletrônica"><span class="ic">✍</span> Assinaturas</a>
@@ -707,7 +707,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
 <section id="s-publicacoes" class="hidden">
   <div class="card">
     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-      <h3 style="margin:0">📰 Publicações — portal de notícias</h3>
+      <h3 style="margin:0">📰 Postagens — portal de notícias</h3>
       <span style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn sm ghost" onclick="pubImportar(this)" title="Lê os posts públicos de djan.com.br e cmpadvogados.com.br e atualiza o extrato">↻ importar dos sites</button>
         <button class="btn sm" style="background:#6d28a8;color:#fff;border:1px solid #6d28a8" onclick="pubGerarIA(this)" title="A IA redige DUAS versões distintas do tema (djan = consumidor, cmp = empresarial), no padrão editorial do escritório — viram rascunhos para você revisar e publicar">🤖 Gerar com IA (2 versões)</button>
@@ -7531,7 +7531,7 @@ function go(s){
   if(s==="emails" && typeof renderEmails==='function')renderEmails();
   if(s==="chats" && typeof waCarregar==='function')waCarregar(true);
   if(s==="relatorio" && typeof renderRelatorioMensal==='function')renderRelatorioMensal();
-  if(s==="publicacoes" && typeof renderPublicacoes==='function'){renderPublicacoes(); var _t2=document.getElementById("scr-title"); if(_t2)_t2.textContent="Publicações — portal de notícias";}
+  if(s==="publicacoes" && typeof renderPublicacoes==='function'){renderPublicacoes(); var _t2=document.getElementById("scr-title"); if(_t2)_t2.textContent="Postagens — portal de notícias";}
   try{ var _cfgP=document.getElementById('btn-cfg-proc'); if(_cfgP) _cfgP.style.display=(s==='processos')?'inline-block':'none'; }catch(e){}
   if(s==="sugestoes" && typeof renderSugestoes==='function'){ var _an=document.getElementById('sg-autor'); if(_an && !_an.value){ _an.value=((document.getElementById('who-name')||{}).textContent||'').trim(); } renderSugestoes(); }
   if(s==="lote") renderLote();
