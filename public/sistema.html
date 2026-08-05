@@ -302,7 +302,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
 
     <section id="s-agenda" class="hidden">
       <div class="agtools">
-        <div class="switch"><button id="sw-tar" class="on" onclick="setViewAg('tarefas')">Prazos e tarefas<sup class="ag-cnt" id="cnt-tar"></sup></button><button id="sw-ag" onclick="setViewAg('agenda')">Reuniões e audiências<sup class="ag-cnt" id="cnt-ag"></sup></button><button id="sw-auto" onclick="setViewAg('auto')" title="Tarefas que o sistema criou sozinho a partir das audiências — ficam fora da agenda de prazos para não competir com o que você agendou">🤖 Automáticas<sup class="ag-cnt" id="cnt-auto"></sup></button><button id="sw-dil" onclick="setViewAg('diligencias')" title="Só as diligências — o que precisa ser feito fora do processo (protocolo em balcão, cartório, cópia, certidão)">🔎 Diligências<sup class="ag-cnt" id="cnt-dil"></sup></button><button id="sw-kan" onclick="setViewAg('kanban')">Kanban</button></div>
+        <div class="switch"><button id="sw-tar" class="on" onclick="setViewAg('tarefas')">Prazos e tarefas<sup class="ag-atr" id="atr-tar"></sup><sup class="ag-cnt" id="cnt-tar"></sup></button><button id="sw-ag" onclick="setViewAg('agenda')">Reuniões e audiências<sup class="ag-atr" id="atr-ag"></sup><sup class="ag-cnt" id="cnt-ag"></sup></button><button id="sw-auto" onclick="setViewAg('auto')" title="Tarefas que o sistema criou sozinho a partir das audiências — ficam fora da agenda de prazos para não competir com o que você agendou">🤖 Automáticas<sup class="ag-atr" id="atr-auto"></sup><sup class="ag-cnt" id="cnt-auto"></sup></button><button id="sw-dil" onclick="setViewAg('diligencias')" title="Só as diligências — o que precisa ser feito fora do processo (protocolo em balcão, cartório, cópia, certidão)">🔎 Diligências<sup class="ag-atr" id="atr-dil"></sup><sup class="ag-cnt" id="cnt-dil"></sup></button><button id="sw-kan" onclick="setViewAg('kanban')">Kanban</button></div>
         <button class="btn sm" style="margin-left:auto" onclick="abrirNovaTarefa()">+ Nova tarefa</button>
         <div class="legend" id="legenda-agenda"><span class="lg"><i class="dot az"></i>Audiência / Reunião</span><span class="lg"><i class="dot am"></i>Manifestação</span><span class="lg"><i class="dot vm"></i>Prazo importante</span></div>
         <div class="legend" id="legenda-tarefas" style="display:none"><span class="lg"><i style="display:inline-block;width:11px;height:11px;border-radius:3px;background:rgba(24,95,165,.16);border:1px solid rgba(24,95,165,.32);margin-right:5px;vertical-align:-1px"></i>Prazo</span><span class="lg"><i style="display:inline-block;width:11px;height:11px;border-radius:3px;background:rgba(109,122,140,.11);border:1px solid rgba(109,122,140,.22);margin-right:5px;vertical-align:-1px"></i>Tarefa</span></div>
@@ -400,6 +400,11 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
       </div>
       <div id="crm-contatos">
         <div class="kpis" id="crm-kpis"></div>
+        <div class="switch" style="margin-bottom:10px">
+          <button id="ct-sw-cli" class="on" onclick="setAbaContato('clientes')">Clientes<sup class="ag-cnt" id="ct-n-cli"></sup></button>
+          <button id="ct-sw-opo" onclick="setAbaContato('oponentes')">Oponentes<sup class="ag-cnt" id="ct-n-opo"></sup></button>
+          <button id="ct-sw-var" onclick="setAbaContato('varas')">Varas<sup class="ag-cnt" id="ct-n-var"></sup></button>
+        </div>
         <div class="searchbar"><input id="buscaCli" placeholder="Buscar por nome, tipo, telefone, origem..." oninput="renderContatos()"><span class="note" id="cli-count" style="align-self:center"></span><button class="btn sm" style="background:#185FA5;color:#fff;border-color:#185FA5;line-height:1.15;padding:5px 12px;text-align:center" onclick="abrirContatosSemelhantes()" title="Agrupa contatos com nome, telefone ou e-mail parecidos — acha os candidatos a mesclar pra você">🔍 Achar semelhantes <span id="csm-badge" style="display:none;font-size:9px;font-weight:700;background:#fff;color:#185FA5;border-radius:9px;padding:0 6px;margin-left:2px"></span></button><button class="btn sm" style="background:#6d28a8;color:#fff;border-color:#6d28a8;line-height:1.15;padding:5px 12px;text-align:center" onclick="mesclarContatos()" title="Marque 2+ contatos da mesma pessoa (nas caixinhas): você escolhe o nome que fica e todos os processos desse cliente são sincronizados">⛒ Mesclar<br><span style="font-size:9px;font-weight:400;opacity:.85">sincroniza por cliente</span></button><select id="ordCli" onchange="renderContatos()" style="font-size:12px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--bg)" title="Ordenar a lista de contatos"><option value="az">Ordenar: A → Z</option><option value="proc">Mais processos ativos</option></select><button class="btn sm" style="margin-left:auto" onclick="novoContato()">+ Novo contato</button></div>
         <div class="card"><table><thead><tr><th style="width:30px" title="Marque 2+ da mesma pessoa e clique em Mesclar"></th><th>Nome</th><th>Tipo</th><th>Telefone</th><th>E-mail</th><th>Origem</th><th>Proc.</th><th>Editar</th><th>Excluir</th></tr></thead><tbody id="crm-body"></tbody></table></div>
       </div>
@@ -2595,8 +2600,128 @@ async function _preencherDocsPartes(){
     }
   });
 }
+/* ===== Contatos em três abas: Clientes · Oponentes · Varas =====
+   Antes a tela misturava tudo numa lista só de 701 linhas, e as VARAS nem
+   apareciam: viviam em contatos_orgao, tabela separada, alcançável só pelo
+   balcão virtual dentro da ficha. Quem precisava do e-mail de uma vara tinha de
+   abrir um processo daquela vara para achá-lo.
+   Os OPONENTES também não existiam como cadastro — são só o texto do campo
+   `oponente` do processo. Aqui eles são montados a partir dos processos, com a
+   contagem de quantas vezes cada um aparece. */
+var abaContato='clientes';
+window.__VARAS=null;
+function setAbaContato(v){
+  abaContato=v;
+  [['ct-sw-cli','clientes'],['ct-sw-opo','oponentes'],['ct-sw-var','varas']].forEach(function(x){
+    var el=document.getElementById(x[0]); if(el) el.classList.toggle('on', v===x[1]);
+  });
+  var bc=document.getElementById('buscaCli');
+  if(bc) bc.placeholder = (v==='varas') ? 'Buscar vara por nome, comarca, tribunal ou e-mail...'
+                        : (v==='oponentes') ? 'Buscar parte contrária pelo nome...'
+                        : 'Buscar por nome, tipo, telefone, origem...';
+  if(v==='varas' && !window.__VARAS) carregarVaras(); else renderContatos();
+}
+async function carregarVaras(){
+  try{
+    var sb=window.__sb; if(!sb){ window.__VARAS=[]; renderContatos(); return; }
+    var r=await sb.from('contatos_orgao').select('id,tribunal,orgao,comarca,email,whatsapp,telefones,balcao_link').order('orgao');
+    window.__VARAS=(r.error?[]:(r.data||[]));
+    if(r.error) console.warn('varas:',r.error.message);
+  }catch(e){ window.__VARAS=[]; }
+  renderContatos();
+}
+/* Oponentes saem do campo `oponente` dos processos. _partesSplit já separa
+   litisconsórcio ("A; B; C"), então cada réu vira uma linha, e não a lista
+   inteira colada num nome só. */
+function _oponentesDaBase(){
+  var mapa={};
+  (DADOS.processos||[]).forEach(function(p){
+    if(!p||!p.oponente) return;
+    var lista=(typeof _partesSplit==='function')?_partesSplit(p.oponente):[p.oponente];
+    lista.forEach(function(n){
+      n=String(n||'').trim(); if(n.length<3) return;
+      var k=(typeof normClienteNome==='function')?normClienteNome(n):n.toLowerCase();
+      if(!mapa[k]) mapa[k]={nome:n, proc:0, numeros:[]};
+      mapa[k].proc++; if(mapa[k].numeros.length<8) mapa[k].numeros.push(p.numero);
+    });
+  });
+  return Object.keys(mapa).map(function(k){return mapa[k];}).sort(function(a,b){ return b.proc-a.proc || a.nome.localeCompare(b.nome); });
+}
+function _pintaContagemContatos(){
+  var põe=function(id,n){ var e=document.getElementById(id); if(e){ e.textContent=n>0?String(n):''; e.style.background='#5f6b7a'; } };
+  põe('ct-n-cli',(CONTATOS||[]).length);
+  põe('ct-n-opo',_oponentesDaBase().length);
+  põe('ct-n-var',(window.__VARAS||[]).length);
+}
 function renderContatos(){
-  seedContatos();
+  if(abaContato==='varas')     return renderContatosVaras();
+  if(abaContato==='oponentes') return renderContatosOponentes();
+  return renderContatosClientes();
+}
+function renderContatosVaras(){
+  seedContatos(); _pintaContagemContatos();
+  var q=(document.getElementById("buscaCli").value||"").toLowerCase().trim();
+  var lista=(window.__VARAS||[]).filter(function(v){
+    if(!q) return true;
+    /* a busca inclui o e-mail de propósito: achar a vara pelo endereço que
+       respondeu um e-mail é o caso de uso que faltava */
+    return [v.orgao,v.comarca,v.tribunal,v.email,v.telefones,v.whatsapp].join(' ').toLowerCase().indexOf(q)>-1;
+  });
+  document.getElementById("cli-count").textContent=lista.length+" vara"+(lista.length===1?'':'s');
+  var b=document.getElementById("crm-body"); b.innerHTML="";
+  if(window.__VARAS===null){ b.innerHTML='<tr><td colspan="9" class="note" style="padding:10px">Carregando as varas…</td></tr>'; return; }
+  if(!lista.length){ b.innerHTML='<tr><td colspan="9" class="note" style="padding:10px">'+(q?'Nenhuma vara encontrada.':'Nenhuma vara cadastrada ainda — elas entram sozinhas quando você salva o contato pelo balcão virtual da ficha.')+'</td></tr>'; return; }
+  lista.forEach(function(v){
+    var tr=document.createElement('tr');
+    var mail=v.email?('<a href="https://mail.google.com/mail/?view=cm&fs=1&to='+encodeURIComponent(v.email)+'" target="_blank" rel="noopener" style="color:#185FA5">'+esc(v.email)+'</a>'):'—';
+    var zap=v.whatsapp?('<a href="https://wa.me/'+String(v.whatsapp).replace(/\D/g,'')+'" target="_blank" rel="noopener" style="color:#127a53;margin-left:6px" title="WhatsApp da vara">📲</a>'):'';
+    var balcao=v.balcao_link?('<a href="'+esc(v.balcao_link)+'" target="_blank" rel="noopener" style="color:#185FA5;font-size:11px">balcão virtual ↗</a>'):'';
+    tr.innerHTML='<td></td>'
+      +'<td><b>'+esc(v.orgao||'—')+'</b>'+(v.comarca?('<br><span class="note" style="font-size:11px">'+esc(v.comarca)+'</span>'):'')+'</td>'
+      +'<td><span class="b">'+esc(v.tribunal||'—')+'</span></td>'
+      +'<td>'+esc(v.telefones||'—')+zap+'</td>'
+      +'<td>'+mail+'</td>'
+      +'<td>'+balcao+'</td><td></td>'
+      +'<td><button class="btn sm ghost" onclick="editarVara(\''+v.id+'\')">Editar</button></td>'
+      +'<td><button class="btn sm ghost" style="color:var(--danger)" onclick="excluirVara(\''+v.id+'\')">Excluir</button></td>';
+    b.appendChild(tr);
+  });
+}
+function renderContatosOponentes(){
+  seedContatos(); _pintaContagemContatos();
+  var q=(document.getElementById("buscaCli").value||"").toLowerCase().trim();
+  var lista=_oponentesDaBase().filter(function(o){ return !q || o.nome.toLowerCase().indexOf(q)>-1; });
+  document.getElementById("cli-count").textContent=lista.length+" oponente"+(lista.length===1?'':'s');
+  var b=document.getElementById("crm-body"); b.innerHTML="";
+  if(!lista.length){ b.innerHTML='<tr><td colspan="9" class="note" style="padding:10px">Nenhuma parte contrária encontrada.</td></tr>'; return; }
+  lista.slice(0,400).forEach(function(o){
+    var tr=document.createElement('tr');
+    tr.innerHTML='<td></td><td><b>'+esc(nomeBonito(o.nome))+'</b></td>'
+      +'<td><span class="b warn">oponente</span></td><td>—</td><td>—</td>'
+      +'<td><span class="note" style="font-size:11px">'+esc(o.numeros.slice(0,2).join(' · '))+(o.proc>2?(' +'+(o.proc-2)):'')+'</span></td>'
+      +'<td>'+o.proc+'</td><td></td><td></td>';
+    b.appendChild(tr);
+  });
+}
+function editarVara(id){
+  var v=(window.__VARAS||[]).find(function(x){return String(x.id)===String(id);}); if(!v) return;
+  var email=window.prompt('E-mail da '+(v.orgao||'vara')+':', v.email||''); if(email===null) return;
+  var tel=window.prompt('Telefone(s):', v.telefones||''); if(tel===null) return;
+  window.__sb.from('contatos_orgao').update({email:email.trim()||null, telefones:tel.trim()||null}).eq('id',id).then(function(r){
+    if(r.error){ alert('Erro: '+r.error.message); return; }
+    v.email=email.trim(); v.telefones=tel.trim(); renderContatos();
+  });
+}
+function excluirVara(id){
+  var v=(window.__VARAS||[]).find(function(x){return String(x.id)===String(id);}); if(!v) return;
+  if(!confirm('Excluir o contato de "'+(v.orgao||'')+'"?')) return;
+  window.__sb.from('contatos_orgao').delete().eq('id',id).then(function(r){
+    if(r.error){ alert('Erro: '+r.error.message); return; }
+    window.__VARAS=(window.__VARAS||[]).filter(function(x){return String(x.id)!==String(id);}); renderContatos();
+  });
+}
+function renderContatosClientes(){
+  seedContatos(); _pintaContagemContatos();
   var q=(document.getElementById("buscaCli").value||"").toLowerCase();
   var f=CONTATOS.filter(function(c){return !q||(c.nome+" "+c.tipo+" "+c.tel+" "+c.origem).toLowerCase().indexOf(q)>-1;});
   /* ordenação da lista: A→Z (padrão) ou por nº de processos ATIVOS (maior→menor) */
@@ -3504,26 +3629,30 @@ function setViewAg(v){VIEWAG=v;
 function _contarAgendas(){
   try{
     if(!KAN) initKanban();
-    var hoje=_hojeISO(), c={tarefas:0,auto:0,diligencias:0,agenda:0}, atras={tarefas:0,auto:0,diligencias:0};
+    var hoje=_hojeISO(), hj={tarefas:0,auto:0,diligencias:0,agenda:0}, atr={tarefas:0,auto:0,diligencias:0,agenda:0};
     (KAN||[]).forEach(function(t){
       if(!t||_tarConcluida(t)) return;
-      var d=String(t.prazo||t.data||'').slice(0,10); if(!d||d>hoje) return;
+      var d=String(t.prazo||t.data||'').slice(0,10); if(!d||d>hoje) return;   /* futuro não conta */
       var alvo=_tarefaAuto(t)?'auto':(_tarefaDiligencia(t)?'diligencias':'tarefas');
-      c[alvo]++; if(d<hoje) atras[alvo]++;
+      if(d===hoje) hj[alvo]++; else atr[alvo]++;
     });
     if(!AGENDA) initAgenda();
-    (AGENDA||[]).forEach(function(e){ if(e&&String(e.data||'').slice(0,10)===hoje) c.agenda++; });
-    var põe=function(id,n,atrasados){
-      var el=document.getElementById(id); if(!el) return;
-      el.textContent=n>0?String(n):'';
-      el.title=n>0?(n+' a fazer'+(atrasados>0?(' — '+atrasados+' em atraso'):' hoje')):'';
-      /* atrasado é vermelho; só de hoje, âmbar — a cor diz a urgência sem abrir */
-      el.style.background=atrasados>0?'#b5342b':'#8a6d1a';
+    (AGENDA||[]).forEach(function(e){ if(e&&String(e.data||'').slice(0,10)===hoje) hj.agenda++; });
+    /* Formato pedido: atraso primeiro, em vermelho com sinal, depois o do dia.
+         com atraso  →  "-3 +10"
+         sem atraso  →  "10"
+       O "+" só aparece quando há um "-" antes dele; sozinho, o sinal não
+       significaria nada e só poluiria o botão. */
+    var põe=function(idH,idA,n,a){
+      var eH=document.getElementById(idH), eA=document.getElementById(idA);
+      if(eA){ eA.textContent=a>0?('−'+a):''; eA.title=a>0?(a+' em atraso'):''; }
+      if(eH){ eH.textContent=n>0?((a>0?'+':'')+n):''; eH.title=n>0?(n+' para hoje'):''; }
     };
-    põe('cnt-tar', c.tarefas, atras.tarefas);
-    põe('cnt-auto', c.auto, atras.auto);
-    põe('cnt-dil', c.diligencias, atras.diligencias);
-    põe('cnt-ag', c.agenda, 0);
+    põe('cnt-tar','atr-tar', hj.tarefas, atr.tarefas);
+    põe('cnt-auto','atr-auto', hj.auto, atr.auto);
+    põe('cnt-dil','atr-dil', hj.diligencias, atr.diligencias);
+    /* audiência de ontem já passou: não existe "audiência em atraso" */
+    põe('cnt-ag','atr-ag', hj.agenda, 0);
   }catch(e){ console.warn('contagem das abas:',e&&e.message||e); }
 }
 function renderAgendaView(){ _contarAgendas(); if(VIEWAG==="kanban")renderKanban(); else if(VIEWAG==="tarefas"||VIEWAG==="auto"||VIEWAG==="diligencias")renderTarefasView(); else renderAgViewInner(); }
@@ -13325,6 +13454,12 @@ function setDilView(v){
       background:#b5342b;color:#fff;font-size:10px;font-weight:700;line-height:16px;text-align:center;
       vertical-align:super;position:relative;top:-2px}
     .ag-cnt:empty{display:none}
+    /* atraso vai SEPARADO do número do dia, em vermelho e com sinal: "10 -3"
+       diz duas coisas de uma vez — quanto tem hoje e quanto ficou para trás */
+    .ag-atr{display:inline-block;padding:0 4px;margin-left:3px;border-radius:9px;
+      background:#b5342b;color:#fff;font-size:10px;font-weight:700;line-height:16px;
+      vertical-align:super;position:relative;top:-2px}
+    .ag-atr:empty{display:none}
     .tbl-triagem td[data-label="Classificar"] .btn{flex:1 1 auto;text-align:center;min-height:38px}
     .searchbar{flex-wrap:wrap} .searchbar input{max-width:none}
     .agtools{flex-wrap:wrap}
