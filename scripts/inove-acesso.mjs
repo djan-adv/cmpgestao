@@ -15,7 +15,29 @@
 // A senha é gerada aqui e mostrada UMA vez — não fica guardada em lugar nenhum
 // legível, só o hash scrypt vai para o banco.
 
-import { q, q1, hashSenha, gerarSenha } from '../app/api/inove/lib.js'
+import fs from 'fs'
+import path from 'path'
+import { fileURLToPath } from 'url'
+
+// O Next.js lê o .env sozinho; um `node scripts/…` avulso NÃO. Sem isto, quem põe a
+// INOVE_DB_URL no .env vê o script reclamar que a variável não existe.
+function carregaEnv() {
+  const raiz = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+  for (const arq of ['.env.local', '.env']) {
+    const caminho = path.join(raiz, arq)
+    if (!fs.existsSync(caminho)) continue
+    for (const linha of fs.readFileSync(caminho, 'utf8').split('\n')) {
+      const m = linha.match(/^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/)
+      if (!m) continue
+      const chave = m[1]
+      if (process.env[chave] !== undefined) continue   // o que já veio do shell manda
+      process.env[chave] = m[2].trim().replace(/^(['"])([\s\S]*)\1$/, '$2')
+    }
+  }
+}
+carregaEnv()
+
+const { q, q1, hashSenha, gerarSenha } = await import('../app/api/inove/lib.js')
 
 const [, , cmd, ...args] = process.argv
 const RE_EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
