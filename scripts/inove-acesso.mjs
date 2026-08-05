@@ -23,16 +23,26 @@ import { fileURLToPath } from 'url'
 // INOVE_DB_URL no .env vê o script reclamar que a variável não existe.
 function carregaEnv() {
   const raiz = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+  const doShell = new Set(Object.keys(process.env))
   for (const arq of ['.env.local', '.env']) {
     const caminho = path.join(raiz, arq)
     if (!fs.existsSync(caminho)) continue
+    const vistos = new Map()
     for (const linha of fs.readFileSync(caminho, 'utf8').split('\n')) {
       const m = linha.match(/^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/)
       if (!m) continue
       const chave = m[1]
-      if (process.env[chave] !== undefined) continue   // o que já veio do shell manda
+      if (doShell.has(chave)) continue        // o que veio do shell manda sobre o arquivo
+      // Chave repetida no mesmo arquivo: vence a ÚLTIMA, como faz o dotenv do
+      // Next.js. Já custou uma hora de depuração o script usar a primeira linha
+      // enquanto o site usava a última — os dois liam o mesmo arquivo e discordavam.
+      vistos.set(chave, (vistos.get(chave) || 0) + 1)
       process.env[chave] = m[2].trim().replace(/^(['"])([\s\S]*)\1$/, '$2')
     }
+    for (const [chave, n] of vistos) {
+      if (n > 1) console.error('Aviso: ' + chave + ' aparece ' + n + 'x em ' + arq + ' — valendo a última.')
+    }
+    if (vistos.size) break                    // .env.local encontrado: não lê o .env
   }
 }
 carregaEnv()
