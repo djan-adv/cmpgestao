@@ -5546,28 +5546,29 @@ async function _jbvSalvarPasta(btn){
 }
 /* ===== Anexos da captura rápida (exibidos no histórico) ===== */
 window.__anexosMap=window.__anexosMap||{};
+/* jwt cacheado p/ montar o <img src="/api/anexo?...&jwt=..."> sem precisar await
+   no meio do render (mesmo padrão do chatJwt). window.__sb só existe DEPOIS do
+   login — por isso não busca no carregamento do script, só quando alguém chama
+   loadAnexosProc (que só acontece com a ficha do processo já aberta, logado). */
+window.__anexoJwt='';
+async function _atualizaAnexoJwt(){
+  try{
+    if(!window.__sb) return;
+    var s=await window.__sb.auth.getSession();
+    var tok=(s&&s.data&&s.data.session&&s.data.session.access_token)||'';
+    if(tok) window.__anexoJwt=tok;
+  }catch(e){}
+}
 async function loadAnexosProc(numero){
   try{
     var num=String(numero||''); if(!num) return;
+    await _atualizaAnexoJwt();
     var r=await window.__sb.from('anexos').select('id,nome,tipo,andamento_id').eq('processo_numero',num).order('criado_em',{ascending:true});
     if(!r||!r.data) return;
     var map={}; r.data.forEach(function(a){ if(!a.andamento_id) return; (map[a.andamento_id]=map[a.andamento_id]||[]).push(a); });
     window.__anexosMap=map; if(typeof renderHistorico==='function') renderHistorico();
   }catch(e){}
 }
-/* jwt cacheado p/ montar o <img src="/api/anexo?...&jwt=..."> sem precisar await
-   no meio do render (mesmo padrão do chatJwt) */
-window.__anexoJwt='';
-async function _atualizaAnexoJwt(){
-  try{
-    var vazio=!window.__anexoJwt;
-    var s=await window.__sb.auth.getSession();
-    var tok=(s&&s.data&&s.data.session&&s.data.session.access_token)||'';
-    if(tok) window.__anexoJwt=tok;
-    if(vazio&&window.__anexoJwt&&typeof atual!=='undefined'&&atual&&typeof renderHistorico==='function') renderHistorico();
-  }catch(e){}
-}
-try{ _atualizaAnexoJwt(); setInterval(_atualizaAnexoJwt, 4*60000); }catch(e){}
 function anexosHtml(andId){
   var arr=(andId && window.__anexosMap && window.__anexosMap[andId])||[]; if(!arr.length) return '';
   return '<div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:6px">'+arr.map(function(a){
