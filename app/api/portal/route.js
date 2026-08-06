@@ -23,7 +23,7 @@ import crypto from 'crypto'
 import fs from 'fs'
 import path from 'path'
 import { tipoRealDoArquivo, pdfDeTexto } from '../jusbr/lib.js'
-import { svc, confereSenha, sessao, tokenDo, digitos, processosPermitidos, FONTES_OFICIAIS } from './lib.js'
+import { svc, confereSenha, sessao, tokenDo, digitos, processosPermitidos, FILTRO_HIST_CLIENTE } from './lib.js'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -108,7 +108,7 @@ async function vinculadosDoProcesso(sb, p) {
   const saida = []
   for (const v of (vps || [])) {
     const { data: ands } = await sb.from('andamentos')
-      .select('id,data,texto').eq('processo_id', v.id).in('fonte', FONTES_OFICIAIS)
+      .select('id,data,texto').eq('processo_id', v.id).or(FILTRO_HIST_CLIENTE)
       .order('data', { ascending: false }).order('id', { ascending: false }).limit(60)
     const docs = await docsDoProcesso(sb, v)
     saida.push({
@@ -313,7 +313,7 @@ export async function POST(request) {
     const { data: p } = await sb.from('processos').select('*').eq('id', id).maybeSingle()
     if (!p) return Response.json({ erro: 'Processo não encontrado.' }, { status: 404 })
     const { data: ands } = await sb.from('andamentos')
-      .select('id,data,texto,fonte').eq('processo_id', id).in('fonte', FONTES_OFICIAIS)
+      .select('id,data,texto,fonte').eq('processo_id', id).or(FILTRO_HIST_CLIENTE)
       .order('data', { ascending: false }).order('id', { ascending: false }).limit(300)
     const [docs, cart, vinculados] = await Promise.all([
       docsDoProcesso(sb, p), cartorioDaVara(sb, p), vinculadosDoProcesso(sb, p),

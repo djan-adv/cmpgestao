@@ -55,6 +55,12 @@ export function digitos(s) { return String(s || '').replace(/\D/g, '') }
 // "[MENSAGEM AGENDADA…]" ou a cópia do e-mail enviado — e NÃO podem ir para o app.
 export const FONTES_OFICIAIS = ['djen', 'datajud', 'jusbr', 'protocolo']
 
+// Filtro para usar no lugar de .in('fonte', FONTES_OFICIAIS): também deixa
+// passar o andamento manual que o escritório LIBEROU um a um pelo botão do
+// histórico (andamentos.visivel_cliente) — é como a solicitação ao cartório
+// chega a aparecer no app, mesmo sendo fonte='manual'.
+export const FILTRO_HIST_CLIENTE = `fonte.in.(${FONTES_OFICIAIS.join(',')}),visivel_cliente.eq.true`
+
 /* ---------- quais processos um acesso enxerga ----------
    Resolvido no banco (função portal_processos_ids): grants explícitos +
    processos do contato vinculado + processos cujo cliente_nome bate com o nome do
