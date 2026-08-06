@@ -21,6 +21,13 @@ import { svc, hashSenha, gerarSenha, digitos } from '../lib.js'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
+// mesma ideia da função portal_norm() do banco: sem acento, minúsculo, sem espaço duplicado —
+// usada só para COMPARAR nomes (nunca para gravar), então formatação não gera falso alarme.
+function normalizaNome(s) {
+  return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toLowerCase().replace(/\s+/g, ' ').trim()
+}
+
 async function usuarioEscritorio(request) {
   const jwt = (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '')
   if (!jwt) return null
@@ -294,6 +301,19 @@ export async function POST(request) {
     if (existente) {
       if (existente.escritorio_id !== quem.escritorio_id) {
         return Response.json({ erro: 'Este e-mail já está em uso em outro escritório.' }, { status: 409 })
+      }
+      // Trava contra vazamento entre clientes: e-mail digitado errado (ou puxado errado de
+      // algum lugar) não pode herdar o acesso de outra pessoa. Só segue direto quando o nome
+      // bate com quem já está cadastrado nesse e-mail; do contrário, exige confirmação
+      // explícita do escritório (que já viu o nome do titular atual na tela) via
+      // body.confirmar_titular — assim o "acusa que já está cadastrado pra fulano" vira um
+      // bloqueio de verdade, não só um aviso que passa batido.
+      if (existente.nome && normalizaNome(existente.nome) !== normalizaNome(nome) && !body.confirmar_titular) {
+        return Response.json({
+          erro: `Este e-mail já está cadastrado para "${existente.nome}". Confira se é a mesma pessoa antes de continuar.`,
+          precisa_confirmar: true,
+          titular_existente: existente.nome,
+        }, { status: 409 })
       }
       acessoId = existente.id
       const upd = { senha_enviada_em: new Date().toISOString() }
