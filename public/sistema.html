@@ -2245,7 +2245,7 @@ async function monitorarAcoesCliente(){
     faixa.innerHTML=cab
       +'<div style="margin:6px 0 8px">'+achados.length+' processo(s) com publicação no período · <b style="color:#6d28a8">'+novos.length+' novo(s)</b> (fora da nossa base)'+(trabalhistas?(' · '+trabalhistas+' trabalhista(s)'):'')+'</div>'
       +'<div style="max-height:220px;overflow:auto">'+achados.map(function(a){
-        return '<div style="padding:5px 0;border-top:1px dashed #ddc9ea"><b>'+esc(a.numero.replace(/\D/g,''))+'</b> '+(a.novo?'<span style="font-size:10px;background:#6d28a8;color:#fff;border-radius:8px;padding:1px 7px;font-weight:700">NOVO</span>':'<span class="note" style="font-size:10px">já na base</span>')+' <span class="note">· '+esc(a.tribunal||'')+(a.data?(' · '+String(a.data).split('-').reverse().join('/')):'')+'</span>'+(nomes.length>1?(' <span class="note" style="font-size:10.5px">· parte: '+esc((a.partes||[]).join(', '))+'</span>'):'')+'<div class="note" style="margin:2px 0 0;font-size:11.5px">'+esc((a.texto||'').slice(0,160))+'…</div></div>';
+        return '<div style="padding:5px 0;border-top:1px dashed #ddc9ea"><b><a onclick="event.stopPropagation();abrirNoJusbr(\''+esc(a.numero.replace(/\D/g,''))+'\')" style="cursor:pointer;color:#6d28a8;text-decoration:underline" title="Abrir no jus.br">'+esc(a.numero.replace(/\D/g,''))+'</a></b> '+(a.novo?'<span style="font-size:10px;background:#6d28a8;color:#fff;border-radius:8px;padding:1px 7px;font-weight:700">NOVO</span>':'<span class="note" style="font-size:10px">já na base</span>')+' <span class="note">· '+esc(a.tribunal||'')+(a.data?(' · '+String(a.data).split('-').reverse().join('/')):'')+'</span>'+(nomes.length>1?(' <span class="note" style="font-size:10.5px">· parte: '+esc((a.partes||[]).join(', '))+'</span>'):'')+'<div class="note" style="margin:2px 0 0;font-size:11.5px">'+esc((a.texto||'').slice(0,160))+'…</div></div>';
       }).join('')+'</div>'
       +rodape;
   }catch(e){ faixa.innerHTML='<b style="color:#b5342b">Erro de rede.</b> '+esc((e&&e.message)||e); }
@@ -5431,6 +5431,12 @@ async function jusbrCarregar(numero){
     var barra=document.getElementById('jusbr-barra'); if(barra) barra.style.display='flex';
   }catch(e){ st.textContent='Falha: '+(e&&e.message||e); }
 }
+/* abre o processo direto no jus.br (PDPJ), pelo número (com ou sem máscara) */
+function abrirNoJusbr(numero){
+  var dig=String(numero||'').replace(/\D/g,'');
+  var numf=dig.length===20?dig.replace(/^(\d{7})(\d{2})(\d{4})(\d)(\d{2})(\d{4})$/,'$1-$2.$3.$4.$5.$6'):dig;
+  window.open('https://portaldeservicos.pdpj.jus.br/consulta/autosdigitais?processo='+encodeURIComponent(numf),'_blank');
+}
 /* baixa a íntegra (todas as peças) direto para a pasta Downloads — sem gravar no sistema */
 async function jusbrBaixarIntegra(numero){
   var jwt=await jusbrJwt(); if(!jwt){ alert('Sessão expirada — recarregue.'); return; }
@@ -5464,12 +5470,10 @@ async function jusbrBaixar(btn,uuid,href,nome,hrefTexto){
       /* alguns .html (expediente/despacho) o jus.br só entrega dentro do visor logado —
          nesses, abrimos direto no jus.br, onde o conteúdo carrega de verdade. */
       if(d && d.motivo==='visor'){
-        var _digs=String(window.__jusbrNum||'').replace(/\D/g,'');
-        var _numf=_digs.length===20?_digs.replace(/^(\d{7})(\d{2})(\d{4})(\d)(\d{2})(\d{4})$/,'$1-$2.$3.$4.$5.$6'):_digs;
         try{ if(d.diag){ console.log('JUSBR DIAG',nome,d.diag); } }catch(e){}
         var _dg=(d&&d.erro&&d.erro.indexOf('[diag:')>-1)?('\n\n'+d.erro.slice(d.erro.indexOf('[diag:'))):'';
         if(confirm('Este documento ("'+nome+'") o jus.br só entrega dentro do visor logado — não dá para guardar no sistema.'+_dg+'\n\nAbrir no jus.br agora para ler?')){
-          window.open('https://portaldeservicos.pdpj.jus.br/consulta/autosdigitais?processo='+encodeURIComponent(_numf),'_blank');
+          abrirNoJusbr(window.__jusbrNum);
         }
         btn.disabled=false; btn.textContent=t0; return;
       }
@@ -7124,7 +7128,8 @@ async function virarAssessoria(){
 function _numFichaHTML(p){
   var dig=String(p&&p.numero||'').replace(/\D/g,'');
   if(dig.length===20){
-    return '<span>Processo nº <span onclick="copiarNumero(this,\''+p.numero+'\')" style="cursor:pointer;border-bottom:1px dotted var(--muted)" title="Clique para copiar o número">'+esc(p.numero)+'</span></span>';
+    return '<span>Processo nº <span onclick="copiarNumero(this,\''+p.numero+'\')" style="cursor:pointer;border-bottom:1px dotted var(--muted)" title="Clique para copiar o número">'+esc(p.numero)+'</span>'
+      +' <a onclick="abrirNoJusbr(\''+dig+'\')" style="cursor:pointer;color:#185FA5;font-size:12.5px;text-decoration:none" title="Abrir este processo no jus.br">↗ jus.br</a></span>';
   }
   /* caso identificado pelo CNPJ do cliente (14 dígitos): mostra fixo, com opção de editar */
   if(dig.length===14 && !window.__numEdit){
