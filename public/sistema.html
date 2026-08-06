@@ -5555,9 +5555,26 @@ async function loadAnexosProc(numero){
     window.__anexosMap=map; if(typeof renderHistorico==='function') renderHistorico();
   }catch(e){}
 }
+/* jwt cacheado p/ montar o <img src="/api/anexo?...&jwt=..."> sem precisar await
+   no meio do render (mesmo padrão do chatJwt) */
+window.__anexoJwt='';
+async function _atualizaAnexoJwt(){
+  try{
+    var vazio=!window.__anexoJwt;
+    var s=await window.__sb.auth.getSession();
+    var tok=(s&&s.data&&s.data.session&&s.data.session.access_token)||'';
+    if(tok) window.__anexoJwt=tok;
+    if(vazio&&window.__anexoJwt&&typeof atual!=='undefined'&&atual&&typeof renderHistorico==='function') renderHistorico();
+  }catch(e){}
+}
+try{ _atualizaAnexoJwt(); setInterval(_atualizaAnexoJwt, 4*60000); }catch(e){}
 function anexosHtml(andId){
   var arr=(andId && window.__anexosMap && window.__anexosMap[andId])||[]; if(!arr.length) return '';
   return '<div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:6px">'+arr.map(function(a){
+    if(/^image\//.test(a.tipo||'')){
+      var src='/api/anexo?id='+encodeURIComponent(a.id)+'&jwt='+encodeURIComponent(window.__anexoJwt||'');
+      return '<img src="'+src+'" alt="'+esc(a.nome||'print')+'" title="'+esc(a.nome||'')+'" loading="lazy" style="max-width:220px;max-height:220px;border-radius:8px;cursor:pointer;display:block;border:1px solid #e4e8ef" onclick="event.stopPropagation();window.open(this.src,\'_blank\')">';
+    }
     return '<a class="btn sm ghost" style="font-size:11px" href="#" onclick="abrirAnexo(event,\''+a.id+'\',\''+esc(a.tipo||'')+'\')" title="'+esc(a.nome||'')+'">📎 '+esc(String(a.nome||'anexo').slice(0,28))+'</a>';
   }).join('')+'</div>';
 }
@@ -10606,19 +10623,84 @@ async function salvarObservacoes(){
   try{ var sb=window.__sb; if(sb&&atual._id){ var r=await sb.from('processos').update({observacoes:(v||null)}).eq('id',atual._id); if(r&&r.error){ alert('Não foi possível salvar a observação: '+r.error.message); } } }catch(e){ alert('Erro ao salvar: '+(e&&e.message||e)); }
   renderObservacoes();
 }
-async function addHistManual(){
+/* modal do "+ histórico manual": texto + prints/fotos (arquivo, ou Ctrl+V direto
+   no textarea) — os prints ficam visíveis dentro do próprio quadro do histórico
+   (anexosHtml), não só como link de download */
+window.__histManFiles=[];
+function addHistManual(){
   if(!atual) return;
-  var t=window.prompt('Histórico manual (interno — NUNCA é enviado ao cliente):');
-  if(!t||!t.trim()) return;
-  t=t.trim();
+  var old=document.getElementById('hm-modal'); if(old) old.remove();
+  window.__histManFiles=[];
+  var ov=document.createElement('div'); ov.id='hm-modal';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(20,28,40,.45);z-index:99;display:flex;align-items:center;justify-content:center;padding:16px';
+  var bx=document.createElement('div');
+  bx.style.cssText='background:#fff;border-radius:14px;padding:22px 24px;width:min(480px,92vw);max-height:88vh;overflow:auto;box-shadow:0 12px 40px rgba(0,0,0,.25);font-size:13px';
+  bx.innerHTML='<p class="sectlabel" style="margin-top:0">+ histórico manual</p>'
+    +'<p class="note" style="margin:0 0 8px">Interno — NUNCA é enviado ao cliente.</p>'
+    +'<textarea id="hm-texto" rows="5" placeholder="Escreva aqui… (ou cole um print com Ctrl+V)" style="width:100%;box-sizing:border-box;font-family:inherit;font-size:13.5px;padding:8px 10px;border:1px solid #d6dce6;border-radius:8px"></textarea>'
+    +'<div style="margin-top:8px"><label class="btn sm ghost" style="cursor:pointer;display:inline-block">📎 anexar print/foto<input id="hm-file" type="file" accept="image/*,.pdf" multiple style="display:none" onchange="_histManAddFiles(event)"></label></div>'
+    +'<div id="hm-files" style="margin-top:6px;font-size:12.5px"></div>'
+    +'<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px"><button class="btn sm ghost" onclick="document.getElementById(\'hm-modal\').remove()">Cancelar</button><button class="btn sm gold" id="hm-salvar" onclick="_salvarHistManual()">Salvar</button></div>';
+  ov.appendChild(bx);
+  ov.onmousedown=function(e){ ov.__bd=(e.target===ov); };
+  ov.onclick=function(e){ if(e.target===ov&&ov.__bd) ov.remove(); };
+  document.body.appendChild(ov);
+  var ta=document.getElementById('hm-texto');
+  if(ta){
+    ta.focus();
+    ta.addEventListener('paste', function(e){
+      var cd=e.clipboardData; if(!cd) return;
+      var files=[]; for(var i=0;i<(cd.items?cd.items.length:0);i++){ var it=cd.items[i]; if(it.kind==='file'){ var f=it.getAsFile(); if(f) files.push(f); } }
+      if(files.length){ e.preventDefault(); _histManLerArquivos(files); }
+    });
+  }
+}
+function _histManAddFiles(ev){
+  var fs=(ev&&ev.target&&ev.target.files)||[];
+  _histManLerArquivos(Array.prototype.slice.call(fs));
+  if(ev&&ev.target) ev.target.value='';
+}
+function _histManLerArquivos(files){
+  files.forEach(function(f){
+    var rd=new FileReader();
+    rd.onload=function(){ window.__histManFiles.push({nome:(f.name||'print.png'),tipo:(f.type||'image/png'),b64:String(rd.result)}); _renderHistManFiles(); };
+    rd.readAsDataURL(f);
+  });
+}
+function _renderHistManFiles(){
+  var el=document.getElementById('hm-files'); if(!el) return;
+  el.innerHTML=(window.__histManFiles||[]).map(function(f,i){
+    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0">📄 '+esc(f.nome)+' <span style="color:#b5342b;cursor:pointer;font-weight:700" onclick="_histManRmFile('+i+')">remover</span></div>';
+  }).join('');
+}
+function _histManRmFile(i){ (window.__histManFiles||[]).splice(i,1); _renderHistManFiles(); }
+async function _salvarHistManual(){
+  if(!atual) return;
+  var ta=document.getElementById('hm-texto');
+  var t=(ta?ta.value:'').trim();
+  var arquivos=(window.__histManFiles||[]).slice();
+  if(!t && !arquivos.length){ alert('Escreva um texto ou anexe um print.'); return; }
+  var btn=document.getElementById('hm-salvar'); if(btn){ btn.disabled=true; btn.textContent='Salvando…'; }
   var hoje=new Date(); var iso=hoje.getFullYear()+'-'+String(hoje.getMonth()+1).padStart(2,'0')+'-'+String(hoje.getDate()).padStart(2,'0');
   try{
     var sb=window.__sb;
-    var w=await sb.from('andamentos').insert({processo_id:atual._id,data:iso,texto:t,fonte:'manual'}).select('id').single();
-    if(w.error){ alert('Erro ao salvar: '+w.error.message); return; }
-    atual.hist_full=atual.hist_full||[]; atual.hist_full.unshift({id:w.data&&w.data.id,data:iso+'T00:00:00.000Z',texto:t,f:'manual'});
+    var w=await sb.from('andamentos').insert({processo_id:atual._id,data:iso,texto:(t||'(print anexado)'),fonte:'manual'}).select('id').single();
+    if(w.error){ alert('Erro ao salvar: '+w.error.message); if(btn){btn.disabled=false;btn.textContent='Salvar';} return; }
+    var novoId=w.data&&w.data.id;
+    atual.hist_full=atual.hist_full||[]; atual.hist_full.unshift({id:novoId,data:iso+'T00:00:00.000Z',texto:(t||'(print anexado)'),f:'manual'});
+    if(arquivos.length && novoId){
+      try{
+        var jwt=await jusbrJwt();
+        var r=await fetch('/api/historico-anexo',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+jwt},body:JSON.stringify({andamento_id:novoId,numero:atual.numero,arquivos:arquivos})});
+        var d=await respJson(r);
+        if(!r.ok || !d || d.erro) alert('Histórico salvo, mas houve falha ao anexar o(s) arquivo(s)'+((d&&d.erro)?(': '+d.erro):'.'));
+      }catch(e){ alert('Histórico salvo, mas falhou ao anexar o(s) arquivo(s): '+(e&&e.message||e)); }
+      try{ if(typeof loadAnexosProc==='function') loadAnexosProc(atual.numero); }catch(e){}
+    }
+    window.__histManFiles=[];
     histShown=5; renderHistorico();
-  }catch(e){ alert('Erro: '+(e&&e.message||e)); }
+    var m=document.getElementById('hm-modal'); if(m) m.remove();
+  }catch(e){ alert('Erro: '+(e&&e.message||e)); if(btn){btn.disabled=false;btn.textContent='Salvar';} }
 }
 /* ponto 4: o telefone/WhatsApp é do CLIENTE, não do processo.
    Buscamos e salvamos na tabela `contatos` pelo nome do cliente, então o mesmo número
