@@ -10779,32 +10779,71 @@ function honQuadroHTML(p){
         +String(cp).replace('.',',')+'% do êxito</div>';
     }
   })();
-  verba('Contratual','hon_val_contratual','hon_pct_contratual',true);
+  /* ORDEM DO QUADRO — do maior para o menor, como na planilha de cálculo:
+       Total da condenação
+       − Sucumbenciais   (destacados do total)
+       − Execução        (destacados do total)
+       = Saldo
+       − Contratuais     (percentual sobre o SALDO, não sobre o total)
+       = Líquido do advogado / Líquido do cliente
+     Antes o quadro começava pelo contratual e terminava na condenação, o
+     inverso da ordem em que a conta é feita — e sem a linha do saldo, que é a
+     base do contratual, não dava para conferir nada de cabeça. */
+  var condV=_hv(p.valor_condenacao);
+  if(condV!==0||window.__honShow.valor_condenacao){
+    out+='<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;line-height:1.6"><b style="color:var(--navy);font-size:11.5px">TOTAL DA CONDENAÇÃO</b><b style="white-space:nowrap">'+honFmtInput('valor_condenacao',p.valor_condenacao)+'</b></div>';
+    out+=div;
+  }
   verba('Sucumbência','hon_val_sucumbencia','hon_pct_sucumbencia',true);
   verba('Execução','hon_val_execucao','hon_pct_execucao',!trab);
+  /* Saldo: o que sobra depois de destacar sucumbência e execução. É a base do
+     contratual, então precisa estar visível — sem ele o percentual do contratual
+     não se confere. */
+  var sucV=_hv(p.hon_val_sucumbencia), exeV=(trab?0:_hv(p.hon_val_execucao));
+  var saldoV=condV-sucV-exeV;
+  if(condV>0 && (sucV!==0||exeV!==0)){
+    out+='<div style="display:flex;justify-content:space-between;gap:8px;line-height:1.5;color:#5f6b7a"><span style="font-size:11px">= saldo (base do contratual)</span><span style="white-space:nowrap;font-size:11.5px">R$ '+hFmt(saldoV)+'</span></div>';
+  }
+  verba('Contratual','hon_val_contratual','hon_pct_contratual',true);
+  /* confere o contratual contra o saldo: percentual digitado × saldo. Erro de
+     digitação aparece aqui, antes de virar número dito ao cliente. */
+  (function(){
+    var cp=(p.hon_pct_contratual!=null&&p.hon_pct_contratual!=='')?Number(p.hon_pct_contratual):null;
+    var cv=_hv(p.hon_val_contratual);
+    if(cp&&saldoV>0){
+      var esperado=saldoV*cp/100;
+      var bate=cv>0 && Math.abs(esperado-cv)<Math.max(1,esperado*0.01);
+      out+='<div style="font-size:10.5px;color:'+(bate?'#0F6E56':'#8a6d1a')+';text-align:right;line-height:1.4;margin-top:-1px">'
+        +cp.toString().replace('.',',')+'% do saldo = R$ '+hFmt(esperado)+(bate?' ✓':(cv>0?' ⚠ difere do lançado':''))+'</div>';
+    }
+  })();
   verba('Pró-labore','hon_pro_labore',null,!trab&&!james);
   /* multa má-fé é percentual puro — só aparece se preenchida */
   if(!james && ((p.hon_pct_ma_fe!=null&&Number(p.hon_pct_ma_fe)!==0)||window.__honShow.hon_pct_ma_fe)) out+=honRow('Multa má-fé',honInput('hon_pct_ma_fe',p.hon_pct_ma_fe,true));
   else if(!james) chips.push(['Multa má-fé','hon_pct_ma_fe']);
   /* condenação: some quando não há (o quadro fica só com o que existe) */
-  var temCond=_hv(p.valor_condenacao)!==0||window.__honShow.valor_condenacao;
-  var totAdv=_hv(p.hon_val_contratual)+_hv(p.hon_val_sucumbencia)+(trab?0:_hv(p.hon_val_execucao))+((!trab&&!james)?_hv(p.hon_pro_labore):0);
+  var temCond=condV!==0||window.__honShow.valor_condenacao;
+  var totAdv=_hv(p.hon_val_contratual)+sucV+exeV+((!trab&&!james)?_hv(p.hon_pro_labore):0);
   /* o total só informa alguma coisa quando há mais de uma verba: com uma só ele
      repete, palavra por palavra, a linha imediatamente acima */
   var nVerbas=[_hv(p.hon_val_contratual),_hv(p.hon_val_sucumbencia),(trab?0:_hv(p.hon_val_execucao)),((!trab&&!james)?_hv(p.hon_pro_labore):0)]
     .filter(function(v){ return v!==0; }).length;
   if(totAdv>0 && nVerbas>1){
     out+=div;
-    out+='<div style="display:flex;justify-content:space-between;gap:8px;line-height:1.5"><b style="color:var(--navy);font-size:12px">TOTAL DO ADVOGADO</b><b style="color:var(--navy);white-space:nowrap">R$ '+hFmt(totAdv)+'</b></div>';
+    out+='<div style="display:flex;justify-content:space-between;gap:8px;line-height:1.5"><b style="color:var(--navy);font-size:12px">LÍQUIDO DO ADVOGADO</b><b style="color:var(--navy);white-space:nowrap">R$ '+hFmt(totAdv)+'</b></div>';
   }
   if(temCond){
     if(totAdv<=0) out+=div;
-    out+=honRow(james?'Crédito':'Condenação',honFmtInput('valor_condenacao',p.valor_condenacao));
-    /* líquido = condenação − contratual − pró-labore (sucumbência e execução saem
-       da parte contrária, não do bolso do cliente) */
-    var liq=_hv(p.valor_condenacao)-_hv(p.hon_val_contratual)-((!trab&&!james)?_hv(p.hon_pro_labore):0);
-    if(!james && _hv(p.valor_condenacao)>0 && liq>0)
+    /* LÍQUIDO DO CLIENTE = condenação − TUDO que é do advogado.
+       Antes descontava só o contratual, sob a premissa de que sucumbência e
+       execução saem da parte contrária (art. 85, §14 do CPC). Mas na planilha
+       do escritório as duas são DESTACADAS de dentro do total da condenação —
+       são linhas das verbas acessórias que compõem o próprio total. Pelo modelo
+       antigo o cliente aparecia levando R$ 27 mil a mais do que leva. */
+    var liq=condV-totAdv;
+    if(!james && condV>0)
       out+='<div style="display:flex;justify-content:space-between;gap:8px;line-height:1.5"><b style="color:#0F6E56;font-size:11.5px">LÍQUIDO DO CLIENTE</b><b style="color:#0F6E56;white-space:nowrap">R$ '+hFmt(liq)+'</b></div>';
+    if(james) out+=honRow('Crédito',honFmtInput('valor_condenacao',p.valor_condenacao));
   } else chips.push([james?'Crédito':'Condenação','valor_condenacao']);
   /* chips das verbas que não existem neste processo — um clique abre a linha */
   if(chips.length){
