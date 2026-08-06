@@ -5947,7 +5947,24 @@ function toggleConcluirTarefa(id){
   try{
     var _uid=g.data.session.user.id;
     var _dev=null; try{ _dev=localStorage.getItem('cmp_dev_id'); }catch(e){}
-    if(!_dev){ _dev='dev_'+Math.random().toString(36).slice(2)+Date.now().toString(36); try{ localStorage.setItem('cmp_dev_id',_dev); }catch(e){} }
+    var _uaAgora=(navigator.userAgent||'').slice(0,300);
+    if(!_dev){
+      /* localStorage perdeu o id (Edge configurado para limpar dados ao fechar,
+         aba anônima, limpeza de cache…) — antes isso criava um aparelho novo a
+         cada sessão e o mesmo usuário estourava o limite sozinho, sem nenhum
+         acesso "emprestado" de verdade. Recupera o MESMO registro se achar um
+         aparelho deste usuário com a identificação de navegador idêntica e
+         usado nas últimas 24h — é o jeito de reconhecer "sou eu de novo" sem
+         depender do localStorage. */
+      try{
+        var _recu=await sb.from('sessao_dispositivos').select('dispositivo_id,ua,ultimo_uso').eq('user_id',_uid).eq('ua',_uaAgora).order('ultimo_uso',{ascending:false}).limit(1).maybeSingle();
+        if(_recu&&_recu.data&&_recu.data.dispositivo_id&&_recu.data.ultimo_uso&&(Date.now()-new Date(_recu.data.ultimo_uso).getTime())<24*3600*1000){
+          _dev=_recu.data.dispositivo_id;
+        }
+      }catch(e){}
+      if(!_dev) _dev='dev_'+Math.random().toString(36).slice(2)+Date.now().toString(36);
+      try{ localStorage.setItem('cmp_dev_id',_dev); }catch(e){}
+    }
     window.__devId=_dev;
 
     /* Nome do aparelho SEM perguntar nada. O navegador não expõe o nome real da
