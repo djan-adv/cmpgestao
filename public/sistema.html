@@ -2077,7 +2077,7 @@ function abrir(i){
     +'<button id="btn-app-cli" class="btn sm cmp-only" style="background:#2E3A4B;color:#fff;border:1px solid #2E3A4B" onclick="acessoAppDaFicha()" title="Portal do cliente (app): cria o login, envia a senha por e-mail e mostra se o cliente já entrou. Verde = cliente logado no app.">&#128242; Dar acesso ao app</button>'
     +'<button class="btn sm cmp-only" style="background:#fff8e6;color:#8a6d00;border:1px solid #e8dcbb" onclick="falarComClienteDaFicha()" title="Abre a janela de conversa com o cliente deste processo (aparece EMPILHADA acima do chat da equipe). Tudo fica gravado no processo.">&#128172; Falar com cliente</button>'
     +'</div>'
-    +((typeof _ehCasoProc==='function'&&_ehCasoProc(p))?'<div style="margin-top:8px"><button class="btn sm cmp-only" style="background:#f3eaf7;color:#6d28a8;border:1px solid #ddc9ea;font-weight:700" onclick="monitorarAcoesCliente()" title="Testar: buscar no DJEN ações NOVAS (últimos 3 meses) que citem o nome deste cliente — inclui trabalhista. Não busca por CNPJ (a API do CNJ não permite).">&#128269; Monitorar ações novas</button></div>':'')
+    +((typeof _ehCasoProc==='function'&&_ehCasoProc(p))?'<div style="margin-top:8px"><button class="btn sm cmp-only" style="background:#f3eaf7;color:#6d28a8;border:1px solid #ddc9ea;font-weight:700" onclick="monitorarAcoesCliente()" title="Testar: buscar no DJEN ações NOVAS (últimos 3 meses) que citem o nome de QUALQUER autor deste Caso (empresa e sócios) — inclui trabalhista. Não busca por CNPJ/CPF (a API do CNJ não permite).">&#128269; Monitorar ações novas</button></div>':'')
     +'</div>';
   // dados do processo
   html+='<div class="card" id="card-dados-proc"><p class="sectlabel">Dados do processo</p><div style="font-size:13.5px;line-height:1.6;color:var(--ink)">'+
@@ -2203,31 +2203,51 @@ function _marcaAcompNaFicha(numero, ativo){
     btn.title='E-mail de atualização ao cliente — informar movimentação, pedir providência, ou ativar o acompanhamento semanal automático';
   }
 }
-/* TESTE: monitorar ações novas (últimos 3 meses) que citem o nome deste cliente
-   de assessoria no DJEN. Mostra uma faixa no topo da ficha, como os avisos. */
+/* TESTE: monitorar ações novas (últimos 3 meses) que citem o nome de QUALQUER
+   autor deste Caso no DJEN — antes só olhava o primeiro nome do campo cliente
+   (ex.: num Caso com a empresa + 2 sócios, Nicolas e Vitor nunca eram
+   consultados). Mostra uma faixa no topo da ficha, como os avisos. */
 async function monitorarAcoesCliente(){
   if(typeof atual==='undefined'||!atual) return;
-  var nome=String(atual.cliente||'').split(/\s+e\s+|;|,/i)[0].trim()||String(atual.cliente||'').trim();
-  if(nome.length<4){ alert('Este cliente não tem nome suficiente para buscar. Preencha o nome na ficha.'); return; }
+  var nomes=(typeof _partesSplit==='function'?_partesSplit(atual.cliente):[]).filter(function(n){return n.length>=4;});
+  if(!nomes.length){ var n0=String(atual.cliente||'').trim(); if(n0.length>=4) nomes=[n0]; }
+  if(!nomes.length){ alert('Este cliente não tem nome suficiente para buscar. Preencha o nome na ficha.'); return; }
   var host=document.getElementById('det-body'); if(!host) return;
   var faixa=document.getElementById('monitor-faixa');
   if(!faixa){ faixa=document.createElement('div'); faixa.id='monitor-faixa'; host.insertBefore(faixa, host.firstChild); }
   faixa.style.cssText='background:#f6eefb;border:1px solid #ddc9ea;border-left:4px solid #6d28a8;border-radius:10px;padding:10px 12px;margin:0 0 12px;font-size:13px';
-  faixa.innerHTML='🔎 Buscando ações novas (últimos 3 meses) contra <b>'+esc(nome)+'</b> no DJEN…';
+  faixa.innerHTML='🔎 Buscando ações novas (últimos 3 meses) contra '+nomes.length+' parte'+(nomes.length>1?'s':'')+': <b>'+esc(nomes.join(', '))+'</b> no DJEN…';
   try{
     var tok=await docToken();
-    var r=await fetch('/api/monitor-parte?nome='+encodeURIComponent(nome)+'&dias=90',{headers:{Authorization:'Bearer '+tok}});
-    var j=await r.json().catch(function(){return {};});
-    if(!r.ok||j.erro){ faixa.innerHTML='<b style="color:#b5342b">Falha:</b> '+esc((j&&j.erro)||('HTTP '+r.status))+' <a onclick="this.closest(\'div\').remove()" style="cursor:pointer;color:#6d28a8;float:right">✕</a>'; return; }
-    var novos=(j.achados||[]).filter(function(a){return a.novo;});
-    var cab='<div style="display:flex;justify-content:space-between;align-items:center"><b style="color:#6d28a8">🔎 Monitoramento — '+esc(nome)+'</b><a onclick="this.closest(\'div\').remove()" style="cursor:pointer;color:#6d28a8">✕</a></div>';
-    if(!(j.achados||[]).length){ faixa.innerHTML=cab+'<div class="note" style="margin:6px 0 0">'+esc(j.aviso||'Nenhuma publicação com este nome nos últimos 3 meses.')+'</div>'; return; }
+    var porNum={}, falhas=[];
+    /* uma busca por vez (sequencial), pra não estourar limite do DJEN quando o
+       Caso tem várias partes */
+    for(var i=0;i<nomes.length;i++){
+      var nm=nomes[i];
+      try{
+        var r=await fetch('/api/monitor-parte?nome='+encodeURIComponent(nm)+'&dias=90',{headers:{Authorization:'Bearer '+tok}});
+        var j=await r.json().catch(function(){return {};});
+        if(!r.ok||j.erro){ falhas.push(nm); continue; }
+        (j.achados||[]).forEach(function(a){
+          var ex=porNum[a.numero];
+          if(ex){ if(ex.partes.indexOf(nm)<0) ex.partes.push(nm); }
+          else { a.partes=[nm]; porNum[a.numero]=a; }
+        });
+      }catch(e){ falhas.push(nm); }
+    }
+    var achados=[]; for(var k in porNum){ if(porNum.hasOwnProperty(k)) achados.push(porNum[k]); }
+    achados.sort(function(x,y){ return String(y.data||'').localeCompare(String(x.data||'')); });
+    var novos=achados.filter(function(a){return a.novo;});
+    var trabalhistas=achados.filter(function(a){return /TRT|trabalh/i.test(((a.tribunal||'')+' '+(a.texto||'')));}).length;
+    var cab='<div style="display:flex;justify-content:space-between;align-items:center"><b style="color:#6d28a8">🔎 Monitoramento — '+nomes.length+' parte'+(nomes.length>1?'s':'')+'</b><a onclick="this.closest(\'div\').remove()" style="cursor:pointer;color:#6d28a8">✕</a></div>';
+    var rodape='<div class="note" style="margin-top:6px;font-size:11px">Busca por NOME (a API do CNJ não permite por CNPJ/CPF)'+(nomes.length>1?(' — consultadas '+nomes.length+' partes: '+esc(nomes.join(', '))):'')+'. Nome comum pode gerar falso-positivo; só aparecem processos com publicação no período.'+(falhas.length?(' <span style="color:#b5342b">Falhou para: '+esc(falhas.join(', '))+'.</span>'):'')+'</div>';
+    if(!achados.length){ faixa.innerHTML=cab+'<div class="note" style="margin:6px 0 0">Nenhuma publicação com '+(nomes.length>1?'estes nomes':'este nome')+' nos últimos 3 meses.</div>'+rodape; return; }
     faixa.innerHTML=cab
-      +'<div style="margin:6px 0 8px">'+j.total+' processo(s) com publicação no período · <b style="color:#6d28a8">'+novos.length+' novo(s)</b> (fora da nossa base)'+(j.trabalhistas?(' · '+j.trabalhistas+' trabalhista(s)'):'')+'</div>'
-      +'<div style="max-height:220px;overflow:auto">'+(j.achados||[]).map(function(a){
-        return '<div style="padding:5px 0;border-top:1px dashed #ddc9ea"><b>'+esc(a.numero.replace(/\D/g,''))+'</b> '+(a.novo?'<span style="font-size:10px;background:#6d28a8;color:#fff;border-radius:8px;padding:1px 7px;font-weight:700">NOVO</span>':'<span class="note" style="font-size:10px">já na base</span>')+' <span class="note">· '+esc(a.tribunal||'')+(a.data?(' · '+String(a.data).split('-').reverse().join('/')):'')+'</span><div class="note" style="margin:2px 0 0;font-size:11.5px">'+esc((a.texto||'').slice(0,160))+'…</div></div>';
+      +'<div style="margin:6px 0 8px">'+achados.length+' processo(s) com publicação no período · <b style="color:#6d28a8">'+novos.length+' novo(s)</b> (fora da nossa base)'+(trabalhistas?(' · '+trabalhistas+' trabalhista(s)'):'')+'</div>'
+      +'<div style="max-height:220px;overflow:auto">'+achados.map(function(a){
+        return '<div style="padding:5px 0;border-top:1px dashed #ddc9ea"><b>'+esc(a.numero.replace(/\D/g,''))+'</b> '+(a.novo?'<span style="font-size:10px;background:#6d28a8;color:#fff;border-radius:8px;padding:1px 7px;font-weight:700">NOVO</span>':'<span class="note" style="font-size:10px">já na base</span>')+' <span class="note">· '+esc(a.tribunal||'')+(a.data?(' · '+String(a.data).split('-').reverse().join('/')):'')+'</span>'+(nomes.length>1?(' <span class="note" style="font-size:10.5px">· parte: '+esc((a.partes||[]).join(', '))+'</span>'):'')+'<div class="note" style="margin:2px 0 0;font-size:11.5px">'+esc((a.texto||'').slice(0,160))+'…</div></div>';
       }).join('')+'</div>'
-      +'<div class="note" style="margin-top:6px;font-size:11px">Busca por NOME (a API do CNJ não permite por CNPJ). Nome comum pode gerar falso-positivo; só aparecem processos com publicação no período.</div>';
+      +rodape;
   }catch(e){ faixa.innerHTML='<b style="color:#b5342b">Erro de rede.</b> '+esc((e&&e.message)||e); }
 }
 function traduzir(){
