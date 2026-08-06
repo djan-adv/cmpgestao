@@ -17059,7 +17059,7 @@ function exportarProdutividadeCSV(){
       appCliRenderLista(procId);
     });
   };
-  window.appCliConceder=function(procId, canal){
+  window.appCliConceder=function(procId, canal, confirmarTitular){
     canal=canal||'email';
     var n=document.getElementById('appcli-nome'), e=document.getElementById('appcli-email'),
         z=document.getElementById('appcli-zap'), av=document.getElementById('appcli-avis');
@@ -17069,8 +17069,16 @@ function exportarProdutividadeCSV(){
     if(!nome||nome.length<3){ if(av) av.textContent='Informe o nome.'; return; }
     if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ if(av) av.textContent='Informe o e-mail do cliente — ele é o login do app, mesmo enviando por WhatsApp.'; return; }
     if(bt){ bt.disabled=true; bt.textContent=(canal==='whatsapp')?'Criando…':'Enviando…'; }
-    admin({acao:'conceder',processo_id:procId,nome:nome,email:email,canal:canal,whatsapp:zap}).then(function(d){
+    admin({acao:'conceder',processo_id:procId,nome:nome,email:email,canal:canal,whatsapp:zap,confirmar_titular:!!confirmarTitular}).then(function(d){
       if(bt){ bt.disabled=false; bt.innerHTML=rotulo; }
+      if(d&&d.precisa_confirmar){
+        // e-mail já pertence a outro cadastro — só reenvia com confirmar_titular se o
+        // próprio escritório disser que é a mesma pessoa (trava contra vazamento entre clientes)
+        if(confirm('Este e-mail já está cadastrado para "'+d.titular_existente+'".\n\nÉ a mesma pessoa? Clique OK só se tiver certeza — do contrário o processo pode ficar visível para outro cliente.')){
+          appCliConceder(procId, canal, true);
+        } else if(av){ av.textContent='Cancelado — confira o e-mail digitado.'; }
+        return;
+      }
       if(!(d&&d.ok)){ if(av) av.textContent='Erro: '+((d&&d.erro)||'falhou'); return; }
       if(canal==='whatsapp'){
         var comNumero=abrirWhats(zap, d.texto||'');
