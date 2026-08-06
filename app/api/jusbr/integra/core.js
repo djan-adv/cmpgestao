@@ -147,10 +147,80 @@ export function ordenarPecas(files, { uuidsSel = [], ordem = '' } = {}) {
   return files
 }
 
-// Junta tudo num PDF só. Peça em HTML/texto vira páginas de texto, para não
-// sumir do documento final.
+// Quebra o HTML em blocos (parágrafo/linha/célula), preservando negrito e
+// centralização — sem isso, texto de expediente/ato ordinatório virava um
+// bloco só, tudo esquerda e sem destaque nenhum (ilegível perto do original).
+// Não é um parser de árvore de verdade (é regex sobre os tokens de tag), mas
+// cobre bem o padrão desses documentos do TJ: tags de bloco não aninhadas
+// de forma complexa, negrito/centralização por linha inteira.
+const TAGS_BLOCO = new Set(['p', 'div', 'td', 'th', 'tr', 'table', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'br'])
+const TAGS_NEGRITO = new Set(['b', 'strong', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'])
+export function blocosDeHtml(html) {
+  const semScript = String(html || '')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+  const tokens = semScript.match(/<[^>]+>|[^<]+/g) || []
+  let boldDepth = 0, centerDepth = 0, destaqueDepth = 0
+  let buf = '', bufBold = false, bufCenter = false, bufDestaque = false
+  const blocos = []
+  function flush() {
+    const t = decodeEntidadesHtml(buf).replace(/[ \t]+/g, ' ').trim()
+    buf = ''; const b = bufBold, c = bufCenter, d = bufDestaque
+    bufBold = false; bufCenter = false; bufDestaque = false
+    if (t) blocos.push({ texto: t, negrito: b, centro: c, destaque: d })
+  }
+  for (const tk of tokens) {
+    if (tk[0] === '<') {
+      const fecha = /^<\//.test(tk)
+      const nome = ((tk.match(/^<\/?\s*([a-zA-Z0-9]+)/) || [, ''])[1] || '').toLowerCase()
+      const centralizado = /\balign\s*=\s*["']?center["']?/i.test(tk) || /text-align\s*:\s*center/i.test(tk)
+      // "destaque" = fundo colorido de verdade (bgcolor/background) — NÃO borda.
+      // É o que diferencia o título de seção ("SENTENÇA"/"ATO ORDINATÓRIO", caixa
+      // cinza) do cabeçalho (negrito+centralizado, mas sem caixa nenhuma) e da
+      // tabela de partes (borda tracejada, sem fundo).
+      const destacado = /\bbgcolor\s*=/i.test(tk) || /background(-color)?\s*:/i.test(tk)
+      if (!fecha) {
+        if (TAGS_NEGRITO.has(nome)) boldDepth++
+        if (centralizado) centerDepth++
+        if (destacado) destaqueDepth++
+        if (nome === 'br') flush()
+      } else {
+        if (TAGS_BLOCO.has(nome) && nome !== 'br') flush()
+        if (TAGS_NEGRITO.has(nome)) boldDepth = Math.max(0, boldDepth - 1)
+        if (TAGS_BLOCO.has(nome)) { centerDepth = 0; destaqueDepth = 0 }
+      }
+    } else {
+      buf += tk
+      if (boldDepth > 0) bufBold = true
+      if (centerDepth > 0) bufCenter = true
+      if (destaqueDepth > 0) bufDestaque = true
+    }
+  }
+  flush()
+  return blocos
+}
+// Quebra um texto em linhas que cabem em `larguraMax` pontos, medindo pela
+// fonte de verdade (em vez de contar caracteres) — necessário pra centralizar direito.
+function quebraLinhas(texto, font, tamanho, larguraMax) {
+  const linhas = []
+  String(texto || '').split('\n').forEach((par) => {
+    const palavras = par.split(' ').filter((w) => w !== '')
+    if (!palavras.length) { linhas.push(''); return }
+    let atual = ''
+    for (const w of palavras) {
+      const tentativa = atual ? atual + ' ' + w : w
+      if (atual && font.widthOfTextAtSize(tentativa, tamanho) > larguraMax) { linhas.push(atual); atual = w }
+      else atual = tentativa
+    }
+    if (atual) linhas.push(atual)
+  })
+  return linhas
+}
+
+// Junta tudo num PDF só. Peça em HTML/texto vira páginas de texto (com
+// negrito/centralização preservados), para não sumir do documento final.
 export async function pdfUnico(files) {
-  const { PDFDocument, StandardFonts } = await import('pdf-lib')
+  const { PDFDocument, StandardFonts, rgb } = await import('pdf-lib')
   const out = await PDFDocument.create()
   const fonte = await out.embedFont(StandardFonts.Helvetica)
   const negrito = await out.embedFont(StandardFonts.HelveticaBold)
@@ -158,6 +228,7 @@ export async function pdfUnico(files) {
     .replace(/[‘’]/g, "'").replace(/[“”]/g, '"')
     .replace(/[–—−]/g, '-').replace(/ /g, ' ')
     .replace(/[^\x00-\xFF]/g, '?')
+  const MARG_ESQ = 45, MARG_DIR = 550, LARG_UTIL = MARG_DIR - MARG_ESQ
   let juntados = 0, falhos = 0
   for (const f of files) {
     const ehPdf = f.data.slice(0, 5).toString('utf8').toLowerCase().startsWith('%pdf')
@@ -170,20 +241,29 @@ export async function pdfUnico(files) {
       } catch (e) { falhos++ }
     } else {
       try {
-        const txt = decodeEntidadesHtml(f.data.toString('utf8')
-          .replace(/<style[\s\S]*?<\/style>/gi, ' ').replace(/<script[\s\S]*?<\/script>/gi, ' ')
-          .replace(/<br\s*\/?>/gi, '\n').replace(/<\/p>/gi, '\n\n').replace(/<[^>]+>/g, ' '))
-          .replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim()
-        const linhas = []
-        lat1(txt).split('\n').forEach((ln) => {
-          while (ln.length > 96) { let c = ln.lastIndexOf(' ', 96); if (c < 40) c = 96; linhas.push(ln.slice(0, c)); ln = ln.slice(c).replace(/^ /, '') }
-          linhas.push(ln)
-        })
+        const blocos = blocosDeHtml(f.data.toString('utf8'))
         let pg = out.addPage([595, 842]); let y = 800
-        pg.drawText(lat1(f.name).slice(0, 90), { x: 45, y: y, size: 11, font: negrito }); y -= 22
-        for (const ln of linhas) {
-          if (y < 45) { pg = out.addPage([595, 842]); y = 800 }
-          pg.drawText(ln, { x: 45, y: y, size: 9.5, font: fonte }); y -= 13
+        pg.drawText(lat1(f.name).slice(0, 90), { x: MARG_ESQ, y, size: 11, font: negrito }); y -= 22
+        for (const b of blocos) {
+          const fnt = b.negrito ? negrito : fonte
+          const tamanho = b.negrito ? 10.5 : 9.5
+          const linhas = quebraLinhas(lat1(b.texto), fnt, tamanho, LARG_UTIL)
+          if (b.destaque && linhas.length === 1) {
+            if (y < 55) { pg = out.addPage([595, 842]); y = 800 }
+            const w = fnt.widthOfTextAtSize(linhas[0], tamanho)
+            const boxW = Math.min(LARG_UTIL, w + 40)
+            const boxX = MARG_ESQ + (LARG_UTIL - boxW) / 2
+            pg.drawRectangle({ x: boxX, y: y - 5, width: boxW, height: 18, color: rgb(0.88, 0.88, 0.88), borderColor: rgb(0.55, 0.55, 0.55), borderWidth: 0.75 })
+            pg.drawText(linhas[0], { x: MARG_ESQ + (LARG_UTIL - w) / 2, y, size: tamanho, font: fnt }); y -= 13 + 10
+            continue
+          }
+          for (const ln of linhas) {
+            if (y < 45) { pg = out.addPage([595, 842]); y = 800 }
+            let x = MARG_ESQ
+            if (b.centro) { const w = fnt.widthOfTextAtSize(ln, tamanho); x = MARG_ESQ + Math.max(0, (LARG_UTIL - w) / 2) }
+            pg.drawText(ln, { x, y, size: tamanho, font: fnt }); y -= 13
+          }
+          y -= 6
         }
         juntados++
       } catch (e) { falhos++ }
