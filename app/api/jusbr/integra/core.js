@@ -50,6 +50,37 @@ export function abs(h) {
 export function ehShell(b) { return /<app-root|ng-version=/.test(b.slice(0, 6000).toString('utf8').toLowerCase()) }
 export function limpaNome(s) { return String(s || 'documento').replace(/[\\/:*?"<>|\r\n\t]+/g, '-').slice(0, 120) }
 
+// Entidades nomeadas do HTML4 (Latin-1 + pontuação comum) — os documentos do
+// TJ (expedientes/atos ordinatórios em HTML) vêm cheios delas ("JUDICI&Aacute;RIO",
+// "&ordm;", "&ccedil;ão"...) e, sem decodificar, a peça inteira fica ilegível
+// no PDF final ("PODER JUDICI&Aacute;RIO" em vez de "PODER JUDICIÁRIO").
+const ENTIDADES_HTML = {
+  nbsp: ' ', amp: '&', lt: '<', gt: '>', quot: '"', apos: "'",
+  Aacute: 'Á', aacute: 'á', Agrave: 'À', agrave: 'à', Acirc: 'Â', acirc: 'â', Atilde: 'Ã', atilde: 'ã', Auml: 'Ä', auml: 'ä', Aring: 'Å', aring: 'å', AElig: 'Æ', aelig: 'æ',
+  Eacute: 'É', eacute: 'é', Egrave: 'È', egrave: 'è', Ecirc: 'Ê', ecirc: 'ê', Euml: 'Ë', euml: 'ë',
+  Iacute: 'Í', iacute: 'í', Igrave: 'Ì', igrave: 'ì', Icirc: 'Î', icirc: 'î', Iuml: 'Ï', iuml: 'ï',
+  Oacute: 'Ó', oacute: 'ó', Ograve: 'Ò', ograve: 'ò', Ocirc: 'Ô', ocirc: 'ô', Otilde: 'Õ', otilde: 'õ', Ouml: 'Ö', ouml: 'ö', Oslash: 'Ø', oslash: 'ø',
+  Uacute: 'Ú', uacute: 'ú', Ugrave: 'Ù', ugrave: 'ù', Ucirc: 'Û', ucirc: 'û', Uuml: 'Ü', uuml: 'ü',
+  Yacute: 'Ý', yacute: 'ý', yuml: 'ÿ',
+  Ntilde: 'Ñ', ntilde: 'ñ', Ccedil: 'Ç', ccedil: 'ç',
+  szlig: 'ß', ETH: 'Ð', eth: 'ð', THORN: 'Þ', thorn: 'þ',
+  ordf: 'ª', ordm: 'º', sect: '§', para: '¶', deg: '°', middot: '·', micro: 'µ',
+  laquo: '«', raquo: '»', iexcl: '¡', iquest: '¿',
+  cent: '¢', pound: '£', curren: '¤', yen: '¥', euro: '€',
+  copy: '©', reg: '®', trade: '™',
+  times: '×', divide: '÷', plusmn: '±', sup1: '¹', sup2: '²', sup3: '³', frac12: '½', frac14: '¼', frac34: '¾',
+  ndash: '–', mdash: '—', minus: '−',
+  lsquo: '‘', rsquo: '’', sbquo: '‚', ldquo: '“', rdquo: '”', bdquo: '„',
+  hellip: '…', bull: '•', dagger: '†', Dagger: '‡', permil: '‰', prime: '′', Prime: '″',
+  shy: '', not: '¬', brvbar: '¦', uml: '¨', acute: '´', cedil: '¸', macr: '¯',
+}
+export function decodeEntidadesHtml(s) {
+  return String(s || '')
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, h) => String.fromCodePoint(parseInt(h, 16)))
+    .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(parseInt(d, 10)))
+    .replace(/&([a-zA-Z]+);/g, (m, nome) => Object.prototype.hasOwnProperty.call(ENTIDADES_HTML, nome) ? ENTIDADES_HTML[nome] : m)
+}
+
 // Baixa as peças. Devolve { files, pulados } ou { erro, status }.
 export async function coletarPecas(sb, numero, { uuidsSel = [] } = {}) {
   const sess = await getFreshToken(sb)
@@ -139,11 +170,9 @@ export async function pdfUnico(files) {
       } catch (e) { falhos++ }
     } else {
       try {
-        const txt = f.data.toString('utf8')
+        const txt = decodeEntidadesHtml(f.data.toString('utf8')
           .replace(/<style[\s\S]*?<\/style>/gi, ' ').replace(/<script[\s\S]*?<\/script>/gi, ' ')
-          .replace(/<br\s*\/?>/gi, '\n').replace(/<\/p>/gi, '\n\n').replace(/<[^>]+>/g, ' ')
-          .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
-          .replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+          .replace(/<br\s*\/?>/gi, '\n').replace(/<\/p>/gi, '\n\n').replace(/<[^>]+>/g, ' '))
           .replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim()
         const linhas = []
         lat1(txt).split('\n').forEach((ln) => {
