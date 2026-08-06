@@ -227,6 +227,17 @@
   </div>
 </section>
 
+<!-- convite de avisos, na primeira entrada -->
+<div id="modal-avisos" class="hidden" style="position:fixed;inset:0;background:rgba(20,26,36,.55);z-index:200;display:flex;align-items:center;justify-content:center;padding:20px">
+  <div style="background:#fff;border-radius:16px;max-width:380px;padding:24px;text-align:center;font-family:inherit">
+    <div style="font-size:38px">🔔</div>
+    <h3 style="margin:8px 0 6px">Ativar avisos do processo</h3>
+    <p style="color:#5b6572;font-size:13.5px;line-height:1.55;margin:0 0 18px">Avise quando o escritório mandar mensagem, quando houver audiência marcada e quando faltar pouco para ela. Sem isso, você só sabe abrindo o app.</p>
+    <button class="rbtn dourado" style="width:100%;margin-bottom:8px" onclick="ativarAvisosDoConvite()">🔔 Ativar avisos</button>
+    <button class="rbtn claro" style="width:100%" onclick="fecharConviteAvisos()">Agora não</button>
+  </div>
+</div>
+
 <!-- ==================== HOME (cards) ==================== -->
 <section id="home" class="hidden">
   <div class="topo">
@@ -238,10 +249,14 @@
     <div class="ola"><img src="/logo_cmp_white.png" alt="CMP">
       <div><h1 id="h-nome">Olá</h1><p>Toque num processo para ver movimentações, documentos e falar com o escritório.</p></div>
     </div>
+    <div id="push-banner" class="hidden" style="background:#fdf3e7;border:1px solid #e8d9b0;border-radius:12px;padding:12px 14px;margin-bottom:12px;display:flex;align-items:center;gap:10px;justify-content:space-between;flex-wrap:wrap">
+      <span style="font-size:13px;color:#8a6d1a"><b>🔔 Ative os avisos</b><br>Sem isso você não é avisado de mensagem nova nem de audiência.</span>
+      <button class="rbtn dourado" style="white-space:nowrap" onclick="ativarAvisos()">Ativar agora</button>
+    </div>
     <div id="cards"></div>
     <div class="rodape">
       <button class="rbtn claro" id="btn-instalar2" style="display:none" onclick="instalar()">📲 Instalar o aplicativo</button>
-      <div class="t" style="margin-bottom:0" id="push-linha"><button class="rbtn claro" onclick="ativarAvisos()">🔔 Ativar avisos no celular</button></div>
+      <div class="t hidden" style="margin-bottom:0" id="push-linha"><button class="rbtn claro" onclick="ativarAvisos()">🔔 Ativar avisos no celular</button></div>
       <div class="t" style="margin-top:12px">Acompanhe o escritório:</div>
       <div class="rlinha">
         <a class="rig" href="https://instagram.com/cmpadvs" target="_blank" rel="noopener" title="Instagram do escritório" aria-label="Instagram @cmpadvs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="5.5"/><circle cx="12" cy="12" r="4.2"/><circle cx="17.6" cy="6.4" r="1.15" fill="currentColor" stroke="none"/></svg></a>
@@ -441,7 +456,51 @@ function entrarNaHome(){
   carregarMeus(true);
   if(HOME_TIMER) clearInterval(HOME_TIMER);
   HOME_TIMER = setInterval(function(){ if(!$('home').classList.contains('hidden')) carregarMeus(false); }, 45000);
+  atualizaEstadoAvisos();
 }
+/* Nenhum navegador liga notificação "por padrão" — é o próprio sistema
+   operacional que trava isso, sem exceção, e nenhum site consegue contornar.
+   O que dá pra fazer: perguntar CEDO (no primeiro login, e não escondido no
+   rodapé) e, enquanto não estiver ativado, mostrar um aviso que não passa
+   despercebido — para o cliente nunca ficar sem saber que está sem alerta. */
+function atualizaEstadoAvisos(){
+  var banner=$('push-banner'), linha=$('push-linha');
+  if(!('Notification' in window)){ if(banner)banner.classList.add('hidden'); return; }
+  if(Notification.permission==='granted'){
+    /* permissão do navegador concedida — ainda falta confirmar que ESTE
+       aparelho está de fato inscrito no servidor (pode ter sido negado depois,
+       ou nunca ter concluído o cadastro da inscrição) */
+    if('serviceWorker' in navigator && 'PushManager' in window){
+      navigator.serviceWorker.getRegistration('/portal.html').then(function(reg){
+        if(!reg){ if(banner)banner.classList.remove('hidden'); return; }
+        reg.pushManager.getSubscription().then(function(sub){
+          if(sub){ if(banner)banner.classList.add('hidden'); if(linha){ linha.classList.remove('hidden'); linha.innerHTML='<span style="color:var(--ok);font-weight:600">🔔 Avisos ativados neste aparelho</span>'; } }
+          else if(banner) banner.classList.remove('hidden');
+        });
+      });
+    }
+  } else if(Notification.permission==='denied'){
+    /* bloqueado pelo próprio navegador — pedir de novo pela JS não adianta
+       nada, só o cliente consegue desbloquear nas configurações dele */
+    if(banner){ banner.classList.remove('hidden'); banner.querySelector('span').innerHTML='<b>🔕 Avisos bloqueados neste aparelho</b><br>Ative pelo navegador: toque no cadeado ao lado do endereço → Notificações → Permitir.'; banner.querySelector('button').style.display='none'; }
+  } else {
+    /* nunca perguntado — é a hora de pedir cedo, no primeiro login.
+       IMPORTANTE: no iPhone (iOS 16.4+) o pedido de permissão SÓ funciona a
+       partir de um toque direto do usuário — chamado de dentro de um
+       setTimeout ou de código automático, ele falha calado, sem erro
+       nenhum. Então em vez de chamar ativarAvisos() sozinho, mostra um convite
+       em tela cheia com UM botão: o toque nesse botão É o gesto que o
+       navegador exige, e funciona em qualquer aparelho. Aparece uma vez por
+       login (não a cada 45s do timer da home). */
+    if(banner) banner.classList.remove('hidden');
+    if(!window.__pushJaOfereceu){ window.__pushJaOfereceu=true; mostrarConviteAvisos(); }
+  }
+}
+function mostrarConviteAvisos(){
+  var m=$('modal-avisos'); if(m) m.classList.remove('hidden');
+}
+function fecharConviteAvisos(){ var m=$('modal-avisos'); if(m) m.classList.add('hidden'); }
+function ativarAvisosDoConvite(){ fecharConviteAvisos(); ativarAvisos(); }
 function carregarMeus(mostrarCarregando){
   if(mostrarCarregando) $('cards').innerHTML = '<div class="vazio">Carregando seus processos…</div>';
   api('meus').then(function(d){
@@ -794,6 +853,8 @@ function instalar(){
   }
 }
 function fecharModalIos(){ $('modal-ios').classList.add('hidden'); }
+
+
 
 /* ---------- avisos (push) ---------- */
 function b64ParaU8(s){ var p='='.repeat((4-s.length%4)%4); var b=(s+p).replace(/-/g,'+').replace(/_/g,'/'); var raw=atob(b); var arr=new Uint8Array(raw.length); for(var i=0;i<raw.length;i++)arr[i]=raw.charCodeAt(i); return arr; }
