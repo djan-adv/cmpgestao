@@ -69,6 +69,9 @@ const JOBS = [
   { nome: 'minuta_dossie', rotulo: 'Minutas — dossiê do Estagiário Virtual', url: '/api/robo/minutas?fase=dossie', cada_min: 15, timeout_ms: 240000 },
   // íntegra dos autos: download pesado do jus.br, um processo por vez
   { nome: 'minuta_integra', rotulo: 'Minutas — íntegra dos autos na pasta', url: '/api/robo/minutas?fase=integra', cada_min: 20, timeout_ms: 280000 },
+  // sentença/acórdão saiu → avisa o cliente pelo chat do app, sozinho. Mesmo teto
+  // mensal do Estagiário Virtual (ia_config): se estourar o mês, este também para.
+  { nome: 'aviso_decisao_cliente', rotulo: 'Cliente — avisar sentença/acórdão pelo chat', url: '/api/robo/avisos-cliente', cada_min: 30, timeout_ms: 55000 },
 ]
 
 function jobDevido(job, execRow, bt) {
