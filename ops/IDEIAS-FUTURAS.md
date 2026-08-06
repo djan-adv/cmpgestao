@@ -31,3 +31,13 @@ com domínio/marca/e-mail próprios, planos por assentos, personalização por
 configuração (não por fork). A Inove é o 1º inquilino-protótipo. Registro
 completo das ideias/perguntas/decisões do Djan e da arquitetura em
 **ops/PROJETO-MULTIEMPRESA.md**.
+
+## 5. RI Digital (ONR) — pesquisa de bens e matrícula de imóveis — PRIORITÁRIO, BLOQUEADO EM ACESSO
+Consultar pelo CMPGestão se uma pessoa/empresa tem imóvel registrado em algum
+cartório do Brasil (Pesquisa Nacional de Bens do RI Digital/ONR, ridigital.org.br)
+e pedir certidão/matrícula digital — fecha a lacuna que o Dossiê do Devedor já
+avisa que tem hoje ("não substitui... Registro de Imóveis"). Falta confirmar
+se o RI Digital abre cadastro/API para escritório de advocacia (o site está
+bloqueado neste ambiente por política do proxy; preciso que você acesse
+ridigital.org.br e confirme — ver item 7 do spec).
+Especificação completa em **ops/PROJETO-RI-DIGITAL.md**.
