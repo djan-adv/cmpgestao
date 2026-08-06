@@ -34,23 +34,46 @@ manual ("integração de cartórios") sugere que o público primário são as
 próprias serventias, mas não dá pra saber, sem abrir o PDF, se advocacia/
 sistemas terceiros têm uma porta de entrada equivalente para consulta.
 
+## 1.1 Confirmado: eles têm API
+
+Achei dois tutoriais em vídeo — **"Como ativar o credenciamento e gerar sua
+chave de API no RI Digital"** (um publicado em junho/2026):
+- https://www.youtube.com/watch?v=2NpsswX-v34
+- https://www.youtube.com/watch?v=jwB4THQ4W9o
+
+Existência de um fluxo de **credenciamento self-service que gera chave de
+API** está confirmada — não é só o manual PDF genérico. Também achei
+descrição de uma **API de integração "XML v5" já habilitada**, pela qual o
+**cartório** disponibiliza o Indicador Pessoal/Livro 2 para a central
+ONR/RI Digital (preferencialmente via Web Service; se a serventia não tiver
+infraestrutura, cai para um Next Cloud SAS). Essa parte é claramente
+**cartório → central** (enviar dado), não o que o escritório precisa.
+
+O que falta descobrir é se o **mesmo fluxo de credenciamento dos vídeos**
+serve para **consulente externo** (escritório de advocacia pesquisando) ou é
+só para a serventia. Os títulos não especificam — só assistindo dá pra saber.
+
 ## 2. O que não consegui confirmar (bloqueio real)
 
 O proxy de saída deste ambiente **recusa conexão com `ridigital.org.br`**
 (bloqueio de política, confirmado em `$HTTPS_PROXY/__agentproxy/status`:
 `connect_rejected` para `ridigital.org.br:443`) — não é bloqueio do site, é
-deste sandbox. Não consegui abrir nem a página inicial nem o manual de
-integração. Ficou pendente, e só dá pra confirmar de um navegador normal:
+deste sandbox. Tentei também `web.archive.org` e o YouTube direto (pra ler os
+vídeos do item 1.1); os dois também foram recusados. Não consegui abrir nem a
+página inicial nem o manual de integração nem assistir aos vídeos. Ficou
+pendente, e só dá pra confirmar de um navegador normal:
 
-1. Se pessoa jurídica (escritório de advocacia) pode se cadastrar como
+1. Assistir aos dois vídeos do item 1.1 — é o atalho mais rápido para saber
+   se dá pra credenciar o escritório como consulente.
+2. Se pessoa jurídica (escritório de advocacia) pode se cadastrar como
    **usuário/consulente** direto no RI Digital, ou se o acesso é só para
    cartórios/correspondentes.
-2. O conteúdo do manual de integração — se a API é só para cartório *enviar*
+3. O conteúdo do manual de integração — se a API é só para cartório *enviar*
    dado (como a CENSEC, que descartamos por isso) ou também para *consultar*.
-3. Preço por consulta (Pesquisa Nacional de Bens x Pesquisa Qualificada x
+4. Preço por consulta (Pesquisa Nacional de Bens x Pesquisa Qualificada x
    certidão de matrícula) — isso é regulado por tabela de emolumentos de cada
    Corregedoria estadual, então varia, mas o site deveria informar a faixa.
-4. Se a antiga rota via **ARISP/Central Registradores (SP)** foi mesmo
+5. Se a antiga rota via **ARISP/Central Registradores (SP)** foi mesmo
    absorvida pelo RI Digital nacional — um indício forte: a API equivalente
    que a Infosimples (um dos brokers que pesquisei) oferecia para
    "Pesquisa Prévia de Bens" via ARISP aparece hoje como **descontinuada**.
