@@ -2025,10 +2025,10 @@ function abrir(i){
      deste processo agora e re-renderiza quando ele descer (nada se perde) */
   if(p && p._id && !p._histOk && !p._histLoading && window.__sb){
     p._histLoading=true;
-    window.__sb.from('andamentos').select('id,data,texto,fonte,providencia').eq('processo_id',p._id).order('data',{ascending:false}).limit(3000).then(function(r){
+    window.__sb.from('andamentos').select('id,data,texto,fonte,providencia,visivel_cliente').eq('processo_id',p._id).order('data',{ascending:false}).limit(3000).then(function(r){
       p._histLoading=false;
       if(r && !r.error && r.data){
-        p.hist_full=r.data.map(function(a){return {id:a.id, data:(a.data? a.data+'T00:00:00.000Z':null), texto:a.texto, f:a.fonte||'', pr:(a.providencia===true)};});
+        p.hist_full=r.data.map(function(a){return {id:a.id, data:(a.data? a.data+'T00:00:00.000Z':null), texto:a.texto, f:a.fonte||'', pr:(a.providencia===true), vc:(a.visivel_cliente===true)};});
         p._histOk=true;
         var ii=DADOS.processos.indexOf(p);
         var sec=document.getElementById('s-proc-det');
@@ -4297,7 +4297,7 @@ function salvarTarefa(){
           if(d && d.__naoJson){ alert(_msgRotaFaltando()); return; }
           if(!r.ok){ alert('Tarefa criada, mas não foi possível registrar no histórico/anexar: '+((d&&d.erro)||'erro')); return; }
           if(typeof atual!=='undefined' && atual && atual._id && _pid===atual._id){
-            try{ var q=await window.__sb.from('andamentos').select('id,data,texto,fonte,providencia').eq('processo_id',atual._id).order('data',{ascending:false}); if(q&&q.data){ atual.hist_full=q.data.map(function(a){return {id:a.id,data:(a.data?a.data+'T00:00:00.000Z':null),texto:a.texto,f:a.fonte||'',pr:(a.providencia===true)};}); } }catch(e){}
+            try{ var q=await window.__sb.from('andamentos').select('id,data,texto,fonte,providencia,visivel_cliente').eq('processo_id',atual._id).order('data',{ascending:false}); if(q&&q.data){ atual.hist_full=q.data.map(function(a){return {id:a.id,data:(a.data?a.data+'T00:00:00.000Z':null),texto:a.texto,f:a.fonte||'',pr:(a.providencia===true),vc:(a.visivel_cliente===true)};}); } }catch(e){}
             if(typeof loadAnexosProc==='function') loadAnexosProc(atual.numero);
           }
         }catch(e){ alert('Tarefa criada, mas falhou ao registrar no histórico/anexar: '+(e&&e.message||e)); }
@@ -5113,6 +5113,11 @@ function renderHistorico(){
     /* resposta que chegou por e-mail — importada da caixa pelo robô do IMAP */
     var ehEmail=(mv.f==='email');
     if(ehEmail) cl=["E-mail recebido — resposta","#0b7285","email"];
+    /* O app do cliente só mostra fonte oficial (djen/datajud/jusbr/protocolo) OU
+       o que o escritório liberou um a um por aqui (visivel_cliente). Sem essa
+       segunda porta, a solicitação de conclusão ao cartório — que é trabalho
+       feito PELO cliente — nunca aparecia para ele. */
+    var jaVisivelApp=['djen','datajud','jusbr','protocolo'].indexOf(mv.f)>-1;
     var li=document.createElement("li");li.style.cssText="cursor:pointer;list-style:none;border-left:3px solid "+cl[1]+";padding:2px 0 2px 10px;margin-bottom:9px";
     var nome=String(mv.texto||"").split(" — ")[0].split("\n")[0];
     var isMan=(mv.f==='manual')||/^\[Anotação/.test(String(mv.texto||''));
@@ -5127,7 +5132,10 @@ function renderHistorico(){
        é uma resposta que alguém escreveu, tem que dar para ler de bate-pronto */
     var captInline=(ehCaptura||ehEmail)?String(mv.texto||"").split("\n").slice(1).join("\n").trim():"";
     var label=teor?"ver teor":(((ehCaptura||ehEmail)&&captInline)?"":"ver registro");var cor=teor?"var(--gold)":"var(--muted)";
-    li.innerHTML='<div class="dt" style="font-size:11px;color:var(--muted)">'+dt+' · <span style="color:'+(isMan?'#7b1e3a':cl[1])+';font-weight:600">'+(isMan?'Histórico manual (interno — não enviar ao cliente)':cl[0])+'</span>'+(mv.pr?' · <span style="color:#0b7285;font-weight:700" title="Entra no resumo dos e-mails de atualização ao cliente">★ providência do escritório</span>':'')+'</div>'
+    /* o rótulo vermelho "não enviar ao cliente" ficaria mentiroso justamente no
+       item que o escritório liberou — aqui ele troca para avisar o contrário */
+    var rotuloMan=(isMan&&mv.vc)?'Histórico manual — visível no app do cliente':(isMan?'Histórico manual (interno — não enviar ao cliente)':cl[0]);
+    li.innerHTML='<div class="dt" style="font-size:11px;color:var(--muted)">'+dt+' · <span style="color:'+(isMan?(mv.vc?'#127a53':'#7b1e3a'):cl[1])+';font-weight:600">'+rotuloMan+'</span>'+(mv.pr?' · <span style="color:#0b7285;font-weight:700" title="Entra no resumo dos e-mails de atualização ao cliente">★ providência do escritório</span>':'')+(!isMan&&mv.vc&&!jaVisivelApp?' · <span style="color:#127a53;font-weight:700" title="Liberado para o app do cliente">📲 visível no app</span>':'')+'</div>'
       +'<div'+(isMan?' style="color:#7b1e3a;font-weight:600"':'')+'>'+esc(nome)+(label?(' <span style="color:'+cor+';font-size:11px">('+label+')</span>'):'')+'</div>'
       +(captInline?('<div style="font-size:13px;color:#374151;margin-top:4px;white-space:pre-wrap;max-height:280px;overflow:auto;background:'+(ehEmail?'#eef6f8':'#f4f7f5')+';border-radius:8px;padding:8px 10px">'+esc(captInline)+'</div>'):'')
       /* responder sem sair do processo — o botão fica sempre visível na resposta */
@@ -5135,7 +5143,9 @@ function renderHistorico(){
       +anexosHtml(mv.id)
       +((/^\[MINUTA/.test(String(mv.texto||'')) && mv.id)?('<div style="margin-top:5px">'+(/APROVADA/.test(mv.texto)?'<span style="font-size:11px;color:#127a53;font-weight:700">✓ aprovada — cópia em Documentos do processo</span>':'<button class="btn sm" style="font-size:11px;background:#127a53" onclick="aprovarMinuta(event,'+mv.id+')">✔ Aprovar (copiar p/ Documentos do processo)</button>')+'</div>'):'')
       +'<div class="hist-det" style="display:none;font-size:13px;color:var(--muted);margin-top:4px;white-space:pre-wrap;max-height:260px;overflow:auto"></div>'
-      +'<div class="hist-act" style="display:none;margin-top:6px">'+(isMan?('<button class="btn sm ghost" style="font-size:11px" onclick="editarHistManual(event,'+atual.hist_full.indexOf(mv)+')">✎ editar</button> <button class="btn sm ghost" style="font-size:11px;color:#b5342b" onclick="excluirHistManual(event,'+atual.hist_full.indexOf(mv)+')">🗑 excluir</button> '):'')+'<button class="btn sm ghost" style="font-size:11px;color:'+(mv.pr?'#0b7285':'#697180')+'" onclick="_togglePro(event,'+atual.hist_full.indexOf(mv)+')" title="Marcar como providência adotada pelo escritório — passa a constar no resumo dos e-mails de atualização ao cliente">'+(mv.pr?'★ providência (remover)':'☆ marcar providência do escritório')+'</button></div>';
+      +'<div class="hist-act" style="display:none;margin-top:6px">'+(isMan?('<button class="btn sm ghost" style="font-size:11px" onclick="editarHistManual(event,'+atual.hist_full.indexOf(mv)+')">✎ editar</button> <button class="btn sm ghost" style="font-size:11px;color:#b5342b" onclick="excluirHistManual(event,'+atual.hist_full.indexOf(mv)+')">🗑 excluir</button> '):'')+'<button class="btn sm ghost" style="font-size:11px;color:'+(mv.pr?'#0b7285':'#697180')+'" onclick="_togglePro(event,'+atual.hist_full.indexOf(mv)+')" title="Marcar como providência adotada pelo escritório — passa a constar no resumo dos e-mails de atualização ao cliente">'+(mv.pr?'★ providência (remover)':'☆ marcar providência do escritório')+'</button>'
+      +(jaVisivelApp?'':(' <button class="btn sm ghost" style="font-size:11px;color:'+(mv.vc?'#127a53':'#697180')+'" onclick="_toggleAppCliente(event,'+atual.hist_full.indexOf(mv)+')" title="'+(mv.vc?'Tirar do app do cliente':'Ex.: pedido de conclusão ao cartório — o cliente vê que o escritório agiu, mesmo sem publicação oficial ainda')+'">'+(mv.vc?'📲 visível no app (remover)':'📲 enviar ao app do cliente')+'</button>'))
+      +'</div>';
     (function(cont){li.onclick=function(){var d=li.querySelector(".hist-det");var a=li.querySelector(".hist-act");if(d.style.display==="none"){d.textContent=cont;d.style.display="block";if(a)a.style.display="block";}else{d.style.display="none";if(a)a.style.display="none";}};})(content);
     ul.appendChild(li);
   })(arr[k]);}
@@ -5176,6 +5186,25 @@ async function _togglePro(ev,hix){
   if(w.error){ alert('Erro ao marcar: '+w.error.message); return; }
   if(!w.data||!w.data.length){ alert('O banco não permitiu a alteração (RLS). Avise o Claude.'); return; }
   mv.pr=novo; renderHistorico();
+}
+/* Libera/tira UM andamento manual do app do cliente. O app só mostra fonte
+   oficial (djen/datajud/jusbr/protocolo); é assim que a solicitação de
+   conclusão ao cartório passa a aparecer — mesmo sendo fonte='manual' — sem
+   abrir a porta para todo registro interno (rascunho, anotação, o que for). */
+async function _toggleAppCliente(ev,hix){
+  if(ev)ev.stopPropagation();
+  var mv=atual&&atual.hist_full&&atual.hist_full[hix]; if(!mv) return;
+  if(!mv.id){ alert('Registro recém-criado — dê F5 e tente novamente.'); return; }
+  var novo=!mv.vc;
+  var w=await window.__sb.from('andamentos').update({visivel_cliente:novo}).eq('id',mv.id).select('id');
+  if(w.error){ alert('Erro ao marcar: '+w.error.message); return; }
+  if(!w.data||!w.data.length){ alert('O banco não permitiu a alteração (RLS). Avise o Claude.'); return; }
+  mv.vc=novo; renderHistorico();
+  /* só avisa ao ENTRAR — tirar do app é silencioso, não tem o que notificar */
+  if(novo && atual._id){
+    admin({acao:'notificar_cliente', processo_id:atual._id,
+      texto:'Nova atualização no histórico do seu processo — toque para ver.'}).catch(function(){});
+  }
 }
 /* últimas providências do escritório (marcadas), da mais recente p/ a mais antiga */
 function _providenciasDoEscritorio(p,n){
@@ -5228,8 +5257,8 @@ async function atualizarHistorico(){
     var tot=djenNovos+mvNovos;
     if(tot>0 && atual._id){
       try{
-        var q=await window.__sb.from('andamentos').select('id,data,texto,fonte,providencia').eq('processo_id',atual._id).order('data',{ascending:false});
-        if(q&&q.data){ atual.hist_full=q.data.map(function(a){return {id:a.id,data:(a.data?a.data+'T00:00:00.000Z':null),texto:a.texto,f:a.fonte||'',pr:(a.providencia===true)};}); histShown=5; }
+        var q=await window.__sb.from('andamentos').select('id,data,texto,fonte,providencia,visivel_cliente').eq('processo_id',atual._id).order('data',{ascending:false});
+        if(q&&q.data){ atual.hist_full=q.data.map(function(a){return {id:a.id,data:(a.data?a.data+'T00:00:00.000Z':null),texto:a.texto,f:a.fonte||'',pr:(a.providencia===true),vc:(a.visivel_cliente===true)};}); histShown=5; }
       }catch(e){}
     }
     /* re-renderiza a ficha inteira (recalcula o selo "vinculado" e preenche os dados) */
@@ -6036,12 +6065,12 @@ function toggleConcluirTarefa(id){
         var byId={}; DADOS.processos.forEach(function(p){ if(p._id) byId[p._id]=p; });
         var last=null, tot=0;
         for(;;){
-          var q=sb.from('andamentos').select('id,processo_id,data,texto,fonte,providencia').order('id',{ascending:true}).limit(5000);
+          var q=sb.from('andamentos').select('id,processo_id,data,texto,fonte,providencia,visivel_cliente').order('id',{ascending:true}).limit(5000);
           if(last!==null) q=q.gt('id',last);
           var r=await q; if(r.error){ if(/providencia/.test(r.error.message||'')){ q=sb.from('andamentos').select('id,processo_id,data,texto,fonte').order('id',{ascending:true}).limit(5000); if(last!==null) q=q.gt('id',last); r=await q; } if(r.error) throw r.error; }
           var rows=r.data||[]; if(!rows.length) break;
           rows.forEach(function(a){ var p=byId[a.processo_id]; if(!p||p._histOk) return; /* _histOk: ficha já buscou o histórico completo direto */
-            p.hist_full.push({id:a.id, data:(a.data? a.data+'T00:00:00.000Z':null), texto:a.texto, f:a.fonte||'', pr:(a.providencia===true)}); });
+            p.hist_full.push({id:a.id, data:(a.data? a.data+'T00:00:00.000Z':null), texto:a.texto, f:a.fonte||'', pr:(a.providencia===true), vc:(a.visivel_cliente===true)}); });
           tot+=rows.length; last=rows[rows.length-1].id;
         }
         DADOS.processos.forEach(function(p){ if(p._histOk) return; p.hist_full.sort(function(x,y){return (y.data||'').localeCompare(x.data||'');}); p._histOk=true; });
