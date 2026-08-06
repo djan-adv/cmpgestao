@@ -879,8 +879,23 @@ function ativarAvisos(){
   });
 }
 
+/* ---------- só celular: o portal do cliente não é pra abrir no computador ---------- */
+function _ehCelular(){ return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent||''); }
+function _bloqueiaDesktop(){
+  var ov=document.createElement('div');
+  ov.style.cssText='position:fixed;inset:0;background:var(--bg);z-index:99999;display:flex;align-items:center;justify-content:center;padding:24px';
+  ov.innerHTML='<div class="loginbox" style="margin:0">'
+    +'<div style="font-size:44px">📱</div>'
+    +'<h2 style="color:var(--navy);margin:10px 0 4px;font-size:19px">Abra pelo celular</h2>'
+    +'<div class="sub">O portal do cliente foi feito para o celular — é por lá que chegam os avisos do processo. Pelo computador o acesso fica bloqueado.</div>'
+    +'<button class="btnp" style="margin-top:6px" onclick="(function(b){ if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(location.href).then(function(){ b.textContent=\'✓ link copiado — abra no celular\'; }); } else { window.prompt(\'Copie o link:\', location.href); } })(this)">Copiar o link deste portal</button>'
+    +'<div class="seg">Perdeu o link ou a senha? Fale com o escritório — reenviamos pelo WhatsApp.</div>'
+    +'</div>';
+  document.body.appendChild(ov);
+}
 /* ---------- arranque ---------- */
 (function(){
+  if(!_ehCelular()){ _bloqueiaDesktop(); return; }
   // service worker (instalabilidade + push) — escopo restrito ao portal para
   // NUNCA substituir o service worker do chat da equipe (escopo /) no mesmo navegador
   if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('/portal-sw.js',{scope:'/portal.html'}); }catch(e){} }
