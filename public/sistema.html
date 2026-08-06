@@ -9082,6 +9082,11 @@ function renderCtlChips(){
     else { act.textContent='📲'; act.title='Abrir no WhatsApp';
       act.onclick=function(){ var d=t.replace(/\D/g,''); if(d.length<=11)d='55'+d; window.open('https://wa.me/'+d,'_blank'); }; }
     wrap.appendChild(act);
+    var del=document.createElement('a');
+    del.style.cssText='cursor:pointer;text-decoration:none;font-size:12px;line-height:1;color:#b3413a;margin-left:2px';
+    del.textContent='🗑'; del.title='Contato errado? Excluir de TODOS os registros deste cliente (com confirmação)';
+    del.onclick=function(){ _excluirContatoEmTodos(t); };
+    wrap.appendChild(del);
     var selo=_seloAppHTML(t);
     if(selo){
       /* o selo vai ABAIXO do e-mail, então o chip inteiro passa a empilhar */
@@ -9144,6 +9149,65 @@ function _contatosDeOutrosProcessos(nome){
     });
   });
   return out;
+}
+/* Contato errado (homônimo, digitação, herança de outro processo) some de
+   TODOS os lugares onde poderia voltar: ficha de cada processo do cliente
+   (ctl/ctlp) e o cadastro-mestre em Contatos — sem isso, o autofill do
+   cadastro novo (salvarCadManual/gerarCasoNovoCliente) reintroduz sozinho o
+   mesmo contato errado no próximo processo desse cliente. */
+async function _excluirContatoEmTodos(token){
+  if(!atual||!atual.cliente) return;
+  var key=_chaveCtl(token); if(!key) return;
+  var nk=normClienteNome(atual.cliente);
+  var afetados=(DADOS.processos||[]).filter(function(p){ return p&&p.cliente&&normClienteNome(p.cliente)===nk; });
+  if(!confirm('Excluir "'+token+'" de TODOS os registros de '+atual.cliente+' ('+afetados.length+' processo'+(afetados.length>1?'s':'')+', incluindo o cadastro do cliente)?\n\nAssim ele não volta a ser sugerido/puxado depois.')) return;
+  var sb=window.__sb, erros=0;
+  for(var i=0;i<afetados.length;i++){
+    var p=afetados[i];
+    var toks=String(p.ctl||'').split(/[,;\n]+/).map(function(s){return s.trim();}).filter(Boolean);
+    var novoCtl=toks.filter(function(t){ return _chaveCtl(t)!==key; }).join(', ');
+    var mapa=Object.assign({}, p.ctlp||{}), ctlpMudou=false;
+    Object.keys(mapa).forEach(function(k){
+      var antes=mapa[k]||[], depois=antes.filter(function(t){ return _chaveCtl(t)!==key; });
+      if(depois.length!==antes.length){ ctlpMudou=true; if(depois.length) mapa[k]=depois; else delete mapa[k]; }
+    });
+    if(novoCtl===(p.ctl||'') && !ctlpMudou) continue;
+    if(p._id && sb){
+      var upd={contatos_livres:novoCtl||null};
+      if(ctlpMudou) upd.contatos_partes=(Object.keys(mapa).length?mapa:null);
+      var w=await sb.from('processos').update(upd).eq('id',p._id);
+      if(w&&w.error){ erros++; continue; }
+    }
+    p.ctl=novoCtl; if(ctlpMudou) p.ctlp=mapa;
+  }
+  try{
+    var c=(CONTATOS||[]).find(function(x){ return x.tipo==='cliente' && normClienteNome(x.nome)===nk; });
+    if(c){
+      if(c.tel && _chaveCtl(c.tel)===key) c.tel='—';
+      if(c.email && _chaveCtl(c.email)===key) c.email='—';
+      if(c.dbid && sb){
+        var q=await sb.from('contatos').select('telefone,email,telefones,emails').eq('id',c.dbid).single();
+        if(q&&q.data){
+          var reg=q.data, upd2={};
+          if(reg.telefone && _chaveCtl(reg.telefone)===key) upd2.telefone=null;
+          if(reg.email && _chaveCtl(reg.email)===key) upd2.email=null;
+          if(Array.isArray(reg.telefones)) upd2.telefones=reg.telefones.filter(function(t){return _chaveCtl(t)!==key;});
+          if(Array.isArray(reg.emails)) upd2.emails=reg.emails.filter(function(t){return _chaveCtl(t)!==key;});
+          if(Object.keys(upd2).length) await sb.from('contatos').update(upd2).eq('id',c.dbid);
+        }
+      }
+    }
+    (window.__CONTATOSDB||[]).forEach(function(x){
+      if(!x||!x.nome||normClienteNome(x.nome)!==nk) return;
+      if(x.telefone && _chaveCtl(x.telefone)===key) x.telefone=null;
+      if(x.email && _chaveCtl(x.email)===key) x.email=null;
+      if(Array.isArray(x.telefones)) x.telefones=x.telefones.filter(function(t){return _chaveCtl(t)!==key;});
+      if(Array.isArray(x.emails)) x.emails=x.emails.filter(function(t){return _chaveCtl(t)!==key;});
+    });
+  }catch(e){}
+  renderCtlChips();
+  try{ if(typeof renderContatos==='function') renderContatos(); }catch(e){}
+  alert(erros?('Removido, mas '+erros+' processo(s) falharam ao salvar — confira.'):'✓ "'+token+'" removido de todos os registros de '+atual.cliente+'.');
 }
 async function _puxarContatoDoCliente(){
   if(!atual) return;
