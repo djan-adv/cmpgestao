@@ -385,7 +385,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
     </section>
     <section id="s-processos" class="hidden">
       <div class="searchbar"><input id="busca" placeholder="Buscar por cliente, número, oponente ou assunto..." oninput="renderProc()"><select id="ordena" onchange="renderProc()" class="btn sm sb-sel" style="margin-left:8px;max-width:120px"><option value="">Novos Protocolos</option><option value="az">Cliente (A→Z)</option><option value="za">Cliente (Z→A)</option><option value="data_desc">Movimentação mais recente</option><option value="parados">Parados (mov. mais antiga)</option><option value="valor">Valor da causa (maior→menor)</option></select><select id="filtroEtq" onchange="renderProc()" class="btn sm sb-sel" style="margin-left:8px;max-width:112px"><option value="">Todas as etiquetas</option></select><select id="porPagina" onchange="renderProc()" class="btn sm sb-sel" style="margin-left:8px;max-width:76px"><option value="20">20 por página</option><option value="40">40</option><option value="60">60</option><option value="80">80</option><option value="100">100</option><option value="todos" selected>Todos</option></select><span class="note" id="proc-count" style="align-self:center"></span><span id="proc-semvara" style="align-self:center;margin-left:10px;display:none"></span><span class="note" id="proc-espaco" style="align-self:center;margin-left:10px;cursor:pointer" onclick="carregarEspacoDocs(true)" title="Espaço que os documentos ocupam no servidor (VPS) — clique para recalcular"></span><button id="btn-atu-todos" class="btn sm sb-btn" style="margin-left:auto" onclick="atualizarTodosProcessos()" title="Buscar no DJEN as publicações novas de TODOS os processos (últimos 7 dias, pelas OABs do escritório)">↻ Atualizar todos</button><button class="btn sm gold sb-btn" style="margin-left:8px" onclick="abrirBusca()">+ Cadastrar por número <span style="font-weight:400;font-size:10px;opacity:.8">(pesquisa pelo djen)</span></button><button class="btn sm sb-btn" style="margin-left:8px;background:var(--navy);color:#fff;border-color:var(--navy)" onclick="abrirCadManual()">+ Cadastrar manual / caso</button><button class="btn sm sb-btn" style="margin-left:8px;background:#0F6E56;color:#fff;border-color:#0F6E56" onclick="abrirSyncPastas()" title="Enviar de uma vez uma pasta com vários processos — o sistema reconhece cada subpasta e manda para o processo certo">&#8645; Sincronizar pasta</button></div>
-      <div class="card"><table><thead><tr><th style="width:26%;cursor:pointer;user-select:none" onclick="ordenarCliente()" title="Clique para ordenar por cliente (A→Z / Z→A)">Cliente <span id="cli-sort-arrow" style="font-size:10px;color:var(--muted)"></span></th><th style="width:150px">Processo</th><th style="width:22%"><span onclick="ordenarAssuntoLocal('assunto')" style="cursor:pointer;user-select:none" title="Ordenar por assunto (A→Z / Z→A)">Assunto <span id="asn-sort-arrow" style="font-size:10px;color:var(--muted)"></span></span><span style="color:var(--line);margin:0 5px">|</span><span onclick="ordenarAssuntoLocal('local')" style="cursor:pointer;user-select:none" title="Ordenar por vara/local (A→Z / Z→A) — agrupa os processos da mesma vara">Local <span id="loc-sort-arrow" style="font-size:10px;color:var(--muted)"></span></span></th><th style="width:170px;cursor:pointer;user-select:none" onclick="ordenarMov()" title="Clique para ordenar pela data da última movimentação (mais recente ↔ mais antiga)">Última movimentação <span id="mov-sort-arrow" style="font-size:10px;color:var(--muted)"></span></th><th style="width:96px;cursor:pointer;user-select:none" onclick="ordenarParado()" title="Clique para ordenar por dias parado (mais ↔ menos)">Parado há <span id="par-sort-arrow" style="font-size:10px;color:var(--muted)"></span></th><th style="width:104px;text-align:right"><span onclick="ordenarCondenacao()" style="cursor:pointer;user-select:none" title="Ordenar por valor da condenação (maior ↔ menor)">Valor total <span id="cond-sort-arrow" style="font-size:10px;color:var(--muted)"></span></span> <span onclick="toggleStatusFiltro()" style="cursor:pointer;user-select:none;font-size:10px;color:var(--muted);font-weight:400" title="Filtrar: todos → julgados → não julgados">⚖<span id="st-filtro-lbl"></span></span></th><th style="width:110px;cursor:pointer;user-select:none" onclick="ordenarPrazoToggle()" title="Clique para ordenar pelo prazo fatal (mais próximo ↔ mais distante)">Prazo fatal <span id="prazo-sort-arrow" style="font-size:10px;color:var(--muted)"></span></th><th style="width:58px;text-align:center;cursor:pointer;user-select:none" onclick="ordenarDocs()" title="Clique para ordenar pelo tamanho dos documentos no servidor (maior ↔ menor)">Docs <span id="docs-sort-arrow" style="font-size:10px;color:var(--muted)"></span></th></tr></thead><tbody id="proc-body"></tbody></table></div><div id="proc-pager" style="display:flex;gap:6px;align-items:center;justify-content:center;padding:14px;flex-wrap:wrap"></div>
+      <div class="card"><table><thead><tr><th style="width:26%;cursor:pointer;user-select:none" onclick="ordenarCliente()" title="Clique para ordenar por cliente (A→Z / Z→A)">Cliente <span id="cli-sort-arrow" style="font-size:10px;color:var(--muted)"></span></th><th style="width:150px">Processos/casos</th><th style="width:22%"><span onclick="ordenarAssuntoLocal('assunto')" style="cursor:pointer;user-select:none" title="Ordenar por assunto (A→Z / Z→A)">Assunto <span id="asn-sort-arrow" style="font-size:10px;color:var(--muted)"></span></span><span style="color:var(--line);margin:0 5px">|</span><span onclick="ordenarAssuntoLocal('local')" style="cursor:pointer;user-select:none" title="Ordenar por vara/local (A→Z / Z→A) — agrupa os processos da mesma vara">Local <span id="loc-sort-arrow" style="font-size:10px;color:var(--muted)"></span></span></th><th style="width:170px;cursor:pointer;user-select:none" onclick="ordenarMov()" title="Clique para ordenar pela data da última movimentação (mais recente ↔ mais antiga)">Última movimentação <span id="mov-sort-arrow" style="font-size:10px;color:var(--muted)"></span></th><th style="width:96px;cursor:pointer;user-select:none" onclick="ordenarParado()" title="Clique para ordenar por dias parado (mais ↔ menos)">Parado há <span id="par-sort-arrow" style="font-size:10px;color:var(--muted)"></span></th><th style="width:104px;text-align:right"><span onclick="ordenarCondenacao()" style="cursor:pointer;user-select:none" title="Ordenar por valor da condenação (maior ↔ menor)">Valor total <span id="cond-sort-arrow" style="font-size:10px;color:var(--muted)"></span></span> <span onclick="toggleStatusFiltro()" style="cursor:pointer;user-select:none;font-size:10px;color:var(--muted);font-weight:400" title="Filtrar: todos → julgados → não julgados">⚖<span id="st-filtro-lbl"></span></span></th><th style="width:110px;cursor:pointer;user-select:none" onclick="ordenarPrazoToggle()" title="Clique para ordenar pelo prazo fatal (mais próximo ↔ mais distante)">Prazo fatal <span id="prazo-sort-arrow" style="font-size:10px;color:var(--muted)"></span></th><th style="width:58px;text-align:center;cursor:pointer;user-select:none" onclick="ordenarDocs()" title="Clique para ordenar pelo tamanho dos documentos no servidor (maior ↔ menor)">Docs <span id="docs-sort-arrow" style="font-size:10px;color:var(--muted)"></span></th></tr></thead><tbody id="proc-body"></tbody></table></div><div id="proc-pager" style="display:flex;gap:6px;align-items:center;justify-content:center;padding:14px;flex-wrap:wrap"></div>
     </section>
 
     <section id="s-proc-det" class="hidden">
@@ -7060,9 +7060,23 @@ function _procCelHTML(p, i, comEtiqueta){
   var julgadoBadge=(fs==='recur'||fs==='exec'||fs==='alvara')?(' <span style="display:inline-block;background:#6d28a8;color:#fff;border-radius:8px;padding:0 5px;font-size:8.5px;font-weight:700;vertical-align:middle" title="Já houve sentença/decisão de mérito — fase recursal, de cumprimento ou de alvará">Julgado</span>'):'';
   var etq=comEtiqueta?(' <a onclick="event.stopPropagation();etiquetarLinha('+i+')" title="Etiquetas deste processo" style="cursor:pointer;color:#185FA5;font-size:10px">🏷</a>'+((typeof etiquetasDoProc==='function'&&etiquetasDoProc(p.numero))?('<div style="margin-top:1px">'+etiquetasDoProc(p.numero)+'</div>'):'')):'';
   var numEsc=String(p.numero||'').replace(/'/g,'');
+  /* processo(s) vinculado(s) ao mesmo caso, colapsados nesta linha pelo
+     agrupamento de renderProc() — o 2º aparece aqui embaixo; se houver um 3º
+     (ou mais), só o "+N" (a busca por número acha ele normalmente). */
+  var vincHTML='';
+  if(p.__grupoVinc&&p.__grupoVinc.length){
+    var seg=p.__grupoVinc[0];
+    var idxSeg=(typeof DADOS!=='undefined'&&DADOS.processos)?DADOS.processos.indexOf(seg):-1;
+    var resto=p.__grupoVinc.slice(1).map(function(x){return fmtCNJ(x.numero);}).join(', ');
+    vincHTML='<div style="margin-top:2px;font-size:9.5px;color:var(--muted);white-space:nowrap" title="Processo vinculado ao mesmo caso">'
+      +'<a onclick="event.stopPropagation();'+(idxSeg>=0?('abrir('+idxSeg+')'):'')+'" style="cursor:pointer;color:#185FA5;text-decoration:none">↳ '+fmtCNJ(seg.numero)+'</a>'
+      +(resto?(' <span title="também vinculado: '+esc(resto)+'">+'+p.__grupoVinc.slice(1).length+'</span>'):'')
+      +'</div>';
+  }
   return '<td class="proc" style="font-size:10.5px;line-height:1.3">'
     +'<span onclick="event.stopPropagation();copiarNumero(this,\''+numEsc+'\')" style="cursor:pointer" title="Clique para copiar o número">'+fmtCNJ(p.numero)+'</span>'
     +'<div style="margin-top:2px;white-space:nowrap">'+origemBtnHTML(p)+' <span class="b '+stCls(p.status)+'" style="font-size:8.5px;padding:0 5px">'+esc(p.status||'—')+'</span>'+julgadoBadge+etq+'</div>'
+    +vincHTML
     +'</td>';
 }
 /* Coluna que substitui o antigo "Status" (que agora vive dentro da coluna
@@ -7440,6 +7454,46 @@ function renderProc(){
     var oke=true; if(eq){ var ids=(typeof ASSIGN!=='undefined'&&ASSIGN[p.numero])||[]; oke=ids.indexOf(eq)>-1; }
     return okq&&oke&&movFiltroOk(p)&&origemFiltroOk(p)&&!/encerr/i.test(p.status||'')&&!isInove(p)&&!p.lote_id&&(!isSuspenso(p)||_buscaAtiva());
   });
+  /* Processos vinculados (mesmo caso, ex.: original + agravo) viram UMA linha só
+     na listagem principal — sem buscar, sem repetir o nome do cliente várias
+     vezes: o mais antigo (distribuido_em) é a referência, o 2º aparece embaixo
+     das pílulas (ver _procCelHTML), o 3º (e além) fica de fora da tela mas
+     continua no array DADOS.processos — a busca (com texto digitado) desmonta
+     o agrupamento e mostra cada processo do jeito normal, então achar o 3º
+     pelo número funciona igual sempre funcionou. Não mexe no robô do DJEN:
+     é só um agrupamento visual desta função, cada processo continua sendo
+     monitorado individualmente por trás. */
+  if(!q){
+    (function(){
+      function digN(s){ return String(s||'').replace(/\D/g,''); }
+      var porNum={}; lista.forEach(function(p){ porNum[digN(p.numero)]=p; });
+      var visitado={}, agrupada=[];
+      lista.forEach(function(p){
+        var dn=digN(p.numero); if(visitado[dn]) return;
+        var fila=[dn], grupo=[], vistoLocal={};
+        while(fila.length){
+          var cur=fila.shift(); if(vistoLocal[cur]) continue; vistoLocal[cur]=true;
+          var pc=porNum[cur]; if(!pc) continue;
+          grupo.push(pc);
+          (pc.vinculados||[]).forEach(function(v){ var vd=digN(v); if(!vistoLocal[vd]) fila.push(vd); });
+        }
+        grupo.forEach(function(gp){ visitado[digN(gp.numero)]=true; });
+        if(grupo.length<=1){ p.__grupoVinc=null; agrupada.push(p); return; }
+        grupo.sort(function(a,b){
+          var da=a.distribuido_em, db=b.distribuido_em;
+          if(da&&db) return da<db?-1:(da>db?1:0);
+          if(da&&!db) return -1; if(db&&!da) return 1;
+          return 0;
+        });
+        var principal=grupo[0];
+        principal.__grupoVinc=grupo.slice(1);
+        agrupada.push(principal);
+      });
+      lista=agrupada;
+    })();
+  } else {
+    lista.forEach(function(p){ p.__grupoVinc=null; });
+  }
   /* ordenação por prazo fatal (coluna): mais próximo → distante, ou o inverso.
      Tem prioridade sobre a ordenação padrão quando escolhida. */
   var op=window.__ordenaPrazo||'';
