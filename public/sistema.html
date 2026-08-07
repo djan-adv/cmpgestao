@@ -11144,7 +11144,18 @@ function salvarHon(campo,raw){
   var s=t.replace(/[^\d,.-]/g,'').replace(/\./g,'').replace(',','.');
   var num=(t==='')?0:parseFloat(s); if(isNaN(num)) return;
   atual[campo]=num;
-  try{ var sb=window.__sb; if(sb && atual._id){ var upd={}; upd[campo]=num; sb.from('processos').update(upd).eq('id',atual._id).then(function(r){ if(r&&r.error) console.warn('honorário não persistido:',r.error.message); }); } }catch(e){}
+  /* a partir do momento em que o advogado digita um valor à mão, o robô de
+     honorários (busca nos documentos) nunca mais sobrescreve este processo
+     sem que ele peça de novo — ver /api/robo/honorarios */
+  var marcaManual=/^(hon_val_|valor_condenacao|valor_causa)/.test(campo);
+  if(marcaManual) atual.hon_origem='manual';
+  try{
+    var sb=window.__sb;
+    if(sb && atual._id){
+      var upd={}; upd[campo]=num; if(marcaManual) upd.hon_origem='manual';
+      sb.from('processos').update(upd).eq('id',atual._id).then(function(r){ if(r&&r.error) console.warn('honorário não persistido:',r.error.message); });
+    }
+  }catch(e){}
   // "célula vinculada": ao mudar valor/crédito de um processo contra James, recalcula a soma na ficha da falência (0819443-91)
   if(/^(hon_val_|valor_condenacao)/.test(campo) && /james laurence/i.test(String(atual.oponente||''))) atualizarSomaFalencia();
 }
@@ -11313,6 +11324,14 @@ function honQuadroHTML(p){
   var atzTxt=p.hon_atualizado_em
     ? ('atualizado em <b>'+String(p.hon_atualizado_em).slice(0,10).split('-').reverse().join('/')+'</b>'+(p.hon_indice?(' · '+esc(p.hon_indice)):''))
     : '';
+  if(!james){
+    var origemTxt=p.hon_origem==='manual'?'valor digitado à mão — o robô não mexe':(p.hon_origem==='documento'?'já conferido em documento':(p.hon_origem==='estimado_formula'?'estimativa por fórmula, ainda sem checar documento':'ainda não buscado'));
+    var numEscHon=String(p.numero||'').replace(/'/g,'');
+    out+='<div style="margin-top:6px" id="hon-robo-linha">'
+      +'<button class="btn sm ghost" id="hon-robo-btn" style="width:100%;font-size:10.5px;padding:3px 8px" onclick="buscarHonorariosDoc(\''+numEscHon+'\')" title="Lê a petição inicial, a sentença/acórdão e a procuração deste processo (na pasta Documentos) e preenche valor da causa, valor da condenação e percentuais de honorários com o que estiver escrito neles">🔎 Buscar nos documentos</button>'
+      +'<div class="note" style="margin:2px 0 0;font-size:9.5px;line-height:1.3">'+esc(origemTxt)+'</div>'
+      +'</div>';
+  }
   out+='<div style="margin-top:6px;display:flex;justify-content:'+(atzTxt?'space-between':'flex-end')+';align-items:center;gap:6px">'
     +(atzTxt?'<span class="note" style="margin:0;font-size:10px;line-height:1.3">'+atzTxt+'</span>':'')
     +'<button class="btn sm ghost" style="font-size:10.5px;padding:2px 8px;white-space:nowrap" onclick="abrirAtualizacaoHon()" title="Corrige todos os valores pelo índice (INPC/IPCA/IGP-M, sugerido pela sentença) + juros de mora — busca os índices oficiais do Banco Central">⟳ atualizar</button>'
@@ -11320,6 +11339,36 @@ function honQuadroHTML(p){
   out+='<div style="margin-top:6px"><button class="btn sm" style="width:100%;background:#FE3E6D;border-color:#FE3E6D;color:#fff;font-weight:700;font-size:11.5px;padding:4px 10px" onclick="boletoDoProcesso()" title="Se já há boletos deste processo, reenvia o mais recente por e-mail; se não há, abre a criação de um novo boleto já vinculado a este processo">💳 Gerar boleto</button></div>';
   out+='</div>';
   return out;
+}
+/* ——— Robô de honorários: lê os PDFs do processo (petição inicial, sentença,
+   procuração) e preenche valor da causa/condenação e os percentuais de
+   honorários com o que estiver escrito neles — ver /api/robo/honorarios ——— */
+async function buscarHonorariosDoc(numero){
+  var btn=document.getElementById('hon-robo-btn');
+  if(btn){ btn.disabled=true; btn.textContent='Lendo documentos…'; }
+  try{
+    var s=await window.__sb.auth.getSession();
+    var jwt=(s&&s.data&&s.data.session&&s.data.session.access_token)||'';
+    var r=await fetch('/api/robo/honorarios',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+jwt},body:JSON.stringify({numero:numero})});
+    var j=await r.json().catch(function(){ return {}; });
+    if(!r.ok||j.erro){ alert('Não deu para buscar: '+(j.erro||('HTTP '+r.status))); return; }
+    if(j.sem_documentos){ alert('Nenhum documento aproveitável na pasta deste processo ('+(j.aviso||'')+').'); return; }
+    if(j.pulou){ alert(j.pulou); return; }
+    /* aplica o que a API já gravou no banco também na cópia em memória, para a
+       ficha refletir sem precisar recarregar tudo */
+    if(atual && atual.numero===numero && j.atualizado){
+      Object.keys(j.atualizado).forEach(function(k){ atual[k]=j.atualizado[k]; });
+    }
+    var msg=(j.relatorio||[]).join('\n');
+    if(j.conflitos&&j.conflitos.length){
+      msg+='\n\n⚠ Diferença entre o que já está no sistema e o que está no documento (não sobrescrevi, confira à mão):\n'+j.conflitos.map(function(c){
+        return '• '+c.campo+': sistema R$ '+Number(c.no_sistema).toFixed(2)+' × documento R$ '+Number(c.no_documento).toFixed(2)+' ("'+(c.trecho||'')+'")';
+      }).join('\n');
+    }
+    alert(msg||'Não encontrei nenhum dado novo nos documentos deste processo.');
+    var i=DADOS.processos.indexOf(atual); if(i>=0) abrir(i);
+  }catch(e){ alert('Erro ao buscar: '+(e&&e.message||e)); }
+  finally{ if(btn){ btn.disabled=false; btn.textContent='🔎 Buscar nos documentos'; } }
 }
 /* ——— Atualização monetária (botão ⟳ do quadro) ——— */
 /* Sugere o índice lendo a sentença/decisões no histórico: a menção mais
