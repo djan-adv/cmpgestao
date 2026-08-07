@@ -41,7 +41,6 @@ export const maxDuration = 300
 // projeto) cortava a busca no meio. Dando folga aqui.
 const TIMEOUT_BUSCA_MS = 90000
 const MAX_PROCESSOS_DETALHE = 40  // um fetch de detalhe por processo — teto pro tempo de resposta
-const ORCAMENTO_DETALHE_MS = 220000 // some ao tempo já gasto na busca — maxDuration é 300s
 const MAX_PARA_IA = 24
 
 const RE_DESCONSIDERACAO = /desconsidera[çc][ãa]o (da|de) (personalidade|pessoa) jur[íi]dica|\bidpj\b|desconsiderar a personalidade jur[íi]dica|redirecionamento (da execu[çc][ãa]o )?(a|à|aos) s[óo]ci|inclus[ãa]o (d[oe]s? )?s[óo]ci[oa]s? no p[óo]lo passivo/i
@@ -101,22 +100,49 @@ const FERRAMENTA_ACHADOS = [{
   },
 }]
 
+const espera = (ms) => new Promise((res) => setTimeout(res, ms))
+const MAX_TENTATIVAS_BUSCA = 3
+
 // busca a lista de processos onde o CNPJ é parte — só a 1ª página (100 no máximo)
-async function buscarPorCnpj(token, cnpj) {
+// 502/503/504 = gateway do PRÓPRIO PDPJ patinando (visto em teste real: some numa
+// nova tentativa) — vale a pena repetir; 401/demais erros não adianta insistir.
+// `deadline` (epoch ms) vem do orçamento de tempo da requisição inteira — nunca
+// insiste além dele, para sobrar tempo para o passo 2 (varredura por processo).
+async function buscarPorCnpj(token, cnpj, deadline) {
   const url = `${PDPJ}/api/v2/processos?cpfCnpjParte=${encodeURIComponent(cnpj)}`
-  let r, data
-  try {
-    r = await fetch(url, { headers: { ...PDPJ_HEADERS, Authorization: 'Bearer ' + token, Accept: 'application/json' }, signal: AbortSignal.timeout(TIMEOUT_BUSCA_MS) })
-    data = await r.json().catch(() => null)
-  } catch (e) { return { erro: 'falha ao consultar o PDPJ: ' + ((e && e.message) || e), motivo: 'rede' } }
-  if (r.status === 401) return { erro: 'jus.br: token inválido/expirado — sincronize novamente', motivo: 'expirado' }
-  if (!r.ok) return { erro: 'PDPJ recusou (HTTP ' + r.status + ')', motivo: 'http', status: r.status }
-  const content = Array.isArray(data && data.content) ? data.content : []
-  const total = (data && typeof data.total === 'number') ? data.total : content.length
-  return { content, total }
+  let ultimoErro = null
+  for (let t = 1; t <= MAX_TENTATIVAS_BUSCA; t++) {
+    const podeTentarDeNovo = t < MAX_TENTATIVAS_BUSCA && Date.now() < deadline
+    let r, data
+    try {
+      r = await fetch(url, { headers: { ...PDPJ_HEADERS, Authorization: 'Bearer ' + token, Accept: 'application/json' }, signal: AbortSignal.timeout(TIMEOUT_BUSCA_MS) })
+      data = await r.json().catch(() => null)
+    } catch (e) {
+      ultimoErro = { erro: 'falha ao consultar o PDPJ: ' + ((e && e.message) || e), motivo: 'rede' }
+      if (podeTentarDeNovo) { await espera(3000 * t); continue }
+      return ultimoErro
+    }
+    if (r.status === 401) return { erro: 'jus.br: token inválido/expirado — sincronize novamente', motivo: 'expirado' }
+    if ([502, 503, 504].includes(r.status)) {
+      ultimoErro = { erro: 'PDPJ recusou (HTTP ' + r.status + ')', motivo: 'http', status: r.status }
+      if (podeTentarDeNovo) { await espera(3000 * t); continue }
+      return { ...ultimoErro, erro: ultimoErro.erro + (t > 1 ? (' — tentei ' + t + ' vez(es)') : '') }
+    }
+    if (!r.ok) return { erro: 'PDPJ recusou (HTTP ' + r.status + ')', motivo: 'http', status: r.status }
+    const content = Array.isArray(data && data.content) ? data.content : []
+    const total = (data && typeof data.total === 'number') ? data.total : content.length
+    return { content, total }
+  }
+  return ultimoErro
 }
 
 export async function GET(request) {
+  const t0 = Date.now()
+  // orçamento único para a requisição inteira: 280s (20s de folga sob o
+  // maxDuration de 300s) — repartido entre as tentativas da busca (passo 1) e a
+  // varredura por processo (passo 2), pra nunca estourar o limite da rota.
+  const deadline = t0 + 280000
+
   const user = await usuario(request)
   if (!user) return Response.json({ erro: 'não autenticado' }, { status: 401 })
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) return Response.json({ erro: 'falta service key' }, { status: 500 })
@@ -132,7 +158,7 @@ export async function GET(request) {
   if (tok.erro) return Response.json({ erro: 'sessão do jus.br indisponível: ' + tok.erro + ' — sincronize o jus.br (ver instruções do Estagiário Virtual) e tente de novo.' }, { status: 502 })
 
   // 1) lista de processos onde o CNPJ é parte
-  const busca = await buscarPorCnpj(tok.token, cnpj)
+  const busca = await buscarPorCnpj(tok.token, cnpj, deadline)
   if (busca.erro) return Response.json({ erro: busca.erro, motivo: busca.motivo }, { status: busca.status || 502 })
   if (!busca.content.length) {
     return Response.json({
@@ -149,8 +175,8 @@ export async function GET(request) {
     const meta = extraiMeta(item)
     const trilha = tramitacoesDoProcesso(item)
     const ultima = trilha[trilha.length - 1] || null
-    const t0 = Array.isArray(item.tramitacoes) ? item.tramitacoes[0] : null
-    const partes = (t0 && Array.isArray(t0.partes)) ? t0.partes : []
+    const tram0 = Array.isArray(item.tramitacoes) ? item.tramitacoes[0] : null
+    const partes = (tram0 && Array.isArray(tram0.partes)) ? tram0.partes : []
     // nome do campo de documento dentro de "partes" não foi confirmado na captura
     // manual do endpoint — tentativa best-effort; se não bater, polo fica vazio
     // (não quebra nada, só deixa de mostrar autor/réu nesta linha).
@@ -176,17 +202,16 @@ export async function GET(request) {
     processos.forEach(p => { const row = porNum[p.numero]; if (row) { p.nosso = true; p.cliente = row.cliente_nome || null } })
   } catch (e) {}
 
-  // 2) para cada processo (até o teto de quantidade OU de tempo), busca o
-  // detalhe e escaneia as movimentações. O teto de tempo existe porque a busca
-  // por CNPJ sozinha já pode levar quase 1 minuto (ver TIMEOUT_BUSCA_MS) —
-  // sem ele, muitos processos "leves" na contagem ainda estourariam maxDuration.
+  // 2) para cada processo (até o teto de quantidade OU o prazo da requisição
+  // inteira — ver `deadline`), busca o detalhe e escaneia as movimentações.
   const alvo = processos.slice(0, MAX_PROCESSOS_DETALHE)
   let truncouDetalhe = processos.length > alvo.length
   const candidatas = []
   let semAcesso = 0, detalhados = 0
-  const tDetalhe0 = Date.now()
+  // reserva ~15s no fim do orçamento para montar a resposta com o que já foi lido
+  const deadlineDetalhe = deadline - 15000
   for (const P of alvo) {
-    if (Date.now() - tDetalhe0 > ORCAMENTO_DETALHE_MS) { truncouDetalhe = true; break }
+    if (Date.now() > deadlineDetalhe) { truncouDetalhe = true; break }
     detalhados++
     const det = await buscarProcesso(tok.token, P.numero)
     if (det.erro) { P.acesso = false; if (det.motivo === 'sem_acesso') semAcesso++; continue }
