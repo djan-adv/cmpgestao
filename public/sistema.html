@@ -7083,6 +7083,16 @@ function _procCelHTML(p, i, comEtiqueta){
    Processo, ver _procCelHTML): valor total da condenação. */
 function _celCondenacao(p){
   var v=_hv(p.valor_condenacao);
+  if(!v){
+    /* sem condenação lançada: cai para o total de honorários do advogado (mesma
+       conta do quadro "Honorários" da ficha) — é o caso típico do trabalhista,
+       onde não há "condenação do cliente", só sucumbência+contratual. */
+    var trab=(typeof ehTrabalhista==='function')?ehTrabalhista(p.numero):false;
+    var james=/james laurence/i.test(String(p.oponente||''));
+    var sucV=_hv(p.hon_val_sucumbencia), exeV=(trab?0:_hv(p.hon_val_execucao));
+    var totAdv=_hv(p.hon_val_contratual)+sucV+exeV+((!trab&&!james)?_hv(p.hon_pro_labore):0);
+    if(totAdv) v=totAdv;
+  }
   return '<td style="text-align:right;white-space:nowrap;font-size:12.5px">'+(v?('<b>'+_reais(v)+'</b>'):'<span class="note" style="margin:0">—</span>')+'</td>';
 }
 /* Menu de ações por linha (⚙): substitui vários botões de texto lado a lado
@@ -12873,7 +12883,7 @@ async function enviarEmailVara(o){
     if(ag.erro) return {ok:false,erro:'não foi possível agendar: '+ag.erro+'\n\nO e-mail NÃO foi enviado.'};
     return {ok:true,agendado:true,enviar_em:slot,slotTxt:_slotTxt(slot),j:{}};
   }
-  var corpo={para:o.para,assunto:o.assunto,corpo:o.corpo,numero:numero||undefined};
+  var corpo={para:o.para,assunto:o.assunto,corpo:o.corpo,numero:numero||undefined,destino:'vara'};
   if(o.cc) corpo.cc=o.cc;
   if(o.inReplyTo) corpo.in_reply_to=o.inReplyTo;
   if(o.responderId) corpo.responder_id=o.responderId;

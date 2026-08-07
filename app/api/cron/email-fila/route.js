@@ -38,7 +38,7 @@ export async function GET(request) {
   } catch (e) {}
 
   const fila = await sb.from('emails_agendados')
-    .select('id,para,cc,assunto,corpo,numero,tentativas,enviar_em,in_reply_to,responder_id')
+    .select('id,para,cc,assunto,corpo,numero,tentativas,enviar_em,in_reply_to,responder_id,destino')
     .eq('status', 'agendado').lte('enviar_em', new Date().toISOString())
     .order('enviar_em', { ascending: true }).limit(limite)
   if (fila.error) return Response.json({ erro: fila.error.message }, { status: 500 })
@@ -52,7 +52,7 @@ export async function GET(request) {
       .eq('id', it.id).eq('status', 'agendado').select('id')
     if (trava.error || !trava.data || !trava.data.length) continue
 
-    const r = await enviarEmailCore({ para: it.para, cc: it.cc, assunto: it.assunto, corpo: it.corpo, numero: it.numero, inReplyTo: it.in_reply_to || '' })
+    const r = await enviarEmailCore({ para: it.para, cc: it.cc, assunto: it.assunto, corpo: it.corpo, numero: it.numero, inReplyTo: it.in_reply_to || '', destino: it.destino || '' })
     if (r.ok) {
       await sb.from('emails_agendados').update({ status: 'enviado', enviado_em: new Date().toISOString(), erro: null }).eq('id', it.id)
       // era resposta: o e-mail original passa a constar como respondido só agora

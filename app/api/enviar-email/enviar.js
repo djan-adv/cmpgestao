@@ -112,7 +112,7 @@ function esc(s) {
 // ou { erro, status, repetido }. Nunca lança.
 // confirmarEventoId: id do evento da agenda — liga o botão "✅ Confirmo presença"
 // dentro do e-mail; o clique do cliente confirma o evento sozinho.
-export async function enviarEmailCore({ para, cc, assunto, corpo, numero, dedup = true, inReplyTo = '', confirmarEventoId = null, anexos = [] }) {
+export async function enviarEmailCore({ para, cc, assunto, corpo, numero, dedup = true, inReplyTo = '', confirmarEventoId = null, anexos = [], destino = '' }) {
   const host = process.env.SMTP_HOST
   const port = parseInt(process.env.SMTP_PORT || '465', 10)
   const smtpUser = process.env.SMTP_USER
@@ -192,18 +192,23 @@ export async function enviarEmailCore({ para, cc, assunto, corpo, numero, dedup 
     ? '<img src="' + URL_PUBLICA + '/api/email/abertura?t=' + tokenRastreio + '" width="1" height="1" alt="" style="display:block;width:1px;height:1px;border:0">'
     : ''
 
+  // rodapé social (Instagram / áreas de atuação): só faz sentido para o CLIENTE.
+  // Para vara/cartório é inadequado — e-mail processual não é lugar de divulgação.
+  const paraVara = destino === 'vara'
+  const rodapeSocial = paraVara ? '' :
+    '<div style="text-align:center;padding:14px 0;border-top:1px solid #eaeaea;margin-top:6px">' +
+      '<div style="font-size:12px;color:#8a8f98;margin-bottom:8px">Acompanhe o escritório:</div>' +
+      '<a href="https://instagram.com/cmpadvs" style="display:inline-block;background:#2E3A4B;color:#fff;text-decoration:none;padding:8px 16px;border-radius:20px;font-size:13px;margin:2px 4px">Instagram @cmpadvs</a>' +
+      '<a href="https://instagram.com/djan.adv" style="display:inline-block;background:#2E3A4B;color:#fff;text-decoration:none;padding:8px 16px;border-radius:20px;font-size:13px;margin:2px 4px">Instagram @djan.adv</a>' +
+      '<a href="https://gestao.cmpadvogados.com.br/areas-atuacao.html" style="display:inline-block;background:#C9A227;color:#fff;text-decoration:none;padding:8px 16px;border-radius:20px;font-size:13px;margin:2px 4px">Nosso site — áreas de atuação</a>' +
+    '</div>'
   const corpoHtml = esc(corpo).replace(/\n/g, '<br>')
   const html =
     '<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#1e2733;max-width:600px;margin:0 auto;padding:8px">' +
       '<div style="text-align:center;padding:6px 0 2px">' + logoTag + '</div>' +
       '<div style="border-top:3px solid #b8912e;padding:16px 6px;line-height:1.55">' + corpoHtml + '</div>' +
       blocoConfirmar +
-      '<div style="text-align:center;padding:14px 0;border-top:1px solid #eaeaea;margin-top:6px">' +
-        '<div style="font-size:12px;color:#8a8f98;margin-bottom:8px">Acompanhe o escritório:</div>' +
-        '<a href="https://instagram.com/cmpadvs" style="display:inline-block;background:#2E3A4B;color:#fff;text-decoration:none;padding:8px 16px;border-radius:20px;font-size:13px;margin:2px 4px">Instagram @cmpadvs</a>' +
-        '<a href="https://instagram.com/djan.adv" style="display:inline-block;background:#2E3A4B;color:#fff;text-decoration:none;padding:8px 16px;border-radius:20px;font-size:13px;margin:2px 4px">Instagram @djan.adv</a>' +
-        '<a href="https://gestao.cmpadvogados.com.br/areas-atuacao.html" style="display:inline-block;background:#C9A227;color:#fff;text-decoration:none;padding:8px 16px;border-radius:20px;font-size:13px;margin:2px 4px">Nosso site — áreas de atuação</a>' +
-      '</div>' +
+      rodapeSocial +
     '</div>'
 
   const fromName = process.env.SMTP_FROM_NAME || 'Crispim Mendonça e Pinheiro Advogados'
