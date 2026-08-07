@@ -96,6 +96,8 @@ export async function POST(request) {
     dedup: !body.forcar,
     // arquivos escolhidos pelo advogado (ex.: a sentença) — [{filename, content_base64}]
     anexos: Array.isArray(body.anexos) ? body.anexos : [],
+    // 'vara': tira o rodapé social (Instagram/áreas de atuação) — não cabe em e-mail processual
+    destino: String(body.destino || ''),
   })
   if (r.erro) return Response.json({ erro: r.erro, repetido: r.repetido }, { status: r.status || 500 })
 

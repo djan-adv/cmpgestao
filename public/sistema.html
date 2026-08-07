@@ -384,7 +384,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
       </div>
     </section>
     <section id="s-processos" class="hidden">
-      <div class="searchbar"><input id="busca" placeholder="Buscar por cliente, número, oponente ou assunto..." oninput="renderProc()"><select id="ordena" onchange="renderProc()" class="btn sm sb-sel" style="margin-left:8px;max-width:120px"><option value="">Novos Protocolos</option><option value="az">Cliente (A→Z)</option><option value="za">Cliente (Z→A)</option><option value="data_desc">Movimentação mais recente</option><option value="parados">Parados (mov. mais antiga)</option><option value="valor">Valor da causa (maior→menor)</option></select><select id="filtroEtq" onchange="renderProc()" class="btn sm sb-sel" style="margin-left:8px;max-width:112px"><option value="">Todas as etiquetas</option></select><select id="porPagina" onchange="renderProc()" class="btn sm sb-sel" style="margin-left:8px;max-width:76px"><option value="20">20 por página</option><option value="40">40</option><option value="60">60</option><option value="80">80</option><option value="100">100</option><option value="todos" selected>Todos</option></select><span class="note" id="proc-count" style="align-self:center"></span><span id="proc-semvara" style="align-self:center;margin-left:10px;display:none"></span><span class="note" id="proc-espaco" style="align-self:center;margin-left:10px;cursor:pointer" onclick="carregarEspacoDocs(true)" title="Espaço que os documentos ocupam no servidor (VPS) — clique para recalcular"></span><button id="btn-atu-todos" class="btn sm sb-btn" style="margin-left:auto" onclick="atualizarTodosProcessos()" title="Buscar no DJEN as publicações novas de TODOS os processos (últimos 7 dias, pelas OABs do escritório)">↻ Atualizar todos</button><button class="btn sm gold sb-btn" style="margin-left:8px" onclick="abrirBusca()">+ Cadastrar por número <span style="font-weight:400;font-size:10px;opacity:.8">(pesquisa pelo djen)</span></button><button class="btn sm sb-btn" style="margin-left:8px;background:var(--navy);color:#fff;border-color:var(--navy)" onclick="abrirCadManual()">+ Cadastrar manual / caso</button><button class="btn sm sb-btn" style="margin-left:8px;background:#0F6E56;color:#fff;border-color:#0F6E56" onclick="abrirSyncPastas()" title="Enviar de uma vez uma pasta com vários processos — o sistema reconhece cada subpasta e manda para o processo certo">&#8645; Sincronizar pasta</button></div>
+      <div class="searchbar"><input id="busca" placeholder="Buscar por cliente, número, oponente ou assunto..." oninput="renderProc()"><select id="ordena" onchange="renderProc()" class="btn sm sb-sel" style="margin-left:8px;max-width:120px"><option value="">Novos Protocolos</option><option value="az">Cliente (A→Z)</option><option value="za">Cliente (Z→A)</option><option value="data_desc">Movimentação mais recente</option><option value="parados">Parados (mov. mais antiga)</option><option value="valor">Valor da causa (maior→menor)</option></select><select id="filtroEtq" onchange="renderProc()" class="btn sm sb-sel" style="margin-left:8px;max-width:112px"><option value="">Todas as etiquetas</option></select><select id="porPagina" onchange="renderProc()" class="btn sm sb-sel" style="margin-left:8px;max-width:76px"><option value="20">20 por página</option><option value="40">40</option><option value="60">60</option><option value="80">80</option><option value="100">100</option><option value="todos" selected>Todos</option></select><span class="note" id="proc-count" style="align-self:center"></span><span id="proc-semvara" style="align-self:center;margin-left:10px;display:none"></span><span class="note" id="proc-espaco" style="align-self:center;margin-left:10px;cursor:pointer" onclick="carregarEspacoDocs(true)" title="Espaço que os documentos ocupam no servidor (VPS) — clique para recalcular"></span><button id="btn-atu-todos" class="btn sm sb-btn" style="margin-left:auto" onclick="atualizarTodosProcessos()" title="Buscar no DJEN as publicações novas de TODOS os processos (últimos 7 dias, pelas OABs do escritório)">↻ Atualizar todos</button><button class="btn sm gold sb-btn" style="margin-left:8px" onclick="abrirBusca()">+ Cadastrar por número <span style="font-weight:400;font-size:10px;opacity:.8">(pesquisa pelo djen)</span></button><button class="btn sm sb-btn" style="margin-left:8px;background:var(--navy);color:#fff;border-color:var(--navy)" onclick="abrirCadManual()">+ Cadastrar manual / caso</button><button class="btn sm sb-btn" style="margin-left:8px;background:#0F6E56;color:#fff;border-color:#0F6E56" onclick="abrirSyncPastas()" title="Enviar de uma vez uma pasta com vários processos — o sistema reconhece cada subpasta e manda para o processo certo">&#8645; Sincronizar pasta</button><button class="btn sm sb-btn" style="margin-left:8px;background:#8a6d1a;color:#fff;border-color:#8a6d1a" onclick="abrirHonLote()" title="Roda o robô de honorários (lê petição inicial/sentença/procuração) em todos os processos da lista principal, um a um">💰 Honorários — buscar todos</button></div>
       <div class="card"><table><thead><tr><th style="width:26%;cursor:pointer;user-select:none" onclick="ordenarCliente()" title="Clique para ordenar por cliente (A→Z / Z→A)">Cliente <span id="cli-sort-arrow" style="font-size:10px;color:var(--muted)"></span></th><th style="width:150px">Processos/casos</th><th style="width:22%"><span onclick="ordenarAssuntoLocal('assunto')" style="cursor:pointer;user-select:none" title="Ordenar por assunto (A→Z / Z→A)">Assunto <span id="asn-sort-arrow" style="font-size:10px;color:var(--muted)"></span></span><span style="color:var(--line);margin:0 5px">|</span><span onclick="ordenarAssuntoLocal('local')" style="cursor:pointer;user-select:none" title="Ordenar por vara/local (A→Z / Z→A) — agrupa os processos da mesma vara">Local <span id="loc-sort-arrow" style="font-size:10px;color:var(--muted)"></span></span></th><th style="width:170px;cursor:pointer;user-select:none" onclick="ordenarMov()" title="Clique para ordenar pela data da última movimentação (mais recente ↔ mais antiga)">Última movimentação <span id="mov-sort-arrow" style="font-size:10px;color:var(--muted)"></span></th><th style="width:96px;cursor:pointer;user-select:none" onclick="ordenarParado()" title="Clique para ordenar por dias parado (mais ↔ menos)">Parado há <span id="par-sort-arrow" style="font-size:10px;color:var(--muted)"></span></th><th style="width:104px;text-align:right"><span onclick="ordenarCondenacao()" style="cursor:pointer;user-select:none" title="Ordenar por valor da condenação (maior ↔ menor)">Valor total <span id="cond-sort-arrow" style="font-size:10px;color:var(--muted)"></span></span> <span onclick="toggleStatusFiltro()" style="cursor:pointer;user-select:none;font-size:10px;color:var(--muted);font-weight:400" title="Filtrar: todos → julgados → não julgados">⚖<span id="st-filtro-lbl"></span></span></th><th style="width:110px;cursor:pointer;user-select:none" onclick="ordenarPrazoToggle()" title="Clique para ordenar pelo prazo fatal (mais próximo ↔ mais distante)">Prazo fatal <span id="prazo-sort-arrow" style="font-size:10px;color:var(--muted)"></span></th><th style="width:58px;text-align:center;cursor:pointer;user-select:none" onclick="ordenarDocs()" title="Clique para ordenar pelo tamanho dos documentos no servidor (maior ↔ menor)">Docs <span id="docs-sort-arrow" style="font-size:10px;color:var(--muted)"></span></th></tr></thead><tbody id="proc-body"></tbody></table></div><div id="proc-pager" style="display:flex;gap:6px;align-items:center;justify-content:center;padding:14px;flex-wrap:wrap"></div>
     </section>
 
@@ -5315,6 +5315,73 @@ async function atualizarTodosProcessos(){
   if(btn){ btn.disabled=false; btn.textContent=t0; }
 }
 
+/* ===== Robô de honorários em lote — roda /api/robo/honorarios em todos os
+   processos da listagem principal, um a um (mesmo critério de elegibilidade do
+   renderProc). Cada chamada é best-effort e independente: erro num processo não
+   para o lote. Pode ser interrompido a qualquer momento (⏸ Parar) e retomado
+   depois — quem já tem valor lançado ou honorário digitado à mão é pulado sem
+   custo pelo próprio robô (ver /api/robo/honorarios). ===== */
+function _honLoteElegiveis(){
+  return (DADOS.processos||[]).filter(function(p){
+    return !/encerr/i.test(p.status||'') && !isInove(p) && !p.lote_id && !isSuspenso(p);
+  });
+}
+function _hlLog(html){
+  var log=document.getElementById('hl-log'); if(!log) return;
+  log.insertAdjacentHTML('beforeend','<div>'+html+'</div>');
+  log.scrollTop=log.scrollHeight;
+}
+function abrirHonLote(){
+  window.__honLoteParar=true; /* garante que uma rodada anterior pare antes de reabrir */
+  var alvo=_honLoteElegiveis();
+  document.getElementById('hl-alvo').textContent=alvo.length+' processo(s) na lista principal serão consultados, um a um.';
+  document.getElementById('hl-prog').textContent='';
+  document.getElementById('hl-log').innerHTML='';
+  document.getElementById('hl-iniciar').style.display='';
+  document.getElementById('hl-iniciar').disabled=false;
+  document.getElementById('hl-iniciar').textContent='▶ Iniciar';
+  document.getElementById('hl-parar').style.display='none';
+  document.getElementById('modal-honlote').classList.remove('hidden');
+}
+async function iniciarHonLote(){
+  var alvo=_honLoteElegiveis();
+  if(!alvo.length){ _hlLog('nada para fazer — lista principal vazia.'); return; }
+  var jwt=await docToken(); if(!jwt){ alert('Sessão expirada — recarregue a página (F5).'); return; }
+  window.__honLoteParar=false;
+  document.getElementById('hl-iniciar').disabled=true;
+  document.getElementById('hl-parar').style.display='';
+  document.getElementById('hl-log').innerHTML='';
+  var atualizados=0, pulados=0, semDocs=0, conflitos=0, erros=0, custo=0;
+  for(var i=0;i<alvo.length;i++){
+    if(window.__honLoteParar){ _hlLog('<b>⏸ Parado pelo usuário</b> — '+i+' de '+alvo.length+' processado(s).'); break; }
+    var p=alvo[i];
+    document.getElementById('hl-prog').textContent=(i+1)+' de '+alvo.length+' — '+p.numero;
+    try{
+      var r=await fetch('/api/robo/honorarios',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+jwt},body:JSON.stringify({numero:p.numero})});
+      var j=await r.json().catch(function(){return {};});
+      if(!r.ok||j.erro){ erros++; _hlLog('<span style="color:#b5342b">✗ '+fmtCNJ(p.numero)+' — '+esc((j&&j.erro)||('HTTP '+r.status))+'</span>'); }
+      else if(j.pulou){ pulados++; _hlLog('<span style="color:#8a93a2">— '+fmtCNJ(p.numero)+' — pulado (valor digitado à mão)</span>'); }
+      else if(j.sem_documentos){ semDocs++; _hlLog('<span style="color:#8a93a2">— '+fmtCNJ(p.numero)+' — sem PDF na pasta</span>'); }
+      else{
+        if(j.atualizado&&Object.keys(j.atualizado).length){
+          atualizados++;
+          Object.assign(p,j.atualizado); /* reflete na tela sem precisar recarregar */
+          if(typeof atual!=='undefined'&&atual&&atual.numero===p.numero) Object.assign(atual,j.atualizado);
+        }
+        if(j.conflitos&&j.conflitos.length) conflitos+=j.conflitos.length;
+        if(j.custo_usd) custo+=Number(j.custo_usd)||0;
+        var linha=(j.relatorio||[]).join(' · ')||'sem novidade';
+        _hlLog('<span style="color:#0F6E56">✓</span> '+fmtCNJ(p.numero)+' — '+esc(linha)+(j.conflitos&&j.conflitos.length?' <span style="color:#8a6d1a">⚠ '+j.conflitos.length+' divergência(s) — confira na ficha</span>':''));
+      }
+    }catch(e){ erros++; _hlLog('<span style="color:#b5342b">✗ '+fmtCNJ(p.numero)+' — '+esc((e&&e.message)||e)+'</span>'); }
+  }
+  document.getElementById('hl-prog').textContent='concluído: '+atualizados+' atualizado(s) · '+pulados+' pulado(s) (manual) · '+semDocs+' sem documento · '+conflitos+' divergência(s) · '+erros+' erro(s)'+(custo?(' · custo ≈ US$ '+custo.toFixed(2)):'');
+  document.getElementById('hl-iniciar').disabled=false;
+  document.getElementById('hl-iniciar').textContent='▶ Rodar de novo';
+  document.getElementById('hl-parar').style.display='none';
+  try{ renderProc(); }catch(e){}
+}
+
 /* ===== Documentos do jus.br (PDPJ) — puxar a peça escolhida sob demanda ===== */
 async function jusbrJwt(){ try{ var s=await window.__sb.auth.getSession(); return (s&&s.data&&s.data.session&&s.data.session.access_token)||''; }catch(e){ return ''; } }
 function jusbrMsgErro(d){ var m=(d&&d.erro)||'erro'; if(d&&(d.motivo==='sem_token'||d.motivo==='expirado')){ m+=' — abra o jus.br logado (o token sincroniza sozinho pelo Tampermonkey).'; } return esc(m); }
@@ -7083,6 +7150,16 @@ function _procCelHTML(p, i, comEtiqueta){
    Processo, ver _procCelHTML): valor total da condenação. */
 function _celCondenacao(p){
   var v=_hv(p.valor_condenacao);
+  if(!v){
+    /* sem condenação lançada: cai para o total de honorários do advogado (mesma
+       conta do quadro "Honorários" da ficha) — é o caso típico do trabalhista,
+       onde não há "condenação do cliente", só sucumbência+contratual. */
+    var trab=(typeof ehTrabalhista==='function')?ehTrabalhista(p.numero):false;
+    var james=/james laurence/i.test(String(p.oponente||''));
+    var sucV=_hv(p.hon_val_sucumbencia), exeV=(trab?0:_hv(p.hon_val_execucao));
+    var totAdv=_hv(p.hon_val_contratual)+sucV+exeV+((!trab&&!james)?_hv(p.hon_pro_labore):0);
+    if(totAdv) v=totAdv;
+  }
   return '<td style="text-align:right;white-space:nowrap;font-size:12.5px">'+(v?('<b>'+_reais(v)+'</b>'):'<span class="note" style="margin:0">—</span>')+'</td>';
 }
 /* Menu de ações por linha (⚙): substitui vários botões de texto lado a lado
@@ -12354,6 +12431,18 @@ async function desativarAcompanhamento(){
     <button class="btn" id="ha-aplicar" style="background:#0F6E56;color:#fff" disabled onclick="aplicarAtualizacaoHon(this)">Aplicar e salvar</button>
   </div>
 </div></div>
+<div id="modal-honlote" class="overlay hidden"><div class="modal" style="max-width:640px">
+  <h2>💰 Robô de honorários — todos os processos</h2>
+  <p class="note" style="margin-top:0">Lê a petição inicial, a sentença/acórdão e a procuração de cada processo (guardados no servidor) e preenche <b>valor da causa</b>, <b>valor da condenação</b> e os <b>honorários</b> com o que estiver escrito neles. O que não achar no documento cai na regra padrão da planilha (trabalhista 30% · cível 20% · execução 10% · sucumbência 10%). Nunca sobrescreve valor já lançado nem honorários digitados à mão — só reporta divergência. Processo sem PDF na pasta é pulado sem custo.</p>
+  <p class="note" id="hl-alvo" style="margin-top:0"></p>
+  <div id="hl-prog" style="font-size:13px;font-weight:700;color:var(--navy);margin:6px 0"></div>
+  <div id="hl-log" style="max-height:320px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:12px;line-height:1.6;background:var(--panel)"></div>
+  <div class="foot">
+    <button class="btn ghost" id="hl-fechar" onclick="document.getElementById('modal-honlote').classList.add('hidden')">Fechar</button>
+    <button class="btn ghost" id="hl-parar" style="display:none" onclick="window.__honLoteParar=true">⏸ Parar</button>
+    <button class="btn" id="hl-iniciar" style="background:#8a6d1a;color:#fff" onclick="iniciarHonLote()">▶ Iniciar</button>
+  </div>
+</div></div>
 <div id="modal-responder" class="overlay hidden"><div class="modal" style="max-width:660px">
   <h2>✉ Responder</h2>
   <div id="rp-ctx" class="note" style="margin-top:0;margin-bottom:8px"></div>
@@ -12873,7 +12962,7 @@ async function enviarEmailVara(o){
     if(ag.erro) return {ok:false,erro:'não foi possível agendar: '+ag.erro+'\n\nO e-mail NÃO foi enviado.'};
     return {ok:true,agendado:true,enviar_em:slot,slotTxt:_slotTxt(slot),j:{}};
   }
-  var corpo={para:o.para,assunto:o.assunto,corpo:o.corpo,numero:numero||undefined};
+  var corpo={para:o.para,assunto:o.assunto,corpo:o.corpo,numero:numero||undefined,destino:'vara'};
   if(o.cc) corpo.cc=o.cc;
   if(o.inReplyTo) corpo.in_reply_to=o.inReplyTo;
   if(o.responderId) corpo.responder_id=o.responderId;
