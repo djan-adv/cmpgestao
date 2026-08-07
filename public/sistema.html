@@ -7135,7 +7135,7 @@ function _loteCtrlHTML(p){
     +lotes.map(function(l){ return '<option value="'+l.id+'"'+(String(p.lote_id||'')===String(l.id)?' selected':'')+'>'+esc(l.nome)+'</option>'; }).join('')
     +(atualL?'<option value="__out">— tirar do lote —</option>':'')
     +(susp?'<option value="__tirar_james">— tirar do James Laurence —</option>':'');
-  return ' <select onchange="definirLoteProc(\''+n+'\',this.value)" title="Enviar este processo para uma pasta-lote, ou para o grupo James Laurence (fica fora da lista principal, na pasta suspensa)" style="font-size:11px;padding:3px 6px;border:1px solid var(--line);border-radius:8px;background:'+cor+';color:'+((susp||atualL)?'#fff':'#5d6673')+'">'+opts+'</select>';
+  return ' <select onchange="definirLoteProc(\''+n+'\',this.value)" title="Enviar este processo para uma pasta-lote, ou para o grupo James Laurence (fica fora da lista principal, na pasta suspensa)" style="width:auto;max-width:220px;font-size:11px;padding:3px 6px;border:1px solid var(--line);border-radius:8px;background:'+cor+';color:'+((susp||atualL)?'#fff':'#5d6673')+'">'+opts+'</select>';
 }
 async function definirLoteProc(num, val){
   if(val==='') return;
