@@ -7532,7 +7532,12 @@ function renderProc(){
   var lista=DADOS.processos.filter(function(p){
     var okq=!q||(p.cliente+" "+p.numero+" "+p.oponente+" "+p.tipo).toLowerCase().indexOf(q)>-1;
     var oke=true; if(eq){ var ids=(typeof ASSIGN!=='undefined'&&ASSIGN[p.numero])||[]; oke=ids.indexOf(eq)>-1; }
-    return okq&&oke&&movFiltroOk(p)&&origemFiltroOk(p)&&!/encerr/i.test(p.status||'')&&!isInove(p)&&!p.lote_id&&(!isSuspenso(p)||_buscaAtiva());
+    /* Fora de busca, a lista principal esconde Inove/lote/James Laurence (cada
+       um tem sua própria tela). MAS com texto digitado, o usuário está
+       procurando um processo específico — não faz sentido escondê-lo só porque
+       mora numa dessas subpastas. Encerrado continua fora sempre, buscando ou não. */
+    var buscando=_buscaAtiva();
+    return okq&&oke&&movFiltroOk(p)&&origemFiltroOk(p)&&!/encerr/i.test(p.status||'')&&(!isInove(p)||buscando)&&(!p.lote_id||buscando)&&(!isSuspenso(p)||buscando);
   });
   /* Processos vinculados (mesmo caso, ex.: original + agravo) viram UMA linha só
      na listagem principal — sem buscar, sem repetir o nome do cliente várias
