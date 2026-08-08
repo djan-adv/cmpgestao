@@ -3824,7 +3824,29 @@ async function reenviarAvisoAudiencia(btn){
   var e=_evEdit; if(!e||!e.id){ alert('Este agendamento ainda não está gravado no banco.'); return; }
   var dig=String(e._procResolvido||((e.p&&e.p.numero)||'')).replace(/\D/g,'');
   var p=(DADOS.processos||[]).find(function(y){ return String(y.numero||'').replace(/\D/g,'')===dig&&dig; });
-  if(!p){ alert('Não achei o processo deste evento — abra pelo processo e tente de novo.'); return; }
+  if(!p){
+    /* Reunião do funil comercial (lead) não tem processo vinculado — o e-mail do
+       cliente fica embutido na descrição do evento (ver leadCriarReuniao). Reenvia
+       por esse caminho em vez do fluxo de audiência (que exige um processo). */
+    var emEmb=(String(e.desc||'').match(/e-mail\s+([^\s·]+@[^\s,;·]+)/i)||[])[1]||'';
+    if(!emEmb&&!/reuni/i.test(String(e.tt||''))){ alert('Não achei o processo deste evento — abra pelo processo e tente de novo.'); return; }
+    var email2=window.prompt('Reenviar a confirmação da reunião para:',emEmb||'');
+    if(email2===null) return; email2=email2.trim();
+    if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email2)){ alert('E-mail inválido.'); return; }
+    var t02=btn?btn.textContent:''; if(btn){ btn.textContent='enviando…'; btn.disabled=true; }
+    try{
+      var nomeLead=String(e.tt||'').replace(/^Reunião\s*—\s*/,'');
+      var tok2=await docToken();
+      var r2=await fetch('/api/leads/aviso-reuniao',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok2},
+        body:JSON.stringify({evento_id:e.id,email:email2,nome:nomeLead,data:e.data,hora:e.hora,local:(e.local||'')})});
+      var j2=await r2.json().catch(function(){return {};});
+      if(!r2.ok||j2.erro){ alert('Não enviou: '+((j2&&j2.erro)||('HTTP '+r2.status))); return; }
+      try{ await logAgendaHist('','[Aviso ao cliente] Confirmação de reunião (funil comercial) (re)enviada para '+email2+' — '+_evRotulo(e)); }catch(eH2){}
+      alert('Aviso reenviado para '+email2+'.');
+    }catch(er2){ alert('Erro: '+((er2&&er2.message)||er2)); }
+    finally{ if(btn){ btn.disabled=false; btn.textContent=t02; } }
+    return;
+  }
   var email=_emailClienteDoProc(p);
   email=window.prompt('Enviar o aviso da audiência (com o botão de confirmar presença) para:',email||'');
   if(email===null) return; email=email.trim();
@@ -4665,7 +4687,7 @@ async function leadCriarReuniao(info){
   }).select('id').single();
   if(ins.error) return {erro:ins.error.message};
   var eid=ins.data.id;
-  try{ if(typeof AGENDA!=='undefined'&&AGENDA) AGENDA.push({id:eid,data:info.data,hora:info.hora,tipo:'az',tt:titulo,resp:'Jader Pinheiro',p:{numero:(info.procRef||'—'),cliente:(info.nome||'—')},descricao:descricao,local:(info.local||'')}); }catch(e){}
+  try{ if(typeof AGENDA!=='undefined'&&AGENDA) AGENDA.push({id:eid,data:info.data,hora:info.hora,tipo:'az',tt:titulo,resp:'Jader Pinheiro',p:{numero:(info.procRef||'—'),cliente:(info.nome||'—')},desc:descricao,local:(info.local||'')}); }catch(e){}
   try{ fetch('/api/notificar-jader?evento='+eid,{cache:'no-store'}); }catch(e){}  // avisa o Jader, sempre
   var emailOk=false, emailErro=null;
   if(info.email){
@@ -6300,7 +6322,7 @@ function toggleConcluirTarefa(id){
          Agora carrega tudo em blocos (keyset por id). */
       var agRows=[], agLast=null;
       for(;;){
-        var agQ=sb.from('agenda_eventos').select('id,data,hora,tipo,titulo,resp,processo_numero,origem,confirmado_em,confirmado_por').order('id',{ascending:true}).limit(1000);
+        var agQ=sb.from('agenda_eventos').select('id,data,hora,tipo,titulo,resp,processo_numero,origem,descricao,local_evento,confirmado_em,confirmado_por').order('id',{ascending:true}).limit(1000);
         if(agLast!==null) agQ=agQ.gt('id',agLast);
         var agR=await agQ;
         if(agR.error){ if(!agRows.length){ agRows=null; } break; }
@@ -6310,7 +6332,7 @@ function toggleConcluirTarefa(id){
       }
       var ag={error:(agRows===null), data:agRows||[]};
       if(!ag.error&&ag.data){
-        window.__AGDB=ag.data.map(function(e){return {id:e.id,data:String(e.data).slice(0,10),hora:e.hora||'09:00',tipo:e.tipo||'nt',tt:e.titulo,resp:e.resp||'',org:(e.origem||''),conf:(e.confirmado_em||null),confPor:(e.confirmado_por||''),p:{numero:e.processo_numero||'—',cliente:''}};});
+        window.__AGDB=ag.data.map(function(e){return {id:e.id,data:String(e.data).slice(0,10),hora:e.hora||'09:00',tipo:e.tipo||'nt',tt:e.titulo,resp:e.resp||'',org:(e.origem||''),desc:(e.descricao||''),local:(e.local_evento||''),conf:(e.confirmado_em||null),confPor:(e.confirmado_por||''),p:{numero:e.processo_numero||'—',cliente:''}};});
         /* dedup de exibição: se houver cópias idênticas (mesmo processo+data+título),
            mostra UMA — as cópias continuam no banco até a limpeza, mas não poluem */
         (function(){ var seen={}; window.__AGDB=window.__AGDB.filter(function(e){ var k=e.data+'|'+(e.hora||'')+'|'+String(e.tt||'').slice(0,60)+'|'+String((e.p&&e.p.numero)||'').replace(/\D/g,''); if(seen[k]) return false; seen[k]=1; return true; }); })();
