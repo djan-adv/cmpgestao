@@ -1,9 +1,12 @@
 // Notificações para Jader (e-mail) — NÃO REMOVER / NÃO DESFAZER (pedido expresso do dono).
 // Alerta sobre (1) novos leads: aviso imediato e a cada 30 min ATÉ que o card seja
-// movimentado/editado/lido; e (2) reuniões agendadas: de manhã, 1h antes e 30 min antes.
+// movimentado/editado/lido; (2) reuniões agendadas: de manhã, 1h antes e 30 min antes;
+// e (3) reunião RECÉM-MARCADA: aviso imediato no momento do agendamento (distinto dos
+// lembretes do dia, que continuam valendo do mesmo jeito).
 //
-//   GET /api/notificar-jader        -> faz uma varredura (idempotente) e envia o que estiver devido
+//   GET /api/notificar-jader            -> faz uma varredura (idempotente) e envia o que estiver devido
 //   GET /api/notificar-jader?lead=<id>  -> força o aviso imediato de UM lead recém-criado
+//   GET /api/notificar-jader?evento=<id> -> força o aviso imediato de UMA reunião recém-agendada
 //   GET /api/notificar-jader?debug=1
 //
 // Chamado pelo crontab do VPS a cada ~15-30 min (ver ops/). É idempotente: a trava
@@ -61,11 +64,39 @@ export async function GET(request) {
   const { searchParams } = new URL(request.url)
   const debug = searchParams.get('debug') != null
   const soLead = searchParams.get('lead')
+  const soEvento = searchParams.get('evento')
   const sb = admin()
   const agora = new Date()
   const nowIso = agora.toISOString()
   const loc = localAgora()
   const resumo = { leads_avisados: 0, reunioes_avisadas: 0, enviados: [], erros: [] }
+
+  // ===== 0) REUNIÃO RECÉM-AGENDADA: aviso imediato, uma vez só (não depende do dia) =====
+  if (soEvento) {
+    try {
+      const { data: ev } = await sb.from('agenda_eventos').select('id,data,hora,titulo,resp,local_evento,descricao').eq('id', soEvento).maybeSingle()
+      if (!ev) { resumo.erros.push('evento: não encontrado') }
+      else {
+        const chave = 'reuniao:' + ev.id + ':criada'
+        const trava = debug ? { error: null } : await sb.from('notificacoes_jader').insert({ chave, dia: loc.data }).select('chave')
+        if (trava.error) { resumo.enviados.push('[já avisado] ' + chave) }
+        else {
+          const dbr = ev.data ? String(ev.data).split('-').reverse().join('/') : ''
+          const quando = (dbr ? dbr : '') + (ev.hora ? (' às ' + ev.hora) : '')
+          const lugar = ev.local_evento ? ('<div style="font-size:12.5px;color:#697180">Local/link: ' + esc(ev.local_evento) + '</div>') : ''
+          const html = wrap('📅 Reunião agendada' + (quando ? (' — ' + quando) : ''), '<div style="padding:6px 0"><b>' + esc(ev.titulo || 'Reunião') + '</b>' + lugar +
+            (ev.descricao ? '<div style="font-size:13px;margin-top:4px">' + esc(ev.descricao) + '</div>' : '') + '</div>' +
+            '<p style="font-size:12px;color:#697180;margin-top:12px">Você também vai receber lembretes de manhã, 1h antes e 30 min antes do horário.</p>')
+          if (!debug) {
+            const r = await enviar('Reunião agendada' + (quando ? (' — ' + quando) : '') + ' — CMPGestão', html, (ev.titulo || 'Reunião') + (quando ? (' — ' + quando) : ''))
+            if (r.ok) { resumo.reunioes_avisadas++; resumo.enviados.push(chave) }
+            else { resumo.erros.push(chave + ': ' + r.motivo); try { await sb.from('notificacoes_jader').delete().eq('chave', chave).eq('dia', loc.data) } catch (e) {} }
+          } else resumo.enviados.push('[debug] ' + chave)
+        }
+      }
+    } catch (e) { resumo.erros.push('evento: ' + ((e && e.message) || e)) }
+    return Response.json({ ok: true, local: loc.data + ' ' + String(loc.h).padStart(2, '0') + ':' + String(loc.m).padStart(2, '0'), ...resumo })
+  }
 
   // ===== 1) LEADS: imediato + a cada 30 min até atender =====
   try {

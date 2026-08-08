@@ -69,6 +69,9 @@ export async function GET(request) {
   } catch (e) {}
 
   const dbrEv = ev.data && ev.data.data ? String(ev.data.data).slice(0, 10).split('-').reverse().join('/') : ''
+  // "audiência" era o único caso quando este botão nasceu; hoje também serve para
+  // reunião (funil comercial) e outros eventos — usa o título real quando houver.
+  const tituloEv = (ev.data && ev.data.titulo) ? ev.data.titulo : 'compromisso'
   return pagina('Presença confirmada!',
-    'Obrigado! Registramos que você recebeu o aviso' + (dbrEv ? (' da audiência de <b>' + dbrEv + '</b>' + ((ev.data.hora && ev.data.hora !== 'Dia todo') ? (' às <b>' + ev.data.hora + '</b>') : '')) : '') + '. O escritório já foi informado — não precisa responder o e-mail.', true)
+    'Obrigado! Registramos que você recebeu o aviso' + (dbrEv ? (' de <b>' + tituloEv + '</b>, dia <b>' + dbrEv + '</b>' + ((ev.data.hora && ev.data.hora !== 'Dia todo') ? (' às <b>' + ev.data.hora + '</b>') : '')) : '') + '. O escritório já foi informado — não precisa responder o e-mail.', true)
 }
