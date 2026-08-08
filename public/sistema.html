@@ -4665,7 +4665,7 @@ async function leadCriarReuniao(info){
   }).select('id').single();
   if(ins.error) return {erro:ins.error.message};
   var eid=ins.data.id;
-  try{ if(typeof AGENDA!=='undefined'&&AGENDA) AGENDA.push({data:info.data,hora:info.hora,tipo:'az',tt:titulo,resp:'Jader Pinheiro',p:{numero:(info.procRef||'—'),cliente:(info.nome||'—')}}); }catch(e){}
+  try{ if(typeof AGENDA!=='undefined'&&AGENDA) AGENDA.push({id:eid,data:info.data,hora:info.hora,tipo:'az',tt:titulo,resp:'Jader Pinheiro',p:{numero:(info.procRef||'—'),cliente:(info.nome||'—')},descricao:descricao,local:(info.local||'')}); }catch(e){}
   try{ fetch('/api/notificar-jader?evento='+eid,{cache:'no-store'}); }catch(e){}  // avisa o Jader, sempre
   var emailOk=false, emailErro=null;
   if(info.email){
