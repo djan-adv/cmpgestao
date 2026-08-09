@@ -10599,7 +10599,7 @@ async function aprovarMinuta(ev, andId){
     var rb=await fetch('/api/anexo?id='+encodeURIComponent(doc.id)+'&jwt='+encodeURIComponent(jwt));
     if(!rb.ok){ alert('Não consegui ler o anexo da minuta.'); return; }
     var b64=await _blobB64(await rb.blob());
-    var dig=String(atual.numero||'').replace(/\D/g,'');
+    var dig=_docChaveProc(atual.numero); /* caso sem CNJ ainda usa a pasta "caso-<id>" — ver _docChaveProc */
     var rp=await fetch('/api/docs',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+jwt},body:JSON.stringify({path:dig+'/'+doc.nome,b64:b64})});
     var dp=await respJson(rp);
     if(dp&&dp.__naoJson){ alert(_msgRotaFaltando()); return; }
@@ -16017,7 +16017,11 @@ async function _devSalvar(){
   (j.processos||[]).forEach(function(p){ linhas.push('- '+p.numero+' '+(p.tribunal||'')+' '+(p.polo||'polo?')+' ultima '+(p.ultima||'')+(p.nosso?' [nosso]':'')); });
   linhas.push('','AVISOS'); (j.avisos||[]).forEach(function(a){ linhas.push('- '+a); });
   var txt=linhas.join('\n');
-  var dig=String(atual.numero||'').replace(/\D/g,'');
+  /* _docChaveProc, não o dígito puro do número: um caso ainda sem CNJ (ex.: veio
+     do funil comercial) grava numa pasta própria por ID ("caso-<id>") — usar só
+     os dígitos do número (vazio, nesse caso) salvava fora da pasta que a tela
+     de Documentos realmente lista, e o arquivo "sumia". */
+  var dig=_docChaveProc(atual.numero);
   var nomeArq='001 - DOSSIE DO DEVEDOR ('+new Date().toISOString().slice(0,10).split('-').reverse().join('-')+').txt';
   try{
     var jwt=(typeof finToken==='function')?await finToken():await jusbrJwt();
@@ -16118,7 +16122,7 @@ async function _descSalvar(){
   (j.processos||[]).forEach(function(p){ linhas.push('- '+p.numero+' '+(p.tribunal||'')+' '+(p.classe||'')+' '+(p.polo||'polo?')+(p.acesso===false?' [sem acesso]':'')+(p.nosso?' [nosso]':'')); });
   linhas.push('','AVISOS'); (j.avisos||[]).forEach(function(a){ linhas.push('- '+a); });
   var txt=linhas.join('\n');
-  var dig=String(atual.numero||'').replace(/\D/g,'');
+  var dig=_docChaveProc(atual.numero); /* mesma correção do _devSalvar — ver comentário lá */
   var nomeArq='001 - DESCONSIDERACAO PJ ('+new Date().toISOString().slice(0,10).split('-').reverse().join('-')+').txt';
   try{
     var jwt=(typeof finToken==='function')?await finToken():await jusbrJwt();
