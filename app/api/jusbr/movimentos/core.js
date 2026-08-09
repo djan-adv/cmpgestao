@@ -19,6 +19,46 @@ export const PDPJ_HEADERS = {
   'Referer': 'https://portaldeservicos.pdpj.jus.br/consulta/autosdigitais',
 }
 
+const espera = (ms) => new Promise((res) => setTimeout(res, ms))
+const MAX_TENTATIVAS_BUSCA_DOC = 3
+// busca por CNPJ/CPF é bem mais lenta que a busca por número: em teste real
+// levou 52s numa consulta só. 25s (padrão de outras chamadas ao PDPJ) cortava
+// no meio. Usado por /api/devedor/desconsideracao e /api/devedor/dossie.
+export const TIMEOUT_BUSCA_DOC_MS = 90000
+
+// lista de processos onde um CPF/CNPJ é parte — só a 1ª página (100 no máximo).
+// 502/503/504 = gateway do PRÓPRIO PDPJ patinando (visto em teste real: some
+// numa nova tentativa) — vale a pena repetir; 401/demais erros não adianta
+// insistir. `deadline` (epoch ms) vem do orçamento de tempo da requisição
+// inteira — nunca insiste além dele, pra sobrar tempo pro resto da rota.
+export async function buscarProcessosPorDocumento(token, doc, deadline) {
+  const url = `${PDPJ}/api/v2/processos?cpfCnpjParte=${encodeURIComponent(doc)}`
+  let ultimoErro = null
+  for (let t = 1; t <= MAX_TENTATIVAS_BUSCA_DOC; t++) {
+    const podeTentarDeNovo = t < MAX_TENTATIVAS_BUSCA_DOC && Date.now() < deadline
+    let r, data
+    try {
+      r = await fetch(url, { headers: { ...PDPJ_HEADERS, Authorization: 'Bearer ' + token, Accept: 'application/json' }, signal: AbortSignal.timeout(TIMEOUT_BUSCA_DOC_MS) })
+      data = await r.json().catch(() => null)
+    } catch (e) {
+      ultimoErro = { erro: 'falha ao consultar o PDPJ: ' + ((e && e.message) || e), motivo: 'rede' }
+      if (podeTentarDeNovo) { await espera(3000 * t); continue }
+      return ultimoErro
+    }
+    if (r.status === 401) return { erro: 'jus.br: token inválido/expirado — sincronize novamente', motivo: 'expirado' }
+    if ([502, 503, 504].includes(r.status)) {
+      ultimoErro = { erro: 'PDPJ recusou (HTTP ' + r.status + ')', motivo: 'http', status: r.status }
+      if (podeTentarDeNovo) { await espera(3000 * t); continue }
+      return { ...ultimoErro, erro: ultimoErro.erro + (t > 1 ? (' — tentei ' + t + ' vez(es)') : '') }
+    }
+    if (!r.ok) return { erro: 'PDPJ recusou (HTTP ' + r.status + ')', motivo: 'http', status: r.status }
+    const content = Array.isArray(data && data.content) ? data.content : []
+    const total = (data && typeof data.total === 'number') ? data.total : content.length
+    return { content, total }
+  }
+  return ultimoErro
+}
+
 // ——— varredura robusta: acha arrays de "movimentos" sem saber o nome do campo ———
 // O JSON do PDPJ muda de tribunal para tribunal; procurar pelo nome exato do
 // campo quebra a cada grau novo. Aqui procuramos pelo FORMATO: array cuja

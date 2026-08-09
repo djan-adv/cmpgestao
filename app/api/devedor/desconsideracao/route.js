@@ -30,16 +30,12 @@
 import { createClient } from '@supabase/supabase-js'
 import { chamarClaude } from '../../_ia/claude.js'
 import { getFreshToken, ESCRITORIO_CMP } from '../../jusbr/lib.js'
-import { PDPJ, PDPJ_HEADERS, buscarProcesso, movimentosDoProcesso, extraiMeta, tramitacoesDoProcesso } from '../../jusbr/movimentos/core.js'
+import { buscarProcesso, movimentosDoProcesso, extraiMeta, tramitacoesDoProcesso, buscarProcessosPorDocumento } from '../../jusbr/movimentos/core.js'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
 export const maxDuration = 300
 
-// A busca por CNPJ no PDPJ é bem mais lenta que a busca por número: em teste
-// real levou 52s numa consulta só. 25s (padrão de outras chamadas ao PDPJ neste
-// projeto) cortava a busca no meio. Dando folga aqui.
-const TIMEOUT_BUSCA_MS = 90000
 const MAX_PROCESSOS_DETALHE = 40  // um fetch de detalhe por processo — teto pro tempo de resposta
 const MAX_PARA_IA = 24
 
@@ -100,41 +96,8 @@ const FERRAMENTA_ACHADOS = [{
   },
 }]
 
-const espera = (ms) => new Promise((res) => setTimeout(res, ms))
-const MAX_TENTATIVAS_BUSCA = 3
-
-// busca a lista de processos onde o CNPJ é parte — só a 1ª página (100 no máximo)
-// 502/503/504 = gateway do PRÓPRIO PDPJ patinando (visto em teste real: some numa
-// nova tentativa) — vale a pena repetir; 401/demais erros não adianta insistir.
-// `deadline` (epoch ms) vem do orçamento de tempo da requisição inteira — nunca
-// insiste além dele, para sobrar tempo para o passo 2 (varredura por processo).
-async function buscarPorCnpj(token, cnpj, deadline) {
-  const url = `${PDPJ}/api/v2/processos?cpfCnpjParte=${encodeURIComponent(cnpj)}`
-  let ultimoErro = null
-  for (let t = 1; t <= MAX_TENTATIVAS_BUSCA; t++) {
-    const podeTentarDeNovo = t < MAX_TENTATIVAS_BUSCA && Date.now() < deadline
-    let r, data
-    try {
-      r = await fetch(url, { headers: { ...PDPJ_HEADERS, Authorization: 'Bearer ' + token, Accept: 'application/json' }, signal: AbortSignal.timeout(TIMEOUT_BUSCA_MS) })
-      data = await r.json().catch(() => null)
-    } catch (e) {
-      ultimoErro = { erro: 'falha ao consultar o PDPJ: ' + ((e && e.message) || e), motivo: 'rede' }
-      if (podeTentarDeNovo) { await espera(3000 * t); continue }
-      return ultimoErro
-    }
-    if (r.status === 401) return { erro: 'jus.br: token inválido/expirado — sincronize novamente', motivo: 'expirado' }
-    if ([502, 503, 504].includes(r.status)) {
-      ultimoErro = { erro: 'PDPJ recusou (HTTP ' + r.status + ')', motivo: 'http', status: r.status }
-      if (podeTentarDeNovo) { await espera(3000 * t); continue }
-      return { ...ultimoErro, erro: ultimoErro.erro + (t > 1 ? (' — tentei ' + t + ' vez(es)') : '') }
-    }
-    if (!r.ok) return { erro: 'PDPJ recusou (HTTP ' + r.status + ')', motivo: 'http', status: r.status }
-    const content = Array.isArray(data && data.content) ? data.content : []
-    const total = (data && typeof data.total === 'number') ? data.total : content.length
-    return { content, total }
-  }
-  return ultimoErro
-}
+// busca em app/api/jusbr/movimentos/core.js (buscarProcessosPorDocumento) —
+// compartilhada com /api/devedor/dossie, que faz a mesma varredura por CNPJ/CPF.
 
 export async function GET(request) {
   const t0 = Date.now()
@@ -158,7 +121,7 @@ export async function GET(request) {
   if (tok.erro) return Response.json({ erro: 'sessão do jus.br indisponível: ' + tok.erro + ' — sincronize o jus.br (ver instruções do Estagiário Virtual) e tente de novo.' }, { status: 502 })
 
   // 1) lista de processos onde o CNPJ é parte
-  const busca = await buscarPorCnpj(tok.token, cnpj, deadline)
+  const busca = await buscarProcessosPorDocumento(tok.token, cnpj, deadline)
   if (busca.erro) return Response.json({ erro: busca.erro, motivo: busca.motivo }, { status: busca.status || 502 })
   if (!busca.content.length) {
     return Response.json({

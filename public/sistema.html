@@ -2135,7 +2135,7 @@ function abrir(i){
   var _pb=''; try{ _pb=(typeof protoBlocoHTML==='function')?protoBlocoHTML(p.numero):''; }catch(ePB){ _pb=''; }
   html+='<div id="proto-na-ficha">'+_pb+'</div>';
   /* Dossiê do devedor: procura bens e créditos dele em OUTROS processos, pelo nome */
-  html+='<div class="card cmp-only" id="devedor-card"><p class="sectlabel" style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">🕵 Dossiê do devedor <button class="btn sm" style="font-size:12px;background:#7a4b00;color:#fff" onclick="abrirDossieDevedor()">Procurar bens e créditos</button></p><div class="note">Varre o Diário de Justiça de todos os tribunais atrás de <b>'+esc(p.oponente||'parte contrária')+'</b> em <b>outros processos</b> — como réu e como autor — e destaca penhoras, avaliações, leilões, alvarás e créditos a receber. É pista de investigação, não certidão.</div></div>';
+  html+='<div class="card cmp-only" id="devedor-card"><p class="sectlabel" style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">🕵 Dossiê do devedor <button class="btn sm" style="font-size:12px;background:#7a4b00;color:#fff" onclick="abrirDossieDevedor()">Procurar bens e créditos</button></p><div class="note">Varre o Diário de Justiça (por nome) e o jus.br (por CPF/CNPJ, se informado) atrás de <b>'+esc(p.oponente||'parte contrária')+'</b> em <b>outros processos</b> — como réu e como autor — e destaca penhoras, avaliações, leilões, alvarás e créditos a receber. É pista de investigação, não certidão.</div></div>';
   /* Desconsideração da personalidade jurídica: busca pelo CNPJ da parte no jus.br
      (PDPJ) — diferente do dossiê acima, que busca por NOME no DJEN */
   html+='<div class="card cmp-only" id="desconsideracao-card"><p class="sectlabel" style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">🏛 Desconsideração da personalidade jurídica <button class="btn sm" style="font-size:12px;background:#7a4b00;color:#fff" onclick="abrirDesconsideracaoPJ()">Procurar decisões (por CNPJ)</button></p><div class="note">Busca no jus.br (PDPJ), pelo <b>CNPJ</b> da empresa devedora, todos os processos em que ela é parte — inclusive de outros tribunais — e varre as movimentações atrás de decisão de desconsideração da personalidade jurídica (IDPJ). É pista de investigação, não certidão.</div></div>';
@@ -15936,15 +15936,18 @@ var _DEV_CONF={alta:'#127a53',media:'#8a5a00',baixa:'#b5342b'};
 async function abrirDossieDevedor(){
   if(!atual) return;
   var sugestao=(atual.oponente||'').split(/[;|]+/)[0].trim();
-  var nome=window.prompt('Dossiê do devedor — nome completo ou razão social exata.\n\nA busca do CNJ é por NOME (não aceita CPF/CNPJ), então nome incompleto acha pouco e nome comum traz homônimo.',sugestao);
-  if(!nome||nome.trim().length<5) return;
-  nome=nome.trim();
+  var nome=(window.prompt('Dossiê do devedor — nome completo ou razão social exata.\n\nDeixe em branco se for buscar só pelo CPF/CNPJ no próximo passo.',sugestao)||'').trim();
+  var docSug='';
+  try{ if(window.__docsPorNome && typeof normClienteNome==='function'){ var dd=window.__docsPorNome[normClienteNome(nome||sugestao)]; if(dd) docSug=dd; } }catch(eDD){}
+  var doc=(window.prompt('CPF ou CNPJ do devedor, se souber (opcional — busca direto no jus.br, cobre até processo sem publicação no diário).\n\nDeixe em branco para buscar só pelo nome.',docSug)||'').replace(/\D/g,'');
+  if((!nome||nome.length<5) && doc.length!==11 && doc.length!==14){ alert('Informe o nome completo (mínimo 5 letras) e/ou um CPF/CNPJ válido.'); return; }
   var meses=parseInt(window.prompt('Procurar em quantos meses para trás? (1 a 36)\n\nQuanto maior, mais demora — 12 costuma ser um bom começo.','12')||'12',10);
   if(!meses||meses<1) meses=12;
-  _devModal('<div class="note">Varrendo o Diário de Justiça de todos os tribunais… isso leva de 30 segundos a 2 minutos.</div>');
+  _devModal('<div class="note">'+(doc?'Varrendo o Diário de Justiça e o jus.br (por CPF/CNPJ)… ':'Varrendo o Diário de Justiça de todos os tribunais… ')+'isso leva de 30 segundos a alguns minutos.</div>');
   try{
     var jwt=(typeof finToken==='function')?await finToken():await jusbrJwt();
-    var u='/api/devedor/dossie?nome='+encodeURIComponent(nome)+'&meses='+meses+'&numero='+encodeURIComponent(String(atual.numero||'').replace(/\D/g,''));
+    var u='/api/devedor/dossie?meses='+meses+'&numero='+encodeURIComponent(String(atual.numero||'').replace(/\D/g,''))
+      +(nome?('&nome='+encodeURIComponent(nome)):'')+(doc?('&documento='+encodeURIComponent(doc)):'');
     var r=await fetch(u,{headers:jwt?{Authorization:'Bearer '+jwt}:{}});
     var j=await r.json();
     if(!j||!j.ok){ _devModal('<div class="note" style="color:#b5342b">'+finEsc((j&&j.erro)||'não deu para consultar')+'</div>'); return; }
@@ -15952,7 +15955,9 @@ async function abrirDossieDevedor(){
   }catch(e){ _devModal('<div class="note" style="color:#b5342b">Erro: '+finEsc(String(e&&e.message||e))+'</div>'); }
 }
 function _devHtml(j){
-  var h='<div style="font-weight:700;font-size:16px">🕵 '+finEsc(j.nome)+'</div>'
+  var titulo=j.nome?j.nome:('CPF/CNPJ '+(j.documento||''));
+  if(j.nome&&j.documento) titulo+=' · CPF/CNPJ '+j.documento;
+  var h='<div style="font-weight:700;font-size:16px">🕵 '+finEsc(titulo)+'</div>'
     +'<div class="note" style="margin:2px 0 12px">'+finEsc(j.resumo||'')+'</div>';
   if(j.erro_ia) h+='<div class="note" style="color:#b5342b;margin-bottom:8px">A IA não conseguiu analisar: '+finEsc(j.erro_ia)+' — a lista de processos abaixo continua válida.</div>';
   if((j.sinais||[]).length){
@@ -15978,10 +15983,12 @@ function _devHtml(j){
     h+='<div style="font-weight:700;font-size:13px;margin:14px 0 6px">Processos onde ele aparece ('+ps.length+')</div>'
       +'<div style="max-height:220px;overflow:auto;border:1px solid var(--line);border-radius:8px">'
       +'<table style="width:100%;font-size:12px"><tbody>'+ps.slice(0,80).map(function(p){
+        var fontesTxt=(p.fontes||[]).map(function(f){return f==='pdpj'?'jus.br':'DJEN';}).join('+');
         return '<tr style="border-bottom:1px solid #f0f2f5"><td style="padding:4px 8px">'+finEsc(typeof fmtCNJ==="function"?fmtCNJ(p.numero):p.numero)+'</td>'
           +'<td style="padding:4px 8px;color:#697180">'+finEsc(p.tribunal||'')+'</td>'
           +'<td style="padding:4px 8px">'+(p.polo?finEsc(p.polo):'<span style="color:#98a2b3">—</span>')+'</td>'
           +'<td style="padding:4px 8px;color:#697180">'+finEsc(String(p.ultima||'').split("-").reverse().join("/"))+'</td>'
+          +'<td style="padding:4px 8px;font-size:10.5px;color:#8a93a2" title="Encontrado por">'+finEsc(fontesTxt)+(p.acesso_pdpj===false?' · sem acesso':'')+'</td>'
           +'<td style="padding:4px 8px">'+(p.nosso?'<span style="color:#127a53;font-weight:700">nosso</span>':'')+'</td></tr>';
       }).join('')+'</tbody></table></div>';
   }
@@ -16003,7 +16010,7 @@ function _devModal(html,j){
 /* guarda o dossiê como texto na pasta do processo, para consultar depois */
 async function _devSalvar(){
   var j=window.__devDossie; if(!j||!atual) return;
-  var linhas=['DOSSIE DO DEVEDOR — '+j.nome,'Gerado em '+new Date().toLocaleString('pt-BR')+' · periodo: '+j.meses+' meses','','RESUMO: '+(j.resumo||''),'','SINAIS PATRIMONIAIS'];
+  var linhas=['DOSSIE DO DEVEDOR — '+(j.nome||('CPF/CNPJ '+(j.documento||'')))+(j.nome&&j.documento?(' · CPF/CNPJ '+j.documento):''),'Gerado em '+new Date().toLocaleString('pt-BR')+' · periodo: '+j.meses+' meses','','RESUMO: '+(j.resumo||''),'','SINAIS PATRIMONIAIS'];
   (j.sinais||[]).forEach(function(s,i){
     linhas.push('');
     linhas.push((i+1)+') '+(_DEV_TIPOS[s.tipo]||s.tipo).replace(/^\S+\s/,'')+' — confianca '+s.confianca);
