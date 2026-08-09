@@ -4292,7 +4292,7 @@ function salvarTarefa(){
     var digC=String(proc).replace(/\D/g,'');
     if(tipo==='audiencia'){
       var dAud=data||prazo;
-      var evConf=dAud?(window.__AGDB||[]).find(function(e){ return e && (e.tipo==='az'||/audi[êe]ncia/i.test(e.tt||'')) && e.data===dAud && String((e.p&&e.p.numero)||'').replace(/\D/g,'')===digC; }):null;
+      var evConf=(dAud&&digC)?(window.__AGDB||[]).find(function(e){ return e && (e.tipo==='az'||/audi[êe]ncia/i.test(e.tt||'')) && e.data===dAud && String((e.p&&e.p.numero)||'').replace(/\D/g,'')===digC; }):null;
       if(evConf){
         if(confirm('⚠ JÁ EXISTE AUDIÊNCIA designada para este processo em '+evConf.data.split('-').reverse().join('/')+':\n\n«'+(evConf.tt||'')+'» às '+(evConf.hora||'')+'\n\nOK = abrir a audiência existente para editar\nCancelar = descartar este agendamento')){
           fecharTarefa(); try{ abrirEventoAgenda(evConf); }catch(eC){ go('agenda'); }
@@ -5265,7 +5265,14 @@ function renderHistorico(){
       +'<div class="hist-act" style="display:none;margin-top:6px">'+(isMan?('<button class="btn sm ghost" style="font-size:11px" onclick="editarHistManual(event,'+atual.hist_full.indexOf(mv)+')">✎ editar</button> <button class="btn sm ghost" style="font-size:11px;color:#b5342b" onclick="excluirHistManual(event,'+atual.hist_full.indexOf(mv)+')">🗑 excluir</button> '):'')+'<button class="btn sm ghost" style="font-size:11px;color:'+(mv.pr?'#0b7285':'#697180')+'" onclick="_togglePro(event,'+atual.hist_full.indexOf(mv)+')" title="Marcar como providência adotada pelo escritório — passa a constar no resumo dos e-mails de atualização ao cliente">'+(mv.pr?'★ providência (remover)':'☆ marcar providência do escritório')+'</button>'
       +(jaVisivelApp?'':(' <button class="btn sm ghost" style="font-size:11px;color:'+(mv.vc?'#127a53':'#697180')+'" onclick="_toggleAppCliente(event,'+atual.hist_full.indexOf(mv)+')" title="'+(mv.vc?'Tirar do app do cliente':'Ex.: pedido de conclusão ao cartório — o cliente vê que o escritório agiu, mesmo sem publicação oficial ainda')+'">'+(mv.vc?'📲 visível no app (remover)':'📲 enviar ao app do cliente')+'</button>'))
       +'</div>';
-    (function(cont){li.onclick=function(){var d=li.querySelector(".hist-det");var a=li.querySelector(".hist-act");if(d.style.display==="none"){d.textContent=cont;d.style.display="block";if(a)a.style.display="block";}else{d.style.display="none";if(a)a.style.display="none";}};})(content);
+    (function(cont){li.onclick=function(){
+      /* selecionando texto pra copiar (arrastar o mouse dentro do item), o
+         mouseup solta um "click" igual a qualquer outro — sem essa checagem,
+         o item fechava assim que o usuário soltava o botão do mouse, e nunca
+         dava pra copiar nada daqui. */
+      var sel=window.getSelection?window.getSelection():null;
+      if(sel && String(sel.toString()||'').trim()) return;
+      var d=li.querySelector(".hist-det");var a=li.querySelector(".hist-act");if(d.style.display==="none"){d.textContent=cont;d.style.display="block";if(a)a.style.display="block";}else{d.style.display="none";if(a)a.style.display="none";}};})(content);
     ul.appendChild(li);
   })(arr[k]);}
   if(arr.length>histShown){more.innerHTML='<button class="btn sm ghost" onclick="verMaisHist()">ver mais ('+(arr.length-histShown)+' andamentos)</button>';}
@@ -10665,7 +10672,11 @@ function renderAudienciaSugestao(){
   /* 1) audiências JÁ MARCADAS na agenda deste processo: card destacado até o dia
      da audiência — some sozinho no dia seguinte */
   var marcadas=(window.__AGDB||[]).filter(function(e){
-    return e && e.data>=hoje && String((e.p&&e.p.numero)||'').replace(/\D/g,'')===dig
+    /* dig vazio (processo/caso ainda sem número CNJ) NUNCA pode "casar" com um
+       evento também sem processo — os dois batem em "" e todo compromisso do
+       funil comercial (reunião de lead, sem processo) aparecia grudado no
+       primeiro caso sem número que se abrisse. */
+    return e && dig && e.data>=hoje && String((e.p&&e.p.numero)||'').replace(/\D/g,'')===dig
       && (e.tipo==='az'||/audi[êe]ncia/i.test(e.tt||''));
   }).sort(function(a,b){return a.data<b.data?-1:1;});
   var datasMarcadas={};
@@ -10698,7 +10709,7 @@ function renderAudienciaSugestao(){
   /* 2) audiências FUTURAS encontradas no histórico e ainda fora da agenda: sugerir gravar */
   auds.slice(0,3).forEach(function(a){
     if(datasMarcadas[a.iso]) return;
-    var jaAg=(window.__AGDB||[]).some(function(e){ return e && e.data===a.iso && String((e.p&&e.p.numero)||'').replace(/\D/g,'')===dig; });
+    var jaAg=(window.__AGDB||[]).some(function(e){ return e && dig && e.data===a.iso && String((e.p&&e.p.numero)||'').replace(/\D/g,'')===dig; });
     if(jaAg) return;
     var dispensada=false; try{ dispensada=!!localStorage.getItem('audSug:'+dig+':'+a.iso); }catch(e){}
     if(dispensada) return;
