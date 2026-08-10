@@ -5337,7 +5337,11 @@ function renderHistorico(){
     if(ehCaptura) cl=["Captura externa (celular)","#127a53","cap"];
     /* resposta que chegou por e-mail — importada da caixa pelo robô do IMAP */
     var ehEmail=(mv.f==='email');
-    if(ehEmail) cl=["E-mail recebido — resposta","#0b7285","email"];
+    /* resposta vinda de e-mail oficial (@*.jus.br, mp.br, def.br) é o cartório
+       respondendo — vai em verde escuro, a mesma cor que o sistema usa para
+       "andou": destaca no meio dos movimentos automáticos do diário. */
+    var ehCartorio=ehEmail&&/@[a-z0-9.-]*\.(jus|mp|def)\.br/i.test(String(mv.texto||''));
+    if(ehEmail) cl=[ehCartorio?"Resposta do cartório (e-mail)":"E-mail recebido — resposta","#0F6E56","email"];
     /* O app do cliente só mostra fonte oficial (djen/datajud/jusbr/protocolo) OU
        o que o escritório liberou um a um por aqui (visivel_cliente). Sem essa
        segunda porta, a solicitação de conclusão ao cartório — que é trabalho
@@ -5362,8 +5366,8 @@ function renderHistorico(){
        item que o escritório liberou — aqui ele troca para avisar o contrário */
     var rotuloMan=(isMan&&mv.vc)?'Histórico manual — visível no app do cliente':(isMan?'Histórico manual (interno — não enviar ao cliente)':cl[0]);
     li.innerHTML='<div class="dt" style="font-size:11px;color:var(--muted)">'+dt+' · <span style="color:'+(isMan?(mv.vc?'#127a53':'#7b1e3a'):cl[1])+';font-weight:600">'+rotuloMan+'</span>'+(mv.pr?' · <span style="color:#0b7285;font-weight:700" title="Entra no resumo dos e-mails de atualização ao cliente">★ providência do escritório</span>':'')+(!isMan&&mv.vc&&!jaVisivelApp?' · <span style="color:#127a53;font-weight:700" title="Liberado para o app do cliente">📲 visível no app</span>':'')+'</div>'
-      +'<div'+(isMan?' style="color:#7b1e3a;font-weight:600"':'')+'>'+esc(nome)+(label?(' <span style="color:'+cor+';font-size:11px">('+label+')</span>'):'')+'</div>'
-      +(captInline?('<div style="font-size:13px;color:#374151;margin-top:4px;white-space:pre-wrap;max-height:280px;overflow:auto;background:'+(ehEmail?'#eef6f8':'#f4f7f5')+';border-radius:8px;padding:8px 10px">'+esc(captInline)+'</div>'):'')
+      +'<div'+(isMan?' style="color:#7b1e3a;font-weight:600"':(ehEmail?' style="color:#0F6E56;font-weight:600"':''))+'>'+esc(nome)+(label?(' <span style="color:'+cor+';font-size:11px">('+label+')</span>'):'')+'</div>'
+      +(captInline?('<div style="font-size:13px;color:#374151;margin-top:4px;white-space:pre-wrap;max-height:280px;overflow:auto;background:'+(ehEmail?'#edf6f1':'#f4f7f5')+(ehEmail?';border-left:3px solid #0F6E56':'')+';border-radius:8px;padding:8px 10px">'+esc(captInline)+'</div>'):'')
       /* responder sem sair do processo — o botão fica sempre visível na resposta */
       +(ehEmail?('<div style="margin-top:6px"><button class="btn sm" style="font-size:11px;background:#0F6E56;color:#fff" onclick="responderDoHistorico(event,'+atual.hist_full.indexOf(mv)+')">✉ responder</button> <button class="btn sm ghost" style="font-size:11px" onclick="event.stopPropagation();go(\'emails\')" title="Abrir a caixa de e-mails">abrir caixa</button></div>'):'')
       +anexosHtml(mv.id)
