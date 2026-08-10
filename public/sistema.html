@@ -1736,10 +1736,11 @@ function renderTriagemCard(pend){
   if(!fila.length){ html+='<p class="note" style="margin:0">Fila vazia — tudo triado. ✔</p>'; }
   else{
     html+=fila.slice(0,2).map(function(t){
-      var sug=sugestaoTeor(t.texto||t.titulo); var pz=sug.prazo?(sug.prazo+" dias"):"agendar";
+      var limpo=limparTeor(t.texto);
+      var sug=sugestaoTeor(limpo||t.titulo); var pz=sug.prazo?(sug.prazo+" dias"):"agendar";
       return '<div class="pubv2">'
         +'<div class="meta">'+esc(t.tribunal||"")+' · <a style="cursor:pointer;text-decoration:underline" onclick="irParaProcesso(\''+String(t.numero).replace(/'/g,"")+'\')">'+esc(t.numero)+'</a> · disp. '+esc(t.data||"")+'</div>'
-        +'<div class="tx">'+esc((t.texto||t.titulo||"").slice(0,140))+'…</div>'
+        +'<div class="tx">'+esc((limpo||t.titulo||"").slice(0,140))+'…</div>'
         +'<div class="iav2">✦ IA sugere: <b>'+esc(sug.ativ)+'</b> · prazo sugerido: '+pz+'</div>'
         +'<button class="btn sm gold" onclick="acaoTriagem('+t.id+')">Ação &rarr; criar atividade</button> '
         +'<button class="btn sm ghost" onclick="cienciaTriagem('+t.id+');renderPainel()">Ciência (arquivar)</button>'
@@ -3127,8 +3128,9 @@ function sugestaoTeor(txt){var t=(txt||"").toLowerCase();
 function verTeor(id){
   var t=TRIAGEM.find(function(x){return x.id===id;});var d=document.getElementById("teor-"+id);if(!d||!t)return;
   if(d.style.display==="none"){
-    var sug=sugestaoTeor(t.texto||t.titulo);var pz=sug.prazo?(sug.prazo+" dias"):"agendar/sem prazo";
-    d.innerHTML='<div style="background:var(--accentbg);border-left:3px solid var(--gold);padding:8px 10px;border-radius:0 6px 6px 0;margin-bottom:8px;color:var(--ink);white-space:normal"><b>Sugestão de tratamento (IA):</b> '+esc(sug.ativ)+' — <b>prazo sugerido: '+pz+'</b><div style="margin-top:6px"><button class="btn sm gold" onclick="acaoTriagem('+t.id+')">criar atividade &rarr;</button></div></div><div style="font-weight:600;margin-bottom:2px">Teor do despacho:</div>'+esc(t.texto||"(sem teor)");
+    var limpo=limparTeor(t.texto);
+    var sug=sugestaoTeor(limpo||t.titulo);var pz=sug.prazo?(sug.prazo+" dias"):"agendar/sem prazo";
+    d.innerHTML='<div style="background:var(--accentbg);border-left:3px solid var(--gold);padding:8px 10px;border-radius:0 6px 6px 0;margin-bottom:8px;color:var(--ink);white-space:normal"><b>Sugestão de tratamento (IA):</b> '+esc(sug.ativ)+' — <b>prazo sugerido: '+pz+'</b><div style="margin-top:6px"><button class="btn sm gold" onclick="acaoTriagem('+t.id+')">criar atividade &rarr;</button></div></div><div style="font-weight:600;margin-bottom:2px">Teor do despacho:</div>'+esc(limpo||"(sem teor)");
     d.style.display="block";
   } else d.style.display="none";
 }
@@ -3203,6 +3205,55 @@ async function recarregarPublicacoes(){
   console.log('CMPGestao: '+PUBLICACOES.length+' publicações recentes na triagem.');
   return PUBLICACOES.length;
 }
+/* O DJEN entrega a publicação num bloco só: cabeçalho do tribunal, endereço do
+   fórum, a decisão em si e, no rodapé, a tabela "Documentos associados ao
+   processo" com as chaves de acesso (números de 20+ dígitos). Na triagem só
+   interessa o miolo — o resto é ruído que faz o card virar uma parede de texto.
+   Limpa na EXIBIÇÃO, nunca no banco: o texto original continua intacto e o card
+   tem o botão "texto original" para conferir. */
+function limparTeor(txt){
+  var t=String(txt||''); if(!t) return '';
+  /* rodapé: da tabela de documentos para baixo é só título + chave de acesso */
+  t=t.replace(/\s*Documentos?\s+associados?\s+ao\s+processo[\s\S]*$/i,'');
+  t=t.replace(/\s*Documento[s]?\s+assinado[s]?\s+(digital|eletronic)[\s\S]*$/i,'');
+  t=t.replace(/\s*Para\s+(conferir|verificar)\s+(o\s+original|a\s+autenticidade)[\s\S]*$/i,'');
+  /* cabeçalho institucional: guarda o nome da vara e joga fora endereço e CEP */
+  t=t.replace(/^\s*(?:ESTADO\s+D[EOA]\s[\s\S]{0,300}?)(?=PROCESSO\s*N|AUTOR|EXEQUENTE|REQUERENTE)/i,function(cab){
+    var v=cab.match(/(\d+ª?\s*VARA[\s\S]{0,90}?|\d+º?\s*JUIZADO[\s\S]{0,90}?)(?=\s+(?:AV|AVENIDA|RUA|PRA[ÇC]A|ROD|R\.|F[ÓO]RUM)\b|,|\s+CEP)/i);
+    return v?(v[1].trim().replace(/\s+/g,' ')+'\n\n'):'';
+  });
+  /* chaves de acesso e hashes soltos que sobraram no meio do texto */
+  t=t.replace(/\b\d{14,}\b/g,'').replace(/\b[0-9a-f]{32,}\b/gi,'');
+  /* o texto vem sem quebra nenhuma: separa nos marcos da decisão para dar respiro */
+  t=t.replace(/\s+(DECIDO|DETERMINO|DEFIRO|INDEFIRO|Diante do exposto|Ante o exposto|Isso posto|Posto isso|Intime-se|Cite-se|P\.\s?I\.\s?C?\.?|P\.\s?R\.\s?I\.)/g,'\n\n$1');
+  /* qualificação do processo em linhas próprias — hoje vem tudo emendado */
+  t=t.replace(/\s+(AUTOR|AUTORA|EXEQUENTE|REQUERENTE|EMBARGANTE|R[EÉ]U|RECLAMANTE|RECLAMADO|EXECUTADO|REQUERIDO|EMBARGADO)(S)?\s*:/g,'\n$1$2:');
+  /* "DECISÃO"/"SENTENÇA" como rótulo da peça vira título — mas não quando faz
+     parte do nome da vara ("CUMPRIMENTOS DE SENTENÇA"), daí o teste da preposição */
+  t=t.replace(/(\S+)\s+(DECIS[ÃA]O|DESPACHO|SENTEN[ÇC]A|ATO ORDINAT[ÓO]RIO|CERTID[ÃA]O)\s+/g,function(m,ant,rot){
+    return /^(DE|DA|DO|E|EM|COM|DAS|DOS)$/i.test(ant)?m:(ant+'\n\n'+rot+'\n\n');
+  });
+  return t.replace(/[ \t]{2,}/g,' ').replace(/\n{3,}/g,'\n\n').trim();
+}
+/* trecho inicial + botão, para o card não abrir com 6 mil caracteres na cara */
+var TEOR_CORTE=1200;
+function expandirTeor(id,btn){
+  var t=TRIAGEM.find(function(x){return x.id===id;});
+  var d=document.getElementById('teortxt-'+id); if(!t||!d) return;
+  d.textContent=limparTeor(t.texto); d.style.maxHeight='none';
+  if(btn&&btn.parentElement) btn.parentElement.removeChild(btn);
+}
+/* alterna entre o teor limpo e o que veio do diário, sem perder o lugar */
+function teorOriginal(id,btn){
+  var t=TRIAGEM.find(function(x){return x.id===id;});
+  var d=document.getElementById('teortxt-'+id); if(!t||!d) return;
+  var bruto=(btn.getAttribute('data-bruto')==='1');
+  d.textContent=bruto?limparTeor(t.texto):String(t.texto||'');
+  d.style.maxHeight='none';
+  btn.setAttribute('data-bruto',bruto?'0':'1');
+  btn.textContent=bruto?'texto original':'texto limpo';
+  var ma=document.getElementById('teormais-'+id); if(ma&&ma.parentElement) ma.parentElement.removeChild(ma);
+}
 function renderTriagem(){
   var tb=document.getElementById("triagem");tb.innerHTML="";
   var naoTratadas=TRIAGEM.filter(function(t){return !t.done});
@@ -3218,7 +3269,8 @@ function renderTriagem(){
   var vazia=document.getElementById("triagem-vazia");
   if(vazia){ vazia.style.display=lista.length?"none":"block"; vazia.textContent=(triagemAba==='tratadas')?'Nenhuma publicação tratada ainda.':'Fila vazia — tudo triado.'; }
   lista.slice(0,300).forEach(function(t){
-    var sug=sugestaoTeor(t.texto||t.titulo); var pz=sug.prazo?(sug.prazo+" dias"):"agendar";
+    var limpo=limparTeor(t.texto);
+    var sug=sugestaoTeor(limpo||t.titulo); var pz=sug.prazo?(sug.prazo+" dias"):"agendar";
     var numSafe=String(t.numero).replace(/'/g,"");
     /* partes: autor × réus (até 2 nomes + "e outros") — essencial para clientes com
        muitos processos, que só se distinguem pela parte contrária */
@@ -3233,7 +3285,11 @@ function renderTriagem(){
       : '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px"><button class="btn sm gold" onclick="acaoTriagem('+t.id+')">criar atividade &rarr;</button><button class="btn sm ghost" onclick="cienciaTriagem('+t.id+')">ciência (arquivar)</button><button class="btn sm ghost" style="color:#0b7285" onclick="abrirAtualizarCliente(\''+numSafe+'\')" title="Comunicar a cliente por e-mail">&#9993; cliente</button></div>';
     var teorHtml=barra
       +'<div style="background:var(--accentbg);border-left:3px solid var(--gold);padding:8px 10px;border-radius:0 6px 6px 0;margin:0 0 8px;color:var(--ink);white-space:normal"><b>✦ IA sugere:</b> '+esc(sug.ativ)+' · <b>prazo sugerido: '+pz+'</b></div>'
-      +(t.texto?('<div style="font-weight:600;margin-bottom:2px">Teor do despacho:</div><div style="white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;max-height:480px;overflow:auto;font-size:13.5px;line-height:1.55">'+esc(t.texto)+'</div>'):'<div class="note">Sem teor disponível.</div>');
+      +(t.texto?('<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:2px"><span style="font-weight:600">Teor do despacho:</span>'
+          +'<a onclick="teorOriginal('+t.id+',this)" data-bruto="0" style="cursor:pointer;font-size:11px;color:var(--muted);text-decoration:underline" title="Ver como veio do diário, sem a limpeza">texto original</a></div>'
+        +'<div id="teortxt-'+t.id+'" style="white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;max-height:480px;overflow:auto;font-size:13.5px;line-height:1.55">'+esc(limpo.length>TEOR_CORTE?(limpo.slice(0,TEOR_CORTE).replace(/\s+\S*$/,'')+'…'):limpo)+'</div>'
+        +(limpo.length>TEOR_CORTE?('<div id="teormais-'+t.id+'" style="margin-top:6px"><button class="btn sm ghost" style="font-size:11.5px" onclick="expandirTeor('+t.id+',this)">▾ mostrar tudo ('+limpo.length.toLocaleString('pt-BR')+' caracteres)</button></div>'):'')
+        ):'<div class="note">Sem teor disponível.</div>');
     var card=document.createElement("div");
     card.style.cssText='border:1px solid var(--line);border-radius:10px;padding:10px 13px;margin-bottom:10px;background:#fff';
     card.innerHTML=
@@ -3249,7 +3305,7 @@ function renderTriagem(){
       /* movimentação + ver teor */
       +'<div style="font-size:13.5px;font-weight:600;color:#185FA5">'+esc(t.titulo)+'</div>'
       /* prévia larga e legível */
-      +(t.texto?('<div class="mov-previa" style="font-size:13px;line-height:1.5;color:var(--ink);opacity:.88;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical;overflow:hidden;background:#fafbfc;border-left:3px solid var(--line);border-radius:0 8px 8px 0;padding:8px 12px;margin-top:7px">'+esc(t.texto)+'</div>'):'')
+      +(t.texto?('<div class="mov-previa" style="font-size:13px;line-height:1.5;color:var(--ink);opacity:.88;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical;overflow:hidden;background:#fafbfc;border-left:3px solid var(--line);border-radius:0 8px 8px 0;padding:8px 12px;margin-top:7px">'+esc(limpo)+'</div>'):'')
       /* teor aberto: barra de decisão no TOPO + sugestão IA + texto completo */
       +'<div class="teor" id="teor-'+t.id+'" style="display:none;font-size:13px;color:var(--ink);margin-top:8px;border-top:1px dashed var(--line);padding-top:10px">'+teorHtml+'</div>';
     tb.appendChild(card);
@@ -3275,7 +3331,7 @@ function _autoVincularSeCaso(num){
 function acaoTriagem(id){
   var t=TRIAGEM.find(function(x){return x.id===id});if(!t)return;
   _autoVincularSeCaso(t.numero);
-  var sug=sugestaoTeor(t.texto||t.titulo); triagemAtual=id;
+  var sug=sugestaoTeor(limparTeor(t.texto)||t.titulo); triagemAtual=id;
   abrirNovaTarefa(t.numero);
   document.getElementById("t-titulo").value=sug.ativ;
   document.getElementById("t-tipo").value=sug.tipo;
@@ -5295,6 +5351,7 @@ function renderHistorico(){
     /* o próprio andamento pode JÁ conter o inteiro teor (publicação DJEN gravada
        no histórico) — nesse caso mostra "ver teor" direto, sem depender da lista global */
     if(!teor && !isMan && !ehCaptura && !ehEmail && String(mv.texto||'').length>180) teor=mv.texto;
+    if(teor) teor=limparTeor(teor);   /* mesma limpeza da triagem: sem cabeçalho nem chave de acesso */
     /* captura externa: mostra o próprio texto (com a transcrição da IA), sem a nota de "não está na captura pública" */
     var content=teor||((ehCaptura||ehEmail)?(mv.texto||nome):("Registro do movimento: "+(mv.texto||nome)+"\n\n(O conteúdo detalhado deste andamento não está na captura pública. As publicações com o inteiro teor estão no bloco de publicações e marcadas em dourado.)"));
     /* captura e e-mail recebido: o texto vem direto na tela, sem precisar clicar —
