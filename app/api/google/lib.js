@@ -138,6 +138,29 @@ export async function estaAutorizado(sb) {
   return !!expira
 }
 
+// Quem VAI para o Google Calendar. A tabela agenda_eventos guarda tudo que tem
+// data — audiência, reunião, prazo fatal, tarefa do escritório, lembrete — e
+// mandar tudo entope o calendário pessoal com dezenas de "verificar processo".
+// Só sobem COMPROMISSOS COM HORA MARCADA E TERCEIROS: audiência, perícia,
+// sessão de julgamento e reunião.
+//
+// Critério, por origem:
+//   auto-sistema → audiência lida do andamento do processo: sempre sobe
+//   crm_lead     → reunião marcada com lead: sempre sobe
+//   google       → NUNCA: veio de lá, devolver criaria evento duplicado
+//   protocolo    → prazo de protocolo, é tarefa: não sobe
+//   sistema      → só se o TÍTULO COMEÇAR com audiência/reunião/perícia/sessão.
+//                  O "começar" é o que separa "Audiência inicial" (o compromisso)
+//                  de "lembrar cliente da audiência" (tarefa sobre ele).
+const RE_COMPROMISSO = /^\s*(audi[êe]ncia|reuni[ãa]o|per[íi]cia|sess[ãa]o\s+de\s+julgamento)\b/i
+export function ehCompromissoAgenda(ev) {
+  const origem = String((ev && ev.origem) || '')
+  if (origem === 'google') return false
+  if (origem === 'auto-sistema' || origem === 'crm_lead') return true
+  if (origem === 'protocolo') return false
+  return RE_COMPROMISSO.test(String((ev && ev.titulo) || ''))
+}
+
 // ————— API do Calendar —————
 function headersGoogle(token) { return { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' } }
 

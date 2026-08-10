@@ -15,7 +15,7 @@
 // fazer — não é erro, é o estado normal antes da primeira autorização.
 
 import { createClient } from '@supabase/supabase-js'
-import { ESCRITORIO_CMP, estaAutorizado, getFreshGoogleToken, sincronizarEvento } from '../../google/lib.js'
+import { ESCRITORIO_CMP, apagarEventoGoogle, ehCompromissoAgenda, estaAutorizado, getFreshGoogleToken, sincronizarEvento } from '../../google/lib.js'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -36,18 +36,43 @@ export async function GET(request) {
     return Response.json({ ok: true, sincronizados: 0, resumo: 'Google Calendar ainda não foi autorizado — abra /api/google/auth logado no sistema para ligar a sincronização.' })
   }
 
-  const { data: pendentes, error } = await sb.from('agenda_eventos')
-    .select('id,data,hora,tipo,titulo,resp,processo_numero,descricao,local_evento')
+  // Busca uma janela maior que o lote porque o filtro de compromisso (título) não
+  // dá para fazer no SQL — a maioria das linhas é tarefa e seria descartada aqui.
+  const { data: candidatos, error } = await sb.from('agenda_eventos')
+    .select('id,data,hora,tipo,titulo,resp,origem,processo_numero,descricao,local_evento')
     .eq('escritorio_id', ESCRITORIO_CMP)
     .is('google_event_id', null)
     .gte('data', hojeISO())
     .order('data', { ascending: true })
-    .limit(LOTE)
+    .limit(LOTE * 20)
   if (error) return Response.json({ erro: error.message }, { status: 500 })
-  if (!pendentes || !pendentes.length) return Response.json({ ok: true, sincronizados: 0, resumo: 'nada pendente' })
+  const pendentes = (candidatos || []).filter(ehCompromissoAgenda).slice(0, LOTE)
+
+  // Faxina: eventos que já subiram mas NÃO são compromisso (tarefas mandadas pela
+  // primeira versão deste robô, que não filtrava) saem do Google Calendar.
+  const { data: jaSubiram } = await sb.from('agenda_eventos')
+    .select('id,titulo,origem,google_event_id')
+    .eq('escritorio_id', ESCRITORIO_CMP)
+    .not('google_event_id', 'is', null)
+    .limit(500)
+  const paraApagar = (jaSubiram || []).filter(ev => !ehCompromissoAgenda(ev)).slice(0, LOTE * 4)
+
+  if (!pendentes.length && !paraApagar.length) return Response.json({ ok: true, sincronizados: 0, resumo: 'nada pendente' })
 
   const tok = await getFreshGoogleToken(sb)
   if (tok.erro) return Response.json({ erro: 'Google indisponível: ' + tok.erro }, { status: 502 })
+
+  let apagados = 0
+  const detalhesApagar = []
+  for (const ev of paraApagar) {
+    if (debug) { detalhesApagar.push({ id: ev.id, titulo: ev.titulo, origem: ev.origem }); continue }
+    const d = await apagarEventoGoogle(tok.token, ev.google_event_id)
+    if (d.erro) continue
+    apagados++
+    // limpa a marca para o evento voltar a ser "não sincronizado" — se um dia
+    // virar compromisso de verdade (renomeado), sobe de novo pelo caminho normal
+    try { await sb.from('agenda_eventos').update({ google_event_id: null, google_meet_link: null, google_sync_em: null, google_sync_erro: null }).eq('id', ev.id) } catch (e) {}
+  }
 
   let sincronizados = 0, falhas = 0
   const detalhes = []
@@ -76,8 +101,12 @@ export async function GET(request) {
   }
 
   return Response.json({
-    ok: true, sincronizados, falhas,
-    resumo: sincronizados + ' evento(s) sincronizado(s) com o Google Calendar' + (falhas ? (' · ' + falhas + ' falha(s)') : '') + (pendentes.length === LOTE ? ' · pode haver mais pendentes (lote cheio)' : ''),
+    ok: true, sincronizados, falhas, apagados,
+    resumo: sincronizados + ' compromisso(s) sincronizado(s) com o Google Calendar'
+      + (apagados ? (' · ' + apagados + ' tarefa(s) removida(s) do Google') : '')
+      + (falhas ? (' · ' + falhas + ' falha(s)') : '')
+      + (pendentes.length === LOTE ? ' · pode haver mais pendentes (lote cheio)' : ''),
     detalhes: debug ? detalhes : undefined,
+    a_remover: debug ? detalhesApagar : undefined,
   })
 }
