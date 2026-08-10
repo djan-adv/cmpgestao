@@ -30,6 +30,44 @@ const MAX_CORPO = 60 * 1024         // guarda no máximo 60 KB de texto por e-ma
 function admin() { return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } }) }
 const soDig = (s) => String(s || '').replace(/\D/g, '')
 
+// Telefone que o cliente mandou de volta depois de o convite do app pedir.
+// Devolve o número gravado, ou null quando não há nada a fazer. Conservador:
+// só age se NÓS pedimos àquele endereço e a ficha continua sem telefone —
+// assim nenhum número solto de uma conversa qualquer entra no cadastro.
+async function anotarTelefoneDaResposta(sb, escritorioId, de, corpo) {
+  const { acharTelefone, formataTelefone } = await import('../../portal/convite-lib.js')
+  const { data: conv } = await sb.from('portal_convites')
+    .select('id,contato_id,pediu_telefone,telefone_recebido')
+    .eq('escritorio_id', escritorioId).eq('email', de).maybeSingle()
+  if (!conv || !conv.pediu_telefone || conv.telefone_recebido) return null
+
+  const tel = acharTelefone(corpo)
+  if (!tel) return null
+
+  let contatoId = conv.contato_id
+  if (!contatoId) {
+    const { data: c } = await sb.from('contatos').select('id').eq('escritorio_id', escritorioId).eq('email', de).limit(1).maybeSingle()
+    contatoId = (c && c.id) || null
+  }
+  if (!contatoId) return null
+
+  const { data: ficha } = await sb.from('contatos').select('id,telefone,telefones').eq('id', contatoId).maybeSingle()
+  if (!ficha) return null
+  const bonito = formataTelefone(tel)
+  if (String(ficha.telefone || '').trim()) {
+    // já tem telefone: não mexe na ficha, mas registra que o cliente respondeu
+    await sb.from('portal_convites').update({ telefone_recebido: bonito, telefone_recebido_em: new Date().toISOString() }).eq('id', conv.id)
+    return null
+  }
+  const lista = Array.isArray(ficha.telefones) ? ficha.telefones.slice() : []
+  if (!lista.some(t => soDig(t) === tel)) lista.push(bonito)
+  await sb.from('contatos').update({ telefone: bonito, telefones: lista }).eq('id', contatoId)
+  await sb.from('portal_convites').update({
+    telefone_recebido: bonito, telefone_recebido_em: new Date().toISOString(), pediu_telefone: false,
+  }).eq('id', conv.id)
+  return bonito
+}
+
 // tira a citação do e-mail anterior — o que interessa é o que a pessoa escreveu agora
 function limpaResposta(txt) {
   let t = String(txt || '').replace(/\r\n/g, '\n')
@@ -113,6 +151,7 @@ export async function GET(request) {
 
   const client = new ImapFlow({ host, port, secure: port === 993, auth: { user, pass }, logger: false })
   const importados = []
+  const telefonesAnotados = []
   let vistos = 0, pulados = 0
   let lock
   try {
@@ -219,12 +258,23 @@ export async function GET(request) {
           const a = await sb.from('andamentos').insert({ processo_id: proc.id, data: dt, texto, fonte: 'email' }).select('id').single()
           if (!a.error && a.data) await sb.from('emails_recebidos').update({ andamento_id: a.data.id }).eq('id', ins.data.id)
         }
+
+        // ——— telefone que o cliente mandou na resposta ———
+        // Quando o convite do app pediu o número que faltava, a resposta chega
+        // aqui. Só grava se: (a) pedimos a esta pessoa, (b) a ficha continua sem
+        // telefone e (c) o texto traz um número brasileiro plausível. Nunca
+        // sobrescreve telefone já cadastrado.
+        try {
+          const anotado = await anotarTelefoneDaResposta(sb, escritorioId, de, corpo)
+          if (anotado) telefonesAnotados.push({ de, telefone: anotado })
+        } catch (e) { /* nunca derruba a leitura da caixa */ }
         importados.push({ de, assunto: env.subject, numero, casou_por: casouPor })
       }
     }
     await sb.from('email_imap_estado').upsert({
       id: 1, uidvalidity: uidv, ultima_uid: ultimaUid, ultima_checagem: new Date().toISOString(),
-      ultimo_resultado: importados.length + ' importado(s) de ' + vistos + ' visto(s)',
+      ultimo_resultado: importados.length + ' importado(s) de ' + vistos + ' visto(s)'
+      + (telefonesAnotados.length ? (' — ' + telefonesAnotados.length + ' telefone(s) anotado(s) na ficha') : ''),
     }, { onConflict: 'id' })
   } catch (e) {
     try { await sb.from('email_imap_estado').update({ ultima_checagem: new Date().toISOString(), ultimo_resultado: 'erro: ' + String((e && e.message) || e).slice(0, 300) }).eq('id', 1) } catch (_) {}
@@ -238,6 +288,7 @@ export async function GET(request) {
     ok: true, vistos, pulados, importados: importados.length,
     no_historico: importados.filter(x => x.numero).length,
     sem_processo: importados.filter(x => !x.numero).length,
+    telefones_anotados: telefonesAnotados,
     itens: importados.slice(0, 20),
   })
 }

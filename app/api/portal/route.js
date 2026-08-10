@@ -237,6 +237,14 @@ export async function POST(request) {
     if (!a.primeiro_login_em) marca.primeiro_login_em = marca.ultimo_login_em
     await sb.from('portal_acessos').update(marca).eq('id', a.id)
 
+    // entrou: encerra a cobrança do convite (o robô app-convite para de insistir)
+    if (!a.primeiro_login_em) {
+      try {
+        const { encerrarConvite } = await import('./convite-lib.js')
+        await encerrarConvite(sb, { escritorio_id: a.escritorio_id, email: a.email, motivo: 'logou' })
+      } catch (e) {}
+    }
+
     return Response.json({ ok: true, token, nome: a.nome || '' })
   }
 

@@ -5,6 +5,7 @@
 // cópia oculta ao coordenador, cópia na pasta "Enviados" e trava anti-repetição.
 
 import { createClient } from '@supabase/supabase-js'
+import { estadoConvite, blocoConviteHtml, blocoConviteTexto, registrarConvite, svcOpcional } from '../portal/convite-lib.js'
 import nodemailer from 'nodemailer'
 import crypto from 'crypto'
 import fs from 'fs'
@@ -112,7 +113,11 @@ function esc(s) {
 // ou { erro, status, repetido }. Nunca lança.
 // confirmarEventoId: id do evento da agenda — liga o botão "✅ Confirmo presença"
 // dentro do e-mail; o clique do cliente confirma o evento sozinho.
-export async function enviarEmailCore({ para, cc, assunto, corpo, numero, dedup = true, inReplyTo = '', confirmarEventoId = null, anexos = [], destino = '' }) {
+// convidarApp: por padrão todo e-mail de cliente confere se a pessoa já usa o
+// app e, se não usa, leva o convite junto (e pede o telefone que falta na ficha).
+// Passe false quando o próprio e-mail já for sobre isso — o e-mail de credenciais
+// do portal e a cobrança do robô, que não podem convidar a si mesmos.
+export async function enviarEmailCore({ para, cc, assunto, corpo, numero, dedup = true, inReplyTo = '', confirmarEventoId = null, anexos = [], destino = '', convidarApp = true }) {
   const host = process.env.SMTP_HOST
   const port = parseInt(process.env.SMTP_PORT || '465', 10)
   const smtpUser = process.env.SMTP_USER
@@ -202,12 +207,35 @@ export async function enviarEmailCore({ para, cc, assunto, corpo, numero, dedup 
       '<a href="https://instagram.com/djan.adv" style="display:inline-block;background:#2E3A4B;color:#fff;text-decoration:none;padding:8px 16px;border-radius:20px;font-size:13px;margin:2px 4px">Instagram @djan.adv</a>' +
       '<a href="https://gestao.cmpadvogados.com.br/areas-atuacao.html" style="display:inline-block;background:#C9A227;color:#fff;text-decoration:none;padding:8px 16px;border-radius:20px;font-size:13px;margin:2px 4px">Nosso site — áreas de atuação</a>' +
     '</div>'
+  // ——— convite para o app ———
+  // Antes de mandar, confere no cadastro se este destinatário já usa o aplicativo.
+  // Quem já entrou não vê nada; quem tem acesso e nunca entrou recebe um empurrão;
+  // quem não tem acesso é convidado a pedir. Se o telefone estiver faltando na
+  // ficha, o mesmo bloco pede o número. Tudo best-effort: falha aqui não impede
+  // o e-mail de sair.
+  let conviteHtml = '', conviteTexto = '', convitePendente = null
+  if (convidarApp && !paraVara) {
+    try {
+      const sbc = svcOpcional()
+      if (sbc) {
+        const est = await estadoConvite(sbc, { email: para, numero })
+        est.email_destino = para
+        conviteHtml = blocoConviteHtml(est)
+        conviteTexto = blocoConviteTexto(est)
+        // o registro da cobrança só entra DEPOIS do envio dar certo (mais abaixo):
+        // e-mail que não saiu não pode contar como convite feito.
+        if (conviteHtml) convitePendente = { sb: sbc, est }
+      }
+    } catch (e) {}
+  }
+
   const corpoHtml = esc(corpo).replace(/\n/g, '<br>')
   const html =
     '<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#1e2733;max-width:600px;margin:0 auto;padding:8px">' +
       '<div style="text-align:center;padding:6px 0 2px">' + logoTag + '</div>' +
       '<div style="border-top:3px solid #b8912e;padding:16px 6px;line-height:1.55">' + corpoHtml + '</div>' +
       blocoConfirmar +
+      conviteHtml +
       rodapeSocial +
     '</div>'
 
@@ -221,7 +249,7 @@ export async function enviarEmailCore({ para, cc, assunto, corpo, numero, dedup 
     to: para,
     subject: assunto,
     // texto puro: o link de confirmação vai por extenso (clientes sem HTML)
-    text: corpo + ((tokenRastreio && confirmarEventoId) ? ('\n\nPara confirmar que recebeu este aviso, basta abrir o link (um clique, sem precisar responder):\n' + URL_PUBLICA + '/api/email/confirmar?t=' + tokenRastreio) : ''),
+    text: corpo + ((tokenRastreio && confirmarEventoId) ? ('\n\nPara confirmar que recebeu este aviso, basta abrir o link (um clique, sem precisar responder):\n' + URL_PUBLICA + '/api/email/confirmar?t=' + tokenRastreio) : '') + conviteTexto,
     html,
     attachments,
     messageId,
@@ -254,6 +282,8 @@ export async function enviarEmailCore({ para, cc, assunto, corpo, numero, dedup 
     if (copiaPara && /@/.test(copiaPara) && !destinos.some(d => d.toLowerCase() === copiaPara.toLowerCase())) destinos.push(copiaPara)
     const info = await transporter.sendMail({ envelope: { from: smtpUser, to: destinos }, raw })
     const copia = await salvarEnviados(raw)   // grava em "Enviados" (best-effort)
+    // saiu com o convite dentro: abre/atualiza a linha de cobrança do app
+    if (convitePendente) { try { await registrarConvite(convitePendente.sb, convitePendente.est, para) } catch (e) {} }
     return { ok: true, de: smtpUser, id: (info && info.messageId) || messageId, copiado_enviados: copia.ok, copia_pasta: copia.pasta, copia_motivo: copia.ok ? undefined : copia.motivo }
   } catch (e) {
     // envio falhou: solta a trava anti-repetição para permitir tentar de novo hoje
