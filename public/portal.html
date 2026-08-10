@@ -349,6 +349,20 @@ var deferredPrompt = null; // beforeinstallprompt (Android/Chrome)
 
 function $(id){ return document.getElementById(id); }
 function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+/* Vários tribunais mandam o andamento com o acento já em entidade HTML
+   ("PODER JUDICI&Aacute;RIO", "2&ordm; JUIZADO"). Como o esc() escapa o '&',
+   o cliente via o código cru na tela do celular. Aqui a entidade volta a ser
+   letra ANTES do escape — o esc() continua rodando depois, então nada de HTML
+   do tribunal chega a ser interpretado. */
+function decEnt(s){
+  s = String(s==null?'':s);
+  if(s.indexOf('&') < 0) return s;                 /* caso comum: sai na hora */
+  var ta = document.createElement('textarea');     /* conteúdo de textarea é texto puro: não executa nada */
+  ta.innerHTML = s;
+  return ta.value;
+}
+/* escape para texto que vem do tribunal: decodifica a entidade e escapa depois */
+function escT(s){ return esc(decEnt(s)); }
 function brData(iso){ if(!iso) return ''; var m=String(iso).match(/(\d{4})-(\d{2})-(\d{2})/); return m?(m[3]+'/'+m[2]+'/'+m[1]):String(iso).slice(0,10); }
 /* "Onde está agora" e "por onde passou", para o cliente. Devolve '' quando os
    autos estão na origem: no caso comum não há o que explicar. */
@@ -367,10 +381,10 @@ function _pLocalAtual(p){
   if(!atual || _pMesmoOrgao(atual,origem)) return '';
   var tr=(p&&Array.isArray(p.tramitacoes))?p.tramitacoes:[];
   var g=_pGrauCurto(p.grau_atual||(tr.length?tr[tr.length-1].grau:''));
-  var out='<div class="kv"><div class="k">Onde está agora</div><div class="v">'+esc(atual)+(g?(' ('+esc(g)+')'):'')+'</div></div>';
+  var out='<div class="kv"><div class="k">Onde está agora</div><div class="v">'+escT(atual)+(g?(' ('+escT(g)+')'):'')+'</div></div>';
   if(tr.length>1){
     out+='<div class="kv"><div class="k">Por onde passou</div><div class="v">'
-      +tr.map(function(t){ return esc(t.orgao||'—')+(t.desde?(' — '+brData(t.desde)):''); }).join(' → ')
+      +tr.map(function(t){ return escT(t.orgao||'—')+(t.desde?(' — '+brData(t.desde)):''); }).join(' → ')
       +'</div></div>';
   }
   return out;
@@ -540,10 +554,10 @@ function renderCards(){
     d.innerHTML =
       (p.nao_lidas?('<div class="badge">'+p.nao_lidas+'</div>'):'') +
       '<div class="num">Processo nº '+esc(p.numero||'—')+'</div>' +
-      '<div class="vs">'+esc(p.cliente||'Você')+' <span class="x">×</span> '+esc(p.oponente||'Parte contrária')+'</div>' +
-      '<div class="tt">'+esc(limpaTitulo(p.titulo))+'</div>' +
-      (p.ultima?('<div class="ult"><b>Última movimentação'+(p.ultima.data?(' — '+brData(p.ultima.data)):'')+':</b> '+esc(p.ultima.texto)+'…</div>'):'') +
-      (p.vinculado?('<div class="vinc"><b>Ação principal (nº '+esc(p.vinculado.numero)+')'+(p.vinculado.data?(' — '+brData(p.vinculado.data)):'')+':</b> '+esc(p.vinculado.texto)+'…</div>'):'') +
+      '<div class="vs">'+escT(p.cliente||'Você')+' <span class="x">×</span> '+escT(p.oponente||'Parte contrária')+'</div>' +
+      '<div class="tt">'+escT(limpaTitulo(p.titulo))+'</div>' +
+      (p.ultima?('<div class="ult"><b>Última movimentação'+(p.ultima.data?(' — '+brData(p.ultima.data)):'')+':</b> '+escT(p.ultima.texto)+'…</div>'):'') +
+      (p.vinculado?('<div class="vinc"><b>Ação principal (nº '+esc(p.vinculado.numero)+')'+(p.vinculado.data?(' — '+brData(p.vinculado.data)):'')+':</b> '+escT(p.vinculado.texto)+'…</div>'):'') +
       '<div><span class="chip'+(enc?' enc':'')+'">'+esc(enc?'Encerrado':(p.fase||p.status||'Em andamento'))+'</span></div>';
     c.appendChild(d);
   });
@@ -563,7 +577,7 @@ function abrirEscolhaChat(){
       (p.nao_lidas?('<div class="badge">'+p.nao_lidas+'</div>'):'') +
       '<div class="vs">'+esc(p.cliente||'Você')+' <span class="x">×</span> '+esc(p.oponente||'Parte contrária')+'</div>' +
       '<div class="num">Processo nº '+esc(p.numero||'—')+'</div>' +
-      (p.titulo?('<div class="tt">'+esc(limpaTitulo(p.titulo))+'</div>'):'');
+      (p.titulo?('<div class="tt">'+escT(limpaTitulo(p.titulo))+'</div>'):'');
     c.appendChild(d);
   });
 }
@@ -598,9 +612,9 @@ function renderDetalhes(){
   var html =
     '<div class="sec"><p class="lab">Dados do processo</p>' +
       '<div class="kv"><div class="k">Número</div><div class="v mono">'+esc(p.numero||'—')+'</div></div>' +
-      (p.classe?('<div class="kv"><div class="k">Classe</div><div class="v">'+esc(p.classe)+'</div></div>'):'') +
-      (p.assunto?('<div class="kv"><div class="k">Assunto</div><div class="v">'+esc(p.assunto)+'</div></div>'):'') +
-      ((p.foro||p.orgao)?('<div class="kv"><div class="k">Vara de origem</div><div class="v">'+esc(p.foro||p.orgao)+'</div></div>'):'') +
+      (p.classe?('<div class="kv"><div class="k">Classe</div><div class="v">'+escT(p.classe)+'</div></div>'):'') +
+      (p.assunto?('<div class="kv"><div class="k">Assunto</div><div class="v">'+escT(p.assunto)+'</div></div>'):'') +
+      ((p.foro||p.orgao)?('<div class="kv"><div class="k">Vara de origem</div><div class="v">'+escT(p.foro||p.orgao)+'</div></div>'):'') +
       /* Só aparece quando os autos NÃO estão na vara de origem — em recurso, é a
          primeira coisa que o cliente pergunta, e antes a ficha respondia com a
          vara de 1º grau como se nada tivesse mudado. */
@@ -612,7 +626,7 @@ function renderDetalhes(){
     '</div>';
   if(c){
     html += '<div class="sec cart"><p class="lab">Contato do cartório da Vara</p>' +
-      '<div style="font-size:15px;font-weight:600;margin-bottom:6px">'+esc(c.orgao||'')+(c.comarca?(' — '+esc(c.comarca)):'')+'</div>' +
+      '<div style="font-size:15px;font-weight:600;margin-bottom:6px">'+escT(c.orgao||'')+(c.comarca?(' — '+escT(c.comarca)):'')+'</div>' +
       (c.email?('<a href="mailto:'+esc(c.email)+'"><span class="rot">E-mail</span><br>✉️ '+esc(c.email)+'</a>'):'') +
       (c.telefones?('<a href="tel:'+esc(String(c.telefones).replace(/[^\d+;,]/g,'').split(/[;,]/)[0])+'"><span class="rot">Telefone</span><br>📞 '+esc(c.telefones)+'</a>'):'') +
       (c.whatsapp?('<a href="https://wa.me/55'+esc(String(c.whatsapp).replace(/\D/g,'').replace(/^55/,''))+'" target="_blank" rel="noopener"><span class="rot">WhatsApp / Balcão</span><br>💬 '+esc(c.whatsapp)+'</a>'):'') +
@@ -623,7 +637,7 @@ function renderDetalhes(){
   (ATUAL.vinculados||[]).forEach(function(v){
     html += '<div class="sec" style="background:#f8fbff;border-color:#cfe0f2">' +
       '<p class="lab" style="color:var(--navy)">Ação principal</p>' +
-      '<div style="font-size:14.5px">Este processo acompanha a ação de nº <b>'+esc(v.numero)+'</b>'+(v.foro?(', em trâmite na '+esc(v.foro)):'')+'.</div>' +
+      '<div style="font-size:14.5px">Este processo acompanha a ação de nº <b>'+esc(v.numero)+'</b>'+(v.foro?(', em trâmite na '+escT(v.foro)):'')+'.</div>' +
       '<div style="font-size:12.5px;color:var(--muted);margin-top:5px">É nela que corre a discussão comum a todos os credores. As movimentações e os documentos dela aparecem nas abas <b>Movimentações</b> e <b>Documentos</b>, junto com os do seu processo.</div></div>';
   });
   html += '<div class="sec" style="text-align:center;background:#fffdf3;border-color:#eadfae">' +
@@ -634,8 +648,8 @@ function renderDetalhes(){
 function renderPartes(){
   var html = '<div class="sec"><p class="lab">Partes do processo</p>';
   (ATUAL.partes||[]).forEach(function(pt){
-    html += '<div class="parte"><div class="papel">'+esc(pt.papel||'PARTE')+'</div>' +
-            '<div class="nome">'+esc((pt.nome||'—').toUpperCase())+(pt.voce?'<span class="voce">VOCÊ</span>':'')+'</div></div>';
+    html += '<div class="parte"><div class="papel">'+escT(pt.papel||'PARTE')+'</div>' +
+            '<div class="nome">'+escT((pt.nome||'—').toUpperCase())+(pt.voce?'<span class="voce">VOCÊ</span>':'')+'</div></div>';
   });
   html += '</div><div class="sec" style="font-size:12.5px;color:var(--muted)">As partes são exibidas conforme o cadastro do processo no escritório.</div>';
   $('proc-corpo').innerHTML = html;
@@ -648,7 +662,7 @@ function renderMovs(){
     var t = String(m.texto||'');
     var longa = t.length>240;
     html += '<div class="mov"><div class="dt">'+ (brData(m.data)||'—') +'</div>' +
-      '<div class="tx'+(longa?' corta':'')+'" id="mv'+i+'">'+esc(t)+'</div>' +
+      '<div class="tx'+(longa?' corta':'')+'" id="mv'+i+'">'+escT(t)+'</div>' +
       (longa?('<button class="mais" onclick="verMais('+i+',this)">ver tudo ▾</button>'):'') +
       '</div>';
   });
@@ -658,13 +672,13 @@ function renderMovs(){
   (ATUAL.vinculados||[]).forEach(function(v){
     html += '<div class="sec" style="background:#f8fbff;border-color:#cfe0f2">' +
       '<p class="lab" style="color:var(--navy)">Ação principal — processo nº '+esc(v.numero)+'</p>' +
-      '<div style="font-size:13px;color:var(--muted);margin-bottom:8px">'+esc(limpaTitulo(v.titulo))+(v.foro?(' · '+esc(v.foro)):'')+
+      '<div style="font-size:13px;color:var(--muted);margin-bottom:8px">'+escT(limpaTitulo(v.titulo))+(v.foro?(' · '+escT(v.foro)):'')+
       '<br>Seu processo acompanha esta ação. As movimentações abaixo são dela.</div>';
     if(!(v.movimentacoes||[]).length) html += '<div style="color:var(--muted);font-size:13.5px">Sem movimentações registradas ainda.</div>';
     (v.movimentacoes||[]).slice(0,40).forEach(function(m,i){
       var t=String(m.texto||''), longa=t.length>240;
       html += '<div class="mov"><div class="dt">'+(brData(m.data)||'—')+'</div>' +
-        '<div class="tx'+(longa?' corta':'')+'" id="vm'+i+'">'+esc(t)+'</div>' +
+        '<div class="tx'+(longa?' corta':'')+'" id="vm'+i+'">'+escT(t)+'</div>' +
         (longa?('<button class="mais" onclick="verMaisV('+i+',this)">ver tudo ▾</button>'):'')+'</div>';
     });
     html += '</div>';
@@ -677,8 +691,8 @@ function renderDocs(){
   var d = ATUAL.documentos||{oficiais:[],peticoes:[]};
   function linha(ic, nome, sub, url){
     return '<a class="doc" href="'+url+'" target="_blank" rel="noopener">' +
-      '<div class="di">'+ic+'</div><div class="dn"><div class="n1">'+esc(nome)+'</div>' +
-      (sub?('<div class="n2">'+esc(sub)+'</div>'):'')+'</div><div class="abrir">abrir ›</div></a>';
+      '<div class="di">'+ic+'</div><div class="dn"><div class="n1">'+escT(nome)+'</div>' +
+      (sub?('<div class="n2">'+escT(sub)+'</div>'):'')+'</div><div class="abrir">abrir ›</div></a>';
   }
   var html = '<div class="sec"><p class="lab">Documentos oficiais do processo</p>';
   if(!d.oficiais.length) html += '<div style="color:var(--muted);font-size:13.5px">Assim que houver despacho, decisão, sentença ou acordo nos autos, eles aparecem aqui.</div>';
