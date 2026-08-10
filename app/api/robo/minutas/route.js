@@ -91,6 +91,8 @@ const MANUAL_TRIAGEM =
 
   'URGÊNCIA: "alta" para prazo de até 5 dias, recurso, ou risco de preclusão/revelia; "media" para prazo de 6 a 15 dias; "baixa" para o restante.\n\n' +
 
+  'ATO DECISÓRIO (campo ato_decisorio): responde a uma pergunta INDEPENDENTE de exige_peca — "esta publicação traz uma sentença, um acórdão ou uma decisão já proferida?". Marque true também quando o resultado for TOTALMENTE FAVORÁVEL ao nosso cliente, porque cabem embargos de declaração de qualquer decisão. Marque false para despacho de mero expediente, ato ordinatório, intimação para comparecer/pagar/retirar, juntada, certidão e publicação que apenas informa.\n\n' +
+
   'CAUTELA: na dúvida entre exigir peça e não exigir, marque exige_peca = true — perder prazo é irreversível, e o advogado revisa a triagem de qualquer forma. Você NÃO redige a peça, apenas classifica. Responda SEMPRE chamando a ferramenta registrar_triagem.'
 
 const FERRAMENTA_TRIAGEM = [{
@@ -101,6 +103,7 @@ const FERRAMENTA_TRIAGEM = [{
     type: 'object',
     properties: {
       exige_peca: { type: 'boolean', description: 'A publicação impõe ao escritório apresentar uma petição com prazo?' },
+      ato_decisorio: { type: 'boolean', description: 'A publicação traz uma SENTENÇA, ACÓRDÃO ou DECISÃO (interlocutória ou monocrática) já proferida, seja qual for o resultado? Marque true mesmo quando o resultado for favorável e mesmo quando exige_peca for false. Marque false para despacho de mero expediente, intimação para ato, juntada, certidão e demais atos sem carga decisória.' },
       tipo_peca: { type: 'string', description: 'Nome da peça a apresentar (ex.: "contestação", "réplica", "manifestação sobre laudo"). Vazio se não exigir peça.' },
       instrucao: { type: 'string', description: 'O que a peça deve fazer, em 1 a 3 frases no imperativo, com o eixo da tese. Vazio se não exigir peça.' },
       prazo_dias: { type: 'integer', description: 'Prazo em dias. 0 se não houver prazo.' },
@@ -109,10 +112,22 @@ const FERRAMENTA_TRIAGEM = [{
       resumo: { type: 'string', description: 'Uma frase dizendo o que a publicação determina.' },
       docs_necessarios: { type: 'array', items: { type: 'string' }, description: 'Até 4 palavras-chave de nomes de arquivos a consultar.' },
     },
-    required: ['exige_peca', 'tipo_peca', 'instrucao', 'prazo_dias', 'prazo_uteis', 'urgencia', 'resumo', 'docs_necessarios'],
+    required: ['exige_peca', 'ato_decisorio', 'tipo_peca', 'instrucao', 'prazo_dias', 'prazo_uteis', 'urgencia', 'resumo', 'docs_necessarios'],
     additionalProperties: false,
   },
 }]
+
+const EMBARGOS_DIAS = 5      // art. 1.023 do CPC e art. 49 da Lei 9.099/95: 5 dias nos dois
+const ATO_RECENTE_DIAS = 10  // decisão mais velha que isso não abre prazo de embargos
+
+// A decisão é recente o bastante para valer o prazo de embargos? Sem data, trata
+// como recente: perder prazo é pior do que uma tarefa a mais para conferir.
+function atoRecente(dataAndamento) {
+  if (!dataAndamento) return true
+  const d = new Date(String(dataAndamento).slice(0, 10) + 'T12:00:00Z')
+  if (isNaN(d)) return true
+  return (Date.now() - d.getTime()) <= ATO_RECENTE_DIAS * 86400000
+}
 
 // prazo a partir de hoje. Dias úteis pulam sábado e domingo — feriado não entra na
 // conta, então a data é sugestão e o advogado confere (a tarefa nasce para revisão).
@@ -210,10 +225,39 @@ async function faseTriagem(sb, limite) {
       } catch (e) {}
     }
 
+    // REDE DE SEGURANÇA DOS EMBARGOS (pedido do dono, 10/08/2026): toda sentença,
+    // acórdão ou decisão ganha um prazo de 5 dias para embargos de declaração,
+    // INDEPENDENTE de a triagem ter concluído que cabe outra peça — e mesmo quando
+    // o resultado foi favorável. Se o caso pedir outro recurso, a equipe altera a
+    // tarefa na mão; o que não pode é o prazo não existir.
+    // Só vale para decisão RECENTE (ver ATO_RECENTE_DIAS): publicação antiga que
+    // reaparece no diário não deve criar prazo de embargos já vencido.
+    let embargosEm = null
+    if (t.ato_decisorio && atoRecente(a.data)) {
+      embargosEm = dataPrazo(EMBARGOS_DIAS, t.prazo_uteis !== false)
+      const jaTem = await sb.from('kanban_tarefas')
+        .select('id').eq('numero', p.numero).eq('origem', 'robo_embargos').eq('prazo', embargosEm).limit(1)
+      // o DJEN repete a mesma decisão em vários canais: sem isto, uma sentença
+      // publicada 3 vezes viraria 3 tarefas idênticas de embargos
+      if (!jaTem.data || !jaTem.data.length) {
+        try {
+          await sb.from('kanban_tarefas').insert({
+            escritorio_id: ESCRITORIO_CMP,
+            titulo: 'Prazo: embargos de declaração (' + EMBARGOS_DIAS + ' dias) — ' + String(t.resumo || 'decisão publicada').slice(0, 70),
+            cliente: p.cliente_nome || '—', numero: p.numero, coluna: 'distribuir',
+            data: embargosEm, prazo: embargosEm, tipo: 'prazo', origem: 'robo_embargos',
+            descricao: 'Prazo aberto automaticamente porque saiu sentença/acórdão/decisão. '
+              + 'Confira se cabem embargos (omissão, contradição, obscuridade, erro material) e, se o caso for de outro recurso, altere esta tarefa.',
+          })
+        } catch (e) {}
+      } else { embargosEm = null }
+    }
+
     const ins = await sb.from('robo_minutas').insert(linha).select('id').single()
     resultados.push({
       andamento_id: a.id, numero: p.numero, exige_peca: linha.exige_peca,
-      tipo: linha.tipo_peca, prazo_em: prazoEm, erro: ins.error ? ins.error.message : null,
+      tipo: linha.tipo_peca, prazo_em: prazoEm, embargos_em: embargosEm,
+      erro: ins.error ? ins.error.message : null,
     })
   }
   return { triados: resultados.length, restam: novas.length - fila.length, resultados }
