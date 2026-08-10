@@ -1876,6 +1876,7 @@ async function mdConcluir(gi){
     } else if(!pid){ alert('Este item não tem processo vinculado, então não há histórico onde registrar. Vou apenas concluí-lo (sair da lista).'); }
     /* remove o evento do banco (concluído sai da agenda) e da memória */
     if(sb && a.id){ var dl=await sb.from('agenda_eventos').delete().eq('id',a.id).select('id'); if(dl&&!dl.error&&(!dl.data||!dl.data.length)){ console.warn('agenda: delete não afetou linhas (id '+a.id+')'); } }
+    await _googleEnfileiraExclusao(a);
     await _mdOcultarSemId(a); /* sem id (carga Astrea): persiste o sumiço */
     var i=(AGENDA||[]).indexOf(a); if(i>=0) AGENDA.splice(i,1);
     if(window.__AGDB && a.id){ window.__AGDB=window.__AGDB.filter(function(x){return x.id!==a.id;}); }
@@ -1912,6 +1913,7 @@ async function mdExcluir(gi){
   try{
     var sb=window.__sb;
     if(sb && a.id){ var r=await sb.from('agenda_eventos').delete().eq('id',a.id).select('id'); if(r&&r.error){ alert('Não foi possível excluir: '+r.error.message); return; } if(r&&(!r.data||!r.data.length)){ alert('O banco não confirmou a exclusão (permissão). Me avise se este aviso continuar.'); return; } }
+    await _googleEnfileiraExclusao(a);
     await _mdOcultarSemId(a); /* sem id (carga Astrea): persiste o sumiço */
     var i=(AGENDA||[]).indexOf(a); if(i>=0) AGENDA.splice(i,1);
     if(window.__AGDB && a.id){ window.__AGDB=window.__AGDB.filter(function(x){return x.id!==a.id;}); }
@@ -4030,6 +4032,7 @@ async function apagarEventoDaAgenda(ev){
       if(r&&r.error){ alert('Não foi possível apagar: '+r.error.message); return false; }
       if(r&&(!r.data||!r.data.length)){ alert('O banco não confirmou a exclusão (permissão). Nada foi apagado.'); return false; }
     }
+    try{ await _googleEnfileiraExclusao(ev); }catch(eG){}
     try{ await _mdOcultarSemId(ev); }catch(eO){} /* sem id (carga antiga): persiste o sumiço */
     await _apagaTarefaDoEvento(ev);
     /* tira da memória: agenda do banco, agenda montada e listas na tela */
@@ -6377,7 +6380,7 @@ function toggleConcluirTarefa(id){
          Agora carrega tudo em blocos (keyset por id). */
       var agRows=[], agLast=null;
       for(;;){
-        var agQ=sb.from('agenda_eventos').select('id,data,hora,tipo,titulo,resp,processo_numero,origem,descricao,local_evento,confirmado_em,confirmado_por').order('id',{ascending:true}).limit(1000);
+        var agQ=sb.from('agenda_eventos').select('id,data,hora,tipo,titulo,resp,processo_numero,origem,descricao,local_evento,confirmado_em,confirmado_por,google_event_id').order('id',{ascending:true}).limit(1000);
         if(agLast!==null) agQ=agQ.gt('id',agLast);
         var agR=await agQ;
         if(agR.error){ if(!agRows.length){ agRows=null; } break; }
@@ -6387,7 +6390,7 @@ function toggleConcluirTarefa(id){
       }
       var ag={error:(agRows===null), data:agRows||[]};
       if(!ag.error&&ag.data){
-        window.__AGDB=ag.data.map(function(e){return {id:e.id,data:String(e.data).slice(0,10),hora:e.hora||'09:00',tipo:e.tipo||'nt',tt:e.titulo,resp:e.resp||'',org:(e.origem||''),desc:(e.descricao||''),local:(e.local_evento||''),conf:(e.confirmado_em||null),confPor:(e.confirmado_por||''),p:{numero:e.processo_numero||'—',cliente:''}};});
+        window.__AGDB=ag.data.map(function(e){return {id:e.id,data:String(e.data).slice(0,10),hora:e.hora||'09:00',tipo:e.tipo||'nt',tt:e.titulo,resp:e.resp||'',org:(e.origem||''),desc:(e.descricao||''),local:(e.local_evento||''),conf:(e.confirmado_em||null),confPor:(e.confirmado_por||''),gid:(e.google_event_id||''),p:{numero:e.processo_numero||'—',cliente:''}};});
         /* dedup de exibição: se houver cópias idênticas (mesmo processo+data+título),
            mostra UMA — as cópias continuam no banco até a limpeza, mas não poluem */
         (function(){ var seen={}; window.__AGDB=window.__AGDB.filter(function(e){ var k=e.data+'|'+(e.hora||'')+'|'+String(e.tt||'').slice(0,60)+'|'+String((e.p&&e.p.numero)||'').replace(/\D/g,''); if(seen[k]) return false; seen[k]=1; return true; }); })();
@@ -10695,14 +10698,44 @@ function renderObservacoes(){
    Lê o histórico à procura de "audiência ... dd/mm/aaaa"; audiência passada é
    irrelevante e não aparece. A sugestão fica no quadro Observações, em destaque,
    com botão para gravar na agenda (vira evento azul de audiência). */
+/* Evento apagado aqui precisa sair também do Google Calendar. Quem apaga é o
+   NAVEGADOR, que não tem (nem deve ter) o token do Google — então a exclusão
+   entra numa fila e o robô google-sync, que tem o token, executa. Sem isto o
+   evento continuava no celular do advogado depois de apagado no sistema.
+   `gid` só existe em evento já sincronizado; nos demais isto é um no-op. */
+async function _googleEnfileiraExclusao(ev){
+  try{
+    var gid=(ev&&ev.gid)||''; if(!gid) return;
+    var sb=window.__sb; if(!sb) return;
+    await sb.from('agenda_google_lixeira').upsert({
+      escritorio_id:'908f77fc-19f5-4d86-9576-f5590af09e0a',
+      google_event_id:gid,
+      rotulo:String((ev&&ev.tt)||'').slice(0,120),
+    },{onConflict:'google_event_id'});
+  }catch(e){ console.warn('google lixeira:',e); }
+}
+/* Andamento que é registro do PRÓPRIO sistema, não ato do processo. O histórico
+   guarda os dois na mesma lista, e sem separar isto a varredura de audiências
+   lia o próprio rastro: a linha "[AGENDA] Agendamento apagado: lembrar cliente
+   da audiencia — 14/08/2026 às 09:00" tem a palavra audiência e uma data futura,
+   então virava audiência nova, com e-mail ao cliente na data errada.
+   "[Inteiro teor" fica DE FORA da lista: é peça dos autos puxada do jus.br, onde
+   a designação de verdade costuma aparecer. */
+var _RE_ANDAMENTO_INTERNO=/^\s*\[(AGENDA|Aviso ao cliente|App|E-?mail|ESTAGI[ÁA]RIO VIRTUAL|Chat|Portal|Assinatura|Cobran[çc]a|Minuta)\b/i;
+/* Texto que FALA de audiência sem designar nenhuma — tarefa de lembrete, aviso
+   enviado, pedido de confirmação. A data que aparece aqui é a de uma audiência
+   que já está (ou deveria estar) marcada em outro lugar. */
+var _RE_SO_LEMBRETE=/(lembrar|lembrete|avisar|aviso|comunica[çc][ãa]o|confirmar? (a )?presen[çc]a)[^.]{0,40}audi[êe]ncia|audi[êe]ncia[^.]{0,40}(lembrete|aviso ao cliente)/i;
 function _audienciasFuturasDoHist(p){
   var hoje=new Date(); hoje.setHours(0,0,0,0);
   var out={}, res=[];
   ((p&&p.hist_full)||[]).forEach(function(mv){
     var t=String((mv&&mv.texto)||''); if(!/audi[êe]ncia/i.test(t)) return;
+    if(_RE_ANDAMENTO_INTERNO.test(t)) return;
     var re=/audi[êe]ncia/gi, m;
     while((m=re.exec(t))){
       var jan=t.slice(Math.max(0,m.index-80), m.index+220); /* datas perto da palavra */
+      if(_RE_SO_LEMBRETE.test(jan)) continue;
       var reD=/(\d{1,2})[\/\.](\d{1,2})[\/\.](\d{4})/g, dm;
       var hm=jan.match(/(\d{1,2}):(\d{2})/)||jan.match(/(\d{1,2})h(\d{2})?/i);
       var hora=hm?(String(hm[1]).padStart(2,'0')+':'+String(hm[2]||'00').padStart(2,'0')):'';

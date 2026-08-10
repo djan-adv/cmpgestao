@@ -57,13 +57,32 @@ export async function GET(request) {
     .limit(500)
   const paraApagar = (jaSubiram || []).filter(ev => !ehCompromissoAgenda(ev)).slice(0, LOTE * 4)
 
-  if (!pendentes.length && !paraApagar.length) return Response.json({ ok: true, sincronizados: 0, resumo: 'nada pendente' })
+  const { count: naFila } = await sb.from('agenda_google_lixeira')
+    .select('id', { count: 'exact', head: true })
+    .eq('escritorio_id', ESCRITORIO_CMP).is('apagado_em', null)
+  if (!pendentes.length && !paraApagar.length && !naFila) return Response.json({ ok: true, sincronizados: 0, resumo: 'nada pendente' })
 
   const tok = await getFreshGoogleToken(sb)
   if (tok.erro) return Response.json({ erro: 'Google indisponível: ' + tok.erro }, { status: 502 })
 
-  let apagados = 0
   const detalhesApagar = []
+  // Fila de exclusões vinda da tela: quem apaga o evento é o navegador, que não
+  // tem o token do Google. Ele deixa o google_event_id aqui e nós executamos.
+  const { data: naLixeira } = await sb.from('agenda_google_lixeira')
+    .select('id,google_event_id,rotulo')
+    .eq('escritorio_id', ESCRITORIO_CMP)
+    .is('apagado_em', null)
+    .limit(LOTE * 4)
+  let lixeiraOk = 0
+  for (const lx of (naLixeira || [])) {
+    if (debug) { detalhesApagar.push({ lixeira: lx.id, rotulo: lx.rotulo }); continue }
+    const d = await apagarEventoGoogle(tok.token, lx.google_event_id)
+    if (d.erro) continue
+    lixeiraOk++
+    try { await sb.from('agenda_google_lixeira').update({ apagado_em: new Date().toISOString() }).eq('id', lx.id) } catch (e) {}
+  }
+
+  let apagados = 0
   for (const ev of paraApagar) {
     if (debug) { detalhesApagar.push({ id: ev.id, titulo: ev.titulo, origem: ev.origem }); continue }
     const d = await apagarEventoGoogle(tok.token, ev.google_event_id)
@@ -101,9 +120,10 @@ export async function GET(request) {
   }
 
   return Response.json({
-    ok: true, sincronizados, falhas, apagados,
+    ok: true, sincronizados, falhas, apagados, lixeira: lixeiraOk,
     resumo: sincronizados + ' compromisso(s) sincronizado(s) com o Google Calendar'
       + (apagados ? (' · ' + apagados + ' tarefa(s) removida(s) do Google') : '')
+      + (lixeiraOk ? (' · ' + lixeiraOk + ' evento(s) apagado(s) no Google') : '')
       + (falhas ? (' · ' + falhas + ' falha(s)') : '')
       + (pendentes.length === LOTE ? ' · pode haver mais pendentes (lote cheio)' : ''),
     detalhes: debug ? detalhes : undefined,
