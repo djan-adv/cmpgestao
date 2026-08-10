@@ -809,6 +809,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
     <input id="t-file" type="file" multiple style="display:none" onchange="tarefaAddFiles(event)">
     <div id="t-files" style="font-size:13px"></div>
     <div class="flags" style="margin-top:6px"><label><input type="checkbox" id="t-hist"> Registrar também no histórico do processo</label></div>
+    <div id="t-autoria" class="note" style="display:none;margin-top:8px;font-size:11.5px;color:#8a8fa0"></div>
     <div id="t-pub-acoes" style="display:none;border-top:1px dashed var(--line);margin-top:10px;padding-top:10px">
       <div class="note" style="margin:0 0 6px">Sem tarefa? A publicação pode sair da fila mesmo assim:</div>
       <button class="btn sm ghost" onclick="descartarPubModal()" title="Marca a publicação como tratada (ciência) — vai para a aba Tratadas">🗂 Descartar publicação (ciência)</button>
@@ -3005,7 +3006,28 @@ function _kanCookieGravar(mapa){ try{ var v=encodeURIComponent(JSON.stringify(ma
 function _kanSalvarLocal(a){ if(!a) return; var mapa=_kanCookieLer(); mapa[_kanKey(a)]=a.col||'distribuir'; _kanCookieGravar(mapa); }
 function _aplicarKanbanCookie(){ try{ var mapa=_kanCookieLer(); if(!mapa||!KAN) return; KAN.forEach(function(a){ var c=mapa[_kanKey(a)]; if(c) a.col=c; }); }catch(e){} }
 /* grava a coluna (e demais campos) de uma tarefa no banco. Silencioso se a tabela não existir. */
+/* Nome de quem está usando o sistema agora — é o assento visual (Djan, Rita,
+   Jader…), não o e-mail do login: é assim que "resp" já é gravado, e misturar
+   os dois deixaria a tarefa dizendo "criada por djan.adv@gmail.com". */
+/* timestamp do banco → "10/08/2026 16:44" */
+function _kanQuandoBR(iso){
+  try{ var d=new Date(iso); if(isNaN(d)) return ''; return d.toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}); }catch(e){ return ''; }
+}
+function _kanQuemSou(){
+  try{ var u=usuarioVisualAtual(); return (u&&u.nome)||''; }catch(e){ return ''; }
+}
+/* Mantém o par concluidoPor/concluidoEm coerente com a coluna: entrou em
+   'finalizado' sem carimbo → carimba agora; saiu de 'finalizado' → limpa. */
+function _kanCarimbaConclusao(a){
+  if(!a) return;
+  if(a.col==='finalizado'){
+    if(!a.concluidoPor){ a.concluidoPor=_kanQuemSou(); a.concluidoEm=new Date().toISOString(); }
+  } else if(a.concluidoPor||a.concluidoEm){
+    a.concluidoPor=null; a.concluidoEm=null;
+  }
+}
 function persisteKanban(a){
+  _kanCarimbaConclusao(a);
   _kanSalvarLocal(a);
   try{
     var sb=window.__sb; if(!sb||!a) return;
@@ -3015,12 +3037,13 @@ function persisteKanban(a){
       /* atrasada:false — qualquer persistência aqui é ação deliberada do usuário
          (arrastar, editar, concluir), então o chip de "adiada automaticamente"
          some: quem mexeu por último foi gente, não o robô do sábado */
-      sb.from('kanban_tarefas').update({coluna:a.col,titulo:a.titulo,resp:(a.resp||null),data:(a.data||null),prazo:(a.prazo||null),tipo:(a.tipoForm||null),descricao:(a.descricao||null),local:(a.local||null),atrasada:false}).eq('id',a.dbid).then(function(r){ if(r&&r.error) console.warn('kanban update:',r.error.message); });
+      sb.from('kanban_tarefas').update({coluna:a.col,titulo:a.titulo,resp:(a.resp||null),data:(a.data||null),prazo:(a.prazo||null),tipo:(a.tipoForm||null),descricao:(a.descricao||null),local:(a.local||null),atrasada:false,concluido_por:(a.concluidoPor||null),concluido_em:(a.concluidoEm||null)}).eq('id',a.dbid).then(function(r){ if(r&&r.error) console.warn('kanban update:',r.error.message); });
       a.atrasada=false;
     } else { /* novo: insere e guarda o dbid */
       sb.auth.getUser().then(function(ug){ return sb.from('usuarios').select('escritorio_id').eq('id',ug.data.user.id).single(); }).then(function(pf){
         var esc=pf&&pf.data&&pf.data.escritorio_id; if(!esc) return;
-        return sb.from('kanban_tarefas').insert({escritorio_id:esc,titulo:a.titulo,cliente:a.cliente,numero:a.numero,coluna:a.col,resp:(a.resp||null),data:(a.data||null),prazo:(a.prazo||null),tipo:(a.tipoForm||null),descricao:(a.descricao||null),local:(a.local||null),origem:(a.origem||'sistema')}).select('id').single();
+        if(!a.criadoPor) a.criadoPor=_kanQuemSou();
+        return sb.from('kanban_tarefas').insert({escritorio_id:esc,titulo:a.titulo,cliente:a.cliente,numero:a.numero,coluna:a.col,resp:(a.resp||null),data:(a.data||null),prazo:(a.prazo||null),tipo:(a.tipoForm||null),descricao:(a.descricao||null),local:(a.local||null),origem:(a.origem||'sistema'),criado_por:(a.criadoPor||null),concluido_por:(a.concluidoPor||null),concluido_em:(a.concluidoEm||null)}).select('id').single();
       }).then(function(r){ if(r&&r.data&&r.data.id) a.dbid=r.data.id; }).catch(function(e){ console.warn('kanban insert:',e&&e.message||e); });
     }
   }catch(e){ console.warn('persisteKanban:',e); }
@@ -3501,6 +3524,15 @@ function abrirTarefaKanban(id){
   var _sb=document.getElementById('t-btn-salvar'); if(_sb) _sb.textContent='Salvar alterações';
   var _ct=document.getElementById('t-corrigir-tipo');
   if(_ct) _ct.style.display=(a.tipoForm==='audiencia'?'block':'none');
+  /* quem pediu / quem entregou — some quando a tarefa é antiga e não tem registro */
+  var _au=document.getElementById('t-autoria');
+  if(_au){
+    var l=[];
+    if(a.criadoPor) l.push('Criada por <b>'+esc(a.criadoPor)+'</b>');
+    if(a.col==='finalizado'&&a.concluidoPor) l.push('Concluída por <b>'+esc(a.concluidoPor)+'</b>'+(a.concluidoEm?(' em '+_kanQuandoBR(a.concluidoEm)):''));
+    _au.innerHTML=l.join(' · ');
+    _au.style.display=l.length?'block':'none';
+  }
 }
 /* Corrige o tipo de uma atividade já criada e salva na hora. Nasceu de um erro
    real: "Audiência" era a primeira opção do seletor, então tarefa criada às
@@ -3540,16 +3572,22 @@ function renderAtivProc(){
     var prevBR=a.data?String(a.data).slice(0,10).split('-').reverse().join('/'):'';
     var fatalBR=a.prazo?String(a.prazo).slice(0,10).split('-').reverse().join('/'):'';
     var meta=[];
-    if(a.resp) meta.push(esc(a.resp));
+    if(a.resp) meta.push('executa: '+esc(a.resp));
     if(prevBR) meta.push('prevista: '+prevBR);
     if(fatalBR) meta.push('<span style="color:#b5342b;font-weight:700">prazo fatal: '+fatalBR+'</span>');
     if(a.hora && a.hora!=='Dia todo') meta.push(esc(a.hora));
     meta.push(concl?'<span style="color:#127a53">concluída</span>':'<span style="color:#8a5a00">a executar</span>');
+    /* autoria em linha própria: quem pediu e quem entregou. Fica de fora quando
+       ninguém está registrado (tarefas antigas, anteriores a este controle). */
+    var aut=[];
+    if(a.criadoPor) aut.push('criada por <b>'+esc(a.criadoPor)+'</b>');
+    if(concl&&a.concluidoPor) aut.push('concluída por <b>'+esc(a.concluidoPor)+'</b>'+(a.concluidoEm?(' em '+_kanQuandoBR(a.concluidoEm)):''));
     return '<div style="display:flex;align-items:flex-start;gap:8px;padding:9px 2px;border-bottom:1px solid var(--line)'+(concl?';opacity:.6':'')+'">'
       +'<input type="checkbox" '+(concl?'checked':'')+' onclick="toggleConcluirTarefa('+a.id+');renderAtivProc();" style="width:17px;height:17px;margin-top:2px;cursor:pointer;flex-shrink:0" title="Concluir/reabrir">'
       +'<div style="flex:1;min-width:0">'
         +'<div style="font-weight:600;color:var(--navy);'+(concl?'text-decoration:line-through':'')+'">'+esc(a.titulo||'—')+'</div>'
         +'<div class="note" style="margin:2px 0 0">'+meta.join(' · ')+'</div>'
+        +(aut.length?('<div class="note" style="margin:2px 0 0;font-size:11px;color:#8a8fa0">'+aut.join(' · ')+'</div>'):'')
         +'<div style="margin-top:5px;display:flex;gap:6px;flex-wrap:wrap">'
           +'<button class="btn sm ghost" style="font-size:11px" onclick="abrirTarefaKanban('+a.id+')">✎ editar</button>'
           +'<button class="btn sm ghost" style="font-size:11px" onclick="definirPrazoFatal('+a.id+')">⏰ prazo fatal</button>'
@@ -4147,6 +4185,9 @@ function _v(id){var e=document.getElementById(id);return e?(e.value||"").trim():
 function _assinaturaCMP(nome){ nome=String(nome||'').trim(); var oab=/(^|\s)djan/i.test(nome)?'\nOAB/PB 5219-A':''; return 'Atenciosamente,\n'+nome+oab+'\nCrispim Mendonça e Pinheiro Advogados'; }
 function abrirNovaTarefa(proc){window._tarEditId=null;
   var _ct0=document.getElementById('t-corrigir-tipo'); if(_ct0) _ct0.style.display='none';
+  /* autoria é da tarefa aberta antes — some na tarefa nova (abrirTarefaKanban
+     preenche de novo logo depois, quando é edição) */
+  var _au0=document.getElementById('t-autoria'); if(_au0){ _au0.innerHTML=''; _au0.style.display='none'; }
   var ov=document.getElementById("modal-tarefa");
   /* pano de fundo: abre a FICHA do processo atrás do formulário, com rolagem e
      leitura livres — agendar olhando o processo evita erro de data */
@@ -6109,7 +6150,8 @@ function renderTarDia(){
       +'<input type="checkbox" '+(concl?'checked':'')+' onclick="event.stopPropagation();toggleConcluirTarefa('+a.id+');renderTarDia();" style="width:18px;height:18px;margin-top:2px;cursor:pointer" title="Concluir/reabrir">'
       +'<div style="flex:1;min-width:0;cursor:pointer" onclick="fecharTarDia();abrirTarefaKanban('+a.id+')">'
         +'<div style="font-weight:600;color:var(--navy);'+(concl?'text-decoration:line-through':'')+'">'+esc(a.titulo||'—')+'</div>'
-        +'<div class="note" style="margin:2px 0 0">'+esc(a.cliente||'—')+(a.numero&&a.numero!=='—'?(' · '+esc(a.numero)):'')+' · <span style="color:'+cor+';font-weight:600">'+(a.prazo?'prazo fatal':'previsto')+'</span>'+(a.resp?(' · '+esc(a.resp)):'')+((a.hora&&a.hora!=='Dia todo')?(' · '+esc(a.hora)):'')+'</div>'
+        +'<div class="note" style="margin:2px 0 0">'+esc(a.cliente||'—')+(a.numero&&a.numero!=='—'?(' · '+esc(a.numero)):'')+' · <span style="color:'+cor+';font-weight:600">'+(a.prazo?'prazo fatal':'previsto')+'</span>'+(a.resp?(' · executa: '+esc(a.resp)):'')+((a.hora&&a.hora!=='Dia todo')?(' · '+esc(a.hora)):'')+'</div>'
+        +((concl&&a.concluidoPor)?('<div class="note" style="margin:2px 0 0;font-size:11px;color:#8a8fa0">concluída por <b>'+esc(a.concluidoPor)+'</b>'+(a.concluidoEm?(' em '+_kanQuandoBR(a.concluidoEm)):'')+'</div>'):'')
       +'</div>'
       +'<button class="btn sm ghost" style="flex-shrink:0" onclick="fecharTarDia();abrirTarefaKanban('+a.id+')">Abrir</button>'
     +'</div>';
@@ -6357,9 +6399,12 @@ function toggleConcluirTarefa(id){
     }catch(eAg){ console.log('agenda: '+(eAg&&eAg.message||eAg)); }
     /* carrega as tarefas do Kanban do banco (kanban_tarefas). Se a tabela não existir, ignora e usa o seed. */
     try{
-      var kt=await sb.from('kanban_tarefas').select('id,titulo,cliente,numero,coluna,resp,data,prazo,tipo,descricao,local,origem,atrasada').limit(3000);
+      var kt=await sb.from('kanban_tarefas').select('id,titulo,cliente,numero,coluna,resp,data,prazo,tipo,descricao,local,origem,atrasada,criado_por,concluido_por,concluido_em').limit(3000);
+      /* colunas de autoria são novas: banco sem elas ainda derruba o select
+         inteiro, então repete sem elas em vez de perder todas as tarefas */
+      if(kt.error && /criado_por|concluido_por|concluido_em/.test(kt.error.message||'')) kt=await sb.from('kanban_tarefas').select('id,titulo,cliente,numero,coluna,resp,data,prazo,tipo,descricao,local,origem,atrasada').limit(3000);
       if(!kt.error && kt.data){
-        window.__KANDB=kt.data.map(function(t,i){ return {id:9000+i,dbid:t.id,titulo:t.titulo||'',cliente:t.cliente||'',numero:t.numero||'—',col:t.coluna||'distribuir',resp:t.resp||'',data:t.data||'',prazo:t.prazo||'',tipoForm:t.tipo||'',descricao:t.descricao||'',local:t.local||'',org:t.origem||'',atrasada:!!t.atrasada}; });
+        window.__KANDB=kt.data.map(function(t,i){ return {id:9000+i,dbid:t.id,titulo:t.titulo||'',cliente:t.cliente||'',numero:t.numero||'—',col:t.coluna||'distribuir',resp:t.resp||'',data:t.data||'',prazo:t.prazo||'',tipoForm:t.tipo||'',descricao:t.descricao||'',local:t.local||'',org:t.origem||'',atrasada:!!t.atrasada,criadoPor:(t.criado_por||''),concluidoPor:(t.concluido_por||''),concluidoEm:(t.concluido_em||'')}; });
         KAN=null; initKanban();
         var __ag=document.getElementById('s-agenda'); if(__ag && !__ag.classList.contains('hidden') && typeof renderAgendaView==='function') renderAgendaView();
         if(typeof renderPainelTarefasEtiquetas==='function') renderPainelTarefasEtiquetas();
