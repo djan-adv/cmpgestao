@@ -399,14 +399,13 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
         <button class="btn sm" style="margin-left:auto" onclick="abrirNovaTarefa()">+ Nova tarefa</button>
       </div>
       <div id="crm-contatos">
-        <div class="kpis" id="crm-kpis"></div>
         <div class="switch" style="margin-bottom:10px">
           <button id="ct-sw-cli" class="on" onclick="setAbaContato('clientes')">Clientes<sup class="ag-cnt" id="ct-n-cli"></sup></button>
           <button id="ct-sw-opo" onclick="setAbaContato('oponentes')">Oponentes<sup class="ag-cnt" id="ct-n-opo"></sup></button>
           <button id="ct-sw-var" onclick="setAbaContato('varas')">Varas<sup class="ag-cnt" id="ct-n-var"></sup></button>
         </div>
-        <div class="searchbar"><input id="buscaCli" placeholder="Buscar por nome, tipo, telefone, origem..." oninput="renderContatos()"><span class="note" id="cli-count" style="align-self:center"></span><button class="btn sm" style="background:#185FA5;color:#fff;border-color:#185FA5;line-height:1.15;padding:5px 12px;text-align:center" onclick="abrirContatosSemelhantes()" title="Agrupa contatos com nome, telefone ou e-mail parecidos — acha os candidatos a mesclar pra você">🔍 Achar semelhantes <span id="csm-badge" style="display:none;font-size:9px;font-weight:700;background:#fff;color:#185FA5;border-radius:9px;padding:0 6px;margin-left:2px"></span></button><button class="btn sm" style="background:#6d28a8;color:#fff;border-color:#6d28a8;line-height:1.15;padding:5px 12px;text-align:center" onclick="mesclarContatos()" title="Marque 2+ contatos da mesma pessoa (nas caixinhas): você escolhe o nome que fica e todos os processos desse cliente são sincronizados">⛒ Mesclar<br><span style="font-size:9px;font-weight:400;opacity:.85">sincroniza por cliente</span></button><select id="ordCli" onchange="renderContatos()" style="font-size:12px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--bg)" title="Ordenar a lista de contatos"><option value="az">Ordenar: A → Z</option><option value="proc">Mais processos ativos</option></select><button class="btn sm" style="margin-left:auto" onclick="novoContato()">+ Novo contato</button></div>
-        <div class="card"><table><thead><tr><th style="width:30px" title="Marque 2+ da mesma pessoa e clique em Mesclar"></th><th>Nome</th><th>Tipo</th><th>Telefone</th><th>E-mail</th><th>Origem</th><th>Proc.</th><th>Editar</th><th>Excluir</th></tr></thead><tbody id="crm-body"></tbody></table></div>
+        <div class="searchbar"><input id="buscaCli" placeholder="Buscar por nome, tipo, telefone, origem..." oninput="renderContatos()"><span class="note" id="cli-count" style="align-self:center"></span><button class="btn sm" style="background:#185FA5;color:#fff;border-color:#185FA5;line-height:1.15;padding:5px 12px;text-align:center" onclick="abrirContatosSemelhantes()" title="Agrupa contatos com nome, telefone ou e-mail parecidos — acha os candidatos a mesclar pra você">🔍 Achar semelhantes <span id="csm-badge" style="display:none;font-size:9px;font-weight:700;background:#fff;color:#185FA5;border-radius:9px;padding:0 6px;margin-left:2px"></span></button><button class="btn sm" style="background:#6d28a8;color:#fff;border-color:#6d28a8;line-height:1.15;padding:5px 12px;text-align:center" onclick="mesclarContatos()" title="Marque 2+ contatos da mesma pessoa (nas caixinhas): você escolhe o nome que fica e todos os processos desse cliente são sincronizados">⛒ Mesclar<br><span style="font-size:9px;font-weight:400;opacity:.85">sincroniza por cliente</span></button><button class="btn sm" style="margin-left:auto" onclick="novoContato()">+ Novo contato</button></div>
+        <div class="card"><table><thead><tr><th style="width:30px" title="Marque 2+ da mesma pessoa e clique em Mesclar"></th><th style="cursor:pointer;user-select:none" onclick="ordenarContatoNome()" title="Clique para ordenar por nome (A→Z / Z→A)">Nome <span id="cli-nome-arrow" style="font-size:10px;color:var(--muted)"></span></th><th>Tipo</th><th>Telefone</th><th>E-mail</th><th>Origem</th><th style="cursor:pointer;user-select:none" onclick="ordenarContatoProc()" title="Clique para ordenar pelos processos ativos (maior primeiro)">Proc. <span id="cli-proc-arrow" style="font-size:10px;color:var(--muted)"></span></th><th>Editar</th><th>Excluir</th></tr></thead><tbody id="crm-body"></tbody></table></div>
       </div>
       <div id="crm-captacao" class="hidden">
         <div style="display:flex;flex-wrap:wrap;gap:24px;margin-bottom:12px;align-items:flex-end">
@@ -2692,7 +2691,20 @@ function _pintaContagemContatos(){
   põe('ct-n-opo',_oponentesDaBase().length);
   põe('ct-n-var',(window.__VARAS||[]).length);
 }
+/* Ordenação da lista de contatos pelo cabeçalho, como na tela de processos:
+   clicar em "Nome" alterna A→Z / Z→A; clicar em "Proc." põe quem tem mais
+   processos ativos na frente. Substituiu o seletor "Ordenar:" da barra. */
+var ordCli='az';
+function ordenarContatoNome(){ ordCli=(ordCli==='az')?'za':'az'; renderContatos(); }
+function ordenarContatoProc(){ ordCli=(ordCli==='proc')?'az':'proc'; renderContatos(); }
+function _setaOrdCli(){
+  var n=document.getElementById('cli-nome-arrow'), p=document.getElementById('cli-proc-arrow');
+  if(n) n.textContent=(ordCli==='az')?'▲':((ordCli==='za')?'▼':'');
+  if(p) p.textContent=(ordCli==='proc')?'▼':'';
+}
+function _cmpNomeCli(a,b){ var r=String(a||'').localeCompare(String(b||''),'pt-BR'); return (ordCli==='za')?-r:r; }
 function renderContatos(){
+  _setaOrdCli();
   if(abaContato==='varas')     return renderContatosVaras();
   if(abaContato==='oponentes') return renderContatosOponentes();
   return renderContatosClientes();
@@ -2706,6 +2718,7 @@ function renderContatosVaras(){
        respondeu um e-mail é o caso de uso que faltava */
     return [v.orgao,v.comarca,v.tribunal,v.email,v.telefones,v.whatsapp].join(' ').toLowerCase().indexOf(q)>-1;
   });
+  lista.sort(function(a,b){ return _cmpNomeCli(a.orgao,b.orgao); });
   document.getElementById("cli-count").textContent=lista.length+" vara"+(lista.length===1?'':'s');
   var b=document.getElementById("crm-body"); b.innerHTML="";
   if(window.__VARAS===null){ b.innerHTML='<tr><td colspan="9" class="note" style="padding:10px">Carregando as varas…</td></tr>'; return; }
@@ -2730,6 +2743,7 @@ function renderContatosOponentes(){
   seedContatos(); _pintaContagemContatos();
   var q=(document.getElementById("buscaCli").value||"").toLowerCase().trim();
   var lista=_oponentesDaBase().filter(function(o){ return !q || o.nome.toLowerCase().indexOf(q)>-1; });
+  lista.sort(function(a,b){ return _cmpNomeCli(a.nome,b.nome); });
   document.getElementById("cli-count").textContent=lista.length+" oponente"+(lista.length===1?'':'s');
   var b=document.getElementById("crm-body"); b.innerHTML="";
   if(!lista.length){ b.innerHTML='<tr><td colspan="9" class="note" style="padding:10px">Nenhuma parte contrária encontrada.</td></tr>'; return; }
@@ -2764,17 +2778,15 @@ function renderContatosClientes(){
   var q=(document.getElementById("buscaCli").value||"").toLowerCase();
   var f=CONTATOS.filter(function(c){return !q||(c.nome+" "+c.tipo+" "+c.tel+" "+c.origem).toLowerCase().indexOf(q)>-1;});
   /* ordenação da lista: A→Z (padrão) ou por nº de processos ATIVOS (maior→menor) */
-  var ord=(document.getElementById("ordCli")||{}).value||"az";
+  var ord=ordCli;
   if(ord==="proc"){
     var ativ={}; (DADOS.processos||[]).forEach(function(p){ if(!/encerr/i.test(p.status||'')){ var nk=normClienteNome(p.cliente); if(nk) ativ[nk]=(ativ[nk]||0)+1; } });
     f.forEach(function(c){ c._ativos=ativ[normClienteNome(c.nome)]||0; });
     f.sort(function(a,b){ if(b._ativos!==a._ativos) return b._ativos-a._ativos; return String(a.nome||'').localeCompare(String(b.nome||''),'pt-BR'); });
   } else {
-    f.sort(function(a,b){ return String(a.nome||'').localeCompare(String(b.nome||''),'pt-BR'); });
+    f.sort(function(a,b){ return _cmpNomeCli(a.nome,b.nome); });
   }
   document.getElementById("cli-count").textContent=f.length+" contatos";
-  var ativos=LEADS.filter(function(l){return l.estagio!=="ganho"&&l.estagio!=="perdido";}).length;
-  document.getElementById("crm-kpis").innerHTML=kpi("contatos",CONTATOS.length)+kpi("clientes",CONTATOS.filter(function(c){return c.tipo==="cliente";}).length)+kpi("leads ativos",ativos)+kpi("origem que + converte","Indicação");
   try{ atualizaBadgeSemelhantes(); }catch(e){}
   var b=document.getElementById("crm-body");b.innerHTML="";
   f.slice(0,300).forEach(function(c){var tr=document.createElement("tr");
