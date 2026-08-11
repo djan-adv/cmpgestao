@@ -75,6 +75,9 @@
   .stage.alt{background:#fff;color:var(--navy);border:1px dashed var(--gold)}
   .chk{font-size:13.5px;margin:4px 0;padding-left:20px;position:relative} .chk::before{content:"✓";position:absolute;left:0;color:var(--ok);font-weight:700}
   .searchbar{display:flex;gap:8px;margin-bottom:12px} .searchbar input{max-width:340px}
+  /* barra fixa: com 700 contatos, os dois nomes a mesclar ficam longe um do
+     outro — o botão tem que continuar à mão sem voltar ao topo da lista */
+  .searchbar.fixa{position:sticky;top:0;z-index:30;background:var(--bg);margin:0 -4px 12px;padding:9px 4px;box-shadow:0 8px 10px -9px rgba(30,39,51,.35)}
   .note{font-size:11.5px;color:var(--muted);font-style:italic;margin-top:8px}
   .tag-cli{font-size:10.5px;background:var(--navy);color:#fff;padding:2px 8px;border-radius:20px;margin-left:6px;font-weight:600;vertical-align:middle}
   .parties{font-size:18px;font-weight:400;line-height:1.4} .parties .cli{font-weight:700;color:var(--navy)} .parties .vs{color:var(--muted);margin:0 5px} .parties .op{color:var(--ink)}
@@ -404,7 +407,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
           <button id="ct-sw-opo" onclick="setAbaContato('oponentes')">Oponentes<sup class="ag-cnt" id="ct-n-opo"></sup></button>
           <button id="ct-sw-var" onclick="setAbaContato('varas')">Varas<sup class="ag-cnt" id="ct-n-var"></sup></button>
         </div>
-        <div class="searchbar"><input id="buscaCli" placeholder="Buscar por nome, tipo, telefone, origem..." oninput="renderContatos()"><span class="note" id="cli-count" style="align-self:center"></span><button class="btn sm" style="background:#185FA5;color:#fff;border-color:#185FA5;line-height:1.15;padding:5px 12px;text-align:center" onclick="abrirContatosSemelhantes()" title="Agrupa contatos com nome, telefone ou e-mail parecidos — acha os candidatos a mesclar pra você">🔍 Achar semelhantes <span id="csm-badge" style="display:none;font-size:9px;font-weight:700;background:#fff;color:#185FA5;border-radius:9px;padding:0 6px;margin-left:2px"></span></button><button class="btn sm" style="background:#6d28a8;color:#fff;border-color:#6d28a8;line-height:1.15;padding:5px 12px;text-align:center" onclick="mesclarContatos()" title="Marque 2+ contatos da mesma pessoa (nas caixinhas): você escolhe o nome que fica e todos os processos desse cliente são sincronizados">⛒ Mesclar<br><span style="font-size:9px;font-weight:400;opacity:.85">sincroniza por cliente</span></button><button class="btn sm" style="margin-left:auto" onclick="novoContato()">+ Novo contato</button></div>
+        <div class="searchbar fixa"><input id="buscaCli" placeholder="Buscar por nome, tipo, telefone, origem..." oninput="renderContatos()"><span class="note" id="cli-count" style="align-self:center"></span><button class="btn sm" style="background:#185FA5;color:#fff;border-color:#185FA5;line-height:1.15;padding:5px 12px;text-align:center" onclick="abrirContatosSemelhantes()" title="Agrupa contatos com nome, telefone ou e-mail parecidos — acha os candidatos a mesclar pra você">🔍 Achar semelhantes <span id="csm-badge" style="display:none;font-size:9px;font-weight:700;background:#fff;color:#185FA5;border-radius:9px;padding:0 6px;margin-left:2px"></span></button><button class="btn sm" style="background:#6d28a8;color:#fff;border-color:#6d28a8;line-height:1.15;padding:5px 12px;text-align:center" onclick="mesclarContatos()" title="Marque 2+ contatos da mesma pessoa (nas caixinhas): você escolhe o nome que fica e todos os processos desse cliente são sincronizados">⛒ Mesclar<span id="merge-badge" style="display:none;font-size:9px;font-weight:700;background:#fff;color:#6d28a8;border-radius:9px;padding:0 6px;margin-left:4px"></span><br><span style="font-size:9px;font-weight:400;opacity:.85">sincroniza por cliente</span></button><button class="btn sm" style="margin-left:auto" onclick="novoContato()">+ Novo contato</button></div>
         <div class="card"><table><thead><tr><th style="width:30px" title="Marque 2+ da mesma pessoa e clique em Mesclar"></th><th style="cursor:pointer;user-select:none" onclick="ordenarContatoNome()" title="Clique para ordenar por nome (A→Z / Z→A)">Nome <span id="cli-nome-arrow" style="font-size:10px;color:var(--muted)"></span></th><th>Tipo</th><th>Telefone</th><th>E-mail</th><th>Origem</th><th style="cursor:pointer;user-select:none" onclick="ordenarContatoProc()" title="Clique para ordenar pelos processos ativos (maior primeiro)">Proc. <span id="cli-proc-arrow" style="font-size:10px;color:var(--muted)"></span></th><th>Editar</th><th>Excluir</th></tr></thead><tbody id="crm-body"></tbody></table></div>
       </div>
       <div id="crm-captacao" class="hidden">
@@ -2703,8 +2706,18 @@ function _setaOrdCli(){
   if(p) p.textContent=(ordCli==='proc')?'▼':'';
 }
 function _cmpNomeCli(a,b){ var r=String(a||'').localeCompare(String(b||''),'pt-BR'); return (ordCli==='za')?-r:r; }
+/* marca quantos contatos estão selecionados no botão Mesclar — rolando a lista
+   longe do topo, é o que diz se o primeiro nome continua marcado */
+function _contaMerge(){
+  var n=document.querySelectorAll('#crm-body .cmerge:checked').length;
+  var bd=document.getElementById('merge-badge'); if(!bd) return;
+  bd.textContent=n; bd.style.display=n?'inline-block':'none';
+}
 function renderContatos(){
   _setaOrdCli();
+  var bb=document.getElementById('crm-body');
+  if(bb&&!bb.__mergeHook){ bb.__mergeHook=1; bb.addEventListener('change',_contaMerge); }
+  setTimeout(_contaMerge,0);
   if(abaContato==='varas')     return renderContatosVaras();
   if(abaContato==='oponentes') return renderContatosOponentes();
   return renderContatosClientes();
