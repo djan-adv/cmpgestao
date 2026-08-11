@@ -388,7 +388,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
     </section>
     <section id="s-processos" class="hidden">
       <div class="searchbar"><input id="busca" placeholder="Buscar por cliente, número, oponente ou assunto..." oninput="renderProc()"><select id="ordena" onchange="renderProc()" class="btn sm sb-sel" style="margin-left:8px;max-width:120px"><option value="">Novos Protocolos</option><option value="az">Cliente (A→Z)</option><option value="za">Cliente (Z→A)</option><option value="data_desc">Movimentação mais recente</option><option value="parados">Parados (mov. mais antiga)</option><option value="valor">Valor da causa (maior→menor)</option></select><select id="filtroEtq" onchange="renderProc()" class="btn sm sb-sel" style="margin-left:8px;max-width:112px"><option value="">Todas as etiquetas</option></select><select id="porPagina" onchange="renderProc()" class="btn sm sb-sel" style="margin-left:8px;max-width:76px"><option value="20">20 por página</option><option value="40">40</option><option value="60">60</option><option value="80">80</option><option value="100">100</option><option value="todos" selected>Todos</option></select><span class="note" id="proc-count" style="align-self:center"></span><span id="proc-semvara" style="align-self:center;margin-left:10px;display:none"></span><span class="note" id="proc-espaco" style="align-self:center;margin-left:10px;cursor:pointer" onclick="carregarEspacoDocs(true)" title="Espaço que os documentos ocupam no servidor (VPS) — clique para recalcular"></span><button id="btn-atu-todos" class="btn sm sb-btn" style="margin-left:auto" onclick="atualizarTodosProcessos()" title="Buscar no DJEN as publicações novas de TODOS os processos (últimos 7 dias, pelas OABs do escritório)">↻ Atualizar todos</button><button class="btn sm gold sb-btn" style="margin-left:8px" onclick="abrirBusca()">+ Cadastrar por número <span style="font-weight:400;font-size:10px;opacity:.8">(pesquisa pelo djen)</span></button><button class="btn sm sb-btn" style="margin-left:8px;background:var(--navy);color:#fff;border-color:var(--navy)" onclick="abrirCadManual()">+ Cadastrar manual / caso</button><button class="btn sm sb-btn" style="margin-left:8px;background:#0F6E56;color:#fff;border-color:#0F6E56" onclick="abrirSyncPastas()" title="Enviar de uma vez uma pasta com vários processos — o sistema reconhece cada subpasta e manda para o processo certo">&#8645; Sincronizar pasta</button><button class="btn sm sb-btn" style="margin-left:8px;background:#8a6d1a;color:#fff;border-color:#8a6d1a" onclick="abrirHonLote()" title="Roda o robô de honorários (lê petição inicial/sentença/procuração) em todos os processos da lista principal, um a um">💰 Honorários — buscar todos</button></div>
-      <div class="card"><table><thead><tr><th style="width:26%;cursor:pointer;user-select:none" onclick="ordenarCliente()" title="Clique para ordenar por cliente (A→Z / Z→A)">Cliente <span id="cli-sort-arrow" style="font-size:10px;color:var(--muted)"></span></th><th style="width:150px">Processos/casos</th><th style="width:22%"><span onclick="ordenarAssuntoLocal('assunto')" style="cursor:pointer;user-select:none" title="Ordenar por assunto (A→Z / Z→A)">Assunto <span id="asn-sort-arrow" style="font-size:10px;color:var(--muted)"></span></span><span style="color:var(--line);margin:0 5px">|</span><span onclick="ordenarAssuntoLocal('local')" style="cursor:pointer;user-select:none" title="Ordenar por vara/local (A→Z / Z→A) — agrupa os processos da mesma vara">Local <span id="loc-sort-arrow" style="font-size:10px;color:var(--muted)"></span></span></th><th style="width:170px;cursor:pointer;user-select:none" onclick="ordenarMov()" title="Clique para ordenar pela data da última movimentação (mais recente ↔ mais antiga)">Última movimentação <span id="mov-sort-arrow" style="font-size:10px;color:var(--muted)"></span></th><th style="width:96px;cursor:pointer;user-select:none" onclick="ordenarParado()" title="Clique para ordenar por dias parado (mais ↔ menos)">Parado há <span id="par-sort-arrow" style="font-size:10px;color:var(--muted)"></span></th><th style="width:104px;text-align:right"><span onclick="ordenarCondenacao()" style="cursor:pointer;user-select:none" title="Ordenar por valor da condenação (maior ↔ menor)">Valor total <span id="cond-sort-arrow" style="font-size:10px;color:var(--muted)"></span></span> <span onclick="toggleStatusFiltro()" style="cursor:pointer;user-select:none;font-size:10px;color:var(--muted);font-weight:400" title="Filtrar: todos → julgados → não julgados">⚖<span id="st-filtro-lbl"></span></span></th><th style="width:110px;cursor:pointer;user-select:none" onclick="ordenarPrazoToggle()" title="Clique para ordenar pelo prazo fatal (mais próximo ↔ mais distante)">Prazo fatal <span id="prazo-sort-arrow" style="font-size:10px;color:var(--muted)"></span></th><th style="width:58px;text-align:center;cursor:pointer;user-select:none" onclick="ordenarDocs()" title="Clique para ordenar pelo tamanho dos documentos no servidor (maior ↔ menor)">Docs <span id="docs-sort-arrow" style="font-size:10px;color:var(--muted)"></span></th></tr></thead><tbody id="proc-body"></tbody></table></div><div id="proc-pager" style="display:flex;gap:6px;align-items:center;justify-content:center;padding:14px;flex-wrap:wrap"></div>
+      <div class="card"><table><thead><tr><th style="width:26%;cursor:pointer;user-select:none" onclick="ordenarCliente()" title="Clique para ordenar por cliente (A→Z / Z→A)">Cliente <span id="cli-sort-arrow" style="font-size:10px;color:var(--muted)"></span></th><th style="width:150px;cursor:pointer;user-select:none" onclick="ordenarJulgado()" title="Clique para agrupar por julgados / não julgados">Processos/casos <span id="julg-sort-arrow" style="font-size:10px;color:var(--muted)"></span></th><th style="width:22%"><span onclick="ordenarAssuntoLocal('assunto')" style="cursor:pointer;user-select:none" title="Ordenar por assunto (A→Z / Z→A)">Assunto <span id="asn-sort-arrow" style="font-size:10px;color:var(--muted)"></span></span><span style="color:var(--line);margin:0 5px">|</span><span onclick="ordenarAssuntoLocal('local')" style="cursor:pointer;user-select:none" title="Ordenar por vara/local (A→Z / Z→A) — agrupa os processos da mesma vara">Local <span id="loc-sort-arrow" style="font-size:10px;color:var(--muted)"></span></span></th><th style="width:170px;cursor:pointer;user-select:none" onclick="ordenarMov()" title="Clique para ordenar pela data da última movimentação (mais recente ↔ mais antiga)">Última movimentação <span id="mov-sort-arrow" style="font-size:10px;color:var(--muted)"></span></th><th style="width:96px;cursor:pointer;user-select:none" onclick="ordenarParado()" title="Clique para ordenar por dias parado (mais ↔ menos)">Parado há <span id="par-sort-arrow" style="font-size:10px;color:var(--muted)"></span></th><th style="width:104px;text-align:right"><span onclick="ordenarCondenacao()" style="cursor:pointer;user-select:none" title="Ordenar por valor da condenação (maior ↔ menor)">Valor total <span id="cond-sort-arrow" style="font-size:10px;color:var(--muted)"></span></span> <span onclick="toggleStatusFiltro()" style="cursor:pointer;user-select:none;font-size:10px;color:var(--muted);font-weight:400" title="Filtrar: todos → julgados → não julgados">⚖<span id="st-filtro-lbl"></span></span></th><th style="width:110px;cursor:pointer;user-select:none" onclick="ordenarPrazoToggle()" title="Clique para ordenar pelo prazo fatal (mais próximo ↔ mais distante)">Prazo fatal <span id="prazo-sort-arrow" style="font-size:10px;color:var(--muted)"></span></th><th style="width:58px;text-align:center;cursor:pointer;user-select:none" onclick="ordenarDocs()" title="Clique para ordenar pelo tamanho dos documentos no servidor (maior ↔ menor)">Docs <span id="docs-sort-arrow" style="font-size:10px;color:var(--muted)"></span></th></tr></thead><tbody id="proc-body"></tbody></table></div><div id="proc-pager" style="display:flex;gap:6px;align-items:center;justify-content:center;padding:14px;flex-wrap:wrap"></div>
     </section>
 
     <section id="s-proc-det" class="hidden">
@@ -1613,27 +1613,35 @@ function renderPainel(){
 /* clique no cabeçalho "Cliente": alterna A→Z / Z→A (usa o mesmo controle "ordena" do topo) */
 function ordenarCliente(){
   var s=document.getElementById('ordena'); if(!s) return;
-  window.__ordenaPrazo=''; window.__procDocSort=''; window.__procAsnCampo=''; window.__ordenaCondenacao=''; window.__procSortWho='cli';
+  window.__ordenaPrazo=''; window.__procDocSort=''; window.__procAsnCampo=''; window.__ordenaCondenacao=''; window.__procSortWho='cli'; window.__ordenaJulg='';
   s.value=(s.value==='az')?'za':'az';
   renderProc();
 }
 /* cabeçalho "Última movimentação": alterna mais recente (data_desc) ↔ mais antiga (parados) */
 function ordenarMov(){
   var s=document.getElementById('ordena'); if(!s) return;
-  window.__ordenaPrazo=''; window.__procDocSort=''; window.__procAsnCampo=''; window.__ordenaCondenacao=''; window.__procSortWho='mov';
+  window.__ordenaPrazo=''; window.__procDocSort=''; window.__procAsnCampo=''; window.__ordenaCondenacao=''; window.__procSortWho='mov'; window.__ordenaJulg='';
   s.value=(s.value==='data_desc')?'parados':'data_desc';
   renderProc();
 }
 /* cabeçalho "Parado há": alterna mais parado (parados) ↔ menos parado (data_desc) */
 function ordenarParado(){
   var s=document.getElementById('ordena'); if(!s) return;
-  window.__ordenaPrazo=''; window.__procDocSort=''; window.__procAsnCampo=''; window.__ordenaCondenacao=''; window.__procSortWho='par';
+  window.__ordenaPrazo=''; window.__procDocSort=''; window.__procAsnCampo=''; window.__ordenaCondenacao=''; window.__procSortWho='par'; window.__ordenaJulg='';
   s.value=(s.value==='parados')?'data_desc':'parados';
+  renderProc();
+}
+/* cabeçalho "Processos/casos": agrupa julgados ↔ não julgados. Não filtra nada
+   — a lista continua inteira, só muda quem vem primeiro (o ⚖ de "Valor total"
+   é que esconde um dos lados, quando você quer só um deles). */
+function ordenarJulgado(){
+  window.__ordenaJulg=(window.__ordenaJulg==='julg')?'naojulg':'julg';
+  window.__procSortWho='julg'; window.__ordenaPrazo=''; window.__procDocSort=''; window.__procAsnCampo=''; window.__ordenaCondenacao='';
   renderProc();
 }
 /* cabeçalho "Prazo fatal": alterna mais próximo ↔ mais distante */
 function ordenarPrazoToggle(){
-  window.__procSortWho='prazo'; window.__procDocSort=''; window.__procAsnCampo=''; window.__ordenaCondenacao='';
+  window.__procSortWho='prazo'; window.__procDocSort=''; window.__procAsnCampo=''; window.__ordenaCondenacao=''; window.__ordenaJulg='';
   window.__ordenaPrazo=(window.__ordenaPrazo==='prox')?'dist':'prox';
   renderProc();
 }
@@ -1641,13 +1649,13 @@ function ordenarPrazoToggle(){
    tamanhos chegam sob demanda, carrega o censo de TODA a lista filtrada e
    re-renderiza quando terminar. */
 function ordenarDocs(){
-  window.__procSortWho='docs'; window.__ordenaPrazo=''; window.__procAsnCampo=''; window.__ordenaCondenacao='';
+  window.__procSortWho='docs'; window.__ordenaPrazo=''; window.__procAsnCampo=''; window.__ordenaCondenacao=''; window.__ordenaJulg='';
   window.__procDocSort=(window.__procDocSort==='desc')?'asc':'desc';
   renderProc();
 }
 /* cabeçalho "Valor total" (condenação): alterna maior ↔ menor */
 function ordenarCondenacao(){
-  window.__procSortWho='cond'; window.__ordenaPrazo=''; window.__procDocSort=''; window.__procAsnCampo='';
+  window.__procSortWho='cond'; window.__ordenaPrazo=''; window.__procDocSort=''; window.__procAsnCampo=''; window.__ordenaJulg='';
   window.__ordenaCondenacao=(window.__ordenaCondenacao==='desc')?'asc':'desc';
   renderProc();
 }
@@ -2005,7 +2013,7 @@ function ordenarAssuntoLocal(campo){
   if(atualCampo===campo && atualDir==='az') window.__procAsnDir='za';
   else window.__procAsnDir='az';
   window.__procAsnCampo=campo;
-  window.__procSortWho=(campo==='local'?'loc':'asn');
+  window.__procSortWho=(campo==='local'?'loc':'asn'); window.__ordenaJulg='';
   /* desliga as outras ordenações de coluna, que têm prioridade no renderProc */
   window.__ordenaPrazo=''; window.__procDocSort=''; window.__ordenaCondenacao='';
   var sel=document.getElementById('ordena'); if(sel) sel.value='';
@@ -7405,7 +7413,7 @@ function origemBtnHTML(p){
    ícone 🏷 (só faz sentido na lista principal, onde etiquetas são geridas). */
 function _procCelHTML(p, i, comEtiqueta){
   var fs=(typeof faseDoProc==='function')?faseDoProc(p):'';
-  var julgadoBadge=(fs==='recur'||fs==='exec'||fs==='alvara')?(' <span style="display:inline-block;background:#6d28a8;color:#fff;border-radius:8px;padding:0 5px;font-size:8.5px;font-weight:700;vertical-align:middle" title="Já houve sentença/decisão de mérito — fase recursal, de cumprimento ou de alvará">Julgado</span>'):'';
+  var julgadoBadge=((typeof _ehJulgado==='function')?_ehJulgado(p):(fs==='recur'||fs==='exec'||fs==='alvara'))?(' <span style="display:inline-block;background:#6d28a8;color:#fff;border-radius:8px;padding:0 5px;font-size:8.5px;font-weight:700;vertical-align:middle" title="Já houve sentença/decisão de mérito — fase recursal, de cumprimento ou de alvará">Julgado</span>'):'';
   var etq=comEtiqueta?(' <a onclick="event.stopPropagation();etiquetarLinha('+i+')" title="Etiquetas deste processo" style="cursor:pointer;color:#185FA5;font-size:10px">🏷</a>'+((typeof etiquetasDoProc==='function'&&etiquetasDoProc(p.numero))?('<div style="margin-top:1px">'+etiquetasDoProc(p.numero)+'</div>'):'')):'';
   var numEsc=String(p.numero||'').replace(/'/g,'');
   /* processo(s) vinculado(s) ao mesmo caso, colapsados nesta linha pelo
@@ -7658,10 +7666,13 @@ async function transformarEmProcesso(){
   var i=(DADOS.processos||[]).indexOf(atual); if(i>=0) abrir(i);
   try{ if(typeof atualizarHistorico==='function') await atualizarHistorico(); }catch(e){}
 }
+/* "Julgado" = já houve sentença ou decisão de mérito. Definição única, usada
+   pela etiqueta da coluna, pelo filtro ⚖ e pela ordenação do cabeçalho. */
+function _ehJulgado(p){ var fs=faseDoProc(p); return fs==='recur'||fs==='exec'||fs==='alvara'; }
 function origemFiltroOk(p){
   var f=window.__stFiltro||'';
   if(!f) return true;
-  var fs=faseDoProc(p); var julg=(fs==='recur'||fs==='exec'||fs==='alvara');
+  var julg=_ehJulgado(p);
   if(f==='julgado') return julg;
   if(f==='naojulgado') return !julg;
   return true;
@@ -7796,6 +7807,7 @@ function renderProc(){
     _setA('par-sort-arrow', _who==='par'?(sm==='parados'?'▼':'▲'):'');
     _setA('prazo-sort-arrow', _who==='prazo'?(_opw==='prox'?'▲':'▼'):'');
     _setA('docs-sort-arrow', _who==='docs'?((window.__procDocSort==='desc')?'▼':'▲'):'');
+    _setA('julg-sort-arrow', _who==='julg'?((window.__ordenaJulg==='julg')?'⚖▼':'⚖▲'):'');
     var _ad=window.__procAsnDir==='za'?'▼':'▲';
     _setA('asn-sort-arrow', (_who==='asn')?_ad:'');
     _setA('loc-sort-arrow', (_who==='loc')?_ad:'');
@@ -7803,7 +7815,7 @@ function renderProc(){
     if(_stl){ var _sf=window.__stFiltro||''; _stl.textContent=(_sf==='julgado')?' julgados':((_sf==='naojulgado')?' não julg.':''); }
     _setA('cond-sort-arrow', _who==='cond'?((window.__ordenaCondenacao||'')==='asc'?'▲':'▼'):'');
   }catch(e){}
-  var sig=q+'|'+sm+'|'+eq+'|'+pp+'|'+((document.getElementById("filtroMov")||{}).value||'')+'|'+(window.__stFiltro||'')+'|'+(window.__ordenaPrazo||'')+'|'+(window.__procDocSort||'')+'|'+(window.__procAsnCampo||'')+(window.__procAsnDir||'')+'|'+(window.__semVaraFiltro?'sv':'')+'|'+(window.__ordenaCondenacao||'');
+  var sig=q+'|'+sm+'|'+eq+'|'+pp+'|'+((document.getElementById("filtroMov")||{}).value||'')+'|'+(window.__stFiltro||'')+'|'+(window.__ordenaPrazo||'')+'|'+(window.__procDocSort||'')+'|'+(window.__procAsnCampo||'')+(window.__procAsnDir||'')+'|'+(window.__semVaraFiltro?'sv':'')+'|'+(window.__ordenaCondenacao||'')+'|'+(window.__ordenaJulg||'');
   if(sig!==window.__procSig){ window.__procPage=1; window.__procSig=sig; }
   function pd(x){ if(!x) return 0; var m=String(x).split('/'); return m.length===3? parseInt(m[2]+m[1]+m[0],10):0; }
   function pv(x){ if(!x) return 0; return parseFloat(String(x).replace(/\./g,'').replace(',','.'))||0; }
@@ -7887,6 +7899,16 @@ function renderProc(){
     lista.sort(function(a,b){
       var va=_hv(a.valor_condenacao), vb=_hv(b.valor_condenacao);
       return oc==='desc'?(vb-va):(va-vb);
+    });
+  }
+  else if(window.__ordenaJulg==='julg'||window.__ordenaJulg==='naojulg'){
+    /* mesma definição da etiqueta roxa "Julgado" da coluna: já houve sentença
+       ou decisão de mérito — fase recursal, de cumprimento ou de alvará */
+    var _jl=(window.__ordenaJulg==='julg')?1:-1;
+    lista.sort(function(a,b){
+      var ja=_ehJulgado(a)?1:0, jb=_ehJulgado(b)?1:0;
+      if(ja!==jb) return (jb-ja)*_jl;
+      return String(a.cliente||'').localeCompare(String(b.cliente||''),'pt');
     });
   }
   else if(window.__procAsnCampo){
