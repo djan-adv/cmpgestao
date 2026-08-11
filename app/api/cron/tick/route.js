@@ -72,6 +72,9 @@ const JOBS = [
   // sentença/acórdão saiu → avisa o cliente pelo chat do app, sozinho. Mesmo teto
   // mensal do Estagiário Virtual (ia_config): se estourar o mês, este também para.
   { nome: 'aviso_decisao_cliente', rotulo: 'Cliente — avisar sentença/acórdão pelo chat', url: '/api/robo/avisos-cliente', cada_min: 30, timeout_ms: 55000 },
+  // cliente que ainda não entrou no app: lembrete a cada 2 dias ÚTEIS (o próprio
+  // robô cuida do intervalo e da janela de horário; aqui é só a batida de hora).
+  { nome: 'app_convite', rotulo: 'Cliente — cobrar entrada no aplicativo', url: '/api/cron/app-convite', cada_min: 60 },
   // audiências/reuniões → Google Calendar (com Meet automático nas reuniões).
   // Sem custo quando não há autorização ainda (só confirma e sai).
   { nome: 'google_sync', rotulo: 'Agenda — sincronizar com o Google Calendar', url: '/api/cron/google-sync', cada_min: 10 },

@@ -75,6 +75,9 @@
   .stage.alt{background:#fff;color:var(--navy);border:1px dashed var(--gold)}
   .chk{font-size:13.5px;margin:4px 0;padding-left:20px;position:relative} .chk::before{content:"✓";position:absolute;left:0;color:var(--ok);font-weight:700}
   .searchbar{display:flex;gap:8px;margin-bottom:12px} .searchbar input{max-width:340px}
+  /* barra fixa: com 700 contatos, os dois nomes a mesclar ficam longe um do
+     outro — o botão tem que continuar à mão sem voltar ao topo da lista */
+  .searchbar.fixa{position:sticky;top:0;z-index:30;background:var(--bg);margin:0 -4px 12px;padding:9px 4px;box-shadow:0 8px 10px -9px rgba(30,39,51,.35)}
   .note{font-size:11.5px;color:var(--muted);font-style:italic;margin-top:8px}
   .tag-cli{font-size:10.5px;background:var(--navy);color:#fff;padding:2px 8px;border-radius:20px;margin-left:6px;font-weight:600;vertical-align:middle}
   .parties{font-size:18px;font-weight:400;line-height:1.4} .parties .cli{font-weight:700;color:var(--navy)} .parties .vs{color:var(--muted);margin:0 5px} .parties .op{color:var(--ink)}
@@ -399,14 +402,13 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
         <button class="btn sm" style="margin-left:auto" onclick="abrirNovaTarefa()">+ Nova tarefa</button>
       </div>
       <div id="crm-contatos">
-        <div class="kpis" id="crm-kpis"></div>
         <div class="switch" style="margin-bottom:10px">
           <button id="ct-sw-cli" class="on" onclick="setAbaContato('clientes')">Clientes<sup class="ag-cnt" id="ct-n-cli"></sup></button>
           <button id="ct-sw-opo" onclick="setAbaContato('oponentes')">Oponentes<sup class="ag-cnt" id="ct-n-opo"></sup></button>
           <button id="ct-sw-var" onclick="setAbaContato('varas')">Varas<sup class="ag-cnt" id="ct-n-var"></sup></button>
         </div>
-        <div class="searchbar"><input id="buscaCli" placeholder="Buscar por nome, tipo, telefone, origem..." oninput="renderContatos()"><span class="note" id="cli-count" style="align-self:center"></span><button class="btn sm" style="background:#185FA5;color:#fff;border-color:#185FA5;line-height:1.15;padding:5px 12px;text-align:center" onclick="abrirContatosSemelhantes()" title="Agrupa contatos com nome, telefone ou e-mail parecidos — acha os candidatos a mesclar pra você">🔍 Achar semelhantes <span id="csm-badge" style="display:none;font-size:9px;font-weight:700;background:#fff;color:#185FA5;border-radius:9px;padding:0 6px;margin-left:2px"></span></button><button class="btn sm" style="background:#6d28a8;color:#fff;border-color:#6d28a8;line-height:1.15;padding:5px 12px;text-align:center" onclick="mesclarContatos()" title="Marque 2+ contatos da mesma pessoa (nas caixinhas): você escolhe o nome que fica e todos os processos desse cliente são sincronizados">⛒ Mesclar<br><span style="font-size:9px;font-weight:400;opacity:.85">sincroniza por cliente</span></button><select id="ordCli" onchange="renderContatos()" style="font-size:12px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--bg)" title="Ordenar a lista de contatos"><option value="az">Ordenar: A → Z</option><option value="proc">Mais processos ativos</option></select><button class="btn sm" style="margin-left:auto" onclick="novoContato()">+ Novo contato</button></div>
-        <div class="card"><table><thead><tr><th style="width:30px" title="Marque 2+ da mesma pessoa e clique em Mesclar"></th><th>Nome</th><th>Tipo</th><th>Telefone</th><th>E-mail</th><th>Origem</th><th>Proc.</th><th>Editar</th><th>Excluir</th></tr></thead><tbody id="crm-body"></tbody></table></div>
+        <div class="searchbar fixa"><input id="buscaCli" placeholder="Buscar por nome, tipo, telefone, origem..." oninput="renderContatos()"><span class="note" id="cli-count" style="align-self:center"></span><button class="btn sm" style="background:#185FA5;color:#fff;border-color:#185FA5;line-height:1.15;padding:5px 12px;text-align:center" onclick="abrirContatosSemelhantes()" title="Agrupa contatos com nome, telefone ou e-mail parecidos — acha os candidatos a mesclar pra você">🔍 Achar semelhantes <span id="csm-badge" style="display:none;font-size:9px;font-weight:700;background:#fff;color:#185FA5;border-radius:9px;padding:0 6px;margin-left:2px"></span></button><button class="btn sm" style="background:#6d28a8;color:#fff;border-color:#6d28a8;line-height:1.15;padding:5px 12px;text-align:center" onclick="mesclarContatos()" title="Marque 2+ contatos da mesma pessoa (nas caixinhas): você escolhe o nome que fica e todos os processos desse cliente são sincronizados">⛒ Mesclar<span id="merge-badge" style="display:none;font-size:9px;font-weight:700;background:#fff;color:#6d28a8;border-radius:9px;padding:0 6px;margin-left:4px"></span><br><span style="font-size:9px;font-weight:400;opacity:.85">sincroniza por cliente</span></button><button class="btn sm" style="margin-left:auto" onclick="novoContato()">+ Novo contato</button></div>
+        <div class="card"><table><thead><tr><th style="width:30px" title="Marque 2+ da mesma pessoa e clique em Mesclar"></th><th style="cursor:pointer;user-select:none" onclick="ordenarContatoNome()" title="Clique para ordenar por nome (A→Z / Z→A)">Nome <span id="cli-nome-arrow" style="font-size:10px;color:var(--muted)"></span></th><th>Tipo</th><th>Telefone</th><th>E-mail</th><th>Origem</th><th style="cursor:pointer;user-select:none" onclick="ordenarContatoProc()" title="Clique para ordenar pelos processos ativos (maior primeiro)">Proc. <span id="cli-proc-arrow" style="font-size:10px;color:var(--muted)"></span></th><th>Editar</th><th>Excluir</th></tr></thead><tbody id="crm-body"></tbody></table></div>
       </div>
       <div id="crm-captacao" class="hidden">
         <div style="display:flex;flex-wrap:wrap;gap:24px;margin-bottom:12px;align-items:flex-end">
@@ -1736,10 +1738,11 @@ function renderTriagemCard(pend){
   if(!fila.length){ html+='<p class="note" style="margin:0">Fila vazia — tudo triado. ✔</p>'; }
   else{
     html+=fila.slice(0,2).map(function(t){
-      var sug=sugestaoTeor(t.texto||t.titulo); var pz=sug.prazo?(sug.prazo+" dias"):"agendar";
+      var limpo=limparTeor(t.texto);
+      var sug=sugestaoTeor(limpo||t.titulo); var pz=sug.prazo?(sug.prazo+" dias"):"agendar";
       return '<div class="pubv2">'
         +'<div class="meta">'+esc(t.tribunal||"")+' · <a style="cursor:pointer;text-decoration:underline" onclick="irParaProcesso(\''+String(t.numero).replace(/'/g,"")+'\')">'+esc(t.numero)+'</a> · disp. '+esc(t.data||"")+'</div>'
-        +'<div class="tx">'+esc((t.texto||t.titulo||"").slice(0,140))+'…</div>'
+        +'<div class="tx">'+esc((limpo||t.titulo||"").slice(0,140))+'…</div>'
         +'<div class="iav2">✦ IA sugere: <b>'+esc(sug.ativ)+'</b> · prazo sugerido: '+pz+'</div>'
         +'<button class="btn sm gold" onclick="acaoTriagem('+t.id+')">Ação &rarr; criar atividade</button> '
         +'<button class="btn sm ghost" onclick="cienciaTriagem('+t.id+');renderPainel()">Ciência (arquivar)</button>'
@@ -2691,7 +2694,30 @@ function _pintaContagemContatos(){
   põe('ct-n-opo',_oponentesDaBase().length);
   põe('ct-n-var',(window.__VARAS||[]).length);
 }
+/* Ordenação da lista de contatos pelo cabeçalho, como na tela de processos:
+   clicar em "Nome" alterna A→Z / Z→A; clicar em "Proc." põe quem tem mais
+   processos ativos na frente. Substituiu o seletor "Ordenar:" da barra. */
+var ordCli='az';
+function ordenarContatoNome(){ ordCli=(ordCli==='az')?'za':'az'; renderContatos(); }
+function ordenarContatoProc(){ ordCli=(ordCli==='proc')?'az':'proc'; renderContatos(); }
+function _setaOrdCli(){
+  var n=document.getElementById('cli-nome-arrow'), p=document.getElementById('cli-proc-arrow');
+  if(n) n.textContent=(ordCli==='az')?'▲':((ordCli==='za')?'▼':'');
+  if(p) p.textContent=(ordCli==='proc')?'▼':'';
+}
+function _cmpNomeCli(a,b){ var r=String(a||'').localeCompare(String(b||''),'pt-BR'); return (ordCli==='za')?-r:r; }
+/* marca quantos contatos estão selecionados no botão Mesclar — rolando a lista
+   longe do topo, é o que diz se o primeiro nome continua marcado */
+function _contaMerge(){
+  var n=document.querySelectorAll('#crm-body .cmerge:checked').length;
+  var bd=document.getElementById('merge-badge'); if(!bd) return;
+  bd.textContent=n; bd.style.display=n?'inline-block':'none';
+}
 function renderContatos(){
+  _setaOrdCli();
+  var bb=document.getElementById('crm-body');
+  if(bb&&!bb.__mergeHook){ bb.__mergeHook=1; bb.addEventListener('change',_contaMerge); }
+  setTimeout(_contaMerge,0);
   if(abaContato==='varas')     return renderContatosVaras();
   if(abaContato==='oponentes') return renderContatosOponentes();
   return renderContatosClientes();
@@ -2705,6 +2731,7 @@ function renderContatosVaras(){
        respondeu um e-mail é o caso de uso que faltava */
     return [v.orgao,v.comarca,v.tribunal,v.email,v.telefones,v.whatsapp].join(' ').toLowerCase().indexOf(q)>-1;
   });
+  lista.sort(function(a,b){ return _cmpNomeCli(a.orgao,b.orgao); });
   document.getElementById("cli-count").textContent=lista.length+" vara"+(lista.length===1?'':'s');
   var b=document.getElementById("crm-body"); b.innerHTML="";
   if(window.__VARAS===null){ b.innerHTML='<tr><td colspan="9" class="note" style="padding:10px">Carregando as varas…</td></tr>'; return; }
@@ -2729,6 +2756,7 @@ function renderContatosOponentes(){
   seedContatos(); _pintaContagemContatos();
   var q=(document.getElementById("buscaCli").value||"").toLowerCase().trim();
   var lista=_oponentesDaBase().filter(function(o){ return !q || o.nome.toLowerCase().indexOf(q)>-1; });
+  lista.sort(function(a,b){ return _cmpNomeCli(a.nome,b.nome); });
   document.getElementById("cli-count").textContent=lista.length+" oponente"+(lista.length===1?'':'s');
   var b=document.getElementById("crm-body"); b.innerHTML="";
   if(!lista.length){ b.innerHTML='<tr><td colspan="9" class="note" style="padding:10px">Nenhuma parte contrária encontrada.</td></tr>'; return; }
@@ -2763,17 +2791,15 @@ function renderContatosClientes(){
   var q=(document.getElementById("buscaCli").value||"").toLowerCase();
   var f=CONTATOS.filter(function(c){return !q||(c.nome+" "+c.tipo+" "+c.tel+" "+c.origem).toLowerCase().indexOf(q)>-1;});
   /* ordenação da lista: A→Z (padrão) ou por nº de processos ATIVOS (maior→menor) */
-  var ord=(document.getElementById("ordCli")||{}).value||"az";
+  var ord=ordCli;
   if(ord==="proc"){
     var ativ={}; (DADOS.processos||[]).forEach(function(p){ if(!/encerr/i.test(p.status||'')){ var nk=normClienteNome(p.cliente); if(nk) ativ[nk]=(ativ[nk]||0)+1; } });
     f.forEach(function(c){ c._ativos=ativ[normClienteNome(c.nome)]||0; });
     f.sort(function(a,b){ if(b._ativos!==a._ativos) return b._ativos-a._ativos; return String(a.nome||'').localeCompare(String(b.nome||''),'pt-BR'); });
   } else {
-    f.sort(function(a,b){ return String(a.nome||'').localeCompare(String(b.nome||''),'pt-BR'); });
+    f.sort(function(a,b){ return _cmpNomeCli(a.nome,b.nome); });
   }
   document.getElementById("cli-count").textContent=f.length+" contatos";
-  var ativos=LEADS.filter(function(l){return l.estagio!=="ganho"&&l.estagio!=="perdido";}).length;
-  document.getElementById("crm-kpis").innerHTML=kpi("contatos",CONTATOS.length)+kpi("clientes",CONTATOS.filter(function(c){return c.tipo==="cliente";}).length)+kpi("leads ativos",ativos)+kpi("origem que + converte","Indicação");
   try{ atualizaBadgeSemelhantes(); }catch(e){}
   var b=document.getElementById("crm-body");b.innerHTML="";
   f.slice(0,300).forEach(function(c){var tr=document.createElement("tr");
@@ -3127,8 +3153,9 @@ function sugestaoTeor(txt){var t=(txt||"").toLowerCase();
 function verTeor(id){
   var t=TRIAGEM.find(function(x){return x.id===id;});var d=document.getElementById("teor-"+id);if(!d||!t)return;
   if(d.style.display==="none"){
-    var sug=sugestaoTeor(t.texto||t.titulo);var pz=sug.prazo?(sug.prazo+" dias"):"agendar/sem prazo";
-    d.innerHTML='<div style="background:var(--accentbg);border-left:3px solid var(--gold);padding:8px 10px;border-radius:0 6px 6px 0;margin-bottom:8px;color:var(--ink);white-space:normal"><b>Sugestão de tratamento (IA):</b> '+esc(sug.ativ)+' — <b>prazo sugerido: '+pz+'</b><div style="margin-top:6px"><button class="btn sm gold" onclick="acaoTriagem('+t.id+')">criar atividade &rarr;</button></div></div><div style="font-weight:600;margin-bottom:2px">Teor do despacho:</div>'+esc(t.texto||"(sem teor)");
+    var limpo=limparTeor(t.texto);
+    var sug=sugestaoTeor(limpo||t.titulo);var pz=sug.prazo?(sug.prazo+" dias"):"agendar/sem prazo";
+    d.innerHTML='<div style="background:var(--accentbg);border-left:3px solid var(--gold);padding:8px 10px;border-radius:0 6px 6px 0;margin-bottom:8px;color:var(--ink);white-space:normal"><b>Sugestão de tratamento (IA):</b> '+esc(sug.ativ)+' — <b>prazo sugerido: '+pz+'</b><div style="margin-top:6px"><button class="btn sm gold" onclick="acaoTriagem('+t.id+')">criar atividade &rarr;</button></div></div><div style="font-weight:600;margin-bottom:2px">Teor do despacho:</div>'+esc(limpo||"(sem teor)");
     d.style.display="block";
   } else d.style.display="none";
 }
@@ -3203,6 +3230,55 @@ async function recarregarPublicacoes(){
   console.log('CMPGestao: '+PUBLICACOES.length+' publicações recentes na triagem.');
   return PUBLICACOES.length;
 }
+/* O DJEN entrega a publicação num bloco só: cabeçalho do tribunal, endereço do
+   fórum, a decisão em si e, no rodapé, a tabela "Documentos associados ao
+   processo" com as chaves de acesso (números de 20+ dígitos). Na triagem só
+   interessa o miolo — o resto é ruído que faz o card virar uma parede de texto.
+   Limpa na EXIBIÇÃO, nunca no banco: o texto original continua intacto e o card
+   tem o botão "texto original" para conferir. */
+function limparTeor(txt){
+  var t=String(txt||''); if(!t) return '';
+  /* rodapé: da tabela de documentos para baixo é só título + chave de acesso */
+  t=t.replace(/\s*Documentos?\s+associados?\s+ao\s+processo[\s\S]*$/i,'');
+  t=t.replace(/\s*Documento[s]?\s+assinado[s]?\s+(digital|eletronic)[\s\S]*$/i,'');
+  t=t.replace(/\s*Para\s+(conferir|verificar)\s+(o\s+original|a\s+autenticidade)[\s\S]*$/i,'');
+  /* cabeçalho institucional: guarda o nome da vara e joga fora endereço e CEP */
+  t=t.replace(/^\s*(?:ESTADO\s+D[EOA]\s[\s\S]{0,300}?)(?=PROCESSO\s*N|AUTOR|EXEQUENTE|REQUERENTE)/i,function(cab){
+    var v=cab.match(/(\d+ª?\s*VARA[\s\S]{0,90}?|\d+º?\s*JUIZADO[\s\S]{0,90}?)(?=\s+(?:AV|AVENIDA|RUA|PRA[ÇC]A|ROD|R\.|F[ÓO]RUM)\b|,|\s+CEP)/i);
+    return v?(v[1].trim().replace(/\s+/g,' ')+'\n\n'):'';
+  });
+  /* chaves de acesso e hashes soltos que sobraram no meio do texto */
+  t=t.replace(/\b\d{14,}\b/g,'').replace(/\b[0-9a-f]{32,}\b/gi,'');
+  /* o texto vem sem quebra nenhuma: separa nos marcos da decisão para dar respiro */
+  t=t.replace(/\s+(DECIDO|DETERMINO|DEFIRO|INDEFIRO|Diante do exposto|Ante o exposto|Isso posto|Posto isso|Intime-se|Cite-se|P\.\s?I\.\s?C?\.?|P\.\s?R\.\s?I\.)/g,'\n\n$1');
+  /* qualificação do processo em linhas próprias — hoje vem tudo emendado */
+  t=t.replace(/\s+(AUTOR|AUTORA|EXEQUENTE|REQUERENTE|EMBARGANTE|R[EÉ]U|RECLAMANTE|RECLAMADO|EXECUTADO|REQUERIDO|EMBARGADO)(S)?\s*:/g,'\n$1$2:');
+  /* "DECISÃO"/"SENTENÇA" como rótulo da peça vira título — mas não quando faz
+     parte do nome da vara ("CUMPRIMENTOS DE SENTENÇA"), daí o teste da preposição */
+  t=t.replace(/(\S+)\s+(DECIS[ÃA]O|DESPACHO|SENTEN[ÇC]A|ATO ORDINAT[ÓO]RIO|CERTID[ÃA]O)\s+/g,function(m,ant,rot){
+    return /^(DE|DA|DO|E|EM|COM|DAS|DOS)$/i.test(ant)?m:(ant+'\n\n'+rot+'\n\n');
+  });
+  return t.replace(/[ \t]{2,}/g,' ').replace(/\n{3,}/g,'\n\n').trim();
+}
+/* trecho inicial + botão, para o card não abrir com 6 mil caracteres na cara */
+var TEOR_CORTE=1200;
+function expandirTeor(id,btn){
+  var t=TRIAGEM.find(function(x){return x.id===id;});
+  var d=document.getElementById('teortxt-'+id); if(!t||!d) return;
+  d.textContent=limparTeor(t.texto); d.style.maxHeight='none';
+  if(btn&&btn.parentElement) btn.parentElement.removeChild(btn);
+}
+/* alterna entre o teor limpo e o que veio do diário, sem perder o lugar */
+function teorOriginal(id,btn){
+  var t=TRIAGEM.find(function(x){return x.id===id;});
+  var d=document.getElementById('teortxt-'+id); if(!t||!d) return;
+  var bruto=(btn.getAttribute('data-bruto')==='1');
+  d.textContent=bruto?limparTeor(t.texto):String(t.texto||'');
+  d.style.maxHeight='none';
+  btn.setAttribute('data-bruto',bruto?'0':'1');
+  btn.textContent=bruto?'texto original':'texto limpo';
+  var ma=document.getElementById('teormais-'+id); if(ma&&ma.parentElement) ma.parentElement.removeChild(ma);
+}
 function renderTriagem(){
   var tb=document.getElementById("triagem");tb.innerHTML="";
   var naoTratadas=TRIAGEM.filter(function(t){return !t.done});
@@ -3218,7 +3294,8 @@ function renderTriagem(){
   var vazia=document.getElementById("triagem-vazia");
   if(vazia){ vazia.style.display=lista.length?"none":"block"; vazia.textContent=(triagemAba==='tratadas')?'Nenhuma publicação tratada ainda.':'Fila vazia — tudo triado.'; }
   lista.slice(0,300).forEach(function(t){
-    var sug=sugestaoTeor(t.texto||t.titulo); var pz=sug.prazo?(sug.prazo+" dias"):"agendar";
+    var limpo=limparTeor(t.texto);
+    var sug=sugestaoTeor(limpo||t.titulo); var pz=sug.prazo?(sug.prazo+" dias"):"agendar";
     var numSafe=String(t.numero).replace(/'/g,"");
     /* partes: autor × réus (até 2 nomes + "e outros") — essencial para clientes com
        muitos processos, que só se distinguem pela parte contrária */
@@ -3233,7 +3310,11 @@ function renderTriagem(){
       : '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px"><button class="btn sm gold" onclick="acaoTriagem('+t.id+')">criar atividade &rarr;</button><button class="btn sm ghost" onclick="cienciaTriagem('+t.id+')">ciência (arquivar)</button><button class="btn sm ghost" style="color:#0b7285" onclick="abrirAtualizarCliente(\''+numSafe+'\')" title="Comunicar a cliente por e-mail">&#9993; cliente</button></div>';
     var teorHtml=barra
       +'<div style="background:var(--accentbg);border-left:3px solid var(--gold);padding:8px 10px;border-radius:0 6px 6px 0;margin:0 0 8px;color:var(--ink);white-space:normal"><b>✦ IA sugere:</b> '+esc(sug.ativ)+' · <b>prazo sugerido: '+pz+'</b></div>'
-      +(t.texto?('<div style="font-weight:600;margin-bottom:2px">Teor do despacho:</div><div style="white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;max-height:480px;overflow:auto;font-size:13.5px;line-height:1.55">'+esc(t.texto)+'</div>'):'<div class="note">Sem teor disponível.</div>');
+      +(t.texto?('<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:2px"><span style="font-weight:600">Teor do despacho:</span>'
+          +'<a onclick="teorOriginal('+t.id+',this)" data-bruto="0" style="cursor:pointer;font-size:11px;color:var(--muted);text-decoration:underline" title="Ver como veio do diário, sem a limpeza">texto original</a></div>'
+        +'<div id="teortxt-'+t.id+'" style="white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;max-height:480px;overflow:auto;font-size:13.5px;line-height:1.55">'+esc(limpo.length>TEOR_CORTE?(limpo.slice(0,TEOR_CORTE).replace(/\s+\S*$/,'')+'…'):limpo)+'</div>'
+        +(limpo.length>TEOR_CORTE?('<div id="teormais-'+t.id+'" style="margin-top:6px"><button class="btn sm ghost" style="font-size:11.5px" onclick="expandirTeor('+t.id+',this)">▾ mostrar tudo ('+limpo.length.toLocaleString('pt-BR')+' caracteres)</button></div>'):'')
+        ):'<div class="note">Sem teor disponível.</div>');
     var card=document.createElement("div");
     card.style.cssText='border:1px solid var(--line);border-radius:10px;padding:10px 13px;margin-bottom:10px;background:#fff';
     card.innerHTML=
@@ -3249,7 +3330,7 @@ function renderTriagem(){
       /* movimentação + ver teor */
       +'<div style="font-size:13.5px;font-weight:600;color:#185FA5">'+esc(t.titulo)+'</div>'
       /* prévia larga e legível */
-      +(t.texto?('<div class="mov-previa" style="font-size:13px;line-height:1.5;color:var(--ink);opacity:.88;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical;overflow:hidden;background:#fafbfc;border-left:3px solid var(--line);border-radius:0 8px 8px 0;padding:8px 12px;margin-top:7px">'+esc(t.texto)+'</div>'):'')
+      +(t.texto?('<div class="mov-previa" style="font-size:13px;line-height:1.5;color:var(--ink);opacity:.88;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical;overflow:hidden;background:#fafbfc;border-left:3px solid var(--line);border-radius:0 8px 8px 0;padding:8px 12px;margin-top:7px">'+esc(limpo)+'</div>'):'')
       /* teor aberto: barra de decisão no TOPO + sugestão IA + texto completo */
       +'<div class="teor" id="teor-'+t.id+'" style="display:none;font-size:13px;color:var(--ink);margin-top:8px;border-top:1px dashed var(--line);padding-top:10px">'+teorHtml+'</div>';
     tb.appendChild(card);
@@ -3275,7 +3356,7 @@ function _autoVincularSeCaso(num){
 function acaoTriagem(id){
   var t=TRIAGEM.find(function(x){return x.id===id});if(!t)return;
   _autoVincularSeCaso(t.numero);
-  var sug=sugestaoTeor(t.texto||t.titulo); triagemAtual=id;
+  var sug=sugestaoTeor(limparTeor(t.texto)||t.titulo); triagemAtual=id;
   abrirNovaTarefa(t.numero);
   document.getElementById("t-titulo").value=sug.ativ;
   document.getElementById("t-tipo").value=sug.tipo;
@@ -5281,7 +5362,11 @@ function renderHistorico(){
     if(ehCaptura) cl=["Captura externa (celular)","#127a53","cap"];
     /* resposta que chegou por e-mail — importada da caixa pelo robô do IMAP */
     var ehEmail=(mv.f==='email');
-    if(ehEmail) cl=["E-mail recebido — resposta","#0b7285","email"];
+    /* resposta vinda de e-mail oficial (@*.jus.br, mp.br, def.br) é o cartório
+       respondendo — vai em verde escuro, a mesma cor que o sistema usa para
+       "andou": destaca no meio dos movimentos automáticos do diário. */
+    var ehCartorio=ehEmail&&/@[a-z0-9.-]*\.(jus|mp|def)\.br/i.test(String(mv.texto||''));
+    if(ehEmail) cl=[ehCartorio?"Resposta do cartório (e-mail)":"E-mail recebido — resposta","#0F6E56","email"];
     /* O app do cliente só mostra fonte oficial (djen/datajud/jusbr/protocolo) OU
        o que o escritório liberou um a um por aqui (visivel_cliente). Sem essa
        segunda porta, a solicitação de conclusão ao cartório — que é trabalho
@@ -5295,6 +5380,7 @@ function renderHistorico(){
     /* o próprio andamento pode JÁ conter o inteiro teor (publicação DJEN gravada
        no histórico) — nesse caso mostra "ver teor" direto, sem depender da lista global */
     if(!teor && !isMan && !ehCaptura && !ehEmail && String(mv.texto||'').length>180) teor=mv.texto;
+    if(teor) teor=limparTeor(teor);   /* mesma limpeza da triagem: sem cabeçalho nem chave de acesso */
     /* captura externa: mostra o próprio texto (com a transcrição da IA), sem a nota de "não está na captura pública" */
     var content=teor||((ehCaptura||ehEmail)?(mv.texto||nome):("Registro do movimento: "+(mv.texto||nome)+"\n\n(O conteúdo detalhado deste andamento não está na captura pública. As publicações com o inteiro teor estão no bloco de publicações e marcadas em dourado.)"));
     /* captura e e-mail recebido: o texto vem direto na tela, sem precisar clicar —
@@ -5305,8 +5391,8 @@ function renderHistorico(){
        item que o escritório liberou — aqui ele troca para avisar o contrário */
     var rotuloMan=(isMan&&mv.vc)?'Histórico manual — visível no app do cliente':(isMan?'Histórico manual (interno — não enviar ao cliente)':cl[0]);
     li.innerHTML='<div class="dt" style="font-size:11px;color:var(--muted)">'+dt+' · <span style="color:'+(isMan?(mv.vc?'#127a53':'#7b1e3a'):cl[1])+';font-weight:600">'+rotuloMan+'</span>'+(mv.pr?' · <span style="color:#0b7285;font-weight:700" title="Entra no resumo dos e-mails de atualização ao cliente">★ providência do escritório</span>':'')+(!isMan&&mv.vc&&!jaVisivelApp?' · <span style="color:#127a53;font-weight:700" title="Liberado para o app do cliente">📲 visível no app</span>':'')+'</div>'
-      +'<div'+(isMan?' style="color:#7b1e3a;font-weight:600"':'')+'>'+esc(nome)+(label?(' <span style="color:'+cor+';font-size:11px">('+label+')</span>'):'')+'</div>'
-      +(captInline?('<div style="font-size:13px;color:#374151;margin-top:4px;white-space:pre-wrap;max-height:280px;overflow:auto;background:'+(ehEmail?'#eef6f8':'#f4f7f5')+';border-radius:8px;padding:8px 10px">'+esc(captInline)+'</div>'):'')
+      +'<div'+(isMan?' style="color:#7b1e3a;font-weight:600"':(ehEmail?' style="color:#0F6E56;font-weight:600"':''))+'>'+esc(nome)+(label?(' <span style="color:'+cor+';font-size:11px">('+label+')</span>'):'')+'</div>'
+      +(captInline?('<div style="font-size:13px;color:#374151;margin-top:4px;white-space:pre-wrap;max-height:280px;overflow:auto;background:'+(ehEmail?'#edf6f1':'#f4f7f5')+(ehEmail?';border-left:3px solid #0F6E56':'')+';border-radius:8px;padding:8px 10px">'+esc(captInline)+'</div>'):'')
       /* responder sem sair do processo — o botão fica sempre visível na resposta */
       +(ehEmail?('<div style="margin-top:6px"><button class="btn sm" style="font-size:11px;background:#0F6E56;color:#fff" onclick="responderDoHistorico(event,'+atual.hist_full.indexOf(mv)+')">✉ responder</button> <button class="btn sm ghost" style="font-size:11px" onclick="event.stopPropagation();go(\'emails\')" title="Abrir a caixa de e-mails">abrir caixa</button></div>'):'')
       +anexosHtml(mv.id)

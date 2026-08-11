@@ -226,7 +226,7 @@ export async function alertarEscritorio(assunto, corpo) {
       para: process.env.INOVE_ALERTA_EMAIL || 'djan.adv@gmail.com',
       assunto,
       corpo,
-      dedup: false,
+      dedup: false, convidarApp: false,   // alerta interno: não é cliente
     })
   } catch (e) { /* alerta falhar não pode quebrar a ação do usuário */ }
 }

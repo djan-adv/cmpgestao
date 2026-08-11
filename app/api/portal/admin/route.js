@@ -118,7 +118,9 @@ async function emailCredenciais({ nome, email, senha, numero, novoProcesso }) {
   return enviarEmailCore({
     para: email,
     assunto: 'Seu acesso ao aplicativo do escritório — CMP Advogados',
-    corpo, numero: numero || '', dedup: false,
+    // convidarApp: false — este e-mail JÁ é o convite (leva login e senha);
+    // o bloco automático repetiria a mesma conversa dentro dela mesma.
+    corpo, numero: numero || '', dedup: false, convidarApp: false,
   })
 }
 
