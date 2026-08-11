@@ -3607,11 +3607,11 @@ function abrirTarefaKanban(id){
   var _sb=document.getElementById('t-btn-salvar'); if(_sb) _sb.textContent='Salvar alterações';
   var _ct=document.getElementById('t-corrigir-tipo');
   if(_ct) _ct.style.display=(a.tipoForm==='audiencia'?'block':'none');
-  /* quem pediu / quem entregou — some quando a tarefa é antiga e não tem registro */
+  /* quem pediu / quem entregou — tarefa do robô aparece como "sistema" */
   var _au=document.getElementById('t-autoria');
   if(_au){
     var l=[];
-    if(a.criadoPor) l.push('Criada por <b>'+esc(a.criadoPor)+'</b>');
+    l.push('Criada por <b>'+_kanAutor(a)+'</b>');
     if(a.col==='finalizado'&&a.concluidoPor) l.push('Concluída por <b>'+esc(a.concluidoPor)+'</b>'+(a.concluidoEm?(' em '+_kanQuandoBR(a.concluidoEm)):''));
     _au.innerHTML=l.join(' · ');
     _au.style.display=l.length?'block':'none';
@@ -3642,6 +3642,26 @@ function corrigirTipoAtividade(novoTipo){
   try{ if(typeof renderAgendaView==='function') renderAgendaView(); }catch(e){}
 }
 function concluirTarefaModal(){ var id=window._tarEditId; if(id!=null){ concluirTarefaKanban(id); } fecharTarefa(); try{ if(typeof renderAtivProc==='function') renderAtivProc(); if(typeof renderHistorico==='function') renderHistorico(); }catch(e){} }
+/* Quem criou a atividade. Tarefa feita à mão guarda o nome em criado_por; a que
+   o robô abriu sozinho não guarda nome nenhum — e ficava sem autoria na tela,
+   como se ninguém a tivesse criado. Aqui a origem vira o autor: "sistema", com
+   a rotina entre parênteses para saber de onde veio o prazo. */
+var _ORIGEM_AUTOR={
+  'robo_embargos':'sistema (prazo automático de embargos)',
+  'robo_minuta':'sistema (triagem do robô)',
+  'minuta':'sistema (minuta)',
+  'auto-sistema':'sistema (agenda automática)',
+  'captura':'sistema (captura pelo celular)',
+  'crm_lead':'sistema (captação)',
+  'sistema':'sistema'
+};
+function _kanAutor(a){
+  if(a&&a.criadoPor) return esc(a.criadoPor);
+  var o=String((a&&(a.org||a.origem))||'').toLowerCase();
+  if(_ORIGEM_AUTOR&&_ORIGEM_AUTOR[o]) return _ORIGEM_AUTOR[o];
+  if(/^robo|^auto/.test(o)) return 'sistema ('+esc(o.replace(/[_-]/g,' '))+')';
+  return 'não registrado';
+}
 /* ===== Painel "Atividades do escritório neste processo" (tarefas/prazos deste processo) ===== */
 function renderAtivProc(){
   var el=document.getElementById('ativ-proc'); if(!el) return;
@@ -3661,9 +3681,8 @@ function renderAtivProc(){
     if(a.hora && a.hora!=='Dia todo') meta.push(esc(a.hora));
     meta.push(concl?'<span style="color:#127a53">concluída</span>':'<span style="color:#8a5a00">a executar</span>');
     /* autoria em linha própria: quem pediu e quem entregou. Fica de fora quando
-       ninguém está registrado (tarefas antigas, anteriores a este controle). */
-    var aut=[];
-    if(a.criadoPor) aut.push('criada por <b>'+esc(a.criadoPor)+'</b>');
+       o robô abriu sozinho, o autor é o sistema — nunca fica em branco. */
+    var aut=['criada por <b>'+_kanAutor(a)+'</b>'];
     if(concl&&a.concluidoPor) aut.push('concluída por <b>'+esc(a.concluidoPor)+'</b>'+(a.concluidoEm?(' em '+_kanQuandoBR(a.concluidoEm)):''));
     return '<div style="display:flex;align-items:flex-start;gap:8px;padding:9px 2px;border-bottom:1px solid var(--line)'+(concl?';opacity:.6':'')+'">'
       +'<input type="checkbox" '+(concl?'checked':'')+' onclick="toggleConcluirTarefa('+a.id+');renderAtivProc();" style="width:17px;height:17px;margin-top:2px;cursor:pointer;flex-shrink:0" title="Concluir/reabrir">'
@@ -5269,11 +5288,32 @@ function pubsDoProcesso(num){
   if(!PUBIDX){PUBIDX={};(typeof PUBLICACOES!=="undefined"?PUBLICACOES:[]).forEach(function(p){var k=(p.numero||"").replace(/\D/g,"");(PUBIDX[k]=PUBIDX[k]||[]).push(p);});}
   return PUBIDX[(num||"").replace(/\D/g,"")]||[];
 }
+/* Que ato é este: 'peca' (nossa), 'decisao' (do juízo), 'pub' ou 'and'.
+   O erro que isto conserta: acórdão e sentença caíam em "petição" porque o
+   cabeçalho traz "APELAÇÃO CÍVEL n. ..." — que é o nome da CLASSE do processo,
+   não a peça protocolada. Por isso a leitura é feita em duas passadas: primeiro
+   o CABEÇALHO, onde o documento se identifica, e só depois o corpo. */
+function tipoAto(txt){
+  var t=(""+(txt||"")).toLowerCase();
+  var topo=t.slice(0,500);
+  /* 1) cabeçalho de peça nossa — endereçamento e nome do documento */
+  if(/excelent[íi]ssim|merit[íi]ssim|peti[çc][ãa]o inicial|contrarraz|contraminuta|raz[õo]es (de|do) (apela|recurso)|contesta[çc][ãa]o|r[ée]plica|impugna[çc][ãa]o (a|à|ao)|memoriais|alega[çc][õo]es finais|vem,? respeitosamente|junta[çd][ãa]o de peti/.test(topo)) return 'peca';
+  /* 2) cabeçalho de ato do juízo — inclui a moldura do acórdão (órgão julgador,
+        câmara/turma, relator), que aparece antes da palavra "acórdão" */
+  if(/\bac[óo]rd[ãa]o\b|\bementa\b|acordam|decis[ãa]o monocr|\bsenten[çc]a\b|\bdespacho\b|\bdecis[ãa]o\b|[óo]rg[ãa]o julgador|\bc[âa]mara\b|\bturma\b|relator|\bvistos\b/.test(topo)) return 'decisao';
+  /* 3) corpo: verbo do juiz decide antes do nome do recurso */
+  if(/\bjulgo\b|julgad|homolog|resolvo o m[ée]rito|proced[êe]nc|improced|\bdefiro\b|indefiro|nego provimento|dou provimento|conhe[çc]o do recurso|extingo|arquivem-se|intime-se|cite-se/.test(t)) return 'decisao';
+  if(/peti[çc][ãa]o|manifesta[çc]|impugna[çc]|habilita[çc]|junta[çd]|protocol/.test(t)) return 'peca';
+  if(/decurso|publica|disponibiliza|intima|comunica|ci[êe]ncia|di[áa]rio da justi/.test(t)) return 'pub';
+  /* 4) só o nome do recurso, sem mais nada: é a peça (ex.: "Juntada de apelação") */
+  if(/embargos|apela[çc]|\brecurso\b|agravo|memori|alega[çc]/.test(t)) return 'peca';
+  return 'and';
+}
 function classMov(t){
-  t=(""+(t||"")).toLowerCase();
-  if(/peti[çc]|contraminuta|contrarraz|manifesta|impugna|r[ée]plica|embargos|apela[çc]|\brecurso\b|agravo|memori|alega[çc]|habilita|inicial|junta[çd][ãa]?o? de peti/.test(t)) return ["Peça / petição","#0F6E56","peca"];
-  if(/senten[çc]a|ac[óo]rd[ãa]o|\bdecis[ãa]o\b|homolog|julgad|resolvo o m[ée]rito|proced[êe]nc/.test(t)) return ["Decisão","#6d28a8","decisao"];
-  if(/decurso|publica|disponibiliza|intima|comunica|ci[êe]ncia|di[áa]rio da justi/.test(t)) return ["Publicação / prazo","#8a5a00","pub"];
+  var k=tipoAto(t);
+  if(k==='peca')    return ["Peça / petição","#0F6E56","peca"];
+  if(k==='decisao') return ["Decisão","#6d28a8","decisao"];
+  if(k==='pub')     return ["Publicação / prazo","#8a5a00","pub"];
   return ["Andamento do juízo","#185FA5","and"];
 }
 /* Um andamento só é útil se disser o que aconteceu. A base tem ~93 mil andamentos
@@ -7311,9 +7351,10 @@ function classHist(p){
   var iC=-1,iP=-1,iD=-1,iI=-1;
   for(var k=0;k<h.length&&k<100;k++){
     var t=String(h[k].texto||'').toLowerCase();
+    var kind=tipoAto(h[k].texto);   /* mesma régua do histórico: acórdão não é petição */
     if(iC<0&&/conclus/.test(t))iC=k;
-    if(iP<0&&/contraminuta|manifesta|contesta|impugna|embargos|petic|petiç/.test(t))iP=k;
-    if(iD<0&&/despacho|decis[aã]o|senten|julgad|julgament|mero expediente|defer|indefer|proced[eê]n|improced|homolog|extin|n[aã]o conhecimento/.test(t))iD=k;
+    if(iP<0&&kind==='peca')iP=k;
+    if(iD<0&&(kind==='decisao'||/mero expediente|n[aã]o conhecimento/.test(t)))iD=k;
     if(iI<0&&/intima|publica[cç]|disponibiliza|cita[cç]|notifica|vista/.test(t))iI=k;
     if(iC>=0&&iP>=0&&iD>=0&&iI>=0)break;
   }
