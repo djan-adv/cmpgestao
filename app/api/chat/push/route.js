@@ -42,6 +42,36 @@ function _hojeBR() {
 function _norm(s) {
   return String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim()
 }
+// Lê os assentos e devolve os dois conjuntos que interessam ao push: quem está
+// de férias (não recebe nada) e quem está fora do grupo (só recebe privado).
+async function _assentos(admin, escritorioId) {
+  try {
+    const { data: cfg } = await admin.from('produtividade_config').select('valor')
+      .eq('escritorio_id', escritorioId).eq('chave', 'assentos').maybeSingle()
+    if (!cfg || !cfg.valor) return []
+    const arr = JSON.parse(cfg.valor)
+    return Array.isArray(arr) ? arr : []
+  } catch (e) { return [] }
+}
+async function _contasPorAssento(admin, escritorioId, assentos) {
+  const ids = new Set()
+  if (!assentos.length) return ids
+  const emails = new Set(assentos.map(a => String(a.email || '').toLowerCase()).filter(Boolean))
+  const nomes = new Set(assentos.map(a => _norm(a.nome)).filter(Boolean))
+  const { data: contas } = await admin.from('usuarios').select('id,nome,email').eq('escritorio_id', escritorioId)
+  ;(contas || []).forEach(c => {
+    if (emails.has(String(c.email || '').toLowerCase()) || nomes.has(_norm(c.nome))) ids.add(c.id)
+  })
+  return ids
+}
+// Fora do grupo: mensagem sem destinatário (o "Todos") não chega para essas
+// pessoas. As privadas continuam chegando normalmente.
+async function idsSoPrivado(admin, escritorioId) {
+  try {
+    const assentos = (await _assentos(admin, escritorioId)).filter(a => a && a.so_privado)
+    return await _contasPorAssento(admin, escritorioId, assentos)
+  } catch (e) { return new Set() }
+}
 async function idsEmFerias(admin, escritorioId) {
   const fora = new Set()
   try {
@@ -137,6 +167,12 @@ export async function POST(request) {
     // passam os dois por aqui, então não há caminho que escape da regra.
     const deFerias = await idsEmFerias(admin, escritorioId)
     if (deFerias.size) destinatarios = destinatarios.filter(id => !deFerias.has(id))
+    // Fora do grupo: só se aplica ao broadcast. Mensagem privada para essa
+    // pessoa continua chegando — é justamente o canal que sobrou para ela.
+    if (!body.para_id) {
+      const soPriv = await idsSoPrivado(admin, escritorioId)
+      if (soPriv.size) destinatarios = destinatarios.filter(id => !soPriv.has(id))
+    }
     if (!destinatarios.length) return Response.json({ ok: true, enviados: 0, motivo: 'sem destinatário (autor, ou todos de férias)' })
 
     const origem = String(body.origem_endpoint || '')
