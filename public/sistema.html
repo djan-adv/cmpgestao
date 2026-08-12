@@ -17760,9 +17760,20 @@ async function monitTrazerAssessoria(id){
   };
   function pintar(){
     var el=document.getElementById('cmp-chat-msgs'); if(!el) return;
-    if(!msgs.length){ el.innerHTML='<div style="color:#5a6473;font-size:12px">Sem mensagens ainda. Escreva abaixo — vai para todo o escritório, ou escolha uma pessoa para conversa privada.</div>'; return; }
-    el.innerHTML=msgs.map(function(m,_i){
-      var faixa=(_i===0 || _diaChave(m.criado_em)!==_diaChave(msgs[_i-1].criado_em)) ? _faixaDia(m.criado_em) : '';
+    /* O seletor deixa de ser só o destinatário do envio: ele escolhe a CONVERSA.
+       'Todos' mostra apenas o grupo; uma pessoa mostra apenas o privado entre
+       nós dois. Antes tudo vinha misturado na mesma linha do tempo e uma
+       mensagem privada parecia estar exposta na equipe — não estava (o banco só
+       entrega privada a quem participa), mas confundia igual. */
+    var _sel=document.getElementById('cmp-chat-para');
+    var _alvoSel=_sel?String(_sel.value||''):'';
+    var lista=msgs.filter(function(m){
+      if(_alvoSel) return m.para_id && ((m.autor_id===eu&&String(m.para_id)===_alvoSel)||(String(m.autor_id)===_alvoSel&&m.para_id===eu));
+      return !m.para_id;
+    });
+    if(!lista.length){ el.innerHTML='<div style="color:#5a6473;font-size:12px">'+(_alvoSel?'Nenhuma mensagem privada com esta pessoa ainda. O que você escrever abaixo só vocês dois veem.':'Sem mensagens ainda. Escreva abaixo — vai para todo o escritório, ou escolha uma pessoa para conversa privada.')+'</div>'; return; }
+    el.innerHTML=lista.map(function(m,_i){
+      var faixa=(_i===0 || _diaChave(m.criado_em)!==_diaChave(lista[_i-1].criado_em)) ? _faixaDia(m.criado_em) : '';
       var meu=(m.autor_id===eu);
       var priv=!!m.para_id;
       var quem=meu?'você':(nomeDe(m.autor_id)||m.autor_nome||'colega');
@@ -17853,6 +17864,7 @@ async function monitTrazerAssessoria(id){
       return '<option value="'+p.id+'"'+(fora?' disabled':'')+'>'+(fora?'🏖 ':'🔒 ')+h(curtos[p.id]||(p.nome||'').split(' ')[0])+(fora?' (férias)':'')+'</option>';
     }).join('');
     if(atual) s.value=atual;
+    s.onchange=function(){ pintar(); };
   }
   async function carregar(){
     try{
@@ -18040,6 +18052,42 @@ async function monitTrazerAssessoria(id){
      casos a tela avisa em vez de ficar chamando para sempre. */
   var _cl={pc:null, local:null, remoto:null, canal:null, comQuem:null, nome:'', entrando:false, video:true, timeout:null};
   var ICE={iceServers:[{urls:['stun:stun.l.google.com:19302','stun:stun1.l.google.com:19302']}]};
+  /* Campainha: o toque é agendado INTEIRO na linha do tempo do áudio — o
+     confirm() congela o JavaScript, mas o áudio roda em outra thread e continua
+     tocando enquanto a pergunta 'Atender?' está na tela. O contexto de áudio é
+     destravado no primeiro toque/clique na página (exigência do iOS/Chrome). */
+  var _clAudioCtx=null;
+  function _clDesbloquearAudio(){
+    try{
+      var AC=window.AudioContext||window.webkitAudioContext; if(!AC) return;
+      if(!_clAudioCtx) _clAudioCtx=new AC();
+      if(_clAudioCtx.state==='suspended') _clAudioCtx.resume();
+    }catch(e){}
+  }
+  document.addEventListener('click',_clDesbloquearAudio,true);
+  document.addEventListener('touchend',_clDesbloquearAudio,true);
+  function _clCampainha(){
+    try{
+      var AC=window.AudioContext||window.webkitAudioContext; if(!AC) return null;
+      if(!_clAudioCtx) _clAudioCtx=new AC();
+      var ctx=_clAudioCtx; try{ ctx.resume(); }catch(e){}
+      var master=ctx.createGain(); master.gain.value=1; master.connect(ctx.destination);
+      var t0=ctx.currentTime+0.05;
+      for(var c=0;c<15;c++){
+        [0,0.55].forEach(function(off){
+          var t=t0+c*2+off;
+          var o=ctx.createOscillator(), g=ctx.createGain();
+          o.type='sine'; o.frequency.value=880;
+          g.gain.setValueAtTime(0.0001,t);
+          g.gain.exponentialRampToValueAtTime(0.25,t+0.04);
+          g.gain.exponentialRampToValueAtTime(0.0001,t+0.5);
+          o.connect(g); g.connect(master);
+          o.start(t); o.stop(t+0.55);
+        });
+      }
+      return {stop:function(){ try{ master.gain.value=0; master.disconnect(); }catch(e){} }};
+    }catch(e){ return null; }
+  }
   function _clCanalNome(a,b){ var x=[String(a),String(b)].sort(); return 'chamada:'+x[0]+':'+x[1]; }
   function _clUI(){
     var el=document.getElementById('cmp-call'); if(el) return el;
@@ -18051,6 +18099,7 @@ async function monitTrazerAssessoria(id){
       +'<div style="flex:1;position:relative;overflow:hidden;background:#000">'
         +'<video id="cl-remoto" autoplay playsinline style="width:100%;height:100%;object-fit:cover"></video>'
         +'<video id="cl-local" autoplay playsinline muted style="position:absolute;right:12px;bottom:12px;width:26vw;max-width:180px;border-radius:10px;border:2px solid rgba(255,255,255,.6);object-fit:cover"></video>'
+        +'<img id="cl-marca" src="/logo_cmp_white.png" alt="" style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:52%;max-width:250px;opacity:.35;pointer-events:none;display:none">'
       +'</div>'
       +'<div style="padding:14px;display:flex;gap:10px;justify-content:center;background:rgba(0,0,0,.35);padding-bottom:calc(14px + env(safe-area-inset-bottom))">'
         +'<button id="cl-mic" onclick="__cmpChat.calMic()" style="border:0;border-radius:50%;width:52px;height:52px;font-size:20px;background:#2b3a4d;color:#fff;cursor:pointer">🎙</button>'
@@ -18064,6 +18113,8 @@ async function monitTrazerAssessoria(id){
   function _clMostrar(nome,estado){
     var el=_clUI(); el.style.display='flex';
     var n=document.getElementById('cl-nome'); if(n) n.textContent=nome||'chamada';
+    /* chamada só de voz: a logo da CMP fica de marca d'água no lugar do vídeo */
+    var mq=document.getElementById('cl-marca'); if(mq) mq.style.display=_cl.video?'none':'block';
     _clEstado(estado);
   }
   function _clFechar(){ var el=document.getElementById('cmp-call'); if(el) el.style.display='none'; }
@@ -18100,7 +18151,11 @@ async function monitTrazerAssessoria(id){
     if(s.tipo==='oferta'){
       if(_cl.pc){ /* ocupado */ canal.send({type:'broadcast',event:'sinal',payload:{de:eu,para:s.de,tipo:'recusou'}}); return; }
       var quem=(porId[s.de]&&porId[s.de].nome)||pessoa.nome||'colega';
-      if(!confirm('📞 '+quem+' está chamando'+(s.video?' em vídeo':'')+'.\n\nAtender?')){
+      var camp=_clCampainha();
+      try{ if(navigator.vibrate) navigator.vibrate([400,180,400,180,600]); }catch(eV){}
+      var atende=confirm('📞 '+quem+' está chamando'+(s.video?' em vídeo':'')+'.\n\nAtender?');
+      if(camp) camp.stop();
+      if(!atende){
         canal.send({type:'broadcast',event:'sinal',payload:{de:eu,para:s.de,tipo:'recusou'}}); return;
       }
       try{ await _clAtender(s, canal, quem); }
@@ -18147,6 +18202,9 @@ async function monitTrazerAssessoria(id){
     _cl.local.getTracks().forEach(function(t){ _cl.pc.addTrack(t,_cl.local); });
     var of=await _cl.pc.createOffer(); await _cl.pc.setLocalDescription(of);
     canal.send({type:'broadcast',event:'sinal',payload:{de:eu,para:alvo,tipo:'oferta',sdp:of,video:!!comVideo}});
+    /* o alarme do celular toca mesmo com o app fechado — a pessoa abre o chat e
+       a oferta ainda está de pé (45s) */
+    try{ _notificarPush('📞 Chamada de '+(comVideo?'vídeo':'voz')+' — abra o chat para atender', alvo); }catch(eP){}
     /* ninguém fica chamando para sempre: 45s sem resposta encerra */
     _cl.timeout=setTimeout(function(){ if(!_cl.remoto){ alert('Sem resposta.'); _clSair(); } },45000);
   }
