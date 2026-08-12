@@ -1650,8 +1650,20 @@ async function clReabrirItem(id){
   if(r&&r.error){ alert('Não foi possível: '+r.error.message); return; }
   renderPublicarResumo();
 }
-/* Aviso em destaque durante a recompilação: 3x o tamanho normal, pra ninguém fechar sem ver */
-function _stGrande(st,on){ if(!st) return; if(on){ st.style.fontSize='34px'; st.style.fontWeight='800'; st.style.fontStyle='normal'; st.style.lineHeight='1.3'; st.style.display='block'; } else { st.style.fontSize=''; st.style.fontWeight=''; st.style.fontStyle=''; st.style.lineHeight=''; st.style.display=''; } }
+/* Durante a recompilação: um relógio girando e nada mais. O textão em 34px com
+   hashes e 'NÃO FECHE' assustava sem informar — quem publica só precisa saber
+   que está andando e quando terminou. */
+var _stRelogioTimer=null;
+function _stRelogio(st,on){
+  if(!st) return;
+  if(_stRelogioTimer){ clearInterval(_stRelogioTimer); _stRelogioTimer=null; }
+  if(!on){ st.style.fontSize=''; return; }
+  var faces=['🕐','🕑','🕒','🕓','🕔','🕕','🕖','🕗','🕘','🕙','🕚','🕛'], i=0;
+  st.style.fontSize='26px'; st.style.color='#8a5a00';
+  st.textContent=faces[0]+' publicando…';
+  _stRelogioTimer=setInterval(function(){ i=(i+1)%faces.length; st.textContent=faces[i]+' publicando…'; },350);
+}
+function _stGrande(st,on){ _stRelogio(st,on); }
 /* Coloca no ar (git pull no servidor). As alterações aprovadas já entram; as
    rejeitadas ficam guardadas para reformulação e não somem da lista. */
 async function publicarAtualizacao(){
@@ -1672,13 +1684,13 @@ async function publicarAtualizacao(){
       if(j.jaAtualizado){ if(st){ st.style.color='#0F6E56'; st.textContent='Já estava na versão mais recente.'; } renderPublicarResumo(); btn.disabled=false; btn.textContent=txt0; return; }
       if(j.build==='iniciado'){
         /* mudança de backend: o servidor está recompilando (1–2 min). Acompanha o status. */
-        if(st){ st.style.color='#8a5a00'; _stGrande(st,true); st.textContent='Publicado ('+(j.de||'')+' → '+(j.para||'')+'). 🛠️ Recompilando o servidor… pode levar 1–2 min. NÃO FECHE.'; }
-        btn.textContent='Recompilando…';
+        if(st) _stRelogio(st,true);
+        btn.textContent='publicando…';
         await _aguardarBuild(st);
         return;
       }
       /* só arquivos estáticos: restart rápido */
-      if(st){ st.style.color='#0F6E56'; st.textContent='Publicado! ('+(j.de||'')+' → '+(j.para||'')+'). Recarregando…'; }
+      if(st){ _stRelogio(st,false); st.style.color='#0F6E56'; st.textContent='✅ Publicado. Recarregando…'; }
       setTimeout(function(){ location.reload(true); }, 1600);
     } else {
       if(st){ st.style.color='#b5342b'; st.textContent='Falha ao publicar: '+((j&&(j.erro||j.saida))||('HTTP '+r.status)); }
@@ -1695,7 +1707,7 @@ async function _aguardarBuild(st){
     var estado='';
     try{ var r=await fetch('/api/deploy?status=1',{cache:'no-store'}); var j=await r.json(); estado=(j&&j.state)||''; if(estado==='error'){ if(st){ _stGrande(st,false); st.style.color='#b5342b'; st.textContent='⚠ Falha ao recompilar. '+((j.saida||'').slice(-300)); } if(btn){ btn.disabled=false; btn.textContent='↑ Publicar atualização agora'; } return; } }
     catch(e){ /* durante o restart o endpoint fica indisponível por alguns segundos — normal */ }
-    if(estado==='done'){ if(st){ st.style.color='#0F6E56'; st.textContent='✅ Servidor recompilado e no ar! Recarregando…'; } setTimeout(function(){ location.reload(true); }, 1800); return; }
+    if(estado==='done'){ if(st){ _stRelogio(st,false); st.style.color='#0F6E56'; st.textContent='✅ Publicado. Recarregando…'; } setTimeout(function(){ location.reload(true); }, 1800); return; }
   }
   if(st){ _stGrande(st,false); st.style.color='#8a5a00'; st.textContent='O build está demorando mais que o normal. Aguarde ~1 min e recarregue a página manualmente.'; }
   if(btn){ btn.disabled=false; btn.textContent='↑ Publicar atualização agora'; }
