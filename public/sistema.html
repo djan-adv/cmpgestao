@@ -1352,7 +1352,12 @@ async function alternarSoPrivado(id){
   if(!souCoordenador()){ alert('Apenas os coordenadores alteram isso.'); return; }
   var u=(USUARIOS_VISUAIS||[]).find(function(x){return x.id===id;}); if(!u) return;
   var ligando=!soPrivado(u);
-  if(ligando && !confirm('Tirar '+u.nome+' do chat do grupo?\n\nEla deixa de receber e de ver o que for escrito em "Todos" — só conversas privadas.')) return;
+  if(ligando && !confirm('Tirar '+u.nome+' do chat do grupo?\n\nEla deixa de RECEBER e de VER o que for escrito em "Todos" — só conversas privadas.')) return;
+  if(!u.email){ alert('Cadastre o acesso desta pessoa primeiro — a regra é aplicada na conta dela.'); return; }
+  /* A marca que vale é a do banco: é ela que a política de leitura do chat
+     consulta. O JSON dos assentos guarda só o reflexo, para a tela desenhar. */
+  try{ await apiAcessos('so_privado',{email:u.email, valor:ligando}); }
+  catch(e){ alert('Não consegui alterar no servidor:\n\n'+((e&&e.message)||e)); return; }
   u.so_privado=ligando;
   await _salvarAssentos(); renderAcessos();
 }
@@ -1441,7 +1446,7 @@ async function syncAcessosDoBanco(){
         return (u.email&&r.email&&String(r.email).toLowerCase()===String(u.email).toLowerCase())
             || (r.nome&&u.nome&&_normNomeAcesso(r.nome)===_normNomeAcesso(u.nome));
       });
-      if(m){ u.email=m.email||u.email; u.senha='definida'; if(typeof m.ativo==='boolean') u.ativo=m.ativo; }
+      if(m){ u.email=m.email||u.email; u.senha='definida'; if(typeof m.ativo==='boolean') u.ativo=m.ativo; if(typeof m.so_privado==='boolean') u.so_privado=m.so_privado; }
     });
   }catch(e){ /* silencioso: sem a chave de admin, mantém o visual */ }
 }

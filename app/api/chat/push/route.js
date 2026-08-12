@@ -66,10 +66,17 @@ async function _contasPorAssento(admin, escritorioId, assentos) {
 }
 // Fora do grupo: mensagem sem destinatário (o "Todos") não chega para essas
 // pessoas. As privadas continuam chegando normalmente.
+//
+// A fonte é a coluna usuarios.so_privado — a MESMA que a política de leitura do
+// chat consulta. Ter duas fontes (aqui o JSON de assentos, lá a coluna) abriria
+// espaço para a pessoa parar de receber o alarme mas continuar lendo a conversa,
+// que foi o problema encontrado.
 async function idsSoPrivado(admin, escritorioId) {
   try {
-    const assentos = (await _assentos(admin, escritorioId)).filter(a => a && a.so_privado)
-    return await _contasPorAssento(admin, escritorioId, assentos)
+    const { data } = await admin.from('usuarios').select('id,so_privado').eq('escritorio_id', escritorioId)
+    const fora = new Set()
+    ;(data || []).forEach(u => { if (u && u.so_privado) fora.add(u.id) })
+    return fora
   } catch (e) { return new Set() }
 }
 async function idsEmFerias(admin, escritorioId) {
