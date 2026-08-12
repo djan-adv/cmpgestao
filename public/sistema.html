@@ -17535,7 +17535,7 @@ async function monitTrazerAssessoria(id){
        envia. A troca do ícone acompanha a digitação. */
     d.querySelector('#cmp-chat-env').onclick=function(){
       var tx=document.getElementById('cmp-chat-txt');
-      if(_gravRec){ _gravParar(false); return; }
+      if(_gravSess){ _gravParar(false); return; }
       if(tx&&tx.value.trim()){ enviar(); } else { _gravIniciar(); }
     };
     d.querySelector('#cmp-chat-grav-x').onclick=function(ev){ ev.stopPropagation(); _gravParar(true); };
@@ -18112,12 +18112,16 @@ async function monitTrazerAssessoria(id){
     setInterval(varrer, 20000);   /* reserva, caso o tempo real caia */
     _atualizaChatJwt(); setInterval(_atualizaChatJwt, 4*60000); /* token p/ mostrar os prints (imagens) */
   }
-  /* ——— mensagem de áudio (mesmo fluxo do /chat do celular) ——— */
-  var _gravRec=null,_gravChunks=[],_gravTimer=null,_gravCancel=false;
+  /* ——— mensagem de áudio ———
+     Formato importa mais que tudo aqui: o Chrome grava webm, e o iPhone NÃO
+     TOCA webm — o destinatário via um player morto. Então: m4a quando o
+     navegador sabe gravá-lo (Safari), senão WAV montado na mão a 16 kHz mono
+     (~2 MB/min), que toca em qualquer aparelho. webm saiu de cena. */
+  var _gravSess=null,_gravTimer=null;
   function _gravBotao(){
     var b=document.getElementById('cmp-chat-env'), tx=document.getElementById('cmp-chat-txt');
     if(!b) return;
-    if(_gravRec){ b.textContent='➤'; return; }
+    if(_gravSess){ b.textContent='➤'; return; }
     b.textContent=(tx&&tx.value.trim())?'➤':'🎤';
   }
   function _gravUI(on){
@@ -18125,39 +18129,70 @@ async function monitTrazerAssessoria(id){
     var g=document.getElementById('cmp-chat-grav'); if(g) g.style.display=on?'flex':'none';
     _gravBotao();
   }
+  function _wavRecorder(stream){
+    var AC=window.AudioContext||window.webkitAudioContext;
+    var ctx=new AC(), src=ctx.createMediaStreamSource(stream);
+    var proc=ctx.createScriptProcessor(4096,1,1), pedacos=[], taxa=ctx.sampleRate;
+    proc.onaudioprocess=function(e){ pedacos.push(new Float32Array(e.inputBuffer.getChannelData(0))); };
+    src.connect(proc); proc.connect(ctx.destination);   /* sem destino o Chrome não dispara */
+    return { parar:function(){
+      try{ proc.disconnect(); src.disconnect(); ctx.close(); }catch(e){}
+      var alvo=16000, total=0; pedacos.forEach(function(c){ total+=c.length; });
+      var flat=new Float32Array(total), o=0; pedacos.forEach(function(c){ flat.set(c,o); o+=c.length; });
+      var fator=taxa/alvo, n=Math.floor(flat.length/fator), pcm=new Int16Array(n);
+      for(var i=0;i<n;i++){ var v=Math.max(-1,Math.min(1,flat[Math.floor(i*fator)])); pcm[i]=v<0?v*0x8000:v*0x7FFF; }
+      var buf=new ArrayBuffer(44+pcm.length*2), dv=new DataView(buf);
+      function ws(off,txt){ for(var k=0;k<txt.length;k++) dv.setUint8(off+k,txt.charCodeAt(k)); }
+      ws(0,'RIFF'); dv.setUint32(4,36+pcm.length*2,true); ws(8,'WAVE'); ws(12,'fmt ');
+      dv.setUint32(16,16,true); dv.setUint16(20,1,true); dv.setUint16(22,1,true);
+      dv.setUint32(24,alvo,true); dv.setUint32(28,alvo*2,true); dv.setUint16(32,2,true); dv.setUint16(34,16,true);
+      ws(36,'data'); dv.setUint32(40,pcm.length*2,true);
+      new Int16Array(buf,44).set(pcm);
+      return new Blob([buf],{type:'audio/wav'});
+    }};
+  }
   async function _gravIniciar(){
-    if(_gravRec) return;
+    if(_gravSess) return;
     var stream;
     try{ stream=await navigator.mediaDevices.getUserMedia({audio:true}); }
     catch(e){ alert('Preciso da permissão do microfone para gravar o áudio.'); return; }
-    var mime=(window.MediaRecorder&&MediaRecorder.isTypeSupported&&MediaRecorder.isTypeSupported('audio/mp4'))?'audio/mp4'
-      :((window.MediaRecorder&&MediaRecorder.isTypeSupported&&MediaRecorder.isTypeSupported('audio/webm'))?'audio/webm':'');
-    var rec;
-    try{ rec=mime?new MediaRecorder(stream,{mimeType:mime}):new MediaRecorder(stream); }
-    catch(e){ stream.getTracks().forEach(function(t){t.stop();}); alert('Este navegador não grava áudio.'); return; }
-    _gravChunks=[]; _gravCancel=false;
-    rec.ondataavailable=function(ev){ if(ev.data&&ev.data.size) _gravChunks.push(ev.data); };
-    rec.onstop=function(){
+    var sess={cancel:false};
+    function finalizar(blob,ext){
       try{ stream.getTracks().forEach(function(t){t.stop();}); }catch(e){}
-      var cancelado=_gravCancel; _gravCancel=false;
-      var tipo=rec.mimeType||mime||'audio/webm';
-      var blob=new Blob(_gravChunks,{type:tipo});
-      _gravRec=null;
+      var cancelado=sess.cancel;
+      _gravSess=null;
       if(_gravTimer){ clearInterval(_gravTimer); _gravTimer=null; }
       _gravUI(false);
       if(cancelado||blob.size<1500) return;   /* clique acidental não vira mensagem */
-      var ext=/mp4/.test(tipo)?'m4a':'webm';
-      enviarAnexo(new File([blob],'audio-'+Date.now()+'.'+ext,{type:tipo}));
-    };
-    _gravRec=rec; rec.start(); _gravUI(true);
+      enviarAnexo(new File([blob],'audio-'+Date.now()+'.'+ext,{type:blob.type}));
+    }
+    var usaM4a=(window.MediaRecorder&&MediaRecorder.isTypeSupported&&MediaRecorder.isTypeSupported('audio/mp4'));
+    if(usaM4a){
+      var rec,chunks=[];
+      try{ rec=new MediaRecorder(stream,{mimeType:'audio/mp4'}); }
+      catch(e){ usaM4a=false; }
+      if(usaM4a){
+        rec.ondataavailable=function(ev){ if(ev.data&&ev.data.size) chunks.push(ev.data); };
+        rec.onstop=function(){ finalizar(new Blob(chunks,{type:rec.mimeType||'audio/mp4'}),'m4a'); };
+        sess.stop=function(){ try{ rec.stop(); }catch(e){} };
+        rec.start();
+      }
+    }
+    if(!usaM4a){
+      var wr;
+      try{ wr=_wavRecorder(stream); }
+      catch(e){ stream.getTracks().forEach(function(t){t.stop();}); alert('Este navegador não grava áudio.'); return; }
+      sess.stop=function(){ finalizar(wr.parar(),'wav'); };
+    }
+    _gravSess=sess; _gravUI(true);
     var t0=Date.now(), el=document.getElementById('cmp-chat-grav-t');
     _gravTimer=setInterval(function(){
       var s2=Math.floor((Date.now()-t0)/1000);
       if(el) el.textContent=Math.floor(s2/60)+':'+String(s2%60).padStart(2,'0');
-      if(s2>=120&&_gravRec){ try{ _gravRec.stop(); }catch(e){} }   /* teto: 2 min */
+      if(s2>=120&&_gravSess){ _gravSess.stop(); }   /* teto: 2 min */
     },400);
   }
-  function _gravParar(cancelar){ _gravCancel=!!cancelar; try{ _gravRec&&_gravRec.stop(); }catch(e){} }
+  function _gravParar(cancelar){ if(!_gravSess) return; _gravSess.cancel=!!cancelar; _gravSess.stop(); }
   async function _atualizaChatJwt(){
     try{ var s=await window.__sb.auth.getSession(); chatJwt=(s&&s.data&&s.data.session&&s.data.session.access_token)||chatJwt; }catch(e){}
   }

@@ -45,6 +45,50 @@ function rotuloProcesso(p) {
 }
 const PALETA_CORES = ['#8a3b8f', '#1f7a44', '#185FA5', '#b5342b', '#6d4aa8', '#0b7285', '#7a4b00', '#c2185b']
 
+// Gravador de reserva para quem não sabe gravar m4a (Android/Chrome só sabem
+// webm, e o iPhone da outra ponta não toca webm). Monta um WAV na mão — 16 kHz
+// mono, ~2 MB/min — que toca em qualquer aparelho, sem depender de codec nenhum.
+function wavRecorder(stream) {
+  const AC = window.AudioContext || window.webkitAudioContext
+  const ctx = new AC()
+  const src = ctx.createMediaStreamSource(stream)
+  const proc = ctx.createScriptProcessor(4096, 1, 1)
+  const pedacos = []
+  const taxaOriginal = ctx.sampleRate
+  proc.onaudioprocess = e => { pedacos.push(new Float32Array(e.inputBuffer.getChannelData(0))) }
+  src.connect(proc); proc.connect(ctx.destination)
+  return {
+    parar() {
+      try { proc.disconnect(); src.disconnect(); ctx.close() } catch (e) {}
+      const total = pedacos.reduce((n, p) => n + p.length, 0)
+      const juntos = new Float32Array(total)
+      let off = 0
+      pedacos.forEach(p => { juntos.set(p, off); off += p.length })
+      const TAXA = 16000
+      const razao = taxaOriginal / TAXA
+      const nOut = Math.floor(juntos.length / razao)
+      const pcm = new Int16Array(nOut)
+      for (let i = 0; i < nOut; i++) {
+        const s = Math.max(-1, Math.min(1, juntos[Math.floor(i * razao)] || 0))
+        pcm[i] = s < 0 ? s * 0x8000 : s * 0x7fff
+      }
+      const bytesPorAmostra = 2, canais = 1
+      const bloco = canais * bytesPorAmostra
+      const tamData = pcm.length * bytesPorAmostra
+      const buf = new ArrayBuffer(44 + tamData)
+      const v = new DataView(buf)
+      const str = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)) }
+      str(0, 'RIFF'); v.setUint32(4, 36 + tamData, true); str(8, 'WAVE')
+      str(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true)
+      v.setUint16(22, canais, true); v.setUint32(24, TAXA, true)
+      v.setUint32(28, TAXA * bloco, true); v.setUint16(32, bloco, true); v.setUint16(34, 16, true)
+      str(36, 'data'); v.setUint32(40, tamData, true)
+      for (let i = 0; i < pcm.length; i++) v.setInt16(44 + i * 2, pcm[i], true)
+      return new Blob([buf], { type: 'audio/wav' })
+    }
+  }
+}
+
 // Tudo que é TEXTO DE CONVERSA cresce 50% (pedido de quem lê no celular, de pé,
 // entre uma audiência e outra). A barra do topo fica de fora: são quatro botões
 // numa linha só, e ampliá-los junto empurraria o "Sair" para fora da tela.
@@ -115,47 +159,54 @@ export default function ChatMobile() {
   const ultimoIdRef = useRef(0)
 
   // ——— mensagem de áudio (o 🎤 do canto direito, como no WhatsApp) ———
+  // Formato importa mais que tudo aqui: Android/Chrome só sabem gravar webm, e
+  // o iPhone não toca webm — quem recebia via um player morto. Então: m4a
+  // quando o navegador souber gravá-lo (Safari), senão WAV montado na mão
+  // (wavRecorder, acima), que toca em qualquer aparelho. webm saiu de cena.
   const [gravSeg, setGravSeg] = useState(-1)   // -1 = não está gravando
-  const mediaRecRef = useRef(null), gravChunksRef = useRef([]), gravTimerRef = useRef(null), gravCancelRef = useRef(false)
+  const gravSessRef = useRef(null), gravTimerRef = useRef(null)
   async function iniciarGravacao() {
-    if (mediaRecRef.current) return
+    if (gravSessRef.current) return
     let stream
     try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }) }
     catch (e) { alert('Preciso da permissão do microfone para gravar o áudio.'); return }
-    // iPhone grava mp4/m4a; o resto, webm — os dois tocam em <audio> nos dois mundos
-    const mime = (window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported('audio/mp4')) ? 'audio/mp4'
-      : ((window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported('audio/webm')) ? 'audio/webm' : '')
-    let rec
-    try { rec = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream) }
-    catch (e) { stream.getTracks().forEach(t => t.stop()); alert('Este navegador não grava áudio.'); return }
-    gravChunksRef.current = []
-    rec.ondataavailable = ev => { if (ev.data && ev.data.size) gravChunksRef.current.push(ev.data) }
-    rec.onstop = () => {
+    const sess = { cancel: false }
+    const finalizar = (blob, ext) => {
       try { stream.getTracks().forEach(t => t.stop()) } catch (e) {}
-      const cancelado = gravCancelRef.current; gravCancelRef.current = false
-      const tipo = rec.mimeType || mime || 'audio/webm'
-      const blob = new Blob(gravChunksRef.current, { type: tipo })
-      mediaRecRef.current = null
+      gravSessRef.current = null
       if (gravTimerRef.current) { clearInterval(gravTimerRef.current); gravTimerRef.current = null }
       setGravSeg(-1)
       // toque acidental (menos de ~1s de dados) não vira mensagem
-      if (cancelado || blob.size < 1500) return
-      const ext = /mp4/.test(tipo) ? 'm4a' : 'webm'
-      enviarPrint(new File([blob], 'audio-' + Date.now() + '.' + ext, { type: tipo }), '🎤 áudio')
+      if (sess.cancel || !blob || blob.size < 1500) return
+      enviarPrint(new File([blob], 'audio-' + Date.now() + '.' + ext, { type: blob.type }), '🎤 áudio')
     }
-    mediaRecRef.current = rec
-    rec.start()
+    const usaM4a = window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported('audio/mp4')
+    if (usaM4a) {
+      let rec
+      try { rec = new MediaRecorder(stream, { mimeType: 'audio/mp4' }) }
+      catch (e) { stream.getTracks().forEach(t => t.stop()); alert('Este navegador não grava áudio.'); return }
+      const chunks = []
+      rec.ondataavailable = ev => { if (ev.data && ev.data.size) chunks.push(ev.data) }
+      rec.onstop = () => finalizar(new Blob(chunks, { type: rec.mimeType || 'audio/mp4' }), 'm4a')
+      sess.stop = () => { try { rec.stop() } catch (e) {} }
+      rec.start()
+    } else {
+      const wr = wavRecorder(stream)
+      sess.stop = () => finalizar(wr.parar(), 'wav')
+    }
+    gravSessRef.current = sess
     setGravSeg(0)
     const t0 = Date.now()
     gravTimerRef.current = setInterval(() => {
       const seg = Math.floor((Date.now() - t0) / 1000)
       setGravSeg(seg)
-      if (seg >= 120 && mediaRecRef.current) { try { mediaRecRef.current.stop() } catch (e) {} }  // teto: 2 min
+      if (seg >= 120 && gravSessRef.current) gravSessRef.current.stop()  // teto: 2 min
     }, 400)
   }
   function pararGravacao(cancelar) {
-    gravCancelRef.current = !!cancelar
-    try { mediaRecRef.current && mediaRecRef.current.stop() } catch (e) {}
+    if (!gravSessRef.current) return
+    gravSessRef.current.cancel = !!cancelar
+    gravSessRef.current.stop()
   }
 
   // ——— chamada de voz/vídeo (mesmo protocolo do chat do sistema, então dá
