@@ -102,7 +102,7 @@ export async function POST(request) {
 
   try {
     if (acao === 'listar') {
-      const { data, error } = await sb.from('usuarios').select('id,nome,email,papel,escritorio_id').eq('escritorio_id', esc)
+      const { data, error } = await sb.from('usuarios').select('id,nome,email,papel,escritorio_id,so_privado').eq('escritorio_id', esc)
       if (error) throw new Error(error.message)
       // marca quem está bloqueado (desativado)
       const lista = data || []
@@ -157,6 +157,17 @@ export async function POST(request) {
       const { error } = await sb.auth.admin.updateUserById(u.id, { ban_duration })
       if (error) throw new Error(error.message)
       return Response.json({ ok: true })
+    }
+
+    // Fora do grupo do chat: além de não receber alarme, a pessoa deixa de LER
+    // as mensagens sem destinatário — quem decide isso é a política de RLS de
+    // chat_mensagens, que lê esta coluna. Por isso a marca vive em `usuarios`,
+    // e não num JSON de configuração no navegador.
+    if (acao === 'so_privado') {
+      const valor = body.valor !== false
+      const { error } = await sb.from('usuarios').update({ so_privado: valor }).eq('email', email).eq('escritorio_id', esc)
+      if (error) throw new Error(error.message)
+      return Response.json({ ok: true, so_privado: valor })
     }
 
     if (acao === 'renomear') {
