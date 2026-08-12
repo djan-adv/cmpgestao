@@ -17250,6 +17250,21 @@ async function monitTrazerAssessoria(id){
      nome errado gravado passam a exibir certo, porque o nome vem do cadastro. */
   function nomeDe(id){ var p=porId[id]; return p?p.nome:''; }
 
+  /* Nome curto sem ambiguidade: com duas Marias no escritório, "Maria" e
+     "Maria" no seletor não dizem com quem se está falando. Repetiu o primeiro
+     nome, vira "M. Rita" e "M. Eduarda". */
+  function _nomesCurtos(lista){
+    var partes=function(p){ return String(p.nome||'').trim().split(/\s+/).filter(Boolean); };
+    var conta={}, out={}, usados={};
+    lista.forEach(function(p){ var n=(partes(p)[0]||'?'); conta[n]=(conta[n]||0)+1; });
+    lista.forEach(function(p){
+      var ps=partes(p), primeiro=ps[0]||'?', rot=primeiro;
+      if(conta[primeiro]>1) rot=ps[1]?(primeiro.charAt(0)+'. '+ps[1]):primeiro;
+      if(usados[rot]) rot=ps.join(' ');
+      usados[rot]=true; out[p.id]=rot;
+    });
+    return out;
+  }
   async function carregarPessoas(){
     try{
       var r=await window.__sb.from('usuarios').select('id,nome,cor_chat').order('nome');
@@ -17258,10 +17273,11 @@ async function monitTrazerAssessoria(id){
       if(eu && porId[eu] && porId[eu].nome) euNome=porId[eu].nome;
       pessoas=todos.filter(function(u){ return u.id!==eu; });
       var s=document.getElementById('cmp-chat-para'); if(!s) return;
+      var curtos=_nomesCurtos(pessoas);
       s.innerHTML='<option value="">👥 Todos</option>'+pessoas.map(function(p){
         /* de férias continua na lista, mas cinza: some o destinatário e fica claro o porquê */
         var fora=(typeof _nomeEstaDeFerias==='function')&&_nomeEstaDeFerias(p.nome);
-        return '<option value="'+p.id+'"'+(fora?' disabled':'')+'>'+(fora?'🏖 ':'🔒 ')+h((p.nome||'').split(' ')[0])+(fora?' (férias)':'')+'</option>';
+        return '<option value="'+p.id+'"'+(fora?' disabled':'')+'>'+(fora?'🏖 ':'🔒 ')+h(curtos[p.id]||(p.nome||'').split(' ')[0])+(fora?' (férias)':'')+'</option>';
       }).join('');
     }catch(e){}
   }

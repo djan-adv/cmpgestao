@@ -19,6 +19,27 @@ function normaliza(s) {
 function horaCurta(iso) {
   try { const d = new Date(iso); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0') } catch { return '' }
 }
+// Nome curto para o chip da conversa. Só o primeiro nome bastava até existirem
+// duas Marias — aí a tela mostrava "Maria" e "Maria" e não dava para saber com
+// quem se estava falando. Quando o primeiro nome se repete, vira "M. Rita" e
+// "M. Eduarda"; repetindo os dois, cai no nome completo.
+function nomesCurtos(pessoas) {
+  const partes = p => String(p.nome || '').trim().split(/\s+/).filter(Boolean)
+  const conta = {}
+  pessoas.forEach(p => { const n = (partes(p)[0] || '?'); conta[n] = (conta[n] || 0) + 1 })
+  const out = {}
+  const usados = {}
+  pessoas.forEach(p => {
+    const ps = partes(p)
+    const primeiro = ps[0] || '?'
+    let rot = primeiro
+    if (conta[primeiro] > 1) rot = ps[1] ? (primeiro.charAt(0) + '. ' + ps[1]) : primeiro
+    if (usados[rot]) rot = ps.join(' ')
+    usados[rot] = true
+    out[p.id] = rot
+  })
+  return out
+}
 function rotuloProcesso(p) {
   return (p.cliente_nome || p.numero || 'processo') + (p.numero ? (' — ' + p.numero) : '')
 }
@@ -92,6 +113,7 @@ export default function ChatMobile() {
   const ultimoIdRef = useRef(0)
 
   const euId = user && user.id
+  const rotulos = nomesCurtos(pessoas)
 
   // ---------- sessão ----------
   useEffect(() => {
@@ -427,7 +449,7 @@ export default function ChatMobile() {
       <div style={{ display: 'flex', gap: 6, padding: '8px 10px', overflowX: 'auto', background: '#fff', borderBottom: '1px solid #ddd', flexShrink: 0 }}>
         <button onClick={() => trocarAlvo(null)} style={{ flexShrink: 0, border: !alvo ? '1.5px solid ' + VERDE : '1px solid #ddd', background: !alvo ? '#e7f7f2' : '#fff', color: '#222', borderRadius: 16, padding: '8px 14px', fontSize: fs(12.5), fontWeight: 600, cursor: 'pointer' }}>👥 Todos</button>
         {pessoas.map(p => (
-          <button key={p.id} onClick={() => trocarAlvo({ id: p.id, nome: p.nome })} style={{ flexShrink: 0, border: alvo && alvo.id === p.id ? '1.5px solid ' + VERDE : '1px solid #ddd', background: alvo && alvo.id === p.id ? '#e7f7f2' : '#fff', color: '#222', borderRadius: 16, padding: '8px 14px', fontSize: fs(12.5), fontWeight: 600, cursor: 'pointer' }}>🔒 {(p.nome || '').split(' ')[0]}</button>
+          <button key={p.id} onClick={() => trocarAlvo({ id: p.id, nome: p.nome })} style={{ flexShrink: 0, border: alvo && alvo.id === p.id ? '1.5px solid ' + VERDE : '1px solid #ddd', background: alvo && alvo.id === p.id ? '#e7f7f2' : '#fff', color: '#222', borderRadius: 16, padding: '8px 14px', fontSize: fs(12.5), fontWeight: 600, cursor: 'pointer' }}>🔒 {rotulos[p.id] || (p.nome || '').split(' ')[0]}</button>
         ))}
       </div>
 
