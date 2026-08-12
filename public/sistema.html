@@ -244,6 +244,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
     <nav class="nav" id="nav">
       <a data-s="painel" class="active" onclick="go('painel')"><span class="ic">▤</span> Painel</a>
       <a data-s="triagem" onclick="go('triagem')"><span class="ic">⚑</span> Publicações</a>
+      <a data-s="movimentar" onclick="go('movimentar')" title="Fila do Estagiário Virtual: o que o robô já preparou para você protocolar — dossiê montado e prazo aberto"><span class="ic">🎓</span> Movimentar <span id="nav-n-mov" style="margin-left:auto;font-size:10.5px;background:#C9A227;color:#22405f;border-radius:10px;padding:1px 7px;font-weight:800;display:none"></span></a>
       <a data-s="agenda" onclick="go('agenda')"><span class="ic">◧</span> Agenda (Kanban)</a>
       <a data-s="processos" onclick="toggleProcessosNav()"><span class="ic">⚖</span> Processos <span id="nav-n-proc" style="margin-left:auto;font-size:10.5px;background:var(--navy2);border-radius:10px;padding:1px 7px"></span></a>
       <div id="proc-subnav" style="display:none">
@@ -634,6 +635,17 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
     <div id="em-lista"></div>
   </div>
 </section>
+<section id="s-movimentar" class="hidden">
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+          <p class="sectlabel" style="margin:0">🎓 Estagiário Virtual — fila de peças</p>
+          <span style="display:inline-flex;gap:6px"><button class="btn sm ghost" onclick="abrirContaIA()" title="Gasto de IA do mês e link para pagar/recarregar a conta da Anthropic">💳 conta da API</button><button class="btn sm ghost" onclick="renderEstagiario()">↻ atualizar</button></span>
+        </div>
+        <p class="note" style="margin:6px 0 10px">O robô lê as intimações do DJEN, separa as que exigem peça e monta um dossiê: <b>um zip só</b>, com as instruções da petição e os documentos dos autos, na pasta <b>&ldquo;Estagiário Virtual&rdquo;</b> do processo. Baixe, mande redigir no Claude do escritório e suba a minuta revisada. O prazo já entra no Kanban na hora da triagem.</p>
+        <div id="estagiario-orcamento" class="note" style="margin-bottom:8px"></div>
+        <div id="estagiario-body"><div class="note">Carregando…</div></div>
+      </div>
+</section>
 <section id="s-robos" class="hidden">
       <div class="card">
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
@@ -644,13 +656,8 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
         <div id="robos-body"><div class="note">Carregando…</div></div>
       </div>
       <div class="card">
-        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
-          <p class="sectlabel" style="margin:0">🎓 Estagiário Virtual — fila de peças</p>
-          <span style="display:inline-flex;gap:6px"><button class="btn sm ghost" onclick="abrirContaIA()" title="Gasto de IA do mês e link para pagar/recarregar a conta da Anthropic">💳 conta da API</button><button class="btn sm ghost" onclick="renderEstagiario()">↻ atualizar</button></span>
-        </div>
-        <p class="note" style="margin:6px 0 10px">O robô lê as intimações do DJEN, separa as que exigem peça e monta um dossiê: <b>um zip só</b>, com as instruções da petição e os documentos dos autos, na pasta <b>&ldquo;Estagiário Virtual&rdquo;</b> do processo. Baixe, mande redigir no Claude do escritório e suba a minuta revisada. O prazo já entra no Kanban na hora da triagem.</p>
-        <div id="estagiario-orcamento" class="note" style="margin-bottom:8px"></div>
-        <div id="estagiario-body"><div class="note">Carregando…</div></div>
+        <p class="sectlabel">🎓 Estagiário Virtual</p>
+        <p class="note" style="margin:6px 0 0">A fila de peças agora tem tela própria: <a onclick="go('movimentar')" style="cursor:pointer;color:var(--navy);text-decoration:underline;font-weight:600">Movimentar</a>, no menu à esquerda, logo abaixo de Publicações.</p>
       </div>
       <div class="card">
         <p class="sectlabel">📅 Google Calendar — sincronização automática</p>
@@ -6504,6 +6511,7 @@ function toggleConcluirTarefa(id){
     carregarHistoricosFundo();
     /* respostas por e-mail ainda não lidas → contador no menu */
     try{ if(typeof atualizaBadgeEmail==='function') atualizaBadgeEmail(); }catch(eBE){}
+    try{ if(typeof atualizaBadgeMovimentar==='function') atualizaBadgeMovimentar(); }catch(eBM){}
     /* publicações novas (robô DJEN) → fila de triagem */
     try{ await recarregarPublicacoes(); }catch(e2){ console.log('pubs: '+(e2&&e2.message||e2)); }
     try{
@@ -8308,11 +8316,11 @@ function toggleProcessosNav(){
 function go(s){
   try{ localStorage.setItem('cmp_secao', s); if(s!=='proc-det') localStorage.removeItem('cmp_proc'); }catch(e){}
   var showId=(s==='contatos')?'crm':s;
-  ["painel","triagem","agenda","processos","proc-det","crm","financeiro","etiquetas","procedimentos","diligencias","relatorio","publicacoes","encerrados","inove","james","cadastros","fases","sugestoes","lote","produtividade","monitoramento","robos","emails","chats"].forEach(function(id){var e=document.getElementById("s-"+id);if(e)e.classList.add("hidden")});
+  ["painel","triagem","agenda","processos","proc-det","crm","financeiro","etiquetas","procedimentos","diligencias","relatorio","publicacoes","encerrados","inove","james","cadastros","fases","sugestoes","lote","produtividade","monitoramento","robos","movimentar","emails","chats"].forEach(function(id){var e=document.getElementById("s-"+id);if(e)e.classList.add("hidden")});
   var sec=document.getElementById("s-"+showId); if(sec) sec.classList.remove("hidden");
   document.querySelectorAll("#nav a").forEach(function(a){a.classList.remove("active")});
   var link=document.querySelector('#nav a[data-s="'+s+'"]');if(link)link.classList.add("active");
-  var t={painel:"Painel",triagem:"Publicações",agenda:"Agenda — Kanban (etapas CMP)",processos:"Processos",crm:"Comercial",financeiro:"Financeiro — cobranças e recebimentos",contatos:"Contatos",procedimentos:"Procedimentos CMP",etiquetas:"Etiquetas","proc-det":"Processo",diligencias:"Diligências",emails:"E-mails — respostas recebidas",chats:"Chats — clientes e equipe",relatorio:"Relatório mensal para clientes",encerrados:"Processos encerrados",inove:"Processos Inove (terceiros)",james:"Processos contra James Laurence",cadastros:"Cadastros — Tribunais de Justiça",inovesol:"Solicitar novas funcionalidades",fases:"Revisar fases dos processos",produtividade:"Produtividade e auditoria de logins"};
+  var t={painel:"Painel",triagem:"Publicações",agenda:"Agenda — Kanban (etapas CMP)",processos:"Processos",crm:"Comercial",financeiro:"Financeiro — cobranças e recebimentos",contatos:"Contatos",procedimentos:"Procedimentos CMP",etiquetas:"Etiquetas","proc-det":"Processo",diligencias:"Diligências",movimentar:"Movimentar — fila do Estagiário Virtual",emails:"E-mails — respostas recebidas",chats:"Chats — clientes e equipe",relatorio:"Relatório mensal para clientes",encerrados:"Processos encerrados",inove:"Processos Inove (terceiros)",james:"Processos contra James Laurence",cadastros:"Cadastros — Tribunais de Justiça",inovesol:"Solicitar novas funcionalidades",fases:"Revisar fases dos processos",produtividade:"Produtividade e auditoria de logins"};
   /* sub-pastas de Processos (Inove/Encerrados/James/lotes personalizados): só
      aparecem dentro da área de Processos (inclusive ao abrir um lote específico) */
   try{
@@ -8336,7 +8344,8 @@ function go(s){
   if(s==="fases" && typeof renderFasesRevisao==='function')renderFasesRevisao();
   if(s==="produtividade" && typeof renderProdutividade==='function')renderProdutividade();
   if(s==="monitoramento" && typeof renderMonitoramento==='function')renderMonitoramento();
-  if(s==="robos" && typeof renderRobos==='function')renderRobos();if(s==="robos" && typeof renderEstagiario==='function')renderEstagiario();
+  if(s==="robos" && typeof renderRobos==='function')renderRobos();
+  if(s==="movimentar" && typeof renderEstagiario==='function')renderEstagiario();
   if(s==="emails" && typeof renderEmails==='function')renderEmails();
   if(s==="chats" && typeof waCarregar==='function')waCarregar(true);
   if(s==="relatorio" && typeof renderRelatorioMensal==='function')renderRelatorioMensal();
@@ -16451,6 +16460,7 @@ async function renderEstagiario(){
         +(o.ativo?'':' — <b style="color:#b5342b">robô desligado</b>');
     }
     var fila=j.fila||[];
+    _badgeMov(fila.length);
     if(!fila.length){ el.innerHTML='<div class="note">Nenhuma intimação exigindo peça no momento.'+(j.arquivadas_sem_peca?(' O robô já arquivou '+j.arquivadas_sem_peca+' publicação(ões) que não exigiam peça.'):'')+'</div>'; return; }
     el.innerHTML='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:10px">'+fila.map(function(x){
       var cor=_EST_CORES[x.status]||'#697180', rot=_EST_ROTULOS[x.status]||x.status;
@@ -16474,6 +16484,18 @@ async function renderEstagiario(){
         +'</div>';
     }).join('')+'</div>';
   }catch(e){ el.innerHTML='<div class="note">Erro: '+finEsc(String(e&&e.message||e))+'</div>'; }
+}
+/* contador no menu "Movimentar" — o que está esperando peça agora */
+function _badgeMov(n){
+  var b=document.getElementById('nav-n-mov'); if(!b) return;
+  b.textContent=n||0; b.style.display=n?'':'none';
+}
+/* Carrega só o número, sem montar a tela: o menu já mostra a fila ao abrir o
+   sistema, do mesmo jeito que o badge de e-mails. */
+async function atualizaBadgeMovimentar(){
+  try{ var r=await fetch('/api/robo/minutas?status=1'); var j=await r.json();
+    if(j&&j.ok) _badgeMov((j.fila||[]).length);
+  }catch(e){}
 }
 /* o zip mora em /opt/cmpdocs — baixa autenticado e entrega ao navegador */
 async function baixarDossie(caminho,btn){
