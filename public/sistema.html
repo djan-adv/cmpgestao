@@ -202,6 +202,14 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
   .kvgrid{grid-template-columns:1fr 1fr!important}
 }
 @media(max-width:480px){ .kvgrid{grid-template-columns:1fr!important} }
+/* CELULAR: tudo 50% maior (pedido de quem usa o sistema em pé, entre uma
+   audiência e outra). O sistema tem centenas de tamanhos em px espalhados por
+   estilos inline; escalar a raiz é o único jeito de a regra valer para todos de
+   uma vez, hoje e nas telas novas. A largura útil cai de 390 para 260px CSS —
+   as tabelas largas continuam rolando na horizontal, como já rolavam. */
+@media(max-width:760px){
+  body{ zoom:1.5 }
+}
 /* Acessos — lista em cartões (bom no desktop e no celular) */
 .acessos-list{display:flex;flex-direction:column}
 .acessos-card{display:grid;grid-template-columns:1fr 120px 90px auto;grid-template-areas:"name perfil status acoes" "email perfil status acoes";align-items:center;gap:1px 12px;padding:7px 2px;border-bottom:1px solid var(--line)}

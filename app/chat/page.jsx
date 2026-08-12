@@ -166,9 +166,10 @@ export default function ChatMobile() {
       const hoje = new Date(Date.now() - 3 * 3600 * 1000).toISOString().slice(0, 10)
       const fora = assentos.filter(a => { const f = a && a.ferias; return f && f.fim && (!f.ini || hoje >= f.ini) && hoje <= f.fim })
       if (!fora.length) return
-      const nomes = new Set(fora.map(a => normaliza(a.nome)).filter(Boolean))
+      const porNome = {}
+      fora.forEach(a => { const n = normaliza(a.nome); if (n) porNome[n] = a.ferias })
       const mapa = {}
-      ;(contas || []).forEach(c => { if (nomes.has(normaliza(c.nome))) mapa[c.id] = true })
+      ;(contas || []).forEach(c => { const f = porNome[normaliza(c.nome)]; if (f) mapa[c.id] = f })
       setEmFerias(mapa)
     } catch (e) { /* sem a config, ninguém fica marcado */ }
   }, [])
@@ -470,9 +471,9 @@ export default function ChatMobile() {
       <div style={{ display: 'flex', gap: 6, padding: '8px 10px', overflowX: 'auto', background: '#fff', borderBottom: '1px solid #ddd', flexShrink: 0 }}>
         <button onClick={() => trocarAlvo(null)} style={{ flexShrink: 0, border: !alvo ? '1.5px solid ' + VERDE : '1px solid #ddd', background: !alvo ? '#e7f7f2' : '#fff', color: '#222', borderRadius: 16, padding: '8px 14px', fontSize: fs(12.5), fontWeight: 600, cursor: 'pointer' }}>👥 Todos</button>
         {pessoas.map(p => (
-          <button key={p.id} disabled={!!emFerias[p.id]} title={emFerias[p.id] ? 'De férias — não recebe mensagem' : ''}
+          <button key={p.id} title={emFerias[p.id] ? 'De férias — não recebe mensagem' : ''}
             onClick={() => trocarAlvo({ id: p.id, nome: p.nome })}
-            style={{ flexShrink: 0, border: alvo && alvo.id === p.id ? '1.5px solid ' + VERDE : '1px solid #ddd', background: emFerias[p.id] ? '#f2f2f2' : (alvo && alvo.id === p.id ? '#e7f7f2' : '#fff'), color: emFerias[p.id] ? '#9aa' : '#222', borderRadius: 16, padding: '8px 14px', fontSize: fs(12.5), fontWeight: 600, cursor: emFerias[p.id] ? 'default' : 'pointer' }}>
+            style={{ flexShrink: 0, border: alvo && alvo.id === p.id ? '1.5px solid ' + VERDE : '1px solid #ddd', background: emFerias[p.id] ? '#f2f2f2' : (alvo && alvo.id === p.id ? '#e7f7f2' : '#fff'), color: emFerias[p.id] ? '#9aa' : '#222', borderRadius: 16, padding: '8px 14px', fontSize: fs(12.5), fontWeight: 600, cursor: 'pointer' }}>
             {emFerias[p.id] ? '🏖' : '🔒'} {rotulos[p.id] || (p.nome || '').split(' ')[0]}</button>
         ))}
       </div>
@@ -527,7 +528,22 @@ export default function ChatMobile() {
         </div>
       )}
 
+      {/* Conversa com quem está de férias: a caixa de texto dá lugar ao aviso.
+          Antes o chip só ficava cinza — e quem não reparasse escreveria uma
+          mensagem que ninguém iria ler. */}
+      {alvo && emFerias[alvo.id] && (
+        <div style={{ background: '#fff8e6', borderTop: '1px solid #e6d9a8', padding: '12px 14px', flexShrink: 0, textAlign: 'center' }}>
+          <div style={{ fontSize: fs(13), color: '#7a5b00', fontWeight: 700 }}>
+            🏖 {(alvo.nome || '').split(' ')[0]} está de férias{emFerias[alvo.id] && emFerias[alvo.id].fim ? (' até ' + String(emFerias[alvo.id].fim).split('-').reverse().join('/')) : ''}.
+          </div>
+          <div style={{ fontSize: fs(12), color: '#8a7a50', marginTop: 3 }}>
+            Mensagens para ela não são entregues — nem aqui, nem no alarme do celular.
+          </div>
+        </div>
+      )}
+
       {/* campo de digitar */}
+      {!(alvo && emFerias[alvo.id]) && (
       <form onSubmit={enviar} style={{ display: 'flex', gap: 8, padding: '8px 10px', background: '#fff', borderTop: '1px solid #ddd', flexShrink: 0, paddingBottom: 'max(8px, env(safe-area-inset-bottom))' }}>
         <input type="file" accept="image/*" ref={fileInputRef} style={{ display: 'none' }}
           onChange={e => { const f = e.target.files && e.target.files[0]; e.target.value = ''; if (f) enviarPrint(f) }} />
@@ -541,6 +557,7 @@ export default function ChatMobile() {
           style={{ flex: 1, border: '1px solid #ddd', borderRadius: 20, padding: '12px 15px', fontSize: fs(15) }} />
         <button type="submit" style={{ width: 44, height: 44, borderRadius: '50%', border: 0, background: VERDE, color: '#fff', fontSize: 18, cursor: 'pointer', flexShrink: 0 }}>➤</button>
       </form>
+      )}
 
       {/* busca de processo (tela cheia) */}
       {buscaAberta && (
