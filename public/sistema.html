@@ -9574,6 +9574,14 @@ async function carregarDocs(numero, sub, escopo){
       if(sub && !isFolder && !isLix && !naLix){ var up2=_docAccBtn('⬆','#185FA5','Mover para a pasta principal'); up2.onclick=(function(rf){return function(ev){ ev.stopPropagation(); if(confirm('Mover "'+x.nome+'" para a pasta principal?')) moverDoc(dig, rf, escBaseRel, numero, sub, escopo); };})(relFull); tdAcc.appendChild(up2); }
       if(!isFolder && !naLix){ var rn=_docAccBtn('✎','#697180','Renomear'); rn.onclick=(function(rf,nome){return function(ev){ ev.stopPropagation(); _renomearInline(nm, dig, rf, numero, sub, escopo, nome); };})(relFull, x.nome); tdAcc.appendChild(rn); }
       if(!isFolder && !naLix){ var dl=_docAccBtn('⬇','#185FA5','Baixar'); dl.onclick=(function(rf){return function(ev){ ev.stopPropagation(); baixarDoc(dig, rf); };})(relFull); tdAcc.appendChild(dl); }
+      /* PDF pronto na pasta → link de assinatura, sem refazer o documento: a
+         procuração costuma ser gerada num dia e enviada noutro, quando o cliente
+         atende. Só PDF: o assinador não converte Word. */
+      if(!isFolder && !naLix && /\.pdf$/i.test(x.nome||'')){
+        var asg=_docAccBtn('✍','#7a4b00','Enviar para assinatura — gera o link do cliente');
+        asg.onclick=(function(rf,nome){return function(ev){ ev.stopPropagation(); enviarDocParaAssinatura(dig, rf, nome, numero); };})(relFull, x.nome);
+        tdAcc.appendChild(asg);
+      }
       if(!naLix && !isLix){ var del=_docAccBtn('🗑','#b5342b',(isFolder?'Enviar a pasta para a Lixeira':'Enviar para a Lixeira')+' — 30 dias, pode restaurar'); del.onclick=(function(rf){return function(ev){ ev.stopPropagation(); lixeiraDoc(dig, rf, numero, sub, escopo); };})(relFull); tdAcc.appendChild(del); }
       if(naLix && !isLix){ var rst=_docAccBtn('↩','#127a53','Restaurar'); rst.onclick=(function(rf){return function(ev){ ev.stopPropagation(); restaurarDoc(dig, rf, numero, sub, escopo); };})(relFull); tdAcc.appendChild(rst); }
       tr.appendChild(tdc); tr.appendChild(td1); tr.appendChild(tdAcc);
@@ -9611,6 +9619,65 @@ function _renomearInline(nm, dig, relFull, numero, sub, escopo, nomeAtual){
   inp.onclick=function(ev){ ev.stopPropagation(); };
   inp.onkeydown=function(ev){ if(ev.key==='Enter'){ ev.preventDefault(); salvar(); } else if(ev.key==='Escape'){ done=true; carregarDocs(numero,sub,escopo); } };
   inp.onblur=salvar;
+}
+/* Pega um PDF que já está na pasta do processo e cria o link de assinatura —
+   mesmo caminho de quando a procuração é gerada, só que a partir do arquivo
+   existente. Serve para procuração feita antes e enviada depois, e para
+   contrato, declaração, qualquer PDF que o cliente precise assinar. */
+async function enviarDocParaAssinatura(dig, rel, nome, numeroProc){
+  try{
+    var proc=(typeof atual!=='undefined'&&atual)?atual:{};
+    var cliNome=(typeof _partesSplit==='function'?(_partesSplit(proc.cliente)[0]||''):String(proc.cliente||''))||'';
+    var email=''; try{ email=(typeof _emailClienteDoProc==='function')?(_emailClienteDoProc(proc)||''):''; }catch(e){}
+    var tel=''; try{ (typeof splitCtlTokens==='function'?splitCtlTokens(proc.ctl||''):[]).some(function(t){ if(!/@/.test(t)&&String(t).replace(/\D/g,'').length>=10){ tel=t; return true; } return false; }); }catch(e){}
+    var quem=window.prompt('Quem vai assinar "'+nome+'"?\n\nNome:', cliNome);
+    if(quem===null) return; quem=(quem||'').trim();
+    var mail=window.prompt('E-mail de quem assina (deixe em branco para mandar só o link por WhatsApp):', email||'');
+    if(mail===null) return; mail=(mail||'').trim();
+    var tok=await docToken();
+    var r=await fetch('/api/docs?file='+encodeURIComponent(dig+'/'+rel),{headers:{Authorization:'Bearer '+tok}});
+    if(!r.ok){ alert('Não consegui ler o arquivo na pasta.'); return; }
+    var blob=await r.blob();
+    var envio=await _enviarParaAssinatura(blob, nome.replace(/\.pdf$/i,'')+(quem?(' — '+quem):''), {nome:quem,email:mail}, numeroProc||proc.numero||'');
+    if(envio.erro){ alert('Não consegui criar o link de assinatura:\n\n'+envio.erro); return; }
+    var mailOk=mail?await _emailLinkAssinatura(mail, quem, nome.replace(/\.pdf$/i,''), envio.link):false;
+    try{
+      var sb4=window.__sb, dp=String(numeroProc||proc.numero||'').replace(/\D/g,'');
+      if(sb4&&dp){
+        var rp2=await sb4.from('processos').select('id').eq('numero_digitos',dp).limit(1);
+        if(rp2.data&&rp2.data[0]) await sb4.from('andamentos').insert({processo_id:rp2.data[0].id,
+          data:new Date().toISOString().slice(0,10), fonte:'manual',
+          texto:'[Assinatura] "'+nome+'" enviado para '+(quem||'assinar')+(mail?(' ('+mail+')'):' (sem e-mail)')+'.'});
+      }
+    }catch(e){}
+    _modalLinkAssinatura(envio.link, quem, tel, nome, mailOk, mail);
+  }catch(e){ alert('Erro: '+((e&&e.message)||e)); }
+}
+/* mostra o link pronto para copiar/WhatsApp — igual ao da procuração recém-gerada */
+function _modalLinkAssinatura(link, quem, tel, nome, mailOk, mail){
+  var d=String(tel||'').replace(/\D/g,'');
+  var wa=d?('https://wa.me/'+(d.length<=11?('55'+d):d)+'?text='+encodeURIComponent('Olá'+(quem?(', '+String(quem).split(' ')[0]):'')+'! Segue o link para assinar: '+link)):'';
+  var antigo=document.getElementById('asg-modal'); if(antigo) antigo.remove();
+  var ov=document.createElement('div'); ov.id='asg-modal';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(20,28,40,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+  ov.innerHTML='<div style="background:#fff;border-radius:14px;padding:20px;max-width:460px;width:100%">'
+    +'<div style="font-weight:700;color:var(--navy);font-size:15px">✍ Link de assinatura criado</div>'
+    +'<div class="note" style="margin:6px 0 10px">'+_procEsc(nome)+' · '+(mail?(mailOk?('e-mail enviado para '+_procEsc(mail)):'<span style="color:#8a5a00">o e-mail não saiu — mande o link por aqui</span>'):'sem e-mail — mande o link por aqui')+'</div>'
+    +'<input id="asg-link" value="'+_procEsc(link)+'" readonly style="width:100%;font-size:12px;padding:7px 9px;box-sizing:border-box">'
+    +'<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;margin-top:12px">'
+      +'<button class="btn sm ghost" onclick="_asgCopiar(this)">📋 copiar</button>'
+      +(wa?('<a class="btn sm" style="background:#128C7E;color:#fff;text-decoration:none" href="'+_procEsc(wa)+'" target="_blank" rel="noopener">WhatsApp</a>'):'')
+      +'<button class="btn" onclick="_asgFechar()">Fechar</button>'
+    +'</div></div>';
+  document.body.appendChild(ov);
+}
+function _asgFechar(){ var m=document.getElementById('asg-modal'); if(m) m.remove(); }
+function _asgCopiar(btn){
+  var e=document.getElementById('asg-link'); if(!e) return;
+  e.select(); e.setSelectionRange(0,99999);
+  var ok=false; try{ ok=document.execCommand('copy'); }catch(x){}
+  if(!ok&&navigator.clipboard){ try{ navigator.clipboard.writeText(e.value); ok=true; }catch(x){} }
+  if(btn) btn.textContent=ok?'✓ copiado':'selecione e copie';
 }
 async function baixarDoc(dig, rel){
   var tok=await docToken();
