@@ -18199,7 +18199,14 @@ async function monitTrazerAssessoria(id){
      NAT simétrico (algumas 4G corporativas) podem não fechar a conexão. Nesses
      casos a tela avisa em vez de ficar chamando para sempre. */
   var _cl={pc:null, local:null, remoto:null, canal:null, comQuem:null, nome:'', entrando:false, video:true, timeout:null};
-  var ICE={iceServers:[{urls:['stun:stun.l.google.com:19302','stun:stun1.l.google.com:19302']}]};
+  var ICE={iceServers:[
+    {urls:['stun:stun.l.google.com:19302','stun:stun1.l.google.com:19302']},
+    /* TURN do PRÓPRIO VPS (ops/turn/setup.sh): quando a rede bloqueia a ligação
+       direta, a mídia passa cifrada pelo nosso servidor. */
+    {urls:['turn:gestao.cmpadvogados.com.br:3478?transport=udp','turn:gestao.cmpadvogados.com.br:3478?transport=tcp'],username:'cmp',credential:'e933e7efb6e977b645ba39a5dc6be4a2d5213f7fc30e596a'},
+    /* reserva comunitária, caso o coturn do VPS esteja fora */
+    {urls:['turn:openrelay.metered.ca:80','turn:openrelay.metered.ca:443','turn:openrelay.metered.ca:443?transport=tcp'],username:'openrelayproject',credential:'openrelayproject'},
+  ]};
   /* Campainha: o toque é agendado INTEIRO na linha do tempo do áudio — o
      confirm() congela o JavaScript, mas o áudio roda em outra thread e continua
      tocando enquanto a pergunta 'Atender?' está na tela. O contexto de áudio é
