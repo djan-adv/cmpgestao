@@ -220,6 +220,17 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
   #cmp-chat{ left:0!important; right:0!important; width:auto!important; max-width:none!important }
   #cmp-chat-msgs{ height:38vh!important; max-height:38vh!important }
   #cmp-chat-resize{ display:none!important }   /* arrastar para redimensionar não serve no toque */
+  /* A barra do chat ganhou os botões de ligação e, com o zoom, o título quebrou
+     em três linhas — a barra virou um bloco alto cobrindo meia tela. Uma linha
+     só: título com reticências se faltar espaço e a paleta de cor escondida
+     (dá para trocar a cor pelo /chat). */
+  #cmp-chat-bar{ flex-wrap:nowrap!important; gap:6px!important; overflow:hidden }
+  #cmp-chat-bar b{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; flex:0 1 auto }
+  #cmp-chat-cor{ display:none!important }
+  /* menu lateral aberto fica POR CIMA do chat — era ele que escondia o rodapé
+     com 'acessos ›' e o caminho até o Publicar */
+  body.side-open .side{ z-index:130!important }
+  body.side-open #scrim{ z-index:125!important }
   /* painel lateral de pré-visualização de documento: min-width 340px CSS passa a
      valer 510px reais com o zoom e não cabe na tela do celular */
   #doc-preview-painel{ left:0!important; width:auto!important; min-width:0!important; max-width:none!important }
