@@ -251,7 +251,33 @@ export default function ChatMobile() {
     return () => { supabase.removeChannel(canal); clearInterval(varre) }
   }, [euId])
 
-  useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight }, [msgs, alvo])
+  // ——— rolagem ———
+  // O "volta sozinho" vinha de fixar a rolagem no fim ANTES de os prints
+  // carregarem: a imagem chega, a altura da lista cresce e a última mensagem
+  // some para baixo. E o polling de 20s empurrava de volta quem tinha subido
+  // para ler algo antigo. Agora: 'irAoFim' repete o ajuste nos quadros
+  // seguintes (pegando imagem e layout), e o auto-scroll das mensagens novas só
+  // acontece se você JÁ estava no fim.
+  const pertoDoFimRef = useRef(true)
+  const irAoFim = useCallback(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const fim = () => { el.scrollTop = el.scrollHeight }
+    fim()
+    requestAnimationFrame(fim)
+    setTimeout(fim, 120)
+    setTimeout(fim, 400)   // prints e fontes já carregados
+    pertoDoFimRef.current = true
+  }, [])
+  const aoRolar = useCallback(() => {
+    const el = scrollRef.current
+    if (!el) return
+    pertoDoFimRef.current = (el.scrollHeight - el.scrollTop - el.clientHeight) < 90
+  }, [])
+  // abrir e trocar de conversa: sempre na mensagem mais recente
+  useEffect(() => { irAoFim() }, [alvo, irAoFim])
+  // mensagem nova: só desce se a pessoa estava acompanhando o fim
+  useEffect(() => { if (pertoDoFimRef.current) irAoFim() }, [msgs, irAoFim])
 
   // resolve nome de um processo vinculado (cache em ref — não dispara loop de render)
   const buscarNomeProcesso = useCallback(async (id) => {
@@ -414,7 +440,7 @@ export default function ChatMobile() {
       )}
 
       {/* mensagens */}
-      <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: '12px 10px' }}>
+      <div ref={scrollRef} onScroll={aoRolar} style={{ flex: 1, overflowY: 'auto', padding: '12px 10px', overflowAnchor: 'none' }}>
         {!visiveis.length && <div style={{ textAlign: 'center', color: '#8a9', fontSize: fs(13), marginTop: 30 }}>Nenhuma mensagem ainda.</div>}
         {visiveis.map(m => {
           const meu = m.autor_id === euId
@@ -433,6 +459,7 @@ export default function ChatMobile() {
                 {m.imagem_anexo_id && imgToken && (
                   <img src={'/api/anexo?id=' + encodeURIComponent(m.imagem_anexo_id) + '&jwt=' + encodeURIComponent(imgToken)}
                     onClick={e => window.open(e.currentTarget.src, '_blank')}
+                    onLoad={() => { if (pertoDoFimRef.current) irAoFim() }}
                     style={{ maxWidth: '100%', maxHeight: 260, borderRadius: 6, marginTop: 4, display: 'block', cursor: 'pointer' }} />
                 )}
                 {m.processo_id && <div style={{ fontSize: fs(10.5), color: '#7a5b00', marginTop: 3 }}>🔗 {procNomesRef.current[m.processo_id] === '…' ? 'processo vinculado' : (procNomesRef.current[m.processo_id] || 'processo vinculado')}</div>}
