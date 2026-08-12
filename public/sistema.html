@@ -15199,7 +15199,7 @@ function setDilView(v){
     var n=new Date();
     w.innerHTML='<span id="gbusca-wrap"><input id="gbusca" placeholder="Buscar processo, cliente ou CPF…  (Ctrl+K)" autocomplete="off"><div id="gbusca-drop"></div></span>'
       +'<span id="tb-data">'+dias[n.getDay()]+', '+n.getDate()+' de '+ms[n.getMonth()]+'</span>'
-      +'<span id="tb-sino" title="Publicações a triar">🔔<i id="tb-badge"></i></span>';
+      +'<span id="tb-sino" title="Publicações a triar — abrir a triagem">⚑<i id="tb-badge"></i></span>';
     var who=tb.querySelector('.who');
     tb.insertBefore(w, who||null);
     document.getElementById('tb-sino').onclick=function(){ if(typeof go==='function') go('triagem'); };
@@ -17919,7 +17919,23 @@ async function monitTrazerAssessoria(id){
   async function ativarAlarmeEquipe(){
     var b=_sino(); if(!b) return;
     if(b.dataset.estado==='indisponivel'){ alert('Este navegador não permite alarme. No iPhone, adicione o sistema à Tela de Início antes.'); return; }
-    if(b.dataset.estado==='ativado'){ await desligarAlarmeEquipe(); return; }
+    if(b.dataset.estado==='ativado'){
+      /* com o alarme ligado, o clique vira o teste — é assim que se confere o
+         caminho inteiro (servidor → Apple/Google → aparelho) sem depender de
+         outra pessoa mandar mensagem. Desligar continua disponível no Cancelar. */
+      if(confirm('🔔 O alarme está LIGADO neste aparelho.\n\nOK = enviar um TESTE agora (a notificação deve tocar aqui em alguns segundos)\nCancelar = desligar o alarme')){
+        try{
+          var sT=await window.__sb.auth.getSession();
+          var tokT=sT&&sT.data&&sT.data.session&&sT.data.session.access_token;
+          var rT=await fetch('/api/chat/push',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tokT},body:JSON.stringify({acao:'testar'})});
+          var jT=await rT.json();
+          if(jT&&jT.ok&&jT.enviados) alert('Teste enviado para '+jT.enviados+' aparelho(s) seu(s). A notificação deve chegar em alguns segundos — se não tocar, confira o modo silencioso/Não Perturbe.');
+          else alert('Não saiu: '+((jT&&(jT.erro||jT.motivo))||'erro desconhecido'));
+        }catch(eT){ alert('Erro no teste: '+((eT&&eT.message)||eT)); }
+        return;
+      }
+      await desligarAlarmeEquipe(); return;
+    }
     _pintarSino('trabalhando');
     try{
       var perm=await Notification.requestPermission();

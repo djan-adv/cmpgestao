@@ -237,7 +237,15 @@ export default function ChatMobile() {
 
   async function ativarAlarme() {
     if (pushEstado === 'indisponivel') { explicarAlarmeIndisponivel(); return }
-    if (pushEstado === 'ativado') return
+    if (pushEstado === 'ativado') {
+      // alarme já ligado: o clique vira o teste — confere o caminho inteiro sem
+      // depender de outra pessoa mandar mensagem
+      if (!confirm('🔔 O alarme está LIGADO.\n\nEnviar um teste agora? A notificação deve tocar neste aparelho em alguns segundos.')) return
+      const j = await chamarPush('testar', {})
+      if (j && j.ok && j.enviados) alert('Teste enviado. Se não tocar em alguns segundos, confira o modo silencioso / Não Perturbe do aparelho.')
+      else alert('Não saiu: ' + ((j && (j.erro || j.motivo)) || 'erro desconhecido'))
+      return
+    }
     setPushEstado('ativando')
     try {
       const permissao = await Notification.requestPermission()

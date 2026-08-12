@@ -136,6 +136,28 @@ export async function POST(request) {
     return Response.json({ ok: true })
   }
 
+  // Teste do alarme: dispara o push para os aparelhos de QUEM PEDIU — é o único
+  // jeito de conferir o caminho inteiro (servidor → Apple/Google → aparelho)
+  // sem depender de outra pessoa mandar mensagem. A rota de 'notificar' exclui
+  // o autor de propósito, por isso o teste é uma ação à parte.
+  if (body.acao === 'testar') {
+    const v = await vapid()
+    if (!v) return Response.json({ erro: 'push não configurado no servidor' }, { status: 400 })
+    webpush.setVapidDetails('mailto:contato@cmpadvogados.com.br', v.public, v.private)
+    const admin = svc()
+    const { data: subs } = await admin.from('chat_push_subs').select('*').eq('user_id', user.id)
+    if (!subs || !subs.length) return Response.json({ ok: true, enviados: 0, motivo: 'nenhum aparelho seu com alarme ativo' })
+    const payload = JSON.stringify({ titulo: '🔔 Teste do alarme', corpo: 'Funcionou! É assim que mensagens e chamadas vão chegar.', url: '/chat' })
+    let enviados = 0
+    const expirados = []
+    await Promise.all(subs.map(async (s2) => {
+      try { await webpush.sendNotification({ endpoint: s2.endpoint, keys: { p256dh: s2.p256dh, auth: s2.auth_key } }, payload); enviados++ }
+      catch (e) { if (e && (e.statusCode === 404 || e.statusCode === 410)) expirados.push(s2.endpoint) }
+    }))
+    if (expirados.length) { try { await admin.from('chat_push_subs').delete().in('endpoint', expirados) } catch (e) {} }
+    return Response.json({ ok: true, enviados })
+  }
+
   if (body.acao === 'notificar') {
     if (body.autor_id !== user.id) return Response.json({ erro: 'autor não confere com a sessão' }, { status: 403 })
     const v = await vapid()
