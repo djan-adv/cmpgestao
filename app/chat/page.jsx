@@ -113,6 +113,50 @@ export default function ChatMobile() {
   const inputRef = useRef(null)
   const ultimoIdRef = useRef(0)
 
+  // ——— mensagem de áudio (o 🎤 do canto direito, como no WhatsApp) ———
+  const [gravSeg, setGravSeg] = useState(-1)   // -1 = não está gravando
+  const mediaRecRef = useRef(null), gravChunksRef = useRef([]), gravTimerRef = useRef(null), gravCancelRef = useRef(false)
+  async function iniciarGravacao() {
+    if (mediaRecRef.current) return
+    let stream
+    try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }) }
+    catch (e) { alert('Preciso da permissão do microfone para gravar o áudio.'); return }
+    // iPhone grava mp4/m4a; o resto, webm — os dois tocam em <audio> nos dois mundos
+    const mime = (window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported('audio/mp4')) ? 'audio/mp4'
+      : ((window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported('audio/webm')) ? 'audio/webm' : '')
+    let rec
+    try { rec = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream) }
+    catch (e) { stream.getTracks().forEach(t => t.stop()); alert('Este navegador não grava áudio.'); return }
+    gravChunksRef.current = []
+    rec.ondataavailable = ev => { if (ev.data && ev.data.size) gravChunksRef.current.push(ev.data) }
+    rec.onstop = () => {
+      try { stream.getTracks().forEach(t => t.stop()) } catch (e) {}
+      const cancelado = gravCancelRef.current; gravCancelRef.current = false
+      const tipo = rec.mimeType || mime || 'audio/webm'
+      const blob = new Blob(gravChunksRef.current, { type: tipo })
+      mediaRecRef.current = null
+      if (gravTimerRef.current) { clearInterval(gravTimerRef.current); gravTimerRef.current = null }
+      setGravSeg(-1)
+      // toque acidental (menos de ~1s de dados) não vira mensagem
+      if (cancelado || blob.size < 1500) return
+      const ext = /mp4/.test(tipo) ? 'm4a' : 'webm'
+      enviarPrint(new File([blob], 'audio-' + Date.now() + '.' + ext, { type: tipo }), '🎤 áudio')
+    }
+    mediaRecRef.current = rec
+    rec.start()
+    setGravSeg(0)
+    const t0 = Date.now()
+    gravTimerRef.current = setInterval(() => {
+      const seg = Math.floor((Date.now() - t0) / 1000)
+      setGravSeg(seg)
+      if (seg >= 120 && mediaRecRef.current) { try { mediaRecRef.current.stop() } catch (e) {} }  // teto: 2 min
+    }, 400)
+  }
+  function pararGravacao(cancelar) {
+    gravCancelRef.current = !!cancelar
+    try { mediaRecRef.current && mediaRecRef.current.stop() } catch (e) {}
+  }
+
   // ——— chamada de voz/vídeo (mesmo protocolo do chat do sistema, então dá
   // para ligar do computador para o celular e vice-versa) ———
   const [chamada, setChamada] = useState(null)   // {nome, video, estado, mudo, semCam}
@@ -577,9 +621,9 @@ export default function ChatMobile() {
 
   // envia um "print" (screenshot): sobe a imagem à parte (não vai pro
   // chat_mensagens, que ficaria pesado) e grava a mensagem com texto curto
-  async function enviarPrint(file) {
+  async function enviarPrint(file, rotulo) {
     if (!file) return
-    if (file.size > 8 * 1024 * 1024) { alert('Esse print tem mais de 8 MB — reduza e tente de novo.'); return }
+    if (file.size > 8 * 1024 * 1024) { alert('Esse arquivo tem mais de 8 MB — reduza e tente de novo.'); return }
     try {
       const b64 = await new Promise((resolve, reject) => {
         const r = new FileReader()
@@ -596,12 +640,14 @@ export default function ChatMobile() {
       const j = await up.json().catch(() => ({}))
       if (!up.ok || j.erro) { alert('Não deu pra enviar o print: ' + (j.erro || ('HTTP ' + up.status))); return }
       const payload = {
-        texto: '📷 print enviado',
+        texto: rotulo || '📷 print enviado',
         para_id: alvo ? alvo.id : null,
         autor_nome: (porId[euId] && porId[euId].nome) || (user.email || '').split('@')[0],
         respondendo_a: respondendoA ? respondendoA.id : null,
         processo_id: pin ? pin.id : null,
         imagem_anexo_id: j.id,
+        anexo_nome: file.name || null,
+        anexo_tipo: file.type || null,   /* é por ele que a bolha decide player × imagem */
       }
       setRespondendoA(null)
       const r = await supabase.from('chat_mensagens').insert(payload).select('*').single()
@@ -712,11 +758,13 @@ export default function ChatMobile() {
                   </div>
                 )}
                 <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontSize: fs(14.5), lineHeight: 1.4, color: '#1b1b1b' }}>{m.texto}</div>
-                {m.imagem_anexo_id && imgToken && (
-                  <img src={'/api/anexo?id=' + encodeURIComponent(m.imagem_anexo_id) + '&jwt=' + encodeURIComponent(imgToken)}
-                    onClick={e => window.open(e.currentTarget.src, '_blank')}
-                    onLoad={() => { if (pertoDoFimRef.current) irAoFim() }}
-                    style={{ maxWidth: '100%', maxHeight: 260, borderRadius: 6, marginTop: 4, display: 'block', cursor: 'pointer' }} />
+                {m.imagem_anexo_id && imgToken && (/^audio\//.test(m.anexo_tipo || '')
+                  ? <audio controls preload="none" src={'/api/anexo?id=' + encodeURIComponent(m.imagem_anexo_id) + '&jwt=' + encodeURIComponent(imgToken)}
+                      style={{ width: 230, maxWidth: '100%', marginTop: 4, display: 'block' }} />
+                  : <img src={'/api/anexo?id=' + encodeURIComponent(m.imagem_anexo_id) + '&jwt=' + encodeURIComponent(imgToken)}
+                      onClick={e => window.open(e.currentTarget.src, '_blank')}
+                      onLoad={() => { if (pertoDoFimRef.current) irAoFim() }}
+                      style={{ maxWidth: '100%', maxHeight: 260, borderRadius: 6, marginTop: 4, display: 'block', cursor: 'pointer' }} />
                 )}
                 {m.processo_id && <div style={{ fontSize: fs(10.5), color: '#7a5b00', marginTop: 3 }}>🔗 {procNomesRef.current[m.processo_id] === '…' ? 'processo vinculado' : (procNomesRef.current[m.processo_id] || 'processo vinculado')}</div>}
                 <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 6, marginTop: 2 }}>
@@ -752,8 +800,20 @@ export default function ChatMobile() {
         </div>
       )}
 
-      {/* campo de digitar */}
-      {!(alvo && emFerias[alvo.id]) && (
+      {/* campo de digitar. Gravando, a linha vira a barra de gravação: tempo
+          correndo, lixeira para cancelar e ➤ para mandar — como no WhatsApp. */}
+      {!(alvo && emFerias[alvo.id]) && (gravSeg >= 0 ? (
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '8px 10px', background: '#fff', borderTop: '1px solid #ddd', flexShrink: 0, paddingBottom: 'max(8px, env(safe-area-inset-bottom))' }}>
+          <span style={{ width: 12, height: 12, borderRadius: '50%', background: '#d33', animation: 'pulse 1s infinite', flexShrink: 0 }} />
+          <b style={{ fontSize: fs(15), color: '#b3261e', flexShrink: 0 }}>{Math.floor(gravSeg / 60)}:{String(gravSeg % 60).padStart(2, '0')}</b>
+          <span style={{ fontSize: fs(12), color: '#8a93a2', flex: 1 }}>gravando…</span>
+          <button type="button" onClick={() => pararGravacao(true)} title="Cancelar — descarta a gravação"
+            style={{ width: 44, height: 44, borderRadius: '50%', border: '1px solid #ddd', background: '#fff', fontSize: 18, cursor: 'pointer', flexShrink: 0 }}>🗑</button>
+          <button type="button" onClick={() => pararGravacao(false)} title="Enviar o áudio"
+            style={{ width: 44, height: 44, borderRadius: '50%', border: 0, background: VERDE, color: '#fff', fontSize: 18, cursor: 'pointer', flexShrink: 0 }}>➤</button>
+          <style>{'@keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}'}</style>
+        </div>
+      ) : (
       <form onSubmit={enviar} style={{ display: 'flex', gap: 8, padding: '8px 10px', background: '#fff', borderTop: '1px solid #ddd', flexShrink: 0, paddingBottom: 'max(8px, env(safe-area-inset-bottom))' }}>
         <input type="file" accept="image/*" ref={fileInputRef} style={{ display: 'none' }}
           onChange={e => { const f = e.target.files && e.target.files[0]; e.target.value = ''; if (f) enviarPrint(f) }} />
@@ -765,9 +825,12 @@ export default function ChatMobile() {
             if (f) { e.preventDefault(); enviarPrint(f) }
           }}
           style={{ flex: 1, border: '1px solid #ddd', borderRadius: 20, padding: '12px 15px', fontSize: fs(15) }} />
-        <button type="submit" style={{ width: 44, height: 44, borderRadius: '50%', border: 0, background: VERDE, color: '#fff', fontSize: 18, cursor: 'pointer', flexShrink: 0 }}>➤</button>
+        {texto.trim()
+          ? <button type="submit" style={{ width: 44, height: 44, borderRadius: '50%', border: 0, background: VERDE, color: '#fff', fontSize: 18, cursor: 'pointer', flexShrink: 0 }}>➤</button>
+          : <button type="button" onClick={iniciarGravacao} title="Gravar mensagem de áudio"
+              style={{ width: 44, height: 44, borderRadius: '50%', border: 0, background: VERDE, color: '#fff', fontSize: 18, cursor: 'pointer', flexShrink: 0 }}>🎤</button>}
       </form>
-      )}
+      ))}
 
       {/* chamada em andamento — tela cheia, com os controles do WhatsApp */}
       {chamada && (
