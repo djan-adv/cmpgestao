@@ -1531,15 +1531,24 @@ function fecharAcessos(){ document.getElementById('modal-acessos').classList.add
    altura da tela no celular e o botão nunca era alcançado. */
 function abrirPublicar(){
   var m=document.getElementById('modal-publicar'); if(!m) return;
-  /* Empilhamento: com o mesmo z-index, quem vem DEPOIS no HTML fica por cima —
-     e este modal mora antes do de acessos. Abria atrás dele, e só aparecia ao
-     girar o aparelho (que força o navegador a repintar tudo). Mandar o elemento
-     para o fim do body na hora de abrir resolve independentemente da ordem. */
+  /* Dois modais abertos ao mesmo tempo era o problema: o de acessos continuava
+     por baixo (e, com o mesmo z-index, às vezes por CIMA — só o giro do
+     aparelho, que força repintar, mostrava o certo). São dois passos do mesmo
+     caminho, não duas janelas: abrir a publicação FECHA a lista de acessos.
+     Além disso o elemento vai para o fim do body e sobe o z-index, para não
+     depender da ordem em que está escrito no HTML. */
+  try{ var _abertaAntes=!document.getElementById('modal-acessos').classList.contains('hidden'); window.__voltarAcessos=_abertaAntes; fecharAcessos(); }catch(e){}
   try{ if(m.parentNode!==document.body || m.nextSibling) document.body.appendChild(m); }catch(e){}
+  m.style.zIndex='260';
   m.classList.remove('hidden');
   if(typeof renderPublicarResumo==='function') renderPublicarResumo();
 }
-function fecharPublicar(){ var m=document.getElementById('modal-publicar'); if(m) m.classList.add('hidden'); }
+function fecharPublicar(){
+  var m=document.getElementById('modal-publicar'); if(m) m.classList.add('hidden');
+  /* volta para a lista de acessos, que é de onde se veio — sem isso o Fechar
+     jogava a pessoa direto no sistema, no meio do que estava fazendo */
+  try{ if(window.__voltarAcessos){ window.__voltarAcessos=false; abrirAcessos(); } }catch(e){}
+}
 /* Publicar atualização: chama /api/deploy (git pull no servidor) autenticado pelo Supabase.
    Só o coordenador vê o botão; a rota também confere o e-mail no servidor. */
 /* Lista de alterações (tabela changelog): aprovar/rejeitar uma a uma.
