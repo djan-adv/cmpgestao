@@ -74,7 +74,10 @@ export async function POST(request) {
 
   // validação comum aos dois caminhos, para não guardar lixo na fila
   if (!emailValido(body.para)) return Response.json({ erro: 'e-mail do destinatário inválido' }, { status: 400 })
-  if (body.cc && !emailValido(body.cc)) return Response.json({ erro: 'e-mail da cópia (cc) inválido' }, { status: 400 })
+  // cc pode vir com vários endereços separados por vírgula — valida um a um
+  if (body.cc && !String(body.cc).split(',').every(x => !x.trim() || emailValido(x.trim()))) {
+    return Response.json({ erro: 'e-mail da cópia (cc) inválido' }, { status: 400 })
+  }
   if (!String(body.corpo || '').trim()) return Response.json({ erro: 'corpo vazio' }, { status: 400 })
 
   // ——— com hora marcada: entra na fila e sai sozinho no horário ———

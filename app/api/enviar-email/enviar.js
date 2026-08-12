@@ -132,7 +132,14 @@ export async function enviarEmailCore({ para, cc, assunto, corpo, numero, dedup 
   corpo = String(corpo || '')
   numero = String(numero || '').replace(/\D/g, '')
   if (!emailValido(para)) return { erro: 'e-mail do destinatário inválido', status: 400 }
-  if (cc && !emailValido(cc)) return { erro: 'e-mail da cópia (cc) inválido', status: 400 }
+  // cc aceita lista ("a@x.com, b@y.com"): valida endereço a endereço. Antes o
+  // regex de UM endereço reprovava a lista inteira, e qualquer aviso com duas
+  // cópias — o caso normal — morria com "e-mail da cópia (cc) inválido" sem o
+  // cliente receber nada. Endereço torto é descartado; o envio ao destinatário
+  // não pode depender de quem está em cópia.
+  if (cc) {
+    cc = cc.split(',').map(x => x.trim()).filter(x => x && emailValido(x)).join(', ')
+  }
   if (!corpo.trim()) return { erro: 'corpo vazio', status: 400 }
 
   // Trava anti-repetição: mesmo destinatário + mesmo processo + mesmo conteúdo
