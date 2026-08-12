@@ -24,6 +24,22 @@ function rotuloProcesso(p) {
 }
 const PALETA_CORES = ['#8a3b8f', '#1f7a44', '#185FA5', '#b5342b', '#6d4aa8', '#0b7285', '#7a4b00', '#c2185b']
 
+// Tudo que é TEXTO DE CONVERSA cresce 50% (pedido de quem lê no celular, de pé,
+// entre uma audiência e outra). A barra do topo fica de fora: são quatro botões
+// numa linha só, e ampliá-los junto empurraria o "Sair" para fora da tela.
+const F = 1.5
+const fs = n => Math.round(n * F * 10) / 10
+
+// Última conversa aberta, por pessoa: quem usa o chat volta ao ponto onde
+// parou, em vez de cair sempre em "Todos".
+const CHAVE_ALVO = id => 'cmp_chat_alvo_' + id
+function alvoSalvo(id) {
+  try { const v = localStorage.getItem(CHAVE_ALVO(id)); return v ? JSON.parse(v) : null } catch (e) { return null }
+}
+function salvarAlvo(id, alvo) {
+  try { alvo ? localStorage.setItem(CHAVE_ALVO(id), JSON.stringify(alvo)) : localStorage.removeItem(CHAVE_ALVO(id)) } catch (e) {}
+}
+
 // VAPID public key vem em base64url — o Push API exige Uint8Array
 function chaveVapidParaBytes(base64url) {
   const pad = '='.repeat((4 - (base64url.length % 4)) % 4)
@@ -187,6 +203,20 @@ export default function ChatMobile() {
     if (lista.length) ultimoIdRef.current = lista[lista.length - 1].id
   }, [euId])
   useEffect(() => { carregar() }, [carregar])
+
+  // Abre na última conversa que ESTA pessoa usou. Espera a lista de colegas
+  // chegar: se o contato salvo não existe mais (saiu do escritório), cai em
+  // "Todos" em vez de abrir numa conversa fantasma. Roda uma vez por sessão —
+  // depois disso, quem manda é o clique.
+  const restaurouRef = useRef(false)
+  useEffect(() => {
+    if (!euId || restaurouRef.current || !pessoas.length) return
+    restaurouRef.current = true
+    const salvo = alvoSalvo(euId)
+    if (salvo && salvo.id && pessoas.some(p => p.id === salvo.id)) setAlvo(salvo)
+  }, [euId, pessoas])
+
+  const trocarAlvo = useCallback(a => { setAlvo(a); if (euId) salvarAlvo(euId, a) }, [euId])
 
   // token p/ exibir os prints (imagens) via /api/anexo — atualizado periodicamente
   useEffect(() => {
@@ -369,23 +399,23 @@ export default function ChatMobile() {
 
       {/* seletor de conversa (Todos / colegas) */}
       <div style={{ display: 'flex', gap: 6, padding: '8px 10px', overflowX: 'auto', background: '#fff', borderBottom: '1px solid #ddd', flexShrink: 0 }}>
-        <button onClick={() => setAlvo(null)} style={{ flexShrink: 0, border: !alvo ? '1.5px solid ' + VERDE : '1px solid #ddd', background: !alvo ? '#e7f7f2' : '#fff', color: '#222', borderRadius: 16, padding: '6px 12px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer' }}>👥 Todos</button>
+        <button onClick={() => trocarAlvo(null)} style={{ flexShrink: 0, border: !alvo ? '1.5px solid ' + VERDE : '1px solid #ddd', background: !alvo ? '#e7f7f2' : '#fff', color: '#222', borderRadius: 16, padding: '8px 14px', fontSize: fs(12.5), fontWeight: 600, cursor: 'pointer' }}>👥 Todos</button>
         {pessoas.map(p => (
-          <button key={p.id} onClick={() => setAlvo({ id: p.id, nome: p.nome })} style={{ flexShrink: 0, border: alvo && alvo.id === p.id ? '1.5px solid ' + VERDE : '1px solid #ddd', background: alvo && alvo.id === p.id ? '#e7f7f2' : '#fff', color: '#222', borderRadius: 16, padding: '6px 12px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer' }}>🔒 {(p.nome || '').split(' ')[0]}</button>
+          <button key={p.id} onClick={() => trocarAlvo({ id: p.id, nome: p.nome })} style={{ flexShrink: 0, border: alvo && alvo.id === p.id ? '1.5px solid ' + VERDE : '1px solid #ddd', background: alvo && alvo.id === p.id ? '#e7f7f2' : '#fff', color: '#222', borderRadius: 16, padding: '8px 14px', fontSize: fs(12.5), fontWeight: 600, cursor: 'pointer' }}>🔒 {(p.nome || '').split(' ')[0]}</button>
         ))}
       </div>
 
       {/* pin de processo */}
       {pin && (
         <div style={{ background: '#fff3b0', borderBottom: '1px solid #d9b64c', padding: '7px 12px', fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-          <span>📌 <b>{pin.rotulo}</b> — mensagens ficam marcadas a este processo</span>
+          <span style={{ fontSize: fs(12.5) }}>📌 <b>{pin.rotulo}</b> — mensagens ficam marcadas a este processo</span>
           <button onClick={() => setPin(null)} style={{ marginLeft: 'auto', background: 'none', border: 0, color: '#7a5b00', fontWeight: 700, cursor: 'pointer' }}>✕</button>
         </div>
       )}
 
       {/* mensagens */}
       <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: '12px 10px' }}>
-        {!visiveis.length && <div style={{ textAlign: 'center', color: '#8a9', fontSize: 13, marginTop: 30 }}>Nenhuma mensagem ainda.</div>}
+        {!visiveis.length && <div style={{ textAlign: 'center', color: '#8a9', fontSize: fs(13), marginTop: 30 }}>Nenhuma mensagem ainda.</div>}
         {visiveis.map(m => {
           const meu = m.autor_id === euId
           const cit = m.respondendo_a ? msgs.find(x => x.id === m.respondendo_a) : null
@@ -393,22 +423,22 @@ export default function ChatMobile() {
           return (
             <div key={m.id} style={{ display: 'flex', justifyContent: meu ? 'flex-end' : 'flex-start', marginBottom: 8 }}>
               <div style={{ maxWidth: '82%', background: meu ? BOLHA_MINHA : '#fff', borderLeft: '4px solid ' + corAutor, borderRadius: 9, padding: '7px 9px', boxShadow: '0 1px 1px rgba(0,0,0,.08)', position: 'relative' }}>
-                {!meu && <div style={{ fontSize: 11.5, fontWeight: 700, color: corAutor, marginBottom: 2 }}>{nomeDe(m.autor_id) || 'colega'}</div>}
+                {!meu && <div style={{ fontSize: fs(11.5), fontWeight: 700, color: corAutor, marginBottom: 2 }}>{nomeDe(m.autor_id) || 'colega'}</div>}
                 {cit && (
-                  <div style={{ borderLeft: '3px solid ' + VERDE, background: 'rgba(0,0,0,.04)', borderRadius: 4, padding: '4px 7px', marginBottom: 4, fontSize: 12, color: '#556' }}>
+                  <div style={{ borderLeft: '3px solid ' + VERDE, background: 'rgba(0,0,0,.04)', borderRadius: 4, padding: '5px 8px', marginBottom: 4, fontSize: fs(12), color: '#556' }}>
                     <b>{cit.autor_id === euId ? 'você' : (nomeDe(cit.autor_id) || 'colega')}</b><br />{cit.texto.slice(0, 120)}
                   </div>
                 )}
-                <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontSize: 14.5, color: '#1b1b1b' }}>{m.texto}</div>
+                <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontSize: fs(14.5), lineHeight: 1.4, color: '#1b1b1b' }}>{m.texto}</div>
                 {m.imagem_anexo_id && imgToken && (
                   <img src={'/api/anexo?id=' + encodeURIComponent(m.imagem_anexo_id) + '&jwt=' + encodeURIComponent(imgToken)}
                     onClick={e => window.open(e.currentTarget.src, '_blank')}
                     style={{ maxWidth: '100%', maxHeight: 260, borderRadius: 6, marginTop: 4, display: 'block', cursor: 'pointer' }} />
                 )}
-                {m.processo_id && <div style={{ fontSize: 10.5, color: '#7a5b00', marginTop: 3 }}>🔗 {procNomesRef.current[m.processo_id] === '…' ? 'processo vinculado' : (procNomesRef.current[m.processo_id] || 'processo vinculado')}</div>}
+                {m.processo_id && <div style={{ fontSize: fs(10.5), color: '#7a5b00', marginTop: 3 }}>🔗 {procNomesRef.current[m.processo_id] === '…' ? 'processo vinculado' : (procNomesRef.current[m.processo_id] || 'processo vinculado')}</div>}
                 <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 6, marginTop: 2 }}>
-                  <span onClick={() => responderA(m)} style={{ fontSize: 11, color: '#8a93a2', cursor: 'pointer' }}>↩ responder</span>
-                  <span style={{ fontSize: 10.5, color: '#8a93a2' }}>{horaCurta(m.criado_em)}</span>
+                  <span onClick={() => responderA(m)} style={{ fontSize: fs(11), color: '#8a93a2', cursor: 'pointer' }}>↩ responder</span>
+                  <span style={{ fontSize: fs(10.5), color: '#8a93a2' }}>{horaCurta(m.criado_em)}</span>
                 </div>
               </div>
             </div>
@@ -419,7 +449,7 @@ export default function ChatMobile() {
       {/* resposta citada em andamento */}
       {respondendoA && (
         <div style={{ background: '#fff', borderTop: '1px solid #ddd', padding: '7px 10px', display: 'flex', gap: 8, alignItems: 'flex-start', flexShrink: 0 }}>
-          <div style={{ flex: 1, borderLeft: '3px solid ' + VERDE, paddingLeft: 8, fontSize: 12.5, color: '#556' }}><b>{respondendoA.autor}</b><br />{respondendoA.texto.slice(0, 140)}</div>
+          <div style={{ flex: 1, borderLeft: '3px solid ' + VERDE, paddingLeft: 8, fontSize: fs(12.5), color: '#556' }}><b>{respondendoA.autor}</b><br />{respondendoA.texto.slice(0, 140)}</div>
           <button onClick={() => setRespondendoA(null)} style={{ background: 'none', border: 0, color: '#8a93a2', fontWeight: 700, cursor: 'pointer' }}>✕</button>
         </div>
       )}
@@ -435,7 +465,7 @@ export default function ChatMobile() {
             const f = Array.prototype.find.call(e.clipboardData.files || [], f => /^image\//.test(f.type))
             if (f) { e.preventDefault(); enviarPrint(f) }
           }}
-          style={{ flex: 1, border: '1px solid #ddd', borderRadius: 20, padding: '11px 14px', fontSize: 15 }} />
+          style={{ flex: 1, border: '1px solid #ddd', borderRadius: 20, padding: '12px 15px', fontSize: fs(15) }} />
         <button type="submit" style={{ width: 44, height: 44, borderRadius: '50%', border: 0, background: VERDE, color: '#fff', fontSize: 18, cursor: 'pointer', flexShrink: 0 }}>➤</button>
       </form>
 
