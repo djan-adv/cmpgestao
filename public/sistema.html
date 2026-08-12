@@ -17811,10 +17811,13 @@ async function monitTrazerAssessoria(id){
       var anexoHtml='';
       if(m.imagem_anexo_id){
         var ehImg=!m.anexo_tipo||/^image\//.test(m.anexo_tipo);
+        var ehAudio=/^audio\//.test(m.anexo_tipo||'');
         var srcAnexo='/api/anexo?id='+encodeURIComponent(m.imagem_anexo_id)+'&jwt='+encodeURIComponent(chatJwt);
-        anexoHtml=ehImg
-          ?('<div style="margin-top:4px"><img src="'+srcAnexo+'" style="max-width:220px;max-height:220px;border-radius:6px;cursor:pointer;display:block" onclick="window.open(this.src,\'_blank\')" title="Abrir em tamanho maior"></div>')
-          :('<div style="margin-top:4px"><a href="'+srcAnexo+'" target="_blank" style="display:inline-flex;align-items:center;gap:5px;background:#fff3b0;border:1px solid #d9b64c;border-radius:7px;padding:4px 9px;color:#5a4a00;text-decoration:none;font-size:12px">📎 '+h(m.anexo_nome||'anexo')+'</a></div>');
+        anexoHtml=ehAudio
+          ?('<div style="margin-top:4px"><audio controls preload="none" src="'+srcAnexo+'" style="width:230px;max-width:100%"></audio></div>')
+          :(ehImg
+            ?('<div style="margin-top:4px"><img src="'+srcAnexo+'" style="max-width:220px;max-height:220px;border-radius:6px;cursor:pointer;display:block" onclick="window.open(this.src,\'_blank\')" title="Abrir em tamanho maior"></div>')
+            :('<div style="margin-top:4px"><a href="'+srcAnexo+'" target="_blank" style="display:inline-flex;align-items:center;gap:5px;background:#fff3b0;border:1px solid #d9b64c;border-radius:7px;padding:4px 9px;color:#5a4a00;text-decoration:none;font-size:12px">📎 '+h(m.anexo_nome||'anexo')+'</a></div>'));
       }
       return faixa+'<div id="cmp-chat-msg-'+m.id+'" style="margin:0 0 7px;'+(meu?'text-align:right':'')+'">'
         +'<div class="cmp-chat-bolha" style="display:inline-block;max-width:88%;text-align:left;background:'+_tinta(corAutor,.17)+';border:1px solid '+_tinta(corAutor,.45)+';border-left:4px solid '+corAutor+';border-radius:9px;padding:6px 9px'+(priv?';box-shadow:0 0 0 2px rgba(217,182,76,.45)':'')+'">'
