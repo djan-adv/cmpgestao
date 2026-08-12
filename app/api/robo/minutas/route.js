@@ -556,7 +556,12 @@ export async function GET(request) {
     const orc = await orcamento(sb)
     const { data: fila } = await sb.from('robo_minutas')
       .select('id,processo_numero,status,tipo_peca,prazo_em,urgencia,resumo,dossie_nome,dossie_path,dossie_bytes,integra_path,integra_bytes,integra_erro,minuta_anexo_id,erro,criado_em')
-      .eq('exige_peca', true).order('criado_em', { ascending: false }).limit(40)
+      // prazo mais próximo primeiro — é a ordem em que o trabalho tem que sair.
+      // Sem prazo vai para o fim; empate desempata pela triagem mais recente.
+      .eq('exige_peca', true)
+      .order('prazo_em', { ascending: true, nullsFirst: false })
+      .order('criado_em', { ascending: false })
+      .limit(40)
     const { count: semPeca } = await sb.from('robo_minutas').select('id', { count: 'exact', head: true }).eq('exige_peca', false)
     return Response.json({ ok: true, orcamento: orc, modo: await modoAtual(sb), fila: fila || [], arquivadas_sem_peca: semPeca || 0 })
   }
