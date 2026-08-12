@@ -230,6 +230,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
 .acessos-card .ac-status{grid-area:status;justify-self:start}
 .acessos-card .ac-acoes{grid-area:acoes;justify-self:end}
 .acessos-card .btn.sm{font-size:11px;padding:4px 9px;border-radius:7px}
+.ac-menu{display:none}
 .acessos-card .ac-ferias{grid-area:email;justify-self:start;font-size:11px;color:#8a5a00;font-weight:700}
 @media(max-width:760px){
   .acessos-card{grid-template-columns:1fr auto;grid-template-areas:"name perfil" "name status" "acoes acoes" "email email";gap:5px 10px;padding:13px 2px}
@@ -238,6 +239,13 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
   .acessos-card .ac-acoes{justify-self:stretch;margin-top:4px}
   .acessos-card .ac-acoes>div{justify-content:flex-start!important;flex-wrap:wrap!important}
   .acessos-card .ac-email{margin-top:2px}
+  /* Seis botões por pessoa empilhados faziam a lista passar de uma tela e meia
+     — com o zoom do celular, o rodapé com "Publicar" ficava fora de alcance.
+     No celular as ações viram um menu só; no computador seguem como botões. */
+  .acessos-card .ac-acoes>div{display:none!important}
+  .ac-menu{display:block;width:100%;font-size:13px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:#fff}
+  /* o botão de publicar fica preso no rodapé do modal, sempre alcançável */
+  .publicar-acoes{position:sticky;bottom:0;background:var(--panel);padding:8px 0;border-top:1px solid var(--line);z-index:2}
 }
 @media(min-width:1100px){#s-proc-det{padding-right:calc(21vw + 4px);position:relative}#docs-col{position:fixed;right:14px;top:150px;width:21vw;max-height:calc(100vh - 170px);overflow:auto;z-index:20}#doc-card,#docop-card{box-shadow:0 6px 22px rgba(30,39,51,.10)}#doc-card table td,#docop-card table td{font-size:12px!important;word-break:break-word}}</style>
 
@@ -963,7 +971,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
       <p class="sectlabel" style="margin:0 0 4px">Publicar atualização</p>
       <p class="note" style="margin:0 0 8px">Decida item por item: <b>Publicar esta</b> aprova a alteração; <b>Rejeitar</b> pede uma justificativa e guarda o item para eu reformular — ele não some, volta para sua aprovação depois de ajustado. Ao final, <b>Publicar atualização agora</b> coloca no ar as aprovadas.</p>
       <div id="publicar-resumo" style="margin:0 0 10px"><div class="note">Verificando novidades…</div></div>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <div class="publicar-acoes" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <button class="btn sm gold" id="btn-publicar" onclick="publicarAtualizacao()">↑ Publicar atualização agora</button>
         <button class="btn sm ghost" id="btn-rejeitar" style="display:none" onclick="rejeitarAtualizacao()">Rejeitar</button>
         <span id="publicar-status" class="note" style="margin:0"></span>
@@ -1649,7 +1657,24 @@ function renderAcessos(){
       acoes+='<button class="btn sm ghost" onclick="toggleAtivoAcesso(\''+u.id+'\')">'+(ativo?'Desativar':'Ativar')+'</button>';
       if(!u.email) acoes+='<button class="btn sm ghost" style="color:#b5342b" title="Remover da lista (ainda sem cadastro)" onclick="removerAssento(\''+u.id+'\')">✕</button>';
     }
-    acoes = acoes ? ('<div style="display:flex;gap:5px;justify-content:flex-end;flex-wrap:nowrap">'+acoes+'</div>') : '<span class="note" style="margin:0">—</span>';
+    /* mesmas ações, em menu — é o que aparece no celular */
+    var menu=[];
+    if(pode){
+      menu.push(['cad',(u.email?'Editar acesso':'Cadastrar acesso')]);
+      if(u.id!=='djan') menu.push(['ren','Renomear']);
+    }
+    if(ehCoord && u.id!=='djan'){
+      if(!u.senha) menu.push(['convite','🔗 Link de convite']);
+      menu.push(['ferias', emFerias(u)?'🏖 Encerrar férias':'🏖 Registrar férias']);
+      menu.push(['priv', soPrivado(u)?'Devolver ao grupo do chat':'Tirar do grupo (só privado)']);
+      menu.push(['ativo', ativo?'Desativar acesso':'Reativar acesso']);
+      if(!u.email) menu.push(['remover','Remover da lista']);
+    }
+    var menuHtml=menu.length
+      ? '<select class="ac-menu" onchange="acaoAcesso(\''+u.id+'\',this)"><option value="">⚙ ações…</option>'
+        +menu.map(function(o){ return '<option value="'+o[0]+'">'+esc(o[1])+'</option>'; }).join('')+'</select>'
+      : '';
+    acoes = acoes ? ('<div style="display:flex;gap:5px;justify-content:flex-end;flex-wrap:nowrap">'+acoes+'</div>'+menuHtml) : (menuHtml||'<span class="note" style="margin:0">—</span>');
     return '<div class="acessos-card"'+(ativo?'':' style="opacity:.5"')+'>'
       +'<div class="ac-name">'+esc(u.nome)+'</div>'
       +'<div class="ac-email">'+esc(u.email||'sem cadastro')+(u.senha?' · senha definida':'')
@@ -1659,6 +1684,19 @@ function renderAcessos(){
       +'<div class="ac-acoes">'+acoes+'</div>'
       +'</div>';
   }).join('');
+}
+/* Uma ação por vez, vinda do menu do celular. Reaproveita as mesmas funções dos
+   botões do computador — nada de caminho paralelo que possa divergir. */
+function acaoAcesso(id, sel){
+  var v=sel&&sel.value; if(sel) sel.value='';
+  if(!v) return;
+  if(v==='cad') return cadastroVisualUsuario(id);
+  if(v==='ren') return trocarNomeVisual(id);
+  if(v==='convite') return gerarConvite(id);
+  if(v==='ferias') return marcarFerias(id);
+  if(v==='priv') return alternarSoPrivado(id);
+  if(v==='ativo') return toggleAtivoAcesso(id);
+  if(v==='remover') return removerAssento(id);
 }
 /* mantém compatibilidade: o rodapé agora só chama a tela de acessos */
 function renderSeletorUsuariosVisual(){ if(document.getElementById('modal-acessos') && !document.getElementById('modal-acessos').classList.contains('hidden')) renderAcessos(); }
