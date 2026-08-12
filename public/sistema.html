@@ -1412,7 +1412,10 @@ async function novoAssento(perfil){
   var base=_normNomeAcesso(nome).split(' ')[0]||'novo';
   var id=base; var n=2;
   while((USUARIOS_VISUAIS||[]).some(function(u){return u.id===id;})){ id=base+n; n++; }
-  USUARIOS_VISUAIS.push({id:id,nome:nome,perfil:(perfil==='est'?'est':'adv'),email:'',senha:'',ativo:true});
+  /* Estagiário entra FORA do grupo do chat: a conversa geral do escritório
+     discute estratégia e valor de cliente. Quem precisar liberar faz no próprio
+     painel, no botão 'só privado' da linha — a regra é o padrão, não uma trava. */
+  USUARIOS_VISUAIS.push({id:id,nome:nome,perfil:(perfil==='est'?'est':'adv'),email:'',senha:'',ativo:true,so_privado:(perfil==='est')});
   await _salvarAssentos();
   renderAcessos();
   alert(nome+' foi adicionado(a).\n\nAgora use "🔗 Link de convite" na linha dele(a) para enviar o acesso pelo WhatsApp.');
@@ -1441,13 +1444,30 @@ async function syncAcessosDoBanco(){
   try{
     var j=await apiAcessos('listar',{});
     var rows=(j&&j.usuarios)||[];
+    var usados={};
     (USUARIOS_VISUAIS||[]).forEach(function(u){
       var m=rows.find(function(r){
         return (u.email&&r.email&&String(r.email).toLowerCase()===String(u.email).toLowerCase())
             || (r.nome&&u.nome&&_normNomeAcesso(r.nome)===_normNomeAcesso(u.nome));
       });
-      if(m){ u.email=m.email||u.email; u.senha='definida'; if(typeof m.ativo==='boolean') u.ativo=m.ativo; if(typeof m.so_privado==='boolean') u.so_privado=m.so_privado; }
+      if(m){ usados[String(m.email||'').toLowerCase()]=true; u.email=m.email||u.email; u.senha='definida'; if(typeof m.ativo==='boolean') u.ativo=m.ativo; if(typeof m.so_privado==='boolean') u.so_privado=m.so_privado; }
     });
+    /* Conta que existe no banco mas não está na lista de assentos ENTRA na lista.
+       Sem isto, quem foi cadastrado por outro caminho (convite, por exemplo)
+       trabalhava no sistema sem aparecer na tela de Acessos — foi o que
+       aconteceu com a estagiária: ninguém conseguia mexer nas permissões dela. */
+    var novos=0;
+    rows.forEach(function(r){
+      var mail=String(r.email||'').toLowerCase(); if(!mail||usados[mail]) return;
+      var ja=(USUARIOS_VISUAIS||[]).some(function(u){ return String(u.email||'').toLowerCase()===mail; });
+      if(ja) return;
+      var base=_normNomeAcesso(r.nome||mail).split(' ')[0]||'novo', id=base, n=2;
+      while((USUARIOS_VISUAIS||[]).some(function(u){return u.id===id;})){ id=base+n; n++; }
+      USUARIOS_VISUAIS.push({id:id, nome:(r.nome||mail), perfil:(/estag/i.test(r.papel||'')?'est':'adv'),
+        email:r.email, senha:'definida', ativo:(typeof r.ativo==='boolean'?r.ativo:true), so_privado:!!r.so_privado});
+      novos++;
+    });
+    if(novos){ try{ await _salvarAssentos(); }catch(e){} }
   }catch(e){ /* silencioso: sem a chave de admin, mantém o visual */ }
 }
 async function cadastroVisualUsuario(id){
@@ -1462,6 +1482,8 @@ async function cadastroVisualUsuario(id){
   try{
     var j=await apiAcessos('salvar',{email:em,senha:se,nome:u.nome,papel:u.perfil});
     u.email=em; u.senha='definida'; u.ativo=true;
+    /* a marca de 'fora do grupo' só existe na conta; aplica agora que ela existe */
+    try{ if(soPrivado(u)) await apiAcessos('so_privado',{email:em, valor:true}); }catch(eSP){}
     alert('Acesso '+(j.criado?'CRIADO':'atualizado')+' para '+u.nome+'.\n\nPeça para a pessoa entrar no mesmo link do sistema com:\nE-mail: '+em+'\nSenha: a que você acabou de definir.');
     renderAcessos(); renderSeletorUsuariosVisual();
   }catch(e){ alert('Não foi possível salvar o acesso.\n\n'+(e&&e.message||e)); }
@@ -17529,6 +17551,25 @@ async function monitTrazerAssessoria(id){
     var t=document.getElementById('cmp-chat-txt'); if(t) t.focus();
   }
   function cancelarResposta(){ respondendoA=null; pintarReply(); }
+  /* Apagar: para mim some só da minha tela (a mensagem continua com quem já
+     leu); para todos tira do banco — e isso só o autor pode, porque é a única
+     regra que o servidor consegue garantir. */
+  async function apagar(id, souAutor){
+    /* dois passos: primeiro desistir, depois escolher o alcance. Um confirm só
+       com "OK = todos / Cancelar = só para mim" não deixa fechar sem apagar. */
+    if(!confirm('Apagar esta mensagem?')) return;
+    if(souAutor){
+      var paraTodos=confirm('Apagar para quem?\n\nOK = para TODOS (some para o escritório inteiro).\nCancelar = só para MIM (os outros continuam vendo).');
+      if(paraTodos){
+        var r=await window.__sb.from('chat_mensagens').delete().eq('id',id);
+        if(r.error){ alert('Não consegui apagar: '+r.error.message); return; }
+        msgs=msgs.filter(function(x){return x.id!==id;}); pintar(); return;
+      }
+    }
+    var rp=await window.__sb.rpc('chat_ocultar_para_mim',{msg_id:id});
+    if(rp.error){ alert('Não consegui apagar: '+rp.error.message); return; }
+    msgs=msgs.filter(function(x){return x.id!==id;}); pintar();
+  }
   function pintarReply(){
     var el=document.getElementById('cmp-chat-reply'); if(!el) return;
     if(!respondendoA){ el.style.display='none'; el.innerHTML=''; return; }
@@ -17646,7 +17687,8 @@ async function monitTrazerAssessoria(id){
       }
       return faixa+'<div id="cmp-chat-msg-'+m.id+'" style="margin:0 0 7px;'+(meu?'text-align:right':'')+'">'
         +'<div class="cmp-chat-bolha" style="display:inline-block;max-width:88%;text-align:left;background:'+_tinta(corAutor,.17)+';border:1px solid '+_tinta(corAutor,.45)+';border-left:4px solid '+corAutor+';border-radius:9px;padding:6px 9px'+(priv?';box-shadow:0 0 0 2px rgba(217,182,76,.45)':'')+'">'
-        +'<div style="font-size:11px;color:#3a4250;font-weight:700">'+h(quem)+h(alvo)+' · <span title="'+h(_dataHoraCompleta(m.criado_em))+'" style="color:#6b6540;font-weight:400">'+hora(m.criado_em)+(priv?' 🔒':'')+'</span><a onclick="__cmpChat.responderA('+m.id+')" title="Responder" style="cursor:pointer;color:#8a8355;font-weight:400;margin-left:4px">↩</a></div>'
+        +'<div style="font-size:11px;color:#3a4250;font-weight:700">'+h(quem)+h(alvo)+' · <span title="'+h(_dataHoraCompleta(m.criado_em))+'" style="color:#6b6540;font-weight:400">'+hora(m.criado_em)+(priv?' 🔒':'')+'</span><a onclick="__cmpChat.responderA('+m.id+')" title="Responder" style="cursor:pointer;color:#8a8355;font-weight:400;margin-left:4px">↩</a>'
+        +'<a onclick="__cmpChat.apagar('+m.id+','+(meu?'1':'0')+')" title="Apagar" style="cursor:pointer;color:#b09a86;font-weight:400;margin-left:4px">✕</a></div>'
         +citada
         +'<div style="white-space:pre-wrap;word-break:break-word">'+h(m.texto)+'</div>'
         +anexoHtml
@@ -17878,7 +17920,7 @@ async function monitTrazerAssessoria(id){
   }
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',esperaSessao); else esperaSessao();
   /* ponte para os onclick inline (o dock inteiro vive numa closure) */
-  window.__cmpChat={responderA:responderA, cancelarResposta:cancelarResposta, abrirBusca:abrirBusca, fixar:fixar, desfixar:desfixar, escolherCor:escolherCor};
+  window.__cmpChat={responderA:responderA, apagar:apagar, cancelarResposta:cancelarResposta, abrirBusca:abrirBusca, fixar:fixar, desfixar:desfixar, escolherCor:escolherCor};
 })();
 
 /* ===== Histórico do chat sobre o processo (painel amarelo na ficha) =====

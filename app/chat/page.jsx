@@ -207,7 +207,29 @@ export default function ChatMobile() {
     }).catch(() => setPushEstado('indisponivel'))
   }, [euId])
 
+  // iPhone só entrega notificação para site INSTALADO na tela de início. Em vez
+  // de esconder o botão, explicamos o caminho — em duas frases, com o passo a
+  // passo do próprio aparelho.
+  function explicarAlarmeIndisponivel() {
+    const ua = navigator.userAgent || ''
+    const ehIOS = /iPhone|iPad|iPod/i.test(ua)
+    const naTelaDeInicio = window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches
+    if (ehIOS && !naTelaDeInicio) {
+      alert('Para receber o alarme no iPhone, o chat precisa estar instalado na tela de início:\n\n'
+        + '1. toque no botão Compartilhar (o quadrado com a seta para cima);\n'
+        + '2. escolha "Adicionar à Tela de Início";\n'
+        + '3. abra o CMP Chat por esse ícone e toque no sino de novo.')
+      return
+    }
+    if (Notification && Notification.permission === 'denied') {
+      alert('As notificações deste site estão bloqueadas no aparelho.\n\nAbra os ajustes do navegador, permita notificações para este site e toque no sino de novo.')
+      return
+    }
+    alert('Este navegador não permite alarme. Abra o chat pelo Chrome (Android/computador) ou instale o site na tela de início, no iPhone.')
+  }
+
   async function ativarAlarme() {
+    if (pushEstado === 'indisponivel') { explicarAlarmeIndisponivel(); return }
     if (pushEstado === 'ativado') return
     setPushEstado('ativando')
     try {
@@ -446,12 +468,17 @@ export default function ChatMobile() {
       <div style={{ background: VERDE_ESCURO, color: '#fff', padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
         <div style={{ fontWeight: 700, fontSize: 16 }}>{alvo ? alvo.nome : '👥 Todos (equipe)'}</div>
         <button onClick={() => { setBuscaAberta(true); buscarProcessos('') }} title="Falar sobre um processo" style={{ marginLeft: 'auto', background: 'rgba(255,255,255,.15)', border: 0, color: '#fff', borderRadius: 8, padding: '6px 10px', fontSize: 13, cursor: 'pointer' }}>🔍 processo</button>
-        {pushEstado !== 'indisponivel' && (
-          <button onClick={ativarAlarme} disabled={pushEstado === 'ativando' || pushEstado === 'verificando'} title={pushEstado === 'ativado' ? 'Alarme ativado — você recebe notificação mesmo com o app fechado' : 'Ativar alarme (notificação no celular)'}
-            style={{ background: pushEstado === 'ativado' ? 'rgba(255,255,255,.3)' : 'rgba(255,255,255,.15)', border: 0, color: '#fff', borderRadius: 8, padding: '6px 10px', fontSize: 13, cursor: pushEstado === 'ativando' ? 'default' : 'pointer' }}>
-            {pushEstado === 'ativado' ? '🔔 ativado' : pushEstado === 'ativando' ? '🔔 …' : '🔕 ativar alarme'}
-          </button>
-        )}
+        {/* O sino SEMPRE aparece. Antes ele sumia quando o navegador não tinha
+            Push — que no iPhone é o caso normal enquanto o site não estiver
+            instalado na tela de início. Quem mais precisa do alarme era
+            justamente quem não via o botão nem descobria o porquê. */}
+        <button onClick={ativarAlarme} disabled={pushEstado === 'ativando' || pushEstado === 'verificando'}
+          title={pushEstado === 'ativado' ? 'Alarme ligado — você recebe notificação mesmo com o app fechado'
+            : pushEstado === 'indisponivel' ? 'Alarme indisponível neste navegador — toque para ver como resolver'
+            : 'Ativar alarme (notificação no celular)'}
+          style={{ background: pushEstado === 'ativado' ? 'rgba(255,255,255,.3)' : 'rgba(255,255,255,.15)', border: 0, color: '#fff', borderRadius: 8, padding: '6px 10px', fontSize: 13, cursor: pushEstado === 'ativando' ? 'default' : 'pointer' }}>
+          {pushEstado === 'ativado' ? '🔔 ativado' : pushEstado === 'ativando' ? '🔔 …' : pushEstado === 'indisponivel' ? '🔕 alarme' : '🔕 ativar alarme'}
+        </button>
         <button onClick={() => setSeletorCor(s => !s)} title="Escolher minha cor" style={{ background: 'rgba(255,255,255,.15)', border: 0, color: '#fff', borderRadius: 8, padding: '6px 10px', fontSize: 13, cursor: 'pointer' }}>🎨</button>
         <button onClick={sair} title="Sair" style={{ background: 'rgba(255,255,255,.15)', border: 0, color: '#fff', borderRadius: 8, padding: '6px 10px', fontSize: 13, cursor: 'pointer' }}>Sair</button>
       </div>
