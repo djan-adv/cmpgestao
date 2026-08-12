@@ -17398,6 +17398,8 @@ async function monitTrazerAssessoria(id){
          com o escritório agora. */
       +'<button id="cmp-chat-cliconv" title="Conversas com clientes" style="margin-left:auto;border:0;background:transparent;font-size:15px;line-height:1;cursor:pointer;padding:2px 4px;position:relative">📨'
       +'<span id="cmp-chat-cliconv-b" style="display:none;position:absolute;top:-2px;right:-4px;background:#b5342b;color:#fff;border-radius:9px;font-size:9.5px;font-weight:700;padding:0 4px;line-height:14px"></span></button>'
+      +'<button id="cmp-chat-fone" title="Ligar (voz) para a pessoa escolhida no seletor — conversa direta entre os dois aparelhos" style="border:0;background:transparent;font-size:15px;line-height:1;cursor:pointer;padding:2px 4px">📞</button>'
+      +'<button id="cmp-chat-video" title="Chamada de vídeo com a pessoa escolhida no seletor" style="border:0;background:transparent;font-size:15px;line-height:1;cursor:pointer;padding:2px 4px">🎥</button>'
       +'<button id="cmp-chat-sino" title="Ativar o alarme no celular para as mensagens da equipe" style="border:0;background:transparent;font-size:15px;line-height:1;cursor:pointer;padding:2px 4px">🔕</button>'
       +'<button id="cmp-chat-cor" title="Escolher minha cor no chat" style="border:0;background:transparent;font-size:15px;line-height:1;cursor:pointer;padding:2px 4px">🎨</button>'
       +'<button id="cmp-chat-min" title="Minimizar" style="border:0;background:transparent;color:#5a5326;font-weight:700;font-size:15px;line-height:1;cursor:pointer;padding:2px 4px">▁</button></div>'
@@ -17423,6 +17425,8 @@ async function monitTrazerAssessoria(id){
       if(typeof window.appCliListaConversas==='function') window.appCliListaConversas();
     };
     d.querySelector('#cmp-chat-sino').onclick=function(ev){ ev.stopPropagation(); ativarAlarmeEquipe(); };
+    d.querySelector('#cmp-chat-fone').onclick=function(ev){ ev.stopPropagation(); ligar(false); };
+    d.querySelector('#cmp-chat-video').onclick=function(ev){ ev.stopPropagation(); ligar(true); };
     conferirAlarmeEquipe();
     d.querySelector('#cmp-chat-resize').addEventListener('pointerdown', function(ev){ ev.stopPropagation(); iniciarResize(ev); });
     d.querySelector('#cmp-chat-env').onclick=enviar;
@@ -17749,6 +17753,7 @@ async function monitTrazerAssessoria(id){
       if(eu && porId[eu] && porId[eu].nome) euNome=porId[eu].nome;
       pessoas=todos.filter(function(u){ return u.id!==eu; });
       _pintarPara();
+      try{ _clAssinarTodos(); }catch(eC){}
     }catch(e){}
   }
   /* Desenha o seletor "para quem". Ficava dentro de carregarPessoas(), que roda
@@ -17942,7 +17947,154 @@ async function monitTrazerAssessoria(id){
   }
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',esperaSessao); else esperaSessao();
   /* ponte para os onclick inline (o dock inteiro vive numa closure) */
-  window.__cmpChat={responderA:responderA, apagar:apagar, cancelarResposta:cancelarResposta, abrirBusca:abrirBusca, fixar:fixar, desfixar:desfixar, escolherCor:escolherCor};
+
+  /* ===== Chamada de voz e vídeo, 1 a 1 =====
+     A conversa vai DIRETO de um navegador ao outro (WebRTC): nenhum servidor do
+     escritório — nem o Supabase — recebe áudio ou imagem. O Realtime é usado só
+     para os dois combinarem como se encontrar (oferta, resposta e candidatos de
+     rede); o conteúdo da chamada não passa por lá.
+     Limite conhecido: sem servidor TURN, redes que escondem o aparelho atrás de
+     NAT simétrico (algumas 4G corporativas) podem não fechar a conexão. Nesses
+     casos a tela avisa em vez de ficar chamando para sempre. */
+  var _cl={pc:null, local:null, remoto:null, canal:null, comQuem:null, nome:'', entrando:false, video:true, timeout:null};
+  var ICE={iceServers:[{urls:['stun:stun.l.google.com:19302','stun:stun1.l.google.com:19302']}]};
+  function _clCanalNome(a,b){ var x=[String(a),String(b)].sort(); return 'chamada:'+x[0]+':'+x[1]; }
+  function _clUI(){
+    var el=document.getElementById('cmp-call'); if(el) return el;
+    el=document.createElement('div'); el.id='cmp-call';
+    el.style.cssText='position:fixed;inset:0;background:#0d1420;z-index:400;display:none;flex-direction:column;color:#fff;font-family:inherit';
+    el.innerHTML=''
+      +'<div id="cl-topo" style="padding:12px 14px;display:flex;align-items:center;gap:10px;background:rgba(0,0,0,.35)">'
+        +'<b id="cl-nome" style="font-size:15px"></b><span id="cl-estado" style="font-size:12.5px;opacity:.8"></span></div>'
+      +'<div style="flex:1;position:relative;overflow:hidden;background:#000">'
+        +'<video id="cl-remoto" autoplay playsinline style="width:100%;height:100%;object-fit:cover"></video>'
+        +'<video id="cl-local" autoplay playsinline muted style="position:absolute;right:12px;bottom:12px;width:26vw;max-width:180px;border-radius:10px;border:2px solid rgba(255,255,255,.6);object-fit:cover"></video>'
+      +'</div>'
+      +'<div style="padding:14px;display:flex;gap:10px;justify-content:center;background:rgba(0,0,0,.35);padding-bottom:calc(14px + env(safe-area-inset-bottom))">'
+        +'<button id="cl-mic" onclick="__cmpChat.calMic()" style="border:0;border-radius:50%;width:52px;height:52px;font-size:20px;background:#2b3a4d;color:#fff;cursor:pointer">🎙</button>'
+        +'<button id="cl-cam" onclick="__cmpChat.calCam()" style="border:0;border-radius:50%;width:52px;height:52px;font-size:20px;background:#2b3a4d;color:#fff;cursor:pointer">🎥</button>'
+        +'<button onclick="__cmpChat.calDesligar()" title="Desligar" style="border:0;border-radius:50%;width:52px;height:52px;font-size:20px;background:#b5342b;color:#fff;cursor:pointer">✕</button>'
+      +'</div>';
+    document.body.appendChild(el);
+    return el;
+  }
+  function _clEstado(t){ var e=document.getElementById('cl-estado'); if(e) e.textContent=t?(' · '+t):''; }
+  function _clMostrar(nome,estado){
+    var el=_clUI(); el.style.display='flex';
+    var n=document.getElementById('cl-nome'); if(n) n.textContent=nome||'chamada';
+    _clEstado(estado);
+  }
+  function _clFechar(){ var el=document.getElementById('cmp-call'); if(el) el.style.display='none'; }
+  async function _clMidia(comVideo){
+    return await navigator.mediaDevices.getUserMedia({audio:true, video:comVideo?{facingMode:'user'}:false});
+  }
+  function _clLimpar(){
+    try{ if(_cl.pc) _cl.pc.close(); }catch(e){}
+    try{ if(_cl.local) _cl.local.getTracks().forEach(function(t){ t.stop(); }); }catch(e){}
+    if(_cl.timeout){ clearTimeout(_cl.timeout); _cl.timeout=null; }
+    _cl.pc=null; _cl.local=null; _cl.remoto=null; _cl.comQuem=null; _cl.entrando=false;
+    _clFechar();
+  }
+  function _clSair(){
+    try{ if(_cl.canal&&_cl.comQuem) _cl.canal.send({type:'broadcast',event:'sinal',payload:{de:eu,para:_cl.comQuem,tipo:'fim'}}); }catch(e){}
+    _clLimpar();
+  }
+  /* canal de sinalização: um por par de pessoas, aberto o tempo todo para poder
+     RECEBER chamada — quem só liga não precisaria dele, quem atende sim */
+  function _clAssinarTodos(){
+    if(!eu||!window.__sb) return;
+    (pessoas||[]).forEach(function(p){
+      var nome=_clCanalNome(eu,p.id);
+      if(_cl['ch_'+nome]) return;
+      var c=window.__sb.channel(nome,{config:{broadcast:{self:false}}});
+      c.on('broadcast',{event:'sinal'},function(m){ _clSinal(m.payload,c,p); }).subscribe();
+      _cl['ch_'+nome]=c;
+    });
+  }
+  async function _clSinal(s, canal, pessoa){
+    if(!s||s.para!==eu) return;
+    if(s.tipo==='fim'){ if(_cl.pc||_cl.entrando){ alert('Chamada encerrada.'); } _clLimpar(); return; }
+    if(s.tipo==='recusou'){ _clEstado('recusada'); setTimeout(_clLimpar,1200); return; }
+    if(s.tipo==='oferta'){
+      if(_cl.pc){ /* ocupado */ canal.send({type:'broadcast',event:'sinal',payload:{de:eu,para:s.de,tipo:'recusou'}}); return; }
+      var quem=(porId[s.de]&&porId[s.de].nome)||pessoa.nome||'colega';
+      if(!confirm('📞 '+quem+' está chamando'+(s.video?' em vídeo':'')+'.\n\nAtender?')){
+        canal.send({type:'broadcast',event:'sinal',payload:{de:eu,para:s.de,tipo:'recusou'}}); return;
+      }
+      try{ await _clAtender(s, canal, quem); }
+      catch(e){ alert('Não consegui atender: '+((e&&e.message)||e)); _clLimpar(); }
+      return;
+    }
+    if(s.tipo==='resposta' && _cl.pc){ try{ await _cl.pc.setRemoteDescription(s.sdp); _clEstado('conectando…'); }catch(e){} return; }
+    if(s.tipo==='ice' && _cl.pc){ try{ await _cl.pc.addIceCandidate(s.cand); }catch(e){} return; }
+  }
+  function _clNovoPC(canal, comQuem){
+    var pc=new RTCPeerConnection(ICE);
+    pc.onicecandidate=function(ev){
+      if(ev.candidate) canal.send({type:'broadcast',event:'sinal',payload:{de:eu,para:comQuem,tipo:'ice',cand:ev.candidate}});
+    };
+    pc.ontrack=function(ev){
+      _cl.remoto=ev.streams[0];
+      var v=document.getElementById('cl-remoto'); if(v) v.srcObject=_cl.remoto;
+      _clEstado('');
+    };
+    pc.onconnectionstatechange=function(){
+      var st=pc.connectionState;
+      if(st==='connected'){ _clEstado(''); if(_cl.timeout){ clearTimeout(_cl.timeout); _cl.timeout=null; } }
+      if(st==='failed'){ _clEstado('não foi possível conectar'); setTimeout(function(){ alert('A conexão não fechou. Isso costuma ser a rede do celular bloqueando ligação direta — tente no Wi-Fi.'); _clLimpar(); },300); }
+      if(st==='disconnected'||st==='closed'){ _clLimpar(); }
+    };
+    return pc;
+  }
+  async function ligar(comVideo){
+    var sel=document.getElementById('cmp-chat-para');
+    var alvo=sel&&sel.value;
+    if(!alvo){ alert('Escolha a pessoa no seletor ao lado do campo de escrever — a chamada é sempre privada, de um para um.'); return; }
+    if(_cl.pc){ alert('Já existe uma chamada em andamento.'); return; }
+    var nome=(porId[alvo]&&porId[alvo].nome)||'colega';
+    try{
+      _cl.video=!!comVideo;
+      _cl.local=await _clMidia(!!comVideo);
+    }catch(e){ alert('Preciso da permissão de microfone'+(comVideo?' e câmera':'')+' para ligar.\n\n'+((e&&e.message)||'')); return; }
+    var canal=_cl['ch_'+_clCanalNome(eu,alvo)];
+    if(!canal){ alert('Não consegui abrir o canal da chamada. Recarregue a página.'); _clLimpar(); return; }
+    _cl.canal=canal; _cl.comQuem=alvo; _cl.entrando=true;
+    _clMostrar(nome,'chamando…');
+    var v=document.getElementById('cl-local'); if(v) v.srcObject=_cl.local;
+    _cl.pc=_clNovoPC(canal, alvo);
+    _cl.local.getTracks().forEach(function(t){ _cl.pc.addTrack(t,_cl.local); });
+    var of=await _cl.pc.createOffer(); await _cl.pc.setLocalDescription(of);
+    canal.send({type:'broadcast',event:'sinal',payload:{de:eu,para:alvo,tipo:'oferta',sdp:of,video:!!comVideo}});
+    /* ninguém fica chamando para sempre: 45s sem resposta encerra */
+    _cl.timeout=setTimeout(function(){ if(!_cl.remoto){ alert('Sem resposta.'); _clSair(); } },45000);
+  }
+  async function _clAtender(s, canal, quem){
+    _cl.video=!!s.video;
+    _cl.local=await _clMidia(!!s.video);
+    _cl.canal=canal; _cl.comQuem=s.de;
+    _clMostrar(quem,'conectando…');
+    var v=document.getElementById('cl-local'); if(v) v.srcObject=_cl.local;
+    _cl.pc=_clNovoPC(canal, s.de);
+    _cl.local.getTracks().forEach(function(t){ _cl.pc.addTrack(t,_cl.local); });
+    await _cl.pc.setRemoteDescription(s.sdp);
+    var ans=await _cl.pc.createAnswer(); await _cl.pc.setLocalDescription(ans);
+    canal.send({type:'broadcast',event:'sinal',payload:{de:eu,para:s.de,tipo:'resposta',sdp:ans}});
+  }
+  function calMic(){
+    if(!_cl.local) return;
+    var t=_cl.local.getAudioTracks()[0]; if(!t) return;
+    t.enabled=!t.enabled;
+    var b=document.getElementById('cl-mic'); if(b){ b.textContent=t.enabled?'🎙':'🔇'; b.style.background=t.enabled?'#2b3a4d':'#7a2f2f'; }
+  }
+  function calCam(){
+    if(!_cl.local) return;
+    var t=_cl.local.getVideoTracks()[0];
+    if(!t){ alert('Esta chamada é só de voz.'); return; }
+    t.enabled=!t.enabled;
+    var b=document.getElementById('cl-cam'); if(b){ b.textContent=t.enabled?'🎥':'📷'; b.style.background=t.enabled?'#2b3a4d':'#7a2f2f'; }
+  }
+  window.__cmpChat={responderA:responderA, apagar:apagar, cancelarResposta:cancelarResposta, abrirBusca:abrirBusca, fixar:fixar, desfixar:desfixar, escolherCor:escolherCor,
+    ligar:ligar, calMic:calMic, calCam:calCam, calDesligar:_clSair};
 })();
 
 /* ===== Histórico do chat sobre o processo (painel amarelo na ficha) =====
