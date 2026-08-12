@@ -16993,8 +16993,17 @@ async function renderEstagiario(){
   el.innerHTML='<div class="note">Carregando…</div>';
   var orc=document.getElementById('estagiario-orcamento');
   try{
-    var r=await fetch('/api/robo/minutas?status=1'); var j=await r.json();
-    if(!j||!j.ok){ el.innerHTML='<div class="note">Falha ao carregar (o build pode não ter recompilado ainda).</div>'; return; }
+    var r=await fetch('/api/robo/minutas?status=1');
+    var bruto=await r.text();
+    var j=null; try{ j=JSON.parse(bruto); }catch(eJ){}
+    if(!j){
+      /* resposta vazia ou não-JSON: quase sempre a função caiu no servidor (ou
+         estourou o tempo). Mostrar o status ajuda mais que o erro de parse. */
+      el.innerHTML='<div class="note">Não consegui carregar a fila (resposta '+r.status+(r.status===504?' — o servidor demorou demais':'')+'). '
+        +'<a onclick="renderEstagiario()" style="cursor:pointer;color:#185FA5;text-decoration:underline">tentar de novo</a></div>';
+      return;
+    }
+    if(!j.ok){ el.innerHTML='<div class="note">Não consegui carregar a fila: '+finEsc(j.erro||'erro desconhecido')+' <a onclick="renderEstagiario()" style="cursor:pointer;color:#185FA5;text-decoration:underline">tentar de novo</a></div>'; return; }
     if(orc&&j.orcamento){
       var o=j.orcamento, pct=o.tetoBrl?Math.min(100,Math.round(o.gastoBrl/o.tetoBrl*100)):0;
       orc.innerHTML='Modo: <b>'+(j.modo==='api'?'robô redige pela API (custa)':'dossiê para redigir fora (sem custo de API)')+'</b>'
@@ -17041,7 +17050,9 @@ function _badgeMov(n){
 /* Carrega só o número, sem montar a tela: o menu já mostra a fila ao abrir o
    sistema, do mesmo jeito que o badge de e-mails. */
 async function atualizaBadgeMovimentar(){
-  try{ var r=await fetch('/api/robo/minutas?status=1'); var j=await r.json();
+  try{
+    var r=await fetch('/api/robo/minutas?status=1');
+    var t=await r.text(); var j=null; try{ j=JSON.parse(t); }catch(e2){}
     if(j&&j.ok) _badgeMov((j.fila||[]).length);
   }catch(e){}
 }
