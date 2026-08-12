@@ -30,6 +30,41 @@ async function usuario(request) {
   const u = await sb.auth.getUser(jwt)
   return (u && u.data && u.data.user) || null
 }
+// ——— Férias ———
+// Quem está de férias não recebe chat: nem privado, nem do grupo. O período é
+// registrado na tela de Acessos e mora em produtividade_config → 'assentos'
+// (mesma fonte que a tela usa), casado com a conta por e-mail e, na falta dele,
+// pelo nome. Falhando a leitura, o filtro devolve vazio: ninguém deixa de
+// receber mensagem por causa de um erro de infraestrutura.
+function _hojeBR() {
+  return new Date(Date.now() - 3 * 3600 * 1000).toISOString().slice(0, 10)
+}
+function _norm(s) {
+  return String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim()
+}
+async function idsEmFerias(admin, escritorioId) {
+  const fora = new Set()
+  try {
+    const { data: cfg } = await admin.from('produtividade_config').select('valor')
+      .eq('escritorio_id', escritorioId).eq('chave', 'assentos').maybeSingle()
+    if (!cfg || !cfg.valor) return fora
+    const assentos = JSON.parse(cfg.valor)
+    if (!Array.isArray(assentos)) return fora
+    const hoje = _hojeBR()
+    const emFerias = assentos.filter(a => {
+      const f = a && a.ferias
+      return f && f.fim && (!f.ini || hoje >= f.ini) && hoje <= f.fim
+    })
+    if (!emFerias.length) return fora
+    const emails = new Set(emFerias.map(a => String(a.email || '').toLowerCase()).filter(Boolean))
+    const nomes = new Set(emFerias.map(a => _norm(a.nome)).filter(Boolean))
+    const { data: contas } = await admin.from('usuarios').select('id,nome,email').eq('escritorio_id', escritorioId)
+    ;(contas || []).forEach(c => {
+      if (emails.has(String(c.email || '').toLowerCase()) || nomes.has(_norm(c.nome))) fora.add(c.id)
+    })
+  } catch (e) { /* nunca bloqueia o envio */ }
+  return fora
+}
 async function vapid() {
   const { data } = await svc().from('app_secrets').select('valor').eq('chave', 'vapid_chat').maybeSingle()
   return data && data.valor
@@ -81,12 +116,13 @@ export async function POST(request) {
     // origem_endpoint continua sendo descartado logo abaixo; agora é redundante
     // para o autor, mas segue valendo se um dia o próprio voltar a ser destino.
     const admin = svc()
+    const { data: eu } = await admin.from('usuarios').select('escritorio_id').eq('id', user.id).single()
+    const escritorioId = eu && eu.escritorio_id
     let destinatarios = []
     if (body.para_id) {
       destinatarios = [body.para_id]
     } else {
-      const { data: eu } = await admin.from('usuarios').select('escritorio_id').eq('id', user.id).single()
-      const { data: todos } = await admin.from('usuarios').select('id').eq('escritorio_id', eu && eu.escritorio_id)
+      const { data: todos } = await admin.from('usuarios').select('id').eq('escritorio_id', escritorioId)
       destinatarios = (todos || []).map(u => u.id)
     }
     // A regra do autor fica DEPOIS dos dois ramos, no único ponto por onde todos
@@ -97,7 +133,11 @@ export async function POST(request) {
     // Filtrar por user_id e não por aparelho é o que importa: quem escreve no
     // computador não pode receber alarme em NENHUM aparelho seu.
     destinatarios = [...new Set(destinatarios.filter(id => id && id !== user.id))]
-    if (!destinatarios.length) return Response.json({ ok: true, enviados: 0, motivo: 'sem destinatário além do autor' })
+    // Férias entra no MESMO ponto único, pelo mesmo motivo: privado e grupo
+    // passam os dois por aqui, então não há caminho que escape da regra.
+    const deFerias = await idsEmFerias(admin, escritorioId)
+    if (deFerias.size) destinatarios = destinatarios.filter(id => !deFerias.has(id))
+    if (!destinatarios.length) return Response.json({ ok: true, enviados: 0, motivo: 'sem destinatário (autor, ou todos de férias)' })
 
     const origem = String(body.origem_endpoint || '')
     const { data: todasSubs } = await admin.from('chat_push_subs').select('*').in('user_id', destinatarios)
