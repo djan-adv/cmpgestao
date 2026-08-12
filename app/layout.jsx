@@ -7,7 +7,10 @@ export const metadata = {
     icon: '/favicon-cmp.png',
     apple: '/apple-touch-icon.png',
   },
-  appleWebApp: { title: 'CMP.sign' },
+  // Nome sugerido ao "Adicionar à Tela de Início" no iPhone. Era 'CMP.sign' —
+  // nome do assinador — e aparecia até para quem estava instalando o gestão ou o
+  // chat, que é o caso de quem precisa do alarme.
+  appleWebApp: { title: 'CMPGestão' },
 }
 
 export default function RootLayout({ children }) {
