@@ -447,8 +447,8 @@ export default function ChatMobile() {
 
   // canais de chamada: um por colega, abertos o tempo todo — é o que permite
   // RECEBER ligação, não só fazer
-  useEffect(() => {
-    if (!euId || !pessoas.length) return
+  function assinarCanaisChamada() {
+    if (!euId) return
     pessoas.forEach(p => {
       const nome = nomeCanalChamada(euId, p.id)
       if (canaisCallRef.current[nome]) return
@@ -457,6 +457,25 @@ export default function ChatMobile() {
       c.subscribe()
       canaisCallRef.current[nome] = c
     })
+  }
+  useEffect(() => {
+    if (!euId || !pessoas.length) return
+    assinarCanaisChamada()
+  }, [euId, pessoas])   // eslint-disable-line react-hooks/exhaustive-deps
+  // celular suspende a aba em segundo plano e pode derrubar o websocket sem
+  // avisar — a ligação chega, mas o canal já está morto e o alarme não toca.
+  // Ao a pessoa voltar pra tela, descarta os canais antigos e assina de novo.
+  useEffect(() => {
+    function aoFicarVisivel() {
+      if (document.visibilityState !== 'visible' || !euId) return
+      Object.keys(canaisCallRef.current).forEach(nome => {
+        try { canaisCallRef.current[nome].unsubscribe() } catch (e) {}
+      })
+      canaisCallRef.current = {}
+      assinarCanaisChamada()
+    }
+    document.addEventListener('visibilitychange', aoFicarVisivel)
+    return () => document.removeEventListener('visibilitychange', aoFicarVisivel)
   }, [euId, pessoas])   // eslint-disable-line react-hooks/exhaustive-deps
 
   // token p/ exibir os prints (imagens) via /api/anexo — atualizado periodicamente
@@ -958,8 +977,13 @@ export default function ChatMobile() {
             <video autoPlay playsInline muted ref={el => { if (el && streamCallRef.current && el.srcObject !== streamCallRef.current) el.srcObject = streamCallRef.current }}
               style={{ position: 'absolute', right: 12, bottom: 12, width: '28vw', maxWidth: 150, borderRadius: 10, border: '2px solid rgba(255,255,255,.6)', objectFit: 'cover' }} />
             {!chamada.video && (
-              /* chamada só de voz: a logo fica de marca d'água no lugar do vídeo */
-              <img src="/logo_cmp_white.png" alt="" style={{ position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%,-50%)', width: '55%', maxWidth: 230, opacity: .35, pointerEvents: 'none' }} />
+              <>
+                {/* chamada só de voz: a logo fica de marca d'água no lugar do vídeo,
+                    com um telefone balançando por cima pra tela não ficar parada */}
+                <img src="/logo_cmp_white.png" alt="" style={{ position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%,-50%)', width: '55%', maxWidth: 230, opacity: .35, pointerEvents: 'none' }} />
+                <style>{'@keyframes cmpFoneToca{0%,100%{transform:translate(-50%,-50%) rotate(-16deg)}50%{transform:translate(-50%,-50%) rotate(16deg)}}'}</style>
+                <span style={{ position: 'absolute', left: '50%', top: '28%', fontSize: 44, pointerEvents: 'none', animation: 'cmpFoneToca 1.2s ease-in-out infinite' }}>📞</span>
+              </>
             )}
           </div>
           <div style={{ padding: 14, display: 'flex', gap: 12, justifyContent: 'center', background: 'rgba(0,0,0,.35)', paddingBottom: 'calc(14px + env(safe-area-inset-bottom))' }}>

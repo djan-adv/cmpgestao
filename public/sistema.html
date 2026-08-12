@@ -76,6 +76,7 @@
   .chk{font-size:13.5px;margin:4px 0;padding-left:20px;position:relative} .chk::before{content:"✓";position:absolute;left:0;color:var(--ok);font-weight:700}
   .searchbar{display:flex;gap:8px;margin-bottom:12px} .searchbar input{max-width:340px}
   @keyframes cmpGravPulse{0%,100%{opacity:1}50%{opacity:.25}}
+  @keyframes cmpFoneToca{0%,100%{transform:translate(-50%,-50%) rotate(-16deg)}50%{transform:translate(-50%,-50%) rotate(16deg)}}
   /* barra fixa: com 700 contatos, os dois nomes a mesclar ficam longe um do
      outro — o botão tem que continuar à mão sem voltar ao topo da lista */
   .searchbar.fixa{position:sticky;top:0;z-index:30;background:var(--bg);margin:0 -4px 12px;padding:9px 4px;box-shadow:0 8px 10px -9px rgba(30,39,51,.35)}
@@ -18108,7 +18109,9 @@ async function monitTrazerAssessoria(id){
         })
         .subscribe();
     }catch(e){}
-    document.addEventListener('visibilitychange',function(){ if(document.visibilityState==='visible') pintar(); });
+    document.addEventListener('visibilitychange',function(){
+      if(document.visibilityState==='visible'){ pintar(); try{ _clRessubscrever(); }catch(e){} }
+    });
     setInterval(varrer, 20000);   /* reserva, caso o tempo real caia */
     _atualizaChatJwt(); setInterval(_atualizaChatJwt, 4*60000); /* token p/ mostrar os prints (imagens) */
   }
@@ -18293,6 +18296,7 @@ async function monitTrazerAssessoria(id){
         +'<video id="cl-remoto" autoplay playsinline style="width:100%;height:100%;object-fit:cover"></video>'
         +'<video id="cl-local" autoplay playsinline muted style="position:absolute;right:12px;bottom:12px;width:26vw;max-width:180px;border-radius:10px;border:2px solid rgba(255,255,255,.6);object-fit:cover"></video>'
         +'<img id="cl-marca" src="/logo_cmp_white.png" alt="" style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:52%;max-width:250px;opacity:.35;pointer-events:none;display:none">'
+        +'<span id="cl-fone" style="position:absolute;left:50%;top:28%;font-size:48px;pointer-events:none;display:none;animation:cmpFoneToca 1.2s ease-in-out infinite">📞</span>'
       +'</div>'
       +'<div style="padding:14px;display:flex;gap:10px;justify-content:center;background:rgba(0,0,0,.35);padding-bottom:calc(14px + env(safe-area-inset-bottom))">'
         +'<button id="cl-mic" onclick="__cmpChat.calMic()" style="border:0;border-radius:50%;width:52px;height:52px;font-size:20px;background:#2b3a4d;color:#fff;cursor:pointer">🎙</button>'
@@ -18306,8 +18310,10 @@ async function monitTrazerAssessoria(id){
   function _clMostrar(nome,estado){
     var el=_clUI(); el.style.display='flex';
     var n=document.getElementById('cl-nome'); if(n) n.textContent=nome||'chamada';
-    /* chamada só de voz: a logo da CMP fica de marca d'água no lugar do vídeo */
+    /* chamada só de voz: a logo da CMP fica de marca d'água no lugar do vídeo,
+       com um telefone balançando por cima pra tela não ficar parada */
     var mq=document.getElementById('cl-marca'); if(mq) mq.style.display=_cl.video?'none':'block';
+    var mf=document.getElementById('cl-fone'); if(mf) mf.style.display=_cl.video?'none':'block';
     _clEstado(estado);
   }
   function _clFechar(){ var el=document.getElementById('cmp-call'); if(el) el.style.display='none'; }
@@ -18336,6 +18342,20 @@ async function monitTrazerAssessoria(id){
       c.on('broadcast',{event:'sinal'},function(m){ _clSinal(m.payload,c,p); }).subscribe();
       _cl['ch_'+nome]=c;
     });
+  }
+  /* o navegador (sobretudo celular) suspende a aba em segundo plano e pode
+     derrubar o websocket sem avisar — resultado: a chamada chega, mas o
+     canal já está morto e a tela nunca pergunta "Atender?". Ao voltar pra
+     tela, descarta os canais de chamada antigos e assina de novo — sem isso
+     só recarregando a página na mão volta a receber ligação. */
+  function _clRessubscrever(){
+    if(!eu||!window.__sb) return;
+    Object.keys(_cl).forEach(function(k){
+      if(k.indexOf('ch_')!==0) return;
+      try{ _cl[k].unsubscribe(); }catch(e){}
+      delete _cl[k];
+    });
+    _clAssinarTodos();
   }
   async function _clSinal(s, canal, pessoa){
     if(!s||s.para!==eu) return;
