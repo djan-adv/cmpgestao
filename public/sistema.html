@@ -16970,6 +16970,7 @@ async function monitTrazerAssessoria(id){
 
   function montar(){
     if(document.getElementById('cmp-chat')) return;
+    setTimeout(_pintarPara,0);   /* o <select> nasce logo abaixo, nesta mesma função */
     var d=document.createElement('div'); d.id='cmp-chat';
     var tam=_tamSalvo();
     d.style.cssText='position:fixed;right:16px;bottom:0;width:'+(tam?tam.w:390)+'px;max-width:94vw;z-index:95;font-family:inherit;font-size:13px;color:#1b1b1b';
@@ -17291,14 +17292,24 @@ async function monitTrazerAssessoria(id){
       porId={}; todos.forEach(function(u){ porId[u.id]=u; });
       if(eu && porId[eu] && porId[eu].nome) euNome=porId[eu].nome;
       pessoas=todos.filter(function(u){ return u.id!==eu; });
-      var s=document.getElementById('cmp-chat-para'); if(!s) return;
-      var curtos=_nomesCurtos(pessoas);
-      s.innerHTML='<option value="">👥 Todos</option>'+pessoas.map(function(p){
-        /* de férias continua na lista, mas cinza: some o destinatário e fica claro o porquê */
-        var fora=(typeof _nomeEstaDeFerias==='function')&&_nomeEstaDeFerias(p.nome);
-        return '<option value="'+p.id+'"'+(fora?' disabled':'')+'>'+(fora?'🏖 ':'🔒 ')+h(curtos[p.id]||(p.nome||'').split(' ')[0])+(fora?' (férias)':'')+'</option>';
-      }).join('');
+      _pintarPara();
     }catch(e){}
+  }
+  /* Desenha o seletor "para quem". Ficava dentro de carregarPessoas(), que roda
+     ANTES de montar() — e o <select> só nasce em montar(). Resultado: no
+     computador o campo ficava só com "Todos", sem os colegas, enquanto no
+     celular (outra tela) a lista aparecia. Agora é uma função à parte, chamada
+     nos dois momentos: quem chegar por último pinta. */
+  function _pintarPara(){
+    var s=document.getElementById('cmp-chat-para'); if(!s||!pessoas.length) return;
+    var curtos=_nomesCurtos(pessoas);
+    var atual=s.value;
+    s.innerHTML='<option value="">👥 Todos</option>'+pessoas.map(function(p){
+      /* de férias continua na lista, mas cinza: some o destinatário e fica claro o porquê */
+      var fora=(typeof _nomeEstaDeFerias==='function')&&_nomeEstaDeFerias(p.nome);
+      return '<option value="'+p.id+'"'+(fora?' disabled':'')+'>'+(fora?'🏖 ':'🔒 ')+h(curtos[p.id]||(p.nome||'').split(' ')[0])+(fora?' (férias)':'')+'</option>';
+    }).join('');
+    if(atual) s.value=atual;
   }
   async function carregar(){
     try{
@@ -17433,7 +17444,9 @@ async function monitTrazerAssessoria(id){
          e não com o nome de quem está logado agora) */
       euNome=(u.data.user.email||'').split('@')[0];
     }catch(e){ pronto=false; setTimeout(esperaSessao,2000); return; }
-    await carregarPessoas(); montar(); await carregar();
+    /* montar ANTES: o seletor de destinatário só existe depois dele, e
+       carregarPessoas() precisa do campo na tela para preenchê-lo */
+    montar(); await carregarPessoas(); await carregar();
     try{
       window.__sb.channel('chat-cmp')
         .on('postgres_changes',{event:'INSERT',schema:'public',table:'chat_mensagens'},function(p){ chegou(p.new); })
