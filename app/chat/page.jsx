@@ -604,7 +604,10 @@ export default function ChatMobile() {
       try { ctx.resume() } catch (e) {}
       const master = ctx.createGain(); master.gain.value = 1; master.connect(ctx.destination)
       const t0 = ctx.currentTime + 0.05
-      for (let c = 0; c < 15; c++) {
+      // quem liga desiste depois de 45s sem resposta (timeoutCallRef) — o
+      // toque tem que cobrir essa janela inteira, senão para de tocar com a
+      // tela ainda pedindo "Atender?"
+      for (let c = 0; c < 24; c++) {
         for (const off of [0, 0.55]) {
           const t = t0 + c * 2 + off
           const o = ctx.createOscillator(), g = ctx.createGain()

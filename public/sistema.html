@@ -18263,7 +18263,10 @@ async function monitTrazerAssessoria(id){
       var ctx=_clAudioCtx; try{ ctx.resume(); }catch(e){}
       var master=ctx.createGain(); master.gain.value=1; master.connect(ctx.destination);
       var t0=ctx.currentTime+0.05;
-      for(var c=0;c<15;c++){
+      /* quem liga desiste depois de 45s sem resposta (_cl.timeout) — o toque
+         tem que cobrir essa janela inteira, senão para de tocar com a tela
+         ainda pedindo "Atender?" */
+      for(var c=0;c<24;c++){
         [0,0.55].forEach(function(off){
           var t=t0+c*2+off;
           var o=ctx.createOscillator(), g=ctx.createGain();
