@@ -15199,7 +15199,7 @@ function setDilView(v){
     var n=new Date();
     w.innerHTML='<span id="gbusca-wrap"><input id="gbusca" placeholder="Buscar processo, cliente ou CPF…  (Ctrl+K)" autocomplete="off"><div id="gbusca-drop"></div></span>'
       +'<span id="tb-data">'+dias[n.getDay()]+', '+n.getDate()+' de '+ms[n.getMonth()]+'</span>'
-      +'<span id="tb-sino" title="Publicações a triar">🔔<i id="tb-badge"></i></span>';
+      +'<span id="tb-sino" title="Publicações a triar — abrir a triagem">⚑<i id="tb-badge"></i></span>';
     var who=tb.querySelector('.who');
     tb.insertBefore(w, who||null);
     document.getElementById('tb-sino').onclick=function(){ if(typeof go==='function') go('triagem'); };
