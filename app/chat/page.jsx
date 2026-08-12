@@ -417,6 +417,47 @@ export default function ChatMobile() {
   // só combina o encontro. O nome do canal é o MESMO do chat do sistema, por
   // isso computador liga para celular e vice-versa.
   const ICE_CALL = { iceServers: [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }] }
+  // Campainha agendada inteira na linha do tempo do áudio: o confirm() congela o
+  // JavaScript, mas o áudio roda em outra thread e segue tocando enquanto a
+  // pergunta 'Atender?' está na tela. O contexto é destravado no primeiro toque.
+  const audioCtxRef = useRef(null)
+  useEffect(() => {
+    const destravar = () => {
+      try {
+        const AC = window.AudioContext || window.webkitAudioContext
+        if (!AC) return
+        if (!audioCtxRef.current) audioCtxRef.current = new AC()
+        if (audioCtxRef.current.state === 'suspended') audioCtxRef.current.resume()
+      } catch (e) {}
+    }
+    document.addEventListener('touchend', destravar, true)
+    document.addEventListener('click', destravar, true)
+    return () => { document.removeEventListener('touchend', destravar, true); document.removeEventListener('click', destravar, true) }
+  }, [])
+  function campainha() {
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext
+      if (!AC) return null
+      if (!audioCtxRef.current) audioCtxRef.current = new AC()
+      const ctx = audioCtxRef.current
+      try { ctx.resume() } catch (e) {}
+      const master = ctx.createGain(); master.gain.value = 1; master.connect(ctx.destination)
+      const t0 = ctx.currentTime + 0.05
+      for (let c = 0; c < 15; c++) {
+        for (const off of [0, 0.55]) {
+          const t = t0 + c * 2 + off
+          const o = ctx.createOscillator(), g = ctx.createGain()
+          o.type = 'sine'; o.frequency.value = 880
+          g.gain.setValueAtTime(0.0001, t)
+          g.gain.exponentialRampToValueAtTime(0.25, t + 0.04)
+          g.gain.exponentialRampToValueAtTime(0.0001, t + 0.5)
+          o.connect(g); g.connect(master)
+          o.start(t); o.stop(t + 0.55)
+        }
+      }
+      return { stop: () => { try { master.gain.value = 0; master.disconnect() } catch (e) {} } }
+    } catch (e) { return null }
+  }
   function nomeCanalChamada(a, b) { const x = [String(a), String(b)].sort(); return 'chamada:' + x[0] + ':' + x[1] }
   function limparChamada() {
     try { pcCallRef.current && pcCallRef.current.close() } catch (e) {}
@@ -456,6 +497,9 @@ export default function ChatMobile() {
     stream.getTracks().forEach(t => pc.addTrack(t, stream))
     const of = await pc.createOffer(); await pc.setLocalDescription(of)
     canal.send({ type: 'broadcast', event: 'sinal', payload: { de: euId, para: alvo.id, tipo: 'oferta', sdp: of, video: !!comVideo } })
+    // o alarme (push) toca no celular mesmo com o app fechado — a pessoa abre o
+    // chat e a oferta ainda está de pé
+    chamarPush('notificar', { autor_id: euId, autor_nome: (porId[euId] && porId[euId].nome) || '', texto: '📞 Chamada de ' + (comVideo ? 'vídeo' : 'voz') + ' — abra o chat para atender', para_id: alvo.id })
     timeoutCallRef.current = setTimeout(() => { if (!remotoStreamRef.current) { alert('Sem resposta.'); desligarChamada() } }, 45000)
   }
   async function atenderChamada(sinal, canal, quem) {
@@ -476,7 +520,11 @@ export default function ChatMobile() {
     if (sig.tipo === 'oferta') {
       if (pcCallRef.current) { canal.send({ type: 'broadcast', event: 'sinal', payload: { de: euId, para: sig.de, tipo: 'recusou' } }); return }
       const quem = (porId[sig.de] && porId[sig.de].nome) || pessoa.nome || 'colega'
-      if (!confirm('📞 ' + quem + ' está chamando' + (sig.video ? ' em vídeo' : '') + '.\n\nAtender?')) {
+      const camp = campainha()
+      try { if (navigator.vibrate) navigator.vibrate([400, 180, 400, 180, 600]) } catch (e) {}
+      const atende = confirm('📞 ' + quem + ' está chamando' + (sig.video ? ' em vídeo' : '') + '.\n\nAtender?')
+      if (camp) camp.stop()
+      if (!atende) {
         canal.send({ type: 'broadcast', event: 'sinal', payload: { de: euId, para: sig.de, tipo: 'recusou' } }); return
       }
       try { await atenderChamada(sig, canal, quem) } catch (e) { alert('Não consegui atender: ' + ((e && e.message) || e)); limparChamada() }
@@ -725,6 +773,10 @@ export default function ChatMobile() {
               style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
             <video autoPlay playsInline muted ref={el => { if (el && streamCallRef.current && el.srcObject !== streamCallRef.current) el.srcObject = streamCallRef.current }}
               style={{ position: 'absolute', right: 12, bottom: 12, width: '28vw', maxWidth: 150, borderRadius: 10, border: '2px solid rgba(255,255,255,.6)', objectFit: 'cover' }} />
+            {!chamada.video && (
+              /* chamada só de voz: a logo fica de marca d'água no lugar do vídeo */
+              <img src="/logo_cmp_white.png" alt="" style={{ position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%,-50%)', width: '55%', maxWidth: 230, opacity: .35, pointerEvents: 'none' }} />
+            )}
           </div>
           <div style={{ padding: 14, display: 'flex', gap: 12, justifyContent: 'center', background: 'rgba(0,0,0,.35)', paddingBottom: 'calc(14px + env(safe-area-inset-bottom))' }}>
             <button onClick={chamadaMic} style={{ border: 0, borderRadius: '50%', width: 56, height: 56, fontSize: 22, background: chamada.mudo ? '#7a2f2f' : '#2b3a4d', color: '#fff', cursor: 'pointer' }}>{chamada.mudo ? '🔇' : '🎙'}</button>
