@@ -36,10 +36,14 @@ export default function Sala({ params }) {
   const [falas, setFalas] = useState([])
   const [transcrevendo, setTranscrevendo] = useState(false)
 
-  const localRef = useRef(null), remotoRef = useRef(null)
-  const pcRef = useRef(null), canalRef = useRef(null), streamRef = useRef(null)
-  const recRef = useRef(null), euRef = useRef('')
+  const [remotos, setRemotos] = useState([])   // [{id, nome}] — quem mais está na sala
+  const localRef = useRef(null)
+  const canalRef = useRef(null), streamRef = useRef(null)
+  const recRef = useRef(null), euRef = useRef(''), euIdRef = useRef('')
   const nomeEscritorioRef = useRef('')
+  // um RTCPeerConnection por participante (mesh completo) — até uns 5 na sala
+  // isso aguenta numa boa; o gargalo seria o navegador, não a lógica
+  const peersRef = useRef({})   // { [id]: {pc, stream, nome, el} }
 
   useEffect(() => {
     let vivo = true
@@ -48,10 +52,11 @@ export default function Sala({ params }) {
         if (!vivo) return
         if (!j || !j.ok) { setErro((j && j.erro) || 'Não consegui abrir a sala.'); setFase('erro'); return }
         setInfo(j)
-        // o nome da CLIENTE é sugestão só para quem chega pelo link sem login;
-        // para quem é do escritório, vale o nome do cadastro (senão a
-        // transcrição sai toda com o nome da cliente, como aconteceu)
-        setNome(prev => nomeEscritorioRef.current || prev || j.cliente_nome || '')
+        // quem é do escritório entra com o nome do cadastro; quem chega pelo
+        // link (cliente, ou qualquer outro convidado) escreve o PRÓPRIO nome —
+        // pré-preencher com o nome da cliente saía errado quando quem entrava
+        // era outra pessoa (advogado da parte contrária, testemunha etc.)
+        setNome(prev => nomeEscritorioRef.current || prev || '')
         setFase('entrada')
       }).catch(() => { if (vivo) { setErro('Sem conexão.'); setFase('erro') } })
     // quem já está logado no sistema é do escritório: rótulo do lado + nome real
@@ -107,21 +112,55 @@ export default function Sala({ params }) {
 
   function pararTudo() {
     try { const r = recRef.current; recRef.current = null; if (r) r.stop() } catch (e) {}
-    try { pcRef.current && pcRef.current.close() } catch (e) {}
+    Object.keys(peersRef.current).forEach(id => { try { peersRef.current[id].pc && peersRef.current[id].pc.close() } catch (e) {} })
+    peersRef.current = {}
     try { streamRef.current && streamRef.current.getTracks().forEach(t => t.stop()) } catch (e) {}
-    pcRef.current = null; streamRef.current = null
+    streamRef.current = null
   }
 
-  function novoPC(canal) {
+  function adicionarParticipante(id, nomeRemoto) {
+    setRemotos(prev => prev.find(p => p.id === id)
+      ? (nomeRemoto ? prev.map(p => p.id === id ? { ...p, nome: nomeRemoto } : p) : prev)
+      : [...prev, { id, nome: nomeRemoto || 'participante' }])
+  }
+  function removerParticipante(id) {
+    try { peersRef.current[id] && peersRef.current[id].pc && peersRef.current[id].pc.close() } catch (e) {}
+    delete peersRef.current[id]
+    setRemotos(prev => prev.filter(p => p.id !== id))
+  }
+  // um <video> por participante; o ref liga o elemento à stream assim que os
+  // dois existirem (a stream pode chegar antes ou depois do <video> montar)
+  function refDoVideo(id) {
+    return el => {
+      const p = peersRef.current[id] = peersRef.current[id] || {}
+      p.el = el
+      if (el && p.stream) el.srcObject = p.stream
+    }
+  }
+  // uma ligação (RTCPeerConnection) por participante — quem entra manda
+  // oferta pra todo mundo que já está na sala, e vice-versa, então o grupo
+  // inteiro fecha o mesh sozinho, sem precisar de servidor de mídia
+  function garantirPC(id, nomeRemoto) {
+    const existente = peersRef.current[id]
+    if (existente && existente.pc) { if (nomeRemoto) existente.nome = nomeRemoto; return existente.pc }
     const pc = new RTCPeerConnection(ICE)
-    pc.onicecandidate = ev => { if (ev.candidate) canal.send({ type: 'broadcast', event: 'sinal', payload: { tipo: 'ice', cand: ev.candidate, de: euRef.current } }) }
-    pc.ontrack = ev => { if (remotoRef.current) remotoRef.current.srcObject = ev.streams[0]; setEstado('') }
+    pc.onicecandidate = ev => {
+      if (ev.candidate && canalRef.current) canalRef.current.send({ type: 'broadcast', event: 'sinal', payload: { tipo: 'ice', cand: ev.candidate, de: euIdRef.current, para: id } })
+    }
+    pc.ontrack = ev => {
+      const p = peersRef.current[id]; if (!p) return
+      p.stream = ev.streams[0]
+      if (p.el) p.el.srcObject = p.stream
+      setEstado('')
+    }
     pc.onconnectionstatechange = () => {
       const st = pc.connectionState
       if (st === 'connected') setEstado('')
-      if (st === 'failed') setEstado('não consegui conectar — tente pelo Wi-Fi')
-      if (st === 'disconnected') setEstado('a outra pessoa saiu')
+      if (st === 'failed') { setEstado('não consegui conectar com ' + ((peersRef.current[id] && peersRef.current[id].nome) || 'alguém') + ' — tente pelo Wi-Fi'); removerParticipante(id) }
+      if (st === 'disconnected' || st === 'closed') removerParticipante(id)
     }
+    if (streamRef.current) streamRef.current.getTracks().forEach(t => pc.addTrack(t, streamRef.current))
+    peersRef.current[id] = { ...(peersRef.current[id] || {}), pc, nome: nomeRemoto || (peersRef.current[id] && peersRef.current[id].nome) || 'participante' }
     return pc
   }
 
@@ -129,6 +168,7 @@ export default function Sala({ params }) {
     const meu = (nome || '').trim()
     if (meu.length < 2) { alert('Escreva seu nome para entrar.'); return }
     euRef.current = meu
+    euIdRef.current = (window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID() : (Date.now() + '-' + Math.random())
     let stream
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: comVideo ? { facingMode: 'user' } : false })
@@ -138,14 +178,10 @@ export default function Sala({ params }) {
     }
     streamRef.current = stream
     setFase('chamada')
-    setTimeout(() => { if (localRef.current) localRef.current.srcObject = stream }, 0)
     fetch('/api/sala', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ acao: 'entrar', token }) }).catch(() => {})
 
     const canal = supabase.channel('sala:' + token, { config: { broadcast: { self: false } } })
     canalRef.current = canal
-    const pc = novoPC(canal)
-    pcRef.current = pc
-    stream.getTracks().forEach(t => pc.addTrack(t, stream))
 
     canal.on('broadcast', { event: 'fala' }, m => {
       const p = m.payload || {}
@@ -155,34 +191,50 @@ export default function Sala({ params }) {
       const s = m.payload || {}
       try {
         if (s.tipo === 'cheguei') {
-          // quem já estava na sala convida quem acabou de chegar
+          // quem já estava na sala convida quem acabou de chegar — se já
+          // tinha ligação com essa pessoa, não manda oferta de novo
+          adicionarParticipante(s.de, s.nome)
+          if (peersRef.current[s.de] && peersRef.current[s.de].pc) return
+          const pc = garantirPC(s.de, s.nome)
           const of = await pc.createOffer()
           await pc.setLocalDescription(of)
-          canal.send({ type: 'broadcast', event: 'sinal', payload: { tipo: 'oferta', sdp: of, de: euRef.current } })
+          canal.send({ type: 'broadcast', event: 'sinal', payload: { tipo: 'oferta', sdp: of, de: euIdRef.current, para: s.de, nome: euRef.current } })
           setEstado('conectando…')
-        } else if (s.tipo === 'oferta') {
+        } else if (s.tipo === 'oferta' && s.para === euIdRef.current) {
+          adicionarParticipante(s.de, s.nome)
+          const pc = garantirPC(s.de, s.nome)
           await pc.setRemoteDescription(s.sdp)
           const ans = await pc.createAnswer()
           await pc.setLocalDescription(ans)
-          canal.send({ type: 'broadcast', event: 'sinal', payload: { tipo: 'resposta', sdp: ans, de: euRef.current } })
+          canal.send({ type: 'broadcast', event: 'sinal', payload: { tipo: 'resposta', sdp: ans, de: euIdRef.current, para: s.de } })
           setEstado('conectando…')
-        } else if (s.tipo === 'resposta') {
-          await pc.setRemoteDescription(s.sdp)
-        } else if (s.tipo === 'ice') {
-          await pc.addIceCandidate(s.cand)
+        } else if (s.tipo === 'resposta' && s.para === euIdRef.current) {
+          const p = peersRef.current[s.de]
+          if (p && p.pc) await p.pc.setRemoteDescription(s.sdp)
+        } else if (s.tipo === 'ice' && s.para === euIdRef.current) {
+          const p = peersRef.current[s.de]
+          if (p && p.pc) await p.pc.addIceCandidate(s.cand)
         } else if (s.tipo === 'saiu') {
-          setEstado('a outra pessoa saiu')
+          const nomeSaiu = (peersRef.current[s.de] && peersRef.current[s.de].nome) || 'a outra pessoa'
+          removerParticipante(s.de)
+          setEstado(nomeSaiu + ' saiu')
         }
       } catch (e) { /* sinal fora de ordem não derruba a chamada */ }
     })
     canal.subscribe(st => {
-      if (st === 'SUBSCRIBED') canal.send({ type: 'broadcast', event: 'sinal', payload: { tipo: 'cheguei', de: euRef.current } })
+      if (st === 'SUBSCRIBED') canal.send({ type: 'broadcast', event: 'sinal', payload: { tipo: 'cheguei', de: euIdRef.current, nome: euRef.current } })
     })
     ligarTranscricao()
   }
 
+  // o vídeo local só existe DEPOIS que a tela de chamada monta — em vez do
+  // truque de setTimeout(0), espera o React terminar de desenhar
+  useEffect(() => {
+    if (fase === 'chamada' && localRef.current && streamRef.current) localRef.current.srcObject = streamRef.current
+  }, [fase])
+
   async function sair() {
-    try { canalRef.current && canalRef.current.send({ type: 'broadcast', event: 'sinal', payload: { tipo: 'saiu' } }) } catch (e) {}
+    try { canalRef.current && canalRef.current.send({ type: 'broadcast', event: 'sinal', payload: { tipo: 'saiu', de: euIdRef.current } }) } catch (e) {}
     pararTudo()
     if (souEscritorio) {
       // encerrar é do escritório: fecha a sala e guarda a transcrição no processo
@@ -192,7 +244,7 @@ export default function Sala({ params }) {
         alert(j && j.ok ? ('Reunião encerrada. ' + (j.falas || 0) + ' fala(s) transcritas' + (j.no_historico ? ' e guardadas no histórico do processo.' : '.')) : 'Reunião encerrada.')
       } catch (e) {}
     }
-    setFase('entrada'); setFalas([]); setEstado('esperando a outra pessoa…')
+    setFase('entrada'); setFalas([]); setRemotos([]); setEstado('esperando a outra pessoa…')
   }
 
   useEffect(() => () => pararTudo(), [])
@@ -231,15 +283,41 @@ export default function Sala({ params }) {
       <div style={{ padding: '10px 14px', background: 'rgba(0,0,0,.35)', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         <b style={{ fontSize: 15 }}>{(info && info.titulo) || 'Reunião'}</b>
         <span style={{ fontSize: 12.5, opacity: .8 }}>{estado}</span>
+        {remotos.length > 1 && <span style={{ fontSize: 12, opacity: .8 }}>· {remotos.length + 1} na sala</span>}
         <span style={{ marginLeft: 'auto', fontSize: 11.5, opacity: .75 }}>
           {transcrevendo ? '● transcrevendo' : 'sem transcrição neste navegador'}
         </span>
       </div>
 
       <div style={{ flex: 1, position: 'relative', background: '#000', minHeight: 0 }}>
-        <video ref={remotoRef} autoPlay playsInline style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-        <video ref={localRef} autoPlay playsInline muted
-          style={{ position: 'absolute', right: 12, bottom: 12, width: '26vw', maxWidth: 170, borderRadius: 10, border: '2px solid rgba(255,255,255,.6)', objectFit: 'cover' }} />
+        {remotos.length <= 1 ? (
+          // caso comum (dois na sala): remoto em tela cheia + eu num cantinho,
+          // do jeito que sempre foi
+          <>
+            {remotos[0]
+              ? <video key={remotos[0].id} autoPlay playsInline ref={refDoVideo(remotos[0].id)}
+                  style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+              : <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,.6)', fontSize: 14 }}>
+                  {estado || 'esperando a outra pessoa…'}
+                </div>}
+            <video ref={localRef} autoPlay playsInline muted
+              style={{ position: 'absolute', right: 12, bottom: 12, width: '26vw', maxWidth: 170, borderRadius: 10, border: '2px solid rgba(255,255,255,.6)', objectFit: 'cover' }} />
+          </>
+        ) : (
+          // três ou mais: grade com todo mundo, eu incluído — como Meet/Zoom
+          <div style={{ position: 'absolute', inset: 0, display: 'grid', gridTemplateColumns: 'repeat(' + Math.min(2, remotos.length + 1) + ',1fr)', gap: 2 }}>
+            {remotos.map(p => (
+              <div key={p.id} style={{ position: 'relative', background: '#111' }}>
+                <video autoPlay playsInline ref={refDoVideo(p.id)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                <span style={{ position: 'absolute', left: 6, bottom: 6, fontSize: 11, background: 'rgba(0,0,0,.5)', padding: '2px 7px', borderRadius: 6 }}>{p.nome}</span>
+              </div>
+            ))}
+            <div style={{ position: 'relative', background: '#111' }}>
+              <video ref={localRef} autoPlay playsInline muted style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              <span style={{ position: 'absolute', left: 6, bottom: 6, fontSize: 11, background: 'rgba(0,0,0,.5)', padding: '2px 7px', borderRadius: 6 }}>você</span>
+            </div>
+          </div>
+        )}
       </div>
 
       {falas.length > 0 && (
