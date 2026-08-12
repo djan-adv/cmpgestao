@@ -113,6 +113,13 @@ export default function ChatMobile() {
   const inputRef = useRef(null)
   const ultimoIdRef = useRef(0)
 
+  // ——— chamada de voz/vídeo (mesmo protocolo do chat do sistema, então dá
+  // para ligar do computador para o celular e vice-versa) ———
+  const [chamada, setChamada] = useState(null)   // {nome, video, estado, mudo, semCam}
+  const pcCallRef = useRef(null), streamCallRef = useRef(null), remotoStreamRef = useRef(null)
+  const canalCallRef = useRef(null), comQuemRef = useRef(null), timeoutCallRef = useRef(null)
+  const canaisCallRef = useRef({})
+
   const euId = user && user.id
   const rotulos = nomesCurtos(pessoas)
 
@@ -284,6 +291,20 @@ export default function ChatMobile() {
 
   const trocarAlvo = useCallback(a => { setAlvo(a); if (euId) salvarAlvo(euId, a) }, [euId])
 
+  // canais de chamada: um por colega, abertos o tempo todo — é o que permite
+  // RECEBER ligação, não só fazer
+  useEffect(() => {
+    if (!euId || !pessoas.length) return
+    pessoas.forEach(p => {
+      const nome = nomeCanalChamada(euId, p.id)
+      if (canaisCallRef.current[nome]) return
+      const c = supabase.channel(nome, { config: { broadcast: { self: false } } })
+      c.on('broadcast', { event: 'sinal' }, m => { sinalChamada(m.payload, c, p) })
+      c.subscribe()
+      canaisCallRef.current[nome] = c
+    })
+  }, [euId, pessoas])   // eslint-disable-line react-hooks/exhaustive-deps
+
   // token p/ exibir os prints (imagens) via /api/anexo — atualizado periodicamente
   useEffect(() => {
     if (!euId) return
@@ -375,6 +396,105 @@ export default function ChatMobile() {
 
   // vai direto pro campo de digitar — nada se abre por cima roubando o foco/tela.
   // Quem quiser vincular a um processo toca em "🔍 processo" por conta própria.
+  // ——— apagar mensagem: para todos (só o autor) ou só da minha tela ———
+  async function apagarMsg(m) {
+    if (!confirm('Apagar esta mensagem?')) return
+    if (m.autor_id === euId) {
+      const paraTodos = confirm('Apagar para quem?\n\nOK = para TODOS (some para o escritório inteiro).\nCancelar = só para MIM (os outros continuam vendo).')
+      if (paraTodos) {
+        const r = await supabase.from('chat_mensagens').delete().eq('id', m.id)
+        if (r.error) { alert('Não consegui apagar: ' + r.error.message); return }
+        setMsgs(cur => cur.filter(x => x.id !== m.id)); return
+      }
+    } else if (!confirm('Ela some só da SUA tela — quem já recebeu continua vendo. Continuar?')) return
+    const rp = await supabase.rpc('chat_ocultar_para_mim', { msg_id: m.id })
+    if (rp.error) { alert('Não consegui apagar: ' + rp.error.message); return }
+    setMsgs(cur => cur.filter(x => x.id !== m.id))
+  }
+
+  // ——— chamada 1:1 ———
+  // A conversa vai direto entre os dois aparelhos (WebRTC); o canal do Supabase
+  // só combina o encontro. O nome do canal é o MESMO do chat do sistema, por
+  // isso computador liga para celular e vice-versa.
+  const ICE_CALL = { iceServers: [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }] }
+  function nomeCanalChamada(a, b) { const x = [String(a), String(b)].sort(); return 'chamada:' + x[0] + ':' + x[1] }
+  function limparChamada() {
+    try { pcCallRef.current && pcCallRef.current.close() } catch (e) {}
+    try { streamCallRef.current && streamCallRef.current.getTracks().forEach(t => t.stop()) } catch (e) {}
+    if (timeoutCallRef.current) { clearTimeout(timeoutCallRef.current); timeoutCallRef.current = null }
+    pcCallRef.current = null; streamCallRef.current = null; remotoStreamRef.current = null; comQuemRef.current = null
+    setChamada(null)
+  }
+  function desligarChamada() {
+    try { if (canalCallRef.current && comQuemRef.current) canalCallRef.current.send({ type: 'broadcast', event: 'sinal', payload: { de: euId, para: comQuemRef.current, tipo: 'fim' } }) } catch (e) {}
+    limparChamada()
+  }
+  function novoPCChamada(canal, comQuem) {
+    const pc = new RTCPeerConnection(ICE_CALL)
+    pc.onicecandidate = ev => { if (ev.candidate) canal.send({ type: 'broadcast', event: 'sinal', payload: { de: euId, para: comQuem, tipo: 'ice', cand: ev.candidate } }) }
+    pc.ontrack = ev => { remotoStreamRef.current = ev.streams[0]; setChamada(c => c ? { ...c, estado: '' } : c) }
+    pc.onconnectionstatechange = () => {
+      const st = pc.connectionState
+      if (st === 'connected') { setChamada(c => c ? { ...c, estado: '' } : c); if (timeoutCallRef.current) { clearTimeout(timeoutCallRef.current); timeoutCallRef.current = null } }
+      if (st === 'failed') { alert('A conexão não fechou — isso costuma ser a rede móvel bloqueando ligação direta. Tente no Wi-Fi.'); limparChamada() }
+      if (st === 'disconnected' || st === 'closed') limparChamada()
+    }
+    return pc
+  }
+  async function ligarChamada(comVideo) {
+    if (!alvo) { alert('Abra uma conversa privada (toque no nome da pessoa) para ligar.'); return }
+    if (pcCallRef.current) { alert('Já existe uma chamada em andamento.'); return }
+    let stream
+    try { stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: comVideo ? { facingMode: 'user' } : false }) }
+    catch (e) { alert('Preciso da permissão do microfone' + (comVideo ? ' e da câmera' : '') + ' para ligar.'); return }
+    const canal = canaisCallRef.current[nomeCanalChamada(euId, alvo.id)]
+    if (!canal) { alert('Canal da chamada ainda não abriu — tente de novo em alguns segundos.'); stream.getTracks().forEach(t => t.stop()); return }
+    streamCallRef.current = stream; canalCallRef.current = canal; comQuemRef.current = alvo.id
+    setChamada({ nome: alvo.nome, video: !!comVideo, estado: 'chamando…', mudo: false, semCam: false })
+    const pc = novoPCChamada(canal, alvo.id)
+    pcCallRef.current = pc
+    stream.getTracks().forEach(t => pc.addTrack(t, stream))
+    const of = await pc.createOffer(); await pc.setLocalDescription(of)
+    canal.send({ type: 'broadcast', event: 'sinal', payload: { de: euId, para: alvo.id, tipo: 'oferta', sdp: of, video: !!comVideo } })
+    timeoutCallRef.current = setTimeout(() => { if (!remotoStreamRef.current) { alert('Sem resposta.'); desligarChamada() } }, 45000)
+  }
+  async function atenderChamada(sinal, canal, quem) {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: sinal.video ? { facingMode: 'user' } : false })
+    streamCallRef.current = stream; canalCallRef.current = canal; comQuemRef.current = sinal.de
+    setChamada({ nome: quem, video: !!sinal.video, estado: 'conectando…', mudo: false, semCam: false })
+    const pc = novoPCChamada(canal, sinal.de)
+    pcCallRef.current = pc
+    stream.getTracks().forEach(t => pc.addTrack(t, stream))
+    await pc.setRemoteDescription(sinal.sdp)
+    const ans = await pc.createAnswer(); await pc.setLocalDescription(ans)
+    canal.send({ type: 'broadcast', event: 'sinal', payload: { de: euId, para: sinal.de, tipo: 'resposta', sdp: ans } })
+  }
+  async function sinalChamada(sig, canal, pessoa) {
+    if (!sig || sig.para !== euId) return
+    if (sig.tipo === 'fim') { if (pcCallRef.current) alert('Chamada encerrada.'); limparChamada(); return }
+    if (sig.tipo === 'recusou') { setChamada(c => c ? { ...c, estado: 'recusada' } : c); setTimeout(limparChamada, 1200); return }
+    if (sig.tipo === 'oferta') {
+      if (pcCallRef.current) { canal.send({ type: 'broadcast', event: 'sinal', payload: { de: euId, para: sig.de, tipo: 'recusou' } }); return }
+      const quem = (porId[sig.de] && porId[sig.de].nome) || pessoa.nome || 'colega'
+      if (!confirm('📞 ' + quem + ' está chamando' + (sig.video ? ' em vídeo' : '') + '.\n\nAtender?')) {
+        canal.send({ type: 'broadcast', event: 'sinal', payload: { de: euId, para: sig.de, tipo: 'recusou' } }); return
+      }
+      try { await atenderChamada(sig, canal, quem) } catch (e) { alert('Não consegui atender: ' + ((e && e.message) || e)); limparChamada() }
+      return
+    }
+    if (sig.tipo === 'resposta' && pcCallRef.current) { try { await pcCallRef.current.setRemoteDescription(sig.sdp) } catch (e) {} return }
+    if (sig.tipo === 'ice' && pcCallRef.current) { try { await pcCallRef.current.addIceCandidate(sig.cand) } catch (e) {} }
+  }
+  function chamadaMic() {
+    const t = streamCallRef.current && streamCallRef.current.getAudioTracks()[0]
+    if (t) { t.enabled = !t.enabled; setChamada(c => c ? { ...c, mudo: !t.enabled } : c) }
+  }
+  function chamadaCam() {
+    const t = streamCallRef.current && streamCallRef.current.getVideoTracks()[0]
+    if (!t) { alert('Esta chamada é só de voz.'); return }
+    t.enabled = !t.enabled; setChamada(c => c ? { ...c, semCam: !t.enabled } : c)
+  }
+
   function responderA(m) {
     setRespondendoA({ id: m.id, texto: m.texto, autor: m.autor_id === euId ? 'você' : (nomeDe(m.autor_id) || 'colega') })
     if (inputRef.current) inputRef.current.focus()
@@ -467,7 +587,13 @@ export default function ChatMobile() {
       {/* topo */}
       <div style={{ background: VERDE_ESCURO, color: '#fff', padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
         <div style={{ fontWeight: 700, fontSize: 16 }}>{alvo ? alvo.nome : '👥 Todos (equipe)'}</div>
-        <button onClick={() => { setBuscaAberta(true); buscarProcessos('') }} title="Falar sobre um processo" style={{ marginLeft: 'auto', background: 'rgba(255,255,255,.15)', border: 0, color: '#fff', borderRadius: 8, padding: '6px 10px', fontSize: 13, cursor: 'pointer' }}>🔍 processo</button>
+        {alvo && !emFerias[alvo.id] && (
+          <span style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+            <button onClick={() => ligarChamada(true)} title={'Chamada de VÍDEO com ' + alvo.nome} style={{ border: 0, background: 'rgba(255,255,255,.22)', color: '#fff', borderRadius: '50%', width: 38, height: 38, fontSize: 17, cursor: 'pointer' }}>📹</button>
+            <button onClick={() => ligarChamada(false)} title={'Chamada de VOZ com ' + alvo.nome} style={{ border: 0, background: 'rgba(255,255,255,.22)', color: '#fff', borderRadius: '50%', width: 38, height: 38, fontSize: 17, cursor: 'pointer' }}>📞</button>
+          </span>
+        )}
+        <button onClick={() => { setBuscaAberta(true); buscarProcessos('') }} title="Falar sobre um processo" style={{ marginLeft: alvo && !emFerias[alvo.id] ? 0 : 'auto', background: 'rgba(255,255,255,.15)', border: 0, color: '#fff', borderRadius: 8, padding: '6px 10px', fontSize: 13, cursor: 'pointer' }}>🔍 processo</button>
         {/* O sino SEMPRE aparece. Antes ele sumia quando o navegador não tinha
             Push — que no iPhone é o caso normal enquanto o site não estiver
             instalado na tela de início. Quem mais precisa do alarme era
@@ -539,6 +665,7 @@ export default function ChatMobile() {
                 {m.processo_id && <div style={{ fontSize: fs(10.5), color: '#7a5b00', marginTop: 3 }}>🔗 {procNomesRef.current[m.processo_id] === '…' ? 'processo vinculado' : (procNomesRef.current[m.processo_id] || 'processo vinculado')}</div>}
                 <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 6, marginTop: 2 }}>
                   <span onClick={() => responderA(m)} style={{ fontSize: fs(11), color: '#8a93a2', cursor: 'pointer' }}>↩ responder</span>
+                  <span onClick={() => apagarMsg(m)} title="Apagar" style={{ fontSize: fs(11), color: '#b09a86', cursor: 'pointer' }}>✕</span>
                   <span style={{ fontSize: fs(10.5), color: '#8a93a2' }}>{horaCurta(m.criado_em)}</span>
                 </div>
               </div>
@@ -584,6 +711,27 @@ export default function ChatMobile() {
           style={{ flex: 1, border: '1px solid #ddd', borderRadius: 20, padding: '12px 15px', fontSize: fs(15) }} />
         <button type="submit" style={{ width: 44, height: 44, borderRadius: '50%', border: 0, background: VERDE, color: '#fff', fontSize: 18, cursor: 'pointer', flexShrink: 0 }}>➤</button>
       </form>
+      )}
+
+      {/* chamada em andamento — tela cheia, com os controles do WhatsApp */}
+      {chamada && (
+        <div style={{ position: 'fixed', inset: 0, background: '#0d1420', zIndex: 60, display: 'flex', flexDirection: 'column', color: '#fff' }}>
+          <div style={{ padding: '12px 14px', background: 'rgba(0,0,0,.35)', display: 'flex', gap: 10, alignItems: 'center' }}>
+            <b style={{ fontSize: 16 }}>{chamada.nome}</b>
+            <span style={{ fontSize: 13, opacity: .8 }}>{chamada.estado}</span>
+          </div>
+          <div style={{ flex: 1, position: 'relative', background: '#000', minHeight: 0 }}>
+            <video autoPlay playsInline ref={el => { if (el && remotoStreamRef.current && el.srcObject !== remotoStreamRef.current) el.srcObject = remotoStreamRef.current }}
+              style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            <video autoPlay playsInline muted ref={el => { if (el && streamCallRef.current && el.srcObject !== streamCallRef.current) el.srcObject = streamCallRef.current }}
+              style={{ position: 'absolute', right: 12, bottom: 12, width: '28vw', maxWidth: 150, borderRadius: 10, border: '2px solid rgba(255,255,255,.6)', objectFit: 'cover' }} />
+          </div>
+          <div style={{ padding: 14, display: 'flex', gap: 12, justifyContent: 'center', background: 'rgba(0,0,0,.35)', paddingBottom: 'calc(14px + env(safe-area-inset-bottom))' }}>
+            <button onClick={chamadaMic} style={{ border: 0, borderRadius: '50%', width: 56, height: 56, fontSize: 22, background: chamada.mudo ? '#7a2f2f' : '#2b3a4d', color: '#fff', cursor: 'pointer' }}>{chamada.mudo ? '🔇' : '🎙'}</button>
+            <button onClick={chamadaCam} style={{ border: 0, borderRadius: '50%', width: 56, height: 56, fontSize: 22, background: chamada.semCam ? '#7a2f2f' : '#2b3a4d', color: '#fff', cursor: 'pointer' }}>{chamada.semCam ? '📷' : '🎥'}</button>
+            <button onClick={desligarChamada} style={{ border: 0, borderRadius: '50%', width: 56, height: 56, fontSize: 22, background: '#b5342b', color: '#fff', cursor: 'pointer' }}>✕</button>
+          </div>
+        </div>
       )}
 
       {/* busca de processo (tela cheia) */}
