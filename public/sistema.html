@@ -209,6 +209,17 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
    as tabelas largas continuam rolando na horizontal, como já rolavam. */
 @media(max-width:760px){
   body{ zoom:1.5 }
+  /* O chat flutuante tem largura fixa (390px) e right:16px definidos por JS —
+     com o zoom viraram 585px deslocados, e ele saiu da tela cobrindo o painel.
+     No celular ele passa a ocupar a largura toda, ancorado nas duas bordas, e a
+     área de mensagens ganha altura relativa para sobrar tela para o sistema
+     atrás. Nada aqui mexe em tamanho de fonte — só em geometria. */
+  #cmp-chat{ left:0!important; right:0!important; width:auto!important; max-width:none!important }
+  #cmp-chat-msgs{ height:38vh!important; max-height:38vh!important }
+  #cmp-chat-resize{ display:none!important }   /* arrastar para redimensionar não serve no toque */
+  /* painel lateral de pré-visualização de documento: min-width 340px CSS passa a
+     valer 510px reais com o zoom e não cabe na tela do celular */
+  #doc-preview-painel{ left:0!important; width:auto!important; min-width:0!important; max-width:none!important }
 }
 /* Acessos — lista em cartões (bom no desktop e no celular) */
 .acessos-list{display:flex;flex-direction:column}
