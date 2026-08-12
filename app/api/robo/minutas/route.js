@@ -548,13 +548,24 @@ async function faseMinuta(sb) {
 }
 
 export async function GET(request) {
+  try {
+    return await _get(request)
+  } catch (e) {
+    // Sem isto, qualquer exceção aqui vira uma resposta VAZIA do Vercel — e a
+    // tela mostrava "Unexpected end of JSON input", que não diz nada a ninguém.
+    // Com o erro em JSON, a tela mostra o motivo real.
+    return Response.json({ erro: String((e && e.message) || e) }, { status: 500 })
+  }
+}
+
+async function _get(request) {
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) return Response.json({ erro: 'falta service key' }, { status: 500 })
   const { searchParams } = new URL(request.url)
   const sb = admin()
 
   if (searchParams.get('status') != null) {
     const orc = await orcamento(sb)
-    const { data: fila } = await sb.from('robo_minutas')
+    const { data: fila, error: erroFila } = await sb.from('robo_minutas')
       .select('id,processo_numero,status,tipo_peca,prazo_em,urgencia,resumo,dossie_nome,dossie_path,dossie_bytes,integra_path,integra_bytes,integra_erro,minuta_anexo_id,erro,criado_em')
       // prazo mais próximo primeiro — é a ordem em que o trabalho tem que sair.
       // Sem prazo vai para o fim; empate desempata pela triagem mais recente.
@@ -562,6 +573,7 @@ export async function GET(request) {
       .order('prazo_em', { ascending: true, nullsFirst: false })
       .order('criado_em', { ascending: false })
       .limit(40)
+    if (erroFila) return Response.json({ erro: 'fila: ' + erroFila.message }, { status: 500 })
     const { count: semPeca } = await sb.from('robo_minutas').select('id', { count: 'exact', head: true }).eq('exige_peca', false)
     return Response.json({ ok: true, orcamento: orc, modo: await modoAtual(sb), fila: fila || [], arquivadas_sem_peca: semPeca || 0 })
   }
