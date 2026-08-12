@@ -13,7 +13,14 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from '../../../lib/supabase'
 
 const VERDE = '#0F6E56'
-const ICE = { iceServers: [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }] }
+const ICE = { iceServers: [
+  { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
+  // TURN do PRÓPRIO VPS (ops/turn/setup.sh): quando a rede esconde o aparelho e
+  // a ligação direta não fecha, a mídia passa cifrada pelo nosso servidor.
+  { urls: ['turn:gestao.cmpadvogados.com.br:3478?transport=udp', 'turn:gestao.cmpadvogados.com.br:3478?transport=tcp'], username: 'cmp', credential: 'e933e7efb6e977b645ba39a5dc6be4a2d5213f7fc30e596a' },
+  // reserva comunitária (Open Relay), caso o coturn do VPS esteja fora
+  { urls: ['turn:openrelay.metered.ca:80', 'turn:openrelay.metered.ca:443', 'turn:openrelay.metered.ca:443?transport=tcp'], username: 'openrelayproject', credential: 'openrelayproject' },
+] }
 
 export default function Sala({ params }) {
   const token = params.token
@@ -32,6 +39,7 @@ export default function Sala({ params }) {
   const localRef = useRef(null), remotoRef = useRef(null)
   const pcRef = useRef(null), canalRef = useRef(null), streamRef = useRef(null)
   const recRef = useRef(null), euRef = useRef('')
+  const nomeEscritorioRef = useRef('')
 
   useEffect(() => {
     let vivo = true
@@ -39,11 +47,22 @@ export default function Sala({ params }) {
       .then(r => r.json()).then(j => {
         if (!vivo) return
         if (!j || !j.ok) { setErro((j && j.erro) || 'Não consegui abrir a sala.'); setFase('erro'); return }
-        setInfo(j); setNome(j.cliente_nome || ''); setFase('entrada')
+        setInfo(j)
+        // o nome da CLIENTE é sugestão só para quem chega pelo link sem login;
+        // para quem é do escritório, vale o nome do cadastro (senão a
+        // transcrição sai toda com o nome da cliente, como aconteceu)
+        setNome(prev => nomeEscritorioRef.current || prev || j.cliente_nome || '')
+        setFase('entrada')
       }).catch(() => { if (vivo) { setErro('Sem conexão.'); setFase('erro') } })
-    // quem já está logado no sistema é do escritório — só muda o rótulo do lado
-    supabase.auth.getSession().then(({ data }) => {
-      if (vivo && data && data.session) setSouEscritorio(true)
+    // quem já está logado no sistema é do escritório: rótulo do lado + nome real
+    supabase.auth.getSession().then(async ({ data }) => {
+      if (!vivo || !data || !data.session) return
+      setSouEscritorio(true)
+      try {
+        const { data: u } = await supabase.from('usuarios').select('nome').eq('id', data.session.user.id).maybeSingle()
+        const n = (u && u.nome) || ''
+        if (n && vivo) { nomeEscritorioRef.current = n; setNome(n) }
+      } catch (e) {}
     })
     return () => { vivo = false }
   }, [token])

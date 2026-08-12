@@ -519,7 +519,14 @@ export default function ChatMobile() {
   // A conversa vai direto entre os dois aparelhos (WebRTC); o canal do Supabase
   // só combina o encontro. O nome do canal é o MESMO do chat do sistema, por
   // isso computador liga para celular e vice-versa.
-  const ICE_CALL = { iceServers: [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }] }
+  const ICE_CALL = { iceServers: [
+  { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
+  // TURN do PRÓPRIO VPS (ops/turn/setup.sh): quando a rede esconde o aparelho e
+  // a ligação direta não fecha, a mídia passa cifrada pelo nosso servidor.
+  { urls: ['turn:gestao.cmpadvogados.com.br:3478?transport=udp', 'turn:gestao.cmpadvogados.com.br:3478?transport=tcp'], username: 'cmp', credential: 'e933e7efb6e977b645ba39a5dc6be4a2d5213f7fc30e596a' },
+  // reserva comunitária (Open Relay), caso o coturn do VPS esteja fora
+  { urls: ['turn:openrelay.metered.ca:80', 'turn:openrelay.metered.ca:443', 'turn:openrelay.metered.ca:443?transport=tcp'], username: 'openrelayproject', credential: 'openrelayproject' },
+] }
   // Campainha agendada inteira na linha do tempo do áudio: o confirm() congela o
   // JavaScript, mas o áudio roda em outra thread e segue tocando enquanto a
   // pergunta 'Atender?' está na tela. O contexto é destravado no primeiro toque.
