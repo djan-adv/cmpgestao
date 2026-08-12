@@ -16459,7 +16459,12 @@ async function renderEstagiario(){
         +(o.estourou?' — <b style="color:#b5342b">teto atingido</b>':'')
         +(o.ativo?'':' — <b style="color:#b5342b">robô desligado</b>');
     }
-    var fila=j.fila||[];
+    var fila=(j.fila||[]).slice().sort(function(a,b){
+      /* prazo mais próximo primeiro; sem prazo, no fim da fila */
+      var pa=a.prazo_em||'', pb=b.prazo_em||'';
+      if(!pa&&!pb) return 0; if(!pa) return 1; if(!pb) return -1;
+      return pa<pb?-1:(pa>pb?1:0);
+    });
     _badgeMov(fila.length);
     if(!fila.length){ el.innerHTML='<div class="note">Nenhuma intimação exigindo peça no momento.'+(j.arquivadas_sem_peca?(' O robô já arquivou '+j.arquivadas_sem_peca+' publicação(ões) que não exigiam peça.'):'')+'</div>'; return; }
     el.innerHTML='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:10px">'+fila.map(function(x){
