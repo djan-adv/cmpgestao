@@ -226,7 +226,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
 }
 /* Acessos — lista em cartões (bom no desktop e no celular) */
 .acessos-list{display:flex;flex-direction:column}
-.acessos-card{display:grid;grid-template-columns:1fr 120px 90px auto;grid-template-areas:"name perfil status acoes" "email perfil status acoes";align-items:center;gap:1px 12px;padding:7px 2px;border-bottom:1px solid var(--line)}
+.acessos-card{display:grid;grid-template-columns:minmax(150px,1fr) 92px 72px auto;grid-template-areas:"name perfil status acoes" "email perfil status acoes";align-items:center;gap:2px 14px;padding:11px 2px;border-bottom:1px solid var(--line)}
 .acessos-card .ac-name{grid-area:name;font-weight:700;color:var(--navy);align-self:end}
 .acessos-card .ac-email{grid-area:email;font-size:12px;color:var(--muted);font-style:italic;align-self:start}
 .acessos-card .ac-perfil{grid-area:perfil;justify-self:start}
@@ -1712,7 +1712,7 @@ function renderAcessos(){
       ? '<select class="ac-menu" onchange="acaoAcesso(\''+u.id+'\',this)"><option value="">⚙ ações…</option>'
         +menu.map(function(o){ return '<option value="'+o[0]+'">'+esc(o[1])+'</option>'; }).join('')+'</select>'
       : '';
-    acoes = acoes ? ('<div style="display:flex;gap:5px;justify-content:flex-end;flex-wrap:nowrap">'+acoes+'</div>'+menuHtml) : (menuHtml||'<span class="note" style="margin:0">—</span>');
+    acoes = acoes ? ('<div style="display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap;row-gap:6px">'+acoes+'</div>'+menuHtml) : (menuHtml||'<span class="note" style="margin:0">—</span>');
     return '<div class="acessos-card"'+(ativo?'':' style="opacity:.5"')+'>'
       +'<div class="ac-name">'+esc(u.nome)+'</div>'
       +'<div class="ac-email">'+esc(u.email||'sem cadastro')+(u.senha?' · senha definida':'')
@@ -14717,7 +14717,8 @@ function setDilView(v){
   .iav2{font-size:12px;background:#fdf8ec;border-left:3px solid var(--gold);padding:6px 9px;border-radius:0 6px 6px 0;color:#6b5a1e;margin-bottom:8px}
   .nav .sec{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:#7688a0;padding:12px 12px 4px}
   #nav-badge-triagem{display:none;place-items:center;margin-left:auto;background:var(--gold);color:#fff;font-size:11px;font-weight:700;border-radius:10px;min-width:18px;height:18px;padding:0 5px}
-  .side .userft{position:absolute;left:0;right:0;bottom:0;padding:12px 16px;border-top:1px solid rgba(255,255,255,.08);display:flex;gap:10px;align-items:center;background:var(--navy)}
+  .side .userft{position:absolute;left:0;right:0;bottom:0;padding:14px 16px calc(22px + env(safe-area-inset-bottom));border-top:1px solid rgba(255,255,255,.08);display:flex;gap:12px;align-items:center;background:var(--navy)}
+  .side .userft #uf-acessos{padding:6px 2px}
   .side .userft .av{width:32px;height:32px;border-radius:50%;background:var(--gold);color:#fff;display:grid;place-items:center;font-weight:700;font-size:13px;flex-shrink:0}
   .side .userft .nm{font-size:13px;color:#fff;font-weight:600;line-height:1.2}
   .side .userft .pp{font-size:11px;color:#8fa0b5}
@@ -14883,20 +14884,13 @@ function setDilView(v){
     /* o rodapé é um BOTÃO: clicar no nome abre a TELA de acessos (editar/incluir), estilo Astrea */
     uf.innerHTML='<div class="av" id="uf-av">—</div>'+
       '<div style="flex:1;min-width:0"><div class="nm" id="uf-nm"></div><div class="pp" id="uf-pp"></div></div>'+
-      '<div style="display:flex;flex-direction:column;gap:3px;flex-shrink:0;align-items:flex-end">'
-        +'<span id="uf-acessos" style="color:#8fa0b5;font-size:11px;cursor:pointer" title="Editar / incluir acessos">acessos ›</span>'
-        +'<span id="uf-publicar" class="coord-only" style="color:#C9A227;font-size:11px;font-weight:700;cursor:pointer" title="Publicar as alterações aprovadas">publicar ↑</span>'
-      +'</div>';
+      '<div id="uf-acessos" style="color:#8fa0b5;font-size:11px;flex-shrink:0" title="Editar / incluir acessos">acessos ›</div>';
     sideEl.appendChild(uf);
     uf.style.cursor='pointer';
     /* dois destinos no mesmo rodapé: o nome (e "acessos ›") abre a lista de
        acessos; "publicar ↑" vai direto para a tela de publicação, sem passar
        pela lista — no celular era ela que empurrava o botão para fora da tela */
-    uf.addEventListener('click',function(ev){
-      var alvo=ev&&ev.target;
-      if(alvo && alvo.id==='uf-publicar'){ if(typeof abrirPublicar==='function') abrirPublicar(); return; }
-      if(typeof abrirAcessos==='function') abrirAcessos();
-    });
+    uf.addEventListener('click',function(){ if(typeof abrirAcessos==='function') abrirAcessos(); });
     var syncUser=function(){
       var n=(document.getElementById('who-name')||{}).textContent||'';
       var p=(document.getElementById('who-pill')||{}).textContent||'';
