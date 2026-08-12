@@ -986,7 +986,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
       <button class="btn sm ghost" id="btn-rejeitar" style="display:none" onclick="rejeitarAtualizacao()">Rejeitar</button>
       <span id="publicar-status" class="note" style="margin:0"></span>
     </div>
-    <div class="foot"><button class="btn" onclick="fecharPublicar()">Fechar</button></div>
+    <div class="foot"><button class="btn" id="publicar-btn-fechar" onclick="fecharPublicar()">Fechar</button></div>
   </div>
 </div>
 <div id="modal-acessos" class="overlay hidden">
@@ -1664,6 +1664,9 @@ function _stRelogio(st,on){
   _stRelogioTimer=setInterval(function(){ i=(i+1)%faces.length; st.textContent=faces[i]+' publicando…'; },350);
 }
 function _stGrande(st,on){ _stRelogio(st,on); }
+/* enquanto publica, o Fechar some: fechar no meio deixava a recompilação sem
+   ninguém acompanhando — e a página precisa recarregar sozinha no fim */
+function _publicarTrava(on){ var f=document.getElementById('publicar-btn-fechar'); if(f) f.style.display=on?'none':''; }
 /* Coloca no ar (git pull no servidor). As alterações aprovadas já entram; as
    rejeitadas ficam guardadas para reformulação e não somem da lista. */
 async function publicarAtualizacao(){
@@ -1685,6 +1688,7 @@ async function publicarAtualizacao(){
       if(j.build==='iniciado'){
         /* mudança de backend: o servidor está recompilando (1–2 min). Acompanha o status. */
         if(st) _stRelogio(st,true);
+        _publicarTrava(true);
         btn.textContent='publicando…';
         await _aguardarBuild(st);
         return;
@@ -1705,11 +1709,12 @@ async function _aguardarBuild(st){
   while(Date.now()<fim){
     await new Promise(function(res){ setTimeout(res, 4000); });
     var estado='';
-    try{ var r=await fetch('/api/deploy?status=1',{cache:'no-store'}); var j=await r.json(); estado=(j&&j.state)||''; if(estado==='error'){ if(st){ _stGrande(st,false); st.style.color='#b5342b'; st.textContent='⚠ Falha ao recompilar. '+((j.saida||'').slice(-300)); } if(btn){ btn.disabled=false; btn.textContent='↑ Publicar atualização agora'; } return; } }
+    try{ var r=await fetch('/api/deploy?status=1',{cache:'no-store'}); var j=await r.json(); estado=(j&&j.state)||''; if(estado==='error'){ if(st){ _stGrande(st,false); st.style.color='#b5342b'; st.textContent='⚠ Falha ao recompilar. '+((j.saida||'').slice(-300)); } _publicarTrava(false); if(btn){ btn.disabled=false; btn.textContent='↑ Publicar atualização agora'; } return; } }
     catch(e){ /* durante o restart o endpoint fica indisponível por alguns segundos — normal */ }
     if(estado==='done'){ if(st){ _stRelogio(st,false); st.style.color='#0F6E56'; st.textContent='✅ Publicado. Recarregando…'; } setTimeout(function(){ location.reload(true); }, 1800); return; }
   }
   if(st){ _stGrande(st,false); st.style.color='#8a5a00'; st.textContent='O build está demorando mais que o normal. Aguarde ~1 min e recarregue a página manualmente.'; }
+  _publicarTrava(false);
   if(btn){ btn.disabled=false; btn.textContent='↑ Publicar atualização agora'; }
 }
 function rejeitarAtualizacao(){ /* substituído por rejeição item a item */ }
@@ -17821,7 +17826,7 @@ async function monitTrazerAssessoria(id){
       }
       return faixa+'<div id="cmp-chat-msg-'+m.id+'" style="margin:0 0 7px;'+(meu?'text-align:right':'')+'">'
         +'<div class="cmp-chat-bolha" style="display:inline-block;max-width:88%;text-align:left;background:'+_tinta(corAutor,.17)+';border:1px solid '+_tinta(corAutor,.45)+';border-left:4px solid '+corAutor+';border-radius:9px;padding:6px 9px'+(priv?';box-shadow:0 0 0 2px rgba(217,182,76,.45)':'')+'">'
-        +'<div style="font-size:11px;color:#3a4250;font-weight:700">'+h(quem)+h(alvo)+' · <span title="'+h(_dataHoraCompleta(m.criado_em))+'" style="color:#6b6540;font-weight:400">'+hora(m.criado_em)+(priv?' 🔒':'')+'</span><a onclick="__cmpChat.responderA('+m.id+')" title="Responder" style="cursor:pointer;color:#8a8355;font-weight:400;margin-left:4px">↩</a>'
+        +'<div style="font-size:11px;color:#3a4250;font-weight:700">'+h(quem)+h(alvo)+' · <span title="'+h(_dataHoraCompleta(m.criado_em))+'" style="color:#6b6540;font-weight:400">'+hora(m.criado_em)+(priv?' 🔒':'')+'</span>'+(meu?_tickHtml(m):'')+'<a onclick="__cmpChat.responderA('+m.id+')" title="Responder" style="cursor:pointer;color:#8a8355;font-weight:400;margin-left:4px">↩</a>'
         +'<a onclick="__cmpChat.apagar('+m.id+','+(meu?'1':'0')+')" title="Apagar" style="cursor:pointer;color:#b09a86;font-weight:400;margin-left:4px">✕</a></div>'
         +citada
         +'<div style="white-space:pre-wrap;word-break:break-word">'+h(m.texto)+'</div>'
@@ -17829,6 +17834,7 @@ async function monitTrazerAssessoria(id){
         +chipProc+'</div></div>';
     }).join('');
     rolar();
+    _marcarLidoConversa(lista);
     _carregarProcsDoChat(msgs.map(function(m){ return m.processo_id; }));
   }
   /* nome pelo autor_id, resolvido AGORA a partir do banco — nunca confia no
@@ -17837,6 +17843,47 @@ async function monitTrazerAssessoria(id){
      salvava o nome ERRADO na mensagem). Assim, até mensagens antigas com o
      nome errado gravado passam a exibir certo, porque o nome vem do cadastro. */
   function nomeDe(id){ var p=porId[id]; return p?p.nome:''; }
+
+  /* ===== Visto de leitura (✓ enviado · ✓✓ verde lido) =====
+     Cada pessoa guarda um ponteiro por conversa ("li até a mensagem N") — a
+     tabela chat_leitura. O ponteiro só anda quando a conversa está ABERTA e a
+     aba VISÍVEL: receber no aparelho não marca lido; estar online olhando, sim. */
+  var LEIT={}, _lidoEnviado={};
+  function _canalMsg(m){ return m.para_id?('p:'+[String(m.autor_id),String(m.para_id)].sort().join(':')):'todos'; }
+  function _tickHtml(m){
+    var lido=false;
+    if(m.para_id){
+      var o=String(m.para_id);
+      lido=((LEIT[o]||{})[_canalMsg(m)]||0)>=m.id;
+    } else {
+      /* grupo: ✓✓ quando TODOS os colegas do grupo já leram (quem é 'só
+         privado' não participa e não conta) */
+      var parte=(pessoas||[]).filter(function(p){ return !p.so_privado; });
+      lido=parte.length>0 && parte.every(function(p){ return ((LEIT[p.id]||{})['todos']||0)>=m.id; });
+    }
+    return ' <span style="font-size:11px;font-weight:800;letter-spacing:-2px;color:'+(lido?'#1fa855':'#9aa3ad')+'" title="'+(lido?'Visto':'Enviado — ainda não visto')+'">'+(lido?'✓✓':'✓')+'</span>';
+  }
+  async function _carregarLeituras(){
+    try{
+      var r=await window.__sb.from('chat_leitura').select('user_id,canal,ultimo_id');
+      if(r&&r.data){ LEIT={}; r.data.forEach(function(x){ (LEIT[x.user_id]=LEIT[x.user_id]||{})[x.canal]=x.ultimo_id; }); }
+    }catch(e){}
+  }
+  function _marcarLidoConversa(lista){
+    try{
+      if(!lista||!lista.length||!eu) return;
+      if(document.visibilityState!=='visible') return;
+      var corpo=document.getElementById('cmp-chat-corpo');
+      if(!corpo||corpo.style.display==='none') return;   /* chat minimizado não é "lendo" */
+      var sel=document.getElementById('cmp-chat-para');
+      var alvoSel=sel?String(sel.value||''):'';
+      var canal=alvoSel?('p:'+[String(eu),alvoSel].sort().join(':')):'todos';
+      var maxId=lista[lista.length-1].id;
+      if((_lidoEnviado[canal]||0)>=maxId) return;
+      _lidoEnviado[canal]=maxId;
+      window.__sb.rpc('chat_marcar_lido',{p_canal:canal,p_id:maxId}).then(function(){});
+    }catch(e){}
+  }
 
   /* Nome curto sem ambiguidade: com duas Marias no escritório, "Maria" e
      "Maria" no seletor não dizem com quem se está falando. Repetiu o primeiro
@@ -17855,7 +17902,7 @@ async function monitTrazerAssessoria(id){
   }
   async function carregarPessoas(){
     try{
-      var r=await window.__sb.from('usuarios').select('id,nome,cor_chat').order('nome');
+      var r=await window.__sb.from('usuarios').select('id,nome,cor_chat,so_privado').order('nome');
       var todos=r.data||[];
       porId={}; todos.forEach(function(u){ porId[u.id]=u; });
       if(eu && porId[eu] && porId[eu].nome) euNome=porId[eu].nome;
@@ -18038,6 +18085,19 @@ async function monitTrazerAssessoria(id){
         .on('postgres_changes',{event:'INSERT',schema:'public',table:'chat_mensagens'},function(p){ chegou(p.new); })
         .subscribe();
     }catch(e){}
+    /* vistos: carrega os ponteiros e atualiza ao vivo — é o que faz o ✓ virar
+       ✓✓ na sua tela no instante em que a outra pessoa abre a conversa */
+    await _carregarLeituras(); pintar();
+    try{
+      window.__sb.channel('chat-cmp-leituras')
+        .on('postgres_changes',{event:'*',schema:'public',table:'chat_leitura'},function(p){
+          var x=p.new; if(!x||!x.user_id) return;
+          (LEIT[x.user_id]=LEIT[x.user_id]||{})[x.canal]=x.ultimo_id;
+          pintar();
+        })
+        .subscribe();
+    }catch(e){}
+    document.addEventListener('visibilitychange',function(){ if(document.visibilityState==='visible') pintar(); });
     setInterval(varrer, 20000);   /* reserva, caso o tempo real caia */
     _atualizaChatJwt(); setInterval(_atualizaChatJwt, 4*60000); /* token p/ mostrar os prints (imagens) */
   }

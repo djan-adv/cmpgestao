@@ -94,6 +94,7 @@ export default function ChatMobile() {
 
   const [pessoas, setPessoas] = useState([])       // colegas (id, nome)
   const [emFerias, setEmFerias] = useState({})     // id -> true (não recebe chat)
+  const [leituras, setLeituras] = useState({})     // user_id -> {canal: ultimo_id} (vistos ✓/✓✓)
   const [porId, setPorId] = useState({})
   const [alvo, setAlvo] = useState(null)           // null = Todos; ou {id,nome} = privado
   const [msgs, setMsgs] = useState([])
@@ -228,7 +229,7 @@ export default function ChatMobile() {
   // ---------- pessoas (nomes reais — nunca confiar em autor_nome da mensagem) ----------
   useEffect(() => {
     if (!euId) return
-    supabase.from('usuarios').select('id,nome,cor_chat').order('nome').then(({ data }) => {
+    supabase.from('usuarios').select('id,nome,cor_chat,so_privado').order('nome').then(({ data }) => {
       const todos = data || []
       const mapa = {}; todos.forEach(u => { mapa[u.id] = u })
       setPorId(mapa)
@@ -328,6 +329,56 @@ export default function ChatMobile() {
     if (lista.length) ultimoIdRef.current = lista[lista.length - 1].id
   }, [euId])
   useEffect(() => { carregar() }, [carregar])
+
+  // ——— vistos de leitura (✓ enviado · ✓✓ verde lido) ———
+  // O ponteiro "li até aqui" só anda com a conversa aberta e a tela visível:
+  // receber no bolso não marca lido; estar online olhando, sim.
+  useEffect(() => {
+    if (!euId) return
+    supabase.from('chat_leitura').select('user_id,canal,ultimo_id').then(({ data }) => {
+      if (!data) return
+      const m = {}
+      data.forEach(x => { (m[x.user_id] = m[x.user_id] || {})[x.canal] = x.ultimo_id })
+      setLeituras(m)
+    })
+    const canal = supabase.channel('chat-leituras-mobile')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_leitura' }, p => {
+        const x = p.new
+        if (!x || !x.user_id) return
+        setLeituras(cur => ({ ...cur, [x.user_id]: { ...(cur[x.user_id] || {}), [x.canal]: x.ultimo_id } }))
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(canal) }
+  }, [euId])
+
+  const lidoEnviadoRef = useRef({})
+  useEffect(() => {
+    if (!euId || !msgs.length) return
+    const marcar = () => {
+      if (document.visibilityState !== 'visible') return
+      const canal = alvo ? ('p:' + [String(euId), String(alvo.id)].sort().join(':')) : 'todos'
+      const vis = msgs.filter(m => alvo
+        ? (m.para_id && ((m.autor_id === euId && m.para_id === alvo.id) || (m.autor_id === alvo.id && m.para_id === euId)))
+        : !m.para_id)
+      if (!vis.length) return
+      const maxId = vis[vis.length - 1].id
+      if ((lidoEnviadoRef.current[canal] || 0) >= maxId) return
+      lidoEnviadoRef.current[canal] = maxId
+      supabase.rpc('chat_marcar_lido', { p_canal: canal, p_id: maxId }).then(() => {})
+    }
+    marcar()
+    document.addEventListener('visibilitychange', marcar)
+    return () => document.removeEventListener('visibilitychange', marcar)
+  }, [msgs, alvo, euId])
+
+  function tickDe(m) {
+    if (m.para_id) {
+      const canal = 'p:' + [String(m.autor_id), String(m.para_id)].sort().join(':')
+      return ((leituras[m.para_id] || {})[canal] || 0) >= m.id
+    }
+    const parte = pessoas.filter(p => !p.so_privado)
+    return parte.length > 0 && parte.every(p => ((leituras[p.id] || {})['todos'] || 0) >= m.id)
+  }
 
   // Abre na última conversa que ESTA pessoa usou. Espera a lista de colegas
   // chegar: se o contato salvo não existe mais (saiu do escritório), cai em
@@ -771,6 +822,7 @@ export default function ChatMobile() {
                   <span onClick={() => responderA(m)} style={{ fontSize: fs(11), color: '#8a93a2', cursor: 'pointer' }}>↩ responder</span>
                   <span onClick={() => apagarMsg(m)} title="Apagar" style={{ fontSize: fs(11), color: '#b09a86', cursor: 'pointer' }}>✕</span>
                   <span style={{ fontSize: fs(10.5), color: '#8a93a2' }}>{horaCurta(m.criado_em)}</span>
+                  {meu && <span style={{ fontSize: fs(10.5), fontWeight: 800, letterSpacing: -2, color: tickDe(m) ? '#1fa855' : '#8a93a2' }} title={tickDe(m) ? 'Visto' : 'Enviado — ainda não visto'}>{tickDe(m) ? '✓✓' : '✓'}</span>}
                 </div>
               </div>
             </div>
