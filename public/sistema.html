@@ -8380,7 +8380,7 @@ function renderProc(){
     <div><label>UF</label><input id="proc-uf" style="width:100%;box-sizing:border-box" maxlength="2"></div>
   </div>
   <div style="margin-top:12px;display:flex;gap:8px">
-    <button id="proc-btn-gerar" class="btn" onclick="gerarProcuracaoAuto()">Gerar procuração (Word + PDF)</button>
+    <button id="proc-btn-gerar" class="btn" onclick="gerarProcuracaoAuto()">Gerar e enviar para assinatura</button>
     <button class="btn ghost" onclick="fecharModalProcuracao()">Cancelar</button>
   </div>
 </div></div>
@@ -12663,6 +12663,61 @@ async function _procBuscarCep(){
     if(d.uf) document.getElementById('proc-uf').value=d.uf;
   }catch(e){}
 }
+/* ===== Da procuração gerada ao link de assinatura, sem passo manual =====
+   O PDF que acabou de nascer vai para o assinador (projeto separado) e volta com
+   o link do cliente. Antes eram dois botões e duas telas: gerar aqui e, depois,
+   abrir o módulo de assinatura e refazer o documento lá. */
+var SIGN_URL_PUB='https://fjboytucivmdykkfpdhs.supabase.co';
+var SIGN_KEY_PUB='sb_publishable_9K2-GBTRb7ZYd5dkjPoeZA_kPPNElex';
+var _signSb=null;
+function _signClient(){
+  if(_signSb) return _signSb;
+  if(!window.supabase||!window.supabase.createClient) return null;
+  _signSb=window.supabase.createClient(SIGN_URL_PUB,SIGN_KEY_PUB,{auth:{persistSession:false}});
+  return _signSb;
+}
+function _uuid(){
+  try{ return crypto.randomUUID(); }catch(e){}
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,function(c){
+    var r=Math.random()*16|0; return (c==='x'?r:((r&0x3)|0x8)).toString(16);
+  });
+}
+/* Sobe o PDF e cria o documento no assinador. Devolve {link, docId} ou {erro}.
+   Falhar aqui NÃO invalida a procuração: ela já está salva na pasta do processo. */
+async function _enviarParaAssinatura(blobPdf, titulo, cliente, numeroProc){
+  try{
+    var sign=_signClient(); if(!sign) return {erro:'biblioteca do assinador não carregou'};
+    var docId=_uuid(), path=docId+'/original.pdf';
+    var up=await sign.storage.from('documentos').upload(path, blobPdf, {contentType:'application/pdf'});
+    if(up.error) return {erro:'não consegui enviar o arquivo: '+up.error.message};
+    var tok=await docToken();
+    var r=await fetch('/api/assinatura',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},
+      body:JSON.stringify({acao:'criar', tipo:'upload', doc_id:docId, titulo:titulo,
+        arquivo_path:path, processo:(numeroProc||null),
+        signatarios:[{nome:(cliente.nome||''), email:(cliente.email||'')}]})});
+    var j=await r.json().catch(function(){return {};});
+    if(!r.ok||!j.ok) return {erro:(j&&j.erro)||('HTTP '+r.status)};
+    var sig=(j.signatarios||[])[0];
+    if(!sig) return {erro:'documento criado sem signatário'};
+    return {docId:docId, link:location.origin+'/assinar-doc?d='+docId+'&s='+sig.token};
+  }catch(e){ return {erro:(e&&e.message)||String(e)}; }
+}
+/* e-mail com o link — mesmo texto do módulo de assinaturas */
+async function _emailLinkAssinatura(para, nome, titulo, link){
+  try{
+    if(!para) return false;
+    var primeiro=String(nome||'').trim().split(/\s+/)[0]||'';
+    var corpo='Olá'+(primeiro?(', '+primeiro):'')+'!\n\n'
+      +'Segue o link para assinatura eletrônica: '+(titulo||'documento')+'\n\n'+link+'\n\n'
+      +'Abra pelo celular ou computador, confira os dados e assine. Qualquer dúvida, estamos à disposição.\n\n'
+      +'Crispim, Mendonça e Pinheiro — Advogados\n0800 591 7259 · contato@cmpadvogados.com.br';
+    var tok=await docToken();
+    var r=await fetch('/api/enviar-email',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},
+      body:JSON.stringify({para:para, assunto:'Assinatura eletrônica — '+(titulo||'documento'), corpo:corpo, forcar:true})});
+    var j=await r.json().catch(function(){return {};});
+    return r.ok && !j.erro;
+  }catch(e){ return false; }
+}
 async function gerarProcuracaoAuto(){
   var ctx=window.__procCtx; if(!ctx) return;
   var p=ctx.p;
@@ -12720,11 +12775,52 @@ async function gerarProcuracaoAuto(){
       if(rc2.data&&rc2.data[0]) await sb2.from('contatos').update(reg).eq('id', rc2.data[0].id);
       else { reg.nome=d.nome; reg.tipo='cliente'; await sb2.from('contatos').insert(reg); }
     }catch(e){}
-    if(st){ st.textContent='✓ Procuração gerada e salva na pasta do processo!'; st.style.color='#0F6E56'; }
     try{ if(typeof carregarDocs==='function' && typeof atual!=='undefined' && atual) carregarDocs(atual.numero,'','proc'); }catch(e){}
-    setTimeout(fecharModalProcuracao, 1400);
+    /* Segue direto para a assinatura: o cliente recebe o link sem ninguém
+       precisar abrir outra tela e refazer o documento. */
+    if(st){ st.textContent='✓ Salva na pasta. Enviando para assinatura…'; st.style.color='var(--muted)'; }
+    var envio=await _enviarParaAssinatura(blobPdf, rotulo+' — '+d.nome, {nome:d.nome,email:d.email}, (p&&p.numero)||'');
+    if(envio.erro){
+      if(st){ st.innerHTML='✓ Procuração gerada e salva na pasta.<br><span style="color:#8a5a00">Não consegui criar o link de assinatura ('+_procEsc(envio.erro)+') — use o botão “p/ cliente assinar”.</span>'; st.style.color='#0F6E56'; }
+      return;
+    }
+    var mailOk=await _emailLinkAssinatura(d.email, d.nome, rotulo, envio.link);
+    /* registra na ficha, como o módulo de assinaturas faz */
+    try{
+      var sb3=window.__sb, digp=String((p&&p.numero)||'').replace(/\D/g,'');
+      if(sb3&&digp){
+        var rp=await sb3.from('processos').select('id').eq('numero_digitos',digp).limit(1);
+        if(rp.data&&rp.data[0]) await sb3.from('andamentos').insert({processo_id:rp.data[0].id,
+          data:new Date().toISOString().slice(0,10), fonte:'manual',
+          texto:'[Procuração] Gerada e enviada para assinatura — '+(d.email||'(cliente sem e-mail)')+'.'});
+      }
+    }catch(e){}
+    _procMostrarLink(envio.link, d, rotulo, mailOk);
   }catch(e){ if(st){ st.textContent='Erro: '+(e&&e.message||e); st.style.color='#b5342b'; } }
-  finally{ if(btn){ btn.disabled=false; btn.textContent='Gerar procuração (Word + PDF)'; } }
+  finally{ if(btn){ btn.disabled=false; btn.textContent='Gerar e enviar para assinatura'; } }
+}
+/* O link fica na tela, com copiar e WhatsApp: mandar pelo zap é o que faz o
+   cliente assinar no mesmo dia — e-mail de procuração costuma esperar. */
+function _procMostrarLink(link, d, rotulo, mailOk){
+  var st=document.getElementById('proc-status'); if(!st) return;
+  var tel=String(d.telefone||'').replace(/\D/g,'');
+  var wa=tel?('https://wa.me/'+(tel.length<=11?('55'+tel):tel)+'?text='+encodeURIComponent('Olá'+(d.nome?(', '+String(d.nome).split(' ')[0]):'')+'! Segue o link para assinar a procuração: '+link)):'';
+  st.style.color='#0F6E56';
+  st.innerHTML='✓ Procuração gerada, salva na pasta e <b>enviada para assinatura</b>.'
+    +(d.email?('<br>'+(mailOk?('E-mail enviado para '+_procEsc(d.email)+'.'):'<span style="color:#8a5a00">O e-mail não saiu — mande o link por aqui.</span>')):'<br><span style="color:#8a5a00">Cliente sem e-mail — mande o link por aqui.</span>')
+    +'<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">'
+      +'<input id="proc-link" value="'+_procEsc(link)+'" readonly style="flex:1;min-width:180px;font-size:12px;padding:6px 8px">'
+      +'<button class="btn sm ghost" onclick="_procCopiarLink(this)">📋 copiar</button>'
+      +(wa?('<a class="btn sm" style="background:#128C7E;color:#fff;text-decoration:none" href="'+_procEsc(wa)+'" target="_blank" rel="noopener">WhatsApp</a>'):'')
+      +'<a class="btn sm ghost" href="'+_procEsc(link)+'" target="_blank" rel="noopener">abrir</a>'
+    +'</div>';
+}
+function _procCopiarLink(btn){
+  var el=document.getElementById('proc-link'); if(!el) return;
+  el.select(); el.setSelectionRange(0,99999);
+  var ok=false; try{ ok=document.execCommand('copy'); }catch(e){}
+  if(!ok&&navigator.clipboard){ try{ navigator.clipboard.writeText(el.value); ok=true; }catch(e){} }
+  if(btn){ var t=btn.textContent; btn.textContent=ok?'✓ copiado':'selecione e copie'; setTimeout(function(){ btn.textContent=t; },1800); }
 }
 /* ===== Gerar contrato de honorários automático (Word + PDF) — mesmo esquema da
    procuração acima, mas com clausulado variável: pergunta se tem honorários
