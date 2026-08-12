@@ -3106,7 +3106,11 @@ function renderCaptacao(){
       /* o caso/processo nasce já na ASSINATURA da procuração (ou checklist/fechado) */
       var GAT=['assinado','checklist','ganho'];
       var eraGat=GAT.indexOf(l.estagio)>=0;
+      var _era=l.estagio;
       l.estagio=c.id; if(c.id==='ganho'&&!l.dataFechamento) l.dataFechamento=hojeISO(); salvarLeadsLocal(); renderCaptacao();
+      /* assinou procuração/contrato: abre o caso administrativo já preenchido */
+      if(c.id==='assinado'&&_era!=='assinado') fecharLeadEAbrirCaso(l,'caso');
+      if(c.id==='ganho'&&_era!=='ganho') fecharLeadEAbrirCaso(l);
       if(GAT.indexOf(c.id)>=0 && !eraGat && !l.casoCriado){ l.casoCriado=true; salvarLeadsLocal(); fecharLeadEAbrirCaso(l); }
     }};
     var mvL=(idx>0)?'<a onclick="moverEtapa('+idx+',-1)" style="cursor:pointer;color:var(--muted);text-decoration:none" title="mover para a esquerda">&#9664;</a> ':'';
@@ -3224,15 +3228,30 @@ function moverEtapa(idx,dir){
 /* marca/desmarca a etapa como "mesmo andar" da anterior — no gráfico as duas dividem a faixa */
 function toggleNivel(idx){ var f=FUNIL[idx]; if(!f) return; f.juntar=!f.juntar; salvarFunilLocal(); renderCaptacao(); }
 function primeiroUltimo(n){var p=String(n||"").trim().split(/\s+/);if(p.length<=1)return p[0]||"";return p[0]+" "+p[p.length-1];}
-function moverLead(dragId,targetId){var di=LEADS.findIndex(function(x){return x.id===dragId;});var t=LEADS.find(function(x){return x.id===targetId;});if(di<0||!t||dragId===targetId)return;var d=LEADS[di];_leadAck(d);var eraGanho=(d.estagio==='ganho');d.estagio=t.estagio; if(t.estagio==='ganho'&&!d.dataFechamento) d.dataFechamento=hojeISO(); LEADS.splice(di,1);var ti=LEADS.findIndex(function(x){return x.id===targetId;});LEADS.splice(ti,0,d);salvarLeadsLocal();renderCaptacao(); if(t.estagio==='ganho'&&!eraGanho) fecharLeadEAbrirCaso(d);}
+function moverLead(dragId,targetId){var di=LEADS.findIndex(function(x){return x.id===dragId;});var t=LEADS.find(function(x){return x.id===targetId;});if(di<0||!t||dragId===targetId)return;var d=LEADS[di];_leadAck(d);var eraGanho=(d.estagio==='ganho');var eraEstagio=d.estagio;d.estagio=t.estagio; if(t.estagio==='ganho'&&!d.dataFechamento) d.dataFechamento=hojeISO(); LEADS.splice(di,1);var ti=LEADS.findIndex(function(x){return x.id===targetId;});LEADS.splice(ti,0,d);salvarLeadsLocal();renderCaptacao();
+  if(t.estagio==='assinado'&&eraEstagio!=='assinado') fecharLeadEAbrirCaso(d,'caso');
+  if(t.estagio==='ganho'&&!eraGanho) fecharLeadEAbrirCaso(d);}
 /* ao FECHAR um lead (arrastar para "Fechado"), abre o cadastro de caso já preenchido com o lead */
-function fecharLeadEAbrirCaso(l){
+/* Lead que virou cliente abre o cadastro já preenchido. Em 'assinado'
+   (procuração/contrato assinados) o caso nasce como CASO ADMINISTRATIVO, com
+   número interno automático: o processo judicial ainda não existe, e é aqui que
+   os documentos do cliente precisam de uma pasta. Em 'ganho' segue como estava.
+   Os arquivos do card sobem para a pasta ao salvar (transferirArqsLeadParaProc). */
+function fecharLeadEAbrirCaso(l, modo){
   if(!l||typeof abrirCadManual!=='function') return;
   try{
     abrirCadManual();
-    if(typeof setCadTipo==='function') setCadTipo('novo');
+    if(modo==='caso'){
+      if(typeof setCadTipo==='function') setCadTipo('caso');
+      var idc=document.getElementById('cm-casoid');
+      if(idc && !idc.value && typeof _numCasoAuto==='function') idc.value=_numCasoAuto();
+    } else if(typeof setCadTipo==='function') setCadTipo('novo');
     var sel=document.getElementById('cm-lead'); if(sel) sel.value=String(l.id);
     if(typeof cmPuxarLead==='function') cmPuxarLead(l.id);
+    if(modo==='caso'){
+      var st=document.getElementById('cm-lead-status');
+      if(st) st.innerHTML='✓ dados do lead preenchidos. <b>Caso administrativo</b> — ao salvar, os arquivos do card sobem para a pasta.';
+    }
   }catch(e){}
 }
 function initKanban(){
