@@ -93,6 +93,7 @@ export default function ChatMobile() {
   const [entrando, setEntrando] = useState(false)
 
   const [pessoas, setPessoas] = useState([])       // colegas (id, nome)
+  const [emFerias, setEmFerias] = useState({})     // id -> true (não recebe chat)
   const [porId, setPorId] = useState({})
   const [alvo, setAlvo] = useState(null)           // null = Todos; ou {id,nome} = privado
   const [msgs, setMsgs] = useState([])
@@ -153,6 +154,25 @@ export default function ChatMobile() {
   }
   function sair() { supabase.auth.signOut() }
 
+  // Quem está de férias não recebe chat (nem privado nem do grupo) — a regra
+  // vale de verdade no servidor, que não dispara o alarme. Aqui é só o aviso na
+  // tela: o chip fica cinza para ninguém mandar recado achando que chegou.
+  const marcarFerias = useCallback(async (contas) => {
+    try {
+      const { data } = await supabase.from('produtividade_config').select('valor').eq('chave', 'assentos').maybeSingle()
+      if (!data || !data.valor) return
+      const assentos = JSON.parse(data.valor)
+      if (!Array.isArray(assentos)) return
+      const hoje = new Date(Date.now() - 3 * 3600 * 1000).toISOString().slice(0, 10)
+      const fora = assentos.filter(a => { const f = a && a.ferias; return f && f.fim && (!f.ini || hoje >= f.ini) && hoje <= f.fim })
+      if (!fora.length) return
+      const nomes = new Set(fora.map(a => normaliza(a.nome)).filter(Boolean))
+      const mapa = {}
+      ;(contas || []).forEach(c => { if (nomes.has(normaliza(c.nome))) mapa[c.id] = true })
+      setEmFerias(mapa)
+    } catch (e) { /* sem a config, ninguém fica marcado */ }
+  }, [])
+
   // ---------- pessoas (nomes reais — nunca confiar em autor_nome da mensagem) ----------
   useEffect(() => {
     if (!euId) return
@@ -161,6 +181,7 @@ export default function ChatMobile() {
       const mapa = {}; todos.forEach(u => { mapa[u.id] = u })
       setPorId(mapa)
       setPessoas(todos.filter(u => u.id !== euId))
+      marcarFerias(todos)
     })
   }, [euId])
   const nomeDe = useCallback((id) => (porId[id] && porId[id].nome) || '', [porId])
@@ -449,7 +470,10 @@ export default function ChatMobile() {
       <div style={{ display: 'flex', gap: 6, padding: '8px 10px', overflowX: 'auto', background: '#fff', borderBottom: '1px solid #ddd', flexShrink: 0 }}>
         <button onClick={() => trocarAlvo(null)} style={{ flexShrink: 0, border: !alvo ? '1.5px solid ' + VERDE : '1px solid #ddd', background: !alvo ? '#e7f7f2' : '#fff', color: '#222', borderRadius: 16, padding: '8px 14px', fontSize: fs(12.5), fontWeight: 600, cursor: 'pointer' }}>👥 Todos</button>
         {pessoas.map(p => (
-          <button key={p.id} onClick={() => trocarAlvo({ id: p.id, nome: p.nome })} style={{ flexShrink: 0, border: alvo && alvo.id === p.id ? '1.5px solid ' + VERDE : '1px solid #ddd', background: alvo && alvo.id === p.id ? '#e7f7f2' : '#fff', color: '#222', borderRadius: 16, padding: '8px 14px', fontSize: fs(12.5), fontWeight: 600, cursor: 'pointer' }}>🔒 {rotulos[p.id] || (p.nome || '').split(' ')[0]}</button>
+          <button key={p.id} disabled={!!emFerias[p.id]} title={emFerias[p.id] ? 'De férias — não recebe mensagem' : ''}
+            onClick={() => trocarAlvo({ id: p.id, nome: p.nome })}
+            style={{ flexShrink: 0, border: alvo && alvo.id === p.id ? '1.5px solid ' + VERDE : '1px solid #ddd', background: emFerias[p.id] ? '#f2f2f2' : (alvo && alvo.id === p.id ? '#e7f7f2' : '#fff'), color: emFerias[p.id] ? '#9aa' : '#222', borderRadius: 16, padding: '8px 14px', fontSize: fs(12.5), fontWeight: 600, cursor: emFerias[p.id] ? 'default' : 'pointer' }}>
+            {emFerias[p.id] ? '🏖' : '🔒'} {rotulos[p.id] || (p.nome || '').split(' ')[0]}</button>
         ))}
       </div>
 
