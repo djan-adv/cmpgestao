@@ -2449,7 +2449,8 @@ function abrir(i){
       '<button class="btn sm" style="background:#f7f3e8;color:#8a6d00;border:1px solid #e8dcbb;font-weight:700;font-size:11px;padding:3px 8px" onclick="abrirGerarProcuracao(\''+p.numero+'\')" title="Gera a procuração pronta (Word + PDF, padrão CMP) com os dados que o sistema já tem — só pede o que faltar">&#9997; Gerar procuração</button>'+
       '<button class="btn sm ghost" style="font-weight:700;font-size:11px;padding:3px 8px" onclick="abrirAssinatura(\''+p.numero+'\')" title="Gerar link de procuração para o CLIENTE preencher o que faltar e assinar eletronicamente à distância">&#128231; p/ assinatura eletrônica</button>'+
       '<button class="btn sm" style="background:#f4eefb;color:#6d28a8;border:1px solid #ddd0f0;font-weight:700;font-size:11px;padding:3px 8px" onclick="escolherDocParaAssinar(\''+p.numero+'\')" title="Escolher um documento que já está na pasta e gerar o link de assinatura">&#9997; Assinar documento da pasta</button>'+
-      '<button class="btn sm" style="background:#e8f4f0;color:#0F6E56;border:1px solid #bfe0d4;font-weight:700;font-size:11px;padding:3px 8px" onclick="criarSalaReuniao(\''+p.numero+'\')" title="Cria uma sala de vídeo e gera o link para o cliente entrar pelo navegador, sem instalar nada">&#127909; Reunião por vídeo</button>'+
+      '<button class="btn sm" style="background:#e8f4f0;color:#0F6E56;border:1px solid #bfe0d4;font-weight:700;font-size:11px;padding:3px 8px" onclick="criarSalaReuniao(\''+p.numero+'\')" title="Sala do próprio escritório: o cliente entra pelo navegador, sem instalar nada, e a conversa é transcrita para o histórico. Não guarda gravação.">&#127909; Sala de vídeo (nossa)</button>'+
+      '<button class="btn sm" style="background:#eef3fa;color:#185FA5;border:1px solid #cfe0f2;font-weight:700;font-size:11px;padding:3px 8px" onclick="criarMeetExterno(\''+p.numero+'\')" title="Cria uma reunião no Google Meet e põe no calendário — para quando o cliente já usa Meet ou a reunião tem mais de duas pessoas">&#128197; Meet (externo)</button>'+
       '<button class="btn sm" style="background:#eef3fa;color:#185FA5;border:1px solid #cfe0f2;font-weight:700;font-size:11px;padding:3px 8px" onclick="abrirGerarContrato(\''+p.numero+'\')" title="Gera o contrato de honorários pronto (Word + PDF, padrão CMP) — pergunta objeto, honorários iniciais/parcelamento e percentual de êxito">&#128220; Gerar contrato</button>'+
       '<button class="btn sm" style="background:#7b1e3a;color:#fff;border:1px solid #7b1e3a;font-weight:700;font-size:11px;padding:3px 8px" onclick="abrirProtocolarPeticao(\''+p.numero+'\')" title="Guarda a peça no sistema com prazo fatal e alerta — pronta para protocolo (PDF) ou aguardando ajuste (Word). O protocolo em si é feito no jus.br.">&#128228; Subir petição para protocolo</button>'+
     '</div>'+
@@ -9681,6 +9682,25 @@ function _renomearInline(nm, dig, relFull, numero, sub, escopo, nomeAtual){
   inp.onclick=function(ev){ ev.stopPropagation(); };
   inp.onkeydown=function(ev){ if(ev.key==='Enter'){ ev.preventDefault(); salvar(); } else if(ev.key==='Escape'){ done=true; carregarDocs(numero,sub,escopo); } };
   inp.onblur=salvar;
+}
+/* Reunião no Google Meet: link do Google, evento no calendário do escritório.
+   Serve quando o cliente já usa Meet, quando são mais de duas pessoas (a sala
+   própria é 1 a 1) ou quando a rede não deixa a chamada direta fechar. Em troca,
+   áudio e vídeo passam pelo Google — a sala própria é a que não guarda gravação. */
+async function criarMeetExterno(numero){
+  try{
+    var proc=(typeof atual!=='undefined'&&atual)?atual:{};
+    var cli=(typeof _partesSplit==='function'?(_partesSplit(proc.cliente)[0]||''):String(proc.cliente||''))||'';
+    var titulo=window.prompt('Título da reunião no Meet (vai para o calendário):','Reunião — '+(cli||'cliente'));
+    if(titulo===null) return;
+    var tok=await docToken();
+    var r=await fetch('/api/google/meet',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},
+      body:JSON.stringify({titulo:(titulo||'').trim(), processo:(numero||proc.numero||'')})});
+    var j=await r.json().catch(function(){return {};});
+    if(!r.ok||!j.ok){ alert('Não consegui criar no Google Meet:\n\n'+((j&&j.erro)||('HTTP '+r.status))+'\n\nSe o Google não estiver conectado, use a sala do escritório.'); return; }
+    var tel=''; try{ (typeof splitCtlTokens==='function'?splitCtlTokens(proc.ctl||''):[]).some(function(t){ if(!/@/.test(t)&&String(t).replace(/\D/g,'').length>=10){ tel=t; return true; } return false; }); }catch(e){}
+    _modalSalaCriada(j.link, cli, tel, (titulo||'').trim()+' (Google Meet)');
+  }catch(e){ alert('Erro: '+((e&&e.message)||e)); }
 }
 /* ===== Reunião por vídeo com o cliente =====
    Cria a sala e devolve o link pronto para mandar. O cliente abre no navegador,
@@ -17447,8 +17467,10 @@ async function monitTrazerAssessoria(id){
          com o escritório agora. */
       +'<button id="cmp-chat-cliconv" title="Conversas com clientes" style="margin-left:auto;border:0;background:transparent;font-size:15px;line-height:1;cursor:pointer;padding:2px 4px;position:relative">📨'
       +'<span id="cmp-chat-cliconv-b" style="display:none;position:absolute;top:-2px;right:-4px;background:#b5342b;color:#fff;border-radius:9px;font-size:9.5px;font-weight:700;padding:0 4px;line-height:14px"></span></button>'
-      +'<button id="cmp-chat-fone" title="Ligar (voz) para a pessoa escolhida no seletor — conversa direta entre os dois aparelhos" style="border:0;background:transparent;font-size:15px;line-height:1;cursor:pointer;padding:2px 4px">📞</button>'
-      +'<button id="cmp-chat-video" title="Chamada de vídeo com a pessoa escolhida no seletor" style="border:0;background:transparent;font-size:15px;line-height:1;cursor:pointer;padding:2px 4px">🎥</button>'
+      /* chamadas ficam no cabeçalho, como no WhatsApp — e com fundo próprio,
+         para ninguém confundir com o clipe de anexo lá do campo de escrever */
+      +'<button id="cmp-chat-video" title="Chamada de VÍDEO (câmera e microfone) com a pessoa escolhida ao lado do campo de escrever" style="border:0;background:rgba(15,110,86,.12);color:#0F6E56;border-radius:50%;width:30px;height:30px;font-size:15px;line-height:1;cursor:pointer;padding:0">📹</button>'
+      +'<button id="cmp-chat-fone" title="Chamada de VOZ (só microfone) com a pessoa escolhida ao lado do campo de escrever" style="border:0;background:rgba(15,110,86,.12);color:#0F6E56;border-radius:50%;width:30px;height:30px;font-size:15px;line-height:1;cursor:pointer;padding:0">📞</button>'
       +'<button id="cmp-chat-sino" title="Ativar o alarme no celular para as mensagens da equipe" style="border:0;background:transparent;font-size:15px;line-height:1;cursor:pointer;padding:2px 4px">🔕</button>'
       +'<button id="cmp-chat-cor" title="Escolher minha cor no chat" style="border:0;background:transparent;font-size:15px;line-height:1;cursor:pointer;padding:2px 4px">🎨</button>'
       +'<button id="cmp-chat-min" title="Minimizar" style="border:0;background:transparent;color:#5a5326;font-weight:700;font-size:15px;line-height:1;cursor:pointer;padding:2px 4px">▁</button></div>'
@@ -17460,7 +17482,7 @@ async function monitTrazerAssessoria(id){
       +'<div style="display:flex;gap:6px;padding:8px;border-top:1px solid #e0d9a0;align-items:center">'
       +'<select id="cmp-chat-para" title="Para quem vai a mensagem" style="max-width:120px;font-size:12px;padding:6px;border:1px solid #d8d093;border-radius:7px;background:#fffdf0;color:#1b1b1b"><option value="">👥 Todos</option></select>'
       +'<input id="cmp-chat-txt" placeholder="escreva, tecle Enter ou cole um print…" style="flex:1;font-size:13px;padding:7px 9px;border:1px solid #d8d093;border-radius:7px;background:#fffdf0;color:#1b1b1b">'
-      +'<button id="cmp-chat-print" title="Anexar arquivo (print, PDF, Word, planilha… ou cole um print com Ctrl+V no campo de texto)" style="border:0;background:transparent;font-size:16px;cursor:pointer;padding:4px 6px">📎</button>'
+      +'<button id="cmp-chat-print" title="Anexar arquivo — print, PDF, Word, planilha (ou cole um print com Ctrl+V no campo de texto). Para ligar, use os botões do topo." style="border:0;background:transparent;font-size:16px;cursor:pointer;padding:4px 6px">📎</button>'
       +'<input type="file" id="cmp-chat-printfile" style="display:none">'
       +'<button id="cmp-chat-env" style="border:0;background:#5a5326;color:#fff;border-radius:7px;padding:7px 11px;font-weight:700;cursor:pointer">➤</button>'
       +'</div></div>';
