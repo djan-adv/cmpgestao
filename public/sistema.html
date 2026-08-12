@@ -1531,6 +1531,11 @@ function fecharAcessos(){ document.getElementById('modal-acessos').classList.add
    altura da tela no celular e o botão nunca era alcançado. */
 function abrirPublicar(){
   var m=document.getElementById('modal-publicar'); if(!m) return;
+  /* Empilhamento: com o mesmo z-index, quem vem DEPOIS no HTML fica por cima —
+     e este modal mora antes do de acessos. Abria atrás dele, e só aparecia ao
+     girar o aparelho (que força o navegador a repintar tudo). Mandar o elemento
+     para o fim do body na hora de abrir resolve independentemente da ordem. */
+  try{ if(m.parentNode!==document.body || m.nextSibling) document.body.appendChild(m); }catch(e){}
   m.classList.remove('hidden');
   if(typeof renderPublicarResumo==='function') renderPublicarResumo();
 }
@@ -6689,7 +6694,10 @@ function toggleConcluirTarefa(id){
   var SB_URL='https://ndeqlyrydcijbgjiviuw.supabase.co';
   var SB_KEY='sb_publishable_X5Jo69qYCQOMEg0fu2yc1w_gIYwWuQD';
   if(!window.supabase){ console.error('supabase-js nao carregou'); return; }
-  var sb=window.supabase.createClient(SB_URL,SB_KEY);
+  /* Sessão guardada e renovada sozinha: quem entra uma vez no celular não pode
+     ser mandado para a tela de login depois. (São os padrões do supabase-js,
+     escritos aqui de propósito — é comportamento do qual o sistema depende.) */
+  var sb=window.supabase.createClient(SB_URL,SB_KEY,{auth:{persistSession:true,autoRefreshToken:true}});
   window.__sb=sb;
   var g=await sb.auth.getSession();
   if(!g.data||!g.data.session){ document.documentElement.removeAttribute('data-boot'); location.replace('/'); return; }
@@ -6718,7 +6726,12 @@ function toggleConcluirTarefa(id){
          depender do localStorage. */
       try{
         var _recu=await sb.from('sessao_dispositivos').select('dispositivo_id,ua,ultimo_uso').eq('user_id',_uid).eq('ua',_uaAgora).order('ultimo_uso',{ascending:false}).limit(1).maybeSingle();
-        if(_recu&&_recu.data&&_recu.data.dispositivo_id&&_recu.data.ultimo_uso&&(Date.now()-new Date(_recu.data.ultimo_uso).getTime())<24*3600*1000){
+        /* 90 dias, não 24 horas: o mesmo iPhone tem armazenamento SEPARADO no
+           Safari e no atalho da tela de início, então o app instalado chega aqui
+           sem id e gastava um slot novo — com três aparelhos, o quarto acesso
+           era barrado. Reconhecer o mesmo navegador por mais tempo evita isso, e
+           também o aparelho que ficou uma semana parado. */
+        if(_recu&&_recu.data&&_recu.data.dispositivo_id&&_recu.data.ultimo_uso&&(Date.now()-new Date(_recu.data.ultimo_uso).getTime())<90*24*3600*1000){
           _dev=_recu.data.dispositivo_id;
         }
       }catch(e){}
