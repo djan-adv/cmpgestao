@@ -17179,13 +17179,19 @@ async function monitTrazerAssessoria(id){
        seletor em "Todos", a resposta a um assunto privado sairia para o
        escritório inteiro sem ninguém perceber. O outro lado da conversa é quem
        não sou eu. */
-    if(m.para_id){
-      var outro=(m.autor_id===eu)?m.para_id:m.autor_id;
-      var sel=document.getElementById('cmp-chat-para');
-      if(sel && outro && outro!==eu){
-        var tem=false;
-        for(var i=0;i<sel.options.length;i++){ if(sel.options[i].value===outro){ tem=true; break; } }
-        if(tem) sel.value=outro;
+    var sel=document.getElementById('cmp-chat-para');
+    if(sel){
+      if(m.para_id){
+        var outro=(m.autor_id===eu)?m.para_id:m.autor_id;
+        if(outro && outro!==eu){
+          var tem=false;
+          for(var i=0;i<sel.options.length;i++){ if(sel.options[i].value===outro){ tem=true; break; } }
+          if(tem) sel.value=outro;
+        }
+      } else {
+        /* pergunta feita ao grupo: a resposta volta ao grupo, mesmo que o
+           seletor tenha ficado numa conversa privada de antes */
+        sel.value='';
       }
     }
     pintarReply();
