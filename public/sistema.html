@@ -7350,16 +7350,26 @@ async function salvarCadManual(){
     try{ seedContatos(); }catch(e){}
     var nk=normClienteNome(cli);
     var match=(window.__cmCliMatch&&normClienteNome(window.__cmCliMatch.nome)===nk)?window.__cmCliMatch:((CONTATOS||[]).find(function(x){return normClienteNome(x.nome)===nk;}));
+    /* telefone/e-mail do lead do Comercial — sem isso, ficava só escrito no
+       texto da observação (ilegível como dado) e nunca virava contato de
+       verdade na ficha do processo */
+    var ld=window.__cadLead||{};
+    var ldTel=(ld.tel||''), ldMail=(ld.email||'');
     if(match){
-      /* cliente já existe → traz os dados de contato dele para o processo */
-      var mtel=(match.tel&&match.tel!=='—')?match.tel:'', mmail=(match.email&&match.email!=='—')?match.email:'';
+      /* cliente já existe → traz os dados de contato dele para o processo;
+         o que faltar nele, completa com o que veio do lead */
+      var mtel=(match.tel&&match.tel!=='—')?match.tel:ldTel, mmail=(match.email&&match.email!=='—')?match.email:ldMail;
       if(mtel||mmail){ try{ mergeContatoNoProcesso(novo,mtel,mmail); }catch(e){} }
+      try{ var sbu=window.__sb; if(sbu&&(ldTel||ldMail)){ var updc={}; if(ldMail&&(!match.email||match.email==='—')) updc.email=ldMail; if(ldTel&&(!match.tel||match.tel==='—')) updc.telefone=ldTel;
+        if(Object.keys(updc).length) await sbu.from('contatos').update(updc).ilike('nome',cli); } }catch(e){}
     } else {
-      /* cliente novo → cria contato (aba Contatos) e persiste no banco */
+      /* cliente novo → cria contato (aba Contatos) já com telefone/e-mail do
+         lead, quando existirem, e persiste no banco */
+      if(ldTel||ldMail){ try{ mergeContatoNoProcesso(novo,ldTel,ldMail); }catch(e){} }
       try{ var sb2=window.__sb; if(sb2){ var esc3=null; try{ var ug2=await sb2.auth.getUser(); var pf2=await sb2.from('usuarios').select('escritorio_id').eq('id',ug2.data.user.id).single(); esc3=pf2&&pf2.data&&pf2.data.escritorio_id; }catch(e){}
-        var regc={nome:cli,tipo:'cliente'}; if(esc3) regc.escritorio_id=esc3;
+        var regc={nome:cli,tipo:'cliente'}; if(ldMail) regc.email=ldMail; if(ldTel) regc.telefone=ldTel; if(esc3) regc.escritorio_id=esc3;
         await sb2.from('contatos').insert(regc);
-        window.__CONTATOSDB=(window.__CONTATOSDB||[]); window.__CONTATOSDB.push({nome:cli,origem:'cadastro de processo'});
+        window.__CONTATOSDB=(window.__CONTATOSDB||[]); window.__CONTATOSDB.push({nome:cli,email:ldMail,telefone:ldTel,origem:'cadastro de processo'});
       } }catch(e){ console.warn('criar contato:',e&&e.message||e); }
     }
     CONTATOS=null; /* força re-sincronizar para refletir na aba Contatos */
