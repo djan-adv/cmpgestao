@@ -1021,7 +1021,9 @@ export default function ChatMobile() {
         <button type="button" onClick={() => fileInputRef.current && fileInputRef.current.click()} title="Enviar print"
           style={{ width: 40, height: 40, borderRadius: '50%', border: '1px solid #ddd', background: '#fff', fontSize: 17, cursor: 'pointer', flexShrink: 0 }}>📷</button>
         <input ref={inputRef} value={texto} onChange={e => setTexto(e.target.value)} placeholder="Mensagem ou cole um print"
-          autoComplete="off" onPaste={e => {
+          autoComplete="off" enterKeyHint="send"
+          onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); enviar(e) } }}
+          onPaste={e => {
             const f = Array.prototype.find.call(e.clipboardData.files || [], f => /^image\//.test(f.type))
             if (f) { e.preventDefault(); enviarPrint(f) }
           }}
