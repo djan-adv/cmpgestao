@@ -204,6 +204,7 @@ export async function POST(request) {
           title: row.titulo,
           content: (row.conteudo_html || row.resumo || '') + '\n' + EMBED_CHAT_HTML,
           status: 'publish',
+          comment_status: 'closed',   // a caixa "Deixe um comentário" do tema sai, o chat entra no lugar
           excerpt: stripHtml(row.conteudo_html || '').slice(0, 200),
           ...(categoriaDe(row.tema) ? { categories: [categoriaDe(row.tema)] } : {}),
         }),

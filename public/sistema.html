@@ -798,6 +798,12 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
       <button class="btn sm ghost" onclick="elementorListarBotoes('djan')">Ver botões — djan.com.br</button>
       <span class="note" style="margin:0">Lista os botões com link achados nos dados do Elementor; escolha um pelo número pra trocar o link, no mesmo fluxo.</span>
     </div>
+    <div class="coord-only" style="background:#fff8e6;border:1px solid #e8dcbb;border-radius:10px;padding:10px 12px;margin:10px 0;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <b style="font-size:12.5px;color:#7a5f12">🔗 Substituir um widget (ex.: formulário quebrado) pelo chat:</b>
+      <button class="btn sm ghost" onclick="elementorListarWidgets('cmp')">Ver widgets — cmpadvogados.com.br</button>
+      <button class="btn sm ghost" onclick="elementorListarWidgets('djan')">Ver widgets — djan.com.br</button>
+      <span class="note" style="margin:0">Lista todos os widgets da home (marca os que parecem formulário no topo); escolha um pra substituir por um bloco do chat, no mesmo fluxo.</span>
+    </div>
     <div id="pub-form" style="display:none;background:#f6f9fc;border:1px solid #dbe6f2;border-radius:10px;padding:12px;margin:10px 0">
       <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px">
         <div><label style="font-size:12px;font-weight:600;color:var(--muted)">Título</label><input id="pub-titulo" style="width:100%"></div>
@@ -9088,6 +9094,37 @@ async function elementorListarBotoes(site){
     var jt=await rt.json();
     if(!rt.ok||jt.erro){ alert('Não trocou: '+(jt.erro||('HTTP '+rt.status))); return; }
     alert('Link trocado! Confere ao vivo: '+jt.link_pagina);
+  }catch(e){ alert('Erro: '+(e&&e.message||e)); }
+}
+/* Home em Elementor: lista TODOS os widgets (não só com link) — marca no topo
+   os que parecem formulário (pelo texto "Nome Completo"/"e-mail"/"Enviar" ou
+   pelo tipo do widget) — e deixa escolher um pra substituir por um bloco do
+   chat (iframe), preservando a seção/coluna ao redor (só o widget escolhido
+   é trocado). Pede a altura do bloco (padrão o dobro do normal: 1240px). */
+async function elementorListarWidgets(site){
+  var rotulo=(site==='djan')?'djan.com.br':'cmpadvogados.com.br';
+  try{
+    var tok=await docToken();
+    var r=await fetch('/api/site-embed',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({acao:'listar_elementos_elementor',site:site})});
+    var j=await r.json();
+    if(!r.ok||j.erro){ alert('Não consegui listar: '+(j.erro||('HTTP '+r.status))); return; }
+    if(!j.elementor_data_acessivel){ alert(j.aviso||'Não consegui ler os dados do Elementor pela API.'); return; }
+    if(!j.widgets||!j.widgets.length){ alert('Não achei widgets nos dados do Elementor de '+rotulo+'.'); return; }
+    var mostrar=j.widgets.slice(0,25);
+    var lista=mostrar.map(function(w,i){ return (i+1)+') '+(w.suspeito_formulario?'⚠ ':'')+'"'+(w.texto||'(sem texto)')+'" ['+w.tipo+']\n   caminho: '+w.caminho; }).join('\n\n');
+    var rodape=j.total>mostrar.length?('\n\n(mostrando '+mostrar.length+' de '+j.total+' — os marcados com ⚠ parecem formulário e vêm primeiro)'):'';
+    var escolha=prompt(rotulo+' — '+j.total+' widget(s) na home:\n\n'+lista+rodape+'\n\nDigite o NÚMERO do widget que quer SUBSTITUIR pelo chat (ou cancele):');
+    if(!escolha) return;
+    var idx=parseInt(escolha,10)-1;
+    var alvo=mostrar[idx];
+    if(!alvo){ alert('Número inválido.'); return; }
+    var altura=prompt('Altura do bloco do chat, em pixels (padrão = o dobro do normal):','1240');
+    if(altura===null) return;
+    if(!confirm('Vai SUBSTITUIR o widget "'+(alvo.texto||alvo.tipo)+'" em '+rotulo+' por um bloco do chat ('+(altura||1240)+'px). Isso apaga o conteúdo atual desse widget — não dá pra desfazer por aqui. Confirma?')) return;
+    var rt=await fetch('/api/site-embed',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({acao:'substituir_widget_por_chat',site:site,caminho:alvo.caminho,altura:parseInt(altura,10)||1240})});
+    var jt=await rt.json();
+    if(!rt.ok||jt.erro){ alert('Não substituiu: '+(jt.erro||('HTTP '+rt.status))); return; }
+    alert('Substituído! Confere ao vivo: '+jt.link_pagina);
   }catch(e){ alert('Erro: '+(e&&e.message||e)); }
 }
 /* ===== Proteção contra a seta "voltar" do navegador (e o botão lateral do mouse):
