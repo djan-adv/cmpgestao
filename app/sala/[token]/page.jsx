@@ -304,15 +304,20 @@ export default function Sala({ params }) {
               style={{ position: 'absolute', right: 12, bottom: 12, width: '26vw', maxWidth: 170, borderRadius: 10, border: '2px solid rgba(255,255,255,.6)', objectFit: 'cover' }} />
           </>
         ) : (
-          // três ou mais: grade com todo mundo, eu incluído — como Meet/Zoom
-          <div style={{ position: 'absolute', inset: 0, display: 'grid', gridTemplateColumns: 'repeat(' + Math.min(2, remotos.length + 1) + ',1fr)', gap: 2 }}>
+          // três ou mais: grade com todo mundo, eu incluído — como Meet/Zoom.
+          // gridAutoRows:'1fr' é o que importa aqui: sem altura fixa na linha,
+          // o <video style="height:100%"> cai pra proporção NATIVA da câmera —
+          // e no celular, em pé, a câmera frontal é mais alta que larga. A
+          // grade inteira estourava tela abaixo, cobrindo os botões e
+          // empurrando o próprio quadradinho pra fora da vista.
+          <div style={{ position: 'absolute', inset: 0, display: 'grid', gridTemplateColumns: 'repeat(' + Math.min(2, remotos.length + 1) + ',1fr)', gridAutoRows: '1fr', gap: 2 }}>
             {remotos.map(p => (
-              <div key={p.id} style={{ position: 'relative', background: '#111' }}>
+              <div key={p.id} style={{ position: 'relative', background: '#111', overflow: 'hidden' }}>
                 <video autoPlay playsInline ref={refDoVideo(p.id)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 <span style={{ position: 'absolute', left: 6, bottom: 6, fontSize: 11, background: 'rgba(0,0,0,.5)', padding: '2px 7px', borderRadius: 6 }}>{p.nome}</span>
               </div>
             ))}
-            <div style={{ position: 'relative', background: '#111' }}>
+            <div style={{ position: 'relative', background: '#111', overflow: 'hidden' }}>
               <video ref={localRef} autoPlay playsInline muted style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               <span style={{ position: 'absolute', left: 6, bottom: 6, fontSize: 11, background: 'rgba(0,0,0,.5)', padding: '2px 7px', borderRadius: 6 }}>você</span>
             </div>
