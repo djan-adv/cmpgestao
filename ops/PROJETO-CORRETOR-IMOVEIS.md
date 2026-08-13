@@ -1,9 +1,11 @@
 # Projeto — Site do corretor de imóveis (djan.net.br)
 
-> Status: **base construída, depende de infra/credenciais do Djan para ir ao ar.**
+> Status: **banco já criado e populado no Supabase real (via MCP). Falta só a parte
+> que só o Djan consegue fazer: DNS/nginx da VPS e colar as variáveis de ambiente.**
 > Pedido original: site de perfil completo do corretor — imóveis próprios, imóveis em
 > parceria, anúncios de terceiros e portal de avaliação — **separado da CMP**, mas
-> reaproveitando VPS + GitHub + Supabase já existentes.
+> reaproveitando VPS + GitHub + Supabase já existentes. Domínio confirmado:
+> `djan.net.br`, já registrado na Hostinger.
 
 ---
 
@@ -35,6 +37,18 @@ atividades no material de divulogação do corretor. Marca, cores, favicon e tex
    endereço do imóvel, mensagem) que vira lead na aba "Solicitações" do painel — não é
    vitrine de laudos nem calculadora automática (descartado por agora; se quiser depois,
    registrar aqui antes de reimplementar).
+5. **Instagram:** vai ser criado, com foco em **intenção, não atenção** — conteúdo
+   pensado pra quem já está em decisão de comprar/vender/avaliar, não pra alcance/viral.
+   Sem conta ainda; quando tiver o `@`, entra no campo Perfil → Instagram do painel e
+   passa a aparecer no rodapé do site.
+6. **Chat "comercial" (aba esquerda, azul claro, como a Agenda):** o Djan pediu pra
+   reaproveitar um chat que "já temos pronto". Procurei no sistema inteiro (nav
+   Comercial do `sistema.html`, módulo Agenda, `app/chat/`, o widget flutuante do
+   `sistema.html`, o chat do `portal.html`) e **não existe nenhum componente que bata
+   com essa descrição** — o mais perto é o funil "Comercial" (kanban de leads, sem
+   chat) e o chat interno da equipe (`app/chat/`, verde estilo WhatsApp, preso a
+   `usuarios`/`processos` da CMP). Fica **pendente de esclarecimento** antes de
+   implementar — ver seção 6.
 
 ## 3. O que já está pronto no código (branch `claude/corretor-imoveis-profile-site-4hntzf`)
 
@@ -49,7 +63,19 @@ atividades no material de divulogação do corretor. Marca, cores, favicon e tex
 - **Banco:** `ops/sql/imoveis_schema.sql` — schema `imoveis` com as tabelas `perfil`
   (linha única, editável), `imoveis` (próprios e parceria), `anuncios` (terceiros),
   `leads` (avaliação/imóvel/parceria/contato) e `sessoes` (login do painel), mais o
-  role `imoveis_app`.
+  role `imoveis_app`. **Já aplicado no Supabase real** (projeto `cmpgestao`,
+  `ndeqlyrydcijbgjiviuw`) via MCP — schema, tabelas e role já existem lá. Isolamento
+  conferido na hora:
+  ```
+  has_table_privilege('imoveis_app','public.processos','select') → false
+  has_table_privilege('imoveis_app','public.processos','update') → false
+  has_schema_privilege('imoveis_app','imoveis','usage')           → true
+  ```
+- **2 imóveis de teste já cadastrados no banco** (`tipo='proprio'`, `status='ativo'`):
+  - Casa em Patos, Rua JK 288 — R$ 700.001
+  - Prédio comercial em Patos, Rua Felizardo Leite 44 — R$ 1.400.000
+  Faltou **UF, bairro e fotos** (o Djan não passou) — completar pelo painel
+  (`/corretor/admin` → Imóveis → Editar) assim que o site estiver no ar.
 - **API:** `app/api/imoveis/route.js` + `lib.js` — mesmo padrão da Inove (conexão
   direta via `pg`, sem `service_role`, sem tocar no cliente Supabase da CMP). Leitura
   pública (perfil, imóveis, anúncios), envio de lead público, login único do admin e
@@ -66,27 +92,36 @@ atividades no material de divulogação do corretor. Marca, cores, favicon e tex
 
 ## 4. O que falta — depende do Djan
 
-1. **Rodar o SQL:** colar `ops/sql/imoveis_schema.sql` inteiro no SQL Editor do
-   Supabase do projeto `cmpgestao`.
-2. **Senha do role:** `alter role imoveis_app with password 'uma-senha-forte';` — não
-   fica em arquivo nenhum.
+1. ~~Rodar o SQL~~ — **feito** (schema/tabelas/role já existem no Supabase real).
+2. ~~Senha do role~~ — **feita** (`imoveis_app`), gerada e aplicada. O valor foi
+   passado direto no chat (não fica em arquivo nenhum do repositório) — precisa ir
+   pro `.env.local` da VPS, ver item 3.
 3. **Variáveis de ambiente na VPS** (`/opt/cmpgestao/.env.local`, nunca commitado):
-   - `IMOVEIS_DB_URL` — connection string do Postgres do Supabase como `imoveis_app`
-     (mesmo host/porta usados em `INOVE_DB_URL`, só troca usuário/senha).
-   - `IMOVEIS_ADMIN_SENHA_HASH` — rodar `node scripts/hash-senha-imoveis.mjs "senha"`
-     e colar o resultado.
-4. **DNS + nginx:** apontar `djan.net.br` (e `www`) para a VPS, e criar o `server_name`
-   correspondente no nginx (proxy genérico pra `127.0.0.1:3000`, igual ao que já existe
-   pro `inove.djan.app.br`) + certificado SSL (certbot). Enquanto isso não acontece, dá
-   pra testar por `corretor.djan.app.br` (mesmo esquema, só precisa do DNS desse
-   subdomínio apontando pra VPS, se ainda não apontar).
+   - `IMOVEIS_DB_URL` — connection string do Postgres como `imoveis_app` (senha
+     enviada no chat). Jeito mais seguro de montar certo: **copiar a `INOVE_DB_URL`
+     que já está no `.env.local`** e só trocar usuário/senha antes do `@`
+     (`imoveis_app:<a-senha-que-mandei>@` no lugar de `inove_app:...@`) — garante o
+     mesmo host/porta que já funciona daí. Se preferir montar do zero, o formato
+     Supabase costuma ser
+     `postgresql://imoveis_app.ndeqlyrydcijbgjiviuw:<senha>@aws-0-sa-east-1.pooler.supabase.com:5432/postgres`
+     — mas confirme comparando com a `INOVE_DB_URL` real antes de usar essa segunda opção.
+   - `IMOVEIS_ADMIN_SENHA_HASH` — já gerei um hash (senha e hash enviados no chat).
+     Se preferir escolher sua própria senha do painel, é só rodar
+     `node scripts/hash-senha-imoveis.mjs "sua-senha"` e colar o resultado no lugar.
+4. **DNS + nginx:** apontar `djan.net.br` (e `www`) para a VPS (Hostinger), e criar o
+   `server_name` correspondente no nginx (proxy genérico pra `127.0.0.1:3000`, igual ao
+   que já existe pro `inove.djan.app.br`) + certificado SSL (certbot). Enquanto isso não
+   acontece, dá pra testar por `corretor.djan.app.br` (mesmo esquema, precisa do DNS
+   desse subdomínio apontando pra VPS, se ainda não apontar).
 5. **Rebuild:** `npm install` (novo pacote `pg` já é dependência existente, nada novo)
    + `npm run build` + `pm2 restart cmpgestao`.
-6. **Conteúdo real:** foto de perfil, telefone/WhatsApp, bio definitiva, primeiros
-   imóveis (fotos + dados) — tudo cadastrável direto no painel, sem precisar de deploy
-   novo.
+6. **Conteúdo real:** foto de perfil, telefone/WhatsApp, bio definitiva, completar
+   UF/bairro/fotos dos 2 imóveis de teste já cadastrados — tudo pelo painel, sem
+   precisar de deploy novo.
 7. **Logo/favicon definitivo:** hoje é um "D" provisório em SVG
    (`public/favicon-corretor.svg`) — trocar quando tiver a marca definitiva.
+8. **Chat comercial (aba esquerda, azul claro):** esclarecer o que é exatamente antes
+   de implementar — ver seção 6.
 
 ## 5. Notas técnicas
 
@@ -107,3 +142,21 @@ atividades no material de divulogação do corretor. Marca, cores, favicon e tex
   ```sql
   select has_table_privilege('imoveis_app','public.processos','select'); -- deve ser false
   ```
+
+## 6. Chat "comercial" — pendente de esclarecimento
+
+Pedido: reaproveitar "o chat que já temos pronto de comercial, aba esquerda, azul
+claro, parecido com o que já temos de agenda". Procurei em:
+- `public/sistema.html` — nav "Comercial" é o **funil de leads (kanban)**, sem chat.
+- Módulo "Agenda" — é o calendário/kanban de prazos, sem aba lateral nem chat.
+- `app/chat/` (`/chat`) — chat interno da equipe, tela cheia, cores verde/WhatsApp,
+  preso a `usuarios`/`processos`.
+- Widget flutuante do `sistema.html` (`#cmp-chat`) — **canto inferior direito**, fundo
+  amarelo claro, não esquerda/azul.
+- `public/portal.html` (`#chat`) — modal cheia tela do portal do cliente, mesmo padrão
+  de cores.
+
+**Nenhum bate com "aba esquerda, azul claro".** Antes de implementar qualquer coisa,
+preciso confirmar com o Djan: é uma tela específica que ele viu (print/link) e eu não
+achei, ou é um pedido novo (ex.: um widget de chat/WhatsApp flutuante, à esquerda, azul
+claro, pro site do corretor) inspirado na cara do menu do CMPGestão?
