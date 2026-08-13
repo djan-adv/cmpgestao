@@ -2507,7 +2507,6 @@ function abrir(i){
     '</div>';
   document.getElementById("det-body").innerHTML=html;
   posicionarHonMobile();
-  try{ _preencheFaturadoAuto(); }catch(e){}
   histShown=5; renderHistorico(); if(typeof loadAnexosProc==='function') loadAnexosProc(p.numero);
   try{ if(typeof renderPedidoVara==='function') renderPedidoVara(); }catch(e){}
   if(typeof renderAtivProc==='function') renderAtivProc();
@@ -12341,7 +12340,7 @@ function honQuadroHTML(p){
      base do contratual, não dava para conferir nada de cabeça. */
   var condV=_hv(p.valor_condenacao);
   if(condV!==0||window.__honShow.valor_condenacao){
-    out+='<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;line-height:1.6"><b style="color:var(--navy);font-size:11.5px">TOTAL DA CONDENAÇÃO</b><b style="white-space:nowrap">'+honFmtInput('valor_condenacao',p.valor_condenacao)+'</b></div>';
+    out+='<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;line-height:1.6"><b style="color:var(--navy);font-size:10px;font-weight:700;white-space:nowrap">Total da condenação</b><b style="white-space:nowrap">'+honFmtInput('valor_condenacao',p.valor_condenacao)+'</b></div>';
     out+=div;
   }
   verba('Sucumbência','hon_val_sucumbencia','hon_pct_sucumbencia',true);
@@ -12408,32 +12407,19 @@ function honQuadroHTML(p){
       +'</div>';
   }
   out+=div;
-  /* Faturado = boletos emitidos no Financeiro, numa linha só (total, o que falta
-     do contratado e vencidos, quando houver) — preenchido por
-     _preencheFaturadoAuto após a ficha abrir */
-  out+='<div style="display:flex;justify-content:space-between;gap:8px;line-height:1.5">'
-    +'<span style="color:var(--muted)">Faturado</span>'
-    +'<b id="hon-faturado-auto" style="color:#0F6E56;font-size:11px;white-space:nowrap;text-align:right" title="Boletos emitidos para este processo na aba Financeiro (cancelados não contam)">…</b>'
-    +'</div>';
-  /* rodapé: quando foi a última atualização monetária e o botão de refazer.
-     Sem data registrada não se escreve nada — o próprio botão ⟳ já diz o que
-     fazer, e a frase ocupava duas linhas em todo processo ainda não atualizado. */
+  /* três ações, uma linha só — o texto de apoio de cada uma (de onde veio o
+     valor, quando atualizou pela última vez) virou title (passar o mouse) em
+     vez de linha própria; era isso que empurrava o quadro pra baixo. */
+  var origemTxt=james?'':(p.hon_origem==='manual'?'valor digitado à mão — o robô não mexe':(p.hon_origem==='documento'?'já conferido em documento':(p.hon_origem==='estimado_formula'?'estimativa por fórmula, ainda sem checar documento':'ainda não buscado')));
   var atzTxt=p.hon_atualizado_em
-    ? ('atualizado em <b>'+String(p.hon_atualizado_em).slice(0,10).split('-').reverse().join('/')+'</b>'+(p.hon_indice?(' · '+esc(p.hon_indice)):''))
-    : '';
-  if(!james){
-    var origemTxt=p.hon_origem==='manual'?'valor digitado à mão — o robô não mexe':(p.hon_origem==='documento'?'já conferido em documento':(p.hon_origem==='estimado_formula'?'estimativa por fórmula, ainda sem checar documento':'ainda não buscado'));
-    var numEscHon=String(p.numero||'').replace(/'/g,'');
-    out+='<div style="margin-top:6px" id="hon-robo-linha">'
-      +'<button class="btn sm ghost" id="hon-robo-btn" style="width:100%;font-size:10.5px;padding:3px 8px" onclick="buscarHonorariosDoc(\''+numEscHon+'\')" title="Lê a petição inicial, a sentença/acórdão e a procuração deste processo (na pasta Documentos) e preenche valor da causa, valor da condenação e percentuais de honorários com o que estiver escrito neles">🔎 Buscar nos documentos</button>'
-      +'<div class="note" style="margin:2px 0 0;font-size:9.5px;line-height:1.3">'+esc(origemTxt)+'</div>'
-      +'</div>';
-  }
-  out+='<div style="margin-top:6px;display:flex;justify-content:'+(atzTxt?'space-between':'flex-end')+';align-items:center;gap:6px">'
-    +(atzTxt?'<span class="note" style="margin:0;font-size:10px;line-height:1.3">'+atzTxt+'</span>':'')
-    +'<button class="btn sm ghost" style="font-size:10.5px;padding:2px 8px;white-space:nowrap" onclick="abrirAtualizacaoHon()" title="Corrige todos os valores pelo índice (INPC/IPCA/IGP-M, sugerido pela sentença) + juros de mora — busca os índices oficiais do Banco Central">⟳ atualizar</button>'
+    ? ('atualizado em '+String(p.hon_atualizado_em).slice(0,10).split('-').reverse().join('/')+(p.hon_indice?(' · '+p.hon_indice):''))
+    : 'ainda não atualizado';
+  var numEscHon=String(p.numero||'').replace(/'/g,'');
+  out+='<div style="margin-top:6px;display:flex;gap:4px">'
+    +(james?'':'<button class="btn sm ghost" id="hon-robo-btn" style="flex:1;font-size:10px;padding:3px 4px" onclick="buscarHonorariosDoc(\''+numEscHon+'\')" title="'+esc(origemTxt)+' — clique pra ler a petição inicial, a sentença/acórdão e a procuração (pasta Documentos) e preencher valor da causa, condenação e percentuais">🔎 Buscar</button>')
+    +'<button class="btn sm ghost" style="flex:1;font-size:10px;padding:3px 4px" onclick="abrirAtualizacaoHon()" title="'+esc(atzTxt)+' — corrige os valores pelo índice (INPC/IPCA/IGP-M) + juros de mora, com os índices oficiais do Banco Central">⟳ Atualizar</button>'
+    +'<button class="btn sm" style="flex:1;background:#FE3E6D;border-color:#FE3E6D;color:#fff;font-weight:700;font-size:10px;padding:3px 4px" onclick="boletoDoProcesso()" title="Se já há boletos deste processo, reenvia o mais recente por e-mail; se não há, abre a criação de um novo já vinculado a este processo">💳 Boleto</button>'
     +'</div>';
-  out+='<div style="margin-top:6px"><button class="btn sm" style="width:100%;background:#FE3E6D;border-color:#FE3E6D;color:#fff;font-weight:700;font-size:11.5px;padding:4px 10px" onclick="boletoDoProcesso()" title="Se já há boletos deste processo, reenvia o mais recente por e-mail; se não há, abre a criação de um novo boleto já vinculado a este processo">💳 Gerar boleto</button></div>';
   out+='</div>';
   return out;
 }
@@ -12566,38 +12552,6 @@ async function aplicarAtualizacaoHon(btn){
     var i=DADOS.processos.indexOf(atual); if(i>=0) abrir(i);
   }catch(e){ alert('Erro: '+((e&&e.message)||e)); }
   finally{ if(btn){ btn.textContent=t0; btn.disabled=false; } }
-}
-/* Faturado = soma dos boletos deste processo (fonte: cora_cobrancas, exclui os
-   cancelados). Apagar/cancelar no Financeiro reflete aqui automaticamente.
-   Uma linha só: total faturado, o que falta do contratado (se houver) e
-   vencidos (se houver) — o detalhe de pagos/em aberto/programadas continua
-   disponível no title (passar o mouse) em vez de ocupar espaço na ficha. */
-async function _preencheFaturadoAuto(){
-  var el=document.getElementById('hon-faturado-auto'); if(!el||typeof atual==='undefined'||!atual) return;
-  var reais=function(c){ return 'R$ '+(c/100).toFixed(2).replace('.',','); };
-  try{
-    var p=atual;
-    var bols=(await _boletosDoProcesso(p)).filter(function(x){ return x.status!=='cancelada'; });
-    var tot=bols.reduce(function(s,b){ return s+(parseInt(b.valor_centavos,10)||0); },0);
-    var pagosB=bols.filter(function(x){return x.status==='paga';});
-    var abertosB=bols.filter(function(x){return x.status!=='paga';});
-    var pagosC=pagosB.reduce(function(s,b){ return s+(parseInt(b.valor_centavos,10)||0); },0);
-    var hoje=new Date().toISOString().slice(0,10);
-    var vencidos=abertosB.filter(function(x){ return x.vencimento && String(x.vencimento).slice(0,10)<hoje; }).length;
-    var txt=bols.length?reais(tot):'R$ 0,00';
-    var contratadoC=Math.round(_hv(p.hon_val_contratual)*100);
-    if(contratadoC>0){
-      var aFat=contratadoC-tot;
-      if(aFat>0) txt+=' (falta '+reais(aFat)+')';
-      else if(bols.length) txt+=' ✓';
-    }
-    if(vencidos) txt+=' · '+vencidos+' vencido'+(vencidos===1?'':'s');
-    el.textContent=txt;
-    el.style.color=vencidos?'#b5342b':'#0F6E56';
-    el.title=bols.length
-      ? ('pagos: '+reais(pagosC)+' ('+pagosB.length+') · em aberto: '+reais(tot-pagosC)+' ('+abertosB.length+')')
-      : 'Boletos emitidos para este processo na aba Financeiro (cancelados não contam)';
-  }catch(e){ el.textContent='—'; }
 }
 /* No celular, o quadro de Honorários fica melhor abaixo do card "Dados do processo"
    (e acima do histórico), em vez de no topo da ficha. No desktop continua no canto
