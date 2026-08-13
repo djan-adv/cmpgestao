@@ -137,6 +137,7 @@ export default function ChatMobile() {
   const [entrando, setEntrando] = useState(false)
 
   const [pessoas, setPessoas] = useState([])       // colegas (id, nome)
+  const [online, setOnline] = useState({})         // id -> true (com o sistema/chat aberto agora)
   const [emFerias, setEmFerias] = useState({})     // id -> true (não recebe chat)
   const [leituras, setLeituras] = useState({})     // user_id -> {canal: ultimo_id} (vistos ✓/✓✓)
   const [porId, setPorId] = useState({})
@@ -290,6 +291,19 @@ export default function ChatMobile() {
       marcarFerias(todos)
     })
   }, [euId])
+
+  // presença: mesmo canal do sistema (computador) — quem está com um dos dois aberto conta como online
+  useEffect(() => {
+    if (!euId) return
+    const canal = supabase.channel('presenca-equipe', { config: { presence: { key: String(euId) } } })
+    canal.on('presence', { event: 'sync' }, () => {
+      const st = canal.presenceState()
+      const mapa = {}; Object.keys(st).forEach(k => { mapa[k] = true })
+      setOnline(mapa)
+    }).subscribe((status) => { if (status === 'SUBSCRIBED') canal.track({ em: Date.now() }) })
+    return () => { supabase.removeChannel(canal) }
+  }, [euId])
+
   const nomeDe = useCallback((id) => (porId[id] && porId[id].nome) || '', [porId])
   const corDe = useCallback((id) => {
     if (porId[id] && porId[id].cor_chat) return porId[id].cor_chat
@@ -876,10 +890,11 @@ export default function ChatMobile() {
       <div style={{ display: 'flex', gap: 6, padding: '8px 10px', overflowX: 'auto', background: '#fff', borderBottom: '1px solid #ddd', flexShrink: 0 }}>
         <button onClick={() => trocarAlvo(null)} style={{ flexShrink: 0, border: !alvo ? '1.5px solid ' + VERDE : '1px solid #ddd', background: !alvo ? '#e7f7f2' : '#fff', color: '#222', borderRadius: 16, padding: '8px 14px', fontSize: fs(12.5), fontWeight: 600, cursor: 'pointer' }}>👥 Todos</button>
         {pessoas.map(p => (
-          <button key={p.id} title={emFerias[p.id] ? 'De férias — não recebe mensagem' : ''}
+          <button key={p.id} title={emFerias[p.id] ? 'De férias — não recebe mensagem' : (online[p.id] ? 'Online agora' : 'Offline')}
             onClick={() => trocarAlvo({ id: p.id, nome: p.nome })}
-            style={{ flexShrink: 0, border: alvo && alvo.id === p.id ? '1.5px solid ' + VERDE : '1px solid #ddd', background: emFerias[p.id] ? '#f2f2f2' : (alvo && alvo.id === p.id ? '#e7f7f2' : '#fff'), color: emFerias[p.id] ? '#9aa' : '#222', borderRadius: 16, padding: '8px 14px', fontSize: fs(12.5), fontWeight: 600, cursor: 'pointer' }}>
-            {emFerias[p.id] ? '🏖' : '🔒'} {rotulos[p.id] || (p.nome || '').split(' ')[0]}</button>
+            style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6, border: alvo && alvo.id === p.id ? '1.5px solid ' + VERDE : '1px solid #ddd', background: emFerias[p.id] ? '#f2f2f2' : (alvo && alvo.id === p.id ? '#e7f7f2' : '#fff'), color: emFerias[p.id] ? '#9aa' : '#222', borderRadius: 16, padding: '8px 14px', fontSize: fs(12.5), fontWeight: 600, cursor: 'pointer' }}>
+            {emFerias[p.id] ? '🏖' : '🔒'} {rotulos[p.id] || (p.nome || '').split(' ')[0]}
+            <span style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, background: online[p.id] ? '#2ecc71' : '#e74c3c' }} /></button>
         ))}
       </div>
 

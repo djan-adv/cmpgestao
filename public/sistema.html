@@ -17441,6 +17441,7 @@ async function monitTrazerAssessoria(id){
 (function(){
   var LIDO='cmp_chat_lido', MIN='cmp_chat_min';
   var eu=null, euNome='', ultimoId=0, pessoas=[], porId={}, msgs=[], pronto=false, chatJwt='';
+  var ONLINE={};   // id -> true, quem está com o sistema/chat aberto agora (presença em tempo real)
   var pin=null;            // processo fixado nesta conversa: {id, rotulo} — tudo que se envia vai marcado a ele
   var respondendoA=null;   // {id, texto, autor} — mensagem sendo respondida (estilo WhatsApp)
   var procNomeCache={};    // id do processo -> rótulo (para o chip "🔗 ...")
@@ -17957,7 +17958,7 @@ async function monitTrazerAssessoria(id){
     s.innerHTML='<option value="">👥 Todos</option>'+pessoas.map(function(p){
       /* de férias continua na lista, mas cinza: some o destinatário e fica claro o porquê */
       var fora=(typeof _nomeEstaDeFerias==='function')&&_nomeEstaDeFerias(p.nome);
-      return '<option value="'+p.id+'"'+(fora?' disabled':'')+'>'+(fora?'🏖 ':'🔒 ')+h(curtos[p.id]||(p.nome||'').split(' ')[0])+(fora?' (férias)':'')+'</option>';
+      return '<option value="'+p.id+'"'+(fora?' disabled':'')+'>'+(fora?'🏖 ':'🔒 ')+h(curtos[p.id]||(p.nome||'').split(' ')[0])+(fora?' (férias)':'')+'  '+(ONLINE[p.id]?'🟢':'🔴')+'</option>';
     }).join('');
     if(atual) s.value=atual;
     s.onchange=function(){ pintar(); };
@@ -18118,6 +18119,16 @@ async function monitTrazerAssessoria(id){
       window.__sb.channel('chat-cmp')
         .on('postgres_changes',{event:'INSERT',schema:'public',table:'chat_mensagens'},function(p){ chegou(p.new); })
         .subscribe();
+    }catch(e){}
+    /* presença: canal compartilhado com o /chat do celular — quem está com o
+       sistema (ou o chat do celular) aberto entra na lista de "online" de todo mundo */
+    try{
+      var _pc=window.__sb.channel('presenca-equipe',{config:{presence:{key:String(eu)}}});
+      _pc.on('presence',{event:'sync'},function(){
+        var st=_pc.presenceState(); ONLINE={};
+        Object.keys(st).forEach(function(k){ ONLINE[k]=true; });
+        _pintarPara();
+      }).subscribe(function(status){ if(status==='SUBSCRIBED') _pc.track({em:Date.now()}); });
     }catch(e){}
     /* vistos: carrega os ponteiros e atualiza ao vivo — é o que faz o ✓ virar
        ✓✓ na sua tela no instante em que a outra pessoa abre a conversa */
