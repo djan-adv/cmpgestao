@@ -692,7 +692,7 @@ export default function ChatMobile() {
     // tempos, enquanto ninguém atendeu, garante que o app encontre a ligação
     // tocando de verdade ao abrir.
     reofertaCallRef.current = setInterval(() => { if (remotoStreamRef.current) { pararReofertaChamada(); return } mandaOferta() }, 3000)
-    chamarPush('notificar', { autor_id: euId, autor_nome: (porId[euId] && porId[euId].nome) || '', texto: '📞 Chamada de ' + (comVideo ? 'vídeo' : 'voz') + ' — abra o chat para atender', para_id: alvo.id })
+    chamarPush('notificar', { autor_id: euId, autor_nome: (porId[euId] && porId[euId].nome) || '', texto: '📞 Chamada de ' + (comVideo ? 'vídeo' : 'voz') + ' — abra o chat para atender', para_id: alvo.id, chamada: true })
     timeoutCallRef.current = setTimeout(() => { if (!remotoStreamRef.current) { alert('Sem resposta.'); desligarChamada() } }, 45000)
   }
   async function atenderChamada(sinal, canal, quem) {

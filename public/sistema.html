@@ -18055,14 +18055,14 @@ async function monitTrazerAssessoria(id){
       return (sub&&sub.endpoint)||'';
     }catch(e){ return ''; }
   }
-  async function _notificarPush(texto, paraId){
+  async function _notificarPush(texto, paraId, ehChamada){
     /* dispara e esquece — alarme (push) pro celular; nunca deve travar o envio */
     try{
       var s=await window.__sb.auth.getSession();
       var token=s&&s.data&&s.data.session&&s.data.session.access_token; if(!token) return;
       var origem=await _meuEndpoint();
       fetch('/api/chat/push',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},
-        body:JSON.stringify({acao:'notificar', autor_id:eu, autor_nome:euNome, texto:texto, para_id:paraId||null, origem_endpoint:origem})}).catch(function(){});
+        body:JSON.stringify({acao:'notificar', autor_id:eu, autor_nome:euNome, texto:texto, para_id:paraId||null, origem_endpoint:origem, chamada:!!ehChamada})}).catch(function(){});
     }catch(e){}
   }
   async function enviar(){
@@ -18434,7 +18434,7 @@ async function monitTrazerAssessoria(id){
        Reenviar de tempos em tempos, enquanto ninguém atendeu, é o que garante
        que o app, ao abrir, encontre a ligação tocando de verdade. */
     _cl.reoferta=setInterval(function(){ if(_cl.remoto){ _clPararReoferta(); return; } mandaOferta(); },3000);
-    try{ _notificarPush('📞 Chamada de '+(comVideo?'vídeo':'voz')+' — abra o chat para atender', alvo); }catch(eP){}
+    try{ _notificarPush('📞 Chamada de '+(comVideo?'vídeo':'voz')+' — abra o chat para atender', alvo, true); }catch(eP){}
     /* ninguém fica chamando para sempre: 45s sem resposta encerra */
     _cl.timeout=setTimeout(function(){ if(!_cl.remoto){ alert('Sem resposta.'); _clSair(); } },45000);
   }
