@@ -71,19 +71,164 @@ export default function PainelAdmin() {
   return (
     <div style={{ maxWidth: 1000, margin: '0 auto', padding: '32px 20px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 10 }}>
-        <div style={{ display: 'flex', gap: 8 }}>
-          {[['imoveis', 'Imóveis'], ['anuncios', 'Anúncios'], ['leads', 'Solicitações'], ['perfil', 'Perfil']].map(([v, l]) => (
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {[['terceiros', 'Terceiros'], ['imoveis', 'Imóveis'], ['anuncios', 'Anúncios'], ['leads', 'Solicitações'], ['termo', 'Termo'], ['perfil', 'Perfil']].map(([v, l]) => (
             <button key={v} onClick={() => setAba(v)} style={aba === v ? botao : botaoSec}>{l}</button>
           ))}
         </div>
         <button onClick={sair} style={botaoSec}>Sair</button>
       </div>
 
+      {aba === 'terceiros' && <AbaTerceiros token={token} />}
       {aba === 'imoveis' && <AbaImoveis token={token} />}
       {aba === 'anuncios' && <AbaAnuncios token={token} />}
       {aba === 'leads' && <AbaLeads token={token} />}
+      {aba === 'termo' && <AbaTermo token={token} />}
       {aba === 'perfil' && <AbaPerfil token={token} />}
     </div>
+  )
+}
+
+/* ================= TERCEIROS (moderação do portal tipo OLX) ================= */
+const STATUS_LABEL_TERCEIRO = {
+  pendente: ['Em análise', '#8A6D1D'],
+  ativo: ['Publicado', COR.sucesso],
+  inativo: ['Pausado', COR.textoSuave],
+  rejeitado: ['Não aprovado', COR.erro],
+  vendido: ['Vendido', COR.textoSuave],
+  alugado: ['Alugado', COR.textoSuave],
+}
+
+function AbaTerceiros({ token }) {
+  const [lista, setLista] = useState(null)
+  const [erro, setErro] = useState('')
+
+  async function carregar() {
+    const d = await chamar('imoveis_todos', {}, token)
+    setLista((d.imoveis || []).filter(im => im.tipo === 'terceiro'))
+  }
+  useEffect(() => { carregar() }, [])
+
+  async function mudarStatus(im, status) {
+    setErro('')
+    try {
+      await chamar('imovel_salvar', { ...im, status }, token)
+      await carregar()
+    } catch (e) { setErro(e.message) }
+  }
+
+  async function alternarDestaque(im) {
+    setErro('')
+    try {
+      const destaque = !im.destaque
+      const destaque_ate = destaque ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10) : null
+      await chamar('imovel_salvar', { ...im, destaque, destaque_ate }, token)
+      await carregar()
+    } catch (e) { setErro(e.message) }
+  }
+
+  if (!lista) return <div>Carregando…</div>
+  if (erro) console.error(erro)
+
+  return (
+    <div>
+      <div style={{ fontSize: 12.5, color: COR.textoSuave, marginBottom: 14, lineHeight: 1.5 }}>
+        Cadastro é gratuito. Impulsionar (destaque) custa R$ 50/mês, cobrado por fora —
+        marque "Destacar" só depois de confirmar o pagamento. "Destacar" grava a data de
+        hoje + 30 dias em <code>destaque_ate</code>, só como lembrete de renovação.
+      </div>
+      {erro && <div style={{ color: COR.erro, fontSize: 13, marginBottom: 10 }}>{erro}</div>}
+      {lista.length === 0 ? <div style={{ color: COR.textoSuave }}>Nenhum anúncio de terceiro ainda.</div> : (
+        <div style={{ display: 'grid', gap: 10 }}>
+          {lista.map(im => {
+            const [rotuloStatus, cor] = STATUS_LABEL_TERCEIRO[im.status] || [im.status, COR.textoSuave]
+            return (
+              <div key={im.id} style={{ background: COR.branco, border: `1px solid ${COR.borda}`, borderRadius: 10, padding: 14 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+                  <div>
+                    <div style={{ fontWeight: 700 }}>{im.titulo}</div>
+                    <div style={{ fontSize: 12.5, color: COR.textoSuave }}>
+                      {[im.endereco, im.bairro, im.cidade, im.uf].filter(Boolean).join(', ')}
+                      {im.preco != null && ` · R$ ${Number(im.preco).toLocaleString('pt-BR')}`}
+                    </div>
+                    <div style={{ fontSize: 12.5, color: COR.textoSuave, marginTop: 4 }}>
+                      Anunciante: {im.anunciante_nome_conta || '—'}
+                      {im.anunciante_telefone_conta ? ` · ${im.anunciante_telefone_conta}` : ''}
+                      {im.anunciante_email ? ` · ${im.anunciante_email}` : ''}
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontSize: 12.5, fontWeight: 700, color: cor }}>{rotuloStatus}{im.destaque ? ' · destacado' : ''}</div>
+                    {im.destaque_ate && <div style={{ fontSize: 11, color: COR.textoSuave }}>até {new Date(im.destaque_ate).toLocaleDateString('pt-BR')}</div>}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+                  {im.status === 'pendente' && (
+                    <>
+                      <button style={botao} onClick={() => mudarStatus(im, 'ativo')}>Aprovar</button>
+                      <button style={{ ...botaoSec, color: COR.erro, borderColor: COR.erro }} onClick={() => mudarStatus(im, 'rejeitado')}>Rejeitar</button>
+                    </>
+                  )}
+                  {im.status === 'ativo' && (
+                    <button style={botaoSec} onClick={() => mudarStatus(im, 'inativo')}>Pausar</button>
+                  )}
+                  {im.status === 'inativo' && (
+                    <button style={botao} onClick={() => mudarStatus(im, 'ativo')}>Reativar</button>
+                  )}
+                  <button style={botaoSec} onClick={() => alternarDestaque(im)}>{im.destaque ? 'Remover destaque' : 'Destacar (30 dias)'}</button>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* ================= TERMO ================= */
+function AbaTermo({ token }) {
+  const [c, setC] = useState(null)
+  const [salvando, setSalvando] = useState(false)
+  const [ok, setOk] = useState(false)
+  const [erro, setErro] = useState('')
+
+  useEffect(() => {
+    fetch('/api/imoveis?secao=termo').then(r => r.json()).then(d => setC(d.termo || { versao: 'v1', texto: '' }))
+  }, [])
+
+  async function salvar(e) {
+    e.preventDefault()
+    setSalvando(true); setErro(''); setOk(false)
+    try {
+      await chamar('termo_salvar', c, token)
+      setOk(true)
+    } catch (e) {
+      setErro(e.message)
+    } finally {
+      setSalvando(false)
+    }
+  }
+
+  if (!c) return <div>Carregando…</div>
+  const upd = (k, v) => setC({ ...c, [k]: v })
+
+  return (
+    <form onSubmit={salvar} style={{ background: COR.branco, border: `1px solid ${COR.borda}`, borderRadius: 12, padding: 20, maxWidth: 680 }}>
+      <div style={{ fontSize: 12.5, color: COR.textoSuave, marginBottom: 12, lineHeight: 1.5 }}>
+        Este é o Termo de Autorização de Anúncio e Intermediação que o anunciante precisa
+        aceitar antes de publicar um imóvel. Mudar o texto e trocar a versão faz com que
+        novos anúncios fiquem vinculados à nova versão (os aceites antigos ficam
+        registrados com a versão que valia na hora).
+      </div>
+      <label style={rotulo}>Versão (ex.: v1, v2...)</label>
+      <input style={campo} value={c.versao || ''} onChange={e => upd('versao', e.target.value)} required />
+      <label style={rotulo}>Texto do termo</label>
+      <textarea style={{ ...campo, minHeight: 320, fontFamily: 'inherit', whiteSpace: 'pre-wrap' }} value={c.texto || ''} onChange={e => upd('texto', e.target.value)} required />
+      {erro && <div style={{ color: COR.erro, fontSize: 13, marginTop: 8 }}>{erro}</div>}
+      {ok && <div style={{ color: COR.sucesso, fontSize: 13, marginTop: 8 }}>Salvo.</div>}
+      <button type="submit" disabled={salvando} style={{ ...botao, marginTop: 16 }}>{salvando ? 'Salvando…' : 'Salvar termo'}</button>
+    </form>
   )
 }
 
@@ -104,7 +249,7 @@ function AbaImoveis({ token }) {
 
   async function carregar() {
     const d = await chamar('imoveis_todos', {}, token)
-    setLista(d.imoveis)
+    setLista((d.imoveis || []).filter(im => im.tipo !== 'terceiro'))
   }
   useEffect(() => { carregar() }, [])
 

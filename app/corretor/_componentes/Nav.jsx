@@ -5,7 +5,6 @@ const LINKS = [
   { href: '/corretor', label: 'Início' },
   { href: '/corretor/imoveis', label: 'Imóveis' },
   { href: '/corretor/parcerias', label: 'Parcerias' },
-  { href: '/corretor/anuncios', label: 'Anúncios' },
   { href: '/corretor/avaliacao', label: 'Avaliação de Imóveis' },
 ]
 
@@ -20,12 +19,18 @@ export default function Nav() {
         <Link href="/corretor" style={{ color: COR.branco, textDecoration: 'none', fontWeight: 700, fontSize: 19, letterSpacing: 0.3 }}>
           Djan <span style={{ color: COR.destaque }}>Imóveis</span>
         </Link>
-        <nav style={{ display: 'flex', flexWrap: 'wrap', gap: 18 }}>
+        <nav style={{ display: 'flex', flexWrap: 'wrap', gap: 18, alignItems: 'center' }}>
           {LINKS.map(l => (
             <Link key={l.href} href={l.href} style={{ color: '#E7E4DA', textDecoration: 'none', fontSize: 14.5 }}>
               {l.label}
             </Link>
           ))}
+          <Link href="/corretor/anunciar" style={{
+            background: COR.destaque, color: COR.escuro, textDecoration: 'none', fontSize: 13.5, fontWeight: 700,
+            padding: '7px 14px', borderRadius: 20,
+          }}>
+            Anunciar meu imóvel
+          </Link>
         </nav>
       </div>
     </header>

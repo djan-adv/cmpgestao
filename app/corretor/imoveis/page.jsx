@@ -7,10 +7,12 @@ const ABAS = [
   { valor: undefined, label: 'Todos' },
   { valor: 'proprio', label: 'Próprios' },
   { valor: 'parceria', label: 'Parceria' },
+  { valor: 'terceiro', label: 'Anunciantes' },
 ]
+const TIPOS_VALIDOS = ['proprio', 'parceria', 'terceiro']
 
 export default async function PaginaImoveis({ searchParams }) {
-  const tipo = searchParams?.tipo === 'proprio' || searchParams?.tipo === 'parceria' ? searchParams.tipo : undefined
+  const tipo = TIPOS_VALIDOS.includes(searchParams?.tipo) ? searchParams.tipo : undefined
   const imoveis = await buscarImoveis({ tipo })
 
   return (

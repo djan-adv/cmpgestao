@@ -31,7 +31,10 @@ export default async function PaginaInicial() {
               <Link href="/corretor/imoveis" style={{ background: COR.destaque, color: COR.escuro, padding: '12px 20px', borderRadius: 8, fontWeight: 700, textDecoration: 'none', fontSize: 14.5 }}>
                 Ver imóveis
               </Link>
-              <Link href="/corretor/avaliacao" style={{ border: `1px solid ${COR.destaque}`, color: COR.branco, padding: '12px 20px', borderRadius: 8, fontWeight: 700, textDecoration: 'none', fontSize: 14.5 }}>
+              <Link href="/corretor/anunciar" style={{ border: `1px solid ${COR.destaque}`, color: COR.branco, padding: '12px 20px', borderRadius: 8, fontWeight: 700, textDecoration: 'none', fontSize: 14.5 }}>
+                Anunciar meu imóvel
+              </Link>
+              <Link href="/corretor/avaliacao" style={{ border: '1px solid rgba(255,255,255,.3)', color: COR.branco, padding: '12px 20px', borderRadius: 8, fontWeight: 700, textDecoration: 'none', fontSize: 14.5 }}>
                 Solicitar avaliação
               </Link>
               {zap && (
@@ -64,9 +67,9 @@ export default async function PaginaInicial() {
       <section style={{ maxWidth: 1100, margin: '0 auto', padding: '48px 20px' }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 18 }}>
           {[
+            { titulo: 'Anuncie seu imóvel', desc: 'Cadastro gratuito. Publique seu imóvel com o corretor autorizado a intermediar a venda.', href: '/corretor/anunciar' },
             { titulo: 'Imóveis próprios', desc: 'Imóveis à venda e para locação, com atendimento direto.', href: '/corretor/imoveis' },
             { titulo: 'Parcerias', desc: 'Divulgação em conjunto com outros corretores e imobiliárias.', href: '/corretor/parcerias' },
-            { titulo: 'Anúncios de terceiros', desc: 'Espaço para anunciantes parceiros do site.', href: '/corretor/anuncios' },
             { titulo: 'Avaliação de imóveis', desc: 'Avaliação técnica por corretor avaliador (CNAI ' + perfil.cnai + ').', href: '/corretor/avaliacao' },
           ].map(c => (
             <Link key={c.href} href={c.href} style={{ textDecoration: 'none', color: 'inherit' }}>

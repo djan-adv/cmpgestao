@@ -30,10 +30,29 @@ create table if not exists imoveis.perfil (
 );
 insert into imoveis.perfil (id) values (1) on conflict (id) do nothing;
 
--- ---------- imóveis (próprios e de parceria) ----------
+-- ---------- anunciantes (donos de imóvel — portal tipo OLX, autoatendimento) ----------
+create table if not exists imoveis.anunciantes (
+  id         uuid primary key default gen_random_uuid(),
+  nome       text not null,
+  telefone   text,
+  email      text not null unique,
+  senha_hash text not null,
+  ativo      boolean not null default true,
+  criado_em  timestamptz not null default now()
+);
+
+create table if not exists imoveis.anunciante_sessoes (
+  token         text primary key,
+  anunciante_id uuid not null references imoveis.anunciantes(id) on delete cascade,
+  criado_em     timestamptz not null default now(),
+  expira_em     timestamptz not null,
+  ip            text
+);
+
+-- ---------- imóveis (próprios, de parceria e de terceiros/anunciantes) ----------
 create table if not exists imoveis.imoveis (
   id            uuid primary key default gen_random_uuid(),
-  tipo          text not null check (tipo in ('proprio','parceria')),
+  tipo          text not null check (tipo in ('proprio','parceria','terceiro')),
   titulo        text not null,
   descricao     text,
   finalidade    text not null check (finalidade in ('venda','aluguel')),
@@ -50,15 +69,41 @@ create table if not exists imoveis.imoveis (
   area_total    numeric(10,2),
   fotos         jsonb not null default '[]'::jsonb, -- array de URLs
   destaque      boolean not null default false,
-  status        text not null default 'ativo' check (status in ('ativo','inativo','vendido','alugado')),
+  destaque_ate  date, -- lembrete de renovação do impulsionamento (R$ 50/mês, cobrado por fora)
+  status        text not null default 'ativo'
+                  check (status in ('pendente','ativo','inativo','rejeitado','vendido','alugado')),
   parceiro_nome    text, -- preenchido quando tipo = 'parceria'
   parceiro_contato text,
+  anunciante_id    uuid references imoveis.anunciantes(id) on delete set null, -- quando tipo = 'terceiro'
+  termo_versao     text,        -- versão do termo aceita na publicação
+  termo_aceito_em  timestamptz,
   criado_em     timestamptz not null default now(),
   atualizado_em timestamptz not null default now()
 );
 create index if not exists imoveis_imoveis_status_idx on imoveis.imoveis (status, tipo);
+create index if not exists imoveis_imoveis_anunciante_idx on imoveis.imoveis (anunciante_id);
 
--- ---------- anúncios de terceiros (vitrine paga/parceira) ----------
+-- ---------- termo de autorização de anúncio e intermediação (editável no painel) ----------
+create table if not exists imoveis.termo (
+  id            int primary key default 1 check (id = 1),
+  versao        text not null default 'v1',
+  texto         text not null default '',
+  atualizado_em timestamptz not null default now()
+);
+insert into imoveis.termo (id) values (1) on conflict (id) do nothing;
+
+-- prova de aceite do termo — nunca é editado, só inserido
+create table if not exists imoveis.termo_aceites (
+  id            uuid primary key default gen_random_uuid(),
+  anunciante_id uuid not null references imoveis.anunciantes(id) on delete cascade,
+  imovel_id     uuid references imoveis.imoveis(id) on delete set null,
+  versao        text not null,
+  ip            text,
+  aceito_em     timestamptz not null default now()
+);
+
+-- ---------- banners de anunciantes patrocinadores (não confundir com o marketplace
+-- de imóveis de terceiros acima — isto é vitrine de banner/link externo) ----------
 create table if not exists imoveis.anuncios (
   id                 uuid primary key default gen_random_uuid(),
   titulo             text not null,

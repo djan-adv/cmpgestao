@@ -1,11 +1,12 @@
 # Projeto — Site do corretor de imóveis (djan.net.br)
 
-> Status: **banco já criado e populado no Supabase real (via MCP). Falta só a parte
-> que só o Djan consegue fazer: DNS/nginx da VPS e colar as variáveis de ambiente.**
-> Pedido original: site de perfil completo do corretor — imóveis próprios, imóveis em
-> parceria, anúncios de terceiros e portal de avaliação — **separado da CMP**, mas
-> reaproveitando VPS + GitHub + Supabase já existentes. Domínio confirmado:
-> `djan.net.br`, já registrado na Hostinger.
+> Status: **pivotou de "vitrine" pra portal tipo OLX** — o dono do imóvel cadastra o
+> próprio anúncio, aceita o termo de autorização e paga (por fora, por enquanto) pra
+> ser destacado. Banco já criado/migrado no Supabase real (via MCP). Falta a parte que
+> só o Djan consegue fazer: colar o **texto do termo de autorização** (já existe, falta
+> só me passar) e o DNS/nginx/variáveis de ambiente da VPS.
+> Domínio confirmado: `djan.net.br`, registrado na Hostinger — Claude não tem acesso a
+> Hostinger/VPS, só ao repositório Git e ao Supabase (via MCP).
 
 ---
 
@@ -49,6 +50,34 @@ atividades no material de divulogação do corretor. Marca, cores, favicon e tex
    chat) e o chat interno da equipe (`app/chat/`, verde estilo WhatsApp, preso a
    `usuarios`/`processos` da CMP). Fica **pendente de esclarecimento** antes de
    implementar — ver seção 6.
+7. **Pivot pra portal tipo OLX (nova decisão):** o Djan recapitulou o pedido — não é
+   só uma vitrine que o Djan mesmo alimenta, é um **portal onde qualquer dono de
+   imóvel cadastra o próprio anúncio**, igual OLX:
+   - **Cadastro é gratuito.**
+   - **Impulsionar (destacar) custa R$ 50/mês** — cobrado **por fora, manualmente**
+     por enquanto (Pix/dinheiro combinado direto com o Djan); o painel só marca
+     "destacado" com uma data de referência pra lembrar de renovar.
+   - Ao publicar, o dono do imóvel **autoriza o Djan como corretor a intermediar a
+     venda, com direito à comissão** — aceite registrado com data/hora/IP/versão do
+     termo (não é blockchain — é o mesmo espírito de "prova de aceite" que o termo
+     jurídico local descreve, só que em log de banco, não em rede distribuída).
+   - Todo anúncio novo entra como **pendente** e só fica público depois que o Djan
+     aprova pelo painel (ele é o corretor responsável, precisa revisar antes).
+8. **Pergunta em aberto do Djan sobre pagamento automático:** ele perguntou se conta
+   pessoa física do Banco Inter tem API (ele tem conta lá). Resposta: **sim, o Inter
+   tem API pública (Central de Desenvolvedores / Inter API) acessível também por
+   conta PF**, não só PJ como o Cora — dá pra gerar client_id/client_secret +
+   certificado (mTLS) direto no internet banking e cobrar PIX (cobrança imediata/QR
+   code) por lá. Não implementado agora porque o pagamento ficou **manual por
+   decisão do Djan** nesta rodada — se quiser automatizar depois, essa é uma rota
+   viável (diferente do Cora, que já teve PIX dinâmico e cartão testados e
+   descartados — ver `CLAUDE.md` — o Inter ainda não foi tentado neste projeto).
+9. **djan.net.br já tem um anúncio de avaliação de imóveis:** o Djan mencionou isso e
+   Claude não conseguiu confirmar (o proxy da rede bloqueou o fetch externo pro
+   domínio, e Claude não tem acesso ao Hostinger). **Fica pendente de confirmação:**
+   é um conteúdo que já existe fora deste projeto (ex.: no site builder da Hostinger)
+   e precisa ser preservado/substituído, ou é a página `/corretor/avaliacao` que já
+   foi construída aqui?
 
 ## 3. O que já está pronto no código (branch `claude/corretor-imoveis-profile-site-4hntzf`)
 
@@ -60,12 +89,15 @@ atividades no material de divulogação do corretor. Marca, cores, favicon e tex
   (`public/favicon-corretor.svg`) próprios — não herda "CMPGestão" nem o ícone da CMP.
   Paleta em `app/corretor/_componentes/tema.js` (verde-escuro + dourado queimado),
   deliberadamente diferente do navy/dourado da CMP.
-- **Banco:** `ops/sql/imoveis_schema.sql` — schema `imoveis` com as tabelas `perfil`
-  (linha única, editável), `imoveis` (próprios e parceria), `anuncios` (terceiros),
-  `leads` (avaliação/imóvel/parceria/contato) e `sessoes` (login do painel), mais o
-  role `imoveis_app`. **Já aplicado no Supabase real** (projeto `cmpgestao`,
-  `ndeqlyrydcijbgjiviuw`) via MCP — schema, tabelas e role já existem lá. Isolamento
-  conferido na hora:
+- **Banco:** `ops/sql/imoveis_schema.sql` — schema `imoveis` com `perfil` (editável),
+  `imoveis` (próprios, parceria **e terceiro/anunciante**, com `anunciante_id`,
+  `termo_versao`, `termo_aceito_em`, `destaque_ate`), `anunciantes` (conta do dono do
+  imóvel) + `anunciante_sessoes`, `termo` (texto vigente, editável no painel) +
+  `termo_aceites` (log de aceite, só insert), `anuncios` (banners de patrocinador —
+  feature separada do marketplace de imóveis), `leads`, `sessoes` (admin) e o role
+  `imoveis_app`. **Já aplicado no Supabase real** (projeto `cmpgestao`,
+  `ndeqlyrydcijbgjiviuw`) via MCP, em duas migrations (`imoveis_schema` e
+  `imoveis_marketplace_terceiros`). Isolamento conferido de novo depois da segunda:
   ```
   has_table_privilege('imoveis_app','public.processos','select') → false
   has_table_privilege('imoveis_app','public.processos','update') → false
@@ -77,18 +109,25 @@ atividades no material de divulogação do corretor. Marca, cores, favicon e tex
   Faltou **UF, bairro e fotos** (o Djan não passou) — completar pelo painel
   (`/corretor/admin` → Imóveis → Editar) assim que o site estiver no ar.
 - **API:** `app/api/imoveis/route.js` + `lib.js` — mesmo padrão da Inove (conexão
-  direta via `pg`, sem `service_role`, sem tocar no cliente Supabase da CMP). Leitura
-  pública (perfil, imóveis, anúncios), envio de lead público, login único do admin e
-  CRUD protegido por sessão (Bearer token).
-- **Páginas públicas:** `/corretor` (perfil/hero), `/corretor/imoveis` (lista com
-  abas Todos/Próprios/Parceria), `/corretor/imoveis/[id]` (detalhe + formulário de
-  interesse), `/corretor/parcerias` (imóveis de parceria + formulário para propor
-  parceria), `/corretor/anuncios` (vitrine de terceiros), `/corretor/avaliacao`
-  (formulário de solicitação).
-- **Painel:** `/corretor/admin` — login por senha única, abas Imóveis (CRUD completo),
-  Anúncios (CRUD), Solicitações (lista + mudar status) e Perfil (editar bio/contato/foto).
-- **Script:** `scripts/hash-senha-imoveis.mjs` — gera o hash da senha do painel (scrypt,
-  mesmo formato do Portal do Cliente/Inove).
+  direta via `pg`, sem `service_role`, sem tocar no cliente Supabase da CMP).
+  Cadastro/login do **anunciante** (dono do imóvel) com sessão própria (scrypt +
+  Bearer, mesmo formato do admin), CRUD do próprio anúncio (só o dono edita/exclui o
+  que é dele), aceite do termo registrado em `termo_aceites` na hora de publicar.
+  Login único do admin continua separado (sessão diferente, `imoveis.sessoes`).
+- **Páginas públicas:** `/corretor` (perfil/hero, agora com CTA "Anunciar meu
+  imóvel"), `/corretor/imoveis` (lista com abas Todos/Próprios/Parceria/**Anunciantes**),
+  `/corretor/imoveis/[id]` (detalhe + formulário de interesse), `/corretor/parcerias`,
+  `/corretor/anuncios` (banners), `/corretor/avaliacao` (lead de avaliação),
+  `/corretor/termo` (texto do termo de autorização) e **`/corretor/anunciar`** —
+  cadastro/login do anunciante + "Meus anúncios" (criar/editar/remover o próprio
+  imóvel, com aceite obrigatório do termo pra publicar; todo anúncio novo nasce
+  **pendente**, só fica público depois que o admin aprova).
+- **Painel:** `/corretor/admin` — login por senha única. Abas: **Terceiros**
+  (aprovar/rejeitar anúncio pendente, marcar/remover destaque com data de
+  referência de 30 dias), Imóveis (CRUD dos próprios/parceria), Anúncios (banners),
+  Solicitações, **Termo** (editar texto/versão do termo de autorização) e Perfil.
+- **Script:** `scripts/hash-senha-imoveis.mjs` — gera hash de senha (scrypt), usado
+  tanto pro admin quanto internamente pro cadastro de anunciantes.
 
 ## 4. O que falta — depende do Djan
 
@@ -122,6 +161,17 @@ atividades no material de divulogação do corretor. Marca, cores, favicon e tex
    (`public/favicon-corretor.svg`) — trocar quando tiver a marca definitiva.
 8. **Chat comercial (aba esquerda, azul claro):** esclarecer o que é exatamente antes
    de implementar — ver seção 6.
+9. **Texto do termo de autorização — bloqueia o marketplace:** o Djan disse que já
+   tem um texto pronto. **Preciso que ele me passe esse texto** — sem ele, o campo
+   fica em branco em `imoveis.termo` e a página `/corretor/termo` mostra "ainda não
+   foi cadastrado". Anunciante consegue publicar mesmo assim (o checkbox de aceite
+   não trava no texto vazio), mas o aceite não vale nada sem o termo de verdade —
+   **não divulgar `/corretor/anunciar` publicamente até isso ser resolvido**. Assim
+   que o Djan mandar o texto, entra pelo painel (`/corretor/admin` → Termo) — não
+   precisa de deploy novo.
+10. **Confirmar o que já existe em djan.net.br:** o "anúncio de avaliação de
+    imóveis" que o Djan mencionou — é conteúdo fora deste projeto (Hostinger) ou é
+    a página `/corretor/avaliacao` já construída aqui? Ver item 9 da seção 2.
 
 ## 5. Notas técnicas
 

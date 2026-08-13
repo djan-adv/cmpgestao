@@ -31,7 +31,12 @@ export async function q1(sql, params = []) {
   return rows[0] || null
 }
 
-/* ---------- senha do admin único (mesmo formato scrypt do Portal/Inove) ---------- */
+/* ---------- senha (mesmo formato scrypt do Portal/Inove) ---------- */
+export function hashSenha(senha) {
+  const sal = crypto.randomBytes(16).toString('hex')
+  const h = crypto.scryptSync(String(senha), sal, 32).toString('hex')
+  return 's2$' + sal + '$' + h
+}
 export function confereSenha(senha, guardado) {
   try {
     const [v, sal, h] = String(guardado || '').split('$')
@@ -41,14 +46,14 @@ export function confereSenha(senha, guardado) {
   } catch (e) { return false }
 }
 
-/* ---------- sessão ---------- */
+/* ---------- sessão do admin único ---------- */
 export const SESSAO_DIAS = 30
 
 export function tokenDo(request) {
   return (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '').trim()
 }
 
-export async function sessaoValida(token) {
+export async function sessaoAdminValida(token) {
   if (!/^[0-9a-f]{48}$/.test(String(token || ''))) return false
   const s = await q1('select token, expira_em from imoveis.sessoes where token = $1', [token])
   if (!s) return false
@@ -57,6 +62,23 @@ export async function sessaoValida(token) {
     return false
   }
   return true
+}
+
+/* ---------- sessão do anunciante (dono do imóvel, autoatendimento) ---------- */
+export async function sessaoAnunciante(token) {
+  if (!/^[0-9a-f]{48}$/.test(String(token || ''))) return null
+  const s = await q1(
+    `select s.token, s.expira_em, a.*
+       from imoveis.anunciante_sessoes s
+       join imoveis.anunciantes a on a.id = s.anunciante_id
+      where s.token = $1`, [token])
+  if (!s) return null
+  if (new Date(s.expira_em) < new Date()) {
+    try { await q('delete from imoveis.anunciante_sessoes where token = $1', [token]) } catch (e) {}
+    return null
+  }
+  if (!s.ativo) return null
+  return s
 }
 
 export function ip(request) {

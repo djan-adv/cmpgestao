@@ -56,3 +56,11 @@ export async function buscarAnuncios() {
     return []
   }
 }
+
+export async function buscarTermo() {
+  try {
+    return await q1('select versao, texto, atualizado_em from imoveis.termo where id = 1')
+  } catch (e) {
+    return { versao: 'v1', texto: '' }
+  }
+}

@@ -31,6 +31,11 @@ export default function CartaoImovel({ imovel }) {
                 · Parceria
               </span>
             )}
+            {imovel.tipo === 'terceiro' && (
+              <span style={{ fontSize: 11, fontWeight: 700, color: COR.textoSuave, textTransform: 'uppercase', letterSpacing: 0.4 }}>
+                · Anunciante
+              </span>
+            )}
           </div>
           <div style={{ fontWeight: 700, fontSize: 15.5, color: COR.texto }}>{imovel.titulo}</div>
           {local && <div style={{ fontSize: 13, color: COR.textoSuave }}>{local}</div>}
