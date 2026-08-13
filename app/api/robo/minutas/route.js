@@ -197,15 +197,29 @@ async function faseTriagem(sb, limite) {
     if (!t) { resultados.push({ andamento_id: a.id, erro: 'a IA não devolveu a classificação' }); continue }
 
     const prazoEm = t.exige_peca ? dataPrazo(t.prazo_dias, t.prazo_uteis !== false) : null
+
+    // MESMA publicação chega duas vezes do DJEN (bem comum — dois canais, dois
+    // andamento_id diferentes) e cada uma virava um card igual na fila do
+    // Estagiário Virtual, mesmo processo, mesmo prazo. A trava de andamento_id
+    // (linha 158) não pega isso: são andamentos DIFERENTES falando da MESMA
+    // decisão. Aqui, mesmo processo + mesmo prazo já calculado = trata como
+    // reforço da publicação já triada, não como pedido novo — um card só.
+    let duplicado = null
+    if (t.exige_peca && prazoEm) {
+      const { data: ex } = await sb.from('robo_minutas')
+        .select('id').eq('processo_id', p.id).eq('exige_peca', true).eq('prazo_em', prazoEm).limit(1)
+      if (ex && ex.length) duplicado = ex[0].id
+    }
+
     const linha = {
       escritorio_id: ESCRITORIO_CMP, processo_id: p.id, processo_numero: p.numero, andamento_id: a.id,
-      status: t.exige_peca ? 'triado' : 'sem_peca',
-      exige_peca: !!t.exige_peca,
+      status: (t.exige_peca && !duplicado) ? 'triado' : 'sem_peca',
+      exige_peca: !!t.exige_peca && !duplicado,
       tipo_peca: String(t.tipo_peca || '').slice(0, 120) || null,
       prazo_dias: parseInt(t.prazo_dias, 10) || null,
       prazo_em: prazoEm,
       urgencia: t.urgencia || null,
-      resumo: String(t.resumo || '').slice(0, 600),
+      resumo: ((duplicado ? ('[mesma publicação do card já aberto — id ' + duplicado + '] ') : '') + String(t.resumo || '')).slice(0, 600),
       docs_necessarios: Array.isArray(t.docs_necessarios) ? t.docs_necessarios.slice(0, 4) : [],
       instrucao: String(t.instrucao || '').slice(0, 600) || null,
       custo_usd: r.custoUsd,
@@ -213,7 +227,7 @@ async function faseTriagem(sb, limite) {
 
     // a tarefa de prazo nasce AQUI, junto com a triagem — nunca depende da minuta
     // nem do orçamento. Perder prazo é irreversível; a minuta é conveniência.
-    if (t.exige_peca && prazoEm) {
+    if (t.exige_peca && prazoEm && !duplicado) {
       try {
         const tr = await sb.from('kanban_tarefas').insert({
           escritorio_id: ESCRITORIO_CMP,
