@@ -207,13 +207,19 @@ export async function POST(request) {
     const origem = String(body.origem_endpoint || '')
     const { data: todasSubs } = await admin.from('chat_push_subs').select('*').in('user_id', destinatarios)
     const subs = (todasSubs || []).filter(s => s.endpoint !== origem)
+    const ehChamada = !!body.chamada
     const titulo = body.para_id ? ('🔒 ' + (body.autor_nome || 'Colega')) : ('💬 ' + (body.autor_nome || 'Colega'))
-    const payload = JSON.stringify({ titulo, corpo: String(body.texto || '').slice(0, 140), url: '/chat' })
+    const payload = JSON.stringify({ titulo, corpo: String(body.texto || '').slice(0, 140), url: '/chat', tipo: ehChamada ? 'chamada' : 'mensagem' })
+    // urgency alta pede pro provedor (FCM no Android; a Apple decide por conta
+    // própria, não respeita o cabeçalho) entregar sem enfileirar. TTL curto na
+    // chamada: se não entregar dentro da janela de toque, não faz sentido
+    // aparecer depois — a ligação já acabou.
+    const opcoes = { urgency: 'high', TTL: ehChamada ? 50 : 86400 }
 
     let enviados = 0, expirados = []
     await Promise.all((subs || []).map(async (s) => {
       try {
-        await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth_key } }, payload)
+        await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth_key } }, payload, opcoes)
         enviados++
       } catch (e) {
         if (e && (e.statusCode === 404 || e.statusCode === 410)) expirados.push(s.endpoint)
