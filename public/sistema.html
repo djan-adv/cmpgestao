@@ -12382,7 +12382,7 @@ function honQuadroHTML(p){
     .filter(function(v){ return v!==0; }).length;
   if(totAdv>0 && nVerbas>1){
     out+=div;
-    out+='<div style="display:flex;justify-content:space-between;gap:8px;line-height:1.5"><b style="color:var(--navy);font-size:12px">LÍQUIDO DO ADVOGADO</b><b style="color:var(--navy);white-space:nowrap">R$ '+hFmt(totAdv)+'</b></div>';
+    out+='<div style="display:flex;justify-content:space-between;gap:8px;line-height:1.5"><b style="color:var(--navy);font-size:11.5px">Líquido do advogado</b><b style="color:var(--navy);white-space:nowrap">R$ '+hFmt(totAdv)+'</b></div>';
   }
   if(temCond){
     if(totAdv<=0) out+=div;
@@ -12394,7 +12394,7 @@ function honQuadroHTML(p){
        antigo o cliente aparecia levando R$ 27 mil a mais do que leva. */
     var liq=condV-totAdv;
     if(!james && condV>0)
-      out+='<div style="display:flex;justify-content:space-between;gap:8px;line-height:1.5"><b style="color:#0F6E56;font-size:11.5px">LÍQUIDO DO CLIENTE</b><b style="color:#0F6E56;white-space:nowrap">R$ '+hFmt(liq)+'</b></div>';
+      out+='<div style="display:flex;justify-content:space-between;gap:8px;line-height:1.5"><b style="color:#0F6E56;font-size:11.5px">Líquido do cliente</b><b style="color:#0F6E56;white-space:nowrap">R$ '+hFmt(liq)+'</b></div>';
     if(james) out+=honRow('Crédito',honFmtInput('valor_condenacao',p.valor_condenacao));
   } else chips.push([james?'Crédito':'Condenação','valor_condenacao']);
   /* chips das verbas que não existem neste processo — um clique abre a linha.
