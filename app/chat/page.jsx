@@ -215,6 +215,8 @@ export default function ChatMobile() {
   const pcCallRef = useRef(null), streamCallRef = useRef(null), remotoStreamRef = useRef(null)
   const canalCallRef = useRef(null), comQuemRef = useRef(null), timeoutCallRef = useRef(null)
   const canaisCallRef = useRef({})
+  const reofertaCallRef = useRef(null)          // reenvio da oferta, pra quem abrir o app depois de a ligação já ter começado
+  const tocandoRef = useRef(false), tocandoDeRef = useRef(null)   // guarda contra oferta repetida virar "atender de novo" ou "ocupado"
 
   const euId = user && user.id
   const rotulos = nomesCurtos(pessoas)
@@ -642,10 +644,12 @@ export default function ChatMobile() {
     } catch (e) { return null }
   }
   function nomeCanalChamada(a, b) { const x = [String(a), String(b)].sort(); return 'chamada:' + x[0] + ':' + x[1] }
+  function pararReofertaChamada() { if (reofertaCallRef.current) { clearInterval(reofertaCallRef.current); reofertaCallRef.current = null } }
   function limparChamada() {
     try { pcCallRef.current && pcCallRef.current.close() } catch (e) {}
     try { streamCallRef.current && streamCallRef.current.getTracks().forEach(t => t.stop()) } catch (e) {}
     if (timeoutCallRef.current) { clearTimeout(timeoutCallRef.current); timeoutCallRef.current = null }
+    pararReofertaChamada()
     pcCallRef.current = null; streamCallRef.current = null; remotoStreamRef.current = null; comQuemRef.current = null
     setChamada(null)
   }
@@ -679,9 +683,15 @@ export default function ChatMobile() {
     pcCallRef.current = pc
     stream.getTracks().forEach(t => pc.addTrack(t, stream))
     const of = await pc.createOffer(); await pc.setLocalDescription(of)
-    canal.send({ type: 'broadcast', event: 'sinal', payload: { de: euId, para: alvo.id, tipo: 'oferta', sdp: of, video: !!comVideo } })
+    const mandaOferta = () => { try { canal.send({ type: 'broadcast', event: 'sinal', payload: { de: euId, para: alvo.id, tipo: 'oferta', sdp: of, video: !!comVideo } }) } catch (e) {} }
+    mandaOferta()
     // o alarme (push) toca no celular mesmo com o app fechado — a pessoa abre o
-    // chat e a oferta ainda está de pé
+    // chat e a oferta ainda está de pé. Mas o broadcast é do momento: quem abre
+    // o app DEPOIS do primeiro envio (clicou no alarme e só caiu na tela
+    // principal) nunca teria recebido aquela oferta — reenviar de tempos em
+    // tempos, enquanto ninguém atendeu, garante que o app encontre a ligação
+    // tocando de verdade ao abrir.
+    reofertaCallRef.current = setInterval(() => { if (remotoStreamRef.current) { pararReofertaChamada(); return } mandaOferta() }, 3000)
     chamarPush('notificar', { autor_id: euId, autor_nome: (porId[euId] && porId[euId].nome) || '', texto: '📞 Chamada de ' + (comVideo ? 'vídeo' : 'voz') + ' — abra o chat para atender', para_id: alvo.id })
     timeoutCallRef.current = setTimeout(() => { if (!remotoStreamRef.current) { alert('Sem resposta.'); desligarChamada() } }, 45000)
   }
@@ -701,19 +711,28 @@ export default function ChatMobile() {
     if (sig.tipo === 'fim') { if (pcCallRef.current) alert('Chamada encerrada.'); limparChamada(); return }
     if (sig.tipo === 'recusou') { setChamada(c => c ? { ...c, estado: 'recusada' } : c); setTimeout(limparChamada, 1200); return }
     if (sig.tipo === 'oferta') {
-      if (pcCallRef.current) { canal.send({ type: 'broadcast', event: 'sinal', payload: { de: euId, para: sig.de, tipo: 'recusou' } }); return }
+      // a mesma oferta chega de novo (quem liga reenvia por até 45s, pra quem
+      // abrir o app DEPOIS de a chamada já ter começado — ex.: clicou no
+      // alarme — ainda pegar a ligação tocando). Repetida da MESMA pessoa
+      // enquanto já está tocando ou já em atendimento: ignora, sem perguntar
+      // "Atender?" de novo nem cair em "ocupado"
+      if (tocandoRef.current && tocandoDeRef.current === sig.de) return
+      if (pcCallRef.current || tocandoRef.current) { canal.send({ type: 'broadcast', event: 'sinal', payload: { de: euId, para: sig.de, tipo: 'recusou' } }); return }
+      tocandoRef.current = true; tocandoDeRef.current = sig.de
       const quem = (porId[sig.de] && porId[sig.de].nome) || pessoa.nome || 'colega'
       const camp = campainha()
       try { if (navigator.vibrate) navigator.vibrate([400, 180, 400, 180, 600]) } catch (e) {}
       const atende = confirm('📞 ' + quem + ' está chamando' + (sig.video ? ' em vídeo' : '') + '.\n\nAtender?')
       if (camp) camp.stop()
       if (!atende) {
+        tocandoRef.current = false; tocandoDeRef.current = null
         canal.send({ type: 'broadcast', event: 'sinal', payload: { de: euId, para: sig.de, tipo: 'recusou' } }); return
       }
       try { await atenderChamada(sig, canal, quem) } catch (e) { alert('Não consegui atender: ' + ((e && e.message) || e)); limparChamada() }
+      finally { tocandoRef.current = false; tocandoDeRef.current = null }
       return
     }
-    if (sig.tipo === 'resposta' && pcCallRef.current) { try { await pcCallRef.current.setRemoteDescription(sig.sdp) } catch (e) {} return }
+    if (sig.tipo === 'resposta' && pcCallRef.current) { pararReofertaChamada(); try { await pcCallRef.current.setRemoteDescription(sig.sdp) } catch (e) {} return }
     if (sig.tipo === 'ice' && pcCallRef.current) { try { await pcCallRef.current.addIceCandidate(sig.cand) } catch (e) {} }
   }
   function chamadaMic() {

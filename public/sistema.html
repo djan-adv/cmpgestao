@@ -18320,10 +18320,12 @@ async function monitTrazerAssessoria(id){
   async function _clMidia(comVideo){
     return await navigator.mediaDevices.getUserMedia({audio:true, video:comVideo?{facingMode:'user'}:false});
   }
+  function _clPararReoferta(){ if(_cl.reoferta){ clearInterval(_cl.reoferta); _cl.reoferta=null; } }
   function _clLimpar(){
     try{ if(_cl.pc) _cl.pc.close(); }catch(e){}
     try{ if(_cl.local) _cl.local.getTracks().forEach(function(t){ t.stop(); }); }catch(e){}
     if(_cl.timeout){ clearTimeout(_cl.timeout); _cl.timeout=null; }
+    _clPararReoferta();
     _cl.pc=null; _cl.local=null; _cl.remoto=null; _cl.comQuem=null; _cl.entrando=false;
     _clFechar();
   }
@@ -18360,22 +18362,31 @@ async function monitTrazerAssessoria(id){
   async function _clSinal(s, canal, pessoa){
     if(!s||s.para!==eu) return;
     if(s.tipo==='fim'){ if(_cl.pc||_cl.entrando){ alert('Chamada encerrada.'); } _clLimpar(); return; }
-    if(s.tipo==='recusou'){ _clEstado('recusada'); setTimeout(_clLimpar,1200); return; }
+    if(s.tipo==='recusou'){ _clPararReoferta(); _clEstado('recusada'); setTimeout(_clLimpar,1200); return; }
     if(s.tipo==='oferta'){
-      if(_cl.pc){ /* ocupado */ canal.send({type:'broadcast',event:'sinal',payload:{de:eu,para:s.de,tipo:'recusou'}}); return; }
+      /* a mesma oferta chega de novo (quem liga reenvia por até 45s, pra quem
+         abrir o app DEPOIS de a chamada já ter começado — ex.: clicou no
+         alarme — ainda pegar a ligação tocando). Repetida da MESMA pessoa
+         enquanto já está tocando ou já em atendimento: ignora, sem perguntar
+         "Atender?" de novo nem cair em "ocupado" */
+      if(_cl.tocando && _cl.tocandoDe===s.de) return;
+      if(_cl.pc || _cl.tocando){ canal.send({type:'broadcast',event:'sinal',payload:{de:eu,para:s.de,tipo:'recusou'}}); return; }
+      _cl.tocando=true; _cl.tocandoDe=s.de;
       var quem=(porId[s.de]&&porId[s.de].nome)||pessoa.nome||'colega';
       var camp=_clCampainha();
       try{ if(navigator.vibrate) navigator.vibrate([400,180,400,180,600]); }catch(eV){}
       var atende=confirm('📞 '+quem+' está chamando'+(s.video?' em vídeo':'')+'.\n\nAtender?');
       if(camp) camp.stop();
       if(!atende){
+        _cl.tocando=false; _cl.tocandoDe=null;
         canal.send({type:'broadcast',event:'sinal',payload:{de:eu,para:s.de,tipo:'recusou'}}); return;
       }
       try{ await _clAtender(s, canal, quem); }
       catch(e){ alert('Não consegui atender: '+((e&&e.message)||e)); _clLimpar(); }
+      finally{ _cl.tocando=false; _cl.tocandoDe=null; }
       return;
     }
-    if(s.tipo==='resposta' && _cl.pc){ try{ await _cl.pc.setRemoteDescription(s.sdp); _clEstado('conectando…'); }catch(e){} return; }
+    if(s.tipo==='resposta' && _cl.pc){ _clPararReoferta(); try{ await _cl.pc.setRemoteDescription(s.sdp); _clEstado('conectando…'); }catch(e){} return; }
     if(s.tipo==='ice' && _cl.pc){ try{ await _cl.pc.addIceCandidate(s.cand); }catch(e){} return; }
   }
   function _clNovoPC(canal, comQuem){
@@ -18414,9 +18425,15 @@ async function monitTrazerAssessoria(id){
     _cl.pc=_clNovoPC(canal, alvo);
     _cl.local.getTracks().forEach(function(t){ _cl.pc.addTrack(t,_cl.local); });
     var of=await _cl.pc.createOffer(); await _cl.pc.setLocalDescription(of);
-    canal.send({type:'broadcast',event:'sinal',payload:{de:eu,para:alvo,tipo:'oferta',sdp:of,video:!!comVideo}});
+    var mandaOferta=function(){ try{ canal.send({type:'broadcast',event:'sinal',payload:{de:eu,para:alvo,tipo:'oferta',sdp:of,video:!!comVideo}}); }catch(e){} };
+    mandaOferta();
     /* o alarme do celular toca mesmo com o app fechado — a pessoa abre o chat e
-       a oferta ainda está de pé (45s) */
+       a oferta ainda está de pé (45s). Mas o broadcast é do momento: quem abre
+       o app DEPOIS do primeiro envio (foi isso que aconteceu — clicou no
+       alarme e caiu só na tela principal) nunca teria recebido aquela oferta.
+       Reenviar de tempos em tempos, enquanto ninguém atendeu, é o que garante
+       que o app, ao abrir, encontre a ligação tocando de verdade. */
+    _cl.reoferta=setInterval(function(){ if(_cl.remoto){ _clPararReoferta(); return; } mandaOferta(); },3000);
     try{ _notificarPush('📞 Chamada de '+(comVideo?'vídeo':'voz')+' — abra o chat para atender', alvo); }catch(eP){}
     /* ninguém fica chamando para sempre: 45s sem resposta encerra */
     _cl.timeout=setTimeout(function(){ if(!_cl.remoto){ alert('Sem resposta.'); _clSair(); } },45000);
