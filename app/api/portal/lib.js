@@ -4,6 +4,7 @@
 
 import { createClient } from '@supabase/supabase-js'
 import crypto from 'crypto'
+import { enviarEmailCore, URL_PUBLICA } from '../enviar-email/enviar.js'
 
 export function svc() {
   return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } })
@@ -71,4 +72,38 @@ export async function processosPermitidos(sb, acesso) {
   const { data, error } = await sb.rpc('portal_processos_ids', { p_acesso: acesso.id })
   if (error || !data) return []
   return data.map(r => (typeof r === 'string' ? r : r.processo_id)).filter(Boolean)
+}
+
+/* ---------- e-mail com as credenciais do app ----------
+   Movido para cá (fora de admin/route.js) porque um arquivo route.js só pode
+   exportar os handlers HTTP — nada mais sai dele. Usado tanto pelo botão
+   "Dar acesso ao app" (admin/route.js, ação 'conceder') quanto pela varredura
+   em lote (cron/portal-varredura). */
+export async function emailCredenciais({ nome, email, senha, numero, novoProcesso }) {
+  const linhaSenha = senha
+    ? ('LOGIN (seu e-mail): ' + email + '\nSENHA: ' + senha + '\n')
+    : ('LOGIN (seu e-mail): ' + email + '\nSENHA: a mesma que você já usa no portal (se esqueceu, peça ao escritório uma nova).\n')
+  const corpo =
+    'Olá' + (nome ? ', ' + nome : '') + '!\n\n' +
+    (novoProcesso
+      ? 'Um novo processo foi liberado no seu acesso ao aplicativo do escritório.\n\n'
+      : 'Seu acesso ao aplicativo do escritório está pronto!\n\n') +
+    'Pelo aplicativo você acompanha seu processo em tempo real: as movimentações, os documentos oficiais (despachos, sentenças e acordos), as petições que protocolamos e o contato do cartório da Vara. E, se precisar falar com a gente sobre o processo, é só usar o chat de dentro do próprio processo.\n\n' +
+    'ENDEREÇO: ' + URL_PUBLICA + '/portal.html\n' +
+    linhaSenha + '\n' +
+    'COMO COLOCAR NA TELA DO CELULAR (recomendado):\n' +
+    '• Android: abra o endereço acima no Chrome e toque no botão "Instalar o aplicativo".\n' +
+    '• iPhone: abra no Safari, toque em Compartilhar e depois em "Adicionar à Tela de Início".\n' +
+    'Dentro do portal também há um botão que mostra o passo a passo certinho para o seu aparelho.\n\n' +
+    'IMPORTANTE:\n' +
+    '• O acesso é pessoal e protegido por senha — não compartilhe.\n' +
+    '• Por segurança, o uso em muitos aparelhos diferentes bloqueia o acesso automaticamente.\n' +
+    '• Qualquer dúvida, é só responder este e-mail.'
+  return enviarEmailCore({
+    para: email,
+    assunto: 'Seu acesso ao aplicativo do escritório — CMP Advogados',
+    // convidarApp: false — este e-mail JÁ é o convite (leva login e senha);
+    // o bloco automático repetiria a mesma conversa dentro dela mesma.
+    corpo, numero: numero || '', dedup: false, convidarApp: false,
+  })
 }
