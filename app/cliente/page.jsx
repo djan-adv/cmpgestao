@@ -9,7 +9,9 @@ import { supabase } from '../../lib/supabase'
 
 const NAVY = '#2E3A4B'
 const GOLD = '#C9A227'
-const WHATS_NUM = (process.env.NEXT_PUBLIC_WHATSAPP_ESCRITORIO || '').replace(/\D/g, '')
+const WHATS_NUM = '+55 0800 591 7259'.replace(/\D/g, '')
+// mesma URL do convite que já sai nos e-mails pro cliente (app/api/portal/convite-lib.js)
+const URL_PORTAL = 'https://gestao.cmpadvogados.com.br/portal.html'
 
 export default function ClientePage() {
   const [msgs, setMsgs] = useState([])
@@ -127,7 +129,9 @@ export default function ClientePage() {
   }
 
   const placeholder = passo === 'nome' ? 'Seu nome…' : passo === 'mensagem' ? 'Como podemos ajudar?' : passo === 'email' ? 'Seu e-mail…' : 'Mensagem…'
-  const textoWa = 'Olá! Sou ' + (dados.current.nome || '') + ', vim pelo chat do site' + (ref ? (' (atendimento ' + ref + ')') : '') + '.' + (dados.current.mensagem ? (' ' + dados.current.mensagem) : '')
+  const textoWa = 'Olá! Sou ' + (dados.current.nome || '') + ', vim pelo chat do site' + (ref ? (' (atendimento ' + ref + ')') : '') + '.'
+    + (dados.current.mensagem ? (' ' + dados.current.mensagem) : '')
+    + '\n\nJá aproveita e instala nosso app pra acompanhar tudo: ' + URL_PORTAL
   const linkWhats = WHATS_NUM ? ('https://wa.me/' + WHATS_NUM + '?text=' + encodeURIComponent(textoWa)) : ''
 
   return (
