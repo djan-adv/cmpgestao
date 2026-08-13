@@ -12204,6 +12204,10 @@ function salvarHon(campo,raw){
   }catch(e){}
   // "célula vinculada": ao mudar valor/crédito de um processo contra James, recalcula a soma na ficha da falência (0819443-91)
   if(/^(hon_val_|valor_condenacao)/.test(campo) && /james laurence/i.test(String(atual.oponente||''))) atualizarSomaFalencia();
+  /* reabre a ficha: é isso que faz digitar só o % (com o R$ ainda zerado)
+     calcular sozinho na hora — _honAutoCalcular roda de novo em abrir() e
+     preenche o R$ que faltava, sem esperar a pessoa fechar e abrir de novo */
+  var i=DADOS.processos.indexOf(atual); if(i>=0) abrir(i);
 }
 /* Soma dinâmica dos honorários dos processos contra James Laurence, refletida na ficha
    da falência 0819443-91 em memória (o gatilho do banco já persiste; aqui é o reflexo na tela). */
@@ -12304,7 +12308,7 @@ function honQuadroHTML(p){
   var showPct=james?false:(honModoDe(p)==='pct'); // James: só valores, sem percentual
   var div='<div style="border-top:1px dashed var(--line);margin:5px 0"></div>';
   var toggle=james?'':'<a onclick="alternarHonModo()" style="cursor:pointer;font-size:10px;color:#185FA5;font-weight:600;text-transform:none;letter-spacing:0" title="Alternar: só valores (R$) ou valores + percentual de conferência">'+(showPct?'R$ + %':'só R$')+' ⇄</a>';
-  var out='<div class="hon-box" style="float:right;width:238px;margin:2px 0 10px 16px;border:1px solid var(--line);border-radius:12px;padding:9px 15px;background:var(--panel);font-size:12.5px">'
+  var out='<div class="hon-box" style="float:right;width:238px;margin:2px 0 10px 16px;border:1px solid var(--line);border-radius:12px;padding:7px 12px;background:var(--panel);font-size:12px">'
     +'<p class="sectlabel" style="margin:0 0 6px;display:flex;justify-content:space-between;align-items:center;gap:8px"><span>Honorários'+(trab?' · trab.':'')+'</span>'+toggle+'</p>';
   /* verbas: [rótulo, campo-valor, campo-%, cabe neste processo?] */
   var chips=[];
@@ -12351,28 +12355,31 @@ function honQuadroHTML(p){
     out+='<div style="display:flex;justify-content:space-between;gap:8px;line-height:1.5;color:#5f6b7a"><span style="font-size:11px">= saldo (base do contratual)</span><span style="white-space:nowrap;font-size:11.5px">R$ '+hFmt(saldoV)+'</span></div>';
   }
   verba('Contratual','hon_val_contratual','hon_pct_contratual',true);
-  /* confere o contratual contra o saldo: percentual digitado × saldo. Erro de
-     digitação aparece aqui, antes de virar número dito ao cliente. */
+  /* confere o contratual contra o saldo: percentual digitado × saldo. Bateu?
+     um ✓ basta — o valor já está logo ali em cima, repeti-lo por extenso só
+     empilhava a mesma informação duas vezes. Só quando DIFERE é que vale a
+     pena escrever o valor esperado — aí sim é um dado novo (erro de digitação
+     antes de virar número dito ao cliente). */
   (function(){
     var cp=(p.hon_pct_contratual!=null&&p.hon_pct_contratual!=='')?Number(p.hon_pct_contratual):null;
     var cv=_hv(p.hon_val_contratual);
-    if(cp&&saldoV>0){
-      var esperado=saldoV*cp/100;
-      var bate=cv>0 && Math.abs(esperado-cv)<Math.max(1,esperado*0.01);
-      out+='<div style="font-size:10.5px;color:'+(bate?'#0F6E56':'#8a6d1a')+';text-align:right;line-height:1.4;margin-top:-1px">'
-        +cp.toString().replace('.',',')+'% do saldo = R$ '+hFmt(esperado)+(bate?' ✓':(cv>0?' ⚠ difere do lançado':''))+'</div>';
-    }
+    if(!cp||saldoV<=0) return;
+    var esperado=saldoV*cp/100;
+    var bate=cv>0 && Math.abs(esperado-cv)<Math.max(1,esperado*0.01);
+    if(bate) out+='<div style="font-size:10px;color:#0F6E56;text-align:right;line-height:1.2;margin-top:-2px">✓ confere</div>';
+    else if(cv>0) out+='<div style="font-size:10.5px;color:#8a6d1a;text-align:right;line-height:1.4;margin-top:-1px">'
+      +cp.toString().replace('.',',')+'% do saldo = R$ '+hFmt(esperado)+' ⚠ difere do lançado</div>';
   })();
-  verba('Pró-labore','hon_pro_labore',null,!trab&&!james);
+  verba('Pró-labore','hon_pro_labore',null,!james);
   /* multa má-fé é percentual puro — só aparece se preenchida */
   if(!james && ((p.hon_pct_ma_fe!=null&&Number(p.hon_pct_ma_fe)!==0)||window.__honShow.hon_pct_ma_fe)) out+=honRow('Multa má-fé',honInput('hon_pct_ma_fe',p.hon_pct_ma_fe,true));
   else if(!james) chips.push(['Multa má-fé','hon_pct_ma_fe']);
   /* condenação: some quando não há (o quadro fica só com o que existe) */
   var temCond=condV!==0||window.__honShow.valor_condenacao;
-  var totAdv=_hv(p.hon_val_contratual)+sucV+exeV+((!trab&&!james)?_hv(p.hon_pro_labore):0);
+  var totAdv=_hv(p.hon_val_contratual)+sucV+exeV+(!james?_hv(p.hon_pro_labore):0);
   /* o total só informa alguma coisa quando há mais de uma verba: com uma só ele
      repete, palavra por palavra, a linha imediatamente acima */
-  var nVerbas=[_hv(p.hon_val_contratual),_hv(p.hon_val_sucumbencia),(trab?0:_hv(p.hon_val_execucao)),((!trab&&!james)?_hv(p.hon_pro_labore):0)]
+  var nVerbas=[_hv(p.hon_val_contratual),_hv(p.hon_val_sucumbencia),(trab?0:_hv(p.hon_val_execucao)),(!james?_hv(p.hon_pro_labore):0)]
     .filter(function(v){ return v!==0; }).length;
   if(totAdv>0 && nVerbas>1){
     out+=div;
@@ -12391,18 +12398,22 @@ function honQuadroHTML(p){
       out+='<div style="display:flex;justify-content:space-between;gap:8px;line-height:1.5"><b style="color:#0F6E56;font-size:11.5px">LÍQUIDO DO CLIENTE</b><b style="color:#0F6E56;white-space:nowrap">R$ '+hFmt(liq)+'</b></div>';
     if(james) out+=honRow('Crédito',honFmtInput('valor_condenacao',p.valor_condenacao));
   } else chips.push([james?'Crédito':'Condenação','valor_condenacao']);
-  /* chips das verbas que não existem neste processo — um clique abre a linha */
+  /* chips das verbas que não existem neste processo — um clique abre a linha.
+     Pequenos de propósito: com Sucumbência + Multa má-fé + Pró-labore, os 3
+     têm que caber numa linha só (se o nome for muito comprido, quebra — mas
+     no normal os 3 cabem). */
   if(chips.length){
-    out+='<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">'
-      +chips.map(function(c){ return '<a onclick="honMostrar(\''+c[1]+'\')" style="cursor:pointer;font-size:10px;color:#8a93a2;background:var(--accentbg);border-radius:10px;padding:1px 8px;white-space:nowrap" title="Este processo não tem esta verba — clique para lançar">+ '+c[0]+'</a>'; }).join('')
+    out+='<div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:6px">'
+      +chips.map(function(c){ return '<a onclick="honMostrar(\''+c[1]+'\')" style="cursor:pointer;font-size:9.5px;color:#8a93a2;background:var(--accentbg);border-radius:10px;padding:1px 6px;white-space:nowrap" title="Este processo não tem esta verba — clique para lançar">+ '+c[0]+'</a>'; }).join('')
       +'</div>';
   }
   out+=div;
-  /* Faturado = boletos emitidos no Financeiro (sincronizado: pagos / em aberto /
-     a faturar do contratado) — preenchido por _preencheFaturadoAuto após a ficha abrir */
-  out+='<div style="line-height:1.5">'
-    +'<div style="display:flex;justify-content:space-between;gap:8px"><span style="color:var(--muted)">Faturado</span><b id="hon-faturado-auto" style="color:#0F6E56;font-size:11.5px;white-space:nowrap" title="Boletos emitidos para este processo na aba Financeiro (cancelados não contam)">…</b></div>'
-    +'<div id="hon-fat-detalhe" style="font-size:10.5px;color:var(--muted);line-height:1.45"></div>'
+  /* Faturado = boletos emitidos no Financeiro, numa linha só (total, o que falta
+     do contratado e vencidos, quando houver) — preenchido por
+     _preencheFaturadoAuto após a ficha abrir */
+  out+='<div style="display:flex;justify-content:space-between;gap:8px;line-height:1.5">'
+    +'<span style="color:var(--muted)">Faturado</span>'
+    +'<b id="hon-faturado-auto" style="color:#0F6E56;font-size:11px;white-space:nowrap;text-align:right" title="Boletos emitidos para este processo na aba Financeiro (cancelados não contam)">…</b>'
     +'</div>';
   /* rodapé: quando foi a última atualização monetária e o botão de refazer.
      Sem data registrada não se escreve nada — o próprio botão ⟳ já diz o que
@@ -12557,10 +12568,12 @@ async function aplicarAtualizacaoHon(btn){
   finally{ if(btn){ btn.textContent=t0; btn.disabled=false; } }
 }
 /* Faturado = soma dos boletos deste processo (fonte: cora_cobrancas, exclui os
-   cancelados). Apagar/cancelar no Financeiro reflete aqui automaticamente. */
+   cancelados). Apagar/cancelar no Financeiro reflete aqui automaticamente.
+   Uma linha só: total faturado, o que falta do contratado (se houver) e
+   vencidos (se houver) — o detalhe de pagos/em aberto/programadas continua
+   disponível no title (passar o mouse) em vez de ocupar espaço na ficha. */
 async function _preencheFaturadoAuto(){
   var el=document.getElementById('hon-faturado-auto'); if(!el||typeof atual==='undefined'||!atual) return;
-  var det=document.getElementById('hon-fat-detalhe');
   var reais=function(c){ return 'R$ '+(c/100).toFixed(2).replace('.',','); };
   try{
     var p=atual;
@@ -12569,38 +12582,22 @@ async function _preencheFaturadoAuto(){
     var pagosB=bols.filter(function(x){return x.status==='paga';});
     var abertosB=bols.filter(function(x){return x.status!=='paga';});
     var pagosC=pagosB.reduce(function(s,b){ return s+(parseInt(b.valor_centavos,10)||0); },0);
-    var abertosC=tot-pagosC;
     var hoje=new Date().toISOString().slice(0,10);
     var vencidos=abertosB.filter(function(x){ return x.vencimento && String(x.vencimento).slice(0,10)<hoje; }).length;
-    el.textContent=bols.length?(reais(tot)+' ('+bols.length+' boleto'+(bols.length===1?'':'s')+')'):'R$ 0,00';
-    if(det){
-      var linhas=[];
-      if(bols.length){
-        linhas.push('<span style="color:#0F6E56">✓ pagos: '+reais(pagosC)+' ('+pagosB.length+')</span>'
-          +' · <span style="color:#185FA5">em aberto: '+reais(abertosC)+' ('+abertosB.length+')</span>'
-          +(vencidos?(' · <span style="color:#b5342b;font-weight:700">'+vencidos+' vencido'+(vencidos===1?'':'s')+'</span>'):''));
-      }
-      /* parcelas do parcelamento automático ainda por emitir */
-      try{
-        var rp=await window.__sb.from('boletos_programados').select('valor_centavos,vencimento').eq('processo_numero',String(p.numero||'')).eq('status','agendado').order('vencimento',{ascending:true});
-        var progs=(rp&&rp.data)||[];
-        if(progs.length){
-          var totP=progs.reduce(function(s,b){ return s+(parseInt(b.valor_centavos,10)||0); },0);
-          linhas.push('<span style="color:#7a4b00">⏱ programadas: '+progs.length+' parcela'+(progs.length===1?'':'s')+' ('+reais(totP)+') — próx. venc. '+String(progs[0].vencimento||'').split('-').reverse().join('/')+'</span>');
-        }
-      }catch(e){}
-      /* sincroniza com o contratado: o que ainda falta emitir de boleto */
-      var contratadoC=Math.round(_hv(p.hon_val_contratual)*100);
-      if(contratadoC>0){
-        var aFat=contratadoC-tot;
-        /* o "(de X)" só faz sentido quando já houve faturamento parcial — sem
-           boleto nenhum, aFat É o contratado e a frase repetia o mesmo valor */
-        if(aFat>0) linhas.push('a faturar do contratado: <b>'+reais(aFat)+'</b>'+(tot>0?(' (de '+reais(contratadoC)+')'):''));
-        else if(bols.length) linhas.push('contratado ('+reais(contratadoC)+') já faturado por completo'+(aFat<0?' — excedente de '+reais(-aFat)+' (êxito/outras verbas)':''));
-      }
-      det.innerHTML=linhas.join('<br>');
+    var txt=bols.length?reais(tot):'R$ 0,00';
+    var contratadoC=Math.round(_hv(p.hon_val_contratual)*100);
+    if(contratadoC>0){
+      var aFat=contratadoC-tot;
+      if(aFat>0) txt+=' (falta '+reais(aFat)+')';
+      else if(bols.length) txt+=' ✓';
     }
-  }catch(e){ el.textContent='—'; if(det) det.textContent=''; }
+    if(vencidos) txt+=' · '+vencidos+' vencido'+(vencidos===1?'':'s');
+    el.textContent=txt;
+    el.style.color=vencidos?'#b5342b':'#0F6E56';
+    el.title=bols.length
+      ? ('pagos: '+reais(pagosC)+' ('+pagosB.length+') · em aberto: '+reais(tot-pagosC)+' ('+abertosB.length+')')
+      : 'Boletos emitidos para este processo na aba Financeiro (cancelados não contam)';
+  }catch(e){ el.textContent='—'; }
 }
 /* No celular, o quadro de Honorários fica melhor abaixo do card "Dados do processo"
    (e acima do histórico), em vez de no topo da ficha. No desktop continua no canto
