@@ -17937,7 +17937,7 @@ async function monitTrazerAssessoria(id){
   }
   async function carregarPessoas(){
     try{
-      var r=await window.__sb.from('usuarios').select('id,nome,cor_chat,so_privado').order('nome');
+      var r=await window.__sb.from('usuarios').select('id,nome,cor_chat,so_privado,visto_em').order('nome');
       var todos=r.data||[];
       porId={}; todos.forEach(function(u){ porId[u.id]=u; });
       if(eu && porId[eu] && porId[eu].nome) euNome=porId[eu].nome;
@@ -17951,6 +17951,20 @@ async function monitTrazerAssessoria(id){
      computador o campo ficava só com "Todos", sem os colegas, enquanto no
      celular (outra tela) a lista aparecia. Agora é uma função à parte, chamada
      nos dois momentos: quem chegar por último pinta. */
+  /* "visto por último": texto curto tipo WhatsApp a partir do heartbeat (usuarios.visto_em) */
+  function _vistoTxt(iso){
+    if(!iso) return '';
+    try{
+      var min=Math.floor((Date.now()-new Date(iso).getTime())/60000);
+      if(min<1) return 'agora';
+      if(min<60) return min+'min';
+      var hr=Math.floor(min/60);
+      if(hr<24) return hr+'h';
+      var dias=Math.floor(hr/24);
+      if(dias<7) return dias+'d';
+      return new Date(iso).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'});
+    }catch(e){ return ''; }
+  }
   function _pintarPara(){
     var s=document.getElementById('cmp-chat-para'); if(!s||!pessoas.length) return;
     var curtos=_nomesCurtos(pessoas);
@@ -17958,7 +17972,8 @@ async function monitTrazerAssessoria(id){
     s.innerHTML='<option value="">👥 Todos</option>'+pessoas.map(function(p){
       /* de férias continua na lista, mas cinza: some o destinatário e fica claro o porquê */
       var fora=(typeof _nomeEstaDeFerias==='function')&&_nomeEstaDeFerias(p.nome);
-      return '<option value="'+p.id+'"'+(fora?' disabled':'')+'>'+(fora?'🏖 ':'🔒 ')+h(curtos[p.id]||(p.nome||'').split(' ')[0])+(fora?' (férias)':'')+'  '+(ONLINE[p.id]?'🟢':'🔴')+'</option>';
+      var status=ONLINE[p.id]?'🟢':('🔴'+(p.visto_em?(' '+_vistoTxt(p.visto_em)):''));
+      return '<option value="'+p.id+'"'+(fora?' disabled':'')+'>'+(fora?'🏖 ':'🔒 ')+h(curtos[p.id]||(p.nome||'').split(' ')[0])+(fora?' (férias)':'')+'  '+status+'</option>';
     }).join('');
     if(atual) s.value=atual;
     s.onchange=function(){ pintar(); };
@@ -18130,6 +18145,18 @@ async function monitTrazerAssessoria(id){
         _pintarPara();
       }).subscribe(function(status){ if(status==='SUBSCRIBED') _pc.track({em:Date.now()}); });
     }catch(e){}
+    /* "visto por último": grava minha marca de tempo (heartbeat) e busca a dos
+       colegas, pra aparecer no seletor quando alguém está offline */
+    var _bater=async function(){ try{ await window.__sb.from('usuarios').update({visto_em:new Date().toISOString()}).eq('id',eu); }catch(e){} };
+    var _atualizarVistos=async function(){
+      try{
+        var rv=await window.__sb.from('usuarios').select('id,visto_em');
+        (rv.data||[]).forEach(function(u){ if(porId[u.id]) porId[u.id].visto_em=u.visto_em; });
+        _pintarPara();
+      }catch(e){}
+    };
+    _bater(); _atualizarVistos();
+    setInterval(function(){ _bater(); _atualizarVistos(); }, 45000);
     /* vistos: carrega os ponteiros e atualiza ao vivo — é o que faz o ✓ virar
        ✓✓ na sua tela no instante em que a outra pessoa abre a conversa */
     await _carregarLeituras(); pintar();

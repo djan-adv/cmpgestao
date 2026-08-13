@@ -19,6 +19,20 @@ function normaliza(s) {
 function horaCurta(iso) {
   try { const d = new Date(iso); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0') } catch { return '' }
 }
+// "visto por último" — texto curto tipo WhatsApp a partir do heartbeat (usuarios.visto_em)
+function vistoTexto(iso) {
+  if (!iso) return ''
+  try {
+    const min = Math.floor((Date.now() - new Date(iso).getTime()) / 60000)
+    if (min < 1) return 'visto agora'
+    if (min < 60) return 'visto há ' + min + 'min'
+    const h = Math.floor(min / 60)
+    if (h < 24) return 'visto há ' + h + 'h'
+    const dias = Math.floor(h / 24)
+    if (dias < 7) return 'visto há ' + dias + 'd'
+    return 'visto em ' + new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+  } catch { return '' }
+}
 // Nome curto para o chip da conversa. Só o primeiro nome bastava até existirem
 // duas Marias — aí a tela mostrava "Maria" e "Maria" e não dava para saber com
 // quem se estava falando. Quando o primeiro nome se repete, vira "M. Rita" e
@@ -283,7 +297,7 @@ export default function ChatMobile() {
   // ---------- pessoas (nomes reais — nunca confiar em autor_nome da mensagem) ----------
   useEffect(() => {
     if (!euId) return
-    supabase.from('usuarios').select('id,nome,cor_chat,so_privado').order('nome').then(({ data }) => {
+    supabase.from('usuarios').select('id,nome,cor_chat,so_privado,visto_em').order('nome').then(({ data }) => {
       const todos = data || []
       const mapa = {}; todos.forEach(u => { mapa[u.id] = u })
       setPorId(mapa)
@@ -301,7 +315,25 @@ export default function ChatMobile() {
       const mapa = {}; Object.keys(st).forEach(k => { mapa[k] = true })
       setOnline(mapa)
     }).subscribe((status) => { if (status === 'SUBSCRIBED') canal.track({ em: Date.now() }) })
-    return () => { supabase.removeChannel(canal) }
+
+    // "visto por último": grava minha própria marca de tempo (heartbeat) e
+    // busca a dos colegas, pra mostrar quando alguém offline esteve online.
+    const bater = async () => {
+      try { await supabase.from('usuarios').update({ visto_em: new Date().toISOString() }).eq('id', euId) } catch { }
+    }
+    const atualizarVistos = async () => {
+      try {
+        const { data } = await supabase.from('usuarios').select('id,visto_em')
+        setPorId(m => {
+          const novo = { ...m }
+          ;(data || []).forEach(u => { if (novo[u.id]) novo[u.id] = { ...novo[u.id], visto_em: u.visto_em } })
+          return novo
+        })
+      } catch { }
+    }
+    bater(); atualizarVistos()
+    const iv = setInterval(() => { bater(); atualizarVistos() }, 45000)
+    return () => { supabase.removeChannel(canal); clearInterval(iv) }
   }, [euId])
 
   const nomeDe = useCallback((id) => (porId[id] && porId[id].nome) || '', [porId])
@@ -890,11 +922,14 @@ export default function ChatMobile() {
       <div style={{ display: 'flex', gap: 6, padding: '8px 10px', overflowX: 'auto', background: '#fff', borderBottom: '1px solid #ddd', flexShrink: 0 }}>
         <button onClick={() => trocarAlvo(null)} style={{ flexShrink: 0, border: !alvo ? '1.5px solid ' + VERDE : '1px solid #ddd', background: !alvo ? '#e7f7f2' : '#fff', color: '#222', borderRadius: 16, padding: '8px 14px', fontSize: fs(12.5), fontWeight: 600, cursor: 'pointer' }}>👥 Todos</button>
         {pessoas.map(p => (
-          <button key={p.id} title={emFerias[p.id] ? 'De férias — não recebe mensagem' : (online[p.id] ? 'Online agora' : 'Offline')}
+          <button key={p.id} title={emFerias[p.id] ? 'De férias — não recebe mensagem' : (online[p.id] ? 'Online agora' : (vistoTexto((porId[p.id] || {}).visto_em) || 'Offline'))}
             onClick={() => trocarAlvo({ id: p.id, nome: p.nome })}
             style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6, border: alvo && alvo.id === p.id ? '1.5px solid ' + VERDE : '1px solid #ddd', background: emFerias[p.id] ? '#f2f2f2' : (alvo && alvo.id === p.id ? '#e7f7f2' : '#fff'), color: emFerias[p.id] ? '#9aa' : '#222', borderRadius: 16, padding: '8px 14px', fontSize: fs(12.5), fontWeight: 600, cursor: 'pointer' }}>
             {emFerias[p.id] ? '🏖' : '🔒'} {rotulos[p.id] || (p.nome || '').split(' ')[0]}
-            <span style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, background: online[p.id] ? '#2ecc71' : '#e74c3c' }} /></button>
+            <span style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, background: online[p.id] ? '#2ecc71' : '#e74c3c' }} />
+            {!online[p.id] && !emFerias[p.id] && (porId[p.id] || {}).visto_em && (
+              <span style={{ fontSize: fs(10), fontWeight: 400, color: '#99a', flexShrink: 0 }}>{vistoTexto(porId[p.id].visto_em).replace('visto ', '')}</span>
+            )}</button>
         ))}
       </div>
 
