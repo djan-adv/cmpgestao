@@ -69,6 +69,44 @@ async function acharPaginaInicial(site, auth) {
   return null
 }
 
+// varre a árvore de elementos do Elementor (seções > colunas > widgets,
+// aninhados) e junta um "caminho" (índices) até cada nó — usado tanto pra
+// listar botões quanto, depois, pra achar de volta o mesmo nó e trocar o link
+function _andaElementor(nos, caminho, fn) {
+  (nos || []).forEach((no, i) => {
+    const aqui = caminho.concat(i)
+    fn(no, aqui)
+    if (Array.isArray(no.elements) && no.elements.length) _andaElementor(no.elements, aqui, fn)
+  })
+}
+function _achaNoCaminho(nos, caminho) {
+  let atual = nos
+  let no = null
+  for (const i of caminho) {
+    no = (atual || [])[i]
+    if (!no) return null
+    atual = no.elements
+  }
+  return no
+}
+// devolve TODO link (settings.link.url e variantes conhecidas) de um widget —
+// diferentes widgets do Elementor guardam link em campos com nomes diferentes
+const CAMPOS_LINK = ['link', 'button_link', 'url', 'select_link']
+function _linksDoNo(no) {
+  const s = (no && no.settings) || {}
+  const achados = []
+  for (const campo of CAMPOS_LINK) {
+    const v = s[campo]
+    if (v && typeof v === 'object' && typeof v.url === 'string' && v.url) achados.push({ campo, url: v.url })
+    else if (typeof v === 'string' && v) achados.push({ campo, url: v })
+  }
+  return achados
+}
+function _textoDoNo(no) {
+  const s = (no && no.settings) || {}
+  return String(s.text || s.title || s.editor || s.button_text || '').replace(/<[^>]+>/g, ' ').trim().slice(0, 80)
+}
+
 export async function POST(request) {
   let body
   try { body = await request.json() } catch (e) { return Response.json({ erro: 'json inválido' }, { status: 400 }) }
@@ -79,6 +117,53 @@ export async function POST(request) {
   if (!site) return Response.json({ erro: 'site inválido' }, { status: 400 })
   const auth = await credencialWP(site)
   if (!auth) return Response.json({ erro: 'credencial do WordPress não configurada para ' + site.rotulo }, { status: 500 })
+
+  // ===== botões do Elementor na home: listar (só leitura) ou trocar o link de UM =====
+  if (body.acao === 'listar_botoes_elementor' || body.acao === 'trocar_link_botao') {
+    const paginaId0 = await acharPaginaInicial(site, auth)
+    if (!paginaId0) return Response.json({ erro: 'não achei a página inicial de ' + site.rotulo }, { status: 404 })
+    const rm = await fetch(site.base + '/wp-json/wp/v2/pages/' + paginaId0 + '?context=edit', { headers: { Authorization: auth, 'User-Agent': 'Mozilla/5.0 (CMPGestao)' }, cache: 'no-store' })
+    if (!rm.ok) return Response.json({ erro: 'não consegui ler a página inicial (HTTP ' + rm.status + ')' }, { status: 502 })
+    const pagM = await rm.json()
+    const bruto = pagM.meta && pagM.meta._elementor_data
+    if (!bruto || typeof bruto !== 'string' || !bruto.trim()) {
+      return Response.json({ ok: true, elementor_data_acessivel: false, aviso: 'O WordPress não devolveu o campo _elementor_data pela API (meta protegido, comum por padrão) — não dá pra ler nem trocar o link do botão por aqui. Precisa ser no editor visual mesmo.' })
+    }
+    let arvore
+    try { arvore = JSON.parse(bruto) } catch (e) { return Response.json({ erro: 'não consegui interpretar os dados do Elementor (JSON inválido)' }, { status: 502 }) }
+
+    if (body.acao === 'listar_botoes_elementor') {
+      const botoes = []
+      _andaElementor(arvore, [], (no, caminho) => {
+        const links = _linksDoNo(no)
+        if (links.length) botoes.push({ caminho: caminho.join('.'), tipo: no.widgetType || no.elType, texto: _textoDoNo(no), links })
+      })
+      return Response.json({ ok: true, elementor_data_acessivel: true, pagina_id: paginaId0, total_com_link: botoes.length, botoes: botoes.slice(0, 40) })
+    }
+
+    // trocar_link_botao: precisa do caminho exato devolvido por listar_botoes_elementor
+    const caminho = String(body.caminho || '').split('.').filter(x => x !== '').map(Number)
+    if (!caminho.length) return Response.json({ erro: 'informe o caminho (devolvido por listar_botoes_elementor)' }, { status: 400 })
+    const novoLink = String(body.novo_link || '').trim()
+    if (!novoLink) return Response.json({ erro: 'informe novo_link' }, { status: 400 })
+    const no = _achaNoCaminho(arvore, caminho)
+    if (!no) return Response.json({ erro: 'não achei mais esse botão nesse caminho (a página pode ter mudado) — rode listar_botoes_elementor de novo' }, { status: 404 })
+    const s = no.settings || {}
+    let trocou = false
+    for (const campo of CAMPOS_LINK) {
+      const v = s[campo]
+      if (v && typeof v === 'object' && 'url' in v) { v.url = novoLink; trocou = true; break }
+      if (typeof v === 'string' && v) { s[campo] = novoLink; trocou = true; break }
+    }
+    if (!trocou) return Response.json({ erro: 'esse botão não tem um campo de link reconhecido' }, { status: 400 })
+    const ru2 = await fetch(site.base + '/wp-json/wp/v2/pages/' + paginaId0, {
+      method: 'POST',
+      headers: { Authorization: auth, 'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0 (CMPGestao)' },
+      body: JSON.stringify({ meta: { _elementor_data: JSON.stringify(arvore) } }),
+    })
+    if (!ru2.ok) { const t = await ru2.text().catch(() => ''); return Response.json({ erro: 'falha ao gravar (HTTP ' + ru2.status + '): ' + t.slice(0, 300) }, { status: 502 }) }
+    return Response.json({ ok: true, link_pagina: pagM.link })
+  }
 
   // ===== todos os posts (varredura em massa, sem etapa de diagnóstico separada) =====
   if (body.acao === 'inserir_posts') {

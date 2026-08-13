@@ -792,6 +792,12 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
       <button class="btn sm ghost" onclick="embedPostsInserir('djan')">djan.com.br</button>
       <span class="note" style="margin:0">Pula posts com construtor inseguro ou que já têm o embed. Posts novos publicados por aqui já saem com o chat, sem precisar rodar isto de novo.</span>
     </div>
+    <div class="coord-only" style="background:#fff8e6;border:1px solid #e8dcbb;border-radius:10px;padding:10px 12px;margin:10px 0;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <b style="font-size:12.5px;color:#7a5f12">🔗 Home é Elementor — trocar link de um botão pro /cliente:</b>
+      <button class="btn sm ghost" onclick="elementorListarBotoes('cmp')">Ver botões — cmpadvogados.com.br</button>
+      <button class="btn sm ghost" onclick="elementorListarBotoes('djan')">Ver botões — djan.com.br</button>
+      <span class="note" style="margin:0">Lista os botões com link achados nos dados do Elementor; escolha um pelo número pra trocar o link, no mesmo fluxo.</span>
+    </div>
     <div id="pub-form" style="display:none;background:#f6f9fc;border:1px solid #dbe6f2;border-radius:10px;padding:12px;margin:10px 0">
       <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px">
         <div><label style="font-size:12px;font-weight:600;color:var(--muted)">Título</label><input id="pub-titulo" style="width:100%"></div>
@@ -9055,6 +9061,33 @@ async function embedPostsInserir(site){
       +j.ja_tinha+' já tinham o chat\n'
       +j.pulados_construtor+' pulados (construtor inseguro)\n'
       +j.falhas+' falha(s)');
+  }catch(e){ alert('Erro: '+(e&&e.message||e)); }
+}
+/* Home em Elementor: lista os botões com link achados nos dados internos do
+   Elementor (se a API deixar ler — meta protegido às vezes não vem) e, num
+   fluxo só, deixa escolher um pra trocar o link (ex.: pro /cliente). */
+async function elementorListarBotoes(site){
+  var rotulo=(site==='djan')?'djan.com.br':'cmpadvogados.com.br';
+  try{
+    var tok=await docToken();
+    var r=await fetch('/api/site-embed',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({acao:'listar_botoes_elementor',site:site})});
+    var j=await r.json();
+    if(!r.ok||j.erro){ alert('Não consegui listar: '+(j.erro||('HTTP '+r.status))); return; }
+    if(!j.elementor_data_acessivel){ alert(j.aviso||'Não consegui ler os dados do Elementor pela API.'); return; }
+    if(!j.botoes||!j.botoes.length){ alert('Não achei nenhum botão com link nos dados do Elementor de '+rotulo+'.'); return; }
+    var lista=j.botoes.map(function(b,i){ return (i+1)+') "'+(b.texto||'(sem texto)')+'" ['+b.tipo+']\n   link atual: '+(b.links[0]&&b.links[0].url||'')+'\n   caminho: '+b.caminho; }).join('\n\n');
+    var escolha=prompt(rotulo+' — '+j.botoes.length+' botão(ões) com link encontrados:\n\n'+lista+'\n\nDigite o NÚMERO do botão que quer trocar o link (ou cancele):');
+    if(!escolha) return;
+    var idx=parseInt(escolha,10)-1;
+    var alvo=j.botoes[idx];
+    if(!alvo){ alert('Número inválido.'); return; }
+    var novoLink=prompt('Novo link para "'+(alvo.texto||alvo.tipo)+'":',(alvo.links[0]&&alvo.links[0].url)||'https://gestao.cmpadvogados.com.br/cliente');
+    if(!novoLink) return;
+    if(!confirm('Trocar o link de "'+(alvo.texto||alvo.tipo)+'" em '+rotulo+' para:\n'+novoLink+'\n\nConfirma?')) return;
+    var rt=await fetch('/api/site-embed',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({acao:'trocar_link_botao',site:site,caminho:alvo.caminho,novo_link:novoLink})});
+    var jt=await rt.json();
+    if(!rt.ok||jt.erro){ alert('Não trocou: '+(jt.erro||('HTTP '+rt.status))); return; }
+    alert('Link trocado! Confere ao vivo: '+jt.link_pagina);
   }catch(e){ alert('Erro: '+(e&&e.message||e)); }
 }
 /* ===== Proteção contra a seta "voltar" do navegador (e o botão lateral do mouse):
