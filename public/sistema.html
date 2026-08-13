@@ -780,6 +780,12 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
       </span>
     </div>
     <p class="note" style="margin-top:6px">Extrato dos artigos dos dois sites + rascunhos do escritório. Cole o texto (do chat do Claude ou seu), escolha o site e clique em Publicar — sai direto no WordPress pela API, sem navegador. Instagram fica de fora, por decisão do escritório.</p>
+    <div class="coord-only" style="background:#f6f9fc;border:1px solid #dbe6f2;border-radius:10px;padding:10px 12px;margin:10px 0;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <b style="font-size:12.5px;color:var(--muted)">🌐 Chat de captação (/cliente) na home:</b>
+      <button class="btn sm ghost" onclick="embedSiteInserir('cmp')">cmpadvogados.com.br</button>
+      <button class="btn sm ghost" onclick="embedSiteInserir('djan')">djan.com.br</button>
+      <span class="note" style="margin:0">Verifica o construtor da página antes — se for Elementor/Divi, recusa e avisa (use o método manual nesse caso).</span>
+    </div>
     <div id="pub-form" style="display:none;background:#f6f9fc;border:1px solid #dbe6f2;border-radius:10px;padding:12px;margin:10px 0">
       <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px">
         <div><label style="font-size:12px;font-weight:600;color:var(--muted)">Título</label><input id="pub-titulo" style="width:100%"></div>
@@ -8987,6 +8993,31 @@ async function pubSalvarEdicao(){
     setTimeout(fecharModalPubEditar, 900);
   }catch(e){ if(st){ st.textContent='Erro: '+(e&&e.message||e); st.style.color='#b5342b'; } }
   finally{ if(btn){ btn.disabled=false; btn.textContent='Salvar alterações'; } }
+}
+/* Chat de captação (/cliente) na home do site — diagnostica o construtor da
+   página ANTES de inserir (Elementor/Divi normalmente ignoram o campo de
+   conteúdo bruto: nesse caso recusa, pra não editar às cegas sem efeito
+   nenhum). Quem clica confirma o resultado do diagnóstico antes de ir à
+   inserção de verdade — é o "ver antes de publicar" que dá pra ter aqui. */
+async function embedSiteInserir(site){
+  var rotulo=(site==='djan')?'djan.com.br':'cmpadvogados.com.br';
+  try{
+    var tok=await docToken();
+    var rd=await fetch('/api/site-embed',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({acao:'diagnosticar',site:site})});
+    var jd=await rd.json();
+    if(!rd.ok||jd.erro){ alert('Não consegui diagnosticar '+rotulo+': '+(jd.erro||('HTTP '+rd.status))); return; }
+    if(jd.ja_tem_embed){ alert(rotulo+' já tem o chat inserido na home ('+jd.link_pagina+').'); return; }
+    var msg='Página inicial de '+rotulo+' (id '+jd.pagina_id+')\nConstrutor detectado: '+jd.construtor+'\n\n'
+      +(jd.seguro_para_auto_insercao
+        ? 'Parece seguro inserir automaticamente (conteúdo em blocos comuns do WordPress).'
+        : '⚠ Esse construtor costuma IGNORAR edição bruta de conteúdo — a inserção automática pode não aparecer na página ao vivo. Recomendado usar o método manual (colar no editor, com preview) em vez desta opção.')
+      +'\n\nConfirma inserir agora mesmo assim?';
+    if(!confirm(msg)) return;
+    var ri=await fetch('/api/site-embed',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({acao:'inserir',site:site,forcar:!jd.seguro_para_auto_insercao})});
+    var ji=await ri.json();
+    if(!ri.ok||ji.erro){ alert('Não inseriu: '+(ji.erro||('HTTP '+ri.status))); return; }
+    alert('Inserido em '+rotulo+'! Confere ao vivo: '+ji.link_pagina);
+  }catch(e){ alert('Erro: '+(e&&e.message||e)); }
 }
 /* ===== Proteção contra a seta "voltar" do navegador (e o botão lateral do mouse):
    numa página única, o Voltar saía do site direto. Agora cada troca de tela
