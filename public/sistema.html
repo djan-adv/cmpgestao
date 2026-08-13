@@ -17187,6 +17187,23 @@ async function abrirContaIA(){
 var _EST_ROTULOS={triado:'aguardando dossiê',dossie:'dossiê pronto',pronta:'minuta pronta',minutando:'redigindo…',sem_orcamento:'teto do mês atingido',erro:'falhou'};
 var _EST_CORES={dossie:'#127a53',pronta:'#127a53',triado:'#8a5a00',minutando:'#8a5a00',sem_orcamento:'#b5342b',erro:'#b5342b'};
 function _estKb(n){ n=Number(n||0); return n>=1048576?((n/1048576).toFixed(1)+' MB'):(Math.round(n/1024)+' KB'); }
+/* nome das partes ao lado do número, no card da fila — até 2 do autor e até 2 do
+   réu; se não couber na linha, a própria célula corta com reticências (CSS),
+   sem empurrar o card pra baixo nem alargar. Busca em DADOS.processos (já
+   carregado) em vez de pedir mais campo à API — é só isso que falta ali. */
+function _estPartesTxt(numero){
+  try{
+    var dd=String(numero||'').replace(/\D/g,''); if(!dd) return '';
+    var p=(DADOS.processos||[]).find(function(x){ return String(x.numero||'').replace(/\D/g,'')===dd; });
+    if(!p) return '';
+    var aut=(typeof _partesSplit==='function'?_partesSplit(p.cliente):[]).slice(0,2);
+    var reu=(typeof _partesSplit==='function'?_partesSplit(p.oponente):[]).slice(0,2);
+    var partes=[];
+    if(aut.length) partes.push(aut.join(', '));
+    if(reu.length) partes.push(reu.join(', '));
+    return partes.join(' × ');
+  }catch(e){ return ''; }
+}
 async function renderEstagiario(){
   var el=document.getElementById('estagiario-body'); if(!el) return;
   el.innerHTML='<div class="note">Carregando…</div>';
@@ -17227,7 +17244,10 @@ async function renderEstagiario(){
           +'<b style="color:var(--navy);font-size:13px">'+finEsc(x.tipo_peca||'peça')+'</b>'
           +'<span style="font-size:10.5px;color:'+cor+';font-weight:700">'+finEsc(rot)+'</span>'
         +'</div>'
-        +'<div class="note" style="margin:2px 0">'+finEsc(typeof fmtCNJ==='function'?fmtCNJ(x.processo_numero||''):(x.processo_numero||''))+'</div>'
+        +'<div class="note" style="margin:2px 0;display:flex;gap:5px;align-items:baseline;overflow:hidden">'
+          +'<span style="flex:0 0 auto;white-space:nowrap">'+finEsc(typeof fmtCNJ==='function'?fmtCNJ(x.processo_numero||''):(x.processo_numero||''))+'</span>'
+          +(_estPartesTxt(x.processo_numero)?('<span style="flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">· '+finEsc(_estPartesTxt(x.processo_numero))+'</span>'):'')
+        +'</div>'
         +'<div style="font-size:12px;color:'+(venceu?'#b5342b':'var(--ink)')+'">Prazo: <b>'+finEsc(prazo)+'</b>'+(x.urgencia?(' · urgência '+finEsc(x.urgencia)):'')+'</div>'
         +(x.resumo?'<div class="note" style="font-size:11px;margin-top:4px;max-height:52px;overflow:auto">'+finEsc(x.resumo)+'</div>':'')
         +(x.erro?'<div class="note" style="font-size:11px;color:#b5342b;margin-top:4px">'+finEsc(String(x.erro).slice(0,160))+'</div>':'')
