@@ -227,11 +227,15 @@ export default function Sala({ params }) {
     ligarTranscricao()
   }
 
-  // o vídeo local só existe DEPOIS que a tela de chamada monta — em vez do
-  // truque de setTimeout(0), espera o React terminar de desenhar
-  useEffect(() => {
-    if (fase === 'chamada' && localRef.current && streamRef.current) localRef.current.srcObject = streamRef.current
-  }, [fase])
+  // ref por função, não useEffect: o <video> do vídeo local existe em DOIS
+  // pontos do JSX (layout de 2 pessoas vs. grade de 3+) — trocar de um pro
+  // outro desmonta o elemento antigo e monta um novo, e um efeito preso a
+  // `fase` só rodava a primeira vez, deixando o vídeo novo sem imagem depois
+  // que uma terceira pessoa entrava. A função roda toda vez que o nó (re)monta.
+  function refLocal(el) {
+    localRef.current = el
+    if (el && streamRef.current) el.srcObject = streamRef.current
+  }
 
   async function sair() {
     try { canalRef.current && canalRef.current.send({ type: 'broadcast', event: 'sinal', payload: { tipo: 'saiu', de: euIdRef.current } }) } catch (e) {}
@@ -300,7 +304,7 @@ export default function Sala({ params }) {
               : <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,.6)', fontSize: 14 }}>
                   {estado || 'esperando a outra pessoa…'}
                 </div>}
-            <video ref={localRef} autoPlay playsInline muted
+            <video ref={refLocal} autoPlay playsInline muted
               style={{ position: 'absolute', right: 12, bottom: 12, width: '26vw', maxWidth: 170, borderRadius: 10, border: '2px solid rgba(255,255,255,.6)', objectFit: 'cover' }} />
           </>
         ) : (
@@ -318,7 +322,7 @@ export default function Sala({ params }) {
               </div>
             ))}
             <div style={{ position: 'relative', background: '#111', overflow: 'hidden' }}>
-              <video ref={localRef} autoPlay playsInline muted style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              <video ref={refLocal} autoPlay playsInline muted style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               <span style={{ position: 'absolute', left: 6, bottom: 6, fontSize: 11, background: 'rgba(0,0,0,.5)', padding: '2px 7px', borderRadius: 6 }}>você</span>
             </div>
           </div>
