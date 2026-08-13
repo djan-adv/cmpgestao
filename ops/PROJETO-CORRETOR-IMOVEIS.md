@@ -210,3 +210,41 @@ claro, parecido com o que já temos de agenda". Procurei em:
 preciso confirmar com o Djan: é uma tela específica que ele viu (print/link) e eu não
 achei, ou é um pedido novo (ex.: um widget de chat/WhatsApp flutuante, à esquerda, azul
 claro, pro site do corretor) inspirado na cara do menu do CMPGestão?
+
+## 7. Backlog — ideias novas do Djan (ainda não implementadas)
+
+Lista aberta em `2026-08-13`, só juntando pra executar tudo de uma vez depois — nada
+disto está feito ainda.
+
+1. **Botão "Solicitar certidão do imóvel"** — R$ 360, cobrança manual (mesmo modelo do
+   destaque: o Djan confirma o pagamento por fora e libera). Vira um novo tipo de
+   solicitação/lead (`certidao`), com campo pra endereço/matrícula do imóvel — a
+   pensar se entra como um `TIPOS_LEAD` novo em `app/api/imoveis/route.js` ou um fluxo
+   próprio, dependendo de como o Djan cumpre o pedido (busca no cartório manualmente).
+2. **"Quadro de imóveis de contato próprio"** — a esclarecer com o Djan: se é uma
+   seção/vitrine separada pros imóveis que já são `tipo='proprio'` (destacando o
+   contato direto com ele, sem intermediário), ou algo diferente do que a aba
+   "Próprios" já mostra hoje em `/corretor/imoveis`.
+3. **Reforço de "imóveis de terceiros / parceria"** — o Djan voltou a mencionar essas
+   duas categorias; já existem (`tipo='parceria'` e `tipo='terceiro'`), então isto é
+   provavelmente só reafirmar prioridade, não um pedido novo — confirmar se há algo
+   além do que já está em `/corretor/imoveis` (abas Próprios/Parceria/Anunciantes) e no
+   painel (aba Terceiros).
+4. **Cadastro perguntando "corretor ou proprietário":** hoje `/corretor/anunciar` só
+   tem o fluxo de dono de imóvel (`anunciante_cadastro`, sempre vira `tipo='terceiro'`
+   pendente de aprovação). O pedido novo é perguntar, no cadastro, se quem está
+   publicando é **corretor** ou **proprietário** — faz sentido rotear o anúncio pro
+   tipo certo (`parceria` quando for corretor de outra imobiliária, `terceiro` quando
+   for o próprio dono), possivelmente com textos/termos diferentes pra cada papel.
+5. **Botão "Solicitar avaliação de imóvel"** — já existe (`/corretor/avaliacao`,
+   também no cartão de serviços da home) — o Djan reforçou o pedido, registrando aqui
+   que é prioridade manter em destaque, não é item novo de código.
+6. **Espaço pra imagem, texto descritivo e vídeo nos anúncios** — hoje o cadastro de
+   imóvel (painel e `/corretor/anunciar`) já tem fotos (`fotos jsonb`) e descrição
+   (`descricao text`); falta **campo de vídeo** (provavelmente um link — YouTube,
+   Instagram Reels, etc. — embutido na página de detalhe do imóvel).
+7. **Marca d'água opcional da Djan Imóveis nas fotos:** botão opcional no cadastro do
+   anúncio pra aplicar uma marca d'água padrão (do Djan) nas fotos enviadas —
+   processamento de imagem (server-side, provavelmente com `sharp` ou lib parecida),
+   por enquanto sem imagem/logo definitiva pra usar como marca d'água (depende do
+   item "logo/favicon definitivo" da seção 4).
