@@ -5978,11 +5978,35 @@ async function noticiaDoHistorico(ev,hix){
   if(btn){btn.disabled=true;btn.textContent='📰 redigindo (1-2 min)…';}
   try{
     var tok=await docToken();
-    var r=await fetch('/api/publicacoes',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({acao:'noticia',texto:teor,numero:atual.numero||'',orgao:atual.orgao||atual.foro||'',classe:atual.classe||'',assunto:atual.tipo||''})});
+    var payload={acao:'noticia',texto:teor,numero:atual.numero||'',orgao:atual.orgao||atual.foro||'',classe:atual.classe||'',assunto:atual.tipo||''};
+    var hdrs={'Content-Type':'application/json',Authorization:'Bearer '+tok};
+    var r=await fetch('/api/publicacoes',{method:'POST',headers:hdrs,body:JSON.stringify(payload)});
     var j=await r.json();
+    /* anti-duplicidade: este processo já tem notícia — o usuário escolhe entre
+       editar/mesclar a existente (aba Postagens) ou gerar outra mesmo assim */
+    if(r.status===409&&j.ja_existe&&j.ja_existe.length){
+      var lista=j.ja_existe.map(function(p){return '• ['+p.site+' — '+p.status+'] '+p.titulo;}).join('\n');
+      if(confirm('⚠️ Este processo JÁ virou notícia:\n\n'+lista+'\n\nCANCELAR = abrir a existente na aba Postagens pra reeditar/mesclar os fatos novos (se já estiver publicada, salvar atualiza o site).\n\nOK = gerar OUTRA notícia deste mesmo processo.')){
+        payload.forcar=1;
+        r=await fetch('/api/publicacoes',{method:'POST',headers:hdrs,body:JSON.stringify(payload)});
+        j=await r.json();
+      }else{
+        if(btn){btn.disabled=false;btn.textContent='📰 virar notícia no site';}
+        go('publicacoes');
+        if(typeof pubEditar==='function'){ var exId=j.ja_existe[0].id; setTimeout(function(){ pubEditar(exId); },700); }
+        return;
+      }
+    }
     if(!r.ok||j.erro){ alert('Não gerou: '+(j.erro||r.status)); }
     else{
       alert('✓ 2 rascunhos criados (djan e cmp), anonimizados.\n\n• '+((j.titulos||[])[0]||'')+'\n• '+((j.titulos||[])[1]||'')+'\n\nAbrindo a aba Postagens — revise o texto na tela e clique em "publicar" no que aprovar.');
+      /* deixa a marca no histórico do processo (interno — não vai ao cliente) */
+      try{
+        var hN=new Date(),isoN=hN.getFullYear()+'-'+String(hN.getMonth()+1).padStart(2,'0')+'-'+String(hN.getDate()).padStart(2,'0');
+        var txtN='[Notícia] Esta decisão virou notícia anonimizada — 2 rascunhos na aba Postagens: '+((j.titulos||[]).join(' | '));
+        var wN=await window.__sb.from('andamentos').insert({processo_id:atual._id,data:isoN,texto:txtN,fonte:'manual'}).select('id').single();
+        if(!wN.error){ atual.hist_full=atual.hist_full||[]; atual.hist_full.unshift({id:wN.data&&wN.data.id,data:isoN+'T00:00:00.000Z',texto:txtN,f:'manual'}); histShown=5; renderHistorico(); }
+      }catch(eN){}
       go('publicacoes');
       if(j.ids&&j.ids.length&&typeof pubEditar==='function') setTimeout(function(){ pubEditar(j.ids[0]); },700);
     }

@@ -223,6 +223,12 @@ export async function POST(request) {
     const texto = String(body.texto || '').trim()
     if (texto.length < 200) return Response.json({ erro: 'O texto da decisão está muito curto — abra um andamento que tenha o inteiro teor (sentença/acórdão).' }, { status: 400 })
     const numero = String(body.numero || '').trim()
+    // este processo já virou notícia antes? devolve a lista pro usuário decidir
+    // se gera outra mesmo assim (forcar) ou se edita/mescla o rascunho existente
+    if (numero && !body.forcar) {
+      const ja = await db.from('publicacoes').select('id,site,titulo,status,criado_em').eq('processo_numero', numero).order('criado_em', { ascending: false })
+      if (!ja.error && (ja.data || []).length) return Response.json({ ja_existe: ja.data }, { status: 409 })
+    }
     const tribunal = tribunalDoNumero(numero)
     const contexto = [
       body.orgao ? 'Órgão julgador: ' + String(body.orgao).slice(0, 200) : '',
@@ -249,8 +255,8 @@ export async function POST(request) {
     const scrub = s => reNum ? String(s || '').replace(reNum, '[processo preservado]') : String(s || '')
     const area = j.tema_area || body.assunto || null
     const linhas = [
-      { site: 'djan', titulo: scrub(j.djan.titulo), conteudo_html: scrub(j.djan.html), tema: area, status: 'rascunho', origem: 'gestao' },
-      { site: 'cmp', titulo: scrub(j.cmp.titulo), conteudo_html: scrub(j.cmp.html), tema: area, status: 'rascunho', origem: 'gestao' },
+      { site: 'djan', titulo: scrub(j.djan.titulo), conteudo_html: scrub(j.djan.html), tema: area, status: 'rascunho', origem: 'gestao', processo_numero: numero || null },
+      { site: 'cmp', titulo: scrub(j.cmp.titulo), conteudo_html: scrub(j.cmp.html), tema: area, status: 'rascunho', origem: 'gestao', processo_numero: numero || null },
     ]
     const ins = await db.from('publicacoes').insert(linhas).select('id,site,titulo')
     if (ins.error) return Response.json({ erro: 'Gerado, mas falhou ao salvar: ' + ins.error.message }, { status: 500 })
