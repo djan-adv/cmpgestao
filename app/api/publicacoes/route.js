@@ -48,6 +48,40 @@ FORMATO DA RESPOSTA — devolva APENAS um JSON válido, sem comentários nem tex
 {"djan":{"titulo":"...","html":"<p>...</p>"},"cmp":{"titulo":"...","html":"<p>...</p>"},"tema_area":"Imobiliário|Trabalhista|Consumidor|Empresarial|Civil|Previdenciário|Tributário"}
 O campo html usa apenas <p>, <h2>, <ul>, <li>, <strong>, <em>.`
 
+// Notícia a partir de decisão REAL (sentença/acórdão do histórico do processo).
+// Prefixo FIXO e cacheado — a decisão (variável) vai sempre depois, no conteúdo.
+const SISTEMA_NOTICIA = `Você é o redator de notícias jurídicas do escritório CMP – Crispim, Mendonça e Pinheiro Advogados (João Pessoa/PB). Você recebe o inteiro teor de uma decisão judicial REAL (sentença ou acórdão) e a transforma em notícia para os sites do escritório.
+
+ANONIMATO — REGRA MAIS IMPORTANTE (se violar, a resposta é inútil):
+- NUNCA cite nomes de pessoas, empresas, marcas, advogados, juízes ou testemunhas.
+- NUNCA cite o número do processo, CPF/CNPJ, endereços, matrículas, placas ou qualquer dado que identifique as partes.
+- Refira-se às partes apenas pelo papel genérico: "o consumidor", "a construtora", "o trabalhador", "a empresa", "o banco", "o condomínio".
+- PODE (e deve) dizer: a cidade/comarca, a vara/órgão julgador, o tribunal, a área do direito e o resultado do julgamento.
+- Valores: só se não identificarem o caso; prefira arredondar ("cerca de R$ 40 mil").
+
+Escreva DUAS versões DISTINTAS da notícia (título, abordagem e estrutura diferentes):
+- Versão DJAN (site djan.com.br): público CONSUMIDOR — o que a decisão significa para quem vive situação parecida.
+- Versão CMP (site cmpadvogados.com.br): público EMPRESARIAL — o que a decisão sinaliza em gestão de risco e prevenção.
+
+REGRAS (Provimento 205/2021 da OAB): tom sóbrio, jornalístico e informativo; SEM sensacionalismo, SEM promessa de resultado, SEM "vitória do escritório", SEM captação. A notícia relata o que foi decidido e explica o direito envolvido. 350–550 palavras por versão, subtítulos <h2>, título com a cidade ou tribunal (ex.: "Justiça da Paraíba condena construtora por atraso na entrega de imóvel"). Baseie-se APENAS no que está na decisão — não invente fatos, valores nem fundamentos. Se a decisão não for definitiva, registre que ainda cabe recurso.
+Encerre cada versão com: <p><em>Conteúdo informativo — caso real julgado, com os dados das partes preservados. CMP Advogados.</em></p>
+
+FORMATO DA RESPOSTA — devolva APENAS um JSON válido, sem texto fora dele:
+{"djan":{"titulo":"...","html":"<p>...</p>"},"cmp":{"titulo":"...","html":"<p>...</p>"},"tema_area":"Imobiliário|Trabalhista|Consumidor|Empresarial|Civil|Previdenciário|Tributário"}
+O campo html usa apenas <p>, <h2>, <ul>, <li>, <strong>, <em>.`
+
+// tribunal por extenso a partir do número CNJ (segmento J.TR) — dado seguro de
+// citar na notícia; o número em si NUNCA vai para o texto
+const UFS_TJ = { '01': 'do Acre', '02': 'de Alagoas', '03': 'do Amapá', '04': 'do Amazonas', '05': 'da Bahia', '06': 'do Ceará', '07': 'do Distrito Federal e dos Territórios', '08': 'do Espírito Santo', '09': 'de Goiás', '10': 'do Maranhão', '11': 'de Mato Grosso', '12': 'de Mato Grosso do Sul', '13': 'de Minas Gerais', '14': 'do Pará', '15': 'da Paraíba', '16': 'do Paraná', '17': 'de Pernambuco', '18': 'do Piauí', '19': 'do Rio de Janeiro', '20': 'do Rio Grande do Norte', '21': 'do Rio Grande do Sul', '22': 'de Rondônia', '23': 'de Roraima', '24': 'de Santa Catarina', '25': 'de Sergipe', '26': 'de São Paulo', '27': 'do Tocantins' }
+function tribunalDoNumero(numero) {
+  const m = String(numero || '').match(/\.(\d)\.(\d{2})\./)
+  if (!m) return ''
+  if (m[1] === '8') return UFS_TJ[m[2]] ? 'Tribunal de Justiça ' + UFS_TJ[m[2]] : ''
+  if (m[1] === '5') return 'Tribunal Regional do Trabalho da ' + Number(m[2]) + 'ª Região'
+  if (m[1] === '4') return 'Tribunal Regional Federal da ' + Number(m[2]) + 'ª Região'
+  return ''
+}
+
 const SITES = {
   djan: { base: 'https://djan.com.br', rotulo: 'djan.com.br', secret: 'wordpress_djan' },
   cmp: { base: 'https://cmpadvogados.com.br', rotulo: 'cmpadvogados.com.br', secret: 'wordpress_cmp' },
@@ -182,6 +216,45 @@ export async function POST(request) {
     ])
     if (ins.error) return Response.json({ erro: 'Gerado, mas falhou ao salvar: ' + ins.error.message }, { status: 500 })
     return Response.json({ ok: true, custo_usd: r.custoUsd, titulos: [j.djan.titulo, j.cmp.titulo] })
+  }
+
+  // decisão do histórico -> notícia anonimizada (2 rascunhos, um por site)
+  if (body.acao === 'noticia') {
+    const texto = String(body.texto || '').trim()
+    if (texto.length < 200) return Response.json({ erro: 'O texto da decisão está muito curto — abra um andamento que tenha o inteiro teor (sentença/acórdão).' }, { status: 400 })
+    const numero = String(body.numero || '').trim()
+    const tribunal = tribunalDoNumero(numero)
+    const contexto = [
+      body.orgao ? 'Órgão julgador: ' + String(body.orgao).slice(0, 200) : '',
+      tribunal ? 'Tribunal: ' + tribunal : '',
+      body.classe ? 'Classe processual: ' + String(body.classe).slice(0, 200) : '',
+      body.assunto ? 'Assunto: ' + String(body.assunto).slice(0, 200) : '',
+    ].filter(Boolean).join('\n')
+    const r = await chamarClaude({
+      rotina: 'publicacoes',
+      sistemaFixo: SISTEMA_NOTICIA,
+      conteudo: 'DADOS DO CASO (cite só o que a regra de anonimato permite):\n' + (contexto || '(sem dados extras — extraia comarca/vara do próprio teor)') + '\n\nINTEIRO TEOR DA DECISÃO:\n' + texto.slice(0, 28000),
+      maxTokens: 8000,
+      sb: svc(),
+    })
+    if (r.erro) return Response.json({ erro: r.erro }, { status: r.status || 502 })
+    let j
+    try { j = JSON.parse(String(r.texto || '').replace(/^```json?\s*/i, '').replace(/```\s*$/, '')) } catch (e) {
+      return Response.json({ erro: 'A IA respondeu fora do formato — tente de novo.' }, { status: 502 })
+    }
+    if (!j || !j.djan || !j.cmp) return Response.json({ erro: 'Resposta incompleta da IA — tente de novo.' }, { status: 502 })
+    // trava de anonimato: se o nº do processo escapar (com ou sem pontuação), sai daqui
+    const dig = numero.replace(/\D/g, '')
+    const reNum = dig.length >= 10 ? new RegExp(dig.split('').join('[\\.\\-\\s\\/]?'), 'g') : null
+    const scrub = s => reNum ? String(s || '').replace(reNum, '[processo preservado]') : String(s || '')
+    const area = j.tema_area || body.assunto || null
+    const linhas = [
+      { site: 'djan', titulo: scrub(j.djan.titulo), conteudo_html: scrub(j.djan.html), tema: area, status: 'rascunho', origem: 'gestao' },
+      { site: 'cmp', titulo: scrub(j.cmp.titulo), conteudo_html: scrub(j.cmp.html), tema: area, status: 'rascunho', origem: 'gestao' },
+    ]
+    const ins = await db.from('publicacoes').insert(linhas).select('id,site,titulo')
+    if (ins.error) return Response.json({ erro: 'Gerado, mas falhou ao salvar: ' + ins.error.message }, { status: 500 })
+    return Response.json({ ok: true, custo_usd: r.custoUsd, ids: (ins.data || []).map(x => x.id), titulos: (ins.data || []).map(x => x.titulo) })
   }
 
   if (body.acao === 'publicar') {
