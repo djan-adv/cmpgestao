@@ -2062,6 +2062,8 @@ async function cobrarDiligencia(num){
     if(rv.cancelado) return;
     if(!rv.ok){ alert('Não enviou: '+rv.erro+'\n\nSe o envio pelo servidor não estiver ativo, use o botão "E-mail" na ficha do processo.'); return; }
     var sb=window.__sb; if(sb&&p._id&&!rv.agendado){ await sb.from('diligencias').update({ultima_cobranca:new Date().toISOString(),canal:'email'}).eq('processo_id',p._id).neq('status','resolvida'); }
+    /* cobrança reiterada à vara: o cliente vê no app que o escritório está em cima */
+    if(!rv.agendado){ try{ alarmeClienteVara(p,null,'Reiteramos à vara o pedido de andamento do seu processo'); }catch(e){} }
     alert(rv.agendado
       ? ('📮 Na fila — a cobrança sai '+rv.slotTxt+' para a vara ('+c.email+').')
       : ('Cobrança reenviada para a vara ('+c.email+'). Volta a alertar em 7 dias se não houver retorno.'));
@@ -3424,13 +3426,13 @@ function persisteKanban(a){
       /* atrasada:false — qualquer persistência aqui é ação deliberada do usuário
          (arrastar, editar, concluir), então o chip de "adiada automaticamente"
          some: quem mexeu por último foi gente, não o robô do sábado */
-      sb.from('kanban_tarefas').update({coluna:a.col,titulo:a.titulo,resp:(a.resp||null),data:(a.data||null),prazo:(a.prazo||null),tipo:(a.tipoForm||null),descricao:(a.descricao||null),local:(a.local||null),atrasada:false,concluido_por:(a.concluidoPor||null),concluido_em:(a.concluidoEm||null)}).eq('id',a.dbid).then(function(r){ if(r&&r.error) console.warn('kanban update:',r.error.message); });
+      sb.from('kanban_tarefas').update({coluna:a.col,titulo:a.titulo,resp:(a.resp||null),data:(a.data||null),prazo:(a.prazo||null),tipo:(a.tipoForm||null),descricao:(a.descricao||null),local:(a.local||null),atrasada:false,concluido_por:(a.concluidoPor||null),concluido_em:(a.concluidoEm||null),arquivada:(a.arq===true)}).eq('id',a.dbid).then(function(r){ if(r&&r.error) console.warn('kanban update:',r.error.message); });
       a.atrasada=false;
     } else { /* novo: insere e guarda o dbid */
       sb.auth.getUser().then(function(ug){ return sb.from('usuarios').select('escritorio_id').eq('id',ug.data.user.id).single(); }).then(function(pf){
         var esc=pf&&pf.data&&pf.data.escritorio_id; if(!esc) return;
         if(!a.criadoPor) a.criadoPor=_kanQuemSou();
-        return sb.from('kanban_tarefas').insert({escritorio_id:esc,titulo:a.titulo,cliente:a.cliente,numero:a.numero,coluna:a.col,resp:(a.resp||null),data:(a.data||null),prazo:(a.prazo||null),tipo:(a.tipoForm||null),descricao:(a.descricao||null),local:(a.local||null),origem:(a.origem||'sistema'),criado_por:(a.criadoPor||null),concluido_por:(a.concluidoPor||null),concluido_em:(a.concluidoEm||null)}).select('id').single();
+        return sb.from('kanban_tarefas').insert({escritorio_id:esc,titulo:a.titulo,cliente:a.cliente,numero:a.numero,coluna:a.col,resp:(a.resp||null),data:(a.data||null),prazo:(a.prazo||null),tipo:(a.tipoForm||null),descricao:(a.descricao||null),local:(a.local||null),origem:(a.origem||'sistema'),criado_por:(a.criadoPor||null),concluido_por:(a.concluidoPor||null),concluido_em:(a.concluidoEm||null),arquivada:(a.arq===true)}).select('id').single();
       }).then(function(r){ if(r&&r.data&&r.data.id) a.dbid=r.data.id; }).catch(function(e){ console.warn('kanban insert:',e&&e.message||e); });
     }
   }catch(e){ console.warn('persisteKanban:',e); }
@@ -4026,10 +4028,22 @@ function renderAtivProc(){
   var el=document.getElementById('ativ-proc'); if(!el) return;
   if(!KAN)initKanban();
   var num=(typeof atual!=='undefined'&&atual)?atual.numero:'';
-  var arr=(KAN||[]).filter(function(a){return a.numero===num;});
-  if(!arr.length){ el.innerHTML='<div class="note">Nenhuma tarefa ou prazo neste processo — crie em "+ Nova tarefa".</div>'; return; }
-  arr=arr.slice().sort(function(a,b){ var ca=_tarConcluida(a)?1:0, cb=_tarConcluida(b)?1:0; if(ca!==cb) return ca-cb; var pa=a.prazo||a.data||'9999', pb=b.prazo||b.data||'9999'; return pa<pb?-1:(pa>pb?1:0); });
-  el.innerHTML=arr.map(function(a){
+  var tudo=(KAN||[]).filter(function(a){return a.numero===num;});
+  if(!tudo.length){ el.innerHTML='<div class="note">Nenhuma tarefa ou prazo neste processo — crie em "+ Nova tarefa".</div>'; return; }
+  /* arquivadas saem da tela (é o "clean" pedido) — um link discreto traz de volta */
+  var arqs=tudo.filter(function(a){return a.arq===true;});
+  var arr=window.__ativArqVer?tudo:tudo.filter(function(a){return a.arq!==true;});
+  var concluidasVis=tudo.filter(function(a){return _tarConcluida(a)&&a.arq!==true;}).length;
+  var topo='';
+  if(concluidasVis>0||arqs.length>0){
+    topo='<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 6px">'
+      +(concluidasVis>0?('<button class="btn sm ghost" style="font-size:11px" onclick="arquivarConcluidasProc()" title="Tira as concluídas da tela — elas continuam guardadas (link \'ver arquivadas\' aqui embaixo)">🗄 arquivar concluídas ('+concluidasVis+')</button>'):'')
+      +(arqs.length>0?('<a onclick="window.__ativArqVer=!window.__ativArqVer;renderAtivProc();" style="cursor:pointer;color:var(--muted);font-size:11.5px;text-decoration:underline">'+(window.__ativArqVer?'esconder arquivadas':('ver arquivadas ('+arqs.length+')'))+'</a>'):'')
+      +'</div>';
+  }
+  if(!arr.length){ el.innerHTML=topo+'<div class="note">Só há tarefas arquivadas neste processo.</div>'; return; }
+  arr=arr.slice().sort(function(a,b){ var aa=(a.arq===true)?1:0, ab=(b.arq===true)?1:0; if(aa!==ab) return aa-ab; var ca=_tarConcluida(a)?1:0, cb=_tarConcluida(b)?1:0; if(ca!==cb) return ca-cb; var pa=a.prazo||a.data||'9999', pb=b.prazo||b.data||'9999'; return pa<pb?-1:(pa>pb?1:0); });
+  el.innerHTML=topo+arr.map(function(a){
     var concl=_tarConcluida(a);
     var prevBR=a.data?String(a.data).slice(0,10).split('-').reverse().join('/'):'';
     var fatalBR=a.prazo?String(a.prazo).slice(0,10).split('-').reverse().join('/'):'';
@@ -4053,10 +4067,27 @@ function renderAtivProc(){
           +'<button class="btn sm ghost" style="font-size:11px" onclick="abrirTarefaKanban('+a.id+')">✎ editar</button>'
           +'<button class="btn sm ghost" style="font-size:11px" onclick="definirPrazoFatal('+a.id+')">⏰ prazo fatal</button>'
           +(concl?'<button class="btn sm ghost" style="font-size:11px" onclick="toggleConcluirTarefa('+a.id+');renderAtivProc();">↩ reabrir</button>':'<button class="btn sm ghost" style="font-size:11px;color:#127a53;border-color:#bfe3d1" onclick="toggleConcluirTarefa('+a.id+');renderAtivProc();">✓ concluir</button>')
+          +(concl?(a.arq===true
+            ?'<button class="btn sm ghost" style="font-size:11px" onclick="arquivarTarefaProc('+a.id+',false)">📂 desarquivar</button>'
+            :'<button class="btn sm ghost" style="font-size:11px;color:#697180" onclick="arquivarTarefaProc('+a.id+',true)" title="Tira da tela sem apagar — fica no link \'ver arquivadas\'">🗄 arquivar</button>'):'')
         +'</div>'
       +'</div>'
     +'</div>';
   }).join('');
+}
+/* arquivar = sumir da tela sem apagar: a tarefa continua no banco (arquivada=true)
+   e volta pelo link "ver arquivadas". Só faz sentido para concluída. */
+function arquivarTarefaProc(id,on){
+  if(!KAN)initKanban(); var a=KAN.find(function(x){return x.id===id;}); if(!a) return;
+  a.arq=(on===true); persisteKanban(a); renderAtivProc();
+}
+function arquivarConcluidasProc(){
+  if(!KAN)initKanban();
+  var num=(typeof atual!=='undefined'&&atual)?atual.numero:'';
+  var alvo=(KAN||[]).filter(function(a){return a.numero===num&&_tarConcluida(a)&&a.arq!==true;});
+  if(!alvo.length) return;
+  alvo.forEach(function(a){ a.arq=true; persisteKanban(a); });
+  renderAtivProc();
 }
 function definirPrazoFatal(id){
   if(!KAN)initKanban(); var a=KAN.find(function(x){return x.id===id;}); if(!a) return;
@@ -5880,6 +5911,8 @@ function renderHistorico(){
     /* o rótulo vermelho "não enviar ao cliente" ficaria mentiroso justamente no
        item que o escritório liberou — aqui ele troca para avisar o contrário */
     var rotuloMan=(isMan&&mv.vc)?'Histórico manual — visível no app do cliente':(isMan?'Histórico manual (interno — não enviar ao cliente)':cl[0]);
+    /* decisão com inteiro teor pode virar notícia anonimizada nos sites */
+    var ehDecisao=!!teor&&!isMan&&!ehCaptura&&!ehEmail&&/senten[çc]a|ac[óo]rd[ãa]o|julgo|julgamento|improcedente|procedente|condeno|homolog/i.test(String(mv.texto||''));
     li.innerHTML='<div class="dt" style="font-size:11px;color:var(--muted)">'+dt+' · <span style="color:'+(isMan?(mv.vc?'#127a53':'#7b1e3a'):cl[1])+';font-weight:600">'+rotuloMan+'</span>'+(mv.pr?' · <span style="color:#0b7285;font-weight:700" title="Entra no resumo dos e-mails de atualização ao cliente">★ providência do escritório</span>':'')+(!isMan&&mv.vc&&!jaVisivelApp?' · <span style="color:#127a53;font-weight:700" title="Liberado para o app do cliente">📲 visível no app</span>':'')+'</div>'
       +'<div'+(isMan?' style="color:#7b1e3a;font-weight:600"':(ehEmail?' style="color:#0F6E56;font-weight:600"':''))+'>'+esc(nome)+(label?(' <span style="color:'+cor+';font-size:11px">('+label+')</span>'):'')+'</div>'
       +(captInline?('<div style="font-size:13px;color:#374151;margin-top:4px;white-space:pre-wrap;max-height:280px;overflow:auto;background:'+(ehEmail?'#edf6f1':'#f4f7f5')+(ehEmail?';border-left:3px solid #0F6E56':'')+';border-radius:8px;padding:8px 10px">'+esc(captInline)+'</div>'):'')
@@ -5890,6 +5923,7 @@ function renderHistorico(){
       +'<div class="hist-det" style="display:none;font-size:13px;color:var(--muted);margin-top:4px;white-space:pre-wrap;max-height:260px;overflow:auto"></div>'
       +'<div class="hist-act" style="display:none;margin-top:6px">'+(isMan?('<button class="btn sm ghost" style="font-size:11px" onclick="editarHistManual(event,'+atual.hist_full.indexOf(mv)+')">✎ editar</button> <button class="btn sm ghost" style="font-size:11px;color:#b5342b" onclick="excluirHistManual(event,'+atual.hist_full.indexOf(mv)+')">🗑 excluir</button> '):'')+'<button class="btn sm ghost" style="font-size:11px;color:'+(mv.pr?'#0b7285':'#697180')+'" onclick="_togglePro(event,'+atual.hist_full.indexOf(mv)+')" title="Marcar como providência adotada pelo escritório — passa a constar no resumo dos e-mails de atualização ao cliente">'+(mv.pr?'★ providência (remover)':'☆ marcar providência do escritório')+'</button>'
       +(jaVisivelApp?'':(' <button class="btn sm ghost" style="font-size:11px;color:'+(mv.vc?'#127a53':'#697180')+'" onclick="_toggleAppCliente(event,'+atual.hist_full.indexOf(mv)+')" title="'+(mv.vc?'Tirar do app do cliente':'Ex.: pedido de conclusão ao cartório — o cliente vê que o escritório agiu, mesmo sem publicação oficial ainda')+'">'+(mv.vc?'📲 visível no app (remover)':'📲 enviar ao app do cliente')+'</button>'))
+      +(ehDecisao?(' <button class="btn sm ghost" style="font-size:11px;color:#6d28a8" onclick="noticiaDoHistorico(event,'+atual.hist_full.indexOf(mv)+')" title="A IA transforma esta decisão em notícia anonimizada (sem nomes nem número do processo — só comarca, vara/tribunal e resultado) e salva como rascunho na aba Postagens para você aprovar antes de publicar">📰 virar notícia no site</button>'):'')
       +'</div>';
     (function(cont){li.onclick=function(){
       /* selecionando texto pra copiar (arrastar o mouse dentro do item), o
@@ -5925,6 +5959,35 @@ async function excluirHistManual(ev,hix){
   if(w.error){ alert('Erro ao excluir: '+w.error.message); return; }
   if(!w.data||!w.data.length){ alert('O banco não permitiu a exclusão (permissão RLS). Avise o Claude para ajustar.'); return; }
   atual.hist_full.splice(hix,1); renderHistorico();
+}
+/* decisão do histórico -> notícia anonimizada nos sites: a IA redige duas
+   versões (djan consumidor / cmp empresarial) SEM nomes nem nº do processo e
+   salva como rascunho na aba Postagens — nada é publicado sem aprovação. */
+async function noticiaDoHistorico(ev,hix){
+  if(ev)ev.stopPropagation();
+  var mv=atual&&atual.hist_full&&atual.hist_full[hix]; if(!mv) return;
+  /* mesmo teor que a tela mostra: o próprio andamento ou a publicação DJEN mais próxima */
+  var dt=mv.data?String(mv.data).slice(0,10).split("-").reverse().join("/"):"";
+  var pubs=pubsDoProcesso(atual.numero)||[];
+  var teor=null,best=99;for(var pi=0;pi<pubs.length;pi++){if(!pubs[pi].texto)continue;var df=Math.abs(dDiff((pubs[pi].data||"").slice(0,10),dt));if(df<=7&&df<best){best=df;teor=pubs[pi].texto;}}
+  if(!teor && String(mv.texto||'').length>180) teor=mv.texto;
+  teor=limparTeor(String(teor||''));
+  if(teor.length<200){ alert('Este andamento não tem o inteiro teor da decisão — abra um item marcado "ver teor".'); return; }
+  if(!confirm('Transformar esta decisão em notícia para os sites?\n\nA IA escreve DUAS versões anonimizadas (sem nomes nem número do processo — só comarca, vara/tribunal, área e resultado) e salva como RASCUNHO na aba Postagens.\n\nNada é publicado sem a sua aprovação.')) return;
+  var btn=ev&&ev.target;
+  if(btn){btn.disabled=true;btn.textContent='📰 redigindo (1-2 min)…';}
+  try{
+    var tok=await docToken();
+    var r=await fetch('/api/publicacoes',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({acao:'noticia',texto:teor,numero:atual.numero||'',orgao:atual.orgao||atual.foro||'',classe:atual.classe||'',assunto:atual.tipo||''})});
+    var j=await r.json();
+    if(!r.ok||j.erro){ alert('Não gerou: '+(j.erro||r.status)); }
+    else{
+      alert('✓ 2 rascunhos criados (djan e cmp), anonimizados.\n\n• '+((j.titulos||[])[0]||'')+'\n• '+((j.titulos||[])[1]||'')+'\n\nAbrindo a aba Postagens — revise o texto na tela e clique em "publicar" no que aprovar.');
+      go('publicacoes');
+      if(j.ids&&j.ids.length&&typeof pubEditar==='function') setTimeout(function(){ pubEditar(j.ids[0]); },700);
+    }
+  }catch(e){ alert('Erro: '+(e&&e.message||e)); }
+  if(btn){btn.disabled=false;btn.textContent='📰 virar notícia no site';}
 }
 /* marca/desmarca um andamento como "providência adotada pelo escritório" —
    entra no resumo dos e-mails de atualização ao cliente (contrapõe o susto do
@@ -6987,12 +7050,12 @@ function toggleConcluirTarefa(id){
     }catch(eAg){ console.log('agenda: '+(eAg&&eAg.message||eAg)); }
     /* carrega as tarefas do Kanban do banco (kanban_tarefas). Se a tabela não existir, ignora e usa o seed. */
     try{
-      var kt=await sb.from('kanban_tarefas').select('id,titulo,cliente,numero,coluna,resp,data,prazo,tipo,descricao,local,origem,atrasada,criado_por,concluido_por,concluido_em').limit(3000);
-      /* colunas de autoria são novas: banco sem elas ainda derruba o select
+      var kt=await sb.from('kanban_tarefas').select('id,titulo,cliente,numero,coluna,resp,data,prazo,tipo,descricao,local,origem,atrasada,criado_por,concluido_por,concluido_em,arquivada').limit(3000);
+      /* colunas de autoria/arquivo são novas: banco sem elas ainda derruba o select
          inteiro, então repete sem elas em vez de perder todas as tarefas */
-      if(kt.error && /criado_por|concluido_por|concluido_em/.test(kt.error.message||'')) kt=await sb.from('kanban_tarefas').select('id,titulo,cliente,numero,coluna,resp,data,prazo,tipo,descricao,local,origem,atrasada').limit(3000);
+      if(kt.error && /criado_por|concluido_por|concluido_em|arquivada/.test(kt.error.message||'')) kt=await sb.from('kanban_tarefas').select('id,titulo,cliente,numero,coluna,resp,data,prazo,tipo,descricao,local,origem,atrasada').limit(3000);
       if(!kt.error && kt.data){
-        window.__KANDB=kt.data.map(function(t,i){ return {id:9000+i,dbid:t.id,titulo:t.titulo||'',cliente:t.cliente||'',numero:t.numero||'—',col:t.coluna||'distribuir',resp:t.resp||'',data:t.data||'',prazo:t.prazo||'',tipoForm:t.tipo||'',descricao:t.descricao||'',local:t.local||'',org:t.origem||'',atrasada:!!t.atrasada,criadoPor:(t.criado_por||''),concluidoPor:(t.concluido_por||''),concluidoEm:(t.concluido_em||'')}; });
+        window.__KANDB=kt.data.map(function(t,i){ return {id:9000+i,dbid:t.id,titulo:t.titulo||'',cliente:t.cliente||'',numero:t.numero||'—',col:t.coluna||'distribuir',resp:t.resp||'',data:t.data||'',prazo:t.prazo||'',tipoForm:t.tipo||'',descricao:t.descricao||'',local:t.local||'',org:t.origem||'',atrasada:!!t.atrasada,criadoPor:(t.criado_por||''),concluidoPor:(t.concluido_por||''),concluidoEm:(t.concluido_em||''),arq:(t.arquivada===true)}; });
         KAN=null; initKanban();
         var __ag=document.getElementById('s-agenda'); if(__ag && !__ag.classList.contains('hidden') && typeof renderAgendaView==='function') renderAgendaView();
         if(typeof renderPainelTarefasEtiquetas==='function') renderPainelTarefasEtiquetas();
@@ -14344,6 +14407,8 @@ async function enviarResposta(btn){
           atual.hist_full=atual.hist_full||[]; atual.hist_full.unshift({id:ins.data&&ins.data.id,data:hoje+'T00:00:00.000Z',texto:txt,f:'manual'});
           if(typeof renderHistorico==='function') renderHistorico();
         }
+        /* manifestação enviada à vara/cartório: o cliente vê no app + aviso no chat */
+        if(!ins.error && !res.agendado && _ehEmailVara(para)) alarmeClienteVara(p, ins.data&&ins.data.id, 'Enviamos uma manifestação à vara/cartório do seu processo');
       }
     }catch(eH){}
     document.getElementById('modal-responder').classList.add('hidden');
@@ -14593,13 +14658,52 @@ async function registrarEnvioAtualizacao(silent,agendadoPara){
     +'\n'+corpo;
   var sb=window.__sb;
   try{
-    if(sb && p._id){ var ins=await sb.from('andamentos').insert({processo_id:p._id,data:hoje,texto:texto,fonte:'manual'}).select('id').single(); if(ins&&ins.error) throw ins.error; }
-    if(!p.hist_full) p.hist_full=[]; p.hist_full.unshift({id:null,data:hoje+'T00:00:00.000Z',texto:texto,f:'manual'});
+    var ins=null;
+    if(sb && p._id){ ins=await sb.from('andamentos').insert({processo_id:p._id,data:hoje,texto:texto,fonte:'manual'}).select('id').single(); if(ins&&ins.error) throw ins.error; }
+    if(!p.hist_full) p.hist_full=[]; p.hist_full.unshift({id:(ins&&ins.data&&ins.data.id)||null,data:hoje+'T00:00:00.000Z',texto:texto,f:'manual'});
     if(typeof renderHistorico==='function') renderHistorico();
     /* vara: registra/atualiza a diligência (aparece em "Diligências em andamento") */
     if(ehVara){ try{ await _registrarDiligencia(p,'email',corpo); }catch(e){} }
+    /* e-mail à vara JÁ ENVIADO (não agendado): o cliente vê no app + aviso no chat */
+    if(ehVara && !agendadoPara){ try{ alarmeClienteVara(p,(ins&&ins.data&&ins.data.id)||null,(cab==='Pedido de providência')?'Pedimos uma providência à vara no seu processo':'Cobramos o andamento do seu processo na vara'); }catch(e){} }
     if(!silent) alert('Envio registrado no histórico do processo.');
   }catch(e){ alert('Registrado na tela, mas houve erro ao gravar no banco: '+(e&&e.message||e)); }
+}
+/* ═══ Cliente VÊ que o escritório agiu ═══
+   Quando sai e-mail à vara/cartório (pedido de providência, cobrança de
+   andamento, manifestação), o registro do histórico entra VISÍVEL no app do
+   cliente (com ★ providência) e o chat do portal recebe um aviso automático —
+   com push no celular (o servidor já respeita o silêncio noturno e adia pra
+   06h se for o caso). Falha aqui NÃO pode travar o envio: tudo melhor esforço. */
+async function alarmeClienteVara(p, andamentoId, oQue){
+  try{
+    if(!p||!p._id) return;
+    var sb=window.__sb; if(!sb) return;
+    if(andamentoId){
+      try{ await sb.from('andamentos').update({visivel_cliente:true,providencia:true}).eq('id',andamentoId); }catch(e1){}
+      try{
+        (p.hist_full||[]).forEach(function(m){ if(m.id===andamentoId){ m.vc=true; m.pr=true; } });
+        if(typeof atual!=='undefined'&&atual&&atual._id===p._id&&typeof renderHistorico==='function') renderHistorico();
+      }catch(e2){}
+    }
+    var texto='🏛️ '+(oQue||'O escritório falou com a vara sobre o seu processo')+'.\n\n'
+      +'Hoje saiu um e-mail oficial do escritório para a vara/cartório do processo nº '+(p.numero||'')+'. '
+      +'O registro já aparece na linha do tempo do processo, aqui no app.\n\n'
+      +'Assim que a vara responder, avisamos por aqui.';
+    var escId=p.escritorio_id;
+    if(!escId){ var q=await sb.from('processos').select('escritorio_id').eq('id',p._id).maybeSingle(); escId=q&&q.data&&q.data.escritorio_id; }
+    if(!escId) return;
+    var uid=null; try{ var s=await sb.auth.getSession(); uid=s&&s.data&&s.data.session&&s.data.session.user&&s.data.session.user.id; }catch(e3){}
+    var ins=await sb.from('portal_chat').insert({escritorio_id:escId,processo_id:p._id,autor_tipo:'escritorio',autor_id:uid,
+      autor_nome:(typeof _quemAlterou==='function'?_quemAlterou():'CMP Advogados')||'CMP Advogados',
+      texto:texto,lida_escritorio:true,lida_cliente:false});
+    if(ins&&ins.error) return;
+    try{
+      var tok=await docToken();
+      fetch('/api/portal/admin',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},
+        body:JSON.stringify({acao:'notificar_cliente',processo_id:p._id,texto:(oQue||'O escritório cobrou providência da vara no seu processo')+'.'})});
+    }catch(e4){}
+  }catch(e){}
 }
 </script>
 <script>
