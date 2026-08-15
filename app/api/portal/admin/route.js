@@ -172,17 +172,23 @@ export async function POST(request) {
      recebeu o e-mail e nunca logou, quem não tem e-mail e quem ainda não
      recebeu nada. Um cliente por e-mail (mesma regra da varredura). */
   if (acao === 'mapa_acessos') {
-    const [rc, ra, rv] = await Promise.all([
+    const [rc, ra, rv, rp] = await Promise.all([
       sb.from('contatos').select('id,nome,email').eq('escritorio_id', quem.escritorio_id).eq('tipo', 'cliente'),
       sb.from('portal_acessos').select('email,ativo,primeiro_login_em,senha_enviada_em,ultimo_login_em').eq('escritorio_id', quem.escritorio_id),
       sb.from('portal_varredura_avisos').select('email,tipo').eq('escritorio_id', quem.escritorio_id),
+      sb.from('processos').select('cliente_id,cliente_nome,status').eq('escritorio_id', quem.escritorio_id),
     ])
     const okMail = (e) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)
     const acessoPorMail = new Map()
     ;(ra.data || []).forEach(a => { const m = String(a.email || '').trim().toLowerCase(); if (m && !acessoPorMail.has(m)) acessoPorMail.set(m, a) })
     const jaMandado = new Set((rv.data || []).map(a => String(a.email || '').trim().toLowerCase()))
+    // quem de fato tem processo ativo: por vínculo (cliente_id) ou por nome igual
+    const procAtivos = (rp.data || []).filter(p => !/encerrad|arquivad|baixad/i.test(String(p.status || '')))
+    const idsComProc = new Set(procAtivos.map(p => p.cliente_id).filter(Boolean))
+    const partesProc = new Set()
+    procAtivos.forEach(p => String(p.cliente_nome || '').split(';').forEach(parte => { const n = normalizaNome(parte); if (n) partesProc.add(n) }))
     const vistos = new Set()
-    const g = { entraram: [], enviados_sem_login: [], sem_email: [], sem_envio: [] }
+    const g = { entraram: [], enviados_sem_login: [], sem_email: [], sem_envio: [], sem_processo: [] }
     for (const c of (rc.data || [])) {
       const nome = String(c.nome || '').trim()
       if (!nome || /^teste/i.test(nome)) continue
@@ -190,10 +196,13 @@ export async function POST(request) {
       const chave = mail || ('#' + normalizaNome(nome))
       if (vistos.has(chave)) continue
       vistos.add(chave)
+      const a = mail ? acessoPorMail.get(mail) : null
+      const recebeu = !!(mail && ((a && a.senha_enviada_em) || jaMandado.has(mail)))
+      // contato sem NENHUM processo ativo: não devia ser convidado — grupo próprio
+      if (!idsComProc.has(c.id) && !partesProc.has(normalizaNome(nome))) { g.sem_processo.push({ nome, email: mail, recebeu }); continue }
       if (!mail || !okMail(mail)) { g.sem_email.push({ nome, email: mail }); continue }
-      const a = acessoPorMail.get(mail)
       if (a && a.primeiro_login_em) g.entraram.push({ nome, email: mail, ultimo: a.ultimo_login_em || null })
-      else if ((a && a.senha_enviada_em) || jaMandado.has(mail)) g.enviados_sem_login.push({ nome, email: mail })
+      else if (recebeu) g.enviados_sem_login.push({ nome, email: mail })
       else g.sem_envio.push({ nome, email: mail })
     }
     for (const k of Object.keys(g)) g[k].sort((x, y) => x.nome.localeCompare(y.nome, 'pt-BR'))

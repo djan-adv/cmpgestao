@@ -58,6 +58,13 @@ function corpoAtualizacao({ nome }) {
 export async function GET(request) {
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) return Response.json({ erro: 'falta service key' }, { status: 500 })
   const { searchParams } = new URL(request.url)
+  // SUSPENSA em 15/08/2026 a pedido do dono: o alvo era todo contato tipo
+  // 'cliente' com e-mail — e-mail saiu até para gente SEM processo ativo.
+  // Nenhum envio automático até revisar o alvo. `somente_contagem` continua
+  // liberado (não envia nada); para reativar envio, chamar com ?liberar=sim.
+  if (!searchParams.get('somente_contagem') && searchParams.get('liberar') !== 'sim') {
+    return Response.json({ suspenso: true, erro: 'Varredura de convites suspensa pelo dono em 15/08/2026 — nenhum e-mail é enviado por aqui. Revise o alvo (só quem tem processo ativo) antes de reativar com ?liberar=sim.' }, { status: 410 })
+  }
   const limite = Math.max(1, Math.min(200, parseInt(searchParams.get('limite') || String(LOTE_PADRAO), 10) || LOTE_PADRAO))
   const somenteContagem = !!searchParams.get('somente_contagem')
   const sb = admin()
