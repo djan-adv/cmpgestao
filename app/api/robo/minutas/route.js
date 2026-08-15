@@ -580,7 +580,7 @@ async function _get(request) {
   if (searchParams.get('status') != null) {
     const orc = await orcamento(sb)
     const { data: fila, error: erroFila } = await sb.from('robo_minutas')
-      .select('id,tarefa_id,processo_numero,status,tipo_peca,prazo_em,urgencia,resumo,dossie_nome,dossie_path,dossie_bytes,integra_path,integra_bytes,integra_erro,minuta_anexo_id,erro,criado_em')
+      .select('id,tarefa_id,processo_id,processo_numero,status,tipo_peca,prazo_em,urgencia,resumo,dossie_nome,dossie_path,dossie_bytes,integra_path,integra_bytes,integra_erro,minuta_anexo_id,erro,criado_em')
       // prazo mais próximo primeiro — é a ordem em que o trabalho tem que sair.
       // Sem prazo vai para o fim; empate desempata pela triagem mais recente.
       .eq('exige_peca', true)
@@ -588,8 +588,16 @@ async function _get(request) {
       .order('criado_em', { ascending: false })
       .limit(40)
     if (erroFila) return Response.json({ erro: 'fila: ' + erroFila.message }, { status: 500 })
-    // tarefa do Kanban concluída (ou apagada) = trabalho feito → o card sai da fila
     let lista = fila || []
+    // processo arquivado/encerrado/suspenso depois da triagem: o card sai da fila
+    // (a triagem já filtra isso na entrada, mas o status do processo muda depois)
+    const pids = [...new Set(lista.map(x => x.processo_id).filter(Boolean))]
+    if (pids.length) {
+      const { data: procs } = await sb.from('processos').select('id,status,suspenso').in('id', pids)
+      const fora = new Set((procs || []).filter(p => /arquiv|encerr|baixad/i.test(String(p.status || '')) || p.suspenso === true).map(p => p.id))
+      lista = lista.filter(x => !fora.has(x.processo_id))
+    }
+    // tarefa do Kanban concluída (ou apagada) = trabalho feito → o card sai da fila
     const tids = lista.map(x => x.tarefa_id).filter(Boolean)
     if (tids.length) {
       const { data: ts } = await sb.from('kanban_tarefas').select('id,coluna,arquivada').in('id', tids)
