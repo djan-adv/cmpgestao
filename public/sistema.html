@@ -5777,6 +5777,23 @@ function pubsDoProcesso(num){
 function tipoAto(txt){
   var t=(""+(txt||"")).toLowerCase();
   var topo=t.slice(0,500);
+  /* Inteiro teor puxado do jus.br ("[Inteiro teor — X.html]"): o nome do arquivo
+     já diz o que o documento é; e a moldura do tribunal (diretoria, endereço,
+     vara, partes) gasta os primeiros ~500 caracteres, então o documento só se
+     identifica ("DESPACHO", "EXCELENTÍSSIMO…") DEPOIS da janela normal de topo.
+     Aqui: 1º o nome do arquivo; 2º quem se apresenta primeiro no corpo. */
+  var mIT=/^\s*\[inteiro teor\s*[—–-]?\s*([^\]]*)\]/.exec(t);
+  if(mIT){
+    var titIT=mIT[1]||'';
+    if(/despacho|senten[çc]a|ac[óo]rd[ãa]o|\bdecis[ãa]o\b|ato ordinat|homologa/.test(titIT)) return 'decisao';
+    if(/peti[çc]|contesta|r[ée]plica|impugna|manifesta|embargos|apela[çc]|agravo|\brecurso\b|procura[çc]|substabelec|alega[çc]/.test(titIT)) return 'peca';
+    var corpo=t.slice(mIT[0].length, mIT[0].length+2500);
+    var pd=corpo.search(/\bdespacho\b|\bsenten[çc]a\b|\bac[óo]rd[ãa]o\b|\bementa\b|decis[ãa]o (monocr[áa]tica|interlocut[óo]ria)|\bdecis[ãa]o\b|\bvistos\b|ato ordinat[óo]rio/);
+    var pp=corpo.search(/excelent[íi]ssim|merit[íi]ssim|vem,? respeitosamente|peti[çc][ãa]o inicial|contrarraz|raz[õo]es (de|do) (apela|recurso)/);
+    if(pd>=0&&(pp<0||pd<pp)) return 'decisao';
+    if(pp>=0) return 'peca';
+    topo=corpo.slice(0,600); /* sem identidade clara: segue o fluxo normal, já além da moldura */
+  }
   /* 1) cabeçalho de peça nossa — endereçamento e nome do documento */
   if(/excelent[íi]ssim|merit[íi]ssim|peti[çc][ãa]o inicial|contrarraz|contraminuta|raz[õo]es (de|do) (apela|recurso)|contesta[çc][ãa]o|r[ée]plica|impugna[çc][ãa]o (a|à|ao)|memoriais|alega[çc][õo]es finais|vem,? respeitosamente|junta[çd][ãa]o de peti/.test(topo)) return 'peca';
   /* 2) cabeçalho de ato do juízo — inclui a moldura do acórdão (órgão julgador,
