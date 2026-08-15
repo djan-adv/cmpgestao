@@ -73,6 +73,12 @@ function corpoCobranca({ nome, email, situacao, faltaTelefone, numero, envios })
 export async function GET(request) {
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) return Response.json({ erro: 'falta service key' }, { status: 500 })
   const { searchParams } = new URL(request.url)
+  // SUSPENSO em 15/08/2026 a pedido do dono (e-mails demais, limite do SMTP
+  // estourando). O cron já foi removido do tick; esta trava impede também
+  // chamada direta. Para reativar, chamar com ?liberar=sim e religar no tick.
+  if (searchParams.get('liberar') !== 'sim') {
+    return Response.json({ suspenso: true, erro: 'Cobrança automática de entrada no app suspensa pelo dono em 15/08/2026 — nenhum e-mail é enviado por aqui.' }, { status: 410 })
+  }
   const forcar = !!searchParams.get('forcar')
   const limite = Math.max(1, Math.min(LOTE, parseInt(searchParams.get('limite') || String(LOTE), 10) || LOTE))
   const sb = admin()
