@@ -167,6 +167,39 @@ export async function POST(request) {
     return Response.json({ ok: true, contato: { nome: contato.nome, email, telefone } })
   }
 
+  /* ---------- mapa: situação do acesso ao app de TODOS os clientes ----------
+     Alimenta a sub-pasta "Acesso ao app" dentro de Chats: quem já entrou, quem
+     recebeu o e-mail e nunca logou, quem não tem e-mail e quem ainda não
+     recebeu nada. Um cliente por e-mail (mesma regra da varredura). */
+  if (acao === 'mapa_acessos') {
+    const [rc, ra, rv] = await Promise.all([
+      sb.from('contatos').select('id,nome,email').eq('escritorio_id', quem.escritorio_id).eq('tipo', 'cliente'),
+      sb.from('portal_acessos').select('email,ativo,primeiro_login_em,senha_enviada_em,ultimo_login_em').eq('escritorio_id', quem.escritorio_id),
+      sb.from('portal_varredura_avisos').select('email,tipo').eq('escritorio_id', quem.escritorio_id),
+    ])
+    const okMail = (e) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)
+    const acessoPorMail = new Map()
+    ;(ra.data || []).forEach(a => { const m = String(a.email || '').trim().toLowerCase(); if (m && !acessoPorMail.has(m)) acessoPorMail.set(m, a) })
+    const jaMandado = new Set((rv.data || []).map(a => String(a.email || '').trim().toLowerCase()))
+    const vistos = new Set()
+    const g = { entraram: [], enviados_sem_login: [], sem_email: [], sem_envio: [] }
+    for (const c of (rc.data || [])) {
+      const nome = String(c.nome || '').trim()
+      if (!nome || /^teste/i.test(nome)) continue
+      const mail = String(c.email || '').trim().toLowerCase()
+      const chave = mail || ('#' + normalizaNome(nome))
+      if (vistos.has(chave)) continue
+      vistos.add(chave)
+      if (!mail || !okMail(mail)) { g.sem_email.push({ nome, email: mail }); continue }
+      const a = acessoPorMail.get(mail)
+      if (a && a.primeiro_login_em) g.entraram.push({ nome, email: mail, ultimo: a.ultimo_login_em || null })
+      else if ((a && a.senha_enviada_em) || jaMandado.has(mail)) g.enviados_sem_login.push({ nome, email: mail })
+      else g.sem_envio.push({ nome, email: mail })
+    }
+    for (const k of Object.keys(g)) g[k].sort((x, y) => x.nome.localeCompare(y.nome, 'pt-BR'))
+    return Response.json({ ok: true, ...g })
+  }
+
   /* ---------- prévia: o que este login vai mostrar ---------- */
   if (acao === 'previa') {
     const nome = String(body.nome || '').replace(/\s+/g, ' ').trim()
