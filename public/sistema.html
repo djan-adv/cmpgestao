@@ -8047,9 +8047,9 @@ function _procCelHTML(p, i, comEtiqueta){
     var seg=p.__grupoVinc[0];
     var idxSeg=(typeof DADOS!=='undefined'&&DADOS.processos)?DADOS.processos.indexOf(seg):-1;
     var resto=p.__grupoVinc.slice(1).map(function(x){return fmtCNJ(x.numero);}).join(', ');
-    vincHTML='<div style="margin-top:2px;font-size:9.5px;color:var(--muted);white-space:nowrap" title="Processo vinculado ao mesmo caso">'
-      +'<a onclick="event.stopPropagation();'+(idxSeg>=0?('abrir('+idxSeg+')'):'')+'" style="cursor:pointer;color:#185FA5;text-decoration:none">↳ '+fmtCNJ(seg.numero)+'</a>'
-      +(resto?(' <span title="também vinculado: '+esc(resto)+'">+'+p.__grupoVinc.slice(1).length+'</span>'):'')
+    vincHTML='<div style="margin-top:2px;font-size:10.5px" title="Processo apenso/vinculado ao mesmo caso — o cálculo de um aproveita ao outro">'
+      +'<a onclick="event.stopPropagation();'+(idxSeg>=0?('abrir('+idxSeg+')'):'')+'" style="cursor:pointer;color:#185FA5;text-decoration:none;font-weight:600">↳ '+fmtCNJ(seg.numero)+'</a>'
+      +(resto?(' <span style="color:var(--muted)" title="também vinculado: '+esc(resto)+'">+'+p.__grupoVinc.slice(1).length+'</span>'):'')
       +'</div>';
   }
   return '<td class="proc" style="font-size:10.5px;line-height:1.3">'
@@ -8060,7 +8060,7 @@ function _procCelHTML(p, i, comEtiqueta){
 }
 /* Coluna que substitui o antigo "Status" (que agora vive dentro da coluna
    Processo, ver _procCelHTML): valor total da condenação. */
-function _celCondenacao(p){
+function _valorTotalProc(p){
   var v=_hv(p.valor_condenacao);
   if(!v){
     /* sem condenação lançada: cai para o total de honorários do advogado (mesma
@@ -8072,7 +8072,16 @@ function _celCondenacao(p){
     var totAdv=_hv(p.hon_val_contratual)+sucV+exeV+((!trab&&!james)?_hv(p.hon_pro_labore):0);
     if(totAdv) v=totAdv;
   }
-  return '<td style="text-align:right;white-space:nowrap;font-size:12.5px">'+(v?('<b>'+_reais(v)+'</b>'):'<span class="note" style="margin:0">—</span>')+'</td>';
+  return v;
+}
+function _celCondenacao(p){
+  var v=_valorTotalProc(p), deVinc='';
+  /* processos apensos (linha agrupada): o cálculo lançado em QUALQUER um do
+     grupo aproveita ao caso — mostra o maior valor, apontando de onde veio */
+  if(p.__grupoVinc&&p.__grupoVinc.length){
+    p.__grupoVinc.forEach(function(g){ var vg=_valorTotalProc(g); if(vg>v){ v=vg; deVinc=fmtCNJ(g.numero); } });
+  }
+  return '<td style="text-align:right;white-space:nowrap;font-size:12.5px">'+(v?('<b'+(deVinc?(' title="valor lançado no processo apenso '+esc(deVinc)+' — o cálculo aproveita aos dois"'):'')+'>'+_reais(v)+'</b>'):'<span class="note" style="margin:0">—</span>')+'</td>';
 }
 /* Menu de ações por linha (⚙): substitui vários botões de texto lado a lado
    nas listas em lote por um único ícone, economizando espaço horizontal.
