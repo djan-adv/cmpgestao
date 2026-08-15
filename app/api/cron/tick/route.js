@@ -64,9 +64,10 @@ const JOBS = [
   // caixa de entrada: traz as respostas das varas e dos clientes para o histórico
   { nome: 'email_receber', rotulo: 'E-mails — ler respostas (IMAP)', url: '/api/email/receber', cada_min: 10, timeout_ms: 115000 },
   { nome: 'minuta_triagem', rotulo: 'Minutas — triar intimações', url: '/api/robo/minutas?fase=triagem', cada_min: 30 },
-  // dossiê do Estagiário Virtual: junta instruções + peças num zip só. Sai de um em
-  // um, com janela própria (no modo 'api' esta mesma fase redige a minuta, e aí é lenta).
-  { nome: 'minuta_dossie', rotulo: 'Minutas — dossiê do Estagiário Virtual', url: '/api/robo/minutas?fase=dossie', cada_min: 15, timeout_ms: 240000 },
+  // dossiê (.zip) DESLIGADO em 15/08/2026 a pedido do dono: ninguém baixava os zips.
+  // A triagem continua lendo a intimação, sugerindo a peça e lançando o prazo, e a
+  // íntegra continua indo pra pasta. Pra reativar, é só descomentar a linha.
+  // { nome: 'minuta_dossie', rotulo: 'Minutas — dossiê do Estagiário Virtual', url: '/api/robo/minutas?fase=dossie', cada_min: 15, timeout_ms: 240000 },
   // íntegra dos autos: download pesado do jus.br, um processo por vez
   { nome: 'minuta_integra', rotulo: 'Minutas — íntegra dos autos na pasta', url: '/api/robo/minutas?fase=integra', cada_min: 20, timeout_ms: 280000 },
   // sentença/acórdão saiu → avisa o cliente pelo chat do app, sozinho. Mesmo teto
