@@ -9357,8 +9357,12 @@ function renderLote(){
   var tit=document.getElementById('lote-title'); if(tit) tit.innerHTML='<span style="color:'+(l.cor||'#185FA5')+'">▣</span> '+esc(l.nome);
   var st=document.getElementById('scr-title'); if(st) st.textContent=esc(l.nome);
   var q=((document.getElementById('lote-busca')||{}).value||'').toLowerCase();
-  var lista=processosDoLote(l.id).filter(function(p){ return !q||(p.cliente+' '+p.numero+' '+p.oponente+' '+p.tipo).toLowerCase().indexOf(q)>-1; });
-  var cc=document.getElementById('lote-count'); if(cc) cc.textContent=lista.length+' processo'+(lista.length===1?'':'s');
+  /* encerrado não fica na lista do lote — mora em "Processos encerrados", como na lista principal */
+  var todosLote=processosDoLote(l.id);
+  var encN=todosLote.filter(function(p){ return /encerr/i.test(p.status||''); }).length;
+  var lista=todosLote.filter(function(p){ return !/encerr/i.test(p.status||''); })
+    .filter(function(p){ return !q||(p.cliente+' '+p.numero+' '+p.oponente+' '+p.tipo).toLowerCase().indexOf(q)>-1; });
+  var cc=document.getElementById('lote-count'); if(cc) cc.innerHTML=lista.length+' processo'+(lista.length===1?'':'s')+(encN?(' · '+encN+' encerrado'+(encN===1?'':'s')+' fora desta lista — <a onclick="go(\'encerrados\')" style="cursor:pointer;color:#185FA5;text-decoration:underline">ver encerrados</a>'):'');
   var b=document.getElementById('lote-body'); if(!b) return; b.innerHTML='';
   lista.forEach(function(p){ var i=DADOS.processos.indexOf(p);
     var um=(p.hist_full&&p.hist_full[0]&&p.hist_full[0].texto)||'';
