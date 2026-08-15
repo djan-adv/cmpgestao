@@ -19983,6 +19983,20 @@ function exportarProdutividadeCSV(){
     if(d.style.display==='none'){ d.style.display='block'; if(s2)s2.textContent='▾'; if(!__waAcc) waAccCarregar(); }
     else { d.style.display='none'; if(s2)s2.textContent='▸'; }
   };
+  /* clicar no nome (com ou sem e-mail, com ou sem acesso) abre o processo do cliente */
+  window.waAccAbrir=function(nome){
+    function nrm(s){ return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/\s+/g,' ').trim(); }
+    var alvo=nrm(nome); if(!alvo) return;
+    var lista=(typeof DADOS!=='undefined'&&DADOS.processos)||[];
+    var idx=-1;
+    lista.some(function(p,i){ if(nrm(p.cliente).indexOf(alvo)>-1){ idx=i; return true; } return false; });
+    if(idx<0){ /* nome truncado ou grafado diferente: tenta pelas 2 primeiras palavras */
+      var duas=alvo.split(' ').slice(0,2).join(' ');
+      if(duas.length>=6) lista.some(function(p,i){ if(nrm(p.cliente).indexOf(duas)>-1){ idx=i; return true; } return false; });
+    }
+    if(idx<0){ alert('Não achei processo na lista com este nome — pode estar encerrado, em subpasta (Inove/lote) ou com o nome gravado diferente. Use a busca (Ctrl+K).'); return; }
+    if(typeof abrir==='function') abrir(idx);
+  };
   window.waAccCarregar=async function(){
     var d=document.getElementById('wa-acessos'); if(!d) return;
     d.innerHTML='<div class="note" style="padding:12px">Conferindo a base de clientes…</div>';
@@ -19996,7 +20010,7 @@ function exportarProdutividadeCSV(){
       function escA(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
       function bloco(rot,icone,cor,itens,dica){
         var linhas=(itens||[]).map(function(x){
-          return '<div style="padding:3px 12px 3px 30px;font-size:12px;line-height:1.35"><b style="color:var(--ink)">'+escA(x.nome)+'</b>'
+          return '<div onclick="waAccAbrir(this.getAttribute(\'data-n\'))" data-n="'+escA(x.nome)+'" title="Clique para abrir o processo deste cliente" style="padding:3px 12px 3px 30px;font-size:12px;line-height:1.35;cursor:pointer" onmouseover="this.style.background=\'#f4f9ff\'" onmouseout="this.style.background=\'\'"><b style="color:var(--navy)">'+escA(x.nome)+'</b>'
             +(x.email?('<br><span class="note" style="font-size:11px">'+escA(x.email)+'</span>'):'<br><span style="font-size:11px;color:#b5342b">sem e-mail no cadastro</span>')+'</div>';
         }).join('')||'<div class="note" style="padding:3px 12px 3px 30px;font-size:11.5px">ninguém aqui</div>';
         return '<details style="border-bottom:1px dashed #eef1f5"><summary style="cursor:pointer;padding:7px 12px;font-size:12px;font-weight:700;color:'+cor+'" title="'+escA(dica)+'">'+icone+' '+rot+' ('+(itens||[]).length+')</summary>'+linhas+'</details>';
