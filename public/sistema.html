@@ -434,7 +434,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
     </section>
     <section id="s-processos" class="hidden">
       <div class="searchbar"><input id="busca" placeholder="Buscar por cliente, número, oponente ou assunto..." oninput="renderProc()"><select id="ordena" onchange="renderProc()" class="btn sm sb-sel" style="margin-left:8px;max-width:120px"><option value="">Novos Protocolos</option><option value="az">Cliente (A→Z)</option><option value="za">Cliente (Z→A)</option><option value="data_desc">Movimentação mais recente</option><option value="parados">Parados (mov. mais antiga)</option><option value="valor">Valor da causa (maior→menor)</option></select><select id="filtroEtq" onchange="renderProc()" class="btn sm sb-sel" style="margin-left:8px;max-width:112px"><option value="">Todas as etiquetas</option></select><select id="porPagina" onchange="renderProc()" class="btn sm sb-sel" style="margin-left:8px;max-width:76px"><option value="20">20 por página</option><option value="40">40</option><option value="60">60</option><option value="80">80</option><option value="100">100</option><option value="todos" selected>Todos</option></select><span class="note" id="proc-count" style="align-self:center"></span><span id="proc-semvara" style="align-self:center;margin-left:10px;display:none"></span><span class="note" id="proc-espaco" style="align-self:center;margin-left:10px;cursor:pointer" onclick="carregarEspacoDocs(true)" title="Espaço que os documentos ocupam no servidor (VPS) — clique para recalcular"></span><button id="btn-atu-todos" class="btn sm sb-btn" style="margin-left:auto" onclick="atualizarTodosProcessos()" title="Buscar no DJEN as publicações novas de TODOS os processos (últimos 7 dias, pelas OABs do escritório)">↻ Atualizar todos</button><button class="btn sm gold sb-btn" style="margin-left:8px" onclick="abrirBusca()">+ Cadastrar por número <span style="font-weight:400;font-size:10px;opacity:.8">(pesquisa pelo djen)</span></button><button class="btn sm sb-btn" style="margin-left:8px;background:var(--navy);color:#fff;border-color:var(--navy)" onclick="abrirCadManual()">+ Cadastrar manual / caso</button><button class="btn sm sb-btn" style="margin-left:8px;background:#0F6E56;color:#fff;border-color:#0F6E56" onclick="abrirSyncPastas()" title="Enviar de uma vez uma pasta com vários processos — o sistema reconhece cada subpasta e manda para o processo certo">&#8645; Sincronizar pasta</button><button class="btn sm sb-btn" style="margin-left:8px;background:#8a6d1a;color:#fff;border-color:#8a6d1a" onclick="abrirHonLote()" title="Roda o robô de honorários (lê petição inicial/sentença/procuração) em todos os processos da lista principal, um a um">💰 Honorários — buscar todos</button></div>
-      <div class="card"><table><thead><tr><th style="width:26%;cursor:pointer;user-select:none" onclick="ordenarCliente()" title="Clique para ordenar por cliente (A→Z / Z→A)">Cliente <span id="cli-sort-arrow" style="font-size:10px;color:var(--muted)"></span></th><th style="width:150px;cursor:pointer;user-select:none" onclick="ordenarJulgado()" title="Clique para agrupar por julgados / não julgados">Processos/casos <span id="julg-sort-arrow" style="font-size:10px;color:var(--muted)"></span></th><th style="width:22%"><span onclick="ordenarAssuntoLocal('assunto')" style="cursor:pointer;user-select:none" title="Ordenar por assunto (A→Z / Z→A)">Assunto <span id="asn-sort-arrow" style="font-size:10px;color:var(--muted)"></span></span><span style="color:var(--line);margin:0 5px">|</span><span onclick="ordenarAssuntoLocal('local')" style="cursor:pointer;user-select:none" title="Ordenar por vara/local (A→Z / Z→A) — agrupa os processos da mesma vara">Local <span id="loc-sort-arrow" style="font-size:10px;color:var(--muted)"></span></span></th><th style="width:170px;cursor:pointer;user-select:none" onclick="ordenarMov()" title="Clique para ordenar pela data da última movimentação (mais recente ↔ mais antiga)">Última movimentação <span id="mov-sort-arrow" style="font-size:10px;color:var(--muted)"></span></th><th style="width:96px;cursor:pointer;user-select:none" onclick="ordenarParado()" title="Clique para ordenar por dias parado (mais ↔ menos)">Parado há <span id="par-sort-arrow" style="font-size:10px;color:var(--muted)"></span></th><th style="width:104px;text-align:right"><span onclick="ordenarCondenacao()" style="cursor:pointer;user-select:none" title="Ordenar por valor da condenação (maior ↔ menor)">Valor total <span id="cond-sort-arrow" style="font-size:10px;color:var(--muted)"></span></span> <span onclick="toggleStatusFiltro()" style="cursor:pointer;user-select:none;font-size:10px;color:var(--muted);font-weight:400" title="Filtrar: todos → julgados → não julgados">⚖<span id="st-filtro-lbl"></span></span></th><th style="width:110px;cursor:pointer;user-select:none" onclick="ordenarPrazoToggle()" title="Clique para ordenar pelo prazo fatal (mais próximo ↔ mais distante)">Prazo fatal <span id="prazo-sort-arrow" style="font-size:10px;color:var(--muted)"></span></th><th style="width:58px;text-align:center;cursor:pointer;user-select:none" onclick="ordenarDocs()" title="Clique para ordenar pelo tamanho dos documentos no servidor (maior ↔ menor)">Docs <span id="docs-sort-arrow" style="font-size:10px;color:var(--muted)"></span></th></tr></thead><tbody id="proc-body"></tbody></table></div><div id="proc-pager" style="display:flex;gap:6px;align-items:center;justify-content:center;padding:14px;flex-wrap:wrap"></div>
+      <div class="card"><table><thead><tr><th style="width:26%;cursor:pointer;user-select:none" onclick="ordenarCliente()" title="Clique para ordenar por cliente (A→Z / Z→A)">Cliente <span id="cli-sort-arrow" style="font-size:10px;color:var(--muted)"></span></th><th style="width:150px;cursor:pointer;user-select:none" onclick="ordenarJulgado()" title="Clique para agrupar por julgados / não julgados">Processos/casos <span id="julg-sort-arrow" style="font-size:10px;color:var(--muted)"></span></th><th style="width:22%"><span onclick="ordenarAssuntoLocal('assunto')" style="cursor:pointer;user-select:none" title="Ordenar por assunto (A→Z / Z→A)">Assunto <span id="asn-sort-arrow" style="font-size:10px;color:var(--muted)"></span></span><span style="color:var(--line);margin:0 5px">|</span><span onclick="ordenarAssuntoLocal('local')" style="cursor:pointer;user-select:none" title="Ordenar por vara/local (A→Z / Z→A) — agrupa os processos da mesma vara">Local <span id="loc-sort-arrow" style="font-size:10px;color:var(--muted)"></span></span><span style="color:var(--line);margin:0 5px">|</span><span onclick="ordenarAssuntoLocal('fase')" style="cursor:pointer;user-select:none" title="Ordenar/agrupar pela fase do processo (início → fim do fluxo; clique de novo para inverter)">Fase <span id="fase-sort-arrow" style="font-size:10px;color:var(--muted)"></span></span></th><th style="width:170px;cursor:pointer;user-select:none" onclick="ordenarMov()" title="Clique para ordenar pela data da última movimentação (mais recente ↔ mais antiga)">Última movimentação <span id="mov-sort-arrow" style="font-size:10px;color:var(--muted)"></span></th><th style="width:96px;cursor:pointer;user-select:none" onclick="ordenarParado()" title="Clique para ordenar por dias parado (mais ↔ menos)">Parado há <span id="par-sort-arrow" style="font-size:10px;color:var(--muted)"></span></th><th style="width:104px;text-align:right"><span onclick="ordenarCondenacao()" style="cursor:pointer;user-select:none" title="Ordenar por valor da condenação (maior ↔ menor)">Valor total <span id="cond-sort-arrow" style="font-size:10px;color:var(--muted)"></span></span> <span onclick="toggleStatusFiltro()" style="cursor:pointer;user-select:none;font-size:10px;color:var(--muted);font-weight:400" title="Filtrar: todos → julgados → não julgados">⚖<span id="st-filtro-lbl"></span></span></th><th style="width:110px;cursor:pointer;user-select:none" onclick="ordenarPrazoToggle()" title="Clique para ordenar pelo prazo fatal (mais próximo ↔ mais distante)">Prazo fatal <span id="prazo-sort-arrow" style="font-size:10px;color:var(--muted)"></span></th><th style="width:58px;text-align:center;cursor:pointer;user-select:none" onclick="ordenarDocs()" title="Clique para ordenar pelo tamanho dos documentos no servidor (maior ↔ menor)">Docs <span id="docs-sort-arrow" style="font-size:10px;color:var(--muted)"></span></th></tr></thead><tbody id="proc-body"></tbody></table></div><div id="proc-pager" style="display:flex;gap:6px;align-items:center;justify-content:center;padding:14px;flex-wrap:wrap"></div>
     </section>
 
     <section id="s-proc-det" class="hidden">
@@ -636,6 +636,10 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
             <button class="btn sm ghost" id="wa-f-equipe" style="font-size:11px" onclick="waFiltro('equipe')">Equipe</button>
           </div>
         </div>
+        <div onclick="waAccToggle()" style="padding:8px 12px;border-bottom:1px solid var(--line);background:#fbfcfe;cursor:pointer;font-size:12.5px;font-weight:700;color:var(--navy);display:flex;align-items:center;gap:6px" title="Situação do acesso de cada cliente ao aplicativo — quem recebeu o e-mail, quem entrou, quem falta">
+          <span id="wa-acc-seta">▸</span> 📮 Acesso dos clientes ao app <span id="wa-acc-tot" class="note" style="font-size:11px;margin-left:auto"></span>
+        </div>
+        <div id="wa-acessos" style="display:none;max-height:48%;overflow-y:auto;border-bottom:2px solid var(--line);background:#fff"></div>
         <div id="wa-convs" style="flex:1;overflow-y:auto"></div>
       </div>
       <!-- conversa aberta -->
@@ -1366,6 +1370,56 @@ function marcaFeriasNosSelects(){
     }
   });
 }
+/* ===== Redistribuição de tarefas ao sair de cena (férias/desativado) =====
+   Pedido do dono (15/08/2026): quando alguém entra de férias ou é desativado
+   (estagiários entram e saem toda hora), as tarefas abertas não podem ficar
+   órfãs. O sistema pergunta para quem vão; sem resposta, TODAS vão pro Djan. */
+function _rotulosResp(){
+  var s=document.getElementById('tar-resp')||document.getElementById('ag-resp');
+  var out=[];
+  if(s){ for(var i=0;i<s.options.length;i++){ var n=(s.options[i].getAttribute('data-nome')||s.options[i].textContent||'').replace(/\s*\(em férias\)\s*$/,'').trim(); if(n&&n!=='Todos') out.push(n); } }
+  return out.length?out:['Djan','Maria Rita','Jader Pinheiro','Maria Eduarda','Estagiário(a)'];
+}
+/* nome cheio do assento ("Maria Rita Caldas") → rótulo curto usado nas tarefas ("Maria Rita") */
+function _rotuloDoAssento(nome){
+  var alvo=_normNomeAcesso(nome).split(' ').filter(Boolean);
+  return _rotulosResp().find(function(r){
+    var toks=_normNomeAcesso(r).split(' ').filter(Boolean);
+    return toks.length&&toks.every(function(t){ return alvo.indexOf(t)>-1; });
+  })||null;
+}
+async function redistribuirTarefasDe(u,motivo){
+  try{
+    var rot=_rotuloDoAssento(u.nome); if(!rot) return;
+    var sb=window.__sb; if(!sb) return;
+    var q=await sb.from('kanban_tarefas').select('id,prazo,data,arquivada').eq('resp',rot).neq('coluna','finalizado');
+    var abertas=(q.data||[]).filter(function(t){ return t.arquivada!==true; });
+    if(!abertas.length) return;
+    var cands=_rotulosResp().filter(function(r){ return r!==rot&&r!=='Estagiário(a)'&&!_nomeEstaDeFerias(r); });
+    var resp=prompt(u.nome+' ('+motivo+') tem '+abertas.length+' tarefa(s) aberta(s) no Kanban.\n\nPara QUEM redistribuir? Digite um ou mais nomes separados por vírgula:\n• '+cands.join('\n• ')+'\n\n(vazio ou Cancelar = todas para Djan)','');
+    var escolhidos=[];
+    if(resp!==null){
+      String(resp).split(/[,;]| e /i).forEach(function(pd){
+        pd=pd.trim(); if(!pd) return;
+        if(/^(eu|mim|pra mim)$/i.test(pd)) pd='Djan';
+        var pt=_normNomeAcesso(pd).split(' ').filter(Boolean);
+        var m=cands.find(function(cd){ var ct=_normNomeAcesso(cd).split(' ').filter(Boolean); return pt.length&&pt.every(function(t){ return ct.some(function(c){ return c===t||c.indexOf(t)===0; }); }); });
+        if(m&&escolhidos.indexOf(m)<0) escolhidos.push(m);
+      });
+    }
+    if(!escolhidos.length) escolhidos=['Djan'];
+    /* prazo mais curto primeiro, alternando entre os escolhidos — carga equilibrada */
+    abertas.sort(function(a,b){ var pa=a.prazo||a.data||'9999', pb=b.prazo||b.data||'9999'; return pa<pb?-1:(pa>pb?1:0); });
+    var porAlvo={};
+    abertas.forEach(function(t,i){ var para=escolhidos[i%escolhidos.length]; (porAlvo[para]=porAlvo[para]||[]).push(t.id); });
+    for(var k in porAlvo){
+      var w=await sb.from('kanban_tarefas').update({resp:k}).in('id',porAlvo[k]);
+      if(w&&w.error) throw new Error(w.error.message);
+    }
+    alert('✓ '+abertas.length+' tarefa(s) de '+rot+' redistribuída(s) para: '+escolhidos.join(' e ')+'.');
+    try{ if(typeof carregarKanbanDb==='function') carregarKanbanDb(); }catch(e2){}
+  }catch(e){ alert('Não consegui redistribuir as tarefas de '+u.nome+':\n\n'+(e&&e.message||e)+'\n\nRedistribua pelo Kanban.'); }
+}
 /* "Só privado": a pessoa fica fora do grupo — não recebe nem vê o que é escrito
    em "Todos", só as conversas um a um. Serve para quem entra em assunto pontual
    (estágio, apoio externo) e não deve ler a conversa geral do escritório. */
@@ -1417,6 +1471,7 @@ async function marcarFerias(id){
   u.ferias={ini:ini,fim:fim};
   await _salvarAssentos(); renderAcessos(); marcaFeriasNosSelects();
   alert(u.nome+' está de férias de '+_brData(ini)+' a '+_brData(fim)+'.\n\nNesse período não recebe tarefa, não é sugerido para tratar publicação e sai da lista do chat da equipe. O acesso continua funcionando.');
+  await redistribuirTarefasDe(u,'férias');
 }
 /* ===== Assentos (pessoas do escritório) — persistidos em produtividade_config ===== */
 async function _carregarAssentos(){
@@ -1544,6 +1599,7 @@ async function toggleAtivoAcesso(id){
   try{
     await apiAcessos(desativar?'desativar':'ativar',{email:u.email});
     u.ativo=!desativar; renderAcessos(); renderSeletorUsuariosVisual();
+    if(desativar) await redistribuirTarefasDe(u,'desativado');
   }catch(e){ alert('Não foi possível alterar.\n\n'+(e&&e.message||e)); }
 }
 /* ===== Tela de Acessos (estilo Astrea), aberta pelo botão do nome ===== */
@@ -2344,7 +2400,7 @@ function ordenarAssuntoLocal(campo){
   if(atualCampo===campo && atualDir==='az') window.__procAsnDir='za';
   else window.__procAsnDir='az';
   window.__procAsnCampo=campo;
-  window.__procSortWho=(campo==='local'?'loc':'asn'); window.__ordenaJulg='';
+  window.__procSortWho=(campo==='local'?'loc':(campo==='fase'?'fase':'asn')); window.__ordenaJulg='';
   /* desliga as outras ordenações de coluna, que têm prioridade no renderProc */
   window.__ordenaPrazo=''; window.__procDocSort=''; window.__ordenaCondenacao='';
   var sel=document.getElementById('ordena'); if(sel) sel.value='';
@@ -8376,6 +8432,7 @@ function renderProc(){
     var _ad=window.__procAsnDir==='za'?'▼':'▲';
     _setA('asn-sort-arrow', (_who==='asn')?_ad:'');
     _setA('loc-sort-arrow', (_who==='loc')?_ad:'');
+    _setA('fase-sort-arrow', (_who==='fase')?_ad:'');
     var _stl=document.getElementById('st-filtro-lbl');
     if(_stl){ var _sf=window.__stFiltro||''; _stl.textContent=(_sf==='julgado')?' julgados':((_sf==='naojulgado')?' não julg.':''); }
     _setA('cond-sort-arrow', _who==='cond'?((window.__ordenaCondenacao||'')==='asc'?'▲':'▼'):'');
@@ -8478,7 +8535,10 @@ function renderProc(){
   }
   else if(window.__procAsnCampo){
     var _campo=window.__procAsnCampo, _dir=(window.__procAsnDir==='za')?-1:1;
-    var _chave=(_campo==='local')?_localDoProc:function(x){ return String((x&&x.tipo)||'').trim(); };
+    var _chave=(_campo==='local')?_localDoProc
+      /* fase: ordena pelo AVANÇO no fluxo (posição em FASES_META), não pelo nome */
+      :(_campo==='fase'?function(x){ try{ var fid=faseDoProc(x); var i=FASES_META.findIndex(function(f){return f[0]===fid;}); return (i<0?'9':String(i))+' '+_nomeFase(fid); }catch(e){ return ''; } }
+      :function(x){ return String((x&&x.tipo)||'').trim(); });
     lista.sort(function(a,b){
       var A=_chave(a), B=_chave(b);
       /* vazio SEMPRE no fim, nas duas direções */
@@ -8539,7 +8599,7 @@ function renderProc(){
     var digD=String(p.numero||'').replace(/\D/g,'');
     tr.innerHTML='<td style="max-width:220px"><div style="'+_clamp2+'"><span style="font-weight:700;color:var(--navy)">'+esc(resumo3(p.cliente))+'</span> <span style="font-size:12px;color:var(--muted)">× '+(esc(resumo3(p.oponente))||'—')+'</span></div></td>'
       +_procCelHTML(p,i,true)
-      +'<td style="font-size:12px;max-width:220px"><div style="'+_clamp1+'" title="'+esc(p.tipo||'')+'">'+(esc(p.tipo)||'<span class="note" style="margin:0">—</span>')+'</div><div style="'+_clamp1+';margin-top:2px;color:var(--muted);font-size:11.5px" title="'+esc(_localDoProc(p))+'">'+(esc(_localDoProc(p))||'<span style="color:#b5342b">sem vara — corrigir</span>')+'</div></td><td style="max-width:170px"><div style="'+_clamp2+'" title="'+esc(um.slice(0,300))+'">'+(cm?'<span style="font-weight:600;color:var(--navy)">'+cm+'</span>':'<span style="font-size:12.5px">'+esc(um.slice(0,120))+'</span>')+'</div><div style="font-size:12px;color:var(--muted)">'+esc(p.data||'')+'</div></td><td style="text-align:center;white-space:nowrap">'+(function(){var d=(typeof diasParadoOficial==='function')?diasParadoOficial(p):null; if(d==null) return '<span class="note" style="margin:0">—</span>'; var c=d>=90?'#b5342b':(d>=60?'#8a6d1a':'#475569'); return '<span style="font-weight:700;color:'+c+'" title="Dias sem movimentação do juízo/cartório (não conta mov. das partes)">'+d+' dia'+(d===1?'':'s')+'</span>';})()+'</td>'
+      +'<td style="font-size:12px;max-width:220px"><div style="'+_clamp1+'" title="'+esc(p.tipo||'')+'">'+(esc(p.tipo)||'<span class="note" style="margin:0">—</span>')+'</div><div style="'+_clamp1+';margin-top:2px;color:var(--muted);font-size:11.5px" title="'+esc(_localDoProc(p))+'">'+(esc(_localDoProc(p))||'<span style="color:#b5342b">sem vara — corrigir</span>')+'</div>'+(function(){ try{ var fid=faseDoProc(p); return '<div style="margin-top:3px"><span onclick="event.stopPropagation();ordenarAssuntoLocal(\'fase\')" title="Fase: '+esc(_nomeFase(fid))+(p.fase_manual?' (definida manualmente)':' (estimada pelo histórico)')+' — clique para agrupar a lista por fase; para mudar a fase, abra o processo" style="display:inline-block;font-size:10px;font-weight:700;color:#fff;background:'+_corFase(fid)+';border-radius:10px;padding:1px 8px;cursor:pointer">'+esc(_nomeFase(fid))+'</span></div>'; }catch(e){ return ''; } })()+'</td><td style="max-width:170px"><div style="'+_clamp2+'" title="'+esc(um.slice(0,300))+'">'+(cm?'<span style="font-weight:600;color:var(--navy)">'+cm+'</span>':'<span style="font-size:12.5px">'+esc(um.slice(0,120))+'</span>')+'</div><div style="font-size:12px;color:var(--muted)">'+esc(p.data||'')+'</div></td><td style="text-align:center;white-space:nowrap">'+(function(){var d=(typeof diasParadoOficial==='function')?diasParadoOficial(p):null; if(d==null) return '<span class="note" style="margin:0">—</span>'; var c=d>=90?'#b5342b':(d>=60?'#8a6d1a':'#475569'); return '<span style="font-weight:700;color:'+c+'" title="Dias sem movimentação do juízo/cartório (não conta mov. das partes)">'+d+' dia'+(d===1?'':'s')+'</span>';})()+'</td>'
       +_celCondenacao(p)
       +'<td>'+pfHTML+'</td>'
       +'<td style="text-align:center" onclick="event.stopPropagation()"><div id="doc-'+digD+'" title="Documentos no servidor" style="font-size:18px;line-height:1;color:#c3c9d4;cursor:default">📁<div class="note" style="margin:2px 0 0;font-size:10px">—</div></div></td>';
@@ -19910,6 +19970,43 @@ function exportarProdutividadeCSV(){
       var b=document.getElementById('wa-f-'+k); if(b) b.className='btn sm'+(k===f?'':' ghost');
     });
     waRenderLista();
+  };
+
+  /* ---------- sub-pasta "Acesso dos clientes ao app" (só expande no clique) ---------- */
+  var __waAcc=null;
+  window.waAccToggle=function(){
+    var d=document.getElementById('wa-acessos'), s2=document.getElementById('wa-acc-seta');
+    if(!d) return;
+    if(d.style.display==='none'){ d.style.display='block'; if(s2)s2.textContent='▾'; if(!__waAcc) waAccCarregar(); }
+    else { d.style.display='none'; if(s2)s2.textContent='▸'; }
+  };
+  window.waAccCarregar=async function(){
+    var d=document.getElementById('wa-acessos'); if(!d) return;
+    d.innerHTML='<div class="note" style="padding:12px">Conferindo a base de clientes…</div>';
+    try{
+      var ses=await S().auth.getSession();
+      var tok=ses&&ses.data&&ses.data.session&&ses.data.session.access_token;
+      var r=await fetch('/api/portal/admin',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},body:JSON.stringify({acao:'mapa_acessos'})});
+      var j=await r.json();
+      if(!j||!j.ok){ d.innerHTML='<div class="note" style="padding:12px;color:#b5342b">Não consegui carregar: '+String((j&&j.erro)||r.status)+'</div>'; return; }
+      __waAcc=j;
+      function escA(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+      function bloco(rot,icone,cor,itens,dica){
+        var linhas=(itens||[]).map(function(x){
+          return '<div style="padding:3px 12px 3px 30px;font-size:12px;line-height:1.35"><b style="color:var(--ink)">'+escA(x.nome)+'</b>'
+            +(x.email?('<br><span class="note" style="font-size:11px">'+escA(x.email)+'</span>'):'<br><span style="font-size:11px;color:#b5342b">sem e-mail no cadastro</span>')+'</div>';
+        }).join('')||'<div class="note" style="padding:3px 12px 3px 30px;font-size:11.5px">ninguém aqui</div>';
+        return '<details style="border-bottom:1px dashed #eef1f5"><summary style="cursor:pointer;padding:7px 12px;font-size:12px;font-weight:700;color:'+cor+'" title="'+escA(dica)+'">'+icone+' '+rot+' ('+(itens||[]).length+')</summary>'+linhas+'</details>';
+      }
+      var tot=document.getElementById('wa-acc-tot');
+      if(tot) tot.textContent=(j.entraram.length+'✅ · '+j.enviados_sem_login.length+'✉ · '+j.sem_envio.length+'⬜ · '+j.sem_email.length+'⚠');
+      d.innerHTML=
+        bloco('Já entraram no app','✅','#127a53',j.entraram,'Receberam o e-mail e fizeram login pelo menos uma vez')
+        +bloco('Receberam o e-mail e NÃO entraram','✉️','#8a5a00',j.enviados_sem_login,'O e-mail de acesso saiu, mas nunca logaram')
+        +bloco('Ainda não receberam o e-mail de acesso','⬜','#185FA5',j.sem_envio,'Têm e-mail no cadastro, mas nenhum convite foi enviado')
+        +bloco('Sem e-mail no cadastro','⚠️','#b5342b',j.sem_email,'Não têm e-mail — não dá para convidar; complete o cadastro')
+        +'<div class="note" style="padding:8px 12px;font-size:11px">Convite manual: ficha do processo → "Dar acesso ao app". O envio automático em massa está desligado. <a style="cursor:pointer;color:#185FA5;text-decoration:underline" onclick="__waAcc=null;waAccCarregar()">↻ atualizar</a></div>';
+    }catch(e){ d.innerHTML='<div class="note" style="padding:12px;color:#b5342b">Erro: '+String(e&&e.message||e)+'</div>'; }
   };
 
   window.waRenderLista=function(){
