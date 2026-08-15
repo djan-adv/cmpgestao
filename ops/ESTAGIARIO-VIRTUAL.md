@@ -19,8 +19,10 @@ sem custo de API) e sobe a minuta revisada. O robô nunca protocola nada.
      então a mesma publicação nunca é triada nem cobrada duas vezes).
    - **Se exige peça, cria a tarefa de prazo no Kanban na hora.** O prazo não
      depende do dossiê, nem do orçamento, nem de nada dar certo depois.
-3. **Dossiê** (`/api/robo/minutas?fase=dossie`, a cada 15 min) pega a pendência de
-   prazo mais curto e monta o zip. Sem IA nenhuma nesta fase — só junta o que já temos.
+3. **Dossiê** (`/api/robo/minutas?fase=dossie`) — **DESLIGADO em 15/08/2026**:
+   ninguém baixava os zips. O endpoint continua existindo (dá pra rodar na mão ou
+   reativar descomentando a linha em `app/api/cron/tick/route.js`), mas o cron não
+   monta mais o zip. Triagem, prazo e íntegra seguem normais.
 4. **Íntegra** (`/api/robo/minutas?fase=integra`, a cada 20 min) guarda os autos
    inteiros em PDF na pasta do processo — só nas que exigem peça, que é quando
    alguém vai de fato ler os autos. A de prazo mais curto vai na frente.

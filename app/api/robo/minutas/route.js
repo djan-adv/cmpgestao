@@ -580,7 +580,7 @@ async function _get(request) {
   if (searchParams.get('status') != null) {
     const orc = await orcamento(sb)
     const { data: fila, error: erroFila } = await sb.from('robo_minutas')
-      .select('id,processo_numero,status,tipo_peca,prazo_em,urgencia,resumo,dossie_nome,dossie_path,dossie_bytes,integra_path,integra_bytes,integra_erro,minuta_anexo_id,erro,criado_em')
+      .select('id,tarefa_id,processo_numero,status,tipo_peca,prazo_em,urgencia,resumo,dossie_nome,dossie_path,dossie_bytes,integra_path,integra_bytes,integra_erro,minuta_anexo_id,erro,criado_em')
       // prazo mais próximo primeiro — é a ordem em que o trabalho tem que sair.
       // Sem prazo vai para o fim; empate desempata pela triagem mais recente.
       .eq('exige_peca', true)
@@ -588,8 +588,25 @@ async function _get(request) {
       .order('criado_em', { ascending: false })
       .limit(40)
     if (erroFila) return Response.json({ erro: 'fila: ' + erroFila.message }, { status: 500 })
+    // tarefa do Kanban concluída (ou apagada) = trabalho feito → o card sai da fila
+    let lista = fila || []
+    const tids = lista.map(x => x.tarefa_id).filter(Boolean)
+    if (tids.length) {
+      const { data: ts } = await sb.from('kanban_tarefas').select('id,coluna,arquivada').in('id', tids)
+      const abertas = new Set((ts || []).filter(t => t.coluna !== 'finalizado' && t.arquivada !== true).map(t => t.id))
+      lista = lista.filter(x => !x.tarefa_id || abertas.has(x.tarefa_id))
+    }
+    // linhas antigas sem tarefa_id: casa a tarefa da triagem pelo processo + prazo
+    const semTid = lista.filter(x => !x.tarefa_id && x.prazo_em && x.processo_numero)
+    if (semTid.length) {
+      const nums = [...new Set(semTid.map(x => x.processo_numero))]
+      const { data: ts2 } = await sb.from('kanban_tarefas')
+        .select('numero,prazo,coluna,arquivada').eq('origem', 'robo_minuta').in('numero', nums)
+      const feitas = new Set((ts2 || []).filter(t => t.coluna === 'finalizado' || t.arquivada === true).map(t => t.numero + '|' + t.prazo))
+      lista = lista.filter(x => x.tarefa_id || !x.prazo_em || !feitas.has(x.processo_numero + '|' + x.prazo_em))
+    }
     const { count: semPeca } = await sb.from('robo_minutas').select('id', { count: 'exact', head: true }).eq('exige_peca', false)
-    return Response.json({ ok: true, orcamento: orc, modo: await modoAtual(sb), fila: fila || [], arquivadas_sem_peca: semPeca || 0 })
+    return Response.json({ ok: true, orcamento: orc, modo: await modoAtual(sb), fila: lista, arquivadas_sem_peca: semPeca || 0 })
   }
 
   const orc = await orcamento(sb)
