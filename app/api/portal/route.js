@@ -61,6 +61,16 @@ function papeisDaClasse(classe, assunto, fase) {
 // fora petição de terceiro, intimação, mandado, certidão, ato ordinatório, procuração.
 const RE_OFICIAL = /(senten|despach|decis|ac[óo]rd|acordo|homolog|(ata|termo)\s+d[aeo]s?\s+audi|alvar)/i
 
+/* HTML do jus.br → texto corrido, para a conversão em PDF na entrega ao cliente */
+function _htmlParaTexto(html) {
+  return String(html || '')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ').replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<(br|\/p|\/div|\/li|\/tr|\/h[1-6])[^>]*>/gi, '\n')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#\d+;/g, ' ')
+    .replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim()
+}
+
 async function docsDoProcesso(sb, p) {
   const chaves = [p.numero, digitos(p.numero)].filter(Boolean)
   const j = await sb.from('jusbr_arquivos')
@@ -478,10 +488,17 @@ export async function GET(request) {
     else if (data.caminho_disco) { try { buf = fs.readFileSync(data.caminho_disco) } catch (e) { buf = null } }
     if (!buf || !buf.length) return Response.json({ erro: 'Arquivo não encontrado (pode ter expirado).' }, { status: 404 })
     let mime = tipoRealDoArquivo(buf, data.doc_tipo, data.doc_nome)
-    if (mime === 'text/plain' && String(data.doc_tipo || '').indexOf('pdf') > -1) {
-      try { buf = await pdfDeTexto(buf.toString('utf8'), data.doc_nome); mime = 'application/pdf' } catch (e) { mime = 'text/plain; charset=utf-8' }
+    // O cliente recebe PDF: peça que chega em texto ou HTML (ex.: "Sentença.html"
+    // salva pelo visor do jus.br) é convertida na entrega — no celular, PDF abre
+    // e se guarda melhor do que uma página HTML solta.
+    if (mime === 'text/plain' || mime === 'text/html') {
+      try {
+        const txt = mime === 'text/html' ? _htmlParaTexto(buf.toString('utf8')) : buf.toString('utf8')
+        buf = await pdfDeTexto(txt, data.doc_nome); mime = 'application/pdf'
+      } catch (e) { mime = (mime === 'text/html' ? 'text/html' : 'text/plain') + '; charset=utf-8' }
     }
-    const nome = (data.doc_nome || 'documento').replace(/[^\w.\- ]+/g, '_')
+    let nome = (data.doc_nome || 'documento').replace(/[^\w.\- ]+/g, '_')
+    if (mime === 'application/pdf' && !/\.pdf$/i.test(nome)) nome = nome.replace(/\.(html?|txt)$/i, '') + '.pdf'
     return new Response(buf, {
       headers: {
         'Content-Type': mime,
