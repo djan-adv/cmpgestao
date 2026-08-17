@@ -16158,6 +16158,13 @@ async function emitirCobranca(){
   if(!(centavos>0)){ msg.textContent='Informe um valor válido.'; return; }
   if(centavos<500){ msg.textContent='O Cora exige valor mínimo de R$ 5,00 por cobrança.'; return; }
   if(!vencimento){ msg.textContent='Informe o vencimento.'; return; }
+  /* o Cora recusa (400) vencimento no passado — trata aqui, com mensagem clara */
+  var hojeV=(typeof _hojeISO==='function')?_hojeISO():new Date().toISOString().slice(0,10);
+  if(vencimento<hojeV){
+    if(confirm('O vencimento da 1ª parcela ('+vencimento.split('-').reverse().join('/')+') JÁ PASSOU — o Cora não emite boleto com data vencida.\n\nOK = usar HOJE ('+hojeV.split('-').reverse().join('/')+') como vencimento da 1ª parcela (as demais seguem uma por mês a partir dela).')){
+      vencimento=hojeV; var vE=document.getElementById('cob-venc'); if(vE) vE.value=hojeV;
+    } else { msg.textContent='Ajuste o vencimento — não pode ser data passada.'; return; }
+  }
   var nParc=parseInt((document.getElementById('cob-parcelas')||{}).value,10)||1;
   if(nParc>1 && !/parcela/i.test(descricao)) descricao=descricao+' — parcela 1/'+nParc;
   btn.disabled=true; var txt=btn.textContent; btn.textContent='Emitindo…'; msg.textContent='';
