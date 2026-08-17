@@ -27,6 +27,11 @@ const soDig = (s) => String(s || '').replace(/\D/g, '')
 // procuração e petição inicial são leves e sempre úteis: guardamos PERMANENTE
 // (expira_em = null → a limpeza de 30 dias não apaga).
 function ehDocLeve(nome) { return /procura[çc][aã]o|peti[çc][aã]o\s+inicial|\binicial\b/i.test(String(nome || '')) }
+// peça oficial que o CLIENTE vê no app (mesmo filtro do portal): sentença, acórdão,
+// decisão, despacho, acordo, homologação, ata/termo de audiência, alvará. Essas
+// (a) entram SEMPRE no lote, mesmo fora do top-N mais recente, e (b) ficam
+// permanentes — a sentença não pode sumir do app na faxina dos 30 dias.
+const RE_PECA_OFICIAL = /(senten|despach|decis|ac[óo]rd|acordo|homolog|(ata|termo)\s+d[aeo]s?\s+audi|alvar)/i
 
 function normDoc(d) {
   const arq = (d && d.arquivo) || {}
@@ -131,7 +136,13 @@ export async function GET(request) {
     const ordenados = lst.docs.slice().sort((a, b) => String(b.data || '').localeCompare(String(a.data || '')))
     const { data: jaTem } = await sb.from('jusbr_arquivos').select('doc_uuid').eq('escritorio_id', ESCRITORIO_CMP).eq('processo_numero', numero)
     const tem = new Set((jaTem || []).map(r => r.doc_uuid))
-    const novos = ordenados.filter(d => d.uuid && !tem.has(d.uuid)).slice(0, porProc)
+    const naoTem = ordenados.filter(d => d.uuid && !tem.has(d.uuid))
+    const novos = naoTem.slice(0, porProc)
+    // peça oficial nova fora do top-N entra mesmo assim (até +5 por processo)
+    for (const d of naoTem.slice(porProc)) {
+      if (novos.length >= porProc + 5) break
+      if (RE_PECA_OFICIAL.test(d.nome || '')) novos.push(d)
+    }
     let baix = 0
     for (const d of novos) {
       if (total >= maxTotal) break
@@ -144,7 +155,7 @@ export async function GET(request) {
         // conteúdo vai para o disco do VPS; o banco fica só com o caminho
         ...camposConteudo(numero, d.nome, d.uuid, r.buf),
       }
-      if (ehDocLeve(d.nome)) linha.expira_em = '2999-12-31T00:00:00.000Z' // permanente (coluna NOT NULL)
+      if (ehDocLeve(d.nome) || RE_PECA_OFICIAL.test(d.nome || '')) linha.expira_em = '2999-12-31T00:00:00.000Z' // permanente (coluna NOT NULL)
       const ins = await sb.from('jusbr_arquivos').insert(linha).select('id').single()
       if (!ins.error) { baix++; total++; rel.baixados++ }
     }
@@ -181,7 +192,7 @@ export async function GET(request) {
         const r = await baixarDoc(token, numero, d)
         if (r.erro) { rel.pulados++; if (r.erro === 'expirado') { total = maxTotal; break } continue }
         const linha = { escritorio_id: ESCRITORIO_CMP, processo_numero: numero, doc_uuid: d.uuid, doc_nome: d.nome, doc_tipo: r.tipo, tamanho: r.buf.length, baixado_por: 'robo', ...camposConteudo(numero, d.nome, d.uuid, r.buf) }
-        if (ehDocLeve(d.nome)) linha.expira_em = '2999-12-31T00:00:00.000Z' // permanente (coluna NOT NULL)
+        if (ehDocLeve(d.nome) || RE_PECA_OFICIAL.test(d.nome || '')) linha.expira_em = '2999-12-31T00:00:00.000Z' // permanente (coluna NOT NULL)
         const ins = await sb.from('jusbr_arquivos').insert(linha).select('id').single()
         if (!ins.error) { baix++; total++; rel.baixados++ }
       }
