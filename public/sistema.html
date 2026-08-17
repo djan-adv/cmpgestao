@@ -9996,11 +9996,11 @@ async function carregarDocs(numero, sub, escopo){
       /* a pasta "Autos (jus.br)" alimenta o app do cliente: as peças oficiais dela
          (sentença, despacho, decisão, acórdão, acordo, ata, alvará) aparecem lá */
       if(isFolder && /^autos \(jus\.?br\)$/i.test(x.nome||'')){
-        var avc=document.createElement('div');
-        avc.style.cssText='font-size:9.5px;color:#b5342b;font-weight:700;margin-top:1px';
+        var avc=document.createElement('span');
+        avc.style.cssText='font-size:9.5px;color:#b5342b;font-weight:400;margin-left:6px;line-height:1.2';
         avc.textContent='cliente tem acesso aos docs daqui (peças oficiais: sentença, decisão, despacho…)';
         avc.title='O app do cliente mostra as peças OFICIAIS desta pasta em PDF. Petição de terceiro, intimação, mandado e certidão NÃO aparecem para ele.';
-        td1.appendChild(avc);
+        nmeWrap.appendChild(avc);
       }
       if(!isFolder){
         var dtm=x.mod?String(x.mod).slice(0,10).split('-').reverse().join('/'):'';
