@@ -20,6 +20,7 @@ export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
 const JADER = ['jadergabrielpinheiro.adv@gmail.com', 'jaderpinheiroadv@gmail.com']
+const ESCRITORIO_CMP = '908f77fc-19f5-4d86-9576-f5590af09e0a'
 const REMIND_MS = 29 * 60 * 1000   // reenvia lembrete de lead a cada ~30 min
 const OFF_BR = -3                  // Brasília = UTC-3 (sem horário de verão hoje)
 
@@ -126,6 +127,26 @@ export async function GET(request) {
         resumo.enviados.push('leads(' + devidos.length + ')')
         for (const l of devidos) { try { await sb.from('crm_leads').update({ notif_ultimo: nowIso }).eq('id', l.id) } catch (e) {} }
       } else resumo.erros.push('leads: ' + r.motivo)
+      // Aviso no CHAT DA EQUIPE para Djan e Jader (pedido do dono, 18/08/2026) —
+      // UMA mensagem por lead, só no primeiro aviso (notif_ultimo ainda vazio),
+      // pra não virar spam a cada 30 min. Vai como recado no grupo "Todos".
+      try {
+        const primeiros = devidos.filter(l => !l.notif_ultimo)
+        for (const l of primeiros) {
+          const det = [l.canal, l.tel, l.email].filter(Boolean).join(' · ')
+          const { data: eqp } = await sb.from('usuarios').select('id,nome,email').eq('escritorio_id', ESCRITORIO_CMP)
+          const donoChat = (eqp || []).find(u => /djan\.adv@gmail\.com/i.test(u.email || '')) || (eqp || [])[0]
+          if (!donoChat) break
+          await sb.from('chat_mensagens').insert({
+            escritorio_id: ESCRITORIO_CMP, autor_id: donoChat.id, autor_nome: '🤖 CMPGestão',
+            para_id: null,   // grupo Todos — Djan e Jader veem e o sino acende
+            texto: '🟢 NOVO LEAD DO SITE — atender agora pra não perder!\n' +
+              (l.nome || 'Sem nome') + (det ? (' (' + det + ')') : '') +
+              (l.obs ? ('\n' + String(l.obs).split('\n').filter(x => x && !/^Origem:/i.test(x)).join(' ').slice(0, 160)) : '') +
+              '\n→ Comercial › coluna "Novo lead". @Djan @Jader',
+          })
+        }
+      } catch (eC) { resumo.erros.push('chat: ' + ((eC && eC.message) || eC)) }
     } else if (debug) resumo.leads_devidos = devidos.map(l => ({ id: l.id, nome: l.nome, notif_ultimo: l.notif_ultimo }))
   } catch (e) { resumo.erros.push('leads: ' + ((e && e.message) || e)) }
 
