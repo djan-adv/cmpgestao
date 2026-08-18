@@ -189,14 +189,18 @@ export async function POST(request) {
            join inove.etiquetas e on e.id = pe.etiqueta_id
           where pe.processo_id = $1`, [id]),
     ])
-    const [proprios, extra, fin] = await Promise.all([
+    const [proprios, extra, fin, vara] = await Promise.all([
       q('select id, categoria, nome_arquivo, doc_tipo, tamanho, enviado_em from inove.documentos_proprios where processo_id = $1 order by enviado_em desc', [id]),
       q1('select * from inove.processo_extra where processo_id = $1', [id]),
       q1('select id, honorario_fixado, data_deposito from inove.financeiro where processo_id = $1 order by criado_em limit 1', [id]),
+      q1('select * from inove.v_contato_vara where processo_id = $1', [id]),
     ])
     return Response.json({
       ok: true, processo: p, movimentacoes: movs, documentos: docs, etiquetas: etq,
       proprios, extra: extra || {}, financeiro: fin || {},
+      // sugestão vinda do cadastro de varas do escritório; o que a Inove digitou
+      // continua mandando — quem decide a precedência é a tela
+      vara: vara || {},
     })
   }
 

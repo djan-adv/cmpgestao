@@ -43,6 +43,8 @@
   th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);font-size:13px;vertical-align:top}
   th{font-size:11px;text-transform:uppercase;letter-spacing:.3px;color:var(--muted)}
   tr.click{cursor:pointer} tr.click:hover td{background:#f7f9fc}
+  th.ord{cursor:pointer;user-select:none} th.ord:hover{color:var(--navy)}
+  th.ord span{color:var(--gold);font-weight:700}
   .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
   .kpi{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px 16px}
   .kpi b{display:block;font-size:24px;color:var(--navy);line-height:1.1}
@@ -243,7 +245,14 @@
             <select id="proc-fsit" onchange="renderProc()" style="width:auto;max-width:230px"><option value="">Todas as situações</option></select>
           </div>
           <div style="overflow-x:auto"><table>
-            <thead><tr><th style="width:26%">Parte × Réu</th><th style="width:165px">Processo</th><th>Situação</th><th style="width:120px">Quesitos</th><th style="width:70px">Peças</th><th style="width:96px">Últ. mov.</th></tr></thead>
+            <thead><tr>
+              <th style="width:26%" class="ord" onclick="ordenarProc('parte')">Parte × Réu <span id="ord-parte"></span></th>
+              <th style="width:180px" class="ord" onclick="ordenarProc('numero')" title="Ordena pelo código do tribunal dentro do número — agrupa por estado">Processo <span id="ord-numero"></span></th>
+              <th class="ord" onclick="ordenarProc('situacao')">Situação <span id="ord-situacao"></span></th>
+              <th style="width:120px" class="ord" onclick="ordenarProc('quesitos')">Quesitos <span id="ord-quesitos"></span></th>
+              <th style="width:70px" class="ord" onclick="ordenarProc('docs')">Peças <span id="ord-docs"></span></th>
+              <th style="width:96px" class="ord" onclick="ordenarProc('mov')">Últ. mov. <span id="ord-mov"></span></th>
+            </tr></thead>
             <tbody id="proc-body"></tbody>
           </table></div>
           <p class="note" id="proc-vazio" style="display:none;margin-top:8px">Nenhum processo encontrado.</p>
@@ -509,6 +518,26 @@ async function salvarNovoProc(){
   }catch(e){ msg.textContent=(e&&e.message)||'Falhou.'; }
 }
 
+/* Ordenação da lista. O padrão continua sendo a ordem que vem do servidor
+   (movimentação mais recente primeiro); clicar num cabeçalho troca, clicar de
+   novo inverte. */
+var ORD_COL=null, ORD_DIR=1;
+function ordenarProc(col){
+  if(ORD_COL===col){ ORD_DIR=-ORD_DIR; } else { ORD_COL=col; ORD_DIR=1; }
+  renderProc();
+}
+/* Código do tribunal dentro do número CNJ (NNNNNNN-DD.AAAA.J.TR.OOOO): o par
+   J.TR identifica o tribunal, e no caso da Justiça Estadual o TR é o estado.
+   Ordenar por ele agrupa por estado, que é como a planilha deles é organizada. */
+function _trib(numero){
+  var m=String(numero||'').match(/\.(\d)\.(\d{2})\./);
+  return m ? (m[1]+m[2]) : 'zzz';
+}
+function _cmp(a,b){
+  if(a==null||a==='') return 1;      // vazio sempre por último, nos dois sentidos
+  if(b==null||b==='') return -1;
+  return a<b ? -1 : (a>b ? 1 : 0);
+}
 function renderProc(){
   var q=(val('proc-busca')||'').toLowerCase().trim();
   var fs=val('proc-fsit');
@@ -516,6 +545,21 @@ function renderProc(){
     if(fs && (p.situacao||'')!==fs) return false;
     if(!q) return true;
     return ((p.cliente_nome||'')+' '+(p.oponente||'')+' '+(p.numero||'')+' '+(p.assunto||'')).toLowerCase().indexOf(q)>-1;
+  });
+  if(ORD_COL){
+    var chave={
+      parte:    function(p){ return (p.cliente_nome||'').toLowerCase(); },
+      numero:   function(p){ return _trib(p.numero)+'|'+(p.numero||''); },
+      situacao: function(p){ return (p.situacao||'').toLowerCase(); },
+      quesitos: function(p){ return (p.quesitos||'').toLowerCase(); },
+      docs:     function(p){ return Number(p.docs)||0; },
+      mov:      function(p){ return p.ultima_movimentacao||''; }
+    }[ORD_COL];
+    lista=lista.slice().sort(function(a,b){ return _cmp(chave(a),chave(b))*ORD_DIR; });
+  }
+  ['parte','numero','situacao','quesitos','docs','mov'].forEach(function(c){
+    var el=document.getElementById('ord-'+c);
+    if(el) el.textContent = (ORD_COL===c) ? (ORD_DIR>0?'▲':'▼') : '';
   });
   var tb=document.getElementById('proc-body'); tb.innerHTML='';
   lista.forEach(function(p){
@@ -559,7 +603,7 @@ async function abrirProc(id){
     return '<option value="'+e.id+'"'+((sel&&sel.etiqueta_id===e.id)?' selected':'')+'>'+esc(e.nome)+'</option>'; }).join(''); }
   var link=function(d,dl){ return '/api/inove?doc='+encodeURIComponent(d.id)+'&t='+encodeURIComponent(TOKEN)+(dl?'&dl=1':''); };
   var linkP=function(d,dl){ return '/api/inove?proprio='+encodeURIComponent(d.id)+'&t='+encodeURIComponent(TOKEN)+(dl?'&dl=1':''); };
-  var ex=j.extra||{}, fin=j.financeiro||{};
+  var ex=j.extra||{}, fin=j.financeiro||{}, vara=j.vara||{};
   var proprios=j.proprios||[];
   /* Os dois blocos vão para a coluna fixa da direita (#docs-col), como no
      sistema.html — ficam à vista enquanto se rola a ficha. */
@@ -627,7 +671,11 @@ async function abrirProc(id){
     /* Contato da vara, local do processo e anotações — um bloco só, salvo junto. */
     + '<div style="border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:16px">'
     +   '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'
-    +     '<label style="margin:0">E-mail da vara / cartório<input id="ex-email" type="email" placeholder="vara@tjxx.jus.br" value="'+esc(ex.email_vara||'')+'"></label>'
+    +     '<label style="margin:0">E-mail da vara / cartório'
+    +       '<input id="ex-email" type="email" placeholder="vara@tjxx.jus.br" value="'+esc(ex.email_vara||vara.email_sugerido||'')+'">'
+    +       ((!ex.email_vara && vara.email_sugerido)
+            ? '<span class="note" style="font-weight:400">Preenchido pelo cadastro de varas do escritório — confira e salve.</span>' : '')
+    +     '</label>'
     +     '<label style="margin:0">Local atual do processo<input id="ex-local" placeholder="Ex.: concluso ao juiz, arquivo, contadoria…" value="'+esc(ex.local_atual||'')+'"></label>'
     +   '</div>'
     +   '<label>Observações<textarea id="ex-obs" placeholder="Anotações sobre este processo — visíveis para toda a equipe da Inove." style="min-height:80px">'+esc(ex.observacoes||'')+'</textarea></label>'
