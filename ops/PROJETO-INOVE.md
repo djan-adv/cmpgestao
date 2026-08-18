@@ -575,6 +575,28 @@ melhoria é o escritório, direto no banco.
 **Não testado em navegador:** upload real, tarja no arquivo próprio e a aba nova.
 Compila e passa nas conferências de sintaxe/ids/ações.
 
+## 13e. Ajustes de layout e chat — 18/08/2026
+
+**Documentos para protocolar e Proposta enviada foram para a coluna fixa da
+direita**, como no `sistema.html`. O detalhe que faz funcionar não é o
+`position:fixed` da coluna, é o **`padding-right` no card da ficha**: sem ele a
+coluna é fixa em relação à JANELA e cai por cima do texto. Mesma solução do
+`#s-proc-det` / `#docs-col` de lá. Abaixo de 1100px a coluna volta a empilhar.
+
+**O chat virou um dock fixo**, no lugar da seção na barra lateral, espelhando o
+chat da equipe do Gestão: barra amarela no rodapé, minimizável, com **seletor de
+processo** ("Conversa geral" ou qualquer um dos 42). Abrir a ficha de um processo
+já aponta o chat para ele (`ichatIrPara`).
+
+Removidos por ficarem redundantes com o dock: o item "Chat com o escritório" da
+barra lateral (nome que também já estava errado — a conversa é interna deles) e o
+bloco de conversa dentro da ficha. As funções `pintaMsgs`/`carregarChat`/
+`enviarChat` saíram junto; conferido que não sobrou referência órfã.
+
+O indicador de mensagem nova passou a contar **mensagens de outra pessoa da
+Inove** — antes contava `autor_tipo = 'escritorio'`, que não é mais usado desde
+que o chat deixou de falar com o escritório.
+
 ## 11. Ideias levantadas, ainda não aprovadas
 
 1. Alerta de prazo disparado por etiqueta (`Intimado - Elaborar Laudo` há X dias).

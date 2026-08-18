@@ -90,7 +90,37 @@
   .msg.eu{align-self:flex-end;background:var(--navy);color:#fff}
   .msg.eles{align-self:flex-start;background:#fff;border:1px solid var(--line)}
 
+  /* Coluna fixa dos documentos, à direita — mesmo desenho do sistema.html.
+     O padding-right no card é o que impede a coluna de cobrir o texto: sem ele,
+     a coluna é fixed em relação à JANELA e cai por cima do conteúdo. */
+  @media(min-width:1100px){
+    #proc-det{padding-right:calc(21vw + 20px);position:relative}
+    #docs-col{position:fixed;right:14px;top:88px;width:21vw;max-height:calc(100vh - 110px);overflow:auto;z-index:20}
+    #docs-col .bloco{background:#fff;border:1px solid var(--line);border-radius:13px;padding:13px 12px;box-shadow:0 6px 22px rgba(30,39,51,.10);margin-bottom:12px}
+    #docs-col td{font-size:12px;word-break:break-word}
+  }
+  #docs-col .bloco{background:#fff;border:1px solid var(--line);border-radius:13px;padding:13px 12px;margin-bottom:12px}
+
+  /* Chat da equipe — dock fixo, no mesmo espírito do chat da equipe do Gestão */
+  #ichat{position:fixed;right:16px;bottom:0;width:380px;max-width:94vw;z-index:95;font-size:13px}
+  #ichat .barra{display:flex;align-items:center;gap:8px;padding:8px 12px;background:rgba(250,240,170,.97);
+    border:1px solid #e0d9a0;border-bottom:none;border-radius:12px 12px 0 0;cursor:pointer;box-shadow:0 -2px 14px rgba(0,0,0,.10)}
+  #ichat .barra b{color:#1b1b1b;font-size:13px}
+  #ichat .corpo{background:rgba(255,250,205,.94);border:1px solid #e0d9a0;border-top:none;box-shadow:0 -2px 14px rgba(0,0,0,.10)}
+  #ichat select{font-size:12px;padding:6px 8px;border:1px solid #d8d093;border-radius:7px;background:#fffdf0}
+  #ichat .lista{height:270px;overflow:auto;padding:10px 12px;line-height:1.45}
+  #ichat .env{display:flex;gap:6px;padding:8px;border-top:1px solid #e0d9a0;align-items:center}
+  #ichat .env input{flex:1;font-size:13px;padding:7px 9px;border:1px solid #d8d093;border-radius:7px;background:#fffdf0}
+  #ichat .env button{border:0;background:#5a5326;color:#fff;border-radius:7px;padding:7px 11px;font-weight:700;cursor:pointer}
+  #ichat .m{margin-bottom:9px}
+  #ichat .m .q{font-size:11px;font-weight:700;color:#6b6540}
+  #ichat .m .t{background:#fff;border:1px solid #e6dfae;border-radius:9px;padding:6px 9px;display:inline-block;max-width:100%;word-break:break-word}
+  #ichat .m.eu{text-align:right}
+  #ichat .m.eu .t{background:var(--navy);color:#fff;border-color:var(--navy)}
+  #ichat-badge{background:#b5342b;color:#fff;border-radius:10px;font-size:11px;font-weight:700;padding:1px 7px;display:none}
+
   @media(max-width:820px){
+    #ichat{right:0;left:0;width:auto}
     #tela-app{flex-direction:column}
     .side{width:100%;flex-direction:row;flex-wrap:wrap;align-items:center}
     .side .brand{padding:12px 14px}
@@ -148,7 +178,6 @@
       <a id="nav-painel" onclick="ir('painel')"><span class="ic">▤</span> Painel</a>
       <a id="nav-proc" onclick="ir('proc')"><span class="ic">⚖</span> Processos <span class="cnt" id="cnt-proc"></span></a>
       <a id="nav-fin" onclick="ir('fin')"><span class="ic">◈</span> Financeiro</a>
-      <a id="nav-chat" onclick="ir('chat')"><span class="ic">💬</span> Chat com o escritório <span class="cnt" id="cnt-chat"></span></a>
       <a id="nav-cad" onclick="ir('cad')"><span class="ic">🏛</span> Cadastros (Tribunais) <span class="cnt" id="cnt-cad"></span></a>
       <a id="nav-melh" onclick="ir('melh')"><span class="ic">◆</span> Melhorias implantadas</a>
       <a id="nav-sol" onclick="ir('sol')"><span class="ic">✨</span> Solicitar funcionalidades</a>
@@ -249,19 +278,6 @@
             <tbody id="fin-body"></tbody>
           </table></div>
           <p class="note" id="fin-vazio" style="display:none;margin-top:8px">Nenhum lançamento ainda.</p>
-        </div>
-      </section>
-
-      <!-- CHAT GERAL -->
-      <section id="sec-chat" class="hidden">
-        <div class="card">
-          <p class="sectlabel">Conversa com o escritório</p>
-          <p class="note" style="margin:0 0 10px">Qualquer pessoa da equipe do escritório responde por aqui. Para falar de um processo específico, use o chat dentro da ficha dele.</p>
-          <div class="msgs" id="chat-msgs"><div class="note">Carregando…</div></div>
-          <div style="display:flex;gap:8px;margin-top:12px">
-            <textarea id="chat-txt" placeholder="Escreva sua mensagem…" style="min-height:52px" onkeydown="if(event.key==='Enter'&&(event.ctrlKey||event.metaKey))enviarChat(null)"></textarea>
-            <button class="btn gold" onclick="enviarChat(null)">Enviar</button>
-          </div>
         </div>
       </section>
 
@@ -398,14 +414,15 @@ async function abrirApp(){
   await carregarProc();
   await carregarEtq();
   ir('painel');
+  ichatMontar();
   TIMER=setInterval(atualizarNaoLidas, 45000);
   atualizarNaoLidas();
 }
 
 /* ================= navegação ================= */
-var TITULOS={painel:'Painel',proc:'Processos',fin:'Financeiro',chat:'Chat com o escritório',cad:'Cadastros — Tribunais',melh:'Melhorias implantadas',sol:'Solicitar funcionalidades',acc:'Acessos'};
+var TITULOS={painel:'Painel',proc:'Processos',fin:'Financeiro',cad:'Cadastros — Tribunais',melh:'Melhorias implantadas',sol:'Solicitar funcionalidades',acc:'Acessos'};
 function ir(s){
-  ['painel','proc','fin','chat','cad','melh','sol','acc'].forEach(function(k){
+  ['painel','proc','fin','cad','melh','sol','acc'].forEach(function(k){
     document.getElementById('nav-'+k).classList.toggle('on',k===s);
     document.getElementById('sec-'+k).classList.toggle('hidden',k!==s);
   });
@@ -413,7 +430,6 @@ function ir(s){
   if(s==='painel')renderPainel();
   if(s==='proc'){ fecharProc(); renderProc(); }
   if(s==='fin')carregarFin();
-  if(s==='chat')carregarChat(null);
   if(s==='cad')carregarCad();
   if(s==='melh')carregarMelh();
   if(s==='sol')carregarSol();
@@ -434,12 +450,16 @@ async function carregarEtq(){
   document.getElementById('proc-fsit').innerHTML='<option value="">Todas as situações</option>'
     +ETQ.situacao.map(function(e){return '<option value="'+esc(e.nome)+'">'+esc(e.nome)+'</option>';}).join('');
 }
+/* Aviso de mensagem nova no dock. Só conta o que veio de OUTRA pessoa da Inove
+   (o autor_tipo 'escritorio' não é mais usado — a conversa é interna deles). */
 async function atualizarNaoLidas(){
+  if(ICHAT_ABERTO) return;   // aberto, a pessoa já está vendo
   try{
-    var j=await api('chat',{desde_id:0});
-    var n=(j.mensagens||[]).filter(function(m){return m.autor_tipo==='escritorio'&&!m.lida_inove;}).length;
-    var c=document.getElementById('cnt-chat');
-    c.textContent=n||''; c.classList.toggle('alerta',!!n);
+    var j=await api('chat', ICHAT_PROC?{processo_id:ICHAT_PROC,desde_id:0}:{desde_id:0});
+    var msgs=(j.mensagens||[]).filter(function(m){ return m.autor_nome!==(EU.nome||EU.email); });
+    var b=document.getElementById('ichat-badge'); if(!b) return;
+    var novas=msgs.filter(function(m){ return Number(m.id)>ICHAT_ULT; }).length;
+    b.textContent=novas||''; b.style.display=novas?'inline-block':'none';
   }catch(e){}
 }
 
@@ -528,26 +548,30 @@ async function abrirProc(id){
   var linkP=function(d,dl){ return '/api/inove?proprio='+encodeURIComponent(d.id)+'&t='+encodeURIComponent(TOKEN)+(dl?'&dl=1':''); };
   var ex=j.extra||{}, fin=j.financeiro||{};
   var proprios=j.proprios||[];
+  /* Os dois blocos vão para a coluna fixa da direita (#docs-col), como no
+     sistema.html — ficam à vista enquanto se rola a ficha. */
   function blocoProprios(cat,titulo,vazio,altura){
     var lista=proprios.filter(function(d){return d.categoria===cat;});
-    return '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-top:18px">'
-      + '<p class="sectlabel" style="margin:0">'+titulo+' ('+lista.length+')</p>'
-      + '<label class="btn ghost sm" style="margin:0;font-weight:800;color:var(--navy)">+ Anexar'
-      +   '<input type="file" style="display:none" onchange="subirProprio(\''+id+'\',\''+cat+'\',this)">'
-      + '</label>'
+    return '<div class="bloco">'
+      + '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px">'
+      +   '<p class="sectlabel" style="margin:0">'+titulo+' ('+lista.length+')</p>'
+      +   '<label class="btn ghost sm" style="margin:0;font-weight:800;color:var(--navy);white-space:nowrap">+ Anexar'
+      +     '<input type="file" style="display:none" onchange="subirProprio(\''+id+'\',\''+cat+'\',this)">'
+      +   '</label>'
       + '</div>'
       + (lista.length
           ? '<div style="max-height:'+altura+';overflow-y:auto"><table><tbody>'
             + lista.map(function(d){
-                return '<tr><td>'+esc(d.nome_arquivo||'documento')+'<div class="note">'+fdata(d.enviado_em)+'</div></td>'
-                  + '<td style="width:210px;text-align:right;white-space:nowrap">'
+                return '<tr><td>'+esc(d.nome_arquivo||'documento')+'<div class="note">'+fdata(d.enviado_em)+'</div>'
+                  + '<div style="margin-top:5px;white-space:nowrap">'
                   + '<a class="btn ghost sm" style="text-decoration:none" target="_blank" rel="noopener" href="'+linkP(d,false)+'">Abrir</a> '
                   + '<a class="btn ghost sm" style="text-decoration:none" href="'+linkP(d,true)+'">Baixar</a> '
                   + '<button class="btn danger sm" onclick="excluirProprio(\''+d.id+'\',\''+id+'\')">Excluir</button>'
-                  + '</td></tr>';
+                  + '</div></td></tr>';
               }).join('')
             + '</tbody></table></div>'
-          : '<p class="note">'+vazio+'</p>');
+          : '<p class="note" style="margin:0">'+vazio+'</p>')
+      + '</div>';
   }
 
   det.innerHTML =
@@ -620,11 +644,6 @@ async function abrirProc(id){
           + '</tbody></table></div>'
         : '<p class="note">Nenhuma peça baixada ainda. Use o botão acima para buscar no jus.br.</p>')
 
-    + blocoProprios('protocolar', 'Documentos para protocolar',
-        'Nenhum documento anexado. Use "+ Anexar" para guardar minutas e petições antes do protocolo.', '300px')
-    + blocoProprios('proposta', 'Proposta enviada',
-        'Nenhuma proposta anexada ainda.', '170px')
-
     + '<p class="sectlabel" style="margin-top:18px">Movimentações</p>'
     + ((j.movimentacoes||[]).length
         ? '<div style="max-height:300px;overflow-y:auto"><table><tbody>'
@@ -634,14 +653,16 @@ async function abrirProc(id){
           + '</tbody></table></div>'
         : '<p class="note">Sem movimentações registradas.</p>')
 
-    + '<p class="sectlabel" style="margin-top:18px">Conversa sobre este processo</p>'
-    + '<div class="msgs" id="pchat-msgs" style="max-height:34vh"></div>'
-    + '<div style="display:flex;gap:8px;margin-top:10px">'
-    +   '<textarea id="pchat-txt" placeholder="Falar com o escritório sobre este processo…" style="min-height:48px"></textarea>'
-    +   '<button class="btn gold" onclick="enviarChat(\''+id+'\')">Enviar</button>'
+    /* Coluna da direita: fica fixa em tela larga, e empilha embaixo no celular. */
+    + '<div id="docs-col">'
+    +   blocoProprios('protocolar', 'Documentos para protocolar',
+          'Nenhum documento anexado. Use "+ Anexar" para guardar minutas e petições antes do protocolo.', '46vh')
+    +   blocoProprios('proposta', 'Proposta enviada',
+          'Nenhuma proposta anexada ainda.', '22vh')
     + '</div>';
 
-  carregarChat(id);
+  // abrir um processo já deixa o chat da equipe apontado para ele
+  if (typeof ichatIrPara === 'function') ichatIrPara(id);
 }
 
 async function etiquetar(id, dim, valor){
@@ -820,32 +841,84 @@ async function salvarFin(){
   }catch(e){ m.textContent=(e&&e.message)||'Falhou.'; }
 }
 
-/* ================= chat ================= */
-function pintaMsgs(alvo, msgs){
-  var box=document.getElementById(alvo);
-  if(!box) return;
-  box.innerHTML = msgs.length ? msgs.map(function(m){
-    var eu=(m.autor_tipo==='inove');
-    return '<div class="msg '+(eu?'eu':'eles')+'">'
-      +'<span class="quem">'+esc(eu?(m.autor_nome||'Você'):(m.autor_nome||'Escritório'))+'</span>'
-      +esc(m.texto||'')+'<span class="hora">'+fhora(m.criado_em)+'</span></div>';
-  }).join('') : '<div class="note">Nenhuma mensagem ainda. Escreva a primeira.</div>';
-  box.scrollTop=box.scrollHeight;
+/* ================= chat da equipe (dock) =================
+   Conversa INTERNA da Inove — não chega ao escritório. Fica num dock fixo, como
+   o chat da equipe do sistema.html, com um seletor de processo: "Conversa geral"
+   ou qualquer um dos processos. Abrir a ficha de um processo já aponta o chat
+   para ele. */
+var ICHAT_PROC=null, ICHAT_ABERTO=false, ICHAT_TIMER=null, ICHAT_ULT=0;
+
+function ichatMontar(){
+  if(document.getElementById('ichat')) return;
+  var d=document.createElement('div'); d.id='ichat';
+  d.innerHTML=
+    '<div class="barra" onclick="ichatAlternar()">'
+    +  '<b>💬 Chat da equipe</b>'
+    +  '<span id="ichat-badge"></span>'
+    +  '<span style="margin-left:auto;color:#5a5326;font-weight:700" id="ichat-seta">▲</span>'
+    +'</div>'
+    +'<div class="corpo hidden" id="ichat-corpo">'
+    +  '<div style="padding:8px;border-bottom:1px solid #e6dfae">'
+    +    '<select id="ichat-sel" style="width:100%" onchange="ichatTrocar(this.value)"></select>'
+    +  '</div>'
+    +  '<div class="lista" id="ichat-lista"></div>'
+    +  '<div class="env">'
+    +    '<input id="ichat-txt" placeholder="escreva e tecle Enter…">'
+    +    '<button onclick="ichatEnviar()">➤</button>'
+    +  '</div>'
+    +'</div>';
+  document.body.appendChild(d);
+  document.getElementById('ichat-txt').onkeydown=function(e){ if(e.key==='Enter'){ e.preventDefault(); ichatEnviar(); } };
+  ichatPreencherSel();
 }
-async function carregarChat(processoId){
+function ichatPreencherSel(){
+  var sel=document.getElementById('ichat-sel'); if(!sel) return;
+  sel.innerHTML='<option value="">👥 Conversa geral</option>'
+    +PROC.map(function(p){
+      return '<option value="'+p.id+'">'+esc((p.cliente_nome||'').slice(0,42)+' · '+(p.numero||''))+'</option>';
+    }).join('');
+  sel.value=ICHAT_PROC||'';
+}
+function ichatAlternar(){
+  ICHAT_ABERTO=!ICHAT_ABERTO;
+  document.getElementById('ichat-corpo').classList.toggle('hidden',!ICHAT_ABERTO);
+  document.getElementById('ichat-seta').textContent=ICHAT_ABERTO?'▼':'▲';
+  if(ICHAT_ABERTO){ ichatCarregar(); ichatPolling(true); } else { ichatPolling(false); }
+}
+function ichatTrocar(v){ ICHAT_PROC=v||null; ICHAT_ULT=0; ichatCarregar(); }
+function ichatIrPara(processoId){
+  ICHAT_PROC=processoId||null; ICHAT_ULT=0;
+  ichatPreencherSel();
+  if(ICHAT_ABERTO) ichatCarregar();
+}
+function ichatPolling(ligar){
+  if(ICHAT_TIMER){ clearInterval(ICHAT_TIMER); ICHAT_TIMER=null; }
+  if(ligar) ICHAT_TIMER=setInterval(ichatCarregar, 20000);
+}
+async function ichatCarregar(){
+  var box=document.getElementById('ichat-lista'); if(!box) return;
   try{
-    var j=await api('chat', processoId?{processo_id:processoId,desde_id:0}:{desde_id:0});
-    pintaMsgs(processoId?'pchat-msgs':'chat-msgs', j.mensagens||[]);
-    if(!processoId) atualizarNaoLidas();
+    var j=await api('chat', ICHAT_PROC?{processo_id:ICHAT_PROC,desde_id:0}:{desde_id:0});
+    var msgs=j.mensagens||[];
+    box.innerHTML = msgs.length ? msgs.map(function(m){
+      var eu=(m.autor_nome===(EU.nome||EU.email));
+      return '<div class="m'+(eu?' eu':'')+'">'
+        +(eu?'':'<div class="q">'+esc(m.autor_nome||'—')+'</div>')
+        +'<div class="t">'+esc(m.texto||'')+'</div>'
+        +'<div class="q" style="font-weight:400;opacity:.7">'+fhora(m.criado_em)+'</div></div>';
+    }).join('') : '<div class="note">Nenhuma mensagem aqui ainda.</div>';
+    box.scrollTop=box.scrollHeight;
+    ICHAT_ULT=msgs.length?msgs[msgs.length-1].id:0;
+    var b=document.getElementById('ichat-badge'); if(b) b.style.display='none';
   }catch(e){}
 }
-async function enviarChat(processoId){
-  var campo=document.getElementById(processoId?'pchat-txt':'chat-txt');
+async function ichatEnviar(){
+  var campo=document.getElementById('ichat-txt');
   var txt=(campo.value||'').trim(); if(!txt) return;
   campo.value='';
   try{
-    await api('chat_enviar', processoId?{processo_id:processoId,texto:txt}:{texto:txt});
-    carregarChat(processoId);
+    await api('chat_enviar', ICHAT_PROC?{processo_id:ICHAT_PROC,texto:txt}:{texto:txt});
+    ichatCarregar();
   }catch(e){ alert('Não foi possível enviar: '+e.message); campo.value=txt; }
 }
 
