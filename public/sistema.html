@@ -3363,11 +3363,15 @@ function corCanal(c){ if(CANAL_CORES[c]) return CANAL_CORES[c]; var pal=["#2E3A4
 /* persiste a estrutura do funil (etapas) no navegador para as mudanças não sumirem ao recarregar */
 function salvarFunilLocal(){ try{ localStorage.setItem('cmpFunil', JSON.stringify(FUNIL)); }catch(e){} }
 function carregarFunilLocal(){ try{ var s=localStorage.getItem('cmpFunil'); if(s){ var arr=JSON.parse(s); if(Array.isArray(arr)&&arr.length){ FUNIL=arr; } } }catch(e){}
+  /* "Novo lead" é estrutural: é onde caem os leads do chat do site e da caixa de
+     entrada — sem ela, lead novo ficava invisível. Se sumir (exclusão acidental,
+     18/08/2026), volta sozinha na frente do funil. */
+  if(!FUNIL.some(function(f){return f.id==='novo';})){ FUNIL.unshift({id:'novo',nome:'Novo lead'}); try{ salvarFunilLocal(); }catch(e2){} }
   if(!FUNIL.some(function(f){return f.id==='ganho';})) FUNIL.push({id:'ganho',nome:'Fechado — enviado ao operacional'});
   if(!FUNIL.some(function(f){return f.id==='perdido';})) FUNIL.push({id:'perdido',nome:'Perdido'}); }
 function excluirEtapa(idx){
   var f=FUNIL[idx]; if(!f) return;
-  if(f.id==='ganho'||f.id==='perdido'){ alert('As etapas "Fechado" e "Perdido" fazem parte da estrutura do funil e não podem ser excluídas.'); return; }
+  if(f.id==='ganho'||f.id==='perdido'||f.id==='novo'){ alert('As etapas "Novo lead", "Fechado" e "Perdido" fazem parte da estrutura do funil e não podem ser excluídas — é nelas que os robôs entregam e fecham os leads.'); return; }
   var ativos=FUNIL.filter(function(x){return x.id!=='ganho'&&x.id!=='perdido';});
   if(ativos.length<=1){ alert('É preciso manter pelo menos uma etapa no início do funil.'); return; }
   var comLeads=LEADS.filter(function(l){return l.estagio===f.id;});
