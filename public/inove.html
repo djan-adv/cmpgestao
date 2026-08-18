@@ -311,7 +311,7 @@
             </div>
           </div>
           <div style="overflow-x:auto;margin-top:10px"><table>
-            <thead><tr><th>Nome</th><th>E-mail</th><th style="width:130px">Último acesso</th><th style="width:90px">Situação</th><th style="width:160px"></th></tr></thead>
+            <thead><tr><th>Nome</th><th>E-mail</th><th style="width:130px">Último acesso</th><th style="width:90px">Situação</th><th style="width:230px"></th></tr></thead>
             <tbody id="acc-body"></tbody>
           </table></div>
         </div>
@@ -798,6 +798,11 @@ async function carregarAcc(){
       var be=document.createElement('button');
       be.className='btn ghost sm'; be.textContent='Editar'; be.onclick=function(){ editarAcc(a.id); };
       td.appendChild(be);
+      var br=document.createElement('button');
+      br.className='btn ghost sm'; br.style.marginLeft='6px'; br.textContent='Reenviar acesso';
+      br.title='Gera uma senha nova e manda por e-mail — use se não tiver certeza se o e-mail anterior chegou.';
+      br.onclick=function(){ reenviarAcc(a.id, br); };
+      td.appendChild(br);
       if(!eu){
         var bl=document.createElement('button');
         bl.className='btn '+(a.ativo?'danger':'ghost')+' sm';
@@ -862,6 +867,15 @@ async function ligarAcc(id,ativar){
   if(!ativar && !confirm('Desativar este acesso? A pessoa é desconectada na hora.')) return;
   try{ await api('acesso_desativar',{id:id,ativar:ativar}); carregarAcc(); }
   catch(e){ alert('Não foi possível: '+e.message); }
+}
+async function reenviarAcc(id,btn){
+  if(!confirm('Gerar uma senha nova e mandar por e-mail para esta pessoa? A senha atual deixa de funcionar.')) return;
+  if(btn){ btn.disabled=true; btn.textContent='Enviando…'; }
+  try{
+    var j=await api('acesso_reenviar',{id:id});
+    if(j.avisoEmail) alert(j.avisoEmail); else alert('Senha nova enviada por e-mail.');
+  }catch(e){ alert('Não foi possível: '+e.message); }
+  if(btn){ btn.disabled=false; btn.textContent='Reenviar acesso'; }
 }
 
 /* ================= retomar sessão ================= */

@@ -235,6 +235,14 @@ export async function alertarEscritorio(assunto, corpo) {
    Mesmo espírito do "esqueci senha": quem cadastra não digita senha nenhuma — o
    sistema gera, manda pronta por e-mail, e quem recebe já entra com ela. */
 export async function enviarAcessoInove({ nome, email, senha, controlador }) {
+  const r = await enviarAcessoInoveResultado({ nome, email, senha, controlador })
+  // enviarEmailCore NÃO lança em falha — devolve {erro} como retorno normal. Quem só
+  // dá `await` nisso (como este atalho) via de regra usa try/catch pra pegar falha;
+  // sem este throw explícito, um SMTP fora do ar passava como sucesso silencioso.
+  if (r && r.erro) throw new Error(r.erro)
+  return r
+}
+async function enviarAcessoInoveResultado({ nome, email, senha, controlador }) {
   const { enviarEmailCore, URL_PUBLICA } = await import('../enviar-email/enviar.js')
   const corpo =
     'Olá' + (nome ? ', ' + nome : '') + '!\n\n' +
