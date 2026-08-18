@@ -706,17 +706,57 @@ function renderMovs(){
 function verMais(i,btn){ var el=$('mv'+i); if(!el) return; var aberto=!el.classList.contains('corta'); if(aberto){ el.classList.add('corta'); btn.textContent='ver tudo ▾'; } else { el.classList.remove('corta'); btn.textContent='recolher ▴'; } }
 function verMaisV(i,btn){ var el=$('vm'+i); if(!el) return; var aberto=!el.classList.contains('corta'); if(aberto){ el.classList.add('corta'); btn.textContent='ver tudo ▾'; } else { el.classList.remove('corta'); btn.textContent='recolher ▴'; } }
 /* visor de documento DENTRO do app, com botão de fechar — abrir em outra aba
-   no app instalado (PWA) deixava o cliente sem caminho de volta */
+   no app instalado (PWA) deixava o cliente sem caminho de volta.
+   PDF é desenhado página a página com o pdf.js: o iframe no iPhone só mostrava
+   a PRIMEIRA página. A barra respeita a área do relógio (safe-area). */
+function _ensurePdfJsP(){
+  return new Promise(function(res,rej){
+    if(window.pdfjsLib) return res(window.pdfjsLib);
+    var s=document.createElement('script');
+    s.src='https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js';
+    s.onload=function(){ if(window.pdfjsLib){ window.pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js'; res(window.pdfjsLib); } else rej(new Error('pdf.js não carregou')); };
+    s.onerror=function(){ rej(new Error('pdf.js não carregou')); };
+    document.head.appendChild(s);
+  });
+}
+async function _pdfNoVisor(url,cont){
+  var r=await fetch(url); if(!r.ok) throw new Error('HTTP '+r.status);
+  var buf=await r.arrayBuffer();
+  var head=String.fromCharCode.apply(null,new Uint8Array(buf.slice(0,5)));
+  if(head.indexOf('%PDF')!==0) return false;              /* não é PDF: cai pro iframe */
+  var pdfjs=await _ensurePdfJsP();
+  var doc=await pdfjs.getDocument({data:buf}).promise;
+  cont.innerHTML='';
+  var w=(cont.clientWidth||document.documentElement.clientWidth);
+  var dpr=Math.min(window.devicePixelRatio||1,2);
+  for(var i=1;i<=doc.numPages;i++){
+    var pg=await doc.getPage(i);
+    var vp=pg.getViewport({scale:1});
+    var scale=(w-16)/vp.width;
+    var v2=pg.getViewport({scale:scale*dpr});
+    var c=document.createElement('canvas'); c.width=v2.width; c.height=v2.height;
+    c.style.cssText='width:'+Math.floor(w-16)+'px;display:block;margin:8px auto;background:#fff;box-shadow:0 1px 5px rgba(0,0,0,.3);border-radius:3px';
+    cont.appendChild(c);
+    await pg.render({canvasContext:c.getContext('2d'),viewport:v2}).promise;
+  }
+  return true;
+}
 function abrirDoc(url,nome){
   fecharDoc();
   var ov=document.createElement('div'); ov.id='doc-viewer';
-  ov.style.cssText='position:fixed;inset:0;background:#0F2A4A;z-index:999;display:flex;flex-direction:column';
-  ov.innerHTML='<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;color:#fff">'+
+  ov.style.cssText='position:fixed;inset:0;background:#3c4757;z-index:999;display:flex;flex-direction:column';
+  ov.innerHTML='<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;padding-top:calc(10px + env(safe-area-inset-top));color:#fff;background:#0F2A4A">'+
     '<div style="flex:1;font-size:13.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(nome||'Documento')+'</div>'+
     '<a href="'+esc(url)+'&dl=1" style="color:#fff;font-size:12.5px;text-decoration:underline;white-space:nowrap">baixar</a>'+
     '<button onclick="fecharDoc()" style="background:#fff;color:#0F2A4A;border:0;border-radius:18px;padding:7px 16px;font-weight:700;font-size:13px;cursor:pointer">✕ Fechar</button></div>'+
-    '<iframe src="'+esc(url)+'" style="flex:1;width:100%;border:0;background:#fff"></iframe>';
+    '<div id="doc-corpo" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:env(safe-area-inset-bottom)"><div style="color:#fff;text-align:center;padding:34px 16px;font-size:14px">Carregando o documento…</div></div>';
   document.body.appendChild(ov);
+  var cont=document.getElementById('doc-corpo');
+  _pdfNoVisor(url,cont).then(function(foiPdf){
+    if(!foiPdf) cont.innerHTML='<iframe src="'+esc(url)+'" style="width:100%;height:100%;border:0;background:#fff"></iframe>';
+  }).catch(function(){
+    cont.innerHTML='<iframe src="'+esc(url)+'" style="width:100%;height:100%;border:0;background:#fff"></iframe>';
+  });
 }
 function fecharDoc(){ var v=document.getElementById('doc-viewer'); if(v) v.remove(); }
 function renderDocs(){
