@@ -80,7 +80,9 @@
   .main{flex:1 1 auto;min-width:0}
   .topbar{background:#fff;border-bottom:1px solid var(--line);padding:14px 20px;position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:12px}
   .topbar h1{font-size:18px;margin:0;color:var(--navy);flex:1}
-  .content{padding:18px 20px 70px;max-width:1060px}
+  /* 1060px comportava só uma coluna; a ficha do processo agora tem duas e
+     precisava de espaço, senão a da direita espremia a de baixo. */
+  .content{padding:18px 20px 70px;max-width:1460px}
 
   /* Chat */
   .msgs{max-height:52vh;overflow-y:auto;padding:4px 2px;display:flex;flex-direction:column;gap:8px}
@@ -90,16 +92,24 @@
   .msg.eu{align-self:flex-end;background:var(--navy);color:#fff}
   .msg.eles{align-self:flex-start;background:#fff;border:1px solid var(--line)}
 
-  /* Coluna fixa dos documentos, à direita — mesmo desenho do sistema.html.
-     O padding-right no card é o que impede a coluna de cobrir o texto: sem ele,
-     a coluna é fixed em relação à JANELA e cai por cima do conteúdo. */
-  @media(min-width:1100px){
-    #proc-det{padding-right:calc(21vw + 20px);position:relative}
-    #docs-col{position:fixed;right:14px;top:88px;width:21vw;max-height:calc(100vh - 110px);overflow:auto;z-index:20}
-    #docs-col .bloco{background:#fff;border:1px solid var(--line);border-radius:13px;padding:13px 12px;box-shadow:0 6px 22px rgba(30,39,51,.10);margin-bottom:12px}
-    #docs-col td{font-size:12px;word-break:break-word}
+  /* Ficha do processo em duas colunas.
+     Grid + position:sticky, NÃO position:fixed. Com fixed a coluna se prende à
+     JANELA e ignora onde a ficha está: em tela larga ela descola e flutua sozinha
+     na ponta; em tela média ela cai por cima do card. O grid reserva a coluna de
+     verdade, então sobreposição deixa de ser possível, e o sticky é o que a mantém
+     à vista enquanto se rola. */
+  #proc-det.ficha{background:transparent;border:0;box-shadow:none;padding:0}
+  #proc-det .ficha-main{background:var(--panel);border:1px solid var(--line);border-radius:15px;
+    padding:18px 16px;box-shadow:0 6px 22px rgba(30,39,51,.05);min-width:0}
+  #docs-col{min-width:0}
+  #docs-col .bloco{background:var(--panel);border:1px solid var(--line);border-radius:15px;
+    padding:14px;box-shadow:0 6px 22px rgba(30,39,51,.05);margin-bottom:12px}
+  #docs-col .bloco:last-child{margin-bottom:0}
+  #docs-col td{font-size:12.5px;word-break:break-word}
+  @media(min-width:1080px){
+    #proc-det.ficha{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:16px;align-items:start}
+    #docs-col{position:sticky;top:84px;max-height:calc(100vh - 104px);overflow-y:auto}
   }
-  #docs-col .bloco{background:#fff;border:1px solid var(--line);border-radius:13px;padding:13px 12px;margin-bottom:12px}
 
   /* Chat da equipe — dock fixo, no mesmo espírito do chat da equipe do Gestão */
   #ichat{position:fixed;right:16px;bottom:0;width:380px;max-width:94vw;z-index:95;font-size:13px}
@@ -533,7 +543,10 @@ async function abrirProc(id){
   PROC_ABERTO=id;
   var det=document.getElementById('proc-det');
   document.getElementById('proc-lista').classList.add('hidden');
-  det.classList.remove('hidden');
+  // "Carregando" e erro aparecem como card normal; só o conteúdo pronto vira grid
+  // de duas colunas — senão a mensagem fica solta, sem fundo, por causa do
+  // background:transparent que a .ficha aplica.
+  det.className='card';
   det.innerHTML='<div class="note">Carregando…</div>';
   var j;
   try{ j=await api('processo',{id:id}); }
@@ -574,8 +587,10 @@ async function abrirProc(id){
       + '</div>';
   }
 
+  det.className='card ficha';
   det.innerHTML =
-    '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">'
+    '<div class="ficha-main">'
+    + '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">'
     + '<button class="btn ghost sm" onclick="fecharProc()">← Voltar</button>'
     + '<button class="btn gold sm" onclick="atualizarProc(\''+id+'\')" id="btn-atu">↻ Buscar peças novas no jus.br</button>'
     + '</div>'
@@ -653,7 +668,9 @@ async function abrirProc(id){
           + '</tbody></table></div>'
         : '<p class="note">Sem movimentações registradas.</p>')
 
-    /* Coluna da direita: fica fixa em tela larga, e empilha embaixo no celular. */
+    + '</div>'   /* fecha .ficha-main */
+
+    /* Coluna da direita: gruda no topo em tela larga, empilha embaixo no celular. */
     + '<div id="docs-col">'
     +   blocoProprios('protocolar', 'Documentos para protocolar',
           'Nenhum documento anexado. Use "+ Anexar" para guardar minutas e petições antes do protocolo.', '46vh')

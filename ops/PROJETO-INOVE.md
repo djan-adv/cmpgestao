@@ -577,11 +577,24 @@ Compila e passa nas conferências de sintaxe/ids/ações.
 
 ## 13e. Ajustes de layout e chat — 18/08/2026
 
-**Documentos para protocolar e Proposta enviada foram para a coluna fixa da
-direita**, como no `sistema.html`. O detalhe que faz funcionar não é o
-`position:fixed` da coluna, é o **`padding-right` no card da ficha**: sem ele a
-coluna é fixa em relação à JANELA e cai por cima do texto. Mesma solução do
-`#s-proc-det` / `#docs-col` de lá. Abaixo de 1100px a coluna volta a empilhar.
+**Documentos para protocolar e Proposta enviada foram para a coluna da direita.**
+
+Primeira tentativa usou `position:fixed` + `padding-right` no card, copiando o
+`#s-proc-det`/`#docs-col` do `sistema.html`. **Ficou ruim e foi refeito:** com
+`fixed` a coluna se prende à JANELA e ignora onde a ficha está — em tela larga
+descolava e flutuava sozinha na ponta, em tela média caía por cima do card. O
+truque funciona lá porque o conteúdo do Gestão é fluido; aqui o `.content` tinha
+`max-width:1060px`, e a conta não fecha.
+
+**Solução:** a ficha virou `display:grid` com duas colunas
+(`minmax(0,1fr) 330px`) e a coluna da direita usa `position:sticky`. O grid
+reserva o espaço de verdade, então sobreposição deixa de ser possível; o sticky
+é o que segura a coluna à vista ao rolar. O `.content` foi de 1060px para 1460px
+para caber as duas. Abaixo de 1080px empilha.
+
+Detalhe: `.ficha` zera fundo/borda do card externo (os cards agora são as duas
+colunas internas), então os estados "Carregando" e erro voltam a `className='card'`
+— senão a mensagem apareceria solta, sem fundo.
 
 **O chat virou um dock fixo**, no lugar da seção na barra lateral, espelhando o
 chat da equipe do Gestão: barra amarela no rodapé, minimizável, com **seletor de
