@@ -444,9 +444,10 @@ export async function POST(request) {
 
     const dbr = data.split('-').reverse().join('/')
     const horaTxt = (hora && hora !== 'Dia todo') ? (' às ' + hora) : ''
-    // link da sala virtual/videoconferência (vem do histórico, achado pela tela)
-    const link = String(body.link || '').trim()
-    const linkTxt = /^https?:\/\//i.test(link) ? ('\n\n🔗 Link da audiência (sala virtual/videoconferência) — toque para entrar:\n' + link) : ''
+    // 18/08/2026, pedido do dono: o LINK da sala NÃO vai na véspera/designação —
+    // cliente clicando dias antes só dá confusão. O link sai sozinho pelo robô,
+    // 30 e 10 minutos antes da audiência (cron/audiencias + cron/avisos-app).
+    const linkTxt = ''
     const texto = String(body.texto || '').trim() || (
       marcador === 'app_vespera'
         ? ('Lembrete: sua audiência no processo nº ' + p.numero + ' é AMANHÃ, dia ' + dbr + horaTxt + '.' + linkTxt + '\n\n' +

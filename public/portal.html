@@ -609,7 +609,20 @@ function aba(qual){
 }
 function renderDetalhes(){
   var p=ATUAL.dados, c=ATUAL.cartorio;
-  var html =
+  var html = '';
+  /* audiência HOJE: banner com o link da sala — o servidor só devolve no dia
+     da audiência, então isto aparece de manhã e some sozinho no dia seguinte */
+  var ah=ATUAL.audiencia_hoje;
+  if(ah){
+    html += '<div class="sec" style="background:#0F2A4A;border-color:#0F2A4A;color:#fff;text-align:center">' +
+      '<div style="font-size:15px;font-weight:700">📅 Sua audiência é HOJE'+(ah.hora?(', às '+esc(ah.hora)):'')+'</div>' +
+      '<div style="font-size:12.5px;margin-top:4px;opacity:.85">Tenha documento com foto em mãos e procure um lugar silencioso.</div>' +
+      (ah.link?('<a href="'+esc(ah.link)+'" target="_blank" rel="noopener" style="display:inline-block;margin-top:10px;background:#25D366;color:#fff;font-weight:700;border-radius:24px;padding:10px 22px;text-decoration:none;font-size:15px">🎥 Entrar na sala da audiência</a>' +
+        '<div style="font-size:11px;margin-top:6px;opacity:.75">Entre alguns minutos antes do horário marcado.</div>')
+        :('<div style="font-size:12.5px;margin-top:8px;opacity:.85">Se for por videoconferência, o link chega pelo chat ou pelo aviso no celular.</div>')) +
+    '</div>';
+  }
+  html +=
     '<div class="sec"><p class="lab">Dados do processo</p>' +
       '<div class="kv"><div class="k">Número</div><div class="v mono">'+esc(p.numero||'—')+'</div></div>' +
       (p.classe?('<div class="kv"><div class="k">Classe</div><div class="v">'+escT(p.classe)+'</div></div>'):'') +
