@@ -113,17 +113,31 @@ export async function GET(request) {
     if (!quando) { rel.erros++; continue }
 
     const dig = String(e.processo_numero || '').replace(/\D/g, '')
-    const pr = await sb.from('processos').select('id,numero,escritorio_id').eq('numero_digitos', dig).maybeSingle()
+    const pr = await sb.from('processos').select('id,numero,cliente_nome,escritorio_id,audiencia_link').eq('numero_digitos', dig).maybeSingle()
     const p = pr && pr.data
     if (!p) { rel.semProcesso++; if (debug) rel.detalhe.push({ numero: e.processo_numero, erro: 'processo não cadastrado' }); continue }
 
-    // link só é procurado quando há t10 a enfileirar — evita ler o histórico à toa
-    let link = null
+    // 18/08/2026: o link automático (achaLink no histórico) errava — agora só o
+    // campo MANUAL da ficha vale, e ele aparece no app apenas no dia. O push de
+    // 10 min leva o link SÓ se foi inserido à mão; senão aponta pro app.
+    const link = /^https?:\/\//i.test(String(p.audiencia_link || '')) ? String(p.audiencia_link) : null
     const t10 = new Date(quando.getTime() - 10 * 60000)
-    if (t10.getTime() > agora) {
-      const an = await sb.from('andamentos').select('texto').eq('processo_id', p.id).order('data', { ascending: false }).limit(120)
-      link = achaLink(((an && an.data) || []).map(x => x.texto))
-    }
+
+    // tarefa-alerta na VÉSPERA (Kanban): conferir/atualizar o link na ficha.
+    // Dedup por processo+data da audiência — remarcou, nasce outra.
+    try {
+      const vespISO = new Date(quando.getTime() - 86400000).toISOString().slice(0, 10)
+      const jaT = await sb.from('kanban_tarefas').select('id').eq('numero', p.numero).eq('origem', 'robo_aud_link').eq('prazo', e.data).limit(1)
+      if (!jaT.data || !jaT.data.length) {
+        await sb.from('kanban_tarefas').insert({
+          escritorio_id: p.escritorio_id || e.escritorio_id,
+          titulo: 'Conferir/atualizar o LINK da audiência de ' + brData(e.data) + ((e.hora && e.hora !== 'Dia todo') ? (' às ' + String(e.hora).slice(0, 5)) : '') + ' na ficha',
+          cliente: p.cliente_nome || '—', numero: p.numero, coluna: 'distribuir',
+          data: vespISO, prazo: e.data, tipo: 'tarefa', origem: 'robo_aud_link',
+          descricao: 'Cole o link da sala (Meet/Zoom/Teams/balcão) no campo "🔗 Link da audiência" da ficha do processo — é ele que o cliente vê no app, só no dia. Inserção manual, com registro de quem inseriu. Há uma sugestão achada no histórico na própria ficha, para conferir.',
+        })
+      }
+    } catch (eT) {}
 
     const hTxt = (e.hora && e.hora !== 'Dia todo') ? (' às ' + String(e.hora).slice(0, 5)) : ''
     const numTxt = fmtCNJ(p.numero)
