@@ -153,9 +153,12 @@
   .cart .rot{font-size:11px;color:var(--muted);text-transform:uppercase;font-weight:700;letter-spacing:.04em}
 
   /* ---------- chat ---------- */
-  .fab{position:fixed;right:18px;bottom:calc(20px + env(safe-area-inset-bottom));width:60px;height:60px;
-       border-radius:50%;background:var(--gold);color:#fff;font-size:26px;display:flex;align-items:center;
-       justify-content:center;box-shadow:0 4px 14px rgba(120,90,10,.4);z-index:40}
+  /* pílula com TEXTO, não só ícone: o balão 💬 sozinho estava sendo confundido
+     com botão de notificações — escrito "Falar com o escritório" não tem erro */
+  .fab{position:fixed;right:18px;bottom:calc(20px + env(safe-area-inset-bottom));height:54px;width:auto;
+       padding:0 20px;border-radius:28px;background:var(--gold);color:#fff;font-size:15px;font-weight:700;
+       display:flex;align-items:center;justify-content:center;gap:8px;border:0;font-family:inherit;cursor:pointer;
+       box-shadow:0 4px 14px rgba(120,90,10,.4);z-index:40;white-space:nowrap}
   .fab .fb{position:absolute;top:-3px;right:-3px;background:var(--danger);color:#fff;min-width:21px;height:21px;
            line-height:21px;border-radius:11px;font-size:12px;font-weight:700;text-align:center;padding:0 5px}
   #chat{position:fixed;inset:0;background:var(--bg);z-index:60;display:flex;flex-direction:column}
@@ -265,7 +268,7 @@
       </div>
     </div>
   </div>
-  <button class="fab" onclick="abrirEscolhaChat()" aria-label="Falar com o escritório" title="Falar com o escritório">💬<span class="fb hidden" id="fab-badge-home"></span></button>
+  <button class="fab" onclick="abrirEscolhaChat()" aria-label="Falar com o escritório" title="Falar com o escritório">💬 Falar com o escritório<span class="fb hidden" id="fab-badge-home"></span></button>
 </section>
 
 <!-- ==================== ESCOLHER SOBRE QUAL PROCESSO FALAR ====================
@@ -299,7 +302,7 @@
     <button data-aba="docs" onclick="aba('docs')">Documentos <span class="b hidden" id="b-docs"></span></button>
   </div>
   <div class="wrap" id="proc-corpo"></div>
-  <button class="fab" onclick="abrirChat()" aria-label="Chat do processo">💬<span class="fb hidden" id="fab-badge"></span></button>
+  <button class="fab" onclick="abrirChat()" aria-label="Falar com o escritório sobre este processo">💬 Falar com o escritório<span class="fb hidden" id="fab-badge"></span></button>
 </section>
 
 <!-- ==================== CHAT DO PROCESSO ==================== -->
