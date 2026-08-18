@@ -59,10 +59,34 @@ export async function GET(request) {
       .order('jusbr_mov_em', { ascending: true, nullsFirst: true })
       .limit(lote * 4)
     if (error) return Response.json({ ok: false, erro: error.message }, { status: 500 })
-    alvos = (data || [])
+    // processo com audiência HOJE ou AMANHÃ fura a fila do rodízio: é quando o
+    // cliente está olhando o app e a linha do tempo não pode estar atrasada
+    // (pedido do dono, 18/08/2026 — a audiência do dia aparecia com movimentação
+    // de um mês antes).
+    let prioritarios = []
+    try {
+      const hojeBR = new Date(Date.now() - 3 * 3600000).toISOString().slice(0, 10)
+      const amanhaBR = new Date(Date.now() - 3 * 3600000 + 86400000).toISOString().slice(0, 10)
+      const { data: evs } = await sb.from('agenda_eventos').select('data,tipo,titulo,processo_numero')
+        .in('data', [hojeBR, amanhaBR]).limit(300)
+      const digs = [...new Set((evs || [])
+        .filter(e => e.processo_numero && (e.tipo === 'az' || /audi[êe]ncia/i.test(e.titulo || '')))
+        .map(e => soDig(e.processo_numero)))].filter(d => d.length === 20)
+      if (digs.length) {
+        const { data: pri } = await sb.from('processos')
+          .select('id,numero,numero_digitos,status,suspenso,jusbr_mov_em')
+          .eq('escritorio_id', ESCRITORIO_CMP).in('numero_digitos', digs).limit(50)
+        prioritarios = (pri || [])
+          .filter(p => !ENCERRADO.test(p.status || '') && p.suspenso !== true)
+          // já atualizado na última hora não fura de novo — senão monopoliza o lote
+          .filter(p => !p.jusbr_mov_em || (Date.now() - new Date(p.jusbr_mov_em).getTime()) > 3600000)
+      }
+    } catch (e) {}
+    const jaNoLote = new Set(prioritarios.map(p => p.id))
+    alvos = prioritarios.concat((data || [])
+      .filter(p => !jaNoLote.has(p.id))
       .filter(p => soDig(p.numero_digitos || p.numero).length === 20)
-      .filter(p => !ENCERRADO.test(p.status || ''))
-      .slice(0, lote)
+      .filter(p => !ENCERRADO.test(p.status || ''))).slice(0, lote)
   }
 
   const rel = {
