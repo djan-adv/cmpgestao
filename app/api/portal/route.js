@@ -65,13 +65,27 @@ function papeisDaClasse(classe, assunto, fase) {
 // procuração/substabelecimento e atos ordinatórios.
 const RE_OFICIAL = /(senten|despach|decis|ac[óo]rd|acordo|homolog|(ata|termo)\s+d[aeo]s?\s+audi|alvar|peti[çc][ãa]o inicial|contesta[çc]|r[ée]plica|embargos|apela[çc]|contrarraz|agravo|laudo)/i
 
-/* HTML do jus.br → texto corrido, para a conversão em PDF na entrega ao cliente */
+/* HTML do jus.br → texto corrido, para a conversão em PDF na entrega ao cliente.
+   O PJe grava acento como entidade NOMEADA (&Ccedil;, &atilde;, &iacute;…) — sem
+   decodificar, a decisão saía ilegível no app ("DECIS&Atilde;O"). */
+const _ENT = {
+  agrave: 'à', aacute: 'á', acirc: 'â', atilde: 'ã', auml: 'ä', egrave: 'è', eacute: 'é', ecirc: 'ê', euml: 'ë',
+  igrave: 'ì', iacute: 'í', icirc: 'î', iuml: 'ï', ograve: 'ò', oacute: 'ó', ocirc: 'ô', otilde: 'õ', ouml: 'ö',
+  ugrave: 'ù', uacute: 'ú', ucirc: 'û', uuml: 'ü', ccedil: 'ç', ntilde: 'ñ', yacute: 'ý',
+  Agrave: 'À', Aacute: 'Á', Acirc: 'Â', Atilde: 'Ã', Auml: 'Ä', Egrave: 'È', Eacute: 'É', Ecirc: 'Ê', Euml: 'Ë',
+  Igrave: 'Ì', Iacute: 'Í', Icirc: 'Î', Iuml: 'Ï', Ograve: 'Ò', Oacute: 'Ó', Ocirc: 'Ô', Otilde: 'Õ', Ouml: 'Ö',
+  Ugrave: 'Ù', Uacute: 'Ú', Ucirc: 'Û', Uuml: 'Ü', Ccedil: 'Ç', Ntilde: 'Ñ',
+  ordm: 'º', ordf: 'ª', sect: '§', para: '¶', middot: '·', deg: '°', frac12: '½',
+  ldquo: '"', rdquo: '"', lsquo: "'", rsquo: "'", ndash: '–', mdash: '—', hellip: '…', laquo: '«', raquo: '»',
+  amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ',
+}
 function _htmlParaTexto(html) {
   return String(html || '')
     .replace(/<style[\s\S]*?<\/style>/gi, ' ').replace(/<script[\s\S]*?<\/script>/gi, ' ')
     .replace(/<(br|\/p|\/div|\/li|\/tr|\/h[1-6])[^>]*>/gi, '\n')
     .replace(/<[^>]+>/g, ' ')
-    .replace(/&nbsp;/gi, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#\d+;/g, ' ')
+    .replace(/&#(\d+);/g, (m, n) => { const c = parseInt(n, 10); return (c >= 32 && c < 65536) ? String.fromCharCode(c) : ' ' })
+    .replace(/&([A-Za-z]+);/g, (m, k) => (_ENT[k] !== undefined ? _ENT[k] : ' '))
     .replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim()
 }
 
@@ -316,6 +330,15 @@ export async function POST(request) {
       }
     }
 
+    /* processo com audiência HOJE vai para o TOPO da lista (pedido do dono,
+       18/08/2026); o resto segue por última movimentação, como sempre */
+    const audHoje = new Set()
+    try {
+      const hojeBR = new Date(Date.now() - 3 * 3600000).toISOString().slice(0, 10)
+      const { data: evs } = await sb.from('agenda_eventos').select('data,tipo,titulo,processo_numero')
+        .eq('escritorio_id', acesso.escritorio_id).eq('data', hojeBR).limit(300)
+      ;(evs || []).forEach(e => { if (e.processo_numero && (e.tipo === 'az' || /audi[êe]ncia/i.test(e.titulo || ''))) audHoje.add(String(e.processo_numero).replace(/\D/g, '')) })
+    } catch (e) {}
     const lista = (procs || []).map(p => ({
       id: p.id, numero: p.numero,
       titulo: p.assunto || p.classe || 'Ação judicial',
@@ -324,7 +347,9 @@ export async function POST(request) {
       ultima: ultima[p.id] ? { data: ultima[p.id].data, texto: String(ultima[p.id].texto || '').slice(0, 220) } : null,
       vinculado: vincDoProc[p.id] || null,
       nao_lidas: badge[p.id] || 0,
+      audiencia_hoje: audHoje.has(digitos(p.numero)),
     }))
+    lista.sort((a, b) => (b.audiencia_hoje ? 1 : 0) - (a.audiencia_hoje ? 1 : 0))
     return Response.json({ ok: true, nome: acesso.nome || '', processos: lista })
   }
 
