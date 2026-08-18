@@ -18,7 +18,10 @@
 //   POST {acao:'chat', processo_id, desde_id} / {acao:'chat_enviar', processo_id, texto}
 //   POST {acao:'acessos'} / {acao:'acesso_criar'|'acesso_editar'|'acesso_reenviar'|'acesso_desativar'}
 //   POST {acao:'lgpd_aceitar'}
+//   POST {acao:'extra_salvar'|'honorario_salvar'|'melhorias'|'doc_proprio_excluir'}
+//   POST multipart {processo_id, categoria:'protocolar'|'proposta', arquivo}
 //   GET  /api/inove?doc=<id>&t=<token>[&dl=1]         -> o arquivo, já carimbado
+//   GET  /api/inove?proprio=<id>&t=<token>[&dl=1]     -> idem, arquivo que eles subiram
 //
 // Documentos: a Inove vê TUDO dos processos dela, não só as peças oficiais. Perito
 // não acompanha processo, ele produz o laudo — precisa de quesito, impugnação,
@@ -30,6 +33,13 @@ import {
 } from './lib.js'
 import { tipoRealDoArquivo, pdfDeTexto } from '../jusbr/lib.js'
 import crypto from 'crypto'
+import fs from 'fs'
+import path from 'path'
+
+// Os arquivos que a Inove sobe ficam FORA de /opt/cmpdocs (o acervo do escritório):
+// mesmo isolamento que o role inove_app dá no banco, agora no disco.
+const DOCS_INOVE = process.env.INOVE_DOCS_DIR || '/opt/cmpdocs-inove'
+const MAX_UPLOAD = 25 * 1024 * 1024
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -46,6 +56,43 @@ function etiquetaTarja(acesso, doc) {
 }
 
 export async function POST(request) {
+  /* Upload chega como multipart, não JSON — tem que ser tratado antes do parse
+     de body, senão o request.json() estoura e a rota devolve "ação desconhecida". */
+  const ctype = request.headers.get('content-type') || ''
+  if (ctype.indexOf('multipart/form-data') > -1) {
+    const acesso = await sessao(tokenDo(request))
+    if (!acesso) return erro('Sessão expirada. Entre de novo.', 401)
+
+    const form = await request.formData()
+    const pid = String(form.get('processo_id') || '')
+    const categoria = String(form.get('categoria') || '')
+    const arquivo = form.get('arquivo')
+    if (!['protocolar', 'proposta'].includes(categoria)) return erro('Categoria inválida.')
+    if (!arquivo || typeof arquivo === 'string') return erro('Envie um arquivo.')
+    if (arquivo.size > MAX_UPLOAD) return erro('Arquivo muito grande (máximo 25 MB).', 413)
+
+    const p = await q1('select numero from inove.v_processos where id = $1', [pid])
+    if (!p) return erro('Processo não encontrado.', 404)
+
+    const dig = String(p.numero || '').replace(/\D/g, '') || pid
+    const pasta = path.join(DOCS_INOVE, dig, categoria)
+    // nome do arquivo é do usuário: peneira o que poderia escapar da pasta
+    const limpo = String(arquivo.name || 'documento').replace(/[/\\]/g, '_').replace(/[^\w.\- ]+/g, '_').slice(0, 160)
+    const destino = path.join(pasta, crypto.randomUUID().slice(0, 8) + ' ' + limpo)
+    try {
+      fs.mkdirSync(pasta, { recursive: true })
+      fs.writeFileSync(destino, Buffer.from(await arquivo.arrayBuffer()))
+    } catch (e) {
+      return erro('Não foi possível guardar o arquivo no servidor: ' + ((e && e.message) || e), 500)
+    }
+
+    const r = await q1(
+      `insert into inove.documentos_proprios (processo_id, categoria, nome_arquivo, doc_tipo, tamanho, caminho_disco, enviado_por)
+       values ($1,$2,$3,$4,$5,$6,$7) returning id, categoria, nome_arquivo, doc_tipo, tamanho, enviado_em`,
+      [pid, categoria, limpo, arquivo.type || null, arquivo.size, destino, acesso.id])
+    return Response.json({ ok: true, documento: r })
+  }
+
   let body = {}
   try { body = await request.json() } catch (e) {}
   const acao = String(body.acao || '')
@@ -142,7 +189,71 @@ export async function POST(request) {
            join inove.etiquetas e on e.id = pe.etiqueta_id
           where pe.processo_id = $1`, [id]),
     ])
-    return Response.json({ ok: true, processo: p, movimentacoes: movs, documentos: docs, etiquetas: etq })
+    const [proprios, extra, fin] = await Promise.all([
+      q('select id, categoria, nome_arquivo, doc_tipo, tamanho, enviado_em from inove.documentos_proprios where processo_id = $1 order by enviado_em desc', [id]),
+      q1('select * from inove.processo_extra where processo_id = $1', [id]),
+      q1('select id, honorario_fixado, data_deposito from inove.financeiro where processo_id = $1 order by criado_em limit 1', [id]),
+    ])
+    return Response.json({
+      ok: true, processo: p, movimentacoes: movs, documentos: docs, etiquetas: etq,
+      proprios, extra: extra || {}, financeiro: fin || {},
+    })
+  }
+
+  /* Anotações, contato da vara e local do processo — um registro por processo.
+     Fica em inove.processo_extra, e não em public.processos.observacoes, porque
+     aquele campo é a nota INTERNA do escritório e o inove_app não escreve no
+     public de qualquer forma. */
+  if (acao === 'extra_salvar') {
+    const pid = String(body.processo_id || '')
+    const p = await q1('select id from inove.v_processos where id = $1', [pid])
+    if (!p) return erro('Processo não encontrado.', 404)
+    await q(
+      `insert into inove.processo_extra (processo_id, email_vara, local_atual, observacoes, atualizado_por, atualizado_em)
+       values ($1,$2,$3,$4,$5, now())
+       on conflict (processo_id) do update set
+         email_vara = excluded.email_vara,
+         local_atual = excluded.local_atual,
+         observacoes = excluded.observacoes,
+         atualizado_por = excluded.atualizado_por,
+         atualizado_em = now()`,
+      [pid, body.email_vara || null, body.local_atual || null, body.observacoes || null, acesso.id])
+    return Response.json({ ok: true })
+  }
+
+  /* Honorário deferido + data do depósito, editados na própria ficha. Grava na
+     MESMA linha que a aba Financeiro usa — não cria um segundo lugar para o
+     mesmo número, que é como se produz divergência entre duas telas. */
+  if (acao === 'honorario_salvar') {
+    const pid = String(body.processo_id || '')
+    const p = await q1('select numero from inove.v_processos where id = $1', [pid])
+    if (!p) return erro('Processo não encontrado.', 404)
+    const valor = body.honorario_fixado === '' || body.honorario_fixado == null ? null : body.honorario_fixado
+    const data = body.data_deposito || null
+    const ja = await q1('select id from inove.financeiro where processo_id = $1 order by criado_em limit 1', [pid])
+    if (ja) {
+      await q('update inove.financeiro set honorario_fixado = $1, data_deposito = $2, atualizado_por = $3, atualizado_em = now() where id = $4',
+        [valor, data, acesso.id, ja.id])
+      return Response.json({ ok: true, id: ja.id })
+    }
+    const r = await q1(
+      `insert into inove.financeiro (processo_id, processo_numero, honorario_fixado, data_deposito, atualizado_por)
+       values ($1,$2,$3,$4,$5) returning id`,
+      [pid, p.numero, valor, data, acesso.id])
+    return Response.json({ ok: true, id: r && r.id })
+  }
+
+  if (acao === 'melhorias') {
+    const linhas = await q('select versao, titulo, descricao, publicado_em from inove.melhorias order by publicado_em desc, versao desc, ordem')
+    return Response.json({ ok: true, melhorias: linhas })
+  }
+
+  if (acao === 'doc_proprio_excluir') {
+    const d = await q1('select * from inove.documentos_proprios where id = $1', [String(body.id || '')])
+    if (!d) return erro('Documento não encontrado.', 404)
+    try { fs.unlinkSync(d.caminho_disco) } catch (e) { /* sumiu do disco: o registro sai igual */ }
+    await q('delete from inove.documentos_proprios where id = $1', [d.id])
+    return Response.json({ ok: true })
   }
 
   if (acao === 'cadastrar_processo') {
@@ -493,15 +604,30 @@ export async function POST(request) {
 export async function GET(request) {
   const { searchParams } = new URL(request.url)
   const docId = searchParams.get('doc')
-  if (!docId) return erro('Informe o documento.')
+  const proprioId = searchParams.get('proprio')
+  if (!docId && !proprioId) return erro('Informe o documento.')
 
   // o token vem na URL porque o navegador abre o PDF numa aba, sem cabeçalho
   const acesso = await sessao(searchParams.get('t') || '')
   if (!acesso) return erro('Sessão expirada. Entre de novo.', 401)
 
-  const d = await lerDocumento(docId)
-  if (!d) return erro('Documento não encontrado ou fora dos processos da Inove.', 404)
-  d.id = docId
+  let d
+  if (proprioId) {
+    // arquivo que a própria Inove subiu (minuta, proposta) — mesma tarja e mesmo log
+    const meta = await q1(
+      `select dp.*, p.numero from inove.documentos_proprios dp
+         join inove.v_processos p on p.id = dp.processo_id
+        where dp.id = $1`, [proprioId])
+    if (!meta) return erro('Documento não encontrado.', 404)
+    let buf = null
+    try { buf = fs.readFileSync(meta.caminho_disco) } catch (e) { buf = null }
+    if (!buf || !buf.length) return erro('Arquivo não encontrado no servidor.', 404)
+    d = { buf, doc_nome: meta.nome_arquivo, doc_tipo: meta.doc_tipo, processo_id: meta.processo_id, processo_numero: meta.numero, id: proprioId }
+  } else {
+    d = await lerDocumento(docId)
+    if (!d) return erro('Documento não encontrado ou fora dos processos da Inove.', 404)
+    d.id = docId
+  }
 
   const baixar = searchParams.get('dl') === '1'
   await logDoc(acesso, d, baixar ? 'baixou' : 'abriu', request)
