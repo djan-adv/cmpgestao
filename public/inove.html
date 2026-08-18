@@ -289,16 +289,21 @@
         <div class="card">
           <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
             <p class="sectlabel" style="margin:0">Acessos <span class="note" id="acc-uso"></span></p>
-            <button class="btn gold sm" onclick="abrirAcc()">+ Novo acesso</button>
+            <button class="btn gold sm hidden" id="btn-novo-acc" onclick="abrirAcc()">+ Novo acesso</button>
           </div>
-          <p class="note" style="margin:8px 0 0">Cada pessoa entra com o próprio e-mail e senha. Documento aberto fica registrado no nome de quem abriu — por isso não se compartilha login.</p>
+          <p class="note" style="margin:8px 0 0" id="acc-nota">Cada pessoa entra com o próprio e-mail e senha. Documento aberto fica registrado no nome de quem abriu — por isso não se compartilha login.</p>
           <div id="acc-form" class="hidden" style="margin:10px 0;padding:12px;border:1px solid var(--line);border-radius:12px;background:#fafbfc">
             <input type="hidden" id="ac-id">
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:9px">
               <label style="margin:0">Nome <input id="ac-nome" placeholder="Nome da pessoa"></label>
               <label style="margin:0">E-mail <input id="ac-email" type="email" placeholder="pessoa@inove.com.br"></label>
             </div>
-            <label>Senha <input id="ac-senha" type="password" placeholder="mínimo 8 caracteres"></label>
+            <p class="note" id="ac-msg-senha" style="margin:8px 0 0">A senha é gerada e enviada por e-mail para a pessoa — você não precisa criar nem informar uma.</p>
+            <label id="ac-senha-wrap" class="hidden">Nova senha (opcional) <input id="ac-senha" type="password" placeholder="deixe em branco para manter a atual"></label>
+            <label id="ac-ctrl-wrap" class="hidden" style="display:flex;align-items:center;gap:7px;margin-top:12px">
+              <input type="checkbox" id="ac-controlador" style="width:auto">
+              <span style="font-weight:400;font-size:13px;color:var(--ink)">Controlador — pode criar/editar/desativar outros acessos</span>
+            </label>
             <div style="margin-top:10px;display:flex;gap:8px;align-items:center">
               <button class="btn gold sm" onclick="salvarAcc()">Salvar</button>
               <button class="btn ghost sm" onclick="abrirAcc(true)">Cancelar</button>
@@ -353,7 +358,7 @@ async function entrar(){
       body:JSON.stringify({acao:'login',email:email,senha:senha})});
     var j=await r.json();
     if(!r.ok){loginErr(j.erro||'Não foi possível entrar.');return;}
-    TOKEN=j.token; EU={nome:j.nome,email:j.email,oculto:!!j.oculto};
+    TOKEN=j.token; EU={nome:j.nome,email:j.email,oculto:!!j.oculto,controlador:!!j.controlador};
     try{ sessionStorage.setItem('inove_t',TOKEN); sessionStorage.setItem('inove_u',JSON.stringify(EU)); }catch(e){}
     if(j.lgpd) document.getElementById('modal-lgpd').classList.remove('hidden');
     await abrirApp();
@@ -769,31 +774,38 @@ async function enviarSol(){
 }
 
 /* ================= acessos ================= */
+var SOU_CONTROLADOR=false;
 async function carregarAcc(){
-  var j=await api('acessos'); ACC=j.acessos||[];
+  var j=await api('acessos'); ACC=j.acessos||[]; SOU_CONTROLADOR=!!j.souControlador;
   var ativos=ACC.filter(function(a){return a.ativo;}).length;
   document.getElementById('acc-uso').textContent='— '+ativos+' de '+j.limite+' em uso';
   document.getElementById('cnt-acc').textContent=ativos||'';
+  document.getElementById('btn-novo-acc').classList.toggle('hidden',!SOU_CONTROLADOR);
+  document.getElementById('acc-nota').textContent = SOU_CONTROLADOR
+    ? 'Cada pessoa entra com o próprio e-mail e senha — a senha é gerada e enviada por e-mail, ninguém compartilha login.'
+    : 'Cada pessoa entra com o próprio e-mail e senha. Documento aberto fica registrado no nome de quem abriu — por isso não se compartilha login.';
   var tb=document.getElementById('acc-body'); tb.innerHTML='';
   ACC.forEach(function(a){
     var eu=(a.email===EU.email);
     var tr=document.createElement('tr');
-    tr.innerHTML='<td><b>'+esc(a.nome||'')+'</b>'+(eu?' <span class="chip">você</span>':'')+'</td>'
+    tr.innerHTML='<td><b>'+esc(a.nome||'')+'</b>'+(eu?' <span class="chip">você</span>':'')+(a.controlador?' <span class="chip" style="background:#fbf1dc;color:#8a6d1a">controlador</span>':'')+'</td>'
       +'<td class="note">'+esc(a.email)+'</td>'
       +'<td class="note">'+(a.ultimo_login_em?fhora(a.ultimo_login_em):'nunca entrou')+'</td>'
       +'<td>'+(a.ativo?'<span class="chip" style="background:#e5f4ed;color:var(--green)">ativo</span>':'<span class="chip" style="background:#fbeceb;color:var(--red)">inativo</span>')+'</td>'
       +'<td style="text-align:right;white-space:nowrap"></td>';
-    var td=tr.lastChild;
-    var be=document.createElement('button');
-    be.className='btn ghost sm'; be.textContent='Editar'; be.onclick=function(){ editarAcc(a.id); };
-    td.appendChild(be);
-    if(!eu){
-      var bl=document.createElement('button');
-      bl.className='btn '+(a.ativo?'danger':'ghost')+' sm';
-      bl.style.marginLeft='6px';
-      bl.textContent=a.ativo?'Desativar':'Ativar';
-      bl.onclick=function(){ ligarAcc(a.id, !a.ativo); };
-      td.appendChild(bl);
+    if(SOU_CONTROLADOR){
+      var td=tr.lastChild;
+      var be=document.createElement('button');
+      be.className='btn ghost sm'; be.textContent='Editar'; be.onclick=function(){ editarAcc(a.id); };
+      td.appendChild(be);
+      if(!eu){
+        var bl=document.createElement('button');
+        bl.className='btn '+(a.ativo?'danger':'ghost')+' sm';
+        bl.style.marginLeft='6px';
+        bl.textContent=a.ativo?'Desativar':'Ativar';
+        bl.onclick=function(){ ligarAcc(a.id, !a.ativo); };
+        td.appendChild(bl);
+      }
     }
     tb.appendChild(tr);
   });
@@ -804,6 +816,11 @@ function abrirAcc(fechar){
   document.getElementById('ac-id').value='';
   ['ac-nome','ac-email','ac-senha'].forEach(function(id){document.getElementById(id).value='';});
   document.getElementById('ac-email').disabled=false;
+  document.getElementById('ac-controlador').checked=false;
+  // criar: senha é gerada e mandada por e-mail — não pede nada disso na tela
+  document.getElementById('ac-msg-senha').classList.remove('hidden');
+  document.getElementById('ac-senha-wrap').classList.add('hidden');
+  document.getElementById('ac-ctrl-wrap').classList.add('hidden');
   document.getElementById('ac-msg').textContent='';
   f.classList.remove('hidden');
 }
@@ -814,15 +831,31 @@ function editarAcc(id){
   document.getElementById('ac-nome').value=a.nome||'';
   document.getElementById('ac-email').value=a.email;
   document.getElementById('ac-email').disabled=true;
-  document.getElementById('ac-msg').textContent='Deixe a senha em branco para manter a atual.';
+  document.getElementById('ac-controlador').checked=!!a.controlador;
+  // editar: aqui sim dá pra forçar uma senha nova e mexer em quem é controlador
+  document.getElementById('ac-msg-senha').classList.add('hidden');
+  document.getElementById('ac-senha-wrap').classList.remove('hidden');
+  document.getElementById('ac-ctrl-wrap').classList.remove('hidden');
 }
 async function salvarAcc(){
   var m=document.getElementById('ac-msg'); m.textContent='Salvando…';
   var id=val('ac-id');
   try{
-    if(id) await api('acesso_editar',{id:id,nome:val('ac-nome'),senha:val('ac-senha')||null});
-    else   await api('acesso_criar',{nome:val('ac-nome'),email:val('ac-email'),senha:val('ac-senha')});
-    m.textContent='Salvo.'; abrirAcc(true); carregarAcc();
+    if(id){
+      await api('acesso_editar',{id:id,nome:val('ac-nome'),senha:val('ac-senha')||null,controlador:document.getElementById('ac-controlador').checked});
+      m.textContent='Salvo.';
+      abrirAcc(true);
+    } else {
+      var j=await api('acesso_criar',{nome:val('ac-nome'),email:val('ac-email')});
+      if(j.avisoEmail){
+        // a senha só existe aqui — o form não pode fechar sozinho e levar a mensagem junto
+        alert(j.avisoEmail);
+      } else {
+        m.textContent='Criado — a senha foi enviada por e-mail para a pessoa.';
+        abrirAcc(true);
+      }
+    }
+    carregarAcc();
   }catch(e){ m.textContent=(e&&e.message)||'Falhou.'; }
 }
 async function ligarAcc(id,ativar){
