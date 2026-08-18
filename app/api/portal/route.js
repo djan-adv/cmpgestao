@@ -384,19 +384,9 @@ export async function POST(request) {
         .select('data,hora,tipo,titulo,processo_numero').eq('escritorio_id', p.escritorio_id).eq('data', hojeBR).limit(300)
       const ev = (evs || []).find(e => String(e.processo_numero || '').replace(/\D/g, '') === digN && (e.tipo === 'az' || /audi[êe]ncia/i.test(e.titulo || '')))
       if (ev) {
-        let link = null
-        const { data: an } = await sb.from('andamentos').select('texto').eq('processo_id', p.id).order('data', { ascending: false }).limit(120)
-        for (const r of (an || [])) {
-          const txt = String(r.texto || '')
-          if (!/audi[êe]ncia|videoconfer|sala virtual|telepresen|link/i.test(txt)) continue
-          const ms = txt.match(/https?:\/\/[^\s<>"')]+/g)
-          if (!ms) continue
-          for (const u of ms) {
-            const url = u.replace(/[.,;)]+$/, '')
-            if (/(zoom\.us|meet\.google|teams\.microsoft|teams\.live|webex|whereby|jitsi|gov\.br|jus\.br|cisco)/i.test(url)) { link = url; break }
-          }
-          if (link) break
-        }
+        // 18/08/2026: o link vem SÓ do campo manual da ficha (processos.audiencia_link,
+        // com registro de quem inseriu) — a captura automática do histórico errava.
+        const link = /^https?:\/\//i.test(String(p.audiencia_link || '')) ? String(p.audiencia_link) : null
         audienciaHoje = { data: ev.data, hora: (ev.hora && ev.hora !== 'Dia todo') ? String(ev.hora).slice(0, 5) : null, link }
       }
     } catch (e) {}
