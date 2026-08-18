@@ -16,7 +16,7 @@
 //   POST {acao:'atualizar_todos'}                     -> idem, em lote (só acesso oculto)
 //   POST {acao:'financeiro'} / {acao:'financeiro_salvar', ...}
 //   POST {acao:'chat', processo_id, desde_id} / {acao:'chat_enviar', processo_id, texto}
-//   POST {acao:'acessos'} / {acao:'acesso_criar'|'acesso_editar'|'acesso_desativar'}
+//   POST {acao:'acessos'} / {acao:'acesso_criar'|'acesso_editar'|'acesso_reenviar'|'acesso_desativar'}
 //   POST {acao:'lgpd_aceitar'}
 //   GET  /api/inove?doc=<id>&t=<token>[&dl=1]         -> o arquivo, já carimbado
 //
@@ -415,6 +415,28 @@ export async function POST(request) {
       await q('update inove.acessos set nome = $1 where id = $2', [nome, id])
     }
     return Response.json({ ok: true })
+  }
+
+  /* Gera senha nova e reenvia por e-mail — o "esqueci senha" administrado pelo
+     controlador. Existe separado do acesso_editar porque é a ação certa quando não
+     se sabe se o e-mail da criação chegou (enviarEmailCore não avisa sozinha; ver
+     comentário em lib.js), sem ter que digitar senha nenhuma de novo. */
+  if (acao === 'acesso_reenviar') {
+    if (!podeAdministrar) return erro('Só o controlador pode reenviar acesso.', 403)
+    const id = String(body.id || '')
+    const alvo = await q1('select * from inove.acessos where id = $1 and oculto = false', [id])
+    if (!alvo) return erro('Acesso não encontrado.', 404)
+
+    const senha = gerarSenha()
+    await q('update inove.acessos set senha_hash = $1 where id = $2', [hashSenha(senha), id])
+    await q('delete from inove.sessoes where acesso_id = $1', [id])
+
+    try {
+      await enviarAcessoInove({ nome: alvo.nome, email: alvo.email, senha, controlador: alvo.controlador })
+      return Response.json({ ok: true })
+    } catch (e) {
+      return Response.json({ ok: true, avisoEmail: 'Senha trocada, mas o e-mail não pôde ser enviado. Senha gerada: ' + senha })
+    }
   }
 
   if (acao === 'acesso_desativar') {
