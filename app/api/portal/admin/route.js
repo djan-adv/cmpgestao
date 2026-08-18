@@ -444,11 +444,14 @@ export async function POST(request) {
 
     const dbr = data.split('-').reverse().join('/')
     const horaTxt = (hora && hora !== 'Dia todo') ? (' às ' + hora) : ''
+    // link da sala virtual/videoconferência (vem do histórico, achado pela tela)
+    const link = String(body.link || '').trim()
+    const linkTxt = /^https?:\/\//i.test(link) ? ('\n\n🔗 Link da audiência (sala virtual/videoconferência) — toque para entrar:\n' + link) : ''
     const texto = String(body.texto || '').trim() || (
       marcador === 'app_vespera'
-        ? ('Lembrete: sua audiência no processo nº ' + p.numero + ' é AMANHÃ, dia ' + dbr + horaTxt + '.\n\n' +
+        ? ('Lembrete: sua audiência no processo nº ' + p.numero + ' é AMANHÃ, dia ' + dbr + horaTxt + '.' + linkTxt + '\n\n' +
            'Sua presença é obrigatória. Qualquer dúvida, responda por aqui mesmo.')
-        : ('Foi designada audiência no seu processo nº ' + p.numero + ': dia ' + dbr + horaTxt + '.\n\n' +
+        : ('Foi designada audiência no seu processo nº ' + p.numero + ': dia ' + dbr + horaTxt + '.' + linkTxt + '\n\n' +
            'Sua presença é obrigatória. Vamos entrar em contato antes da data para combinar os detalhes — e faremos um novo aviso na véspera.\n\n' +
            'Qualquer dúvida, é só responder aqui neste chat.')
     )

@@ -12017,7 +12017,7 @@ async function avisoAudienciaApp(p, iso, hora, tipo){
     var ses=await s.auth.getSession();
     var tok=ses&&ses.data&&ses.data.session&&ses.data.session.access_token; if(!tok) return {enviado:false,motivo:'sem_sessao'};
     var r=await fetch('/api/portal/admin',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok},
-      body:JSON.stringify({acao:'avisar_audiencia_app',processo_id:p._id,data:iso,hora:hora||'',tipo:tipo||'designacao'})});
+      body:JSON.stringify({acao:'avisar_audiencia_app',processo_id:p._id,data:iso,hora:hora||'',tipo:tipo||'designacao',link:((typeof _linkAudiencia==='function'?_linkAudiencia(p):'')||undefined)})});
     var d=await r.json();
     return {enviado:!!(d&&d.enviado), motivo:(d&&d.motivo)||'', clientes:(d&&d.clientes)||[]};
   }catch(e){ return {enviado:false, motivo:'erro'}; }
