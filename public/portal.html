@@ -554,6 +554,7 @@ function renderCards(){
     var enc = /encerrad/i.test(p.status||'');
     d.innerHTML =
       (p.nao_lidas?('<div class="badge">'+p.nao_lidas+'</div>'):'') +
+      (p.audiencia_hoje?('<div style="background:#0F2A4A;color:#fff;border-radius:8px;padding:4px 10px;font-size:12px;font-weight:700;display:inline-block;margin-bottom:6px">📅 Audiência HOJE — toque para ver o link</div>'):'') +
       '<div class="num">Processo nº '+esc(p.numero||'—')+'</div>' +
       '<div class="vs">'+escT(p.cliente||'Você')+' <span class="x">×</span> '+escT(p.oponente||'Parte contrária')+'</div>' +
       '<div class="tt">'+escT(limpaTitulo(p.titulo))+'</div>' +
@@ -723,7 +724,7 @@ function renderDocs(){
       (sub?('<div class="n2">'+escT(sub)+'</div>'):'')+'</div><div class="abrir">abrir ›</div></a>';
   }
   var html = '<div class="sec"><p class="lab">Documentos oficiais do processo</p>';
-  if(!d.oficiais.length) html += '<div style="color:var(--muted);font-size:13.5px">Assim que houver despacho, decisão, sentença ou acordo nos autos, eles aparecem aqui.</div>';
+  if(!d.oficiais.length) html += '<div style="color:var(--muted);font-size:13.5px">Assim que houver peça nos autos (petição inicial, contestação, réplica, despacho, decisão, sentença ou acordo), ela aparece aqui.</div>';
   d.oficiais.forEach(function(x){
     html += linha('⚖️', x.nome||x.tipo||'Documento', (x.tipo?x.tipo+' · ':'')+(x.data?brData(x.data):''), '/api/portal?doc=jusbr:'+x.id+'&t='+TOKEN);
   });
