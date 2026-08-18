@@ -243,6 +243,7 @@
   <div class="topo">
     <button class="ico vazio">‹</button>
     <div class="tit">Meus processos</div>
+    <button class="ico" onclick="location.reload()" title="Atualizar — recarrega os processos e o acesso" aria-label="Atualizar">↻</button>
     <button class="ico" onclick="sair()" title="Sair" aria-label="Sair">⏻</button>
   </div>
   <div class="wrap">
@@ -700,10 +701,24 @@ function renderMovs(){
 }
 function verMais(i,btn){ var el=$('mv'+i); if(!el) return; var aberto=!el.classList.contains('corta'); if(aberto){ el.classList.add('corta'); btn.textContent='ver tudo ▾'; } else { el.classList.remove('corta'); btn.textContent='recolher ▴'; } }
 function verMaisV(i,btn){ var el=$('vm'+i); if(!el) return; var aberto=!el.classList.contains('corta'); if(aberto){ el.classList.add('corta'); btn.textContent='ver tudo ▾'; } else { el.classList.remove('corta'); btn.textContent='recolher ▴'; } }
+/* visor de documento DENTRO do app, com botão de fechar — abrir em outra aba
+   no app instalado (PWA) deixava o cliente sem caminho de volta */
+function abrirDoc(url,nome){
+  fecharDoc();
+  var ov=document.createElement('div'); ov.id='doc-viewer';
+  ov.style.cssText='position:fixed;inset:0;background:#0F2A4A;z-index:999;display:flex;flex-direction:column';
+  ov.innerHTML='<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;color:#fff">'+
+    '<div style="flex:1;font-size:13.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(nome||'Documento')+'</div>'+
+    '<a href="'+esc(url)+'&dl=1" style="color:#fff;font-size:12.5px;text-decoration:underline;white-space:nowrap">baixar</a>'+
+    '<button onclick="fecharDoc()" style="background:#fff;color:#0F2A4A;border:0;border-radius:18px;padding:7px 16px;font-weight:700;font-size:13px;cursor:pointer">✕ Fechar</button></div>'+
+    '<iframe src="'+esc(url)+'" style="flex:1;width:100%;border:0;background:#fff"></iframe>';
+  document.body.appendChild(ov);
+}
+function fecharDoc(){ var v=document.getElementById('doc-viewer'); if(v) v.remove(); }
 function renderDocs(){
   var d = ATUAL.documentos||{oficiais:[],peticoes:[]};
   function linha(ic, nome, sub, url){
-    return '<a class="doc" href="'+url+'" target="_blank" rel="noopener">' +
+    return '<a class="doc" href="#" data-u="'+url+'" data-n="'+escT(nome)+'" onclick="abrirDoc(this.getAttribute(\'data-u\'),this.getAttribute(\'data-n\'));return false">' +
       '<div class="di">'+ic+'</div><div class="dn"><div class="n1">'+escT(nome)+'</div>' +
       (sub?('<div class="n2">'+escT(sub)+'</div>'):'')+'</div><div class="abrir">abrir ›</div></a>';
   }
