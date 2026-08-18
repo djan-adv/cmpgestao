@@ -31,8 +31,16 @@ a Inove é **um único cliente**, não um escritório à parte.
    alerta para o escritório.
 3. **Etiquetas no lugar de fase.** O campo Fase some da tela deles.
 4. **Aba "Plano" bloqueada** — sai da navegação e da rota. Não pode parecer cobrança.
-5. **5 acessos**, autogeridos por eles (criar, editar, desativar). O acesso do
-   desenvolvedor fica **oculto** da lista.
+5. **5→10 acessos**, autogeridos por eles — mas não por qualquer um: só o
+   **controlador** cria, edita ou desativa. **Adicionado em 05/08/2026, tarde:**
+   `inove.acessos.controlador`, boolean. O primeiro acesso não-oculto que Djan
+   cadastra vira controlador sozinho, na hora do insert. Quem cria um acesso não
+   digita senha — o servidor gera (`gerarSenha()`) e manda por e-mail
+   (`enviarAcessoInove`, mesmo motor do Portal do Cliente), no espírito de
+   "esqueci senha": a pessoa já recebe pronta pra entrar. Uma trava impede zerar
+   o número de controladores (sempre sobra um, além do oculto), pra não travar a
+   Inove sem ninguém que possa administrar. O acesso do desenvolvedor fica
+   **oculto** da lista.
 6. **Inove = um cliente só.**
 7. **Chat na barra lateral esquerda.** **Revisto em 05/08/2026: o chat é conversa
    interna da Inove — NÃO é espelhado no `sistema.html` do escritório.** A redação

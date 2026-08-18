@@ -25,8 +25,8 @@
 // proposta e petição das partes. O controle está na tarja e no log, não no filtro.
 
 import {
-  q, q1, hashSenha, confereSenha, sessao, tokenDo, ip, podeTentar, marcaTentativa,
-  config, num, carimbarPdf, carimbarHtml, lerDocumento, logDoc, alertarEscritorio, erro, SESSAO_DIAS,
+  q, q1, hashSenha, gerarSenha, confereSenha, sessao, tokenDo, ip, podeTentar, marcaTentativa,
+  config, num, carimbarPdf, carimbarHtml, lerDocumento, logDoc, alertarEscritorio, enviarAcessoInove, erro, SESSAO_DIAS,
 } from './lib.js'
 import { tipoRealDoArquivo, pdfDeTexto } from '../jusbr/lib.js'
 import crypto from 'crypto'
@@ -86,7 +86,7 @@ export async function POST(request) {
           and criado_em >= date_trunc('day', now() at time zone 'America/Sao_Paulo')
         limit 1`, [a.id, c.lgpd_versao || '1'])
 
-    return Response.json({ ok: true, token, nome: a.nome || '', email: a.email, lgpd: !aceitou, oculto: !!a.oculto })
+    return Response.json({ ok: true, token, nome: a.nome || '', email: a.email, lgpd: !aceitou, oculto: !!a.oculto, controlador: !!a.controlador })
   }
 
   /* ---------- daqui pra baixo, tudo exige sessão ---------- */
@@ -338,25 +338,29 @@ export async function POST(request) {
     return Response.json({ ok: true, mensagem: r })
   }
 
-  /* ---------- os 5 acessos, administrados por eles ----------
+  /* ---------- os acessos, administrados pelo controlador ----------
      O acesso do desenvolvedor tem oculto = true e não aparece aqui: é conta de
      manutenção, não de usuário, e listá-la só geraria pergunta. Ele também não
-     conta na cota nem pode ser mexido por eles. */
+     conta na cota nem pode ser mexido por eles.
+
+     Só controlador (ou oculto) CRIA/EDITA/DESATIVA. Todo mundo enxerga a lista —
+     saber quem é o controlador é informação de equipe, não é segredo. */
+  const podeAdministrar = acesso.oculto || acesso.controlador
+
   if (acao === 'acessos') {
     const linhas = await q(
-      `select id, nome, email, ativo, criado_em, primeiro_login_em, ultimo_login_em, bloqueado_em
-         from inove.acessos where oculto = false order by nome`)
+      `select id, nome, email, ativo, controlador, criado_em, primeiro_login_em, ultimo_login_em, bloqueado_em
+         from inove.acessos where oculto = false order by controlador desc, nome`)
     const c = await config()
-    return Response.json({ ok: true, acessos: linhas, limite: num(c, 'limite_acessos', 5) })
+    return Response.json({ ok: true, acessos: linhas, limite: num(c, 'limite_acessos', 5), souControlador: podeAdministrar })
   }
 
   if (acao === 'acesso_criar') {
+    if (!podeAdministrar) return erro('Só o controlador pode criar acessos.', 403)
     const nome = String(body.nome || '').trim()
     const email = String(body.email || '').trim().toLowerCase()
-    const senha = String(body.senha || '')
     if (!nome) return erro('Informe o nome.')
     if (!RE_EMAIL.test(email)) return erro('E-mail inválido.')
-    if (senha.length < 8) return erro('A senha precisa de pelo menos 8 caracteres.')
 
     const c = await config()
     const limite = num(c, 'limite_acessos', 5)
@@ -367,19 +371,42 @@ export async function POST(request) {
     const existe = await q1('select 1 from inove.acessos where email = $1', [email])
     if (existe) return erro('Já existe um acesso com esse e-mail.', 409)
 
+    // primeiro acesso não-oculto = controlador, automaticamente
+    const primeiro = await q1('select count(*)::int n from inove.acessos where oculto = false')
+    const vaiSerControlador = primeiro.n === 0
+    const senha = gerarSenha()
+
     const r = await q1(
-      `insert into inove.acessos (nome, email, senha_hash, criado_por)
-       values ($1,$2,$3,$4) returning id, nome, email, ativo, criado_em`,
-      [nome, email, hashSenha(senha), acesso.email])
+      `insert into inove.acessos (nome, email, senha_hash, controlador, criado_por)
+       values ($1,$2,$3,$4,$5) returning id, nome, email, ativo, controlador, criado_em`,
+      [nome, email, hashSenha(senha), vaiSerControlador, acesso.email])
+
+    try { await enviarAcessoInove({ nome, email, senha, controlador: vaiSerControlador }) }
+    catch (e) {
+      // a conta já existe — não desfaz. Avisa quem criou, pra passar a senha por
+      // outro canal, em vez de deixar o acesso pronto e ninguém saber a senha.
+      return Response.json({ ok: true, acesso: r, avisoEmail: 'Acesso criado, mas o e-mail não pôde ser enviado. Senha gerada: ' + senha })
+    }
     return Response.json({ ok: true, acesso: r })
   }
 
   if (acao === 'acesso_editar') {
+    if (!podeAdministrar) return erro('Só o controlador pode editar acessos.', 403)
     const id = String(body.id || '')
     const alvo = await q1('select * from inove.acessos where id = $1 and oculto = false', [id])
     if (!alvo) return erro('Acesso não encontrado.', 404)
     const nome = body.nome !== undefined ? String(body.nome).trim() : alvo.nome
     if (!nome) return erro('Informe o nome.')
+
+    if (body.controlador !== undefined && !!body.controlador !== alvo.controlador) {
+      // não deixa zerar o número de controladores — sempre sobra alguém, além do oculto
+      if (alvo.controlador) {
+        const restam = await q1('select count(*)::int n from inove.acessos where oculto = false and controlador and id <> $1', [id])
+        if (restam.n === 0) return erro('Precisa sobrar ao menos um controlador. Torne outra pessoa controladora antes.', 409)
+      }
+      await q('update inove.acessos set controlador = $1 where id = $2', [!!body.controlador, id])
+    }
+
     if (body.senha) {
       if (String(body.senha).length < 8) return erro('A senha precisa de pelo menos 8 caracteres.')
       await q('update inove.acessos set nome = $1, senha_hash = $2 where id = $3', [nome, hashSenha(String(body.senha)), id])
@@ -391,11 +418,16 @@ export async function POST(request) {
   }
 
   if (acao === 'acesso_desativar') {
+    if (!podeAdministrar) return erro('Só o controlador pode desativar acessos.', 403)
     const id = String(body.id || '')
     if (id === acesso.id) return erro('Você não pode desativar o próprio acesso.')
     const alvo = await q1('select * from inove.acessos where id = $1 and oculto = false', [id])
     if (!alvo) return erro('Acesso não encontrado.', 404)
     const ativar = body.ativar === true
+    if (!ativar && alvo.controlador) {
+      const restam = await q1('select count(*)::int n from inove.acessos where oculto = false and controlador and ativo and id <> $1', [id])
+      if (restam.n === 0) return erro('Precisa sobrar ao menos um controlador ativo. Torne outra pessoa controladora antes de desativar este.', 409)
+    }
     await q('update inove.acessos set ativo = $1 where id = $2', [ativar, id])
     if (!ativar) await q('delete from inove.sessoes where acesso_id = $1', [id])
     return Response.json({ ok: true, ativo: ativar })
