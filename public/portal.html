@@ -789,12 +789,20 @@ function anexoHTML(m){
     '<span><span class="an">'+esc(m.anexo_nome||'arquivo')+'</span>' +
     '<br><span class="at">'+esc(tamanhoLegivel(m.anexo_tamanho))+' · toque para abrir</span></span></a>';
 }
+/* URL no meio da mensagem (ex.: link da sala virtual da audiência) vira link
+   clicável — escapa primeiro, linkifica depois, então nada de HTML injetado */
+function linkifica(t){
+  return esc(t).replace(/https?:\/\/[^\s<]+/g, function(u){
+    var href=u.replace(/&amp;/g,'&').replace(/[.,;)]+$/,'');
+    return '<a href="'+esc(href)+'" target="_blank" rel="noopener" style="color:#185FA5;word-break:break-all;font-weight:600">'+u+'</a>';
+  });
+}
 function desenhaMsg(m){
   var eu = m.autor_tipo==='cliente';
   var d=document.createElement('div'); d.className='cmsg '+(eu?'eu':'eles');
   d.innerHTML='<div class="bolha">'+(!eu?('<div class="quem">'+esc(m.autor_nome||'CMP Advogados')+'</div>'):'')+
     anexoHTML(m)+
-    (m.texto?esc(m.texto):'')+'<div class="hora">'+brHora(m.criado_em)+'</div></div>';
+    (m.texto?linkifica(m.texto):'')+'<div class="hora">'+brHora(m.criado_em)+'</div></div>';
   $('chat-corpo').appendChild(d);
 }
 /* ---------- anexo do chat (documento, foto, PDF, áudio…) ---------- */
