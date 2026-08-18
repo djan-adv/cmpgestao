@@ -150,6 +150,7 @@
       <a id="nav-fin" onclick="ir('fin')"><span class="ic">◈</span> Financeiro</a>
       <a id="nav-chat" onclick="ir('chat')"><span class="ic">💬</span> Chat com o escritório <span class="cnt" id="cnt-chat"></span></a>
       <a id="nav-cad" onclick="ir('cad')"><span class="ic">🏛</span> Cadastros (Tribunais) <span class="cnt" id="cnt-cad"></span></a>
+      <a id="nav-melh" onclick="ir('melh')"><span class="ic">◆</span> Melhorias implantadas</a>
       <a id="nav-sol" onclick="ir('sol')"><span class="ic">✨</span> Solicitar funcionalidades</a>
       <a id="nav-acc" onclick="ir('acc')"><span class="ic">👥</span> Acessos <span class="cnt" id="cnt-acc"></span></a>
     </nav>
@@ -269,6 +270,15 @@
         <div class="card">
           <p class="sectlabel">Cadastro nos Tribunais de Justiça</p>
           <div id="cad-body"><div class="note">Carregando…</div></div>
+        </div>
+      </section>
+
+      <!-- MELHORIAS IMPLANTADAS -->
+      <section id="sec-melh" class="hidden">
+        <div class="card">
+          <p class="sectlabel">O que já foi entregue no portal</p>
+          <p class="note" style="margin:0 0 4px">Cada versão reúne as melhorias publicadas. O que vocês pedem em "Solicitar funcionalidades" aparece aqui quando fica pronto.</p>
+          <div id="melh-lista"><div class="note">Carregando…</div></div>
         </div>
       </section>
 
@@ -393,9 +403,9 @@ async function abrirApp(){
 }
 
 /* ================= navegação ================= */
-var TITULOS={painel:'Painel',proc:'Processos',fin:'Financeiro',chat:'Chat com o escritório',cad:'Cadastros — Tribunais',sol:'Solicitar funcionalidades',acc:'Acessos'};
+var TITULOS={painel:'Painel',proc:'Processos',fin:'Financeiro',chat:'Chat com o escritório',cad:'Cadastros — Tribunais',melh:'Melhorias implantadas',sol:'Solicitar funcionalidades',acc:'Acessos'};
 function ir(s){
-  ['painel','proc','fin','chat','cad','sol','acc'].forEach(function(k){
+  ['painel','proc','fin','chat','cad','melh','sol','acc'].forEach(function(k){
     document.getElementById('nav-'+k).classList.toggle('on',k===s);
     document.getElementById('sec-'+k).classList.toggle('hidden',k!==s);
   });
@@ -405,6 +415,7 @@ function ir(s){
   if(s==='fin')carregarFin();
   if(s==='chat')carregarChat(null);
   if(s==='cad')carregarCad();
+  if(s==='melh')carregarMelh();
   if(s==='sol')carregarSol();
   if(s==='acc')carregarAcc();
   window.scrollTo(0,0);
@@ -514,6 +525,30 @@ async function abrirProc(id){
   function opts(arr,sel){ return '<option value="">—</option>'+arr.map(function(e){
     return '<option value="'+e.id+'"'+((sel&&sel.etiqueta_id===e.id)?' selected':'')+'>'+esc(e.nome)+'</option>'; }).join(''); }
   var link=function(d,dl){ return '/api/inove?doc='+encodeURIComponent(d.id)+'&t='+encodeURIComponent(TOKEN)+(dl?'&dl=1':''); };
+  var linkP=function(d,dl){ return '/api/inove?proprio='+encodeURIComponent(d.id)+'&t='+encodeURIComponent(TOKEN)+(dl?'&dl=1':''); };
+  var ex=j.extra||{}, fin=j.financeiro||{};
+  var proprios=j.proprios||[];
+  function blocoProprios(cat,titulo,vazio,altura){
+    var lista=proprios.filter(function(d){return d.categoria===cat;});
+    return '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-top:18px">'
+      + '<p class="sectlabel" style="margin:0">'+titulo+' ('+lista.length+')</p>'
+      + '<label class="btn ghost sm" style="margin:0;font-weight:800;color:var(--navy)">+ Anexar'
+      +   '<input type="file" style="display:none" onchange="subirProprio(\''+id+'\',\''+cat+'\',this)">'
+      + '</label>'
+      + '</div>'
+      + (lista.length
+          ? '<div style="max-height:'+altura+';overflow-y:auto"><table><tbody>'
+            + lista.map(function(d){
+                return '<tr><td>'+esc(d.nome_arquivo||'documento')+'<div class="note">'+fdata(d.enviado_em)+'</div></td>'
+                  + '<td style="width:210px;text-align:right;white-space:nowrap">'
+                  + '<a class="btn ghost sm" style="text-decoration:none" target="_blank" rel="noopener" href="'+linkP(d,false)+'">Abrir</a> '
+                  + '<a class="btn ghost sm" style="text-decoration:none" href="'+linkP(d,true)+'">Baixar</a> '
+                  + '<button class="btn danger sm" onclick="excluirProprio(\''+d.id+'\',\''+id+'\')">Excluir</button>'
+                  + '</td></tr>';
+              }).join('')
+            + '</tbody></table></div>'
+          : '<p class="note">'+vazio+'</p>');
+  }
 
   det.innerHTML =
     '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">'
@@ -534,6 +569,33 @@ async function abrirProc(id){
     +   '<div><b>Assunto:</b> '+esc(p.assunto||'—')+'</div>'
     +   '<div><b>Órgão:</b> '+esc(p.orgao_atual||p.orgao||'—')+'</div>'
     +   '<div><b>Foro:</b> '+esc(p.foro||'—')+'</div>'
+    + '</div>'
+
+    /* Honorário deferido + depósito: grava na MESMA linha da aba Financeiro,
+       para não existirem dois lugares com o mesmo número. */
+    + '<div style="border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:14px;background:#fafbfc">'
+    +   '<p class="sectlabel" style="margin:0 0 8px">Honorário pericial</p>'
+    +   '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'
+    +     '<label style="margin:0">Valor deferido (R$)<input id="hn-valor" inputmode="decimal" placeholder="0,00" value="'+(fin.honorario_fixado!=null?esc(fin.honorario_fixado):'')+'"></label>'
+    +     '<label style="margin:0">Data do depósito judicial<input id="hn-data" type="date" value="'+esc(String(fin.data_deposito||'').slice(0,10))+'"></label>'
+    +   '</div>'
+    +   '<div style="margin-top:9px;display:flex;gap:8px;align-items:center">'
+    +     '<button class="btn gold sm" onclick="salvarHonorario(\''+id+'\')">Salvar</button>'
+    +     '<span id="hn-msg" class="note"></span>'
+    +   '</div>'
+    + '</div>'
+
+    /* Contato da vara, local do processo e anotações — um bloco só, salvo junto. */
+    + '<div style="border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:16px">'
+    +   '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'
+    +     '<label style="margin:0">E-mail da vara / cartório<input id="ex-email" type="email" placeholder="vara@tjxx.jus.br" value="'+esc(ex.email_vara||'')+'"></label>'
+    +     '<label style="margin:0">Local atual do processo<input id="ex-local" placeholder="Ex.: concluso ao juiz, arquivo, contadoria…" value="'+esc(ex.local_atual||'')+'"></label>'
+    +   '</div>'
+    +   '<label>Observações<textarea id="ex-obs" placeholder="Anotações sobre este processo — visíveis para toda a equipe da Inove." style="min-height:80px">'+esc(ex.observacoes||'')+'</textarea></label>'
+    +   '<div style="margin-top:9px;display:flex;gap:8px;align-items:center">'
+    +     '<button class="btn gold sm" onclick="salvarExtra(\''+id+'\')">Salvar</button>'
+    +     '<span id="ex-msg" class="note"></span>'
+    +   '</div>'
     + '</div>'
 
     + '<div class="lgpd"><b>Uso restrito.</b> As peças abaixo estão sob sigilo. É proibido encaminhar ou divulgar a terceiros. '
@@ -557,6 +619,11 @@ async function abrirProc(id){
             }).join('')
           + '</tbody></table></div>'
         : '<p class="note">Nenhuma peça baixada ainda. Use o botão acima para buscar no jus.br.</p>')
+
+    + blocoProprios('protocolar', 'Documentos para protocolar',
+        'Nenhum documento anexado. Use "+ Anexar" para guardar minutas e petições antes do protocolo.', '300px')
+    + blocoProprios('proposta', 'Proposta enviada',
+        'Nenhuma proposta anexada ainda.', '170px')
 
     + '<p class="sectlabel" style="margin-top:18px">Movimentações</p>'
     + ((j.movimentacoes||[]).length
@@ -595,6 +662,62 @@ async function atualizarProc(id){
   b.disabled=false; b.textContent='↻ Buscar peças novas no jus.br';
 }
 
+async function salvarExtra(id){
+  var m=document.getElementById('ex-msg'); m.textContent='Salvando…';
+  try{
+    await api('extra_salvar',{processo_id:id,email_vara:val('ex-email'),local_atual:val('ex-local'),observacoes:val('ex-obs')});
+    m.textContent='Salvo.';
+  }catch(e){ m.textContent=(e&&e.message)||'Falhou.'; }
+}
+async function salvarHonorario(id){
+  var m=document.getElementById('hn-msg'); m.textContent='Salvando…';
+  try{
+    await api('honorario_salvar',{processo_id:id,honorario_fixado:numero(val('hn-valor')),data_deposito:val('hn-data')||null});
+    m.textContent='Salvo — aparece também na aba Financeiro.';
+  }catch(e){ m.textContent=(e&&e.message)||'Falhou.'; }
+}
+/* Upload vai como multipart, não pela função api() — que é só JSON. */
+async function subirProprio(processoId,categoria,input){
+  var f=input.files&&input.files[0]; if(!f) return;
+  var fd=new FormData();
+  fd.append('processo_id',processoId); fd.append('categoria',categoria); fd.append('arquivo',f);
+  input.value='';
+  try{
+    var r=await fetch('/api/inove',{method:'POST',headers:{'Authorization':'Bearer '+TOKEN},body:fd});
+    var j={}; try{ j=await r.json(); }catch(e){}
+    if(!r.ok) throw new Error(j.erro||('Erro '+r.status));
+    await abrirProc(processoId);
+  }catch(e){ alert('Não foi possível anexar: '+((e&&e.message)||e)); }
+}
+async function excluirProprio(docId,processoId){
+  if(!confirm('Excluir este documento? Não tem como desfazer.')) return;
+  try{ await api('doc_proprio_excluir',{id:docId}); await abrirProc(processoId); }
+  catch(e){ alert('Não foi possível excluir: '+e.message); }
+}
+async function carregarMelh(){
+  var box=document.getElementById('melh-lista');
+  try{
+    var j=await api('melhorias'); var lista=j.melhorias||[];
+    if(!lista.length){ box.innerHTML='<div class="note">Nada publicado ainda.</div>'; return; }
+    var porVersao={}, ordem=[];
+    lista.forEach(function(m){ if(!porVersao[m.versao]){ porVersao[m.versao]=[]; ordem.push(m.versao); } porVersao[m.versao].push(m); });
+    box.innerHTML=ordem.map(function(v){
+      var itens=porVersao[v];
+      return '<div style="margin-bottom:18px">'
+        +'<div style="display:flex;align-items:center;gap:9px;margin-bottom:7px">'
+        +  '<span class="chip" style="background:var(--navy);color:#fff;font-size:12px">Versão '+esc(v)+'</span>'
+        +  '<span class="note">'+fdata(itens[0].publicado_em)+'</span>'
+        +'</div>'
+        +itens.map(function(m){
+          return '<div style="border-left:3px solid var(--gold);padding:2px 0 2px 11px;margin-bottom:9px">'
+            +'<div style="font-weight:700;color:var(--navy);font-size:13.5px">'+esc(m.titulo)+'</div>'
+            +(m.descricao?'<div class="note" style="margin-top:2px">'+esc(m.descricao)+'</div>':'')
+            +'</div>';
+        }).join('')
+        +'</div>';
+    }).join('');
+  }catch(e){ box.innerHTML='<div class="err" style="display:block">'+esc(e.message)+'</div>'; }
+}
 function marcarTodasPecas(v){
   document.querySelectorAll('.pd-check').forEach(function(c){ c.checked=v; });
 }

@@ -536,6 +536,45 @@ Nenhum dos 4 foi iniciado. São suficientes para uma rodada de planejamento pró
 — o RBAC por pessoa em especial muda o contrato de várias views e merece ser
 fechado antes de mexer no código, para não reescrever duas vezes.
 
+## 13d. Versão 2 — 18/08/2026
+
+Cinco pedidos, espelhando o que o `sistema.html` já tem do lado do escritório, mais
+a aba de changelog.
+
+**Documentos próprios** (`inove.documentos_proprios`) — arquivos que a Inove SOBE,
+diferente de `v_documentos` (peças já publicadas no jus.br). Duas categorias na
+mesma tabela: `protocolar` (minuta/petição antes do protocolo, caixa maior) e
+`proposta` (proposta de honorários enviada, caixa menor — o tamanho pedido foi o de
+"Documentos da outra parte"). Upload é multipart e **precisa ser tratado antes do
+`request.json()`**, senão a rota devolve "ação desconhecida".
+
+**Onde os arquivos ficam:** `/opt/cmpdocs-inove/<digitos>/<categoria>/`, **fora** de
+`/opt/cmpdocs` do escritório — o mesmo isolamento que o role `inove_app` dá no
+banco, agora no disco. Configurável por `INOVE_DOCS_DIR`. Teto de 25 MB. O nome do
+arquivo vem do usuário e é peneirado antes de virar caminho.
+
+Servidos por `GET /api/inove?proprio=<id>`, com **a mesma tarja e o mesmo log** das
+peças do jus.br — não faria sentido proteger a peça oficial e deixar a minuta sair
+limpa.
+
+**`inove.processo_extra`** — um registro por processo: `email_vara`, `local_atual`,
+`observacoes`. Não usa `public.processos.observacoes` por dois motivos: aquele campo
+é a nota INTERNA do escritório, e o `inove_app` não escreve no `public` de todo jeito.
+
+**Honorário deferido + data do depósito** na ficha do processo gravam na **mesma
+linha** que a aba Financeiro lê (`inove.financeiro.honorario_fixado` /
+`data_deposito`), criando a linha se ainda não existir. Deliberado: dois lugares
+para o mesmo número é como se produz divergência entre telas.
+
+**`inove.melhorias`** — changelog visível para eles, agrupado por versão, na aba
+"Melhorias implantadas" (acima de "Solicitar funcionalidades"). Contrapartida ao
+canal de pedidos: o que entra ali aparece aqui quando fica pronto. Semeado com a v1
+(portal no ar) e a v2 (esta entrega). Só leitura pelo `inove_app` — quem publica
+melhoria é o escritório, direto no banco.
+
+**Não testado em navegador:** upload real, tarja no arquivo próprio e a aba nova.
+Compila e passa nas conferências de sintaxe/ids/ações.
+
 ## 11. Ideias levantadas, ainda não aprovadas
 
 1. Alerta de prazo disparado por etiqueta (`Intimado - Elaborar Laudo` há X dias).
