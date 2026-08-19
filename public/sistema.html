@@ -2197,7 +2197,13 @@ function renderMeuDia(){
   var tras=new Date(hoje); tras.setDate(tras.getDate()-7);
   var fut=new Date(hoje); fut.setDate(fut.getDate()+3);
   var TAGS={az:["AUDIÊNCIA","background:var(--dangerbg);color:var(--danger)"],vm:["PRAZO","background:var(--warnbg);color:var(--warn)"],am:["MANIFESTAÇÃO","background:var(--warnbg);color:var(--warn)"]};
+  /* tarefa já CONCLUÍDA no Kanban não é pendência: esconde o gêmeo da agenda
+     (a tarefa criada com "Mostrar na agenda" vira duas linhas — concluir no
+     Kanban não apagava a da agenda e ela ficava assombrando o Meu dia) */
+  var _fin={};
+  (window.__KANDB||[]).forEach(function(k){ if(k.col==='finalizado'||k.arq===true) _fin[String(k.titulo||'').trim().toLowerCase()+'|'+String(k.data||'')]=1; });
   var itens=(AGENDA||[]).filter(function(a){var d=new Date(a.data+"T00:00:00");return d>=tras&&d<=fut;})
+    .filter(function(a){ return !_fin[String(a.tt||'').trim().toLowerCase()+'|'+String(a.data||'')]; })
     .sort(function(a,b){return (a.data+(a.hora||""))<(b.data+(b.hora||""))?-1:1;});
   var html='<p class="sectlabel">Meu dia — hoje, atrasados e próximos 3 dias</p>';
   if(!itens.length){ html+='<p class="note" style="margin:0">Nada pendente por aqui.</p>'; }
@@ -2265,13 +2271,32 @@ async function mdConcluir(gi){
     var sb=window.__sb;
     var hoje=new Date(); var iso=hoje.getFullYear()+'-'+String(hoje.getMonth()+1).padStart(2,'0')+'-'+String(hoje.getDate()).padStart(2,'0');
     var pid=_procIdPorNumero(a.p&&a.p.numero);
-    var texto='[Agenda] Concluído: '+(a.tt||'')+' — em '+iso.split('-').reverse().join('/')+(a.resp?(' · '+a.resp):'');
+    /* o crédito é de QUEM CONCLUIU (quem clicou), não do responsável/delegado */
+    var quemC=(typeof _kanQuemSou==='function'?_kanQuemSou():'')||'';
+    var texto='[Agenda] Concluído: '+(a.tt||'')+' — em '+iso.split('-').reverse().join('/')+(quemC?(' · concluído por '+quemC):'')+((a.resp&&a.resp!==quemC)?(' (responsável: '+a.resp+')'):'');
     if(sb && pid){
       var w=await sb.from('andamentos').insert({processo_id:pid,data:iso,texto:texto,fonte:'manual'}).select('id').single();
       if(w.error){ alert('Não foi possível registrar no histórico: '+w.error.message); return; }
       /* reflete na ficha aberta, se for a do mesmo processo */
       try{ if(typeof atual!=='undefined' && atual && atual._id===pid){ atual.hist_full=atual.hist_full||[]; atual.hist_full.unshift({id:w.data&&w.data.id,data:iso+'T00:00:00.000Z',texto:texto,f:'manual'}); if(typeof renderHistorico==='function') renderHistorico(); } }catch(eH){}
     } else if(!pid){ alert('Este item não tem processo vinculado, então não há histórico onde registrar. Vou apenas concluí-lo (sair da lista).'); }
+    /* conclui também a tarefa-GÊMEA do Kanban, carimbando quem clicou — antes o
+       cartão ficava aberto e o ponto acabava indo pra outra pessoa */
+    try{
+      var ttC=String(a.tt||'').trim();
+      (window.__KANDB||[]).forEach(function(k){
+        if(k.col==='finalizado'||k.arq===true) return;
+        if(String(k.titulo||'').trim()!==ttC) return;
+        if(k.data&&a.data&&k.data!==a.data) return;
+        k.col='finalizado'; k.concluidoPor=quemC||k.resp||''; k.concluidoEm=new Date().toISOString();
+        if(sb&&k.dbid) sb.from('kanban_tarefas').update({coluna:'finalizado',concluido_por:k.concluidoPor,concluido_em:k.concluidoEm}).eq('id',k.dbid).then(function(r){ if(r&&r.error) console.warn('gêmea kanban:',r.error.message); });
+      });
+    }catch(eG){}
+    /* produtividade: o evento sai daqui também — o ponto é de quem clicou */
+    try{ if(typeof logEvent==='function'){
+      var ehAudMd=/audi[êe]ncia/i.test((a.tt||'')+' '+(a.tipo||''))||a.tipo==='az';
+      logEvent(ehAudMd?'hearing_completed':'task_completed','agenda',(a.id||''),{titulo:(a.tt||'').slice(0,140),numero:((a.p&&a.p.numero)||null),resp:(a.resp||null),concluido_por:(quemC||null),via:'meu_dia'});
+    } }catch(eL){}
     /* remove o evento do banco (concluído sai da agenda) e da memória */
     if(sb && a.id){ var dl=await sb.from('agenda_eventos').delete().eq('id',a.id).select('id'); if(dl&&!dl.error&&(!dl.data||!dl.data.length)){ console.warn('agenda: delete não afetou linhas (id '+a.id+')'); } }
     await _googleEnfileiraExclusao(a);
@@ -3483,6 +3508,26 @@ function _kanCarimbaConclusao(a){
 }
 function persisteKanban(a){
   _kanCarimbaConclusao(a);
+  /* concluiu no KANBAN → o gêmeo da agenda sai (senão ficava "pendente" no Meu
+     dia pra sempre). Casa por título + data (+ processo, quando os dois têm). */
+  if(a&&a.col==='finalizado'){
+    try{
+      var sbG=window.__sb, ttG=String(a.titulo||'').trim(), digG=String(a.numero||'').replace(/\D/g,'');
+      ((window.__AGDB||[]).filter(function(e){
+        if(String(e.tt||'').trim()!==ttG) return false;
+        if(a.data&&e.data&&e.data!==a.data) return false;
+        var dE=String((e.p&&e.p.numero)||'').replace(/\D/g,'');
+        if(digG&&dE&&digG!==dE) return false;
+        return true;
+      })).forEach(function(e){
+        if(sbG&&e.id) sbG.from('agenda_eventos').delete().eq('id',e.id).then(function(){});
+        try{ if(typeof _googleEnfileiraExclusao==='function') _googleEnfileiraExclusao(e); }catch(eGg){}
+        window.__AGDB=(window.__AGDB||[]).filter(function(x){ return x!==e; });
+        if(AGENDA){ var ixG=AGENDA.indexOf(e); if(ixG>=0) AGENDA.splice(ixG,1); }
+      });
+      if(typeof renderMeuDia==='function') try{ renderMeuDia(); }catch(eR){}
+    }catch(eT){}
+  }
   _kanSalvarLocal(a);
   try{
     var sb=window.__sb; if(!sb||!a) return;
