@@ -1105,6 +1105,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
     </span>
   </div>
   <div id="l-capt" class="note" style="margin:4px 0 6px"></div>
+  <div id="l-docs" style="display:none"></div>
   <div id="l-liveChat" style="display:none;border:1px solid #d9e2ee;border-radius:10px;margin-bottom:12px;overflow:hidden">
     <div style="background:#f4f8fb;padding:7px 12px;font-size:12px;font-weight:700;color:#274b7d;display:flex;justify-content:space-between;align-items:center">
       <span>💬 Conversa ao vivo — chat do site</span>
@@ -5498,6 +5499,43 @@ function editarLead(id){ if(id){ var _l0=LEADS.find(function(x){return x.id===id
   window._lsel=(l.labels?l.labels.slice():[]); renderEtqPicker("l-etq",window._lsel);
   document.getElementById("modal-lead").classList.remove("hidden");
   _liveChatAbrir(l);
+  _renderLeadDocsGaleria(l);
+}
+/* ===== Documentos do card, visíveis igual "Documentos do processo" — antes
+   ficavam escondidos atrás do botão "Arquivos". Clique no nome abre/visualiza;
+   a setinha baixa de verdade (blob, sem depender de o navegador saber abrir). ===== */
+function _iconeArqLead(nome){
+  return /\.pdf$/i.test(nome)?'📄':(/\.docx?$/i.test(nome)?'📝':(/\.(png|jpe?g|gif|webp)$/i.test(nome)?'🖼️':(/\.(xlsx?|csv)$/i.test(nome)?'📊':'📎')));
+}
+function _renderLeadDocsGaleria(l){
+  var el=document.getElementById('l-docs'); if(!el) return;
+  var arqs=(l&&l.arquivos)||[];
+  if(!arqs.length){ el.style.display='none'; el.innerHTML=''; return; }
+  el.style.display='block';
+  el.innerHTML='<div style="border:1px solid #e3e7ec;border-radius:10px;padding:8px 10px;margin-bottom:12px">'
+    +'<div style="font-size:12px;font-weight:700;color:#274b7d;margin-bottom:6px">📎 Documentos do card ('+arqs.length+')</div>'
+    +'<div style="display:flex;flex-wrap:wrap;gap:8px">'
+    +arqs.map(function(a,i){
+      return '<div style="display:flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:8px;padding:5px 9px;background:#fafbfc">'
+        +'<span onclick="abrirLeadArqView('+i+')" style="cursor:pointer;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:170px" title="'+esc(a.nome||'')+' — clique pra ver">'+_iconeArqLead(a.nome||'')+' '+esc((a.nome||'').slice(0,28))+'</span>'
+        +'<span onclick="baixarLeadArqDireto('+i+')" title="baixar" style="cursor:pointer;color:#185FA5;font-size:13px">⬇</span>'
+        +'</div>';
+    }).join('')
+    +'</div></div>';
+}
+async function abrirLeadArqView(i){
+  var l=window._ledit; var a=l&&l.arquivos&&l.arquivos[i]; if(!a) return; var sb=window.__sb; if(!sb) return;
+  try{ var r=await sb.storage.from(LEADS_BUCKET).createSignedUrl(a.path,120); if(r.data&&r.data.signedUrl) window.open(r.data.signedUrl,'_blank'); else alert('Não consegui abrir o arquivo.'); }catch(e){ alert('Erro: '+(e&&e.message||e)); }
+}
+async function baixarLeadArqDireto(i){
+  var l=window._ledit; var a=l&&l.arquivos&&l.arquivos[i]; if(!a) return; var sb=window.__sb; if(!sb) return;
+  try{
+    var dl=await sb.storage.from(LEADS_BUCKET).download(a.path);
+    if(dl.error||!dl.data){ alert('Não consegui baixar.'); return; }
+    var url=URL.createObjectURL(dl.data);
+    var link=document.createElement('a'); link.href=url; link.download=a.nome||'documento'; document.body.appendChild(link); link.click(); document.body.removeChild(link);
+    setTimeout(function(){ URL.revokeObjectURL(url); },4000);
+  }catch(e){ alert('Erro ao baixar: '+(e&&e.message||e)); }
 }
 /* ===== Conversa ao vivo (chat do site) — atende o cliente direto da ficha do
    lead. Enquanto tiver uma resposta 'staff' recente, a IA do chat público para
@@ -5750,6 +5788,15 @@ async function rnConfirmar(){
           try{ salvarLeadsLocal(); }catch(eSv){}
         }
       }catch(eQ){}
+      /* organiza os documentos que acabaram de subir: renomeia pro padrão fixo
+         (identidade/comprovante) ou "Documento de comprovação - X", juntando em
+         UM PDF quando forem páginas/lados do mesmo documento (pedido do dono) */
+      try{
+        var grupos=(r&&r.data&&r.data.documentos)||[];
+        var legenda=(r&&r.data&&r.data._anexo_legend)||[];
+        if(grupos.length&&legenda.length){ await _mlOrganizarDocumentos(l,grupos,legenda); }
+      }catch(eOrg){}
+      try{ _renderLeadDocsGaleria(l); }catch(eRg){}
       var pf=[];
       _mlSetIf('l-nome',card.nome,'nome',pf);
       _mlSetIf('l-tel',card.telefone,'telefone',pf);
@@ -5998,6 +6045,74 @@ async function baixarLeadArq(i){ var l=window._laLead; var a=l&&l.arquivos&&l.ar
 async function removerLeadArq(i){ var l=window._laLead; var a=l&&l.arquivos&&l.arquivos[i]; if(!a)return; if(!confirm('Remover "'+(a.nome||a.path)+'"?'))return; var sb=window.__sb;
   try{ if(sb) await sb.storage.from(LEADS_BUCKET).remove([a.path]); }catch(e){}
   l.arquivos.splice(i,1); salvarLeadsLocal(); renderLeadArqs(); }
+
+/* ===== Organização automática dos documentos do card (pedido do dono,
+   20/08/2026): a IA identifica o que cada anexo é e agrupa páginas/lados do
+   MESMO documento (ex.: RG frente+verso) — aqui só executa o que ela decidiu:
+   junta em um PDF (ou apenas converte/renomeia se já for 1 arquivo) com o
+   nome padrão certo, e apaga os originais soltos. Roda de imediato, ainda no
+   card — quando o card virar caso, transferirArqsLeadParaProc já leva os
+   arquivos já organizados. */
+var NOMES_DOC_PADRAO={identificacao:'3 Documento de identificação', comprovante_residencia:'4 Comprovante de residência'};
+function _nomeDocPadrao(tipo, rotulo, usados){
+  var base=(tipo==='comprovacao')?('Documento de comprovação'+(rotulo?(' - '+rotulo):'')):(NOMES_DOC_PADRAO[tipo]||('Documento de comprovação'+(rotulo?(' - '+rotulo):'')));
+  var nome=base, n=2;
+  while(usados[nome]){ nome=base+' ('+n+')'; n++; }
+  usados[nome]=true; return nome;
+}
+function _fileParaDataURL(f){ return new Promise(function(res,rej){ var r=new FileReader(); r.onload=function(){res(r.result);}; r.onerror=rej; r.readAsDataURL(f); }); }
+function _imgDim(durl){ return new Promise(function(res,rej){ var img=new Image(); img.onload=function(){res({w:img.naturalWidth,h:img.naturalHeight});}; img.onerror=rej; img.src=durl; }); }
+/* imagens (Blob/File), na ordem dada -> um PDF A4, uma imagem por página */
+async function _imagensParaPDF(blobs){
+  var jspdfLib=await _ensureJsPDF(); var jsPDF=jspdfLib.jsPDF;
+  var pdf=null, pageW=210, pageH=297;
+  for(var i=0;i<blobs.length;i++){
+    var durl=await _fileParaDataURL(blobs[i]);
+    var dim; try{ dim=await _imgDim(durl); }catch(e){ continue; }
+    var esc2=Math.min(pageW/dim.w, pageH/dim.h);
+    var w=dim.w*esc2, h=dim.h*esc2;
+    if(!pdf) pdf=new jsPDF({unit:'mm',format:'a4'}); else pdf.addPage();
+    pdf.addImage(durl,'JPEG',(pageW-w)/2,(pageH-h)/2,w,h);
+  }
+  return pdf?pdf.output('blob'):null;
+}
+async function _mlOrganizarDocumentos(l, grupos, legenda){
+  var sb=window.__sb; if(!sb||!legenda||!legenda.length) return;
+  var usados={}; (l.arquivos||[]).forEach(function(a){ if(a&&a.nome) usados[a.nome]=true; });
+  for(var gi=0; gi<grupos.length; gi++){
+    var g=grupos[gi]||{};
+    var idxs=(g.anexos||[]).filter(function(n){ return n>=1 && n<=legenda.length; });
+    if(!idxs.length) continue;
+    var paths=idxs.map(function(n){ return legenda[n-1]; });
+    var arqsOrig=(l.arquivos||[]).filter(function(a){ return a&&paths.indexOf(a.path)>=0; });
+    if(!arqsOrig.length) continue;
+    var nomeNovo=_nomeDocPadrao(g.tipo, g.rotulo, usados);
+    var pathNovo=l._pasta+'/'+_slugArq(nomeNovo)+'.pdf';
+    try{
+      var soUmPdf=(arqsOrig.length===1 && /\.pdf$/i.test(arqsOrig[0].nome||''));
+      if(soUmPdf){
+        var mv=await sb.storage.from(LEADS_BUCKET).move(arqsOrig[0].path, pathNovo);
+        if(mv.error) throw new Error(mv.error.message);
+      } else {
+        var blobs=[];
+        for(var k=0;k<arqsOrig.length;k++){
+          var dl=await sb.storage.from(LEADS_BUCKET).download(arqsOrig[k].path);
+          if(dl.error||!dl.data) continue;
+          blobs.push(dl.data);
+        }
+        if(!blobs.length) continue;
+        var pdfBlob=await _imagensParaPDF(blobs);
+        if(!pdfBlob) continue;
+        var up=await sb.storage.from(LEADS_BUCKET).upload(pathNovo, pdfBlob, {upsert:true, contentType:'application/pdf'});
+        if(up.error) throw new Error(up.error.message);
+        try{ await sb.storage.from(LEADS_BUCKET).remove(arqsOrig.map(function(a){return a.path;})); }catch(eRm){}
+      }
+      l.arquivos=(l.arquivos||[]).filter(function(a){ return !a||paths.indexOf(a.path)<0; });
+      l.arquivos.push({nome:nomeNovo+'.pdf', path:pathNovo, tipo:'application/pdf', tamanho:0, quando:new Date().toISOString()});
+    }catch(eOrg){ console.warn('organizar documento do lead:',eOrg&&eOrg.message||eOrg); }
+  }
+  try{ salvarLeadsLocal(); }catch(e){}
+}
 
 /* ---- Caixa de entrada (leads_publicos, status=novo) ---- */
 function abrirInbox(){ document.getElementById('modal-inbox').classList.remove('hidden'); renderInboxList(); }
@@ -8065,7 +8180,7 @@ async function gerarCasoNovoCliente(){
   try{ var sb=window.__sb; if(sb){ var ug=await sb.auth.getUser(); var pf=await sb.from('usuarios').select('escritorio_id').eq('id',ug.data.user.id).single(); var esc=pf&&pf.data&&pf.data.escritorio_id;
     /* ficha da Receita, se o caso foi aberto pelo CNPJ */
     var rec=window.__receita||null, recF=(rec&&rec.ficha)||null;
-    var linha={escritorio_id:esc,numero:num,cliente_nome:cli||null,oponente:op||null,assunto:(assunto||peca)||null,status:'Administrativo',fonte:'caso'};
+    var linha={escritorio_id:esc,numero:num,cliente_nome:cli||null,oponente:op||null,assunto:(assunto||peca)||null,status:'Administrativo',fonte:'caso',observacoes:(obs||null)};
     if(rec&&rec.documento) linha.receita_doc=rec.documento;      /* CPF: só o número */
     if(recF){
       linha.receita_doc=recF.documento||null;
@@ -8098,19 +8213,42 @@ async function gerarCasoNovoCliente(){
   window.__cadErro=null;
   /* vínculo com cliente (base) ou criação de contato novo — mesma lógica do cadastro */
   try{ seedContatos(); }catch(e){}
+  var _leadTransf=window.__cadLead;
   var fe=window.__fichaExtraida||{};
   var feTel=(fe.tel||''), feMail=(fe.email||'');
+  /* pedido do dono (20/08/2026): aproveitar TUDO que já estava no card do lead
+     (telefone, e-mail, CPF, endereço e qualificação lida de RG/CNH e
+     comprovante de residência) — antes só o nome ia pro caso. */
+  var ld=_leadTransf?_leadDadosQualificacao(_leadTransf):null;
+  var ldTel=(ld&&ld.telefone)||'', ldMail=(ld&&ld.email)||'';
+  var tel2=feTel||ldTel, mail2=feMail||ldMail;
   var nk=normClienteNome(cli);
   var match=(window.__cmCliMatch&&normClienteNome(window.__cmCliMatch.nome)===nk)?window.__cmCliMatch:((CONTATOS||[]).find(function(x){return normClienteNome(x.nome)===nk;}));
-  if(match){ var mtel=(match.tel&&match.tel!=='—')?match.tel:feTel, mmail=(match.email&&match.email!=='—')?match.email:feMail; if(mtel||mmail){ try{ mergeContatoNoProcesso(novo,mtel,mmail); }catch(e){} }
-    /* completa o contato existente com dados novos da ficha, se faltavam */
-    try{ var sbm=window.__sb; if(sbm&&(feTel||feMail)){ var upd={}; if(feMail&&(!match.email||match.email==='—')) upd.email=feMail; if(feTel&&(!match.tel||match.tel==='—')) upd.telefone=feTel;
-      if(Object.keys(upd).length){ await sbm.from('contatos').update(upd).ilike('nome',cli); if(feMail&&upd.email)match.email=feMail; if(feTel&&upd.telefone)match.tel=feTel; } } }catch(e){}
+  if(match){ var mtel=(match.tel&&match.tel!=='—')?match.tel:tel2, mmail=(match.email&&match.email!=='—')?match.email:mail2; if(mtel||mmail){ try{ mergeContatoNoProcesso(novo,mtel,mmail); }catch(e){} }
+    /* completa o contato existente com dados novos da ficha/lead, se faltavam */
+    try{ var sbm=window.__sb; if(sbm&&(tel2||mail2||(ld&&(ld.cpf||ld.rua)))){ var upd={};
+      if(mail2&&(!match.email||match.email==='—')) upd.email=mail2; if(tel2&&(!match.tel||match.tel==='—')) upd.telefone=tel2;
+      if(ld){
+        if(ld.cpf&&!match.cpf_cnpj) upd.cpf_cnpj=ld.cpf;
+        if(ld.rua&&!match.endereco_rua) upd.endereco_rua=ld.rua; if(ld.numero&&!match.endereco_numero) upd.endereco_numero=ld.numero;
+        if(ld.bairro&&!match.endereco_bairro) upd.endereco_bairro=ld.bairro; if(ld.cidade&&!match.endereco_cidade) upd.endereco_cidade=ld.cidade;
+        if(ld.uf&&!match.endereco_uf) upd.endereco_uf=ld.uf; if(ld.cep&&!match.endereco_cep) upd.endereco_cep=ld.cep;
+        if(ld.nacionalidade&&!match.nacionalidade) upd.nacionalidade=ld.nacionalidade;
+        if(ld.estadoCivil&&!match.estado_civil) upd.estado_civil=ld.estadoCivil;
+        if(ld.profissao&&!match.profissao) upd.profissao=ld.profissao;
+      }
+      if(Object.keys(upd).length){ await sbm.from('contatos').update(upd).ilike('nome',cli); if(mail2&&upd.email)match.email=mail2; if(tel2&&upd.telefone)match.tel=tel2; } } }catch(e){}
   }
-  else { try{ mergeContatoNoProcesso(novo,feTel,feMail); }catch(e){}
+  else { try{ mergeContatoNoProcesso(novo,tel2,mail2); }catch(e){}
     try{ var sb2=window.__sb; if(sb2){ var esc3=null; try{ var ug2=await sb2.auth.getUser(); var pf2=await sb2.from('usuarios').select('escritorio_id').eq('id',ug2.data.user.id).single(); esc3=pf2&&pf2.data&&pf2.data.escritorio_id; }catch(e){}
-      var regc={nome:cli,tipo:'cliente'}; if(feMail) regc.email=feMail; if(feTel) regc.telefone=feTel; if(esc3) regc.escritorio_id=esc3; await sb2.from('contatos').insert(regc);
-      window.__CONTATOSDB=(window.__CONTATOSDB||[]); window.__CONTATOSDB.push({nome:cli,email:feMail,telefone:feTel});
+      var regc={nome:cli,tipo:'cliente'}; if(mail2) regc.email=mail2; if(tel2) regc.telefone=tel2; if(esc3) regc.escritorio_id=esc3;
+      if(ld){
+        if(ld.cpf) regc.cpf_cnpj=ld.cpf; if(ld.rua) regc.endereco_rua=ld.rua; if(ld.numero) regc.endereco_numero=ld.numero;
+        if(ld.bairro) regc.endereco_bairro=ld.bairro; if(ld.cidade) regc.endereco_cidade=ld.cidade; if(ld.uf) regc.endereco_uf=ld.uf; if(ld.cep) regc.endereco_cep=ld.cep;
+        if(ld.nacionalidade) regc.nacionalidade=ld.nacionalidade; if(ld.estadoCivil) regc.estado_civil=ld.estadoCivil; if(ld.profissao) regc.profissao=ld.profissao;
+      }
+      await sb2.from('contatos').insert(regc);
+      window.__CONTATOSDB=(window.__CONTATOSDB||[]); window.__CONTATOSDB.push({nome:cli,email:mail2,telefone:tel2});
     } }catch(e){ console.warn('criar contato:',e&&e.message||e); } }
   CONTATOS=null;
   DADOS.processos.unshift(novo);
@@ -8118,7 +8256,6 @@ async function gerarCasoNovoCliente(){
   var digCaso=num.replace(/\D/g,'');
   var anexos=(window.__cmDocs||[]).slice();
   /* TUDO do lead (prints, PDFs colados no card) vai junto para o caso criado */
-  var _leadTransf=window.__cadLead;
   if(_leadTransf && _leadTransf.arquivos && _leadTransf.arquivos.length){
     transferirArqsLeadParaProc(_leadTransf, num).catch(function(){});
   }
@@ -13830,10 +13967,11 @@ async function gerarProcuracaoAuto(){
     var tok=await docToken();
     var corpo=_procuracaoCorpoHTML(d, tipo);
     var rotulo='Procuração'+(tipo==='sem'?'':(' '+tipo+'%'));
+    var nomeArquivo='2 Procuração';  /* nome padrão fixo na pasta — o rótulo com % segue no título/andamento */
     var docHtml=_procDocWord(corpo);
     var b64doc=btoa(unescape(encodeURIComponent(docHtml)));
     var rDoc=await fetch('/api/docs',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},
-      body:JSON.stringify({path:dig+'/'+rotulo+'.doc', b64:b64doc})});
+      body:JSON.stringify({path:dig+'/'+nomeArquivo+'.doc', b64:b64doc})});
     if(!rDoc.ok) throw new Error('falha ao salvar o Word (HTTP '+rDoc.status+')');
     await _ensureHtml2Canvas(); var jspdfLib=await _ensureJsPDF();
     var off=document.createElement('div');
@@ -13853,7 +13991,7 @@ async function gerarProcuracaoAuto(){
     var bufPdf=new Uint8Array(await blobPdf.arrayBuffer());
     var sPdf=''; for(var k=0;k<bufPdf.length;k+=0x8000){ sPdf+=String.fromCharCode.apply(null, bufPdf.subarray(k,Math.min(k+0x8000,bufPdf.length))); }
     var rPdf=await fetch('/api/docs',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},
-      body:JSON.stringify({path:dig+'/'+rotulo+'.pdf', b64:btoa(sPdf)})});
+      body:JSON.stringify({path:dig+'/'+nomeArquivo+'.pdf', b64:btoa(sPdf)})});
     if(!rPdf.ok) throw new Error('falha ao salvar o PDF (HTTP '+rPdf.status+')');
     /* guarda o que faltava (endereço/nacionalidade/estado civil/CPF) pra não perguntar de novo */
     try{
