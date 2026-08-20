@@ -111,6 +111,158 @@ async function atualizarFichaAssinada(cmp, row, sigs) {
 
 function slug(s) { return String(s || 'documento').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w.\- ]+/g, '').replace(/\s+/g, '_').slice(0, 80) }
 
+/* ===== Procuração re-diagramada em A4 (pedido do dono, 20/08/2026) =====
+   O PDF salvo pelo celular do cliente saía como foto em coluna estreita. Para a
+   pasta do processo vai SEMPRE esta versão de leitura, gerada no servidor a
+   partir dos dados do banco — o original do assinador permanece arquivado. */
+const OUTORGADO_TXT = [
+  ['Djan Henrique Mendonça do Nascimento', true],
+  [', brasileiro, casado, advogado, inscrito na OAB/PB n. 5.219-A, e os integrantes da sociedade ', false],
+  ['CRISPIM, MENDONÇA E PINHEIRO ADVOGADOS', true],
+  [', registrada na Ordem dos Advogados do Brasil, seccional da Paraíba sob o número OAB/PB 2200042, e no CNPJ 45.487.942/0001-84, com sede na Rua Abelardo da Silva Guimarães Barreto, 51, sala 604-C edf. Alliance Plaza Business, CEP 58046-110, Altiplano Cabo Branco, João Pessoa/PB, e-mail: djan.adv@gmail.com.', false],
+]
+const MODELOS_CLAUSULAS = { trabalhista: { e: 30, g: true }, previdenciario: { e: 30, g: true }, civel20: { e: 20, g: false }, civel20g: { e: 20, g: true }, civel30: { e: 30, g: false }, civel30g: { e: 30, g: true }, defesa: { e: null, g: false }, defesag: { e: null, g: true }, defesa10: { e: 10, g: false }, defesa10g: { e: 10, g: true } }
+const PCT_EXT = { 10: 'dez por cento', 20: 'vinte por cento', 25: 'vinte e cinco por cento', 30: 'trinta por cento' }
+const MESES_BR = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro']
+// pdf-lib usa WinAnsi na Helvetica: troca o que não codifica para não explodir
+function winAnsi(s) { return String(s || '').replace(/[""]/g, '"').replace(/['']/g, "'").replace(/[–—]/g, '-').replace(/[^\x09\x0A\x20-\x7E -ÿ]/g, ' ') }
+
+async function pdfProcuracaoA4({ d, s0, evtAssinado }) {
+  const { PDFDocument, StandardFonts, rgb } = await import('pdf-lib')
+  const pdf = await PDFDocument.create()
+  const reg = await pdf.embedFont(StandardFonts.Helvetica)
+  const neg = await pdf.embedFont(StandardFonts.HelveticaBold)
+  const obl = await pdf.embedFont(StandardFonts.HelveticaOblique)
+  const AZUL = rgb(0.059, 0.165, 0.29), TINTA = rgb(0.11, 0.15, 0.2), CINZA = rgb(0.36, 0.4, 0.45)
+  const W = 595.28, H = 841.89, M = 62, UTIL = W - M * 2, TAM = 10.5, ALT = 15.5
+
+  let logo = null
+  try { logo = await pdf.embedPng(fs.readFileSync(path.join(process.cwd(), 'public', 'logo_cmp_full.png'))) } catch (e) {}
+
+  const dd = (s0.dados && typeof s0.dados === 'object') ? s0.dados : {}
+  const fem = /a$/i.test(String(dd.nacionalidade || ''))
+  const oa = fem ? 'a' : 'o(a)'
+  const qualif = [dd.nacionalidade || 'brasileiro(a)', dd.estadocivil, dd.profissao].filter(Boolean).join(', ')
+  const cfg = MODELOS_CLAUSULAS[d.modelo] || { e: null, g: false }
+  const ehDefesa = d.modelo === 'defesa' || d.modelo === 'defesag'
+  const quandoBR = s0.assinado_em ? new Date(new Date(s0.assinado_em).getTime() - 3 * 3600000) : new Date(Date.now() - 3 * 3600000)
+  const dataExt = quandoBR.getUTCDate() + ' de ' + MESES_BR[quandoBR.getUTCMonth()] + ' de ' + quandoBR.getUTCFullYear()
+  const horaExt = String(quandoBR.getUTCHours()).padStart(2, '0') + ':' + String(quandoBR.getUTCMinutes()).padStart(2, '0')
+
+  const pars = []
+  pars.push([['Outorgante: ' + (s0.nome || ''), true], [', ' + qualif + ', inscrit' + oa + ' no CPF de nº ', false], [s0.cpf || '—', true],
+    [(dd.rg ? ' e RG ' + dd.rg : '') + (dd.endereco ? ', residente e domiciliad' + oa + ' na ' + dd.endereco : '') + (s0.email ? ', com e-mail: ' + s0.email : '') + (s0.telefone ? ' e contato: ' + s0.telefone : '') + '.', false]])
+  pars.push([['Outorgado: ', true]].concat(OUTORGADO_TXT))
+  pars.push([['Poderes: ', true], ['o(a) outorgante nomeia e constitui seu bastante procurador o(a) outorgado(a), conferindo-lhe a cláusula ', false], ['ad judicia et extra', true],
+    [', para o foro em geral, ' + (d.finalidade ? 'em especial para ' : ''), false]].concat(d.finalidade ? [[String(d.finalidade), true], [', ', false]] : [])
+    .concat([['podendo propor, acompanhar e contestar ações em qualquer juízo, instância ou tribunal, bem como representá-lo(a) perante repartições públicas e privadas, com poderes especiais para ', false], ['transigir, negociar', true],
+      [', firmar acordos, desistir, renunciar, substabelecer com ou sem reserva', false]])
+    .concat(ehDefesa ? [['.', false]] : [[', receber e dar quitação, ', false], ['levantar e receber alvarás judiciais', true], [', e ', false], ['requerer ao juízo o pagamento direto ao(à) outorgado(a), mediante destaque ou retenção sobre os valores devidos ao(à) outorgante, dos honorários advocatícios que lhe forem devidos', true], ['.', false]]))
+  if (cfg.e !== null) pars.push([['Cláusula Contratual', true], [' - pelos serviços prestados o outorgado receberá a título de honorários o percentual de ', false], [cfg.e + '% (' + (PCT_EXT[cfg.e] || '') + ')', true], [' do valor obtido com a ação, podendo requerer ao juízo da causa que lhe pague diretamente os valores destacados do montante principal.', false]])
+  if (cfg.g) pars.push([['Da Gratuidade da Justiça', true], [' - o(a) outorgante declara não dispor de condições de arcar com custas e despesas processuais sem prejuízo do próprio sustento, requerendo os benefícios da gratuidade da justiça, na forma do art. 98 do CPC.', false]])
+  pars.push([['Outorgada de forma livre e consciente, por assinatura eletrônica, nos termos da Lei nº 14.063/2020 e da MP nº 2.200-2/2001.', false]])
+
+  const pg = pdf.addPage([W, H])
+  let y = H - 46
+  if (logo) { const lw = 132, lh = lw * (logo.height / logo.width); pg.drawImage(logo, { x: (W - lw) / 2, y: y - lh, width: lw, height: lh }); y -= lh + 22 } else y -= 16
+  const tit = 'PROCURAÇÃO'
+  pg.drawText(winAnsi(tit), { x: (W - neg.widthOfTextAtSize(tit, 14)) / 2, y, size: 14, font: neg, color: AZUL })
+  y -= 26
+
+  // parágrafo justificado com trechos em negrito: quebra por palavras medindo cada fonte
+  for (const par of pars) {
+    const words = []
+    for (const [t, b] of par) for (const w of winAnsi(t).split(/\s+/)) if (w) words.push({ w, b })
+    let linha = [], larg = 0
+    const flush = (ultima) => {
+      if (!linha.length) return
+      const esp = reg.widthOfTextAtSize(' ', TAM)
+      let x = M
+      const sobra = UTIL - larg, gaps = linha.length - 1
+      const extra = (!ultima && gaps > 0 && sobra > 0 && sobra < UTIL * 0.35) ? sobra / gaps : 0
+      for (const it of linha) {
+        const f = it.b ? neg : reg
+        pg.drawText(it.w, { x, y, size: TAM, font: f, color: it.b ? AZUL : TINTA })
+        x += f.widthOfTextAtSize(it.w, TAM) + esp + extra
+      }
+      y -= ALT
+    }
+    for (const it of words) {
+      const f = it.b ? neg : reg
+      const lw = f.widthOfTextAtSize(it.w, TAM)
+      const esp = reg.widthOfTextAtSize(' ', TAM)
+      if (larg + (linha.length ? esp : 0) + lw > UTIL) { flush(false); linha = []; larg = 0 }
+      larg += (linha.length ? esp : 0) + lw
+      linha.push(it)
+    }
+    flush(true)
+    y -= 6
+  }
+
+  y -= 4
+  const dataLinha = 'João Pessoa/PB, ' + dataExt + '.'
+  pg.drawText(winAnsi(dataLinha), { x: (W - reg.widthOfTextAtSize(winAnsi(dataLinha), TAM)) / 2, y, size: TAM, font: reg, color: TINTA })
+  y -= 52
+
+  // bloco de assinatura
+  const nomeA = winAnsi(s0.nome || '')
+  pg.drawText(nomeA, { x: (W - obl.widthOfTextAtSize(nomeA, 24)) / 2, y, size: 24, font: obl, color: TINTA })
+  y -= 12
+  pg.drawLine({ start: { x: W / 2 - 130, y }, end: { x: W / 2 + 130, y }, thickness: 1, color: TINTA })
+  y -= 15
+  pg.drawText(nomeA, { x: (W - neg.widthOfTextAtSize(nomeA, TAM)) / 2, y, size: TAM, font: neg, color: AZUL })
+  y -= 14
+  const cpfL = 'CPF ' + (s0.cpf || '—')
+  pg.drawText(winAnsi(cpfL), { x: (W - reg.widthOfTextAtSize(winAnsi(cpfL), 9.5)) / 2, y, size: 9.5, font: reg, color: TINTA })
+  y -= 13
+  const metaL = winAnsi('Assinado eletronicamente em ' + quandoBR.getUTCDate() + '/' + String(quandoBR.getUTCMonth() + 1).padStart(2, '0') + '/' + quandoBR.getUTCFullYear() + ', ' + horaExt + ' (Brasília)' + (s0.ip ? ' · IP ' + s0.ip : ''))
+  pg.drawText(metaL, { x: (W - reg.widthOfTextAtSize(metaL, 8)) / 2, y, size: 8, font: reg, color: CINZA })
+  const rod = winAnsi('Crispim, Mendonça e Pinheiro Advogados · 0800 591 7259 · contato@cmpadvogados.com.br')
+  pg.drawText(rod, { x: (W - reg.widthOfTextAtSize(rod, 7.5)) / 2, y: 34, size: 7.5, font: reg, color: CINZA })
+
+  // página 2 — trilha de auditoria
+  const p2 = pdf.addPage([W, H])
+  let y2 = H - 46
+  if (logo) { const lw = 110, lh = lw * (logo.height / logo.width); p2.drawImage(logo, { x: (W - lw) / 2, y: y2 - lh, width: lw, height: lh }); y2 -= lh + 24 }
+  const t2 = 'TRILHA DE AUDITORIA'
+  p2.drawText(t2, { x: (W - neg.widthOfTextAtSize(t2, 12.5)) / 2, y: y2, size: 12.5, font: neg, color: AZUL })
+  y2 -= 30
+  const linhas2 = [
+    ['Signatário(a)', (s0.nome || '') + ' - CPF ' + (s0.cpf || '—')],
+    ['Documento', (d.titulo || 'Procuração') + (d.processo ? ' · caso/processo ' + d.processo : '') + ' · id ' + d.id],
+    ['Método', 'Assinatura eletrônica' + (evtAssinado && /\(([^)]+)\)/.test(evtAssinado.detalhe || '') ? ' - ' + (evtAssinado.detalhe.match(/\(([^)]+)\)/) || [])[1] : '')],
+    ['Fatores', 'E-mail informado (' + (s0.email || '—') + ')' + (s0.ip ? ' · IP ' + s0.ip : '') + (s0.telefone ? ' · contato terminado em ••••' + String(s0.telefone).replace(/\D/g, '').slice(-4) : '')],
+    ['Data e hora', quandoBR.getUTCDate() + '/' + String(quandoBR.getUTCMonth() + 1).padStart(2, '0') + '/' + quandoBR.getUTCFullYear() + ', ' + horaExt + ' (horário de Brasília)'],
+    ['Identificador', (evtAssinado && evtAssinado.id) ? evtAssinado.id + ' (evento de assinatura)' : d.id],
+    ['Fundamento', 'Lei nº 14.063/2020 e MP nº 2.200-2/2001'],
+  ]
+  for (const [k, v] of linhas2) {
+    p2.drawText(winAnsi(k), { x: M, y: y2, size: 9.5, font: neg, color: CINZA })
+    // valor com quebra simples
+    let resto = winAnsi(v)
+    while (resto.length) {
+      let corte = resto
+      while (reg.widthOfTextAtSize(corte, 10) > UTIL - 130 && corte.includes(' ')) corte = corte.slice(0, corte.lastIndexOf(' '))
+      if (reg.widthOfTextAtSize(corte, 10) > UTIL - 130) corte = corte.slice(0, 60)
+      p2.drawText(corte, { x: M + 130, y: y2, size: 10, font: reg, color: TINTA })
+      resto = resto.slice(corte.length).trim()
+      y2 -= 16
+    }
+    y2 -= 6
+  }
+  y2 -= 8
+  const selo = winAnsi('Via de leitura re-diagramada pelo sistema. O registro original da assinatura — com evento, IP, agente de navegação e demais metadados — permanece guardado na plataforma de assinaturas do CMP Advogados e prevalece para conferência.')
+  let restoS = selo
+  while (restoS.length) {
+    let corte = restoS
+    while (reg.widthOfTextAtSize(corte, 9) > UTIL && corte.includes(' ')) corte = corte.slice(0, corte.lastIndexOf(' '))
+    p2.drawText(corte, { x: M, y: y2, size: 9, font: reg, color: CINZA })
+    restoS = restoS.slice(corte.length).trim()
+    y2 -= 13
+  }
+  return Buffer.from(await pdf.save())
+}
+
 export async function GET(request) {
   const { searchParams } = new URL(request.url)
   if (searchParams.get('rodar') === null) return Response.json({ info: 'Sync assinador → fichas. Use ?rodar=1 (cron).' })
@@ -121,7 +273,7 @@ export async function GET(request) {
   try { sign = await signAdmin(cmp) } catch (e) { return Response.json({ ok: false, erro: String((e && e.message) || e) }, { status: 502 }) }
 
   const { data: docs, error } = await sign.from('documentos')
-    .select('id, titulo, tipo, processo, status, sync_cmp_em, signatarios(nome, cpf, email, status, assinado_em)')
+    .select('id, titulo, tipo, modelo, finalidade, processo, status, sync_cmp_em, signatarios(nome, cpf, email, telefone, ip, dados, status, assinado_em)')
     .is('sync_cmp_em', null).eq('status', 'assinado').limit(10)
   if (error) return Response.json({ ok: false, erro: error.message }, { status: 500 })
 
@@ -150,6 +302,16 @@ export async function GET(request) {
       for (const pth of tenta) {
         const dl = await sign.storage.from('documentos').download(pth)
         if (!dl.error && dl.data) { pdfBuf = Buffer.from(await dl.data.arrayBuffer()); ehOriginal = pth.endsWith('original.pdf'); break }
+      }
+      // procuração de modelo: a pasta recebe a VERSÃO A4 re-diagramada (o PDF do
+      // celular saía como foto estreita); se a geração falhar, vai o original
+      if (d.tipo === 'procuracao' && sigs.length) {
+        try {
+          const { data: evt } = await sign.from('eventos_auditoria').select('id,detalhe')
+            .eq('documento_id', d.id).eq('tipo', 'assinado').order('criado_em', { ascending: false }).limit(1)
+          const bonito = await pdfProcuracaoA4({ d, s0: sigs[0], evtAssinado: (evt && evt[0]) || null })
+          if (bonito && bonito.length > 2000) pdfBuf = bonito
+        } catch (e) { console.warn('pdf A4 da procuração:', (e && e.message) || e) }
       }
 
       let salvoEm = '', pdfNome = ''
@@ -185,6 +347,7 @@ export async function GET(request) {
           '\nPainel: https://gestao.cmpadvogados.com.br/assinatura/painel'
         const env = await enviarEmailCore({
           para: EMAIL_ESCRITORIO,
+          cc: 'djan.adv@gmail.com',   // confirmação também direto pro Djan (pedido 20/08/2026)
           assunto: '✍ Assinado: ' + (d.titulo || 'documento') + (quem ? ' — ' + quem.split(';')[0] : ''),
           corpo, numero: dig || '', dedup: true
         })
