@@ -23,7 +23,9 @@ import crypto from 'crypto'
 import fs from 'fs'
 import path from 'path'
 import { tipoRealDoArquivo, pdfDeTexto } from '../jusbr/lib.js'
-import { svc, confereSenha, sessao, tokenDo, digitos, processosPermitidos, FILTRO_HIST_CLIENTE } from './lib.js'
+import { svc, confereSenha, hashSenha, sessao, tokenDo, digitos, processosPermitidos, FILTRO_HIST_CLIENTE } from './lib.js'
+import { enviarEmailCore } from '../enviar-email/enviar.js'
+import { URL_PORTAL } from './convite-lib.js'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -215,6 +217,51 @@ export async function POST(request) {
   try { body = await request.json() } catch (e) {}
   const acao = String(body.acao || '')
   const sb = svc()
+
+  /* ---------- esqueci a senha: manda o link por e-mail (público) ----------
+     Resposta SEMPRE neutra — não revela se o e-mail tem ou não acesso. */
+  if (acao === 'esqueci') {
+    const email = String(body.email || '').trim().toLowerCase()
+    const NEUTRA = { ok: true, msg: 'Se este e-mail tiver acesso ao aplicativo, o link de redefinição foi enviado agora. Confira também a caixa de spam.' }
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return Response.json(NEUTRA)
+    const { data: a } = await sb.from('portal_acessos').select('id,nome,email,ativo,escritorio_id').eq('email', email).maybeSingle()
+    if (!a || !a.ativo) return Response.json(NEUTRA)
+    // no máximo 3 links por hora por acesso — segura abuso e o limite do SMTP
+    const { count } = await sb.from('portal_reset').select('id', { count: 'exact', head: true })
+      .eq('acesso_id', a.id).gte('criado_em', new Date(Date.now() - 3600000).toISOString())
+    if ((count || 0) >= 3) return Response.json(NEUTRA)
+    const token = crypto.randomBytes(24).toString('hex')
+    const ins = await sb.from('portal_reset').insert({ escritorio_id: a.escritorio_id, acesso_id: a.id, token })
+    if (ins.error) return Response.json(NEUTRA)
+    const primeiro = String(a.nome || '').trim().split(/\s+/)[0] || ''
+    const corpo = (primeiro ? 'Olá, ' + primeiro + '!' : 'Olá!') + '\n\n' +
+      'Recebemos um pedido para redefinir a senha do seu acesso ao aplicativo do escritório.\n\n' +
+      'Para criar uma nova senha, abra o link abaixo (vale por 1 hora e só funciona uma vez):\n' +
+      URL_PORTAL + '?reset=' + token + '\n\n' +
+      'Se você não pediu esta troca, ignore este e-mail — sua senha continua a mesma.\n\n' +
+      'Atenciosamente,\nCrispim Mendonça e Pinheiro Advogados'
+    try { await enviarEmailCore({ para: email, assunto: 'Redefinir a senha do aplicativo — CMP Advogados', corpo, convidarApp: false, dedup: false }) } catch (e) {}
+    return Response.json(NEUTRA)
+  }
+
+  /* ---------- nova senha a partir do link (público, token de uso único) ---------- */
+  if (acao === 'reset_senha') {
+    const token = String(body.token || '').trim()
+    const senha = String(body.senha || '')
+    if (!token) return Response.json({ erro: 'Link inválido.' }, { status: 400 })
+    if (senha.length < 6) return Response.json({ erro: 'A senha precisa ter pelo menos 6 caracteres.' }, { status: 400 })
+    const { data: r } = await sb.from('portal_reset').select('id,acesso_id,criado_em,usado_em').eq('token', token).maybeSingle()
+    if (!r || r.usado_em || (Date.now() - new Date(r.criado_em).getTime()) > 3600000) {
+      return Response.json({ erro: 'Este link expirou ou já foi usado. Peça um novo em "Esqueci minha senha".' }, { status: 400 })
+    }
+    const { data: a } = await sb.from('portal_acessos').select('id,email,ativo').eq('id', r.acesso_id).maybeSingle()
+    if (!a || !a.ativo) return Response.json({ erro: 'Este acesso está indisponível. Fale com o escritório.' }, { status: 403 })
+    const up = await sb.from('portal_acessos').update({ senha_hash: hashSenha(senha), senha_enviada_em: new Date().toISOString() }).eq('id', a.id)
+    if (up.error) return Response.json({ erro: 'Não consegui salvar a nova senha. Tente de novo.' }, { status: 500 })
+    await sb.from('portal_reset').update({ usado_em: new Date().toISOString() }).eq('id', r.id)
+    await sb.from('portal_sessoes').delete().eq('acesso_id', a.id)   // derruba sessões antigas por segurança
+    return Response.json({ ok: true, email: a.email })
+  }
 
   /* ---------- login ---------- */
   if (acao === 'login') {
