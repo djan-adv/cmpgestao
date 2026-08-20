@@ -207,7 +207,7 @@
 <!-- ==================== LOGIN ==================== -->
 <section id="login">
   <div class="wrap">
-    <div class="loginbox">
+    <div class="loginbox" id="box-login">
       <img src="/logo_cmp_full.png" alt="Crispim Mendonça e Pinheiro Advogados">
       <div class="sub">Portal do cliente — acompanhe seus processos</div>
       <label for="l-email">E-mail</label>
@@ -216,8 +216,36 @@
       <input id="l-senha" type="password" autocomplete="current-password" placeholder="Senha enviada por e-mail" onkeydown="if(event.key==='Enter')entrar()">
       <button class="btnp" id="btn-entrar" style="margin-top:16px" onclick="entrar()">Entrar</button>
       <div class="errbox" id="l-erro"></div>
+      <div id="l-okmsg" style="display:none;background:#e5f4ed;border:1px solid #bfe0cf;color:#0F6E56;border-radius:10px;padding:10px 12px;font-size:13px;margin-top:10px"></div>
+      <div style="text-align:center;margin-top:12px"><a onclick="mostrarEsqueci()" style="cursor:pointer;color:#274b7d;font-size:13.5px;font-weight:600;text-decoration:underline">Esqueci minha senha</a></div>
       <div class="seg">Acesso pessoal enviado pelo escritório por e-mail. Você vê apenas os SEUS processos.
-        Esqueceu a senha? Fale com o escritório que enviamos uma nova. Seus dados são tratados só para esta consulta (LGPD).</div>
+        Seus dados são tratados só para esta consulta (LGPD).</div>
+    </div>
+
+    <!-- esqueci minha senha: manda o link pro e-mail cadastrado -->
+    <div class="loginbox" id="box-esqueci" style="display:none">
+      <img src="/logo_cmp_full.png" alt="CMP Advogados">
+      <div class="sub">Redefinir senha</div>
+      <label for="e-email">E-mail cadastrado</label>
+      <input id="e-email" type="email" inputmode="email" placeholder="seu@email.com" onkeydown="if(event.key==='Enter')enviarEsqueci()">
+      <button class="btnp" id="btn-esqueci" style="margin-top:16px" onclick="enviarEsqueci()">Enviar link de redefinição</button>
+      <div class="errbox" id="e-erro"></div>
+      <div id="e-ok" style="display:none;background:#e5f4ed;border:1px solid #bfe0cf;color:#0F6E56;border-radius:10px;padding:10px 12px;font-size:13px;margin-top:10px"></div>
+      <div style="text-align:center;margin-top:12px"><a onclick="voltarLogin()" style="cursor:pointer;color:#274b7d;font-size:13.5px;text-decoration:underline">← voltar ao login</a></div>
+      <div class="seg">Enviamos um link para o e-mail cadastrado no escritório. Ele vale por 1 hora e só funciona uma vez.</div>
+    </div>
+
+    <!-- criar nova senha (chega pelo link do e-mail: ?reset=token) -->
+    <div class="loginbox" id="box-novasenha" style="display:none">
+      <img src="/logo_cmp_full.png" alt="CMP Advogados">
+      <div class="sub">Criar nova senha</div>
+      <label for="n-senha">Nova senha <span style="font-weight:400;color:#5b6673">(mínimo 6 caracteres)</span></label>
+      <input id="n-senha" type="password" autocomplete="new-password" placeholder="Nova senha">
+      <label for="n-senha2" style="margin-top:10px">Repita a nova senha</label>
+      <input id="n-senha2" type="password" autocomplete="new-password" placeholder="Repita a senha" onkeydown="if(event.key==='Enter')salvarNovaSenha()">
+      <button class="btnp" id="btn-novasenha" style="margin-top:16px" onclick="salvarNovaSenha()">Salvar nova senha</button>
+      <div class="errbox" id="n-erro"></div>
+      <div class="seg">Por segurança, ao salvar a nova senha os aparelhos conectados são desconectados — entre de novo com a senha nova.</div>
     </div>
     <div class="rodape">
       <button class="rbtn claro" id="btn-instalar" onclick="instalar()">📲 Instalar o aplicativo</button>
@@ -343,6 +371,14 @@
    ===================================================================== */
 var TOKEN = localStorage.getItem('cmp_portal_token') || '';
 var NOME  = localStorage.getItem('cmp_portal_nome') || '';
+/* chegou pelo link de redefinição (?reset=token do e-mail): derruba a sessão
+   local — depois de trocar a senha ela cairia de qualquer jeito — e mostra a
+   tela de nova senha em vez do login */
+var RESET_TOKEN='';
+try{
+  var _rt=new URLSearchParams(location.search).get('reset');
+  if(_rt){ RESET_TOKEN=_rt; TOKEN=''; localStorage.removeItem('cmp_portal_token'); }
+}catch(e){}
 var PROCESSOS = [];
 var ATUAL = null;          // ficha aberta (resposta de acao:'processo')
 var ATUAL_ID = '';
@@ -411,6 +447,37 @@ function nomeAparelho(){
 }
 
 /* ---------- chamadas à API ---------- */
+/* ===== esqueci minha senha / nova senha ===== */
+function _trocaBox(q){ ['box-login','box-esqueci','box-novasenha'].forEach(function(id){ var e=$(id); if(e) e.style.display=(id===q)?'':'none'; }); }
+function mostrarEsqueci(){ _trocaBox('box-esqueci'); var e=$('e-email'); if(e){ e.value=($('l-email')&&$('l-email').value)||''; setTimeout(function(){ e.focus(); },50); } }
+function voltarLogin(){ _trocaBox('box-login'); }
+function enviarEsqueci(){
+  var email=(($('e-email')||{}).value||'').trim(), err=$('e-erro'), ok=$('e-ok'), b=$('btn-esqueci');
+  err.style.display='none'; ok.style.display='none';
+  if(!/^\S+@\S+\.\S+$/.test(email)){ err.textContent='Informe o e-mail cadastrado no escritório.'; err.style.display='block'; return; }
+  b.disabled=true; b.textContent='Enviando…';
+  api('esqueci',{email:email}).then(function(d){
+    b.disabled=false; b.textContent='Enviar link de redefinição';
+    ok.textContent=(d&&d.msg)||'Se este e-mail tiver acesso ao aplicativo, o link foi enviado. Confira também o spam.'; ok.style.display='block';
+  }).catch(function(){ b.disabled=false; b.textContent='Enviar link de redefinição'; err.textContent='Falha de conexão. Verifique a internet e tente de novo.'; err.style.display='block'; });
+}
+function salvarNovaSenha(){
+  var s1=(($('n-senha')||{}).value||''), s2=(($('n-senha2')||{}).value||''), err=$('n-erro'), b=$('btn-novasenha');
+  err.style.display='none';
+  if(s1.length<6){ err.textContent='A senha precisa ter pelo menos 6 caracteres.'; err.style.display='block'; return; }
+  if(s1!==s2){ err.textContent='As duas senhas não conferem — digite igual nas duas caixas.'; err.style.display='block'; return; }
+  b.disabled=true; b.textContent='Salvando…';
+  api('reset_senha',{token:RESET_TOKEN,senha:s1}).then(function(d){
+    b.disabled=false; b.textContent='Salvar nova senha';
+    if(!d||!d.ok){ err.textContent=(d&&d.erro)||'Não deu certo. Peça um novo link em "Esqueci minha senha".'; err.style.display='block'; return; }
+    try{ history.replaceState(null,'',location.pathname); }catch(e){}
+    RESET_TOKEN='';
+    _trocaBox('box-login');
+    if(d.email&&$('l-email')) $('l-email').value=d.email;
+    var m=$('l-okmsg'); if(m){ m.textContent='✓ Senha alterada com sucesso! Entre com a senha nova.'; m.style.display='block'; }
+    if($('l-senha')) $('l-senha').focus();
+  }).catch(function(){ b.disabled=false; b.textContent='Salvar nova senha'; err.textContent='Falha de conexão. Tente de novo.'; err.style.display='block'; });
+}
 function api(acao, dados){
   var corpo = Object.assign({acao:acao}, dados||{});
   return fetch('/api/portal', {
@@ -994,7 +1061,7 @@ function _bloqueiaDesktop(){
   // NUNCA substituir o service worker do chat da equipe (escopo /) no mesmo navegador
   if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('/portal-sw.js',{scope:'/portal.html'}); }catch(e){} }
   if(ehIos() && !emApp()) mostrarBotaoInstalar();   // iPhone: sempre com passo a passo
-  if(TOKEN){ entrarNaHome(); } else { mostra('login'); }
+  if(TOKEN){ entrarNaHome(); } else { mostra('login'); if(RESET_TOKEN) _trocaBox('box-novasenha'); }
 })();
 </script>
 </body>
