@@ -548,6 +548,7 @@ async function faseMinuta(sb) {
     docsPreferidos: alvo.docs_necessarios || [], rotina: 'minuta',
     prazoEm: alvo.prazo_em || null,
     tarefaTitulo: 'Revisar e protocolar: ' + (alvo.tipo_peca || 'peça') + ' — ' + String(instrucao).slice(0, 70),
+    pecaNome: alvo.tipo_peca || null,
   })
   if (r.erro) {
     await sb.from('robo_minutas').update({ status: 'erro', erro: String(r.erro).slice(0, 500), atualizado_em: new Date().toISOString() }).eq('id', alvo.id)
