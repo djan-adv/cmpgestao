@@ -31,8 +31,16 @@ a Inove é **um único cliente**, não um escritório à parte.
    alerta para o escritório.
 3. **Etiquetas no lugar de fase.** O campo Fase some da tela deles.
 4. **Aba "Plano" bloqueada** — sai da navegação e da rota. Não pode parecer cobrança.
-5. **5 acessos**, autogeridos por eles (criar, editar, desativar). O acesso do
-   desenvolvedor fica **oculto** da lista.
+5. **5→10 acessos**, autogeridos por eles — mas não por qualquer um: só o
+   **controlador** cria, edita ou desativa. **Adicionado em 05/08/2026, tarde:**
+   `inove.acessos.controlador`, boolean. O primeiro acesso não-oculto que Djan
+   cadastra vira controlador sozinho, na hora do insert. Quem cria um acesso não
+   digita senha — o servidor gera (`gerarSenha()`) e manda por e-mail
+   (`enviarAcessoInove`, mesmo motor do Portal do Cliente), no espírito de
+   "esqueci senha": a pessoa já recebe pronta pra entrar. Uma trava impede zerar
+   o número de controladores (sempre sobra um, além do oculto), pra não travar a
+   Inove sem ninguém que possa administrar. O acesso do desenvolvedor fica
+   **oculto** da lista.
 6. **Inove = um cliente só.**
 7. **Chat na barra lateral esquerda.** **Revisto em 05/08/2026: o chat é conversa
    interna da Inove — NÃO é espelhado no `sistema.html` do escritório.** A redação
@@ -527,6 +535,80 @@ ajuste pontual):
 Nenhum dos 4 foi iniciado. São suficientes para uma rodada de planejamento própria
 — o RBAC por pessoa em especial muda o contrato de várias views e merece ser
 fechado antes de mexer no código, para não reescrever duas vezes.
+
+## 13d. Versão 2 — 18/08/2026
+
+Cinco pedidos, espelhando o que o `sistema.html` já tem do lado do escritório, mais
+a aba de changelog.
+
+**Documentos próprios** (`inove.documentos_proprios`) — arquivos que a Inove SOBE,
+diferente de `v_documentos` (peças já publicadas no jus.br). Duas categorias na
+mesma tabela: `protocolar` (minuta/petição antes do protocolo, caixa maior) e
+`proposta` (proposta de honorários enviada, caixa menor — o tamanho pedido foi o de
+"Documentos da outra parte"). Upload é multipart e **precisa ser tratado antes do
+`request.json()`**, senão a rota devolve "ação desconhecida".
+
+**Onde os arquivos ficam:** `/opt/cmpdocs-inove/<digitos>/<categoria>/`, **fora** de
+`/opt/cmpdocs` do escritório — o mesmo isolamento que o role `inove_app` dá no
+banco, agora no disco. Configurável por `INOVE_DOCS_DIR`. Teto de 25 MB. O nome do
+arquivo vem do usuário e é peneirado antes de virar caminho.
+
+Servidos por `GET /api/inove?proprio=<id>`, com **a mesma tarja e o mesmo log** das
+peças do jus.br — não faria sentido proteger a peça oficial e deixar a minuta sair
+limpa.
+
+**`inove.processo_extra`** — um registro por processo: `email_vara`, `local_atual`,
+`observacoes`. Não usa `public.processos.observacoes` por dois motivos: aquele campo
+é a nota INTERNA do escritório, e o `inove_app` não escreve no `public` de todo jeito.
+
+**Honorário deferido + data do depósito** na ficha do processo gravam na **mesma
+linha** que a aba Financeiro lê (`inove.financeiro.honorario_fixado` /
+`data_deposito`), criando a linha se ainda não existir. Deliberado: dois lugares
+para o mesmo número é como se produz divergência entre telas.
+
+**`inove.melhorias`** — changelog visível para eles, agrupado por versão, na aba
+"Melhorias implantadas" (acima de "Solicitar funcionalidades"). Contrapartida ao
+canal de pedidos: o que entra ali aparece aqui quando fica pronto. Semeado com a v1
+(portal no ar) e a v2 (esta entrega). Só leitura pelo `inove_app` — quem publica
+melhoria é o escritório, direto no banco.
+
+**Não testado em navegador:** upload real, tarja no arquivo próprio e a aba nova.
+Compila e passa nas conferências de sintaxe/ids/ações.
+
+## 13e. Ajustes de layout e chat — 18/08/2026
+
+**Documentos para protocolar e Proposta enviada foram para a coluna da direita.**
+
+Primeira tentativa usou `position:fixed` + `padding-right` no card, copiando o
+`#s-proc-det`/`#docs-col` do `sistema.html`. **Ficou ruim e foi refeito:** com
+`fixed` a coluna se prende à JANELA e ignora onde a ficha está — em tela larga
+descolava e flutuava sozinha na ponta, em tela média caía por cima do card. O
+truque funciona lá porque o conteúdo do Gestão é fluido; aqui o `.content` tinha
+`max-width:1060px`, e a conta não fecha.
+
+**Solução:** a ficha virou `display:grid` com duas colunas
+(`minmax(0,1fr) 330px`) e a coluna da direita usa `position:sticky`. O grid
+reserva o espaço de verdade, então sobreposição deixa de ser possível; o sticky
+é o que segura a coluna à vista ao rolar. O `.content` foi de 1060px para 1460px
+para caber as duas. Abaixo de 1080px empilha.
+
+Detalhe: `.ficha` zera fundo/borda do card externo (os cards agora são as duas
+colunas internas), então os estados "Carregando" e erro voltam a `className='card'`
+— senão a mensagem apareceria solta, sem fundo.
+
+**O chat virou um dock fixo**, no lugar da seção na barra lateral, espelhando o
+chat da equipe do Gestão: barra amarela no rodapé, minimizável, com **seletor de
+processo** ("Conversa geral" ou qualquer um dos 42). Abrir a ficha de um processo
+já aponta o chat para ele (`ichatIrPara`).
+
+Removidos por ficarem redundantes com o dock: o item "Chat com o escritório" da
+barra lateral (nome que também já estava errado — a conversa é interna deles) e o
+bloco de conversa dentro da ficha. As funções `pintaMsgs`/`carregarChat`/
+`enviarChat` saíram junto; conferido que não sobrou referência órfã.
+
+O indicador de mensagem nova passou a contar **mensagens de outra pessoa da
+Inove** — antes contava `autor_tipo = 'escritorio'`, que não é mais usado desde
+que o chat deixou de falar com o escritório.
 
 ## 11. Ideias levantadas, ainda não aprovadas
 

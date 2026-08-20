@@ -43,6 +43,8 @@
   th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);font-size:13px;vertical-align:top}
   th{font-size:11px;text-transform:uppercase;letter-spacing:.3px;color:var(--muted)}
   tr.click{cursor:pointer} tr.click:hover td{background:#f7f9fc}
+  th.ord{cursor:pointer;user-select:none} th.ord:hover{color:var(--navy)}
+  th.ord span{color:var(--gold);font-weight:700}
   .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
   .kpi{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px 16px}
   .kpi b{display:block;font-size:24px;color:var(--navy);line-height:1.1}
@@ -80,7 +82,9 @@
   .main{flex:1 1 auto;min-width:0}
   .topbar{background:#fff;border-bottom:1px solid var(--line);padding:14px 20px;position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:12px}
   .topbar h1{font-size:18px;margin:0;color:var(--navy);flex:1}
-  .content{padding:18px 20px 70px;max-width:1060px}
+  /* 1060px comportava só uma coluna; a ficha do processo agora tem duas e
+     precisava de espaço, senão a da direita espremia a de baixo. */
+  .content{padding:18px 20px 70px;max-width:1460px}
 
   /* Chat */
   .msgs{max-height:52vh;overflow-y:auto;padding:4px 2px;display:flex;flex-direction:column;gap:8px}
@@ -90,7 +94,45 @@
   .msg.eu{align-self:flex-end;background:var(--navy);color:#fff}
   .msg.eles{align-self:flex-start;background:#fff;border:1px solid var(--line)}
 
+  /* Ficha do processo em duas colunas.
+     Grid + position:sticky, NÃO position:fixed. Com fixed a coluna se prende à
+     JANELA e ignora onde a ficha está: em tela larga ela descola e flutua sozinha
+     na ponta; em tela média ela cai por cima do card. O grid reserva a coluna de
+     verdade, então sobreposição deixa de ser possível, e o sticky é o que a mantém
+     à vista enquanto se rola. */
+  #proc-det.ficha{background:transparent;border:0;box-shadow:none;padding:0}
+  #proc-det .ficha-main{background:var(--panel);border:1px solid var(--line);border-radius:15px;
+    padding:18px 16px;box-shadow:0 6px 22px rgba(30,39,51,.05);min-width:0}
+  #docs-col{min-width:0}
+  #docs-col .bloco{background:var(--panel);border:1px solid var(--line);border-radius:15px;
+    padding:14px;box-shadow:0 6px 22px rgba(30,39,51,.05);margin-bottom:12px}
+  #docs-col .bloco:last-child{margin-bottom:0}
+  #docs-col td{font-size:12.5px;word-break:break-word}
+  @media(min-width:1080px){
+    #proc-det.ficha{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:16px;align-items:start}
+    #docs-col{position:sticky;top:84px;max-height:calc(100vh - 104px);overflow-y:auto}
+  }
+
+  /* Chat da equipe — dock fixo, no mesmo espírito do chat da equipe do Gestão */
+  #ichat{position:fixed;right:16px;bottom:0;width:380px;max-width:94vw;z-index:95;font-size:13px}
+  #ichat .barra{display:flex;align-items:center;gap:8px;padding:8px 12px;background:rgba(250,240,170,.97);
+    border:1px solid #e0d9a0;border-bottom:none;border-radius:12px 12px 0 0;cursor:pointer;box-shadow:0 -2px 14px rgba(0,0,0,.10)}
+  #ichat .barra b{color:#1b1b1b;font-size:13px}
+  #ichat .corpo{background:rgba(255,250,205,.94);border:1px solid #e0d9a0;border-top:none;box-shadow:0 -2px 14px rgba(0,0,0,.10)}
+  #ichat select{font-size:12px;padding:6px 8px;border:1px solid #d8d093;border-radius:7px;background:#fffdf0}
+  #ichat .lista{height:270px;overflow:auto;padding:10px 12px;line-height:1.45}
+  #ichat .env{display:flex;gap:6px;padding:8px;border-top:1px solid #e0d9a0;align-items:center}
+  #ichat .env input{flex:1;font-size:13px;padding:7px 9px;border:1px solid #d8d093;border-radius:7px;background:#fffdf0}
+  #ichat .env button{border:0;background:#5a5326;color:#fff;border-radius:7px;padding:7px 11px;font-weight:700;cursor:pointer}
+  #ichat .m{margin-bottom:9px}
+  #ichat .m .q{font-size:11px;font-weight:700;color:#6b6540}
+  #ichat .m .t{background:#fff;border:1px solid #e6dfae;border-radius:9px;padding:6px 9px;display:inline-block;max-width:100%;word-break:break-word}
+  #ichat .m.eu{text-align:right}
+  #ichat .m.eu .t{background:var(--navy);color:#fff;border-color:var(--navy)}
+  #ichat-badge{background:#b5342b;color:#fff;border-radius:10px;font-size:11px;font-weight:700;padding:1px 7px;display:none}
+
   @media(max-width:820px){
+    #ichat{right:0;left:0;width:auto}
     #tela-app{flex-direction:column}
     .side{width:100%;flex-direction:row;flex-wrap:wrap;align-items:center}
     .side .brand{padding:12px 14px}
@@ -148,8 +190,8 @@
       <a id="nav-painel" onclick="ir('painel')"><span class="ic">▤</span> Painel</a>
       <a id="nav-proc" onclick="ir('proc')"><span class="ic">⚖</span> Processos <span class="cnt" id="cnt-proc"></span></a>
       <a id="nav-fin" onclick="ir('fin')"><span class="ic">◈</span> Financeiro</a>
-      <a id="nav-chat" onclick="ir('chat')"><span class="ic">💬</span> Chat com o escritório <span class="cnt" id="cnt-chat"></span></a>
       <a id="nav-cad" onclick="ir('cad')"><span class="ic">🏛</span> Cadastros (Tribunais) <span class="cnt" id="cnt-cad"></span></a>
+      <a id="nav-melh" onclick="ir('melh')"><span class="ic">◆</span> Melhorias implantadas</a>
       <a id="nav-sol" onclick="ir('sol')"><span class="ic">✨</span> Solicitar funcionalidades</a>
       <a id="nav-acc" onclick="ir('acc')"><span class="ic">👥</span> Acessos <span class="cnt" id="cnt-acc"></span></a>
     </nav>
@@ -203,7 +245,14 @@
             <select id="proc-fsit" onchange="renderProc()" style="width:auto;max-width:230px"><option value="">Todas as situações</option></select>
           </div>
           <div style="overflow-x:auto"><table>
-            <thead><tr><th style="width:26%">Parte × Réu</th><th style="width:165px">Processo</th><th>Situação</th><th style="width:120px">Quesitos</th><th style="width:70px">Peças</th><th style="width:96px">Últ. mov.</th></tr></thead>
+            <thead><tr>
+              <th style="width:26%" class="ord" onclick="ordenarProc('parte')">Parte × Réu <span id="ord-parte"></span></th>
+              <th style="width:180px" class="ord" onclick="ordenarProc('numero')" title="Ordena pelo código do tribunal dentro do número — agrupa por estado">Processo <span id="ord-numero"></span></th>
+              <th class="ord" onclick="ordenarProc('situacao')">Situação <span id="ord-situacao"></span></th>
+              <th style="width:120px" class="ord" onclick="ordenarProc('quesitos')">Quesitos <span id="ord-quesitos"></span></th>
+              <th style="width:70px" class="ord" onclick="ordenarProc('docs')">Peças <span id="ord-docs"></span></th>
+              <th style="width:96px" class="ord" onclick="ordenarProc('mov')">Últ. mov. <span id="ord-mov"></span></th>
+            </tr></thead>
             <tbody id="proc-body"></tbody>
           </table></div>
           <p class="note" id="proc-vazio" style="display:none;margin-top:8px">Nenhum processo encontrado.</p>
@@ -251,24 +300,20 @@
         </div>
       </section>
 
-      <!-- CHAT GERAL -->
-      <section id="sec-chat" class="hidden">
-        <div class="card">
-          <p class="sectlabel">Conversa com o escritório</p>
-          <p class="note" style="margin:0 0 10px">Qualquer pessoa da equipe do escritório responde por aqui. Para falar de um processo específico, use o chat dentro da ficha dele.</p>
-          <div class="msgs" id="chat-msgs"><div class="note">Carregando…</div></div>
-          <div style="display:flex;gap:8px;margin-top:12px">
-            <textarea id="chat-txt" placeholder="Escreva sua mensagem…" style="min-height:52px" onkeydown="if(event.key==='Enter'&&(event.ctrlKey||event.metaKey))enviarChat(null)"></textarea>
-            <button class="btn gold" onclick="enviarChat(null)">Enviar</button>
-          </div>
-        </div>
-      </section>
-
       <!-- CADASTROS -->
       <section id="sec-cad" class="hidden">
         <div class="card">
           <p class="sectlabel">Cadastro nos Tribunais de Justiça</p>
           <div id="cad-body"><div class="note">Carregando…</div></div>
+        </div>
+      </section>
+
+      <!-- MELHORIAS IMPLANTADAS -->
+      <section id="sec-melh" class="hidden">
+        <div class="card">
+          <p class="sectlabel">O que já foi entregue no portal</p>
+          <p class="note" style="margin:0 0 4px">Cada versão reúne as melhorias publicadas. O que vocês pedem em "Solicitar funcionalidades" aparece aqui quando fica pronto.</p>
+          <div id="melh-lista"><div class="note">Carregando…</div></div>
         </div>
       </section>
 
@@ -289,16 +334,21 @@
         <div class="card">
           <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
             <p class="sectlabel" style="margin:0">Acessos <span class="note" id="acc-uso"></span></p>
-            <button class="btn gold sm" onclick="abrirAcc()">+ Novo acesso</button>
+            <button class="btn gold sm hidden" id="btn-novo-acc" onclick="abrirAcc()">+ Novo acesso</button>
           </div>
-          <p class="note" style="margin:8px 0 0">Cada pessoa entra com o próprio e-mail e senha. Documento aberto fica registrado no nome de quem abriu — por isso não se compartilha login.</p>
+          <p class="note" style="margin:8px 0 0" id="acc-nota">Cada pessoa entra com o próprio e-mail e senha. Documento aberto fica registrado no nome de quem abriu — por isso não se compartilha login.</p>
           <div id="acc-form" class="hidden" style="margin:10px 0;padding:12px;border:1px solid var(--line);border-radius:12px;background:#fafbfc">
             <input type="hidden" id="ac-id">
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:9px">
               <label style="margin:0">Nome <input id="ac-nome" placeholder="Nome da pessoa"></label>
               <label style="margin:0">E-mail <input id="ac-email" type="email" placeholder="pessoa@inove.com.br"></label>
             </div>
-            <label>Senha <input id="ac-senha" type="password" placeholder="mínimo 8 caracteres"></label>
+            <p class="note" id="ac-msg-senha" style="margin:8px 0 0">A senha é gerada e enviada por e-mail para a pessoa — você não precisa criar nem informar uma.</p>
+            <label id="ac-senha-wrap" class="hidden">Nova senha (opcional) <input id="ac-senha" type="password" placeholder="deixe em branco para manter a atual"></label>
+            <label id="ac-ctrl-wrap" class="hidden" style="display:flex;align-items:center;gap:7px;margin-top:12px">
+              <input type="checkbox" id="ac-controlador" style="width:auto">
+              <span style="font-weight:400;font-size:13px;color:var(--ink)">Controlador — pode criar/editar/desativar outros acessos</span>
+            </label>
             <div style="margin-top:10px;display:flex;gap:8px;align-items:center">
               <button class="btn gold sm" onclick="salvarAcc()">Salvar</button>
               <button class="btn ghost sm" onclick="abrirAcc(true)">Cancelar</button>
@@ -306,7 +356,7 @@
             </div>
           </div>
           <div style="overflow-x:auto;margin-top:10px"><table>
-            <thead><tr><th>Nome</th><th>E-mail</th><th style="width:130px">Último acesso</th><th style="width:90px">Situação</th><th style="width:160px"></th></tr></thead>
+            <thead><tr><th>Nome</th><th>E-mail</th><th style="width:130px">Último acesso</th><th style="width:90px">Situação</th><th style="width:230px"></th></tr></thead>
             <tbody id="acc-body"></tbody>
           </table></div>
         </div>
@@ -353,7 +403,7 @@ async function entrar(){
       body:JSON.stringify({acao:'login',email:email,senha:senha})});
     var j=await r.json();
     if(!r.ok){loginErr(j.erro||'Não foi possível entrar.');return;}
-    TOKEN=j.token; EU={nome:j.nome,email:j.email,oculto:!!j.oculto};
+    TOKEN=j.token; EU={nome:j.nome,email:j.email,oculto:!!j.oculto,controlador:!!j.controlador};
     try{ sessionStorage.setItem('inove_t',TOKEN); sessionStorage.setItem('inove_u',JSON.stringify(EU)); }catch(e){}
     if(j.lgpd) document.getElementById('modal-lgpd').classList.remove('hidden');
     await abrirApp();
@@ -383,14 +433,15 @@ async function abrirApp(){
   await carregarProc();
   await carregarEtq();
   ir('painel');
+  ichatMontar();
   TIMER=setInterval(atualizarNaoLidas, 45000);
   atualizarNaoLidas();
 }
 
 /* ================= navegação ================= */
-var TITULOS={painel:'Painel',proc:'Processos',fin:'Financeiro',chat:'Chat com o escritório',cad:'Cadastros — Tribunais',sol:'Solicitar funcionalidades',acc:'Acessos'};
+var TITULOS={painel:'Painel',proc:'Processos',fin:'Financeiro',cad:'Cadastros — Tribunais',melh:'Melhorias implantadas',sol:'Solicitar funcionalidades',acc:'Acessos'};
 function ir(s){
-  ['painel','proc','fin','chat','cad','sol','acc'].forEach(function(k){
+  ['painel','proc','fin','cad','melh','sol','acc'].forEach(function(k){
     document.getElementById('nav-'+k).classList.toggle('on',k===s);
     document.getElementById('sec-'+k).classList.toggle('hidden',k!==s);
   });
@@ -398,8 +449,8 @@ function ir(s){
   if(s==='painel')renderPainel();
   if(s==='proc'){ fecharProc(); renderProc(); }
   if(s==='fin')carregarFin();
-  if(s==='chat')carregarChat(null);
   if(s==='cad')carregarCad();
+  if(s==='melh')carregarMelh();
   if(s==='sol')carregarSol();
   if(s==='acc')carregarAcc();
   window.scrollTo(0,0);
@@ -418,12 +469,16 @@ async function carregarEtq(){
   document.getElementById('proc-fsit').innerHTML='<option value="">Todas as situações</option>'
     +ETQ.situacao.map(function(e){return '<option value="'+esc(e.nome)+'">'+esc(e.nome)+'</option>';}).join('');
 }
+/* Aviso de mensagem nova no dock. Só conta o que veio de OUTRA pessoa da Inove
+   (o autor_tipo 'escritorio' não é mais usado — a conversa é interna deles). */
 async function atualizarNaoLidas(){
+  if(ICHAT_ABERTO) return;   // aberto, a pessoa já está vendo
   try{
-    var j=await api('chat',{desde_id:0});
-    var n=(j.mensagens||[]).filter(function(m){return m.autor_tipo==='escritorio'&&!m.lida_inove;}).length;
-    var c=document.getElementById('cnt-chat');
-    c.textContent=n||''; c.classList.toggle('alerta',!!n);
+    var j=await api('chat', ICHAT_PROC?{processo_id:ICHAT_PROC,desde_id:0}:{desde_id:0});
+    var msgs=(j.mensagens||[]).filter(function(m){ return m.autor_nome!==(EU.nome||EU.email); });
+    var b=document.getElementById('ichat-badge'); if(!b) return;
+    var novas=msgs.filter(function(m){ return Number(m.id)>ICHAT_ULT; }).length;
+    b.textContent=novas||''; b.style.display=novas?'inline-block':'none';
   }catch(e){}
 }
 
@@ -463,6 +518,26 @@ async function salvarNovoProc(){
   }catch(e){ msg.textContent=(e&&e.message)||'Falhou.'; }
 }
 
+/* Ordenação da lista. O padrão continua sendo a ordem que vem do servidor
+   (movimentação mais recente primeiro); clicar num cabeçalho troca, clicar de
+   novo inverte. */
+var ORD_COL=null, ORD_DIR=1;
+function ordenarProc(col){
+  if(ORD_COL===col){ ORD_DIR=-ORD_DIR; } else { ORD_COL=col; ORD_DIR=1; }
+  renderProc();
+}
+/* Código do tribunal dentro do número CNJ (NNNNNNN-DD.AAAA.J.TR.OOOO): o par
+   J.TR identifica o tribunal, e no caso da Justiça Estadual o TR é o estado.
+   Ordenar por ele agrupa por estado, que é como a planilha deles é organizada. */
+function _trib(numero){
+  var m=String(numero||'').match(/\.(\d)\.(\d{2})\./);
+  return m ? (m[1]+m[2]) : 'zzz';
+}
+function _cmp(a,b){
+  if(a==null||a==='') return 1;      // vazio sempre por último, nos dois sentidos
+  if(b==null||b==='') return -1;
+  return a<b ? -1 : (a>b ? 1 : 0);
+}
 function renderProc(){
   var q=(val('proc-busca')||'').toLowerCase().trim();
   var fs=val('proc-fsit');
@@ -470,6 +545,21 @@ function renderProc(){
     if(fs && (p.situacao||'')!==fs) return false;
     if(!q) return true;
     return ((p.cliente_nome||'')+' '+(p.oponente||'')+' '+(p.numero||'')+' '+(p.assunto||'')).toLowerCase().indexOf(q)>-1;
+  });
+  if(ORD_COL){
+    var chave={
+      parte:    function(p){ return (p.cliente_nome||'').toLowerCase(); },
+      numero:   function(p){ return _trib(p.numero)+'|'+(p.numero||''); },
+      situacao: function(p){ return (p.situacao||'').toLowerCase(); },
+      quesitos: function(p){ return (p.quesitos||'').toLowerCase(); },
+      docs:     function(p){ return Number(p.docs)||0; },
+      mov:      function(p){ return p.ultima_movimentacao||''; }
+    }[ORD_COL];
+    lista=lista.slice().sort(function(a,b){ return _cmp(chave(a),chave(b))*ORD_DIR; });
+  }
+  ['parte','numero','situacao','quesitos','docs','mov'].forEach(function(c){
+    var el=document.getElementById('ord-'+c);
+    if(el) el.textContent = (ORD_COL===c) ? (ORD_DIR>0?'▲':'▼') : '';
   });
   var tb=document.getElementById('proc-body'); tb.innerHTML='';
   lista.forEach(function(p){
@@ -497,7 +587,10 @@ async function abrirProc(id){
   PROC_ABERTO=id;
   var det=document.getElementById('proc-det');
   document.getElementById('proc-lista').classList.add('hidden');
-  det.classList.remove('hidden');
+  // "Carregando" e erro aparecem como card normal; só o conteúdo pronto vira grid
+  // de duas colunas — senão a mensagem fica solta, sem fundo, por causa do
+  // background:transparent que a .ficha aplica.
+  det.className='card';
   det.innerHTML='<div class="note">Carregando…</div>';
   var j;
   try{ j=await api('processo',{id:id}); }
@@ -509,9 +602,39 @@ async function abrirProc(id){
   function opts(arr,sel){ return '<option value="">—</option>'+arr.map(function(e){
     return '<option value="'+e.id+'"'+((sel&&sel.etiqueta_id===e.id)?' selected':'')+'>'+esc(e.nome)+'</option>'; }).join(''); }
   var link=function(d,dl){ return '/api/inove?doc='+encodeURIComponent(d.id)+'&t='+encodeURIComponent(TOKEN)+(dl?'&dl=1':''); };
+  var linkP=function(d,dl){ return '/api/inove?proprio='+encodeURIComponent(d.id)+'&t='+encodeURIComponent(TOKEN)+(dl?'&dl=1':''); };
+  var ex=j.extra||{}, fin=j.financeiro||{}, vara=j.vara||{};
+  var proprios=j.proprios||[];
+  /* Os dois blocos vão para a coluna fixa da direita (#docs-col), como no
+     sistema.html — ficam à vista enquanto se rola a ficha. */
+  function blocoProprios(cat,titulo,vazio,altura){
+    var lista=proprios.filter(function(d){return d.categoria===cat;});
+    return '<div class="bloco">'
+      + '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px">'
+      +   '<p class="sectlabel" style="margin:0">'+titulo+' ('+lista.length+')</p>'
+      +   '<label class="btn ghost sm" style="margin:0;font-weight:800;color:var(--navy);white-space:nowrap">+ Anexar'
+      +     '<input type="file" style="display:none" onchange="subirProprio(\''+id+'\',\''+cat+'\',this)">'
+      +   '</label>'
+      + '</div>'
+      + (lista.length
+          ? '<div style="max-height:'+altura+';overflow-y:auto"><table><tbody>'
+            + lista.map(function(d){
+                return '<tr><td>'+esc(d.nome_arquivo||'documento')+'<div class="note">'+fdata(d.enviado_em)+'</div>'
+                  + '<div style="margin-top:5px;white-space:nowrap">'
+                  + '<a class="btn ghost sm" style="text-decoration:none" target="_blank" rel="noopener" href="'+linkP(d,false)+'">Abrir</a> '
+                  + '<a class="btn ghost sm" style="text-decoration:none" href="'+linkP(d,true)+'">Baixar</a> '
+                  + '<button class="btn danger sm" onclick="excluirProprio(\''+d.id+'\',\''+id+'\')">Excluir</button>'
+                  + '</div></td></tr>';
+              }).join('')
+            + '</tbody></table></div>'
+          : '<p class="note" style="margin:0">'+vazio+'</p>')
+      + '</div>';
+  }
 
+  det.className='card ficha';
   det.innerHTML =
-    '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">'
+    '<div class="ficha-main">'
+    + '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">'
     + '<button class="btn ghost sm" onclick="fecharProc()">← Voltar</button>'
     + '<button class="btn gold sm" onclick="atualizarProc(\''+id+'\')" id="btn-atu">↻ Buscar peças novas no jus.br</button>'
     + '</div>'
@@ -529,6 +652,37 @@ async function abrirProc(id){
     +   '<div><b>Assunto:</b> '+esc(p.assunto||'—')+'</div>'
     +   '<div><b>Órgão:</b> '+esc(p.orgao_atual||p.orgao||'—')+'</div>'
     +   '<div><b>Foro:</b> '+esc(p.foro||'—')+'</div>'
+    + '</div>'
+
+    /* Honorário deferido + depósito: grava na MESMA linha da aba Financeiro,
+       para não existirem dois lugares com o mesmo número. */
+    + '<div style="border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:14px;background:#fafbfc">'
+    +   '<p class="sectlabel" style="margin:0 0 8px">Honorário pericial</p>'
+    +   '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'
+    +     '<label style="margin:0">Valor deferido (R$)<input id="hn-valor" inputmode="decimal" placeholder="0,00" value="'+(fin.honorario_fixado!=null?esc(fin.honorario_fixado):'')+'"></label>'
+    +     '<label style="margin:0">Data do depósito judicial<input id="hn-data" type="date" value="'+esc(String(fin.data_deposito||'').slice(0,10))+'"></label>'
+    +   '</div>'
+    +   '<div style="margin-top:9px;display:flex;gap:8px;align-items:center">'
+    +     '<button class="btn gold sm" onclick="salvarHonorario(\''+id+'\')">Salvar</button>'
+    +     '<span id="hn-msg" class="note"></span>'
+    +   '</div>'
+    + '</div>'
+
+    /* Contato da vara, local do processo e anotações — um bloco só, salvo junto. */
+    + '<div style="border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:16px">'
+    +   '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'
+    +     '<label style="margin:0">E-mail da vara / cartório'
+    +       '<input id="ex-email" type="email" placeholder="vara@tjxx.jus.br" value="'+esc(ex.email_vara||vara.email_sugerido||'')+'">'
+    +       ((!ex.email_vara && vara.email_sugerido)
+            ? '<span class="note" style="font-weight:400">Preenchido pelo cadastro de varas do escritório — confira e salve.</span>' : '')
+    +     '</label>'
+    +     '<label style="margin:0">Local atual do processo<input id="ex-local" placeholder="Ex.: concluso ao juiz, arquivo, contadoria…" value="'+esc(ex.local_atual||'')+'"></label>'
+    +   '</div>'
+    +   '<label>Observações<textarea id="ex-obs" placeholder="Anotações sobre este processo — visíveis para toda a equipe da Inove." style="min-height:80px">'+esc(ex.observacoes||'')+'</textarea></label>'
+    +   '<div style="margin-top:9px;display:flex;gap:8px;align-items:center">'
+    +     '<button class="btn gold sm" onclick="salvarExtra(\''+id+'\')">Salvar</button>'
+    +     '<span id="ex-msg" class="note"></span>'
+    +   '</div>'
     + '</div>'
 
     + '<div class="lgpd"><b>Uso restrito.</b> As peças abaixo estão sob sigilo. É proibido encaminhar ou divulgar a terceiros. '
@@ -562,14 +716,18 @@ async function abrirProc(id){
           + '</tbody></table></div>'
         : '<p class="note">Sem movimentações registradas.</p>')
 
-    + '<p class="sectlabel" style="margin-top:18px">Conversa sobre este processo</p>'
-    + '<div class="msgs" id="pchat-msgs" style="max-height:34vh"></div>'
-    + '<div style="display:flex;gap:8px;margin-top:10px">'
-    +   '<textarea id="pchat-txt" placeholder="Falar com o escritório sobre este processo…" style="min-height:48px"></textarea>'
-    +   '<button class="btn gold" onclick="enviarChat(\''+id+'\')">Enviar</button>'
+    + '</div>'   /* fecha .ficha-main */
+
+    /* Coluna da direita: gruda no topo em tela larga, empilha embaixo no celular. */
+    + '<div id="docs-col">'
+    +   blocoProprios('protocolar', 'Documentos para protocolar',
+          'Nenhum documento anexado. Use "+ Anexar" para guardar minutas e petições antes do protocolo.', '46vh')
+    +   blocoProprios('proposta', 'Proposta enviada',
+          'Nenhuma proposta anexada ainda.', '22vh')
     + '</div>';
 
-  carregarChat(id);
+  // abrir um processo já deixa o chat da equipe apontado para ele
+  if (typeof ichatIrPara === 'function') ichatIrPara(id);
 }
 
 async function etiquetar(id, dim, valor){
@@ -590,6 +748,62 @@ async function atualizarProc(id){
   b.disabled=false; b.textContent='↻ Buscar peças novas no jus.br';
 }
 
+async function salvarExtra(id){
+  var m=document.getElementById('ex-msg'); m.textContent='Salvando…';
+  try{
+    await api('extra_salvar',{processo_id:id,email_vara:val('ex-email'),local_atual:val('ex-local'),observacoes:val('ex-obs')});
+    m.textContent='Salvo.';
+  }catch(e){ m.textContent=(e&&e.message)||'Falhou.'; }
+}
+async function salvarHonorario(id){
+  var m=document.getElementById('hn-msg'); m.textContent='Salvando…';
+  try{
+    await api('honorario_salvar',{processo_id:id,honorario_fixado:numero(val('hn-valor')),data_deposito:val('hn-data')||null});
+    m.textContent='Salvo — aparece também na aba Financeiro.';
+  }catch(e){ m.textContent=(e&&e.message)||'Falhou.'; }
+}
+/* Upload vai como multipart, não pela função api() — que é só JSON. */
+async function subirProprio(processoId,categoria,input){
+  var f=input.files&&input.files[0]; if(!f) return;
+  var fd=new FormData();
+  fd.append('processo_id',processoId); fd.append('categoria',categoria); fd.append('arquivo',f);
+  input.value='';
+  try{
+    var r=await fetch('/api/inove',{method:'POST',headers:{'Authorization':'Bearer '+TOKEN},body:fd});
+    var j={}; try{ j=await r.json(); }catch(e){}
+    if(!r.ok) throw new Error(j.erro||('Erro '+r.status));
+    await abrirProc(processoId);
+  }catch(e){ alert('Não foi possível anexar: '+((e&&e.message)||e)); }
+}
+async function excluirProprio(docId,processoId){
+  if(!confirm('Excluir este documento? Não tem como desfazer.')) return;
+  try{ await api('doc_proprio_excluir',{id:docId}); await abrirProc(processoId); }
+  catch(e){ alert('Não foi possível excluir: '+e.message); }
+}
+async function carregarMelh(){
+  var box=document.getElementById('melh-lista');
+  try{
+    var j=await api('melhorias'); var lista=j.melhorias||[];
+    if(!lista.length){ box.innerHTML='<div class="note">Nada publicado ainda.</div>'; return; }
+    var porVersao={}, ordem=[];
+    lista.forEach(function(m){ if(!porVersao[m.versao]){ porVersao[m.versao]=[]; ordem.push(m.versao); } porVersao[m.versao].push(m); });
+    box.innerHTML=ordem.map(function(v){
+      var itens=porVersao[v];
+      return '<div style="margin-bottom:18px">'
+        +'<div style="display:flex;align-items:center;gap:9px;margin-bottom:7px">'
+        +  '<span class="chip" style="background:var(--navy);color:#fff;font-size:12px">Versão '+esc(v)+'</span>'
+        +  '<span class="note">'+fdata(itens[0].publicado_em)+'</span>'
+        +'</div>'
+        +itens.map(function(m){
+          return '<div style="border-left:3px solid var(--gold);padding:2px 0 2px 11px;margin-bottom:9px">'
+            +'<div style="font-weight:700;color:var(--navy);font-size:13.5px">'+esc(m.titulo)+'</div>'
+            +(m.descricao?'<div class="note" style="margin-top:2px">'+esc(m.descricao)+'</div>':'')
+            +'</div>';
+        }).join('')
+        +'</div>';
+    }).join('');
+  }catch(e){ box.innerHTML='<div class="err" style="display:block">'+esc(e.message)+'</div>'; }
+}
 function marcarTodasPecas(v){
   document.querySelectorAll('.pd-check').forEach(function(c){ c.checked=v; });
 }
@@ -692,32 +906,84 @@ async function salvarFin(){
   }catch(e){ m.textContent=(e&&e.message)||'Falhou.'; }
 }
 
-/* ================= chat ================= */
-function pintaMsgs(alvo, msgs){
-  var box=document.getElementById(alvo);
-  if(!box) return;
-  box.innerHTML = msgs.length ? msgs.map(function(m){
-    var eu=(m.autor_tipo==='inove');
-    return '<div class="msg '+(eu?'eu':'eles')+'">'
-      +'<span class="quem">'+esc(eu?(m.autor_nome||'Você'):(m.autor_nome||'Escritório'))+'</span>'
-      +esc(m.texto||'')+'<span class="hora">'+fhora(m.criado_em)+'</span></div>';
-  }).join('') : '<div class="note">Nenhuma mensagem ainda. Escreva a primeira.</div>';
-  box.scrollTop=box.scrollHeight;
+/* ================= chat da equipe (dock) =================
+   Conversa INTERNA da Inove — não chega ao escritório. Fica num dock fixo, como
+   o chat da equipe do sistema.html, com um seletor de processo: "Conversa geral"
+   ou qualquer um dos processos. Abrir a ficha de um processo já aponta o chat
+   para ele. */
+var ICHAT_PROC=null, ICHAT_ABERTO=false, ICHAT_TIMER=null, ICHAT_ULT=0;
+
+function ichatMontar(){
+  if(document.getElementById('ichat')) return;
+  var d=document.createElement('div'); d.id='ichat';
+  d.innerHTML=
+    '<div class="barra" onclick="ichatAlternar()">'
+    +  '<b>💬 Chat da equipe</b>'
+    +  '<span id="ichat-badge"></span>'
+    +  '<span style="margin-left:auto;color:#5a5326;font-weight:700" id="ichat-seta">▲</span>'
+    +'</div>'
+    +'<div class="corpo hidden" id="ichat-corpo">'
+    +  '<div style="padding:8px;border-bottom:1px solid #e6dfae">'
+    +    '<select id="ichat-sel" style="width:100%" onchange="ichatTrocar(this.value)"></select>'
+    +  '</div>'
+    +  '<div class="lista" id="ichat-lista"></div>'
+    +  '<div class="env">'
+    +    '<input id="ichat-txt" placeholder="escreva e tecle Enter…">'
+    +    '<button onclick="ichatEnviar()">➤</button>'
+    +  '</div>'
+    +'</div>';
+  document.body.appendChild(d);
+  document.getElementById('ichat-txt').onkeydown=function(e){ if(e.key==='Enter'){ e.preventDefault(); ichatEnviar(); } };
+  ichatPreencherSel();
 }
-async function carregarChat(processoId){
+function ichatPreencherSel(){
+  var sel=document.getElementById('ichat-sel'); if(!sel) return;
+  sel.innerHTML='<option value="">👥 Conversa geral</option>'
+    +PROC.map(function(p){
+      return '<option value="'+p.id+'">'+esc((p.cliente_nome||'').slice(0,42)+' · '+(p.numero||''))+'</option>';
+    }).join('');
+  sel.value=ICHAT_PROC||'';
+}
+function ichatAlternar(){
+  ICHAT_ABERTO=!ICHAT_ABERTO;
+  document.getElementById('ichat-corpo').classList.toggle('hidden',!ICHAT_ABERTO);
+  document.getElementById('ichat-seta').textContent=ICHAT_ABERTO?'▼':'▲';
+  if(ICHAT_ABERTO){ ichatCarregar(); ichatPolling(true); } else { ichatPolling(false); }
+}
+function ichatTrocar(v){ ICHAT_PROC=v||null; ICHAT_ULT=0; ichatCarregar(); }
+function ichatIrPara(processoId){
+  ICHAT_PROC=processoId||null; ICHAT_ULT=0;
+  ichatPreencherSel();
+  if(ICHAT_ABERTO) ichatCarregar();
+}
+function ichatPolling(ligar){
+  if(ICHAT_TIMER){ clearInterval(ICHAT_TIMER); ICHAT_TIMER=null; }
+  if(ligar) ICHAT_TIMER=setInterval(ichatCarregar, 20000);
+}
+async function ichatCarregar(){
+  var box=document.getElementById('ichat-lista'); if(!box) return;
   try{
-    var j=await api('chat', processoId?{processo_id:processoId,desde_id:0}:{desde_id:0});
-    pintaMsgs(processoId?'pchat-msgs':'chat-msgs', j.mensagens||[]);
-    if(!processoId) atualizarNaoLidas();
+    var j=await api('chat', ICHAT_PROC?{processo_id:ICHAT_PROC,desde_id:0}:{desde_id:0});
+    var msgs=j.mensagens||[];
+    box.innerHTML = msgs.length ? msgs.map(function(m){
+      var eu=(m.autor_nome===(EU.nome||EU.email));
+      return '<div class="m'+(eu?' eu':'')+'">'
+        +(eu?'':'<div class="q">'+esc(m.autor_nome||'—')+'</div>')
+        +'<div class="t">'+esc(m.texto||'')+'</div>'
+        +'<div class="q" style="font-weight:400;opacity:.7">'+fhora(m.criado_em)+'</div></div>';
+    }).join('') : '<div class="note">Nenhuma mensagem aqui ainda.</div>';
+    box.scrollTop=box.scrollHeight;
+    ICHAT_ULT=msgs.length?msgs[msgs.length-1].id:0;
+    var b=document.getElementById('ichat-badge'); if(b) b.style.display='none';
   }catch(e){}
 }
-async function enviarChat(processoId){
-  var campo=document.getElementById(processoId?'pchat-txt':'chat-txt');
+async function ichatEnviar(){
+  var campo=document.getElementById('ichat-txt');
   var txt=(campo.value||'').trim(); if(!txt) return;
   campo.value='';
   try{
-    await api('chat_enviar', processoId?{processo_id:processoId,texto:txt}:{texto:txt});
-    carregarChat(processoId);
+    await api('chat_enviar', ICHAT_PROC?{processo_id:ICHAT_PROC,texto:txt}:{texto:txt});
+    ichatCarregar();
   }catch(e){ alert('Não foi possível enviar: '+e.message); campo.value=txt; }
 }
 
@@ -769,31 +1035,43 @@ async function enviarSol(){
 }
 
 /* ================= acessos ================= */
+var SOU_CONTROLADOR=false;
 async function carregarAcc(){
-  var j=await api('acessos'); ACC=j.acessos||[];
+  var j=await api('acessos'); ACC=j.acessos||[]; SOU_CONTROLADOR=!!j.souControlador;
   var ativos=ACC.filter(function(a){return a.ativo;}).length;
   document.getElementById('acc-uso').textContent='— '+ativos+' de '+j.limite+' em uso';
   document.getElementById('cnt-acc').textContent=ativos||'';
+  document.getElementById('btn-novo-acc').classList.toggle('hidden',!SOU_CONTROLADOR);
+  document.getElementById('acc-nota').textContent = SOU_CONTROLADOR
+    ? 'Cada pessoa entra com o próprio e-mail e senha — a senha é gerada e enviada por e-mail, ninguém compartilha login.'
+    : 'Cada pessoa entra com o próprio e-mail e senha. Documento aberto fica registrado no nome de quem abriu — por isso não se compartilha login.';
   var tb=document.getElementById('acc-body'); tb.innerHTML='';
   ACC.forEach(function(a){
     var eu=(a.email===EU.email);
     var tr=document.createElement('tr');
-    tr.innerHTML='<td><b>'+esc(a.nome||'')+'</b>'+(eu?' <span class="chip">você</span>':'')+'</td>'
+    tr.innerHTML='<td><b>'+esc(a.nome||'')+'</b>'+(eu?' <span class="chip">você</span>':'')+(a.controlador?' <span class="chip" style="background:#fbf1dc;color:#8a6d1a">controlador</span>':'')+'</td>'
       +'<td class="note">'+esc(a.email)+'</td>'
       +'<td class="note">'+(a.ultimo_login_em?fhora(a.ultimo_login_em):'nunca entrou')+'</td>'
       +'<td>'+(a.ativo?'<span class="chip" style="background:#e5f4ed;color:var(--green)">ativo</span>':'<span class="chip" style="background:#fbeceb;color:var(--red)">inativo</span>')+'</td>'
       +'<td style="text-align:right;white-space:nowrap"></td>';
-    var td=tr.lastChild;
-    var be=document.createElement('button');
-    be.className='btn ghost sm'; be.textContent='Editar'; be.onclick=function(){ editarAcc(a.id); };
-    td.appendChild(be);
-    if(!eu){
-      var bl=document.createElement('button');
-      bl.className='btn '+(a.ativo?'danger':'ghost')+' sm';
-      bl.style.marginLeft='6px';
-      bl.textContent=a.ativo?'Desativar':'Ativar';
-      bl.onclick=function(){ ligarAcc(a.id, !a.ativo); };
-      td.appendChild(bl);
+    if(SOU_CONTROLADOR){
+      var td=tr.lastChild;
+      var be=document.createElement('button');
+      be.className='btn ghost sm'; be.textContent='Editar'; be.onclick=function(){ editarAcc(a.id); };
+      td.appendChild(be);
+      var br=document.createElement('button');
+      br.className='btn ghost sm'; br.style.marginLeft='6px'; br.textContent='Reenviar acesso';
+      br.title='Gera uma senha nova e manda por e-mail — use se não tiver certeza se o e-mail anterior chegou.';
+      br.onclick=function(){ reenviarAcc(a.id, br); };
+      td.appendChild(br);
+      if(!eu){
+        var bl=document.createElement('button');
+        bl.className='btn '+(a.ativo?'danger':'ghost')+' sm';
+        bl.style.marginLeft='6px';
+        bl.textContent=a.ativo?'Desativar':'Ativar';
+        bl.onclick=function(){ ligarAcc(a.id, !a.ativo); };
+        td.appendChild(bl);
+      }
     }
     tb.appendChild(tr);
   });
@@ -804,6 +1082,11 @@ function abrirAcc(fechar){
   document.getElementById('ac-id').value='';
   ['ac-nome','ac-email','ac-senha'].forEach(function(id){document.getElementById(id).value='';});
   document.getElementById('ac-email').disabled=false;
+  document.getElementById('ac-controlador').checked=false;
+  // criar: senha é gerada e mandada por e-mail — não pede nada disso na tela
+  document.getElementById('ac-msg-senha').classList.remove('hidden');
+  document.getElementById('ac-senha-wrap').classList.add('hidden');
+  document.getElementById('ac-ctrl-wrap').classList.add('hidden');
   document.getElementById('ac-msg').textContent='';
   f.classList.remove('hidden');
 }
@@ -814,21 +1097,46 @@ function editarAcc(id){
   document.getElementById('ac-nome').value=a.nome||'';
   document.getElementById('ac-email').value=a.email;
   document.getElementById('ac-email').disabled=true;
-  document.getElementById('ac-msg').textContent='Deixe a senha em branco para manter a atual.';
+  document.getElementById('ac-controlador').checked=!!a.controlador;
+  // editar: aqui sim dá pra forçar uma senha nova e mexer em quem é controlador
+  document.getElementById('ac-msg-senha').classList.add('hidden');
+  document.getElementById('ac-senha-wrap').classList.remove('hidden');
+  document.getElementById('ac-ctrl-wrap').classList.remove('hidden');
 }
 async function salvarAcc(){
   var m=document.getElementById('ac-msg'); m.textContent='Salvando…';
   var id=val('ac-id');
   try{
-    if(id) await api('acesso_editar',{id:id,nome:val('ac-nome'),senha:val('ac-senha')||null});
-    else   await api('acesso_criar',{nome:val('ac-nome'),email:val('ac-email'),senha:val('ac-senha')});
-    m.textContent='Salvo.'; abrirAcc(true); carregarAcc();
+    if(id){
+      await api('acesso_editar',{id:id,nome:val('ac-nome'),senha:val('ac-senha')||null,controlador:document.getElementById('ac-controlador').checked});
+      m.textContent='Salvo.';
+      abrirAcc(true);
+    } else {
+      var j=await api('acesso_criar',{nome:val('ac-nome'),email:val('ac-email')});
+      if(j.avisoEmail){
+        // a senha só existe aqui — o form não pode fechar sozinho e levar a mensagem junto
+        alert(j.avisoEmail);
+      } else {
+        m.textContent='Criado — a senha foi enviada por e-mail para a pessoa.';
+        abrirAcc(true);
+      }
+    }
+    carregarAcc();
   }catch(e){ m.textContent=(e&&e.message)||'Falhou.'; }
 }
 async function ligarAcc(id,ativar){
   if(!ativar && !confirm('Desativar este acesso? A pessoa é desconectada na hora.')) return;
   try{ await api('acesso_desativar',{id:id,ativar:ativar}); carregarAcc(); }
   catch(e){ alert('Não foi possível: '+e.message); }
+}
+async function reenviarAcc(id,btn){
+  if(!confirm('Gerar uma senha nova e mandar por e-mail para esta pessoa? A senha atual deixa de funcionar.')) return;
+  if(btn){ btn.disabled=true; btn.textContent='Enviando…'; }
+  try{
+    var j=await api('acesso_reenviar',{id:id});
+    if(j.avisoEmail) alert(j.avisoEmail); else alert('Senha nova enviada por e-mail.');
+  }catch(e){ alert('Não foi possível: '+e.message); }
+  if(btn){ btn.disabled=false; btn.textContent='Reenviar acesso'; }
 }
 
 /* ================= retomar sessão ================= */

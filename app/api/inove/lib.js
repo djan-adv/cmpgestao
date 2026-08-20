@@ -231,4 +231,34 @@ export async function alertarEscritorio(assunto, corpo) {
   } catch (e) { /* alerta falhar não pode quebrar a ação do usuário */ }
 }
 
+/* ---------- e-mail de acesso novo ----------
+   Mesmo espírito do "esqueci senha": quem cadastra não digita senha nenhuma — o
+   sistema gera, manda pronta por e-mail, e quem recebe já entra com ela. */
+export async function enviarAcessoInove({ nome, email, senha, controlador }) {
+  const r = await enviarAcessoInoveResultado({ nome, email, senha, controlador })
+  // enviarEmailCore NÃO lança em falha — devolve {erro} como retorno normal. Quem só
+  // dá `await` nisso (como este atalho) via de regra usa try/catch pra pegar falha;
+  // sem este throw explícito, um SMTP fora do ar passava como sucesso silencioso.
+  if (r && r.erro) throw new Error(r.erro)
+  return r
+}
+async function enviarAcessoInoveResultado({ nome, email, senha, controlador }) {
+  const { enviarEmailCore, URL_PUBLICA } = await import('../enviar-email/enviar.js')
+  const corpo =
+    'Olá' + (nome ? ', ' + nome : '') + '!\n\n' +
+    'Seu acesso ao Portal do Perito está pronto' + (controlador ? ' — como controlador, você também pode criar acesso para o restante da equipe.' : '.') + '\n\n' +
+    'ENDEREÇO: ' + URL_PUBLICA + '/inove.html\n' +
+    'E-MAIL: ' + email + '\n' +
+    'SENHA: ' + senha + '\n\n' +
+    'IMPORTANTE:\n' +
+    '• O acesso é pessoal — não compartilhe.\n' +
+    '• As peças dos processos são de uso restrito: cada documento aberto sai carimbado com o seu e-mail e o acesso fica registrado.\n' +
+    '• Qualquer dúvida, é só responder este e-mail.'
+  return enviarEmailCore({
+    para: email,
+    assunto: (controlador ? 'Seu acesso (controlador) ' : 'Seu acesso ') + 'ao Portal do Perito — Inove',
+    corpo, dedup: false,
+  })
+}
+
 export const erro = (msg, status = 400) => Response.json({ erro: msg }, { status })

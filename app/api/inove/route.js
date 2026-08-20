@@ -16,20 +16,30 @@
 //   POST {acao:'atualizar_todos'}                     -> idem, em lote (só acesso oculto)
 //   POST {acao:'financeiro'} / {acao:'financeiro_salvar', ...}
 //   POST {acao:'chat', processo_id, desde_id} / {acao:'chat_enviar', processo_id, texto}
-//   POST {acao:'acessos'} / {acao:'acesso_criar'|'acesso_editar'|'acesso_desativar'}
+//   POST {acao:'acessos'} / {acao:'acesso_criar'|'acesso_editar'|'acesso_reenviar'|'acesso_desativar'}
 //   POST {acao:'lgpd_aceitar'}
+//   POST {acao:'extra_salvar'|'honorario_salvar'|'melhorias'|'doc_proprio_excluir'}
+//   POST multipart {processo_id, categoria:'protocolar'|'proposta', arquivo}
 //   GET  /api/inove?doc=<id>&t=<token>[&dl=1]         -> o arquivo, já carimbado
+//   GET  /api/inove?proprio=<id>&t=<token>[&dl=1]     -> idem, arquivo que eles subiram
 //
 // Documentos: a Inove vê TUDO dos processos dela, não só as peças oficiais. Perito
 // não acompanha processo, ele produz o laudo — precisa de quesito, impugnação,
 // proposta e petição das partes. O controle está na tarja e no log, não no filtro.
 
 import {
-  q, q1, hashSenha, confereSenha, sessao, tokenDo, ip, podeTentar, marcaTentativa,
-  config, num, carimbarPdf, carimbarHtml, lerDocumento, logDoc, alertarEscritorio, erro, SESSAO_DIAS,
+  q, q1, hashSenha, gerarSenha, confereSenha, sessao, tokenDo, ip, podeTentar, marcaTentativa,
+  config, num, carimbarPdf, carimbarHtml, lerDocumento, logDoc, alertarEscritorio, enviarAcessoInove, erro, SESSAO_DIAS,
 } from './lib.js'
 import { tipoRealDoArquivo, pdfDeTexto } from '../jusbr/lib.js'
 import crypto from 'crypto'
+import fs from 'fs'
+import path from 'path'
+
+// Os arquivos que a Inove sobe ficam FORA de /opt/cmpdocs (o acervo do escritório):
+// mesmo isolamento que o role inove_app dá no banco, agora no disco.
+const DOCS_INOVE = process.env.INOVE_DOCS_DIR || '/opt/cmpdocs-inove'
+const MAX_UPLOAD = 25 * 1024 * 1024
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -46,6 +56,43 @@ function etiquetaTarja(acesso, doc) {
 }
 
 export async function POST(request) {
+  /* Upload chega como multipart, não JSON — tem que ser tratado antes do parse
+     de body, senão o request.json() estoura e a rota devolve "ação desconhecida". */
+  const ctype = request.headers.get('content-type') || ''
+  if (ctype.indexOf('multipart/form-data') > -1) {
+    const acesso = await sessao(tokenDo(request))
+    if (!acesso) return erro('Sessão expirada. Entre de novo.', 401)
+
+    const form = await request.formData()
+    const pid = String(form.get('processo_id') || '')
+    const categoria = String(form.get('categoria') || '')
+    const arquivo = form.get('arquivo')
+    if (!['protocolar', 'proposta'].includes(categoria)) return erro('Categoria inválida.')
+    if (!arquivo || typeof arquivo === 'string') return erro('Envie um arquivo.')
+    if (arquivo.size > MAX_UPLOAD) return erro('Arquivo muito grande (máximo 25 MB).', 413)
+
+    const p = await q1('select numero from inove.v_processos where id = $1', [pid])
+    if (!p) return erro('Processo não encontrado.', 404)
+
+    const dig = String(p.numero || '').replace(/\D/g, '') || pid
+    const pasta = path.join(DOCS_INOVE, dig, categoria)
+    // nome do arquivo é do usuário: peneira o que poderia escapar da pasta
+    const limpo = String(arquivo.name || 'documento').replace(/[/\\]/g, '_').replace(/[^\w.\- ]+/g, '_').slice(0, 160)
+    const destino = path.join(pasta, crypto.randomUUID().slice(0, 8) + ' ' + limpo)
+    try {
+      fs.mkdirSync(pasta, { recursive: true })
+      fs.writeFileSync(destino, Buffer.from(await arquivo.arrayBuffer()))
+    } catch (e) {
+      return erro('Não foi possível guardar o arquivo no servidor: ' + ((e && e.message) || e), 500)
+    }
+
+    const r = await q1(
+      `insert into inove.documentos_proprios (processo_id, categoria, nome_arquivo, doc_tipo, tamanho, caminho_disco, enviado_por)
+       values ($1,$2,$3,$4,$5,$6,$7) returning id, categoria, nome_arquivo, doc_tipo, tamanho, enviado_em`,
+      [pid, categoria, limpo, arquivo.type || null, arquivo.size, destino, acesso.id])
+    return Response.json({ ok: true, documento: r })
+  }
+
   let body = {}
   try { body = await request.json() } catch (e) {}
   const acao = String(body.acao || '')
@@ -86,7 +133,7 @@ export async function POST(request) {
           and criado_em >= date_trunc('day', now() at time zone 'America/Sao_Paulo')
         limit 1`, [a.id, c.lgpd_versao || '1'])
 
-    return Response.json({ ok: true, token, nome: a.nome || '', email: a.email, lgpd: !aceitou, oculto: !!a.oculto })
+    return Response.json({ ok: true, token, nome: a.nome || '', email: a.email, lgpd: !aceitou, oculto: !!a.oculto, controlador: !!a.controlador })
   }
 
   /* ---------- daqui pra baixo, tudo exige sessão ---------- */
@@ -142,7 +189,75 @@ export async function POST(request) {
            join inove.etiquetas e on e.id = pe.etiqueta_id
           where pe.processo_id = $1`, [id]),
     ])
-    return Response.json({ ok: true, processo: p, movimentacoes: movs, documentos: docs, etiquetas: etq })
+    const [proprios, extra, fin, vara] = await Promise.all([
+      q('select id, categoria, nome_arquivo, doc_tipo, tamanho, enviado_em from inove.documentos_proprios where processo_id = $1 order by enviado_em desc', [id]),
+      q1('select * from inove.processo_extra where processo_id = $1', [id]),
+      q1('select id, honorario_fixado, data_deposito from inove.financeiro where processo_id = $1 order by criado_em limit 1', [id]),
+      q1('select * from inove.v_contato_vara where processo_id = $1', [id]),
+    ])
+    return Response.json({
+      ok: true, processo: p, movimentacoes: movs, documentos: docs, etiquetas: etq,
+      proprios, extra: extra || {}, financeiro: fin || {},
+      // sugestão vinda do cadastro de varas do escritório; o que a Inove digitou
+      // continua mandando — quem decide a precedência é a tela
+      vara: vara || {},
+    })
+  }
+
+  /* Anotações, contato da vara e local do processo — um registro por processo.
+     Fica em inove.processo_extra, e não em public.processos.observacoes, porque
+     aquele campo é a nota INTERNA do escritório e o inove_app não escreve no
+     public de qualquer forma. */
+  if (acao === 'extra_salvar') {
+    const pid = String(body.processo_id || '')
+    const p = await q1('select id from inove.v_processos where id = $1', [pid])
+    if (!p) return erro('Processo não encontrado.', 404)
+    await q(
+      `insert into inove.processo_extra (processo_id, email_vara, local_atual, observacoes, atualizado_por, atualizado_em)
+       values ($1,$2,$3,$4,$5, now())
+       on conflict (processo_id) do update set
+         email_vara = excluded.email_vara,
+         local_atual = excluded.local_atual,
+         observacoes = excluded.observacoes,
+         atualizado_por = excluded.atualizado_por,
+         atualizado_em = now()`,
+      [pid, body.email_vara || null, body.local_atual || null, body.observacoes || null, acesso.id])
+    return Response.json({ ok: true })
+  }
+
+  /* Honorário deferido + data do depósito, editados na própria ficha. Grava na
+     MESMA linha que a aba Financeiro usa — não cria um segundo lugar para o
+     mesmo número, que é como se produz divergência entre duas telas. */
+  if (acao === 'honorario_salvar') {
+    const pid = String(body.processo_id || '')
+    const p = await q1('select numero from inove.v_processos where id = $1', [pid])
+    if (!p) return erro('Processo não encontrado.', 404)
+    const valor = body.honorario_fixado === '' || body.honorario_fixado == null ? null : body.honorario_fixado
+    const data = body.data_deposito || null
+    const ja = await q1('select id from inove.financeiro where processo_id = $1 order by criado_em limit 1', [pid])
+    if (ja) {
+      await q('update inove.financeiro set honorario_fixado = $1, data_deposito = $2, atualizado_por = $3, atualizado_em = now() where id = $4',
+        [valor, data, acesso.id, ja.id])
+      return Response.json({ ok: true, id: ja.id })
+    }
+    const r = await q1(
+      `insert into inove.financeiro (processo_id, processo_numero, honorario_fixado, data_deposito, atualizado_por)
+       values ($1,$2,$3,$4,$5) returning id`,
+      [pid, p.numero, valor, data, acesso.id])
+    return Response.json({ ok: true, id: r && r.id })
+  }
+
+  if (acao === 'melhorias') {
+    const linhas = await q('select versao, titulo, descricao, publicado_em from inove.melhorias order by publicado_em desc, versao desc, ordem')
+    return Response.json({ ok: true, melhorias: linhas })
+  }
+
+  if (acao === 'doc_proprio_excluir') {
+    const d = await q1('select * from inove.documentos_proprios where id = $1', [String(body.id || '')])
+    if (!d) return erro('Documento não encontrado.', 404)
+    try { fs.unlinkSync(d.caminho_disco) } catch (e) { /* sumiu do disco: o registro sai igual */ }
+    await q('delete from inove.documentos_proprios where id = $1', [d.id])
+    return Response.json({ ok: true })
   }
 
   if (acao === 'cadastrar_processo') {
@@ -338,25 +453,29 @@ export async function POST(request) {
     return Response.json({ ok: true, mensagem: r })
   }
 
-  /* ---------- os 5 acessos, administrados por eles ----------
+  /* ---------- os acessos, administrados pelo controlador ----------
      O acesso do desenvolvedor tem oculto = true e não aparece aqui: é conta de
      manutenção, não de usuário, e listá-la só geraria pergunta. Ele também não
-     conta na cota nem pode ser mexido por eles. */
+     conta na cota nem pode ser mexido por eles.
+
+     Só controlador (ou oculto) CRIA/EDITA/DESATIVA. Todo mundo enxerga a lista —
+     saber quem é o controlador é informação de equipe, não é segredo. */
+  const podeAdministrar = acesso.oculto || acesso.controlador
+
   if (acao === 'acessos') {
     const linhas = await q(
-      `select id, nome, email, ativo, criado_em, primeiro_login_em, ultimo_login_em, bloqueado_em
-         from inove.acessos where oculto = false order by nome`)
+      `select id, nome, email, ativo, controlador, criado_em, primeiro_login_em, ultimo_login_em, bloqueado_em
+         from inove.acessos where oculto = false order by controlador desc, nome`)
     const c = await config()
-    return Response.json({ ok: true, acessos: linhas, limite: num(c, 'limite_acessos', 5) })
+    return Response.json({ ok: true, acessos: linhas, limite: num(c, 'limite_acessos', 5), souControlador: podeAdministrar })
   }
 
   if (acao === 'acesso_criar') {
+    if (!podeAdministrar) return erro('Só o controlador pode criar acessos.', 403)
     const nome = String(body.nome || '').trim()
     const email = String(body.email || '').trim().toLowerCase()
-    const senha = String(body.senha || '')
     if (!nome) return erro('Informe o nome.')
     if (!RE_EMAIL.test(email)) return erro('E-mail inválido.')
-    if (senha.length < 8) return erro('A senha precisa de pelo menos 8 caracteres.')
 
     const c = await config()
     const limite = num(c, 'limite_acessos', 5)
@@ -367,19 +486,42 @@ export async function POST(request) {
     const existe = await q1('select 1 from inove.acessos where email = $1', [email])
     if (existe) return erro('Já existe um acesso com esse e-mail.', 409)
 
+    // primeiro acesso não-oculto = controlador, automaticamente
+    const primeiro = await q1('select count(*)::int n from inove.acessos where oculto = false')
+    const vaiSerControlador = primeiro.n === 0
+    const senha = gerarSenha()
+
     const r = await q1(
-      `insert into inove.acessos (nome, email, senha_hash, criado_por)
-       values ($1,$2,$3,$4) returning id, nome, email, ativo, criado_em`,
-      [nome, email, hashSenha(senha), acesso.email])
+      `insert into inove.acessos (nome, email, senha_hash, controlador, criado_por)
+       values ($1,$2,$3,$4,$5) returning id, nome, email, ativo, controlador, criado_em`,
+      [nome, email, hashSenha(senha), vaiSerControlador, acesso.email])
+
+    try { await enviarAcessoInove({ nome, email, senha, controlador: vaiSerControlador }) }
+    catch (e) {
+      // a conta já existe — não desfaz. Avisa quem criou, pra passar a senha por
+      // outro canal, em vez de deixar o acesso pronto e ninguém saber a senha.
+      return Response.json({ ok: true, acesso: r, avisoEmail: 'Acesso criado, mas o e-mail não pôde ser enviado. Senha gerada: ' + senha })
+    }
     return Response.json({ ok: true, acesso: r })
   }
 
   if (acao === 'acesso_editar') {
+    if (!podeAdministrar) return erro('Só o controlador pode editar acessos.', 403)
     const id = String(body.id || '')
     const alvo = await q1('select * from inove.acessos where id = $1 and oculto = false', [id])
     if (!alvo) return erro('Acesso não encontrado.', 404)
     const nome = body.nome !== undefined ? String(body.nome).trim() : alvo.nome
     if (!nome) return erro('Informe o nome.')
+
+    if (body.controlador !== undefined && !!body.controlador !== alvo.controlador) {
+      // não deixa zerar o número de controladores — sempre sobra alguém, além do oculto
+      if (alvo.controlador) {
+        const restam = await q1('select count(*)::int n from inove.acessos where oculto = false and controlador and id <> $1', [id])
+        if (restam.n === 0) return erro('Precisa sobrar ao menos um controlador. Torne outra pessoa controladora antes.', 409)
+      }
+      await q('update inove.acessos set controlador = $1 where id = $2', [!!body.controlador, id])
+    }
+
     if (body.senha) {
       if (String(body.senha).length < 8) return erro('A senha precisa de pelo menos 8 caracteres.')
       await q('update inove.acessos set nome = $1, senha_hash = $2 where id = $3', [nome, hashSenha(String(body.senha)), id])
@@ -390,12 +532,39 @@ export async function POST(request) {
     return Response.json({ ok: true })
   }
 
+  /* Gera senha nova e reenvia por e-mail — o "esqueci senha" administrado pelo
+     controlador. Existe separado do acesso_editar porque é a ação certa quando não
+     se sabe se o e-mail da criação chegou (enviarEmailCore não avisa sozinha; ver
+     comentário em lib.js), sem ter que digitar senha nenhuma de novo. */
+  if (acao === 'acesso_reenviar') {
+    if (!podeAdministrar) return erro('Só o controlador pode reenviar acesso.', 403)
+    const id = String(body.id || '')
+    const alvo = await q1('select * from inove.acessos where id = $1 and oculto = false', [id])
+    if (!alvo) return erro('Acesso não encontrado.', 404)
+
+    const senha = gerarSenha()
+    await q('update inove.acessos set senha_hash = $1 where id = $2', [hashSenha(senha), id])
+    await q('delete from inove.sessoes where acesso_id = $1', [id])
+
+    try {
+      await enviarAcessoInove({ nome: alvo.nome, email: alvo.email, senha, controlador: alvo.controlador })
+      return Response.json({ ok: true })
+    } catch (e) {
+      return Response.json({ ok: true, avisoEmail: 'Senha trocada, mas o e-mail não pôde ser enviado. Senha gerada: ' + senha })
+    }
+  }
+
   if (acao === 'acesso_desativar') {
+    if (!podeAdministrar) return erro('Só o controlador pode desativar acessos.', 403)
     const id = String(body.id || '')
     if (id === acesso.id) return erro('Você não pode desativar o próprio acesso.')
     const alvo = await q1('select * from inove.acessos where id = $1 and oculto = false', [id])
     if (!alvo) return erro('Acesso não encontrado.', 404)
     const ativar = body.ativar === true
+    if (!ativar && alvo.controlador) {
+      const restam = await q1('select count(*)::int n from inove.acessos where oculto = false and controlador and ativo and id <> $1', [id])
+      if (restam.n === 0) return erro('Precisa sobrar ao menos um controlador ativo. Torne outra pessoa controladora antes de desativar este.', 409)
+    }
     await q('update inove.acessos set ativo = $1 where id = $2', [ativar, id])
     if (!ativar) await q('delete from inove.sessoes where acesso_id = $1', [id])
     return Response.json({ ok: true, ativo: ativar })
@@ -439,15 +608,30 @@ export async function POST(request) {
 export async function GET(request) {
   const { searchParams } = new URL(request.url)
   const docId = searchParams.get('doc')
-  if (!docId) return erro('Informe o documento.')
+  const proprioId = searchParams.get('proprio')
+  if (!docId && !proprioId) return erro('Informe o documento.')
 
   // o token vem na URL porque o navegador abre o PDF numa aba, sem cabeçalho
   const acesso = await sessao(searchParams.get('t') || '')
   if (!acesso) return erro('Sessão expirada. Entre de novo.', 401)
 
-  const d = await lerDocumento(docId)
-  if (!d) return erro('Documento não encontrado ou fora dos processos da Inove.', 404)
-  d.id = docId
+  let d
+  if (proprioId) {
+    // arquivo que a própria Inove subiu (minuta, proposta) — mesma tarja e mesmo log
+    const meta = await q1(
+      `select dp.*, p.numero from inove.documentos_proprios dp
+         join inove.v_processos p on p.id = dp.processo_id
+        where dp.id = $1`, [proprioId])
+    if (!meta) return erro('Documento não encontrado.', 404)
+    let buf = null
+    try { buf = fs.readFileSync(meta.caminho_disco) } catch (e) { buf = null }
+    if (!buf || !buf.length) return erro('Arquivo não encontrado no servidor.', 404)
+    d = { buf, doc_nome: meta.nome_arquivo, doc_tipo: meta.doc_tipo, processo_id: meta.processo_id, processo_numero: meta.numero, id: proprioId }
+  } else {
+    d = await lerDocumento(docId)
+    if (!d) return erro('Documento não encontrado ou fora dos processos da Inove.', 404)
+    d.id = docId
+  }
 
   const baixar = searchParams.get('dl') === '1'
   await logDoc(acesso, d, baixar ? 'baixou' : 'abriu', request)
