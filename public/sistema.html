@@ -1115,7 +1115,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
     <div><label>Anotações</label><textarea id="l-obs" style="min-height:96px" placeholder="Observações sobre o lead — ou simplesmente Ctrl+V com a conversa/e-mail do cliente..."></textarea></div>
     <div><label>Etiquetas</label><div id="l-etq" style="display:flex;flex-wrap:wrap;gap:6px"></div></div>
   </div>
-  <div class="foot"><button class="btn ghost" onclick="fecharLead()">Cancelar</button><button class="btn ghost" style="background:#fff8ee;border-color:#e8d9b0;color:#7a4b00" onclick="abrirAgendarReuniaoLead()" title="Marca a reunião na agenda (responsável Jader) e manda e-mail de confirmação ao cliente, se houver e-mail">📅 Agendar reunião</button><button class="btn" onclick="salvarLead()">Salvar</button></div>
+  <div class="foot"><button class="btn ghost" onclick="fecharLead()">Cancelar</button><button class="btn ghost" style="background:#fff8ee;border-color:#e8d9b0;color:#7a4b00" onclick="abrirAgendarReuniaoLead()" title="Marca a reunião na agenda (responsável Jader) e manda e-mail de confirmação ao cliente, se houver e-mail">📅 Agendar reunião</button><button class="btn ghost" style="background:#eef7f1;border-color:#cfe8db;color:#0F6E56" onclick="criarCasoDoLead()" title="Salva o lead e abre o cadastro de caso já preenchido com os dados dele. Se o caso já existe, abre a ficha direto.">📁 Criar caso</button><button class="btn" onclick="salvarLead()">Salvar</button></div>
 </div></div>
 <div id="modal-lead-arqs" class="overlay hidden"><div class="modal">
   <h2>Arquivos / Prints do lead</h2>
@@ -3429,6 +3429,18 @@ function moverLead(dragId,targetId){var di=LEADS.findIndex(function(x){return x.
    Os arquivos do card sobem para a pasta ao salvar (transferirArqsLeadParaProc). */
 function fecharLeadEAbrirCaso(l, modo){
   if(!l||typeof abrirCadManual!=='function') return;
+  /* lead que JÁ virou caso (botão "Criar caso" ou fechamento anterior): abre a
+     ficha existente — com procuração, contrato, boleto etc. — em vez de recadastrar */
+  try{
+    var ref=String(l.procRef||'').trim();
+    if(ref){
+      var refDig=ref.replace(/\D/g,'');
+      var idxEx=(DADOS&&DADOS.processos?DADOS.processos:[]).findIndex(function(p){
+        var n=String(p.numero||''); return n===ref||(refDig&&n.replace(/\D/g,'')===refDig);
+      });
+      if(idxEx>=0){ go('processos'); abrir(idxEx); return; }
+    }
+  }catch(e){}
   try{
     abrirCadManual();
     if(modo==='caso'){
@@ -5575,6 +5587,21 @@ function salvarLead(){var l=window._ledit;var nome=_v("l-nome");if(!nome){alert(
   if(_ehNovoLead && estagio==='novo'){ try{ if(typeof syncLeadsDb==='function'){ syncLeadsDb().then(function(){ setTimeout(_notifJaderSweep,800); }); } else setTimeout(_notifJaderSweep,1200); }catch(e){} }
   fecharLead();renderCaptacao();
   if(_abrirCaso){ try{ fecharLeadEAbrirCaso(l); }catch(e){} }}
+/* Botão "📁 Criar caso" do modal do lead: salva o lead e abre o cadastro de CASO
+   já preenchido com os dados do card. Se o lead já tem caso (procRef), a ficha
+   existente abre direto — com procuração, contrato, boleto e demais comandos. */
+function criarCasoDoLead(){
+  var l=window._ledit||{}; var idAntes=l.id||null;
+  salvarLead();
+  var ml=document.getElementById('modal-lead');
+  if(ml&&!ml.classList.contains('hidden')) return; /* validação barrou (ex.: sem nome) */
+  var l2=idAntes?LEADS.find(function(x){return x.id===idAntes;}):LEADS[LEADS.length-1];
+  if(!l2) return;
+  /* se o salvamento já abriu o cadastro (etapa mudou p/ assinado/fechado), não duplica */
+  var cad=document.getElementById('modal-cadmanual');
+  if(cad&&!cad.classList.contains('hidden')) return;
+  fecharLeadEAbrirCaso(l2,'caso');
+}
 function hojeISO(){ var d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 /* tempo de conversão em dias (entrada → fechamento) */
 function leadDiasConversao(l){ if(!l||!l.data||!l.dataFechamento) return null; var a=new Date(l.data+'T00:00:00'), b=new Date(l.dataFechamento+'T00:00:00'); if(isNaN(a)||isNaN(b)) return null; return Math.max(0,Math.round((b-a)/86400000)); }
@@ -7467,7 +7494,14 @@ function renderProc(){
       <div id="cm-doc-status" style="font-size:11.5px;margin-top:5px;min-height:15px"></div>
     </div>
     <div style="position:relative"><label>Cliente</label><input id="cm-cliente" placeholder="Digite para buscar na base ou cadastrar novo" autocomplete="off" oninput="cmClienteInput(this.value)" onfocus="cmClienteInput(this.value)" onblur="setTimeout(cmClienteFecha,160)"><div id="cm-cli-drop" class="cm-drop"></div><div id="cm-cli-status" style="font-size:11.5px;margin-top:3px;min-height:15px"></div></div>
-    <div><label>Parte contrária</label><input id="cm-oponente" placeholder="Oponente"></div>
+    <div><label>Parte contrária</label><input id="cm-oponente" placeholder="Oponente">
+      <div style="display:flex;gap:6px;align-items:center;margin-top:6px">
+        <input id="cm-reu-doc" placeholder="CNPJ/CPF do réu (opcional)" autocomplete="off" style="flex:1"
+               onkeydown="if(event.key==='Enter'){event.preventDefault();buscarReuReceita();}">
+        <button type="button" class="btn sm" style="background:#185FA5;color:#fff;white-space:nowrap" onclick="buscarReuReceita()">🔎 Receita</button>
+      </div>
+      <div id="cm-reu-status" style="font-size:11.5px;margin-top:4px;min-height:14px"></div>
+    </div>
   </div>
   <div class="row2">
     <div><label>Ação / assunto</label><input id="cm-assunto" placeholder="Ex.: Indenização por dano moral"></div>
@@ -7482,7 +7516,7 @@ function renderProc(){
 </div></div>
 <script>
 var cadTipo='processo';
-function abrirCadManual(){ cadTipo='processo'; window.__cadLead=null; window.__receita=null; var sd=document.getElementById('cm-doc-status'); if(sd) sd.innerHTML=''; setCadTipo('processo'); ['cm-numero','cm-casoid','cm-cliente','cm-oponente','cm-assunto','cm-foro','cm-causa','cm-obs','cm-peca-livre','cm-doc'].forEach(function(id){var e=document.getElementById(id);if(e)e.value='';}); var pe=document.getElementById('cm-peca'); if(pe) pe.selectedIndex=0;
+function abrirCadManual(){ cadTipo='processo'; window.__cadLead=null; window.__receita=null; window.__receitaReu=null; var sd=document.getElementById('cm-doc-status'); if(sd) sd.innerHTML=''; var sr=document.getElementById('cm-reu-status'); if(sr) sr.innerHTML=''; setCadTipo('processo'); ['cm-numero','cm-casoid','cm-cliente','cm-oponente','cm-assunto','cm-foro','cm-causa','cm-obs','cm-peca-livre','cm-doc','cm-reu-doc'].forEach(function(id){var e=document.getElementById(id);if(e)e.value='';}); var pe=document.getElementById('cm-peca'); if(pe) pe.selectedIndex=0;
   try{ seedContatos(); }catch(e){} window.__cmCliMatch=null; window.__fichaExtraida=null; window.__cmDocs=[]; cmClienteStatus(''); var dd=document.getElementById('cm-cli-drop'); if(dd){dd.classList.remove('on');dd.innerHTML='';}
   var fr=document.getElementById('cm-ficha-resumo'); if(fr){fr.style.display='none';fr.innerHTML='';} var fs=document.getElementById('cm-ficha-status'); if(fs) fs.textContent=''; var fl=document.getElementById('cm-ficha-lista'); if(fl){fl.style.display='none';fl.innerHTML='';}
   try{ cmPopularLeads(); }catch(e){} var _ls=document.getElementById('cm-lead-status'); if(_ls) _ls.textContent=''; var _ls2=document.getElementById('cm-lead'); if(_ls2) _ls2.value='';
@@ -7632,6 +7666,12 @@ async function salvarCadManual(){
   if(_leadTransf && _leadTransf.arquivos && _leadTransf.arquivos.length){
     transferirArqsLeadParaProc(_leadTransf, num).catch(function(){});
   }
+  /* amarra o lead ao caso/processo criado: fechar o card depois abre ESTA ficha, sem duplicar */
+  try{
+    var _lid=Number((document.getElementById('cm-lead')||{}).value||0)||((_leadTransf&&_leadTransf.id)||0);
+    if(_lid){ var _ld=(typeof LEADS!=='undefined'?LEADS:[]).find(function(x){return x.id===_lid;});
+      if(_ld){ _ld.procRef=num; _ld.casoCriado=true; _ld.ultimaAtividade=new Date().toISOString(); salvarLeadsLocal(); } }
+  }catch(e){}
   window.__cadLead=null;
   fecharCadManual();
   var idx=DADOS.processos.indexOf(novo);
@@ -7704,6 +7744,41 @@ async function buscarNaReceita(){
       +'<br><span class="note" style="font-size:10.5px">fonte: '+_escH(f.fonte||'')+' — a ficha completa vai para o histórico do caso</span>','#2E3A4B');
   }catch(e){ _stDoc('⚠ falha: '+((e&&e.message)||e),'#b5342b'); }
 }
+/* ===== CNPJ/CPF do RÉU (parte contrária): mesma consulta da Receita usada para o
+   cliente. O resultado fica em __receitaReu até o caso ser gravado — vira um
+   andamento "[Parte contrária]" no histórico e os contatos entram em
+   contatos_partes, igual à ficha do caso. */
+window.__receitaReu=null;
+function _stReu(txt,cor){ var e=document.getElementById('cm-reu-status'); if(e){ e.style.color=cor||'#5f6b7a'; e.innerHTML=txt; } }
+async function buscarReuReceita(){
+  var el=document.getElementById('cm-reu-doc'); if(!el) return;
+  var dig=String(el.value||'').replace(/\D/g,'');
+  if(!dig){ _stReu('Informe o CNPJ ou CPF do réu.','#b5342b'); el.focus(); return; }
+  if(dig.length===11){
+    /* CPF: não há consulta pública pelo número — só anota, entra no histórico do caso */
+    window.__receitaReu={documento:dig, tipo:'cpf'};
+    _stReu('CPF do réu anotado — vai registrado no caso. (Não existe consulta pública por CPF.)','#8a6d1a');
+    return;
+  }
+  if(dig.length!==14){ _stReu('Número incompleto — CNPJ tem 14 dígitos, CPF tem 11.','#b5342b'); return; }
+  _stReu('Consultando a Receita…');
+  try{
+    var r=await fetch('/api/receita?doc='+encodeURIComponent(dig),{cache:'no-store'});
+    var d=await r.json();
+    if(!(d&&d.ok&&d.ficha)){ _stReu('⚠ '+((d&&d.erro)||'não consegui consultar'),'#b5342b'); return; }
+    var f=d.ficha;
+    window.__receitaReu=d;
+    var op=document.getElementById('cm-oponente');
+    if(op&&!op.value.trim()) op.value=f.razaoSocial||'';
+    var st=(f.situacao||'').toUpperCase();
+    var corSit=/ATIVA/.test(st)?'#127a53':(st?'#b5342b':'#5f6b7a');
+    _stReu('<b>'+_escH(f.razaoSocial||'(sem razão social)')+'</b>'
+      +(f.nomeFantasia?(' <span class="note">('+_escH(f.nomeFantasia)+')</span>'):'')
+      +'<br><span style="color:'+corSit+';font-weight:600">'+_escH(f.situacao||'situação não informada')+'</span>'
+      +(f.endereco?('<br><span class="note">'+_escH(f.endereco)+'</span>'):'')
+      +'<br><span class="note" style="font-size:10.5px">a ficha completa da empresa vai para o histórico do caso</span>','#2E3A4B');
+  }catch(e){ _stReu('⚠ falha: '+((e&&e.message)||e),'#b5342b'); }
+}
 function _escH(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 /* Ficha da Receita em texto, para virar andamento no histórico do caso. Vai como
    texto e não como link porque a consulta pública muda de endereço e o histórico
@@ -7763,10 +7838,20 @@ async function gerarCasoNovoCliente(){
       var ct=[].concat(recF.telefones||[], recF.email?[recF.email]:[]).filter(Boolean).slice(0,4);
       if(ct.length) linha.contatos_livres=ct.join(', ');
     }
+    /* ficha do RÉU (parte contrária), se o CNPJ dele foi consultado */
+    var recReu=window.__receitaReu||null, recReuF=(recReu&&recReu.ficha)||null;
+    if(op&&recReuF){
+      var ctReu=[].concat(recReuF.telefones||[], recReuF.email?[recReuF.email]:[]).filter(Boolean).slice(0,4);
+      if(ctReu.length){ linha.contatos_partes={}; linha.contatos_partes[normClienteNome(op)]=ctReu; }
+    }
     if(esc){ var ins=await sb.from('processos').insert(linha).select('id').single(); if(ins&&ins.data){ novo._id=ins.data.id;
+      if(linha.contatos_partes) novo.ctlp=linha.contatos_partes;
       try{ if(typeof logEvent==='function') logEvent('case_registered','processo',num,{modo:'caso',origem:(recF?'cnpj':'crm')}); }catch(eLg){}
       /* a ficha da Receita vira andamento: é o que faz o caso nascer "completo" */
       if(recF){ try{ await sb.from('andamentos').insert({processo_id:ins.data.id,data:isoDia,texto:_receitaTexto(recF),fonte:'manual'}); }catch(eR){} }
+      /* a ficha da Receita do RÉU também vira andamento — qualifica a parte contrária */
+      if(recReuF){ try{ await sb.from('andamentos').insert({processo_id:ins.data.id,data:isoDia,texto:'[Parte contrária] '+_receitaTexto(recReuF),fonte:'manual'}); }catch(eR2){} }
+      else if(recReu&&recReu.documento){ try{ await sb.from('andamentos').insert({processo_id:ins.data.id,data:isoDia,texto:'[Parte contrária] '+(op||'réu')+' — CPF '+recReu.documento,fonte:'manual'}); }catch(eR3){} }
       if(obs) await sb.from('andamentos').insert({processo_id:ins.data.id,data:isoDia,texto:'[Cadastro manual] '+obs,fonte:'manual'});
       await sb.from('andamentos').insert({processo_id:ins.data.id,data:isoDia,texto:pedido,fonte:'manual'}); }
       else if(ins&&ins.error){ window.__cadErro=ins.error.message; }
@@ -7800,6 +7885,12 @@ async function gerarCasoNovoCliente(){
   if(_leadTransf && _leadTransf.arquivos && _leadTransf.arquivos.length){
     transferirArqsLeadParaProc(_leadTransf, num).catch(function(){});
   }
+  /* amarra o lead ao caso/processo criado: fechar o card depois abre ESTA ficha, sem duplicar */
+  try{
+    var _lid=Number((document.getElementById('cm-lead')||{}).value||0)||((_leadTransf&&_leadTransf.id)||0);
+    if(_lid){ var _ld=(typeof LEADS!=='undefined'?LEADS:[]).find(function(x){return x.id===_lid;});
+      if(_ld){ _ld.procRef=num; _ld.casoCriado=true; _ld.ultimaAtividade=new Date().toISOString(); salvarLeadsLocal(); } }
+  }catch(e){}
   window.__cadLead=null;
   fecharCadManual();
   var idx=DADOS.processos.indexOf(novo);
