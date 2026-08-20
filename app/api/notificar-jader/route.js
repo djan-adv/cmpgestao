@@ -15,14 +15,21 @@
 
 import { createClient } from '@supabase/supabase-js'
 import nodemailer from 'nodemailer'
+import webpush from 'web-push'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
-const JADER = ['jadergabrielpinheiro.adv@gmail.com', 'jaderpinheiroadv@gmail.com']
+const JADER = ['jadergabrielpinheiro.adv@gmail.com', 'jaderpinheiroadv@gmail.com', 'djan.adv@gmail.com']
 const ESCRITORIO_CMP = '908f77fc-19f5-4d86-9576-f5590af09e0a'
 const REMIND_MS = 29 * 60 * 1000   // reenvia lembrete de lead a cada ~30 min
 const OFF_BR = -3                  // Brasília = UTC-3 (sem horário de verão hoje)
+// e-mails de quem tem que ser avisado NO CELULAR (push do /chat), além do
+// aviso no grupo "Todos" — pedido do dono (20/08/2026): "avisar imediatamente
+// no chat nos celulares meu e de jader". Server-side, sem sessão de usuário
+// (diferente de /api/chat/push, que exige login) — por isso o envio é feito
+// aqui direto, com as mesmas chaves VAPID.
+const ALVOS_PUSH_LEAD = [/djan\.adv@gmail\.com/i, /jadergabrielpinheiro\.adv@gmail\.com/i, /jaderpinheiroadv@gmail\.com/i]
 
 function admin() {
   return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } })
@@ -41,6 +48,27 @@ async function enviar(assunto, corpoHtml, corpoTxt) {
     await tp.t.sendMail({ from: '"' + fromName + '" <' + tp.user + '>', to: JADER, subject: assunto, text: corpoTxt || '', html: corpoHtml })
     return { ok: true }
   } catch (e) { return { ok: false, motivo: (e && e.message) || String(e) } }
+}
+// alarme (push) no celular de Djan e Jader — best-effort, nunca derruba a
+// notificação principal (e-mail/chat) se o push falhar ou não estiver configurado
+async function avisarNoCelular(sb, titulo, corpo) {
+  try {
+    const { data: v } = await sb.from('app_secrets').select('valor').eq('chave', 'vapid_chat').maybeSingle()
+    if (!v || !v.valor) return
+    webpush.setVapidDetails('mailto:contato@cmpadvogados.com.br', v.valor.public, v.valor.private)
+    const { data: eqp } = await sb.from('usuarios').select('id,email').eq('escritorio_id', ESCRITORIO_CMP)
+    const alvo = (eqp || []).filter(u => ALVOS_PUSH_LEAD.some(re => re.test(u.email || ''))).map(u => u.id)
+    if (!alvo.length) return
+    const { data: subs } = await sb.from('chat_push_subs').select('*').in('user_id', alvo)
+    if (!subs || !subs.length) return
+    const payload = JSON.stringify({ titulo, corpo, url: '/chat' })
+    const expirados = []
+    await Promise.all(subs.map(async (s) => {
+      try { await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth_key } }, payload, { urgency: 'high', TTL: 86400 }) }
+      catch (e) { if (e && (e.statusCode === 404 || e.statusCode === 410)) expirados.push(s.endpoint) }
+    }))
+    if (expirados.length) { try { await sb.from('chat_push_subs').delete().in('endpoint', expirados) } catch (e) {} }
+  } catch (e) { /* alarme é reforço — nunca derruba o resto */ }
 }
 function localAgora() {
   const d = new Date(Date.now() + OFF_BR * 3600 * 1000)
@@ -145,6 +173,8 @@ export async function GET(request) {
               (l.obs ? ('\n' + String(l.obs).split('\n').filter(x => x && !/^Origem:/i.test(x)).join(' ').slice(0, 160)) : '') +
               '\n→ Comercial › coluna "Novo lead". @Djan @Jader',
           })
+          // alarme direto no celular (push) — não espera ninguém abrir o chat pra ver
+          await avisarNoCelular(sb, '🟢 Novo lead — ' + (l.nome || 'site'), (det ? (det + ' — ') : '') + 'atender agora pra não perder!')
         }
       } catch (eC) { resumo.erros.push('chat: ' + ((eC && eC.message) || eC)) }
     } else if (debug) resumo.leads_devidos = devidos.map(l => ({ id: l.id, nome: l.nome, notif_ultimo: l.notif_ultimo }))

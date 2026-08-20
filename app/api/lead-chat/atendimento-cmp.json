@@ -1,0 +1,203 @@
+{
+  "escritorio": "CMP Advogados",
+  "canal": "robo de atendimento IA",
+  "total": 28,
+  "itens": [
+    {
+      "id": "2.1",
+      "categoria": "trabalhista",
+      "tema": "Sem carteira assinada — ainda trabalhando",
+      "pergunta": "Trabalho sem carteira assinada e ainda estou na empresa. O que posso fazer?",
+      "resposta": "É uma das situações que mais atendemos, e tem solução. Quando a empresa não registra espontaneamente, o registro só sai por ação judicial. Você não precisa pedir demissão nem esperar ser mandado embora: estando ainda trabalhando, na maioria dos casos o caminho é a rescisão indireta, em que o contrato é encerrado por culpa da empresa e você recebe como numa demissão sem justa causa, com FGTS e seguro-desemprego.\nMe passe seu nome completo, sua função, há quanto tempo trabalha ali e como recebe o pagamento."
+    },
+    {
+      "id": "2.2",
+      "categoria": "trabalhista",
+      "tema": "Sem carteira assinada — já demitido",
+      "pergunta": "Fui demitido e nunca tive a carteira assinada. Ainda posso cobrar alguma coisa?",
+      "resposta": "Pode. O fim do contrato não apaga o período trabalhado. A ação busca o reconhecimento do vínculo de todo o tempo, a anotação na carteira e o pagamento do que não foi pago no período.\nExiste prazo contado do seu último dia de trabalho, então não vale deixar parado.\nMe envie seu nome completo, a data em que começou, a data em que saiu, a função e quanto recebia."
+    },
+    {
+      "id": "2.3",
+      "categoria": "trabalhista",
+      "tema": "O que é rescisão indireta",
+      "pergunta": "O que é rescisão indireta e por que vale a pena?",
+      "resposta": "É a justa causa ao contrário: quando quem erra é o empregador, você encerra o contrato por culpa dele e recebe como se tivesse sido demitido sem justa causa.\nA diferença é grande. Pedindo demissão, você perde aviso prévio, perde a multa do FGTS, não saca o FGTS e não recebe seguro-desemprego. Na rescisão indireta reconhecida pelo juiz, tudo isso é devido.\nCostumam justificar o pedido: falta de registro, FGTS não depositado, salário atrasado, pagamento por fora e assédio.\nMe conte sua situação com detalhes que encaminho para análise."
+    },
+    {
+      "id": "2.4",
+      "categoria": "trabalhista",
+      "tema": "Medo de retaliação",
+      "pergunta": "Se eu entrar na justiça enquanto ainda estou trabalhando, a empresa pode me demitir ou me prejudicar?",
+      "resposta": "É a dúvida mais comum e é justa. Retaliar empregado por causa de ação judicial é ilegal e, se acontecer, vira mais um pedido dentro do próprio processo. E se a empresa te demitir sem justa causa depois, você recebe as verbas normalmente — ela não melhora a situação dela fazendo isso.\nO momento certo de ajuizar e se você continua trabalhando durante a ação são definidos junto com você antes de qualquer passo."
+    },
+    {
+      "id": "2.5",
+      "categoria": "trabalhista",
+      "tema": "Salário por fora",
+      "pergunta": "Recebo uma parte do salário \"por fora\" ou por PIX. Isso é problema?",
+      "resposta": "É irregular, e o prejuízo é seu: o que é pago por fora não entra no FGTS, no 13º, nas férias, nas horas extras nem na sua aposentadoria. Seu salário real é maior, mas seus direitos são calculados pelo menor.\nIsso se corrige na Justiça do Trabalho, com o reconhecimento do salário verdadeiro e o recálculo do período.\nGuarde os comprovantes de PIX e as conversas em que se combinam os valores. Não apague nada."
+    },
+    {
+      "id": "2.6",
+      "categoria": "trabalhista",
+      "tema": "Horas extras",
+      "pergunta": "Faço horas extras e a empresa não paga. Como funciona?",
+      "resposta": "Hora extra é toda hora além da jornada contratada e tem que ser paga com acréscimo. Entram também o intervalo de almoço suprimido, o adicional noturno e o tempo em que você fica à disposição da empresa.\nNão precisa haver demissão para cobrar: dá para pleitear continuando no emprego.\nAjuda muito na prova: cartões de ponto, escalas, conversas com a chefia sobre horário e colegas que possam testemunhar.\nMe diga sua função, o horário contratado e o horário que você realmente cumpre."
+    },
+    {
+      "id": "2.7",
+      "categoria": "trabalhista",
+      "tema": "Acidente de trabalho",
+      "pergunta": "Sofri um acidente de trabalho. O que devo fazer?",
+      "resposta": "Primeiro o mais urgente: exija a emissão da CAT pela empresa. Se ela recusar, a CAT pode ser emitida por você, pelo médico, pelo sindicato ou por um familiar — é esse documento que liga o acidente ao trabalho no INSS.\nGuarde todos os atendimentos, exames, laudos e atestados.\nSão duas frentes diferentes: a do INSS e a da empresa, quando houve falha dela (falta de EPI, de treinamento, máquina sem proteção). Também existe estabilidade no emprego após a alta do benefício.\nMe diga a data do acidente, o que aconteceu, se houve CAT e como está sua situação hoje."
+    },
+    {
+      "id": "2.8",
+      "categoria": "trabalhista",
+      "tema": "Doença ocupacional",
+      "pergunta": "Adoeci por causa do trabalho (coluna, tendinite, LER, ombro). Tem o que fazer?",
+      "resposta": "Tem. A doença decorrente do trabalho é equiparada por lei a acidente, mesmo sem um evento único.\nO que precisa ser demonstrado é o nexo com a atividade: o que você faz, com que peso, repetição e postura. Isso costuma ser apurado por perícia no processo.\nReúna atestados, exames de imagem, laudos, prontuário, exames admissional e periódicos e o histórico de afastamentos do INSS.\nMe diga sua função, há quanto tempo faz essa atividade e o diagnóstico que já tem."
+    },
+    {
+      "id": "2.9",
+      "categoria": "trabalhista",
+      "tema": "Assédio moral",
+      "pergunta": "Sofro assédio moral no trabalho. Isso dá processo?",
+      "resposta": "Sim. Humilhação, gritos, exposição diante dos colegas, xingamento, isolamento, ameaça constante de demissão e perseguição podem gerar indenização e, quando graves ou repetidos, sustentam também o pedido de rescisão indireta.\nO que decide é a prova, e ela costuma existir: prints de WhatsApp, e-mails, áudios, testemunhas e atestados. Comece a guardar tudo com data.\nMe conte quem faz, com que frequência, desde quando e se alguém presenciou."
+    },
+    {
+      "id": "2.10",
+      "categoria": "trabalhista",
+      "tema": "Verbas rescisórias não pagas",
+      "pergunta": "Fui demitido e a empresa não pagou minhas verbas rescisórias. E agora?",
+      "resposta": "A empresa tem prazo curto para pagar depois do fim do contrato e, passado esse prazo, incide multa em favor do trabalhador.\nEntram saldo de salário, aviso prévio, 13º e férias proporcionais, férias vencidas se houver, FGTS com a multa e as guias do seguro-desemprego. Se houver horas extras ou pagamento por fora no período, tudo é cobrado no mesmo processo.\nMe envie a data de admissão, a data da demissão, o último salário e o termo de rescisão, se tiver."
+    },
+    {
+      "id": "2.11",
+      "categoria": "trabalhista",
+      "tema": "Salário atrasado",
+      "pergunta": "Meu salário vive atrasando. Isso é motivo para alguma coisa?",
+      "resposta": "É. Atraso reiterado é descumprimento do contrato pela empresa e uma das causas clássicas de rescisão indireta — você encerra o contrato por culpa dela e recebe como em uma demissão sem justa causa.\nVale conferir também o FGTS pelo aplicativo, para ver se os depósitos estão em dia.\nGuarde os comprovantes com as datas e as conversas em que a empresa admite o atraso.\nMe diga há quanto tempo isso ocorre e quantos meses estão em aberto."
+    },
+    {
+      "id": "2.12",
+      "categoria": "trabalhista",
+      "tema": "Cliente acha que o caso é pequeno",
+      "pergunta": "Acho que meu caso é pequeno e não tenho muita coisa para reclamar. Vale a pena procurar advogado?",
+      "resposta": "Vale conversar. Quase todo mundo subestima o próprio caso porque olha um item isolado, quando o que pesa é a soma do período inteiro: FGTS a menos, salário registrado abaixo do real, horas extras diárias que ao longo de anos viram bastante coisa, intervalo reduzido, adicional noturno, insalubridade e acúmulo de função.\nE se você ainda está trabalhando e há irregularidade, a rescisão indireta permite sair recebendo tudo o que se perde ao simplesmente pedir demissão. Esse costuma ser o item mais valioso.\nA análise inicial não te obriga a nada. Me diga sua função, o tempo de casa e o que te incomoda hoje."
+    },
+    {
+      "id": "2.13",
+      "categoria": "trabalhista",
+      "tema": "Prazo",
+      "pergunta": "Saí desse emprego faz tempo. Ainda dá tempo de entrar com a ação?",
+      "resposta": "Depende da data em que você saiu — existe prazo contado do último dia de trabalho, e ele corre rápido. Quanto mais perto do limite, mais urgente, porque a preparação dos documentos leva alguns dias.\nMesmo que já tenha passado bastante tempo, algumas situações seguem regra própria. Vale conferir antes de descartar.\nMe informe a data em que começou e a data em que saiu da empresa que eu verifico e te retorno."
+    },
+    {
+      "id": "2.14",
+      "categoria": "trabalhista",
+      "tema": "Honorários trabalhista",
+      "pergunta": "Quanto custa? Preciso pagar alguma coisa para entrar com o processo?",
+      "resposta": "Nos casos trabalhistas trabalhamos com honorários de êxito: você não paga nada para começar e nossa remuneração só existe se e quando você receber.\nAs condições são apresentadas por escrito antes de qualquer assinatura, depois da análise do seu caso.\nMe envie seu nome completo e o resumo do que aconteceu que damos o primeiro passo."
+    },
+    {
+      "id": "2.15",
+      "categoria": "trabalhista",
+      "tema": "Documentos trabalhista",
+      "pergunta": "Quais documentos preciso enviar para analisarem meu caso trabalhista?",
+      "resposta": "Mande o que tiver, não precisa estar completo.\nPessoais: RG ou CNH, CPF e comprovante de residência.\nDo trabalho: carteira de trabalho ou o PDF da CTPS Digital, contrato, holerites, extrato do FGTS pelo app, termo de rescisão e cartões de ponto.\nProvas do dia a dia: conversas de WhatsApp, e-mails, fotos no local, escalas e nomes de colegas que possam testemunhar.\nHavendo acidente ou doença: CAT, atestados, exames e documentos do INSS.\nPode enviar por aqui em foto ou PDF."
+    },
+    {
+      "id": "3.1",
+      "categoria": "imobiliario",
+      "tema": "Desistência da compra",
+      "pergunta": "Comprei um imóvel na planta e não consigo mais pagar. Posso desistir e receber meu dinheiro de volta?",
+      "resposta": "Pode. Mesmo que o contrato diga que você perde tudo, essa cláusula é abusiva e a Justiça costuma afastá-la. A construtora retém um percentual, mas quase sempre pede muito mais do que os tribunais admitem — é aí que está a discussão. E a devolução tem que ser corrigida, não pelo valor que você pagou anos atrás.\nMe envie o contrato, os comprovantes de pagamento e seu nome completo que fazemos a análise."
+    },
+    {
+      "id": "3.2",
+      "categoria": "imobiliario",
+      "tema": "Retenção de metade dos valores",
+      "pergunta": "A construtora disse que só devolve metade do que paguei. Isso está certo?",
+      "resposta": "Na maioria dos casos, não. Reter metade é exceção: depende de um regime específico do empreendimento, que precisa estar registrado e comprovado — e mesmo nesses casos existe divergência nos tribunais que permite discutir a redução.\nAntes de assinar qualquer distrato, me mande o contrato e a proposta que te fizeram. Vale muito conferir a conta."
+    },
+    {
+      "id": "3.3",
+      "categoria": "imobiliario",
+      "tema": "Distrato já assinado",
+      "pergunta": "Já assinei o distrato com a construtora. Ainda dá para discutir?",
+      "resposta": "Em muitos casos, sim — quando a retenção foi excessiva, a devolução veio sem correção ou foi parcelada de forma desproporcional. Assinar não valida o que foi indevidamente retido.\nHá prazo, então quanto antes melhor. Me envie o distrato, o contrato original e o comprovante do que você recebeu de volta."
+    },
+    {
+      "id": "3.4",
+      "categoria": "imobiliario",
+      "tema": "Atraso na entrega",
+      "pergunta": "A entrega do meu imóvel está atrasada. Quais são os meus direitos?",
+      "resposta": "Você escolhe entre dois caminhos: manter o contrato e cobrar indenização pelo período de atraso, normalmente equivalente ao aluguel do imóvel por mês parado, ou encerrar o contrato por culpa da construtora e receber tudo de volta, corrigido e sem retenção.\nMe envie o contrato com a data prevista de entrega e os comprovantes de pagamento."
+    },
+    {
+      "id": "3.5",
+      "categoria": "imobiliario",
+      "tema": "Multipropriedade",
+      "pergunta": "Comprei uma multipropriedade (cota de tempo em resort) e quero cancelar. É possível?",
+      "resposta": "Sim, é um dos casos que mais atendemos. Essas vendas são feitas sob forte pressão, com promessa de valorização, rentabilidade e revenda fácil que depois não se confirma — isso sustenta a rescisão, a devolução dos valores, o cancelamento das parcelas e das taxas e a retirada do nome dos cadastros de inadimplentes.\nSe a assinatura foi recente, me avise agora: existe prazo curto de arrependimento.\nMe envie o contrato, as cobranças e o material de venda."
+    },
+    {
+      "id": "3.6",
+      "categoria": "imobiliario",
+      "tema": "Irregularidade na incorporação",
+      "pergunta": "Descobri que o empreendimento tem irregularidades. Isso muda alguma coisa?",
+      "resposta": "Muda, e a seu favor. Vender unidade sem a incorporação regularizada não é detalhe burocrático. Constatada a irregularidade, deixa de ser caso de devolução com desconto e passa a se discutir a restituição integral e corrigida, acrescida de multa em favor do comprador.\nPor isso a primeira coisa que checamos é a situação registral do empreendimento. Me passe o contrato e o nome exato do empreendimento e da incorporadora."
+    },
+    {
+      "id": "3.7",
+      "categoria": "imobiliario",
+      "tema": "Loteamento",
+      "pergunta": "Comprei um lote e nada foi entregue (asfalto, água, energia, escritura). O que fazer?",
+      "resposta": "O loteador é obrigado a registrar o loteamento e executar a infraestrutura prometida. Não cumprindo, você pode exigir a obra judicialmente, com multa diária, ou encerrar o contrato por culpa dele, com devolução integral e corrigida, sem retenção. Sendo loteamento irregular, o quadro é ainda melhor para o comprador.\nMe envie o contrato, os comprovantes e o nome do loteamento."
+    },
+    {
+      "id": "3.8",
+      "categoria": "imobiliario",
+      "tema": "Escritura não outorgada",
+      "pergunta": "Paguei tudo, mas o vendedor não passa a escritura. Ele sumiu, faleceu ou a empresa faliu.",
+      "resposta": "Tem solução: existe uma ação em que a própria sentença substitui a escritura e permite o registro no seu nome. Funciona mesmo com vendedor desaparecido, falecido, empresa encerrada ou falida, e mesmo com contrato particular sem registro em cartório.\nMe envie o contrato ou recibo, os comprovantes de pagamento e a matrícula do imóvel — se não tiver a matrícula, o endereço completo já serve."
+    },
+    {
+      "id": "3.9",
+      "categoria": "imobiliario",
+      "tema": "Vícios de construção",
+      "pergunta": "Recebi o imóvel com defeitos (infiltração, rachadura, acabamento). O que fazer?",
+      "resposta": "A construtora responde pelos defeitos. Em problemas de solidez e segurança a garantia legal é de cinco anos, e nos demais vícios o prazo só começa a correr quando o defeito aparece. Dá para exigir o reparo ou o valor para você mesmo executar, além dos danos que o problema causou.\nMe envie fotos e vídeos datados, o contrato e o histórico de reclamações feitas à construtora."
+    },
+    {
+      "id": "3.10",
+      "categoria": "imobiliario",
+      "tema": "Corretagem e SATI",
+      "pergunta": "Cobraram de mim corretagem, SATI ou taxa de assessoria. Posso pedir de volta?",
+      "resposta": "Vale conferir. A corretagem repassada ao comprador só é válida se foi informada de forma clara e destacada antes da assinatura, e a taxa de assessoria costuma ser considerada abusiva quando o serviço não foi efetivamente prestado.\nO prazo para pedir a devolução é curto, então não deixe para depois. Me envie o contrato e os recibos dessas taxas."
+    },
+    {
+      "id": "3.11",
+      "categoria": "imobiliario",
+      "tema": "Honorários imobiliário",
+      "pergunta": "Quanto custa para vocês cuidarem do meu caso imobiliário?",
+      "resposta": "Nos casos imobiliários não trabalhamos com tabela fixa: cada contrato tem uma complexidade diferente, então avaliamos um a um. O modelo é entrada mais honorários de êxito, ou seja, uma parte no início e o restante vinculado ao resultado.\nOs valores exatos são apresentados na reunião com o advogado, depois da análise do seu caso.\nMe envie seu nome completo, o contrato e os comprovantes de pagamento que agendamos essa conversa."
+    },
+    {
+      "id": "3.12",
+      "categoria": "imobiliario",
+      "tema": "Insistência no valor",
+      "pergunta": "Me diz só um valor aproximado antes de eu enviar os documentos.",
+      "resposta": "Entendo, mas passar um número por aqui seria adivinhação — o valor muda conforme o contrato, o quanto já foi pago, o estágio do empreendimento e o tipo de ação. Preferimos não chutar.\nA análise inicial não tem custo e não te compromete. Feita a análise, o advogado te apresenta na reunião o valor da entrada e o percentual de êxito, com tudo por escrito antes de qualquer assinatura.\nMe envie o contrato e os comprovantes que damos o primeiro passo."
+    },
+    {
+      "id": "3.13",
+      "categoria": "imobiliario",
+      "tema": "Documentos imobiliário",
+      "pergunta": "Quais documentos preciso enviar no caso imobiliário?",
+      "resposta": "Mande o que tiver, mesmo incompleto: contrato e aditivos, comprovantes de pagamento, distrato ou proposta de acordo, matrícula do imóvel ou o endereço, material de venda e conversas com o corretor, e-mails trocados com a construtora e fotos, se houver defeito ou obra parada.\nPode enviar por aqui em foto ou PDF, com seu nome completo e um resumo do que aconteceu."
+    }
+  ]
+}

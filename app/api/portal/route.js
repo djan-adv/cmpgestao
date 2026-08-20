@@ -269,15 +269,43 @@ export async function POST(request) {
     const senha = String(body.senha || '')
     const devId = String(body.dispositivo_id || '').slice(0, 64)
     const devNome = String(body.dispositivo_nome || '').slice(0, 160)
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) || !senha) {
-      return Response.json({ erro: 'Informe e-mail e senha.' }, { status: 400 })
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      return Response.json({ erro: 'Informe um e-mail válido.' }, { status: 400 })
     }
     const ip = (request.headers.get('x-forwarded-for') || '').split(',')[0].trim() || 'sem-ip'
     if (!podeTentar(ip + '|' + email)) {
       return Response.json({ erro: 'Muitas tentativas. Aguarde 10 minutos e tente de novo.' }, { status: 429 })
     }
-    const { data: a } = await sb.from('portal_acessos').select('*').eq('email', email).maybeSingle()
-    if (!a || !confereSenha(senha, a.senha_hash)) {
+    let a = (await sb.from('portal_acessos').select('*').eq('email', email).maybeSingle()).data
+
+    if (!senha) {
+      // Primeiro acesso SEM senha (pedido do dono, 20/08/2026): quem acabou de
+      // virar lead pelo chat do site já tem um caso "em fase de contratação"
+      // (fonte 'caso', sem CNJ ainda) — pra esse caso, basta informar o mesmo
+      // e-mail do cadastro. Vale só enquanto o escritório não concede uma
+      // senha de verdade: a partir daí este caminho para de valer para o
+      // e-mail (força a senha normal). Sem risco maior do que isso porque é
+      // acesso único, ao processo/caso recém-aberto — as travas de aparelho e
+      // de tentativas (podeTentar/MAX_APARELHOS) continuam valendo do mesmo jeito.
+      if (a && a.senha_hash) {
+        marcaTentativa(ip + '|' + email)
+        return Response.json({ erro: 'Este e-mail já tem senha cadastrada — informe a senha para entrar.' }, { status: 401 })
+      }
+      if (!a) {
+        const { data: caso } = await sb.from('processos').select('id,cliente_nome,escritorio_id')
+          .eq('fonte', 'caso').ilike('contatos_livres', '%' + email + '%').not('status', 'ilike', '%encerr%').limit(1).maybeSingle()
+        if (!caso) {
+          marcaTentativa(ip + '|' + email)
+          return Response.json({ erro: 'Não encontramos nenhum atendimento em andamento com este e-mail. Fale com o escritório.' }, { status: 404 })
+        }
+        const ins = await sb.from('portal_acessos').insert({
+          escritorio_id: caso.escritorio_id, nome: caso.cliente_nome || '', email, ativo: true, provisorio: true,
+        }).select('*').single()
+        if (ins.error) return Response.json({ erro: 'Não consegui liberar o acesso agora. Tente de novo.' }, { status: 500 })
+        a = ins.data
+      }
+      // `a` existe e está sem senha_hash (provisório) — segue direto pro fluxo comum de sessão abaixo
+    } else if (!a || !confereSenha(senha, a.senha_hash)) {
       marcaTentativa(ip + '|' + email)
       return Response.json({ erro: 'E-mail ou senha incorretos. Confira os dados que o escritório enviou por e-mail.' }, { status: 401 })
     }

@@ -218,6 +218,7 @@
       <div class="errbox" id="l-erro"></div>
       <div id="l-okmsg" style="display:none;background:#e5f4ed;border:1px solid #bfe0cf;color:#0F6E56;border-radius:10px;padding:10px 12px;font-size:13px;margin-top:10px"></div>
       <div style="text-align:center;margin-top:12px"><a onclick="mostrarEsqueci()" style="cursor:pointer;color:#274b7d;font-size:13.5px;font-weight:600;text-decoration:underline">Esqueci minha senha</a></div>
+      <div style="text-align:center;margin-top:6px"><a onclick="entrarSemSenha()" style="cursor:pointer;color:#5b6673;font-size:12.5px;text-decoration:underline">Ainda não tenho senha — sou atendimento novo</a></div>
       <div class="seg">Acesso pessoal enviado pelo escritório por e-mail. Você vê apenas os SEUS processos.
         Seus dados são tratados só para esta consulta (LGPD).</div>
     </div>
@@ -516,6 +517,28 @@ function entrar(){
     localStorage.setItem('cmp_portal_token',TOKEN);
     localStorage.setItem('cmp_portal_nome',NOME);
     $('l-senha').value='';
+    entrarNaHome();
+  })
+  .catch(function(){ b.disabled=false; b.textContent='Entrar'; err.textContent='Falha de conexão. Verifique a internet e tente de novo.'; err.style.display='block'; });
+}
+/* Primeiro acesso, sem senha — vale só pra quem acabou de virar lead pelo
+   chat do site e ainda não recebeu senha do escritório (caso ainda em fase
+   de contratação, sem número de processo). Mesmo endpoint de login, só que
+   sem o campo senha — o servidor decide se libera. */
+function entrarSemSenha(){
+  var email = ($('l-email').value||'').trim();
+  var err = $('l-erro'); err.style.display='none';
+  if(!email){ err.textContent='Digite o e-mail que você usou no atendimento.'; err.style.display='block'; $('l-email').focus(); return; }
+  var b=$('btn-entrar'); b.disabled=true; b.textContent='Entrando…';
+  fetch('/api/portal',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({acao:'login',email:email,senha:'',dispositivo_id:dispositivoId(),dispositivo_nome:nomeAparelho()})})
+  .then(function(r){return r.json();})
+  .then(function(d){
+    b.disabled=false; b.textContent='Entrar';
+    if(!d || !d.ok){ err.textContent=(d&&d.erro)||'Não foi possível entrar agora. Tente de novo.'; err.style.display='block'; return; }
+    TOKEN=d.token; NOME=d.nome||'';
+    localStorage.setItem('cmp_portal_token',TOKEN);
+    localStorage.setItem('cmp_portal_nome',NOME);
     entrarNaHome();
   })
   .catch(function(){ b.disabled=false; b.textContent='Entrar'; err.textContent='Falha de conexão. Verifique a internet e tente de novo.'; err.style.display='block'; });
