@@ -8256,7 +8256,7 @@ async function gerarCasoNovoCliente(){
   try{ var sb=window.__sb; if(sb){ var ug=await sb.auth.getUser(); var pf=await sb.from('usuarios').select('escritorio_id').eq('id',ug.data.user.id).single(); var esc=pf&&pf.data&&pf.data.escritorio_id;
     /* ficha da Receita, se o caso foi aberto pelo CNPJ */
     var rec=window.__receita||null, recF=(rec&&rec.ficha)||null;
-    var linha={escritorio_id:esc,numero:num,cliente_nome:cli||null,oponente:op||null,assunto:(assunto||peca)||null,status:'Administrativo',fonte:'caso',observacoes:(obs||null)};
+    var linha={escritorio_id:esc,numero:num,cliente_nome:cli||null,oponente:op||null,assunto:(assunto||peca)||null,status:'Administrativo',fonte:'caso',observacoes:(obs||null),peca_pendente:(peca||null)};
     if(rec&&rec.documento) linha.receita_doc=rec.documento;      /* CPF: só o número */
     if(recF){
       linha.receita_doc=recF.documento||null;

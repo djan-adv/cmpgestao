@@ -50,6 +50,19 @@ export function carregaModelo() {
 
 function semAcento(s) { return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '') }
 
+// hoje + N dias úteis (só pula sábado/domingo — feriado não entra, mesma regra
+// do resto do Estagiário Virtual). Usado pro prazo da tarefa de revisão.
+export function prazoUteis(dias) {
+  const d = new Date(Date.now() - 3 * 3600000) // hoje em Brasília
+  let restam = dias
+  while (restam > 0) {
+    d.setUTCDate(d.getUTCDate() + 1)
+    const dow = d.getUTCDay()
+    if (dow !== 0 && dow !== 6) restam--
+  }
+  return d.toISOString().slice(0, 10)
+}
+
 export function minutaDoc(proc, texto) {
   const blocks = String(texto || '').split(/\n{2,}/)
   const corpo = blocks.map(function (b) {
@@ -83,10 +96,13 @@ export function sistemaBase() {
 // necessários — entram na frente da fila de PDFs enviados à IA.
 export async function gerarMinuta(sb, {
   numero, instrucao, autor = 'robo', maxFiles = 6, docsPreferidos = [], rotina = 'minuta',
-  tarefaTitulo = null, prazoEm = null,
+  tarefaTitulo = null, prazoEm = null, resp = null, origemTarefa = 'minuta',
 }) {
   const dig = String(numero || '').replace(/\D/g, '')
-  if (dig.length < 16) return { erro: 'número de processo inválido', status: 400 }
+  // CNJ tem 20 dígitos; casos administrativos (sem CNJ) usam a numeração interna
+  // ano.mes.dia.horaminuto (12 dígitos) — o mínimo aqui é só sanidade de entrada,
+  // não formato: o achado do processo é sempre por igualdade exata (numero_digitos).
+  if (dig.length < 8) return { erro: 'número de processo inválido', status: 400 }
   if (!instrucao || !String(instrucao).trim()) return { erro: 'descreva o que a petição deve fazer', status: 400 }
   instrucao = String(instrucao).trim()
 
@@ -190,11 +206,13 @@ export async function gerarMinuta(sb, {
   const quando = prazoEm || amanha
   let tarefaId = null
   try {
-    const t = await sb.from('kanban_tarefas').insert({
+    const linhaTarefa = {
       escritorio_id: ESCRITORIO_CMP, titulo: tarefaTitulo || ('Protocolar/corrigir minuta: ' + instrucao.slice(0, 90)),
       cliente: proc.cliente_nome || '—', numero: proc.numero, coluna: 'distribuir',
-      data: quando, prazo: quando, tipo: 'prazo', origem: 'minuta',
-    }).select('id').single()
+      data: quando, prazo: quando, tipo: 'prazo', origem: origemTarefa,
+    }
+    if (resp) linhaTarefa.resp = resp
+    const t = await sb.from('kanban_tarefas').insert(linhaTarefa).select('id').single()
     tarefaId = t.data && t.data.id
   } catch (e) {}
 
