@@ -56,7 +56,12 @@ async function credenciaisServico() {
 let _svc = null // sessão da conta de serviço reaproveitada entre requisições
 async function admin() {
   if (SIGN_SERVICE) {
-    return createClient(SIGN_URL, SIGN_SERVICE, { auth: { autoRefreshToken: false, persistSession: false } })
+    // valida a chave antes de confiar nela — expirada ("JWT expired", 20/08/2026)
+    // derrubava o painel inteiro; agora cai pra conta de serviço
+    const c = createClient(SIGN_URL, SIGN_SERVICE, { auth: { autoRefreshToken: false, persistSession: false } })
+    const teste = await c.from('documentos').select('id', { head: true, count: 'exact' }).limit(1)
+    if (!teste.error) return c
+    console.warn('assinatura: chave secreta inválida (' + teste.error.message + ') — usando a conta de serviço')
   }
   if (_svc) {
     const s = await _svc.auth.getSession()

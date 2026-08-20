@@ -287,13 +287,23 @@ export default function AssinarProcuracao() {
       const auditEl = document.querySelector('.asn-doc .auditoria')
       const prev = auditEl ? auditEl.style.display : ''
       if (auditEl) auditEl.style.display = 'none'
-      const c1 = await window.html2canvas(docEl, { scale: 2, backgroundColor: '#ffffff', useCORS: true })
+      // Fotografa o documento em LARGURA DE A4 (794px ≈ 210mm @96dpi), não na
+      // largura do celular — era isso que fazia a procuração sair numa coluna
+      // estreita e feia quando o cliente assinava pelo telefone (20/08/2026).
+      const A4PX = 794
+      const c1 = await window.html2canvas(docEl, {
+        scale: 2, backgroundColor: '#ffffff', useCORS: true, windowWidth: A4PX + 80,
+        onclone: (cd) => { const e = cd.querySelector('.asn-doc'); if (e) { e.style.width = A4PX + 'px'; e.style.maxWidth = 'none'; e.style.margin = '0'; } },
+      })
       if (auditEl) auditEl.style.display = prev
       let w1 = pw, h1 = c1.height * pw / c1.width
       if (h1 > phh) { w1 = c1.width * phh / c1.height; h1 = phh }
       pdf.addImage(c1.toDataURL('image/jpeg', 0.92), 'JPEG', (pw - w1) / 2, 0, w1, h1)
       if (auditEl) {
-        const c2 = await window.html2canvas(auditEl, { scale: 2, backgroundColor: '#ffffff', useCORS: true })
+        const c2 = await window.html2canvas(auditEl, {
+          scale: 2, backgroundColor: '#ffffff', useCORS: true, windowWidth: A4PX + 80,
+          onclone: (cd) => { const e = cd.querySelector('.asn-doc .auditoria') || cd.querySelector('.auditoria'); if (e) { e.style.width = A4PX + 'px'; e.style.maxWidth = 'none'; e.style.margin = '0'; e.style.display = 'block'; } },
+        })
         pdf.addPage()
         let w2 = pw - 20, h2 = c2.height * (pw - 20) / c2.width
         if (h2 > phh - 20) { w2 = c2.width * (phh - 20) / c2.height; h2 = phh - 20 }
