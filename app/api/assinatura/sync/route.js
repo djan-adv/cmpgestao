@@ -11,6 +11,7 @@ import fs from 'fs'
 import path from 'path'
 import { createClient } from '@supabase/supabase-js'
 import { enviarEmailCore } from '../../enviar-email/enviar.js'
+import { gerarMinuta, prazoUteis } from '../../peticao/core.js'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 120
@@ -311,7 +312,7 @@ export async function GET(request) {
       const dig = String(d.processo || '').replace(/\D/g, '')
       // acha o processo no CMP (quando há vínculo): número exato ou por dígitos
       let row = null
-      const SEL = 'id, numero, cliente_nome, contatos_livres, contatos_partes, escritorio_id'
+      const SEL = 'id, numero, cliente_nome, oponente, observacoes, contatos_livres, contatos_partes, escritorio_id, peca_pendente, rascunho_gerado_em'
       if (d.processo) {
         let q = await cmp.from('processos').select(SEL).eq('numero', d.processo).limit(1)
         row = q.data && q.data[0]
@@ -372,6 +373,44 @@ export async function GET(request) {
           : '[Assinatura] ' + (d.titulo || 'Documento') + ' ASSINADO' + (quem ? ' por ' + quem : '') +
             (salvoEm ? ' — cópia salva em ' + salvoEm + '.' : ' — cópia disponível no painel de Assinaturas.')
         await cmp.from('andamentos').insert({ processo_id: row.id, data: new Date().toISOString().slice(0, 10), texto, fonte: 'manual' })
+      }
+
+      // ===== caso novo, procuração assinada -> já lança pro Estagiário Virtual
+      // redigir o rascunho e cria a tarefa de revisão (pedido do dono, 20/08/2026).
+      // Só na primeira sincronização (nunca na re-sincronização de selfie), só se
+      // o caso pediu uma peça ao ser criado, e só uma vez por caso (idempotente
+      // por rascunho_gerado_em). Nunca protocola nada — é sempre rascunho pra
+      // revisão de Rita/Djan, com alerta se não for revisado em 2 dias úteis
+      // (ver /api/cron/minutas-atrasadas). =====
+      if (row && d.tipo === 'procuracao' && !reprocesso && row.peca_pendente && !row.rascunho_gerado_em) {
+        try {
+          const prazo = prazoUteis(2)
+          const instrucao = 'Elaborar ' + row.peca_pendente + ' para ' + (row.cliente_nome || 'o(a) cliente') +
+            (row.oponente ? (' em face de ' + row.oponente) : '') +
+            (row.observacoes ? ('.\n\nContexto do atendimento (anotado no Comercial): ' + row.observacoes) : '') +
+            '.\n\nA procuração já foi assinada eletronicamente e está na pasta do caso — os demais documentos anexados também estão na pasta.'
+          const rm = await gerarMinuta(cmp, {
+            numero: row.numero, instrucao, autor: 'robo', rotina: 'minuta_caso_novo', maxFiles: 6,
+            tarefaTitulo: 'Revisar rascunho: ' + row.peca_pendente + ' — ' + (row.cliente_nome || ''),
+            prazoEm: prazo, resp: 'Maria Rita', origemTarefa: 'minuta_caso_novo',
+          })
+          if (!rm.erro) {
+            await cmp.from('processos').update({ rascunho_gerado_em: new Date().toISOString() }).eq('id', row.id)
+            try {
+              await enviarEmailCore({
+                para: 'mariaritahenriq@gmail.com', cc: 'djan.adv@gmail.com',
+                assunto: '📝 Rascunho pronto para revisão — ' + row.peca_pendente + ' — ' + (row.cliente_nome || ''),
+                corpo: 'O cliente assinou a procuração e o Estagiário Virtual já redigiu o rascunho de ' + row.peca_pendente + ' para ' + (row.cliente_nome || '') + '.\n\n' +
+                  'Está salvo em Word na pasta do caso (' + row.numero + '), com o Relatório de Teses no histórico.\n\n' +
+                  'Prazo para revisar: ' + prazo.split('-').reverse().join('/') + ' — se não for revisado até lá, o Jader também é avisado.\n\n' +
+                  'Painel: https://gestao.cmpadvogados.com.br/sistema.html',
+                numero: dig || '', dedup: true,
+              })
+            } catch (eEm) {}
+          } else {
+            console.warn('rascunho automático (caso novo) falhou:', rm.erro)
+          }
+        } catch (eM) { console.warn('rascunho automático (caso novo):', (eM && eM.message) || eM) }
       }
 
       // e-mail de confirmação ao escritório (sempre que algo é assinado)

@@ -70,6 +70,9 @@ const JOBS = [
   // { nome: 'minuta_dossie', rotulo: 'Minutas — dossiê do Estagiário Virtual', url: '/api/robo/minutas?fase=dossie', cada_min: 15, timeout_ms: 240000 },
   // íntegra dos autos: download pesado do jus.br, um processo por vez
   { nome: 'minuta_integra', rotulo: 'Minutas — íntegra dos autos na pasta', url: '/api/robo/minutas?fase=integra', cada_min: 20, timeout_ms: 280000 },
+  // caso novo: procuração assinada -> rascunho automático (dentro do assinatura_sync,
+  // acima). Este job só cobra quem não revisou em 2 dias úteis — Rita, Djan e Jader.
+  { nome: 'minutas_atrasadas', rotulo: 'Estagiário Virtual — cobrar rascunho de caso novo sem revisão', url: '/api/cron/minutas-atrasadas', diario_hora: 9 },
   // sentença/acórdão saiu → avisa o cliente pelo chat do app, sozinho. Mesmo teto
   // mensal do Estagiário Virtual (ia_config): se estourar o mês, este também para.
   { nome: 'aviso_decisao_cliente', rotulo: 'Cliente — avisar sentença/acórdão pelo chat', url: '/api/robo/avisos-cliente', cada_min: 30, timeout_ms: 55000 },
