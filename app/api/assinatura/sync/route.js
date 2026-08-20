@@ -127,7 +127,7 @@ const MESES_BR = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'j
 // pdf-lib usa WinAnsi na Helvetica: troca o que não codifica para não explodir
 function winAnsi(s) { return String(s || '').replace(/[""]/g, '"').replace(/['']/g, "'").replace(/[–—]/g, '-').replace(/[^\x09\x0A\x20-\x7E -ÿ]/g, ' ') }
 
-async function pdfProcuracaoA4({ d, s0, evtAssinado }) {
+async function pdfProcuracaoA4({ d, s0, evtAssinado, selfieBuf }) {
   const { PDFDocument, StandardFonts, rgb } = await import('pdf-lib')
   const pdf = await PDFDocument.create()
   const reg = await pdf.embedFont(StandardFonts.Helvetica)
@@ -236,6 +236,10 @@ async function pdfProcuracaoA4({ d, s0, evtAssinado }) {
     ['Identificador', (evtAssinado && evtAssinado.id) ? evtAssinado.id + ' (evento de assinatura)' : d.id],
     ['Fundamento', 'Lei nº 14.063/2020 e MP nº 2.200-2/2001'],
   ]
+  if (s0.selfie_em) {
+    const se = new Date(new Date(s0.selfie_em).getTime() - 3 * 3600000)
+    linhas2.push(['Selfie', 'recebida em ' + se.getUTCDate() + '/' + String(se.getUTCMonth() + 1).padStart(2, '0') + '/' + se.getUTCFullYear() + ' às ' + String(se.getUTCHours()).padStart(2, '0') + ':' + String(se.getUTCMinutes()).padStart(2, '0') + ' (abaixo — uso interno do escritório)'])
+  }
   for (const [k, v] of linhas2) {
     p2.drawText(winAnsi(k), { x: M, y: y2, size: 9.5, font: neg, color: CINZA })
     // valor com quebra simples
@@ -251,6 +255,19 @@ async function pdfProcuracaoA4({ d, s0, evtAssinado }) {
     y2 -= 6
   }
   y2 -= 8
+  // selfie de confirmação — imagem só nesta via interna
+  if (selfieBuf && selfieBuf.length) {
+    try {
+      let img = null
+      try { img = await pdf.embedJpg(selfieBuf) } catch (e1) { img = await pdf.embedPng(selfieBuf) }
+      const iw = 120, ih = iw * (img.height / img.width)
+      y2 -= 6
+      p2.drawText('Selfie de confirmação (uso interno do escritório):', { x: M, y: y2, size: 9.5, font: neg, color: CINZA })
+      y2 -= ih + 8
+      p2.drawImage(img, { x: M, y: y2, width: iw, height: ih })
+      y2 -= 14
+    } catch (e) { /* selfie ilegível não derruba a via */ }
+  }
   const selo = winAnsi('Via de leitura re-diagramada pelo sistema. O registro original da assinatura — com evento, IP, agente de navegação e demais metadados — permanece guardado na plataforma de assinaturas do CMP Advogados e prevalece para conferência.')
   let restoS = selo
   while (restoS.length) {
@@ -273,7 +290,7 @@ export async function GET(request) {
   try { sign = await signAdmin(cmp) } catch (e) { return Response.json({ ok: false, erro: String((e && e.message) || e) }, { status: 502 }) }
 
   const { data: docs, error } = await sign.from('documentos')
-    .select('id, titulo, tipo, modelo, finalidade, processo, status, sync_cmp_em, signatarios(nome, cpf, email, telefone, ip, dados, status, assinado_em)')
+    .select('id, titulo, tipo, modelo, finalidade, processo, status, sync_cmp_em, signatarios(nome, cpf, email, telefone, ip, dados, status, assinado_em, selfie_path, selfie_em)')
     .is('sync_cmp_em', null).eq('status', 'assinado').limit(10)
   if (error) return Response.json({ ok: false, erro: error.message }, { status: 500 })
 
@@ -309,7 +326,14 @@ export async function GET(request) {
         try {
           const { data: evt } = await sign.from('eventos_auditoria').select('id,detalhe')
             .eq('documento_id', d.id).eq('tipo', 'assinado').order('criado_em', { ascending: false }).limit(1)
-          const bonito = await pdfProcuracaoA4({ d, s0: sigs[0], evtAssinado: (evt && evt[0]) || null })
+          // selfie de confirmação (quando o cliente enviou): entra SÓ nesta via
+          // interna do escritório — a cópia do cliente nunca a carrega
+          let selfieBuf = null
+          if (sigs[0].selfie_path) {
+            const ds = await sign.storage.from('assinaturas').download(sigs[0].selfie_path)
+            if (!ds.error && ds.data) selfieBuf = Buffer.from(await ds.data.arrayBuffer())
+          }
+          const bonito = await pdfProcuracaoA4({ d, s0: sigs[0], evtAssinado: (evt && evt[0]) || null, selfieBuf })
           if (bonito && bonito.length > 2000) pdfBuf = bonito
         } catch (e) { console.warn('pdf A4 da procuração:', (e && e.message) || e) }
       }
