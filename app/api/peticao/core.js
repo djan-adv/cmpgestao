@@ -96,7 +96,7 @@ export function sistemaBase() {
 // necessários — entram na frente da fila de PDFs enviados à IA.
 export async function gerarMinuta(sb, {
   numero, instrucao, autor = 'robo', maxFiles = 6, docsPreferidos = [], rotina = 'minuta',
-  tarefaTitulo = null, prazoEm = null, resp = null, origemTarefa = 'minuta',
+  tarefaTitulo = null, prazoEm = null, resp = null, origemTarefa = 'minuta', pecaNome = null,
 }) {
   const dig = String(numero || '').replace(/\D/g, '')
   // CNJ tem 20 dígitos; casos administrativos (sem CNJ) usam a numeração interna
@@ -200,6 +200,24 @@ export async function gerarMinuta(sb, {
     }
   } catch (e) {}
 
+  // 2b) o MESMO Word direto na pasta do processo ("Documentos do processo" no
+  //     disco, /opt/cmpdocs/<dig>/) — o anexo acima só aparece dentro do
+  //     histórico; o advogado revisa pela pasta, então o rascunho tem que
+  //     estar lá também. Nome fixo "<peça> - a corrigir.doc"; se já existir um
+  //     rascunho com esse nome (nova tentativa), nunca sobrescreve — numera.
+  let arquivoPasta = null
+  try {
+    const baseNome = String(pecaNome || instrucao).replace(/\s+/g, ' ').trim().slice(0, 60).replace(/[\/\\]/g, '-')
+    const dirDestino = path.join(ROOT, dig)
+    fs.mkdirSync(dirDestino, { recursive: true })
+    let nomeFinal = baseNome + ' - a corrigir.doc'
+    let destino = path.join(dirDestino, nomeFinal)
+    let i = 2
+    while (fs.existsSync(destino)) { nomeFinal = baseNome + ' - a corrigir (' + i + ').doc'; destino = path.join(dirDestino, nomeFinal); i++ }
+    fs.writeFileSync(destino, buf)
+    arquivoPasta = nomeFinal
+  } catch (e) {}
+
   // 3) tarefa: protocolar/corrigir a minuta. Sem prazo informado, cai em D+1
   //    (se não protocolar hoje, alerta amanhã).
   const amanha = new Date(Date.now() + 86400000).toISOString().slice(0, 10)
@@ -218,7 +236,7 @@ export async function gerarMinuta(sb, {
 
   return {
     ok: true, processo: proc, andamento_id: andId, anexo_id: anexoId, tarefa_id: tarefaId,
-    arquivo: fileName, docs_usados: nomesUsados, tarefa_para: quando,
+    arquivo: fileName, arquivo_pasta: arquivoPasta, docs_usados: nomesUsados, tarefa_para: quando,
     custo_usd: r.custoUsd, preview: texto.slice(0, 500),
   }
 }

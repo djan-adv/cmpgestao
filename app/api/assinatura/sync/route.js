@@ -392,7 +392,7 @@ export async function GET(request) {
           const rm = await gerarMinuta(cmp, {
             numero: row.numero, instrucao, autor: 'robo', rotina: 'minuta_caso_novo', maxFiles: 6,
             tarefaTitulo: 'Revisar rascunho: ' + row.peca_pendente + ' — ' + (row.cliente_nome || ''),
-            prazoEm: prazo, resp: 'Maria Rita', origemTarefa: 'minuta_caso_novo',
+            prazoEm: prazo, resp: 'Maria Rita', origemTarefa: 'minuta_caso_novo', pecaNome: row.peca_pendente,
           })
           if (!rm.erro) {
             await cmp.from('processos').update({ rascunho_gerado_em: new Date().toISOString() }).eq('id', row.id)
