@@ -1101,6 +1101,17 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
     </span>
   </div>
   <div id="l-capt" class="note" style="margin:4px 0 6px"></div>
+  <div id="l-liveChat" style="display:none;border:1px solid #d9e2ee;border-radius:10px;margin-bottom:12px;overflow:hidden">
+    <div style="background:#f4f8fb;padding:7px 12px;font-size:12px;font-weight:700;color:#274b7d;display:flex;justify-content:space-between;align-items:center">
+      <span>💬 Conversa ao vivo — chat do site</span>
+      <span id="l-liveChat-status" class="note" style="font-weight:400"></span>
+    </div>
+    <div id="l-liveChat-msgs" style="max-height:220px;overflow-y:auto;padding:10px 12px;background:#fbfcfd"></div>
+    <div style="display:flex;gap:6px;padding:8px;border-top:1px solid #e7edf5;background:#fff">
+      <input id="l-liveChat-txt" placeholder="Responder ao cliente…" style="flex:1" onkeydown="if(event.key==='Enter'){event.preventDefault();enviarRespostaLead();}">
+      <button class="btn sm" onclick="enviarRespostaLead()">Enviar</button>
+    </div>
+  </div>
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:0 16px">
     <div><label>Nome</label><input id="l-nome"></div>
     <div><label>Processo de referência <span style="color:var(--muted);font-weight:400">(se houver)</span></label><input id="l-procref" placeholder="0000000-00.0000.0.00.0000"></div>
@@ -5342,9 +5353,64 @@ function editarLead(id){ if(id){ var _l0=LEADS.find(function(x){return x.id===id
   document.getElementById("l-procref").value=l.procRef||"";
   var _cap=document.getElementById("l-capt"); if(_cap){ var _c=l.capturadoEm||(l.data?(l.data+'T00:00:00'):null), _u=l.ultimaAtividade||null; _cap.innerHTML=(_c?('&#128337; Capturado em '+fmtDataHora(_c)):'&#128337; Captura: —')+(_u?('  &middot;  última atividade '+fmtDataHora(_u)):''); }
   window._lsel=(l.labels?l.labels.slice():[]); renderEtqPicker("l-etq",window._lsel);
-  document.getElementById("modal-lead").classList.remove("hidden");}
+  document.getElementById("modal-lead").classList.remove("hidden");
+  _liveChatAbrir(l);
+}
+/* ===== Conversa ao vivo (chat do site) — atende o cliente direto da ficha do
+   lead. Enquanto tiver uma resposta 'staff' recente, a IA do chat público para
+   de responder ESTE lead sozinha (ver app/api/lead-chat 'responder'); volta a
+   responder sozinha depois de HUMANO_JANELA_MIN sem novidade do staff. ===== */
+var _liveChatPoll=null;
+function _liveChatAbrir(l){
+  var box=document.getElementById('l-liveChat'); if(!box) return;
+  var ehChatSite=(l&&l.canal==='Chat do site');
+  var temConversa=!!(l&&Array.isArray(l.conversa)&&l.conversa.length);
+  if(!ehChatSite&&!temConversa){ box.style.display='none'; if(_liveChatPoll){clearInterval(_liveChatPoll);_liveChatPoll=null;} return; }
+  box.style.display='';
+  _liveChatRender(l.conversa||[]);
+  if(_liveChatPoll) clearInterval(_liveChatPoll);
+  _liveChatPoll=setInterval(function(){ _liveChatAtualizar(l); },5000);
+}
+function _liveChatRender(conversa){
+  var m=document.getElementById('l-liveChat-msgs'); if(!m) return;
+  if(!conversa.length){ m.innerHTML='<div class="note" style="padding:4px 0">Sem mensagens ainda.</div>'; return; }
+  m.innerHTML=conversa.map(function(e){
+    var deCliente=(e.de==='user');
+    var rot=deCliente?'':(e.de==='staff'?(esc(e.autor||'equipe')+' · '):'assistente · ');
+    return '<div style="display:flex;justify-content:'+(deCliente?'flex-start':'flex-end')+';margin-bottom:6px">'
+      +'<div style="max-width:82%;background:'+(deCliente?'#fff':'#eaf3ff')+';border:1px solid '+(deCliente?'#e3e7ec':'#cfe0f5')+';border-radius:10px;padding:6px 10px;font-size:13px;white-space:pre-wrap;word-break:break-word">'
+      +(rot?('<div style="font-size:10.5px;color:var(--muted);font-weight:700;margin-bottom:2px">'+rot+'</div>'):'')
+      +esc(e.texto||'')+'</div></div>';
+  }).join('');
+  m.scrollTop=m.scrollHeight;
+}
+async function _liveChatAtualizar(l){
+  if(!l||!l.dbid) return;
+  try{
+    var sb=window.__sb; if(!sb) return;
+    var r=await sb.from('crm_leads').select('conversa').eq('id',l.dbid).maybeSingle();
+    if(r&&r.data&&Array.isArray(r.data.conversa)){ l.conversa=r.data.conversa; if(window._ledit===l) _liveChatRender(l.conversa); }
+  }catch(e){}
+}
+async function enviarRespostaLead(){
+  var l=window._ledit; if(!l||!l.dbid){ alert('Salve o lead primeiro.'); return; }
+  var el=document.getElementById('l-liveChat-txt'); var texto=(el.value||'').trim(); if(!texto) return;
+  var nome=((document.getElementById('who-name')||{}).textContent||'').trim()||'equipe';
+  var st=document.getElementById('l-liveChat-status'); if(st){ st.textContent='enviando…'; }
+  try{
+    var sb=window.__sb; if(!sb) throw new Error('sem conexão');
+    /* lê antes de gravar — reduz (não elimina) a janela de corrida se dois da equipe responderem juntos */
+    var atual=await sb.from('crm_leads').select('conversa').eq('id',l.dbid).maybeSingle();
+    var conversa=(atual&&atual.data&&Array.isArray(atual.data.conversa))?atual.data.conversa:(l.conversa||[]);
+    conversa=conversa.concat([{de:'staff',texto:texto,autor:nome,quando:new Date().toISOString()}]).slice(-80);
+    var w=await sb.from('crm_leads').update({conversa:conversa,ultima_atividade:new Date().toISOString()}).eq('id',l.dbid);
+    if(w.error) throw new Error(w.error.message);
+    l.conversa=conversa; el.value=''; _liveChatRender(conversa);
+    if(st){ st.textContent='enviado ✓'; setTimeout(function(){ if(st) st.textContent=''; },1500); }
+  }catch(e){ if(st){ st.textContent=''; } alert('Não consegui enviar: '+((e&&e.message)||e)); }
+}
 function fmtDataHora(iso){ try{ var d=new Date(iso); if(isNaN(d.getTime())) return String(iso); return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear()+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }catch(e){ return String(iso); } }
-function fecharLead(){document.getElementById("modal-lead").classList.add("hidden");}
+function fecharLead(){document.getElementById("modal-lead").classList.add("hidden"); if(_liveChatPoll){clearInterval(_liveChatPoll);_liveChatPoll=null;}}
 /* ===== Reunião marcada com o lead: cria o evento na agenda (resp. Jader) e avisa
    por e-mail o cliente (se tiver e-mail, com botão de confirmar presença) e o
    Jader sempre. Usada tanto pelo botão manual quanto pela detecção automática ao
@@ -5622,7 +5688,7 @@ function salvarLeadsLocal(){ try{ localStorage.setItem('cmpLeads', JSON.stringif
   if(window.__leadsDbReady){ clearTimeout(window.__leadsSyncTimer); window.__leadsSyncTimer=setTimeout(syncLeadsDb,400); } }
 function carregarLeadsLocal(){ try{ var s=localStorage.getItem('cmpLeads'); if(s){ var arr=JSON.parse(s); if(Array.isArray(arr)&&arr.length){ LEADS=arr; var mx=0; LEADS.forEach(function(l){ if(l.id>mx)mx=l.id; }); lseq=Math.max(lseq,mx+1); } } }catch(e){} }
 async function escId(){ if(window.__escId) return window.__escId; try{ var sb=window.__sb; if(!sb) return null; var ug=await sb.auth.getUser(); var pf=await sb.from('usuarios').select('escritorio_id').eq('id',ug.data.user.id).single(); window.__escId=pf&&pf.data&&pf.data.escritorio_id; return window.__escId; }catch(e){ return null; } }
-function rowToLead(row,id){ return { id:id, dbid:row.id, nome:row.nome||'', canal:row.canal||'', estagio:row.estagio||'novo', tel:row.tel||'', email:row.email||'', doc:row.doc||'', reuDoc:row.reu_doc||'', endereco:row.endereco||'', valor:row.valor||'', valorFechado:row.valor_fechado||'', motivo:row.motivo||'', data:row.data||'', lemdata:row.lemdata||'', lemtxt:row.lemtxt||'', obs:row.obs||'', prioridade:row.prioridade||'media', acao:row.acao||'', procRef:row.proc_ref||'', labels:(row.labels||[]), arquivos:(row.arquivos||[]), memoria:(row.memoria||null), capturadoEm:row.capturado_em||'', ultimaAtividade:row.ultima_atividade||'', dataFechamento:row.data_fechamento||'', ordem:(row.ordem!=null?row.ordem:0), publicoId:row.publico_id||null }; }
+function rowToLead(row,id){ return { id:id, dbid:row.id, nome:row.nome||'', canal:row.canal||'', estagio:row.estagio||'novo', tel:row.tel||'', email:row.email||'', doc:row.doc||'', reuDoc:row.reu_doc||'', endereco:row.endereco||'', conversa:(Array.isArray(row.conversa)?row.conversa:[]), valor:row.valor||'', valorFechado:row.valor_fechado||'', motivo:row.motivo||'', data:row.data||'', lemdata:row.lemdata||'', lemtxt:row.lemtxt||'', obs:row.obs||'', prioridade:row.prioridade||'media', acao:row.acao||'', procRef:row.proc_ref||'', labels:(row.labels||[]), arquivos:(row.arquivos||[]), memoria:(row.memoria||null), capturadoEm:row.capturado_em||'', ultimaAtividade:row.ultima_atividade||'', dataFechamento:row.data_fechamento||'', ordem:(row.ordem!=null?row.ordem:0), publicoId:row.publico_id||null }; }
 function leadToRow(l,esc,incluirId){ var row={ escritorio_id:esc, nome:l.nome||null, canal:l.canal||null, estagio:l.estagio||'novo', tel:l.tel||null, email:l.email||null, doc:l.doc||null, reu_doc:l.reuDoc||null, endereco:l.endereco||null, valor:l.valor||null, valor_fechado:l.valorFechado||null, motivo:l.motivo||null, data:(l.data||null), lemdata:l.lemdata||null, lemtxt:l.lemtxt||null, obs:l.obs||null, prioridade:l.prioridade||'media', acao:l.acao||null, proc_ref:l.procRef||null, labels:(l.labels||[]), arquivos:(l.arquivos||[]), memoria:(l.memoria||null), capturado_em:(l.capturadoEm||null), ultima_atividade:(l.ultimaAtividade||null), data_fechamento:(l.dataFechamento||null), ordem:(l.ordem!=null?l.ordem:0), publico_id:(l.publicoId||null) }; if(incluirId&&l.dbid) row.id=l.dbid; return row; }
 function _leadUuid(){ try{ if(window.crypto&&crypto.randomUUID) return crypto.randomUUID(); }catch(e){} return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,function(c){var r=Math.random()*16|0,v=c==='x'?r:(r&0x3|0x8);return v.toString(16);}); }
 async function carregarLeadsDb(){

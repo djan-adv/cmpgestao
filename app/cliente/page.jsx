@@ -29,12 +29,36 @@ export default function ClientePage() {
   const dados = useRef({ nome: '', mensagem: '', email: '', tel: '' })
   const leadIdRef = useRef(null)   // evita duas criações em paralelo (arquivo + texto quase juntos)
   const saidaAvisoMostradoRef = useRef(false)
+  const syncLenRef = useRef(0)      // quantas entradas de crm_leads.conversa já refletimos aqui (evita duplicar)
+  const humanoAvisadoRef = useRef(false)
 
   const addBot = useCallback((t) => setMsgs(m => [...m, { de: 'bot', texto: t }]), [])
   const addUser = useCallback((t) => setMsgs(m => [...m, { de: 'user', texto: t }]), [])
 
   useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight }, [msgs])
   useEffect(() => { if (inputRef.current) inputRef.current.focus() }, [passo])
+
+  // Alguém da equipe pode responder direto pela ficha do lead no sistema
+  // (grava em crm_leads.conversa) — este polling traz essa resposta pro chat
+  // do visitante sem precisar recarregar a página.
+  useEffect(() => {
+    if (passo !== 'fim') return
+    const iv = setInterval(async () => {
+      if (!leadIdRef.current) return
+      try {
+        const r = await fetch('/api/lead-chat', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ acao: 'sincronizar', id: leadIdRef.current, desde: syncLenRef.current }),
+        })
+        const j = await r.json()
+        if (j && j.ok && Array.isArray(j.conversa) && j.conversa.length) {
+          j.conversa.forEach((entrada) => { if (entrada && (entrada.de === 'staff' || entrada.de === 'bot')) addBot(entrada.texto) })
+          syncLenRef.current = j.total
+        }
+      } catch (e) { /* tenta de novo no próximo ciclo */ }
+    }, 5000)
+    return () => clearInterval(iv)
+  }, [passo, addBot])
 
   // Dificulta fechar a página sem querer ANTES de termos e-mail e WhatsApp — o
   // navegador mostra um aviso nativo de confirmação (o texto é fixo, definido
@@ -82,10 +106,10 @@ export default function ClientePage() {
         dados.current.nome = nomeQ
         if (emailQ) dados.current.email = emailQ
         const j = await criarLead({ nome: nomeQ, email: emailQ || undefined })
-        addBot('Oi, ' + nomeQ.split(' ')[0] + '! 👋 Sou o assistente do escritório Crispim Mendonça e Pinheiro' + (j.ok ? (' (atendimento ' + j.ref + ')') : '') + '. Me conta rapidinho o que está acontecendo — pode mandar prints ou documentos também, se quiser.')
+        addBot('Oi, ' + nomeQ.split(' ')[0] + '! 👋 Aqui é do escritório Crispim Mendonça e Pinheiro' + (j.ok ? (' (atendimento ' + j.ref + ')') : '') + '. Me conta rapidinho o que está acontecendo — pode mandar prints ou documentos também, se quiser.')
         setPasso('mensagem')
       } else {
-        addBot('Oi! 👋 Sou o assistente do escritório Crispim Mendonça e Pinheiro. Qual é o seu nome?')
+        addBot('Oi! 👋 Aqui é do escritório Crispim Mendonça e Pinheiro. Qual é o seu nome?')
       }
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -145,8 +169,10 @@ export default function ClientePage() {
       await atualizarLead({ tel: t })
       await concluirCaptura()
     } else {
-      // fase de contratação: o chat CONTINUA conversando de verdade (IA),
-      // não fica mudo até o cliente ir pro WhatsApp ou alguém da equipe assumir
+      // fase de contratação: o chat CONTINUA conversando de verdade, não fica
+      // mudo até o cliente ir pro WhatsApp ou alguém da equipe assumir. Se a
+      // equipe já assumiu por dentro do sistema, o servidor não manda resposta
+      // (humano:true) — a resposta do atendente chega pelo polling (sincronizar).
       setPensando(true)
       try {
         const r = await fetch('/api/lead-chat', {
@@ -154,7 +180,13 @@ export default function ClientePage() {
           body: JSON.stringify({ acao: 'responder', id: leadIdRef.current, mensagem: t }),
         })
         const j = await r.json()
-        addBot((j && j.resposta) || 'Recebi! Se preferir, continue direto no WhatsApp 👇')
+        if (j && j.ok && j.humano) {
+          syncLenRef.current += 1
+          if (!humanoAvisadoRef.current) { humanoAvisadoRef.current = true; addBot('🧑‍💼 Alguém da nossa equipe já está com você aqui — só um instante!') }
+        } else {
+          syncLenRef.current += 2
+          addBot((j && j.resposta) || 'Recebi! Se preferir, continue direto no WhatsApp 👇')
+        }
       } catch (err) {
         addBot('Recebi sua mensagem! Se quiser garantir resposta rápida, use o WhatsApp abaixo.')
       }

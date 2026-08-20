@@ -17,11 +17,66 @@
 //   POST { acao:'criar', origem_url, nome?, email? }                        -> { ok, id, ref }
 //   POST { acao:'atualizar', id, nome?, email?, tel?, mensagem?, arquivo? } -> { ok }
 //   POST { acao:'concluir', id }                                            -> { ok, numero }
-//   POST { acao:'responder', id, mensagem }                                 -> { ok, resposta }
+//   POST { acao:'responder', id, mensagem }                                 -> { ok, resposta? , humano? }
+//   POST { acao:'sincronizar', id, desde }                                  -> { ok, conversa: novas_entradas }
+//
+// Atendimento humano (pedido do dono, 20/08/2026): a equipe pode assumir a
+// conversa a qualquer momento pela ficha do lead no sistema (grava direto em
+// crm_leads.conversa, com de:'staff') — enquanto tiver uma entrada 'staff'
+// recente (HUMANO_JANELA_MIN), a IA para de responder ESTE lead sozinha; os
+// demais leads simultâneos continuam com a IA normalmente. Sem novidade do
+// staff por um tempo, a IA retoma sozinha.
 
 import { createClient } from '@supabase/supabase-js'
+import fs from 'fs'
+import path from 'path'
 import { enviarEmailCore } from '../enviar-email/enviar.js'
 import { chamarClaude } from '../_ia/claude.js'
+
+// Base de perguntas/respostas fornecida pelo escritório (28 pares — 15
+// trabalhistas, 13 imobiliários), lida uma vez e mantida em texto fixo pro
+// bloco cacheado do system (é a MESMA base pra toda conversa — por isso NÃO
+// entra no bloco variável). Percentual de retenção, prazo de prescrição,
+// precedentes/jurisprudência e valores de honorários foram deixados de fora
+// DE PROPÓSITO nesses textos — a regra em SISTEMA_ATENDIMENTO_CHAT_SITE
+// proíbe a IA de inventar esses números.
+function baseAtendimentoTexto() {
+  try {
+    const p = path.join(process.cwd(), 'app', 'api', 'lead-chat', 'atendimento-cmp.json')
+    const base = JSON.parse(fs.readFileSync(p, 'utf8'))
+    return (base.itens || []).map(it => '### ' + it.tema + '\nP: ' + it.pergunta + '\nR: ' + it.resposta).join('\n\n')
+  } catch (e) { return '' }
+}
+const BASE_TEXTO = baseAtendimentoTexto()
+
+// Prompt FIXO (byte a byte idêntico em toda chamada — vai no `system` com
+// cache_control, regra do CLAUDE.md). Pedido do dono (20/08/2026): o
+// atendimento deve soar como uma PESSOA da equipe, não como um robô/IA — sem
+// se identificar como assistente virtual, sem jargão de bot.
+const SISTEMA_ATENDIMENTO_CHAT_SITE =
+  'Você está atendendo pelo chat do site do escritório Crispim, Mendonça e Pinheiro Advogados (CMP), como se fosse alguém da equipe respondendo.\n\n' +
+  'Esta pessoa já forneceu nome, e-mail e WhatsApp, e um atendimento já foi aberto no sistema do escritório — a conversa está em fase de contratação.\n\n' +
+  'COMO FALAR:\n' +
+  '- Fale como uma pessoa de verdade da equipe, não como um robô ou "assistente virtual" — nunca se descreva como IA, bot ou sistema automatizado, nem use frases como "sou um assistente".\n' +
+  '- Português do Brasil, tom acolhedor e direto, respostas CURTAS (1 a 3 frases, formato de chat/WhatsApp).\n' +
+  '- Não repita perguntas que a pessoa já respondeu nesta conversa.\n' +
+  '- Responda em texto puro, sem markdown, sem aspas ao redor da resposta.\n\n' +
+  'BASE DE PERGUNTAS E RESPOSTAS DO ESCRITÓRIO (trabalhista e imobiliário) — use como referência de conteúdo e de tom sempre que o assunto do cliente casar com algum destes temas; adapte a redação ao que a pessoa perguntou, não copie a resposta pronta se não fizer sentido:\n\n' +
+  BASE_TEXTO + '\n\n' +
+  'REGRAS DURAS (nunca quebrar):\n' +
+  '- NUNCA informe percentual de retenção, prazo de prescrição específico, precedente/jurisprudência ou valor de honorários que não esteja EXPLICITAMENTE escrito na base acima. Se perguntarem algum desses números, diga que isso é avaliado no caso concreto, na análise com o advogado — não estime, não arredonde, não "dê uma ideia".\n' +
+  '- NUNCA dê parecer jurídico, prognóstico de resultado ou prazo processual — isso só o advogado responsável define.\n' +
+  '- Nunca invente informação sobre o escritório que não esteja nas instruções acima.\n' +
+  '- Sempre que fizer sentido, reforce que dá pra continuar agora mesmo pelo WhatsApp do escritório, e que a equipe já foi avisada.\n' +
+  '- Se a pessoa pedir para falar com um advogado/humano, ou o assunto for delicado demais (urgência real, ameaça, risco), diga que a equipe já está a par e vai assumir a conversa.'
+
+// bloco VARIÁVEL — sempre depois do breakpoint do cache_control
+function montarConteudoChat(lead, historico, mensagem) {
+  const transcricao = historico.map(h => ((h.de === 'user') ? 'Cliente: ' : 'Você: ') + h.texto).join('\n')
+  return 'Dados já capturados: nome=' + (lead.nome || '—') + '; e-mail=' + (lead.email || '—') + '; whatsapp=' + (lead.tel || '—') + '.\n\n' +
+    (transcricao ? ('Histórico da conversa até agora:\n' + transcricao + '\n\n') : '') +
+    'Nova mensagem do cliente: "' + mensagem + '"\n\nResponda seguindo as regras do system.'
+}
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -29,6 +84,7 @@ export const maxDuration = 60
 const ESCRITORIO_CMP = '908f77fc-19f5-4d86-9576-f5590af09e0a'
 const MAX_TEXTO = 4000
 const MAX_TURNOS_IA = 40   // trava de custo: acima disso, resposta fixa sem chamar a IA
+const HUMANO_JANELA_MIN = 15   // minutos após a última resposta do staff em que a IA fica calada
 
 function admin() {
   return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } })
@@ -187,31 +243,30 @@ export async function POST(request) {
     const lead = atual.data
     const historico = Array.isArray(lead.conversa) ? lead.conversa.slice(-60) : []
 
+    // atendimento humano: alguém da equipe já respondeu por dentro do sistema
+    // (de:'staff') há pouco tempo -> a IA fica calada NESTE lead (os outros
+    // continuam normalmente); só grava a mensagem nova pro staff ver
+    const staffRecente = historico.filter(h => h.de === 'staff').slice(-1)[0]
+    const humanoAtivo = !!staffRecente && (Date.now() - new Date(staffRecente.quando).getTime()) < HUMANO_JANELA_MIN * 60000
+    if (humanoAtivo) {
+      const novaConversaH = historico.concat([{ de: 'user', texto: mensagem, quando: new Date().toISOString() }]).slice(-80)
+      try {
+        await sb.from('crm_leads').update({
+          conversa: novaConversaH, ultima_atividade: new Date().toISOString(),
+          obs: (lead.obs ? (lead.obs + '\n\n') : '') + mensagem,
+        }).eq('id', id)
+      } catch (e) {}
+      return Response.json({ ok: true, humano: true })
+    }
+
     // trava de custo: depois de muitas rodadas, resposta fixa sem chamar a IA —
     // a conversa já devia ter migrado pro WhatsApp a essa altura
     if (historico.filter(h => h.de === 'user').length >= MAX_TURNOS_IA) {
       return Response.json({ ok: true, resposta: 'Já estamos conversando há um bom tempo por aqui — pra não perder nada, continue direto no WhatsApp que a equipe já está avisada 👇' })
     }
 
-    const SISTEMA_ATENDIMENTO_CHAT_SITE =
-      'Você é o assistente de atendimento do escritório Crispim, Mendonça e Pinheiro Advogados (CMP), conversando pelo chat público do site.\n\n' +
-      'Esta pessoa já forneceu nome, e-mail e WhatsApp, e um caso já foi aberto no sistema do escritório — a conversa está em fase de contratação.\n\n' +
-      'Seu papel agora:\n' +
-      '- Continue a conversa de forma natural e simpática, em português do Brasil, em respostas CURTAS (1 a 3 frases, formato de chat).\n' +
-      '- Aprofunde o entendimento do caso: quando aconteceu, quem são as partes envolvidas, se já existe processo/protocolo, se há documentos, valores envolvidos, urgência (prazo, audiência marcada etc.).\n' +
-      '- NUNCA dê parecer jurídico, prognóstico de resultado, prazo processual ou valor de honorários — isso só o advogado responsável define. Se perguntarem, diga que um advogado vai analisar e responder em breve.\n' +
-      '- Sempre que fizer sentido, reforce que dá pra continuar agora mesmo pelo WhatsApp do escritório, e que a equipe já foi avisada.\n' +
-      '- Nunca invente informação sobre o escritório, valores ou prazos legais.\n' +
-      '- Não repita perguntas que a pessoa já respondeu nesta conversa.\n' +
-      '- Responda em texto puro, sem markdown, sem aspas ao redor da resposta.'
-
-    const transcricao = historico.map(h => (h.de === 'user' ? 'Cliente: ' : 'Assistente: ') + h.texto).join('\n')
-    const conteudo = 'Dados já capturados: nome=' + (lead.nome || '—') + '; e-mail=' + (lead.email || '—') + '; whatsapp=' + (lead.tel || '—') + '.\n\n' +
-      (transcricao ? ('Histórico da conversa até agora:\n' + transcricao + '\n\n') : '') +
-      'Nova mensagem do cliente: "' + mensagem + '"\n\nResponda como assistente, seguindo as regras do system.'
-
     const r = await chamarClaude({
-      rotina: 'chat_site_publico', sistemaFixo: SISTEMA_ATENDIMENTO_CHAT_SITE, conteudo,
+      rotina: 'chat_site_publico', sistemaFixo: SISTEMA_ATENDIMENTO_CHAT_SITE, conteudo: montarConteudoChat(lead, historico, mensagem),
       modelo: 'claude-sonnet-5', maxTokens: 400, sb, ref: id, escritorioId: ESCRITORIO_CMP,
     })
     const resposta = (r && r.texto && r.texto.trim()) || 'Recebi sua mensagem! Se quiser falar agora mesmo com alguém da equipe, é só continuar no WhatsApp 👇'
@@ -228,6 +283,20 @@ export async function POST(request) {
     } catch (e) {}
 
     return Response.json({ ok: true, resposta })
+  }
+
+  // ===== 'sincronizar': o chat do site faz polling nesta ação pra pegar em
+  // near-real-time as respostas que a EQUIPE digitou direto na ficha do lead
+  // (sistema.html grava com de:'staff' em crm_leads.conversa). `desde` é a
+  // quantidade de entradas que o visitante já tem localmente. =====
+  if (body.acao === 'sincronizar') {
+    const id = String(body.id || '')
+    const desde = Math.max(0, parseInt(body.desde, 10) || 0)
+    if (!id) return Response.json({ erro: 'id ausente' }, { status: 400 })
+    const atual = await sb.from('crm_leads').select('conversa').eq('id', id).eq('escritorio_id', ESCRITORIO_CMP).maybeSingle()
+    if (!atual.data) return Response.json({ erro: 'não encontrado' }, { status: 404 })
+    const conversa = Array.isArray(atual.data.conversa) ? atual.data.conversa : []
+    return Response.json({ ok: true, conversa: conversa.slice(desde), total: conversa.length })
   }
 
   return Response.json({ erro: 'ação inválida' }, { status: 400 })
