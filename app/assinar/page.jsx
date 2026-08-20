@@ -252,7 +252,14 @@ export default function AssinarProcuracao() {
     const up = await signSb.storage.from('assinaturas').upload(path, blob, { contentType: 'image/png' })
     if (up.error && !/exist|duplicate/i.test(up.error.message || '')) { setMsg({ texto: 'Erro ao salvar assinatura: ' + up.error.message, ok: false }); setBusy(false); return }
     const metodo = sigMode === 'typed' ? 'assinatura digitada em caligrafia' : 'assinatura desenhada à mão'
-    const { data, error } = await signSb.rpc('assinar_procuracao', { tok: params.s, p_nome: nome, p_cpf: cpf, p_telefone: telefone || null, p_email: email || null, p_path: path, p_ua: navigator.userAgent, p_metodo: metodo })
+    // qualificação completa vai pro BANCO (não só pro PDF): é dela que o servidor
+    // re-diagrama a procuração em A4 e corrige a ficha do processo (20/08/2026)
+    const p_dados = {
+      nacionalidade: f.nacionalidade.trim() || null, estadocivil: f.estadocivil || null,
+      profissao: f.profissao.trim() || null, rg: f.rg.trim() || null,
+      endereco: enderecoCompleto || null, cep: f.cep.trim() || null,
+    }
+    const { data, error } = await signSb.rpc('assinar_procuracao', { tok: params.s, p_nome: nome, p_cpf: cpf, p_telefone: telefone || null, p_email: email || null, p_path: path, p_ua: navigator.userAgent, p_metodo: metodo, p_dados })
     if (error) { setMsg({ texto: error.message, ok: false }); setBusy(false); return }
     const res = data[0]
     const last4 = telefone.replace(/\D/g, '').slice(-4)
