@@ -1220,7 +1220,7 @@ async function identificarUsuarioLogado(){
 }
 var __hoje0=new Date();
 var __ehCel=(typeof window!=='undefined' && window.innerWidth<=860);
-var KAN=null, atual=null, TRIAGEM=null, AGENDA=null, VIEWAG="tarefas", curY=__hoje0.getFullYear(), curM=__hoje0.getMonth(), curD=__hoje0.getDate(), agView=(__ehCel?"dia":"mes"), triagemAtual=null, crmView="contatos", agResp="Todos", canalSel="Geral", mesSel="todos", histShown=5, PUBIDX=null;
+var KAN=null, atual=null, TRIAGEM=null, AGENDA=null, VIEWAG="tarefas", curY=__hoje0.getFullYear(), curM=__hoje0.getMonth(), curD=__hoje0.getDate(), agView=(__ehCel?"dia":"mes"), triagemAtual=null, crmView="contatos", agResp="Todos", canalSel="Geral", mesSel=__hoje0.getMonth() /* painel Comercial abre no mês atual; "Ano todo" é escolha manual */, histShown=5, PUBIDX=null;
 
 /* acesso único por login: o login mais recente assume; os anteriores são
    deslogados. Força cada sócio a ter o próprio acesso. Falha aberta (erro de
