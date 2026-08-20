@@ -1098,6 +1098,10 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
       <span class="note" style="font-size:12px;margin:0">📋 <b>Ctrl+V</b>: print vira anexo (e a IA lê); texto preenche os campos</span>
       <button class="btn sm ghost" onclick="document.getElementById('ml-file').click()" title="Subir PDF, print, Word ou planilha (Excel/CSV) — anexa ao lead e a IA lê para preencher os campos">📎 subir PDF/print</button>
       <input id="ml-file" type="file" multiple accept=".pdf,image/*,.doc,.docx,.xlsx,.xls,.csv" style="display:none" onchange="mlSubirArquivos(this.files)">
+      <button class="btn sm ghost" onclick="document.getElementById('ml-file-rg').click()" title="RG ou CNH — a IA lê CPF, RG, nacionalidade e estado civil pra usar na procuração/contrato">🪪 RG/CNH</button>
+      <input id="ml-file-rg" type="file" multiple accept="image/*,.pdf" style="display:none" onchange="mlSubirArquivos(this.files)">
+      <button class="btn sm ghost" onclick="document.getElementById('ml-file-end').click()" title="Comprovante de residência — a IA lê o endereço pra usar na procuração/contrato">🏠 Comprovante de residência</button>
+      <input id="ml-file-end" type="file" multiple accept="image/*,.pdf" style="display:none" onchange="mlSubirArquivos(this.files)">
     </span>
   </div>
   <div id="l-capt" class="note" style="margin:4px 0 6px"></div>
@@ -3439,7 +3443,7 @@ function moverEtapa(idx,dir){
 function toggleNivel(idx){ var f=FUNIL[idx]; if(!f) return; f.juntar=!f.juntar; salvarFunilLocal(); renderCaptacao(); }
 function primeiroUltimo(n){var p=String(n||"").trim().split(/\s+/);if(p.length<=1)return p[0]||"";return p[0]+" "+p[p.length-1];}
 function moverLead(dragId,targetId){var di=LEADS.findIndex(function(x){return x.id===dragId;});var t=LEADS.find(function(x){return x.id===targetId;});if(di<0||!t||dragId===targetId)return;var d=LEADS[di];_leadAck(d);var eraGanho=(d.estagio==='ganho');var eraEstagio=d.estagio;d.estagio=t.estagio; if(t.estagio==='ganho'&&!d.dataFechamento) d.dataFechamento=hojeISO(); LEADS.splice(di,1);var ti=LEADS.findIndex(function(x){return x.id===targetId;});LEADS.splice(ti,0,d);salvarLeadsLocal();renderCaptacao();
-  if(t.estagio==='assinado'&&eraEstagio!=='assinado') fecharLeadEAbrirCaso(d,'caso');
+  if(t.estagio==='assinado'&&eraEstagio!=='assinado') iniciarProcuracaoContratoAuto(d);
   if(t.estagio==='ganho'&&!eraGanho) fecharLeadEAbrirCaso(d);}
 /* ao FECHAR um lead (arrastar para "Fechado"), abre o cadastro de caso já preenchido com o lead */
 /* Lead que virou cliente abre o cadastro já preenchido. Em 'assinado'
@@ -3475,6 +3479,145 @@ function fecharLeadEAbrirCaso(l, modo){
       if(st) st.innerHTML='✓ dados do lead preenchidos. <b>Caso administrativo</b> — ao salvar, os arquivos do card sobem para a pasta.';
     }
   }catch(e){}
+}
+/* ===== Automação de procuração + contrato ao puxar o card pra coluna
+   "Procuração/contrato assinados" (pedido do dono, 20/08/2026):
+   1) garante o caso (cria se ainda não existir);
+   2) junta CPF/RG/endereço do que já foi lido pelos documentos do card
+      (🪪 RG/CNH, 🏠 Comprovante) — só pergunta o que realmente faltar;
+   3) pergunta a cláusula de êxito (uma vez, vale pros dois documentos);
+   4) gera a procuração e já manda pro link de assinatura;
+   5) pergunta o que falta pro contrato (entrada/forma/valores/objeto —
+      objeto sugerido a partir da "próxima ação" e das anotações do card);
+   6) gera o contrato e já manda pro link de assinatura. ===== */
+function _parseEnderecoLivre(texto){
+  var out={}; var partes=String(texto||'').split(',').map(function(s){return s.trim();}).filter(Boolean);
+  if(partes[0]) out.rua=partes[0]; if(partes[1]) out.numero=partes[1]; if(partes[2]) out.bairro=partes[2];
+  if(partes[3]){ var sp=partes[3].split('/'); out.cidade=(sp[0]||'').trim(); if(sp[1]) out.uf=sp[1].trim().toUpperCase(); }
+  if(partes[4]) out.cep=partes[4];
+  return out;
+}
+function _leadDadosQualificacao(l){
+  var q=(l&&l.qualificacao)||{}; var end=q.endereco||{};
+  if((!end.rua||!end.numero||!end.bairro||!end.cidade||!end.uf||!end.cep)&&l.endereco){
+    var p=_parseEnderecoLivre(l.endereco);
+    end=Object.assign({},end); ['rua','numero','bairro','cidade','uf','cep'].forEach(function(k){ if(!end[k]&&p[k]) end[k]=p[k]; });
+  }
+  return {
+    nome:l.nome||'', cpf:q.cpf||l.doc||'', rg:q.rg||'',
+    nacionalidade:q.nacionalidade||'Brasileiro(a)', estadoCivil:q.estadoCivil||'', profissao:q.profissao||'',
+    email:l.email||'', telefone:l.tel||'',
+    rua:end.rua||'', numero:end.numero||'', bairro:end.bairro||'', cidade:end.cidade||'', uf:end.uf||'', cep:end.cep||''
+  };
+}
+function _perguntar(rotulo, padrao){ var v=window.prompt(rotulo, padrao||''); return v===null?null:v.trim(); }
+async function iniciarProcuracaoContratoAuto(l){
+  if(!l||typeof abrirCadManual!=='function') return;
+  if(!confirm('Puxar "'+(l.nome||'lead')+'" pra gerar a procuração e o contrato de honorários agora?\n\nVou perguntar só o que faltar completar.')) return;
+  try{
+    /* 1) garante o caso */
+    var numero=null;
+    var refDig=String(l.procRef||'').replace(/\D/g,'');
+    var idxEx=refDig?(DADOS.processos||[]).findIndex(function(p){ return String(p.numero||'').replace(/\D/g,'')===refDig; }):-1;
+    if(idxEx>=0){ go('processos'); abrir(idxEx); numero=DADOS.processos[idxEx].numero; }
+    else{
+      abrirCadManual(); if(typeof setCadTipo==='function') setCadTipo('caso');
+      var idc=document.getElementById('cm-casoid'); if(idc&&typeof _numCasoAuto==='function') idc.value=_numCasoAuto();
+      var sel=document.getElementById('cm-lead'); if(sel) sel.value=String(l.id);
+      if(typeof cmPuxarLead==='function') cmPuxarLead(l.id);
+      await gerarCasoNovoCliente();
+      numero=(typeof atual!=='undefined'&&atual)?atual.numero:null;
+      if(!numero){ alert('Não consegui abrir/criar o caso — confira manualmente e tente de novo.'); return; }
+    }
+
+    /* 2) qualificação — o que os documentos do card já trouxeram + o que falta perguntar */
+    var d=_leadDadosQualificacao(l);
+    if(!d.cpf) d.cpf=_perguntar('CPF de '+(d.nome||'cliente')+':');
+    if(d.cpf===null) return;
+    if(!d.estadoCivil) d.estadoCivil=_perguntar('Estado civil de '+(d.nome||'cliente')+' (ex.: solteiro(a), casado(a)):');
+    if(d.estadoCivil===null) return;
+    if(!d.rua||!d.numero||!d.bairro||!d.cidade||!d.uf||!d.cep){
+      var end1=_perguntar('Endereço completo de '+(d.nome||'cliente')+' — rua, nº, bairro, cidade/UF, CEP:',
+        [d.rua,d.numero,d.bairro,(d.cidade&&d.uf)?(d.cidade+'/'+d.uf):'',d.cep].filter(Boolean).join(', '));
+      if(end1===null) return;
+      if(end1){ var p2=_parseEnderecoLivre(end1); ['rua','numero','bairro','cidade','uf','cep'].forEach(function(k){ if(p2[k]) d[k]=p2[k]; }); }
+    }
+    if(!d.cpf||!d.estadoCivil||!d.rua||!d.numero||!d.bairro||!d.cidade||!d.uf||!d.cep){
+      alert('Faltam dados obrigatórios (CPF, estado civil ou endereço completo) — não deu pra gerar. Complete pela ficha do caso e tente de novo.');
+      return;
+    }
+
+    /* 3) cláusula de êxito — uma pergunta só, vale pra procuração E contrato */
+    var temExito=confirm('A procuração e o contrato terão cláusula de honorários de êxito?\n\nOK = sim · Cancelar = não (sem percentual, a combinar à parte)');
+    var pctExito='30';
+    if(temExito){
+      var pctResp=_perguntar('Percentual de êxito — 10, 20 ou 30% (padrão do escritório é 30%):','30');
+      if(pctResp===null) return;
+      var pctDig=String(pctResp).replace(/\D/g,'');
+      pctExito=(['10','20','30'].indexOf(pctDig)>=0)?pctDig:'30';
+    }
+
+    /* 4) PROCURAÇÃO — preenche o modal e gera + envia sozinho */
+    await abrirGerarProcuracao(numero);
+    document.getElementById('proc-nome').value=d.nome;
+    document.getElementById('proc-cpf').value=d.cpf;
+    document.getElementById('proc-nacionalidade').value=d.nacionalidade;
+    document.getElementById('proc-estadocivil').value=d.estadoCivil;
+    if(d.email) document.getElementById('proc-email').value=d.email;
+    if(d.telefone) document.getElementById('proc-telefone').value=d.telefone;
+    document.getElementById('proc-rua').value=d.rua;
+    document.getElementById('proc-numero').value=d.numero;
+    document.getElementById('proc-bairro').value=d.bairro;
+    document.getElementById('proc-cidade').value=d.cidade;
+    document.getElementById('proc-uf').value=d.uf;
+    document.getElementById('proc-cep').value=d.cep;
+    document.getElementById('proc-modelo').value=temExito?pctExito:'sem';
+    await gerarProcuracaoAuto();
+
+    /* 5) CONTRATO — só pergunta o que a procuração não cobre */
+    var temInicial=confirm('O contrato de honorários tem valor de entrada (honorários iniciais), além do êxito?');
+    var forma='vista', valorVista='', vencVista='', valorParcela='', qtdParcelas='', vencParcela1='';
+    if(temInicial){
+      var avista=confirm('Pagamento à vista?\n\nOK = à vista · Cancelar = parcelado');
+      forma=avista?'vista':'parcelado';
+      if(avista){
+        valorVista=_perguntar('Valor da entrada (R$):')||''; vencVista=_perguntar('Data de vencimento (AAAA-MM-DD):')||'';
+      } else {
+        valorParcela=_perguntar('Valor de cada parcela (R$):')||''; qtdParcelas=_perguntar('Quantidade de parcelas:')||''; vencParcela1=_perguntar('Data da 1ª parcela (AAAA-MM-DD):')||'';
+      }
+    }
+    var objetoPadrao=(typeof atual!=='undefined'&&atual&&atual.tipo)?('patrocínio de ação relativa a "'+atual.tipo+'"'+(atual.numero?(', processo nº '+atual.numero):'')+', acompanhando-a em todas as fases e instâncias — inclusive recursos, cumprimento de sentença e levantamento de valores — até o encerramento do processo'):'';
+    var objSugestao=((l.acao?(l.acao+'. '):'')+(l.obs?String(l.obs).split('\n')[0]:'')).trim();
+    var objeto=_perguntar('Objeto do contrato — confira/edite (do card: "'+(objSugestao||'sem anotações')+'"):', objetoPadrao||objSugestao||'prestação de serviços advocatícios');
+    if(objeto===null) objeto=objetoPadrao||objSugestao||'prestação de serviços advocatícios';
+
+    await abrirGerarContrato(numero);
+    document.getElementById('cont-nome').value=d.nome;
+    document.getElementById('cont-cpf').value=d.cpf;
+    document.getElementById('cont-nacionalidade').value=d.nacionalidade;
+    document.getElementById('cont-estadocivil').value=d.estadoCivil;
+    if(d.profissao) document.getElementById('cont-profissao').value=d.profissao;
+    if(d.email) document.getElementById('cont-email').value=d.email;
+    document.getElementById('cont-rua').value=d.rua;
+    document.getElementById('cont-numero').value=d.numero;
+    document.getElementById('cont-bairro').value=d.bairro;
+    document.getElementById('cont-cidade').value=d.cidade;
+    document.getElementById('cont-uf').value=d.uf;
+    document.getElementById('cont-cep').value=d.cep;
+    document.getElementById('cont-objeto').value=objeto;
+    document.getElementById('cont-tem-inicial').checked=temInicial;
+    document.getElementById('cont-tem-exito').checked=temExito;
+    document.getElementById('cont-pct-exito').value=pctExito;
+    var radioForma=document.querySelector('input[name="cont-forma"][value="'+forma+'"]'); if(radioForma) radioForma.checked=true;
+    document.getElementById('cont-valor-vista').value=valorVista;
+    document.getElementById('cont-venc-vista').value=vencVista;
+    document.getElementById('cont-valor-parcela').value=valorParcela;
+    document.getElementById('cont-qtd-parcelas').value=qtdParcelas;
+    document.getElementById('cont-venc-parcela1').value=vencParcela1;
+    await gerarContratoAuto();
+
+    alert('✓ Procuração e contrato de '+d.nome+' gerados e enviados para assinatura. Os links ficaram na tela de cada documento — copie e mande se o e-mail não tiver saído.');
+  }catch(eAuto){ alert('Deu erro na automação: '+((eAuto&&eAuto.message)||eAuto)+'\n\nO que já tiver sido gerado ficou salvo na pasta do caso — complete o resto pelos botões de Procuração/Contrato na ficha.'); }
 }
 function initKanban(){
   if(KAN)return; KAN=[];
@@ -5595,6 +5738,18 @@ async function rnConfirmar(){
         telefone:((document.getElementById('l-tel')||{}).value||'') } });
       var card=(r&&r.data&&r.data.card)||{};
       if(r&&r.data&&r.data.memoria) l.memoria=r.data.memoria;
+      /* RG/CNH e comprovante de residência: qualificação completa pra procuração/contrato
+         (merge — só preenche o que ainda está vazio, nunca sobrescreve o que já tem) */
+      try{
+        var qual=(r&&r.data&&r.data.qualificacao)||null;
+        if(qual){
+          var lq=l.qualificacao||{};
+          ['cpf','rg','nacionalidade','estadoCivil','profissao'].forEach(function(k){ if(qual[k]&&!lq[k]) lq[k]=qual[k]; });
+          if(qual.endereco){ var le=lq.endereco||{}; ['rua','numero','bairro','cidade','uf','cep'].forEach(function(k){ if(qual.endereco[k]&&!le[k]) le[k]=qual.endereco[k]; }); lq.endereco=le; }
+          l.qualificacao=lq;
+          try{ salvarLeadsLocal(); }catch(eSv){}
+        }
+      }catch(eQ){}
       var pf=[];
       _mlSetIf('l-nome',card.nome,'nome',pf);
       _mlSetIf('l-tel',card.telefone,'telefone',pf);
@@ -5688,8 +5843,8 @@ function salvarLeadsLocal(){ try{ localStorage.setItem('cmpLeads', JSON.stringif
   if(window.__leadsDbReady){ clearTimeout(window.__leadsSyncTimer); window.__leadsSyncTimer=setTimeout(syncLeadsDb,400); } }
 function carregarLeadsLocal(){ try{ var s=localStorage.getItem('cmpLeads'); if(s){ var arr=JSON.parse(s); if(Array.isArray(arr)&&arr.length){ LEADS=arr; var mx=0; LEADS.forEach(function(l){ if(l.id>mx)mx=l.id; }); lseq=Math.max(lseq,mx+1); } } }catch(e){} }
 async function escId(){ if(window.__escId) return window.__escId; try{ var sb=window.__sb; if(!sb) return null; var ug=await sb.auth.getUser(); var pf=await sb.from('usuarios').select('escritorio_id').eq('id',ug.data.user.id).single(); window.__escId=pf&&pf.data&&pf.data.escritorio_id; return window.__escId; }catch(e){ return null; } }
-function rowToLead(row,id){ return { id:id, dbid:row.id, nome:row.nome||'', canal:row.canal||'', estagio:row.estagio||'novo', tel:row.tel||'', email:row.email||'', doc:row.doc||'', reuDoc:row.reu_doc||'', endereco:row.endereco||'', conversa:(Array.isArray(row.conversa)?row.conversa:[]), valor:row.valor||'', valorFechado:row.valor_fechado||'', motivo:row.motivo||'', data:row.data||'', lemdata:row.lemdata||'', lemtxt:row.lemtxt||'', obs:row.obs||'', prioridade:row.prioridade||'media', acao:row.acao||'', procRef:row.proc_ref||'', labels:(row.labels||[]), arquivos:(row.arquivos||[]), memoria:(row.memoria||null), capturadoEm:row.capturado_em||'', ultimaAtividade:row.ultima_atividade||'', dataFechamento:row.data_fechamento||'', ordem:(row.ordem!=null?row.ordem:0), publicoId:row.publico_id||null }; }
-function leadToRow(l,esc,incluirId){ var row={ escritorio_id:esc, nome:l.nome||null, canal:l.canal||null, estagio:l.estagio||'novo', tel:l.tel||null, email:l.email||null, doc:l.doc||null, reu_doc:l.reuDoc||null, endereco:l.endereco||null, valor:l.valor||null, valor_fechado:l.valorFechado||null, motivo:l.motivo||null, data:(l.data||null), lemdata:l.lemdata||null, lemtxt:l.lemtxt||null, obs:l.obs||null, prioridade:l.prioridade||'media', acao:l.acao||null, proc_ref:l.procRef||null, labels:(l.labels||[]), arquivos:(l.arquivos||[]), memoria:(l.memoria||null), capturado_em:(l.capturadoEm||null), ultima_atividade:(l.ultimaAtividade||null), data_fechamento:(l.dataFechamento||null), ordem:(l.ordem!=null?l.ordem:0), publico_id:(l.publicoId||null) }; if(incluirId&&l.dbid) row.id=l.dbid; return row; }
+function rowToLead(row,id){ return { id:id, dbid:row.id, nome:row.nome||'', canal:row.canal||'', estagio:row.estagio||'novo', tel:row.tel||'', email:row.email||'', doc:row.doc||'', reuDoc:row.reu_doc||'', endereco:row.endereco||'', conversa:(Array.isArray(row.conversa)?row.conversa:[]), qualificacao:(row.qualificacao&&typeof row.qualificacao==='object'?row.qualificacao:null), valor:row.valor||'', valorFechado:row.valor_fechado||'', motivo:row.motivo||'', data:row.data||'', lemdata:row.lemdata||'', lemtxt:row.lemtxt||'', obs:row.obs||'', prioridade:row.prioridade||'media', acao:row.acao||'', procRef:row.proc_ref||'', labels:(row.labels||[]), arquivos:(row.arquivos||[]), memoria:(row.memoria||null), capturadoEm:row.capturado_em||'', ultimaAtividade:row.ultima_atividade||'', dataFechamento:row.data_fechamento||'', ordem:(row.ordem!=null?row.ordem:0), publicoId:row.publico_id||null }; }
+function leadToRow(l,esc,incluirId){ var row={ escritorio_id:esc, nome:l.nome||null, canal:l.canal||null, estagio:l.estagio||'novo', tel:l.tel||null, email:l.email||null, doc:l.doc||null, reu_doc:l.reuDoc||null, endereco:l.endereco||null, qualificacao:(l.qualificacao||null), valor:l.valor||null, valor_fechado:l.valorFechado||null, motivo:l.motivo||null, data:(l.data||null), lemdata:l.lemdata||null, lemtxt:l.lemtxt||null, obs:l.obs||null, prioridade:l.prioridade||'media', acao:l.acao||null, proc_ref:l.procRef||null, labels:(l.labels||[]), arquivos:(l.arquivos||[]), memoria:(l.memoria||null), capturado_em:(l.capturadoEm||null), ultima_atividade:(l.ultimaAtividade||null), data_fechamento:(l.dataFechamento||null), ordem:(l.ordem!=null?l.ordem:0), publico_id:(l.publicoId||null) }; if(incluirId&&l.dbid) row.id=l.dbid; return row; }
 function _leadUuid(){ try{ if(window.crypto&&crypto.randomUUID) return crypto.randomUUID(); }catch(e){} return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,function(c){var r=Math.random()*16|0,v=c==='x'?r:(r&0x3|0x8);return v.toString(16);}); }
 async function carregarLeadsDb(){
   var sb=window.__sb; if(!sb) return;
@@ -13987,11 +14142,49 @@ async function gerarContratoAuto(){
       else { reg.nome=d.nome; reg.tipo='cliente'; await sb2.from('contatos').insert(reg); }
     }catch(e){}
     try{ if(typeof logEvent==='function') logEvent('document_generated','processo',dig,{tipo:'contrato'}); }catch(eLg){}
-    if(st){ st.textContent='✓ Contrato gerado e salvo na pasta do processo!'; st.style.color='#0F6E56'; }
     try{ if(typeof carregarDocs==='function' && typeof atual!=='undefined' && atual) carregarDocs(atual.numero,'','proc'); }catch(e){}
-    setTimeout(fecharModalContrato, 1400);
+    /* mesmo caminho da procuração: sobe pro assinador, gera o link e manda por e-mail —
+       sem precisar de outra tela pra refazer o documento */
+    if(st){ st.textContent='✓ Salvo na pasta. Enviando para assinatura…'; st.style.color='var(--muted)'; }
+    var envio=await _enviarParaAssinatura(blobPdf, rotulo+' — '+d.nome, {nome:d.nome,email:d.email}, (p&&p.numero)||'');
+    if(envio.erro){
+      if(st){ st.innerHTML='✓ Contrato gerado e salvo na pasta.<br><span style="color:#8a5a00">Não consegui criar o link de assinatura ('+_procEsc(envio.erro)+') — use o botão "p/ cliente assinar".</span>'; st.style.color='#0F6E56'; }
+      return;
+    }
+    var mailOk=await _emailLinkAssinatura(d.email, d.nome, rotulo, envio.link);
+    try{
+      var sb3=window.__sb, digp=String((p&&p.numero)||'').replace(/\D/g,'');
+      if(sb3&&digp){
+        var rp=await sb3.from('processos').select('id').eq('numero_digitos',digp).limit(1);
+        if(rp.data&&rp.data[0]) await sb3.from('andamentos').insert({processo_id:rp.data[0].id,
+          data:new Date().toISOString().slice(0,10), fonte:'manual',
+          texto:'[Contrato de honorários] Gerado e enviado para assinatura — '+(d.email||'(cliente sem e-mail)')+'.'});
+      }
+    }catch(e){}
+    _contMostrarLink(envio.link, d, rotulo, mailOk);
   }catch(e){ if(st){ st.textContent='Erro: '+(e&&e.message||e); st.style.color='#b5342b'; } }
   finally{ if(btn){ btn.disabled=false; btn.textContent='Gerar contrato (Word + PDF)'; } }
+}
+function _contMostrarLink(link, d, rotulo, mailOk){
+  var st=document.getElementById('cont-status'); if(!st) return;
+  var tel=String(d.telefone||'').replace(/\D/g,'');
+  var wa=tel?('https://wa.me/'+(tel.length<=11?('55'+tel):tel)+'?text='+encodeURIComponent('Olá'+(d.nome?(', '+String(d.nome).split(' ')[0]):'')+'! Segue o link para assinar o contrato de honorários: '+link)):'';
+  st.style.color='#0F6E56';
+  st.innerHTML='✓ Contrato gerado, salvo na pasta e <b>enviado para assinatura</b>.'
+    +(d.email?('<br>'+(mailOk?('E-mail enviado para '+_procEsc(d.email)+'.'):'<span style="color:#8a5a00">O e-mail não saiu — mande o link por aqui.</span>')):'<br><span style="color:#8a5a00">Cliente sem e-mail — mande o link por aqui.</span>')
+    +'<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">'
+      +'<input id="cont-link" value="'+_procEsc(link)+'" readonly style="flex:1;min-width:180px;font-size:12px;padding:6px 8px">'
+      +'<button class="btn sm ghost" onclick="_contCopiarLink(this)">📋 copiar</button>'
+      +(wa?('<a class="btn sm" style="background:#128C7E;color:#fff;text-decoration:none" href="'+_procEsc(wa)+'" target="_blank" rel="noopener">WhatsApp</a>'):'')
+      +'<a class="btn sm ghost" href="'+_procEsc(link)+'" target="_blank" rel="noopener">abrir</a>'
+    +'</div>';
+}
+function _contCopiarLink(btn){
+  var el=document.getElementById('cont-link'); if(!el) return;
+  el.select(); el.setSelectionRange(0,99999);
+  var ok=false; try{ ok=document.execCommand('copy'); }catch(e){}
+  if(!ok&&navigator.clipboard){ try{ navigator.clipboard.writeText(el.value); ok=true; }catch(e){} }
+  if(btn){ var t=btn.textContent; btn.textContent=ok?'✓ copiado':'selecione e copie'; setTimeout(function(){ btn.textContent=t; },1800); }
 }
 /* Abre o assinador com os dados do contato aberto no CRM (nome/e-mail/telefone). */
 function assinaturaDoContato(){
