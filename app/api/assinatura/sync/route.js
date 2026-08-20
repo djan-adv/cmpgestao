@@ -289,10 +289,21 @@ export async function GET(request) {
   let sign
   try { sign = await signAdmin(cmp) } catch (e) { return Response.json({ ok: false, erro: String((e && e.message) || e) }, { status: 502 }) }
 
+  const SEL_DOC = 'id, titulo, tipo, modelo, finalidade, processo, status, sync_cmp_em, signatarios(nome, cpf, email, telefone, ip, dados, status, assinado_em, selfie_path, selfie_em)'
   const { data: docs, error } = await sign.from('documentos')
-    .select('id, titulo, tipo, modelo, finalidade, processo, status, sync_cmp_em, signatarios(nome, cpf, email, telefone, ip, dados, status, assinado_em, selfie_path, selfie_em)')
+    .select(SEL_DOC)
     .is('sync_cmp_em', null).eq('status', 'assinado').limit(10)
   if (error) return Response.json({ ok: false, erro: error.message }, { status: 500 })
+  // selfie que chegou DEPOIS do sync: re-gera a via A4 na pasta (com a selfie)
+  try {
+    const { data: reproc } = await sign.from('documentos').select(SEL_DOC)
+      .not('sync_cmp_em', 'is', null).eq('status', 'assinado').eq('tipo', 'procuracao')
+      .order('sync_cmp_em', { ascending: false }).limit(30)
+    for (const d2 of (reproc || [])) {
+      const s2 = (d2.signatarios || [])[0]
+      if (s2 && s2.selfie_em && new Date(s2.selfie_em) > new Date(d2.sync_cmp_em)) docs.push(d2)
+    }
+  } catch (e) { /* re-processo é extra; nunca trava o sync normal */ }
 
   const resultados = []
   for (const d of (docs || [])) {
@@ -348,13 +359,18 @@ export async function GET(request) {
         const quem1 = nomeArq((sigs[0] && (sigs[0].nome || sigs[0].email)) || '')
         const base = dest.nomeFixo ? (dest.nomeFixo + (quem1 ? (' - ' + quem1) : '')) : (slug(d.titulo) + ' ✓' + (ehOriginal ? ' (original)' : ''))
         pdfNome = base + '.pdf'
-        if (fs.existsSync(path.join(dir, pdfNome))) pdfNome = base + ' - ' + d.id.slice(0, 8) + '.pdf'
+        // re-processo (selfie que chegou depois) SOBRESCREVE a via; só o 1º sync
+        // desvia o nome quando já existe arquivo homônimo de OUTRO documento
+        if (!d.sync_cmp_em && fs.existsSync(path.join(dir, pdfNome))) pdfNome = base + ' - ' + d.id.slice(0, 8) + '.pdf'
         fs.writeFileSync(path.join(dir, pdfNome), pdfBuf)
         salvoEm = 'Documentos do processo' + (dest.dir ? ' > ' + dest.dir : '') + ' ("' + pdfNome + '")'
       }
+      const reprocesso = !!d.sync_cmp_em   // só re-gerando a via (selfie chegou depois)
       if (row) {
-        const texto = '[Assinatura] ' + (d.titulo || 'Documento') + ' ASSINADO' + (quem ? ' por ' + quem : '') +
-          (salvoEm ? ' — cópia salva em ' + salvoEm + '.' : ' — cópia disponível no painel de Assinaturas.')
+        const texto = reprocesso
+          ? '[Assinatura] Selfie de confirmação recebida de ' + (quem || 'signatário') + ' — via da procuração atualizada na pasta.'
+          : '[Assinatura] ' + (d.titulo || 'Documento') + ' ASSINADO' + (quem ? ' por ' + quem : '') +
+            (salvoEm ? ' — cópia salva em ' + salvoEm + '.' : ' — cópia disponível no painel de Assinaturas.')
         await cmp.from('andamentos').insert({ processo_id: row.id, data: new Date().toISOString().slice(0, 10), texto, fonte: 'manual' })
       }
 
@@ -362,7 +378,7 @@ export async function GET(request) {
       let emailOk = false
       try {
         const quando = (sigs[0] && sigs[0].assinado_em) ? new Date(sigs[0].assinado_em).toLocaleString('pt-BR', { timeZone: 'America/Fortaleza' }) : ''
-        const corpo = 'Documento assinado no assinador do CMPGestão.\n\n' +
+        const corpo = (reprocesso ? 'Selfie de confirmação recebida — a via da procuração na pasta foi atualizada com ela.\n\n' : 'Documento assinado no assinador do CMPGestão.\n\n') +
           'Documento: ' + (d.titulo || '(sem título)') + '\n' +
           (quem ? ('Assinado por: ' + quem + '\n') : '') +
           (quando ? ('Quando: ' + quando + '\n') : '') +
@@ -372,7 +388,7 @@ export async function GET(request) {
         const env = await enviarEmailCore({
           para: EMAIL_ESCRITORIO,
           cc: 'djan.adv@gmail.com',   // confirmação também direto pro Djan (pedido 20/08/2026)
-          assunto: '✍ Assinado: ' + (d.titulo || 'documento') + (quem ? ' — ' + quem.split(';')[0] : ''),
+          assunto: (reprocesso ? '📸 Selfie recebida: ' : '✍ Assinado: ') + (d.titulo || 'documento') + (quem ? ' — ' + quem.split(';')[0] : ''),
           corpo, numero: dig || '', dedup: true
         })
         emailOk = !!(env && env.ok)
