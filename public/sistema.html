@@ -1103,6 +1103,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
     <div><label>Telefone</label><input id="l-tel"></div>
     <div><label>E-mail</label><input id="l-email"></div>
     <div><label>CPF/CNPJ do cliente</label><input id="l-doc" placeholder="000.000.000-00"></div>
+    <div><label>Endereço do cliente</label><input id="l-end" placeholder="Rua, nº, bairro, cidade/UF, CEP"></div>
     <div><label>CNPJ/CPF da parte ré</label><input id="l-reudoc" placeholder="00.000.000/0000-00 — puxa a Receita ao criar o caso"></div>
     <div><label>Data de entrada</label><input id="l-data" type="date" min="2000-01-01" max="2100-12-31" onchange="guardData(this)"></div>
     <div><label>Valor estimado (R$)</label><input id="l-valor"></div>
@@ -5328,7 +5329,7 @@ function editarLead(id){ if(id){ var _l0=LEADS.find(function(x){return x.id===id
   document.getElementById("l-estagio").innerHTML=FUNIL.map(function(f){return '<option value="'+f.id+'">'+esc(f.nome)+'</option>';}).join("");
   document.getElementById("l-nome").value=l.nome||""; document.getElementById("l-canal").value=l.canal||"Indicação";
   document.getElementById("l-estagio").value=l.estagio; document.getElementById("l-tel").value=l.tel||""; document.getElementById("l-email").value=l.email||"";
-  document.getElementById("l-doc").value=l.doc||""; document.getElementById("l-reudoc").value=l.reuDoc||"";
+  document.getElementById("l-doc").value=l.doc||""; document.getElementById("l-reudoc").value=l.reuDoc||""; document.getElementById("l-end").value=l.endereco||"";
   document.getElementById("l-valor").value=l.valor||""; document.getElementById("l-prio").value=l.prioridade||"media"; document.getElementById("l-acao").value=l.acao||""; document.getElementById("l-lemdata").value=l.lemdata||""; document.getElementById("l-lemtxt").value=l.lemtxt||""; document.getElementById("l-obs").value=l.obs||"";
   document.getElementById("l-data").value=l.data||(id?"":(new Date().getFullYear()+'-'+String(new Date().getMonth()+1).padStart(2,'0')+'-'+String(new Date().getDate()).padStart(2,'0')));
   document.getElementById("l-valorf").value=l.valorFechado||""; document.getElementById("l-motivo").value=l.motivo||"";
@@ -5573,7 +5574,7 @@ async function rnConfirmar(){
 })();
 function salvarLead(){var l=window._ledit;var nome=_v("l-nome");if(!nome){alert("Informe o nome.");return;}
   var estagio=_v("l-estagio");
-  var obj={nome:nome,canal:_v("l-canal"),estagio:estagio,tel:_v("l-tel"),email:_v("l-email"),doc:_v("l-doc"),reuDoc:_v("l-reudoc"),valor:_v("l-valor"),valorFechado:_v("l-valorf"),motivo:_v("l-motivo"),data:normData(_v("l-data")),lemdata:_v("l-lemdata"),lemtxt:_v("l-lemtxt"),obs:_v("l-obs"),prioridade:_v("l-prio"),acao:_v("l-acao"),procRef:_v("l-procref"),labels:(window._lsel||[]).slice()};
+  var obj={nome:nome,canal:_v("l-canal"),estagio:estagio,tel:_v("l-tel"),email:_v("l-email"),doc:_v("l-doc"),reuDoc:_v("l-reudoc"),endereco:_v("l-end"),valor:_v("l-valor"),valorFechado:_v("l-valorf"),motivo:_v("l-motivo"),data:normData(_v("l-data")),lemdata:_v("l-lemdata"),lemtxt:_v("l-lemtxt"),obs:_v("l-obs"),prioridade:_v("l-prio"),acao:_v("l-acao"),procRef:_v("l-procref"),labels:(window._lsel||[]).slice()};
   obj.capturadoEm=(l&&l.capturadoEm)?l.capturadoEm:((l&&l.data)?(l.data+'T00:00:00'):new Date().toISOString());
   obj.ultimaAtividade=new Date().toISOString();
   /* data de fechamento (para tempo de conversão): grava quando vira "ganho" */
@@ -5615,8 +5616,8 @@ function salvarLeadsLocal(){ try{ localStorage.setItem('cmpLeads', JSON.stringif
   if(window.__leadsDbReady){ clearTimeout(window.__leadsSyncTimer); window.__leadsSyncTimer=setTimeout(syncLeadsDb,400); } }
 function carregarLeadsLocal(){ try{ var s=localStorage.getItem('cmpLeads'); if(s){ var arr=JSON.parse(s); if(Array.isArray(arr)&&arr.length){ LEADS=arr; var mx=0; LEADS.forEach(function(l){ if(l.id>mx)mx=l.id; }); lseq=Math.max(lseq,mx+1); } } }catch(e){} }
 async function escId(){ if(window.__escId) return window.__escId; try{ var sb=window.__sb; if(!sb) return null; var ug=await sb.auth.getUser(); var pf=await sb.from('usuarios').select('escritorio_id').eq('id',ug.data.user.id).single(); window.__escId=pf&&pf.data&&pf.data.escritorio_id; return window.__escId; }catch(e){ return null; } }
-function rowToLead(row,id){ return { id:id, dbid:row.id, nome:row.nome||'', canal:row.canal||'', estagio:row.estagio||'novo', tel:row.tel||'', email:row.email||'', doc:row.doc||'', reuDoc:row.reu_doc||'', valor:row.valor||'', valorFechado:row.valor_fechado||'', motivo:row.motivo||'', data:row.data||'', lemdata:row.lemdata||'', lemtxt:row.lemtxt||'', obs:row.obs||'', prioridade:row.prioridade||'media', acao:row.acao||'', procRef:row.proc_ref||'', labels:(row.labels||[]), arquivos:(row.arquivos||[]), memoria:(row.memoria||null), capturadoEm:row.capturado_em||'', ultimaAtividade:row.ultima_atividade||'', dataFechamento:row.data_fechamento||'', ordem:(row.ordem!=null?row.ordem:0), publicoId:row.publico_id||null }; }
-function leadToRow(l,esc,incluirId){ var row={ escritorio_id:esc, nome:l.nome||null, canal:l.canal||null, estagio:l.estagio||'novo', tel:l.tel||null, email:l.email||null, doc:l.doc||null, reu_doc:l.reuDoc||null, valor:l.valor||null, valor_fechado:l.valorFechado||null, motivo:l.motivo||null, data:(l.data||null), lemdata:l.lemdata||null, lemtxt:l.lemtxt||null, obs:l.obs||null, prioridade:l.prioridade||'media', acao:l.acao||null, proc_ref:l.procRef||null, labels:(l.labels||[]), arquivos:(l.arquivos||[]), memoria:(l.memoria||null), capturado_em:(l.capturadoEm||null), ultima_atividade:(l.ultimaAtividade||null), data_fechamento:(l.dataFechamento||null), ordem:(l.ordem!=null?l.ordem:0), publico_id:(l.publicoId||null) }; if(incluirId&&l.dbid) row.id=l.dbid; return row; }
+function rowToLead(row,id){ return { id:id, dbid:row.id, nome:row.nome||'', canal:row.canal||'', estagio:row.estagio||'novo', tel:row.tel||'', email:row.email||'', doc:row.doc||'', reuDoc:row.reu_doc||'', endereco:row.endereco||'', valor:row.valor||'', valorFechado:row.valor_fechado||'', motivo:row.motivo||'', data:row.data||'', lemdata:row.lemdata||'', lemtxt:row.lemtxt||'', obs:row.obs||'', prioridade:row.prioridade||'media', acao:row.acao||'', procRef:row.proc_ref||'', labels:(row.labels||[]), arquivos:(row.arquivos||[]), memoria:(row.memoria||null), capturadoEm:row.capturado_em||'', ultimaAtividade:row.ultima_atividade||'', dataFechamento:row.data_fechamento||'', ordem:(row.ordem!=null?row.ordem:0), publicoId:row.publico_id||null }; }
+function leadToRow(l,esc,incluirId){ var row={ escritorio_id:esc, nome:l.nome||null, canal:l.canal||null, estagio:l.estagio||'novo', tel:l.tel||null, email:l.email||null, doc:l.doc||null, reu_doc:l.reuDoc||null, endereco:l.endereco||null, valor:l.valor||null, valor_fechado:l.valorFechado||null, motivo:l.motivo||null, data:(l.data||null), lemdata:l.lemdata||null, lemtxt:l.lemtxt||null, obs:l.obs||null, prioridade:l.prioridade||'media', acao:l.acao||null, proc_ref:l.procRef||null, labels:(l.labels||[]), arquivos:(l.arquivos||[]), memoria:(l.memoria||null), capturado_em:(l.capturadoEm||null), ultima_atividade:(l.ultimaAtividade||null), data_fechamento:(l.dataFechamento||null), ordem:(l.ordem!=null?l.ordem:0), publico_id:(l.publicoId||null) }; if(incluirId&&l.dbid) row.id=l.dbid; return row; }
 function _leadUuid(){ try{ if(window.crypto&&crypto.randomUUID) return crypto.randomUUID(); }catch(e){} return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,function(c){var r=Math.random()*16|0,v=c==='x'?r:(r&0x3|0x8);return v.toString(16);}); }
 async function carregarLeadsDb(){
   var sb=window.__sb; if(!sb) return;
@@ -7552,6 +7553,9 @@ function cmPuxarLead(id){
   if(l.canal) linhas.push('Origem (canal): '+l.canal);
   if(l.tel) linhas.push('Telefone: '+l.tel);
   if(l.email) linhas.push('E-mail: '+l.email);
+  if(l.doc) linhas.push('CPF/CNPJ: '+l.doc);
+  if(l.endereco) linhas.push('Endereço: '+l.endereco);
+  if(l.reuDoc) linhas.push('CNPJ/CPF da parte ré: '+l.reuDoc);
   if(l.valor) linhas.push('Valor estimado: R$ '+l.valor);
   if(l.valorFechado) linhas.push('Valor fechado: R$ '+l.valorFechado);
   if(l.acao) linhas.push('Próxima ação: '+l.acao);
