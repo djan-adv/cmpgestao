@@ -1140,7 +1140,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
     <div><label>Anotações</label><textarea id="l-obs" style="min-height:96px" placeholder="Observações sobre o lead — ou simplesmente Ctrl+V com a conversa/e-mail do cliente..."></textarea></div>
     <div><label>Etiquetas</label><div id="l-etq" style="display:flex;flex-wrap:wrap;gap:6px"></div></div>
   </div>
-  <div class="foot"><button class="btn ghost" onclick="fecharLead()">Cancelar</button><button class="btn ghost" style="background:#fff8ee;border-color:#e8d9b0;color:#7a4b00" onclick="abrirAgendarReuniaoLead()" title="Marca a reunião na agenda (responsável Jader) e manda e-mail de confirmação ao cliente, se houver e-mail">📅 Agendar reunião</button><button class="btn ghost" style="background:#eef7f1;border-color:#cfe8db;color:#0F6E56" onclick="criarCasoDoLead()" title="Salva o lead e abre o cadastro de caso já preenchido com os dados dele. Se o caso já existe, abre a ficha direto.">📁 Criar caso</button><button class="btn" onclick="salvarLead()">Salvar</button></div>
+  <div class="foot"><button class="btn ghost" onclick="fecharLead()">Cancelar</button><button class="btn ghost" style="background:#fff8ee;border-color:#e8d9b0;color:#7a4b00" onclick="abrirAgendarReuniaoLead()" title="Marca a reunião na agenda (responsável Jader) e manda e-mail de confirmação ao cliente, se houver e-mail">📅 Agendar reunião</button><button class="btn ghost" style="background:#eef7f1;border-color:#cfe8db;color:#0F6E56" onclick="criarCasoDoLead()" title="Salva o lead e abre o cadastro de caso já preenchido com os dados dele. Se o caso já existe, abre a ficha direto.">📁 Criar caso</button><button class="btn ghost" style="background:#f4f8fb;border-color:#cfe0f0;color:#185FA5" onclick="puxarDadosLeadParaCaso()" title="Caso já existe: atualiza telefone/e-mail/CPF/endereço/qualificação do contato, o CNPJ e dados da parte ré, e joga as anotações no campo Observações do caso.">🔄 Atualizar caso vinculado</button><button class="btn" onclick="salvarLead()">Salvar</button></div>
 </div></div>
 <div id="modal-lead-arqs" class="overlay hidden"><div class="modal">
   <h2>Arquivos / Prints do lead</h2>
@@ -3619,6 +3619,82 @@ async function iniciarProcuracaoContratoAuto(l){
 
     alert('✓ Procuração e contrato de '+d.nome+' gerados e enviados para assinatura. Os links ficaram na tela de cada documento — copie e mande se o e-mail não tiver saído.');
   }catch(eAuto){ alert('Deu erro na automação: '+((eAuto&&eAuto.message)||eAuto)+'\n\nO que já tiver sido gerado ficou salvo na pasta do caso — complete o resto pelos botões de Procuração/Contrato na ficha.'); }
+}
+/* ===== "🔄 Atualizar caso vinculado": pra quando o caso já foi criado antes
+   (ou os dados do card mudaram depois) e os dados do lead — telefone, e-mail,
+   CPF, endereço, qualificação, CNPJ da parte ré, anotações — não foram
+   aproveitados. Só completa o que estiver faltando, nunca apaga o que já
+   tem. Pedido do dono (20/08/2026, caso do Edimar). ===== */
+async function puxarDadosLeadParaCaso(){
+  var l=window._ledit; if(!l) return;
+  var refDig=String(l.procRef||'').replace(/\D/g,'');
+  var idxEx=refDig?(DADOS.processos||[]).findIndex(function(p){ return String(p.numero||'').replace(/\D/g,'')===refDig; }):-1;
+  if(idxEx<0){ alert('Este lead ainda não tem um caso vinculado. Use "📁 Criar caso" primeiro.'); return; }
+  var procLocal=DADOS.processos[idxEx];
+  var sb=window.__sb; if(!sb){ alert('Sem conexão.'); return; }
+  if(!confirm('Atualizar o caso "'+(procLocal.numero||'')+'" com os dados atuais do card de '+(l.nome||'lead')+'?')) return;
+  try{
+    var rp=await sb.from('processos').select('id,cliente_nome,oponente,observacoes,contatos_livres').eq('id',procLocal._id).maybeSingle();
+    if(!rp.data){ alert('Não achei o caso no banco.'); return; }
+    var proc=rp.data;
+    var d=_leadDadosQualificacao(l);
+
+    var rc=await sb.from('contatos').select('*').ilike('nome',proc.cliente_nome||l.nome||'').limit(1);
+    var ct=(rc.data||[])[0];
+    var upd={};
+    if(d.telefone&&(!ct||!ct.telefone)) upd.telefone=d.telefone;
+    if(d.email&&(!ct||!ct.email)) upd.email=d.email;
+    if(d.cpf&&(!ct||!ct.cpf_cnpj)) upd.cpf_cnpj=d.cpf;
+    if(d.rua&&(!ct||!ct.endereco_rua)) upd.endereco_rua=d.rua;
+    if(d.numero&&(!ct||!ct.endereco_numero)) upd.endereco_numero=d.numero;
+    if(d.bairro&&(!ct||!ct.endereco_bairro)) upd.endereco_bairro=d.bairro;
+    if(d.cidade&&(!ct||!ct.endereco_cidade)) upd.endereco_cidade=d.cidade;
+    if(d.uf&&(!ct||!ct.endereco_uf)) upd.endereco_uf=d.uf;
+    if(d.cep&&(!ct||!ct.endereco_cep)) upd.endereco_cep=d.cep;
+    if(d.nacionalidade&&(!ct||!ct.nacionalidade)) upd.nacionalidade=d.nacionalidade;
+    if(d.estadoCivil&&(!ct||!ct.estado_civil)) upd.estado_civil=d.estadoCivil;
+    if(d.profissao&&(!ct||!ct.profissao)) upd.profissao=d.profissao;
+    if(ct){ if(Object.keys(upd).length) await sb.from('contatos').update(upd).eq('id',ct.id); }
+    else { var esc9=await escId(); var regc=Object.assign({nome:proc.cliente_nome||l.nome,tipo:'cliente',escritorio_id:esc9},upd); await sb.from('contatos').insert(regc); }
+
+    /* observações do caso: anexa as anotações do lead se ainda não estiverem lá */
+    var patchP={};
+    if(l.obs && (!proc.observacoes || proc.observacoes.indexOf(l.obs.slice(0,40))<0)){
+      patchP.observacoes=(proc.observacoes?(proc.observacoes+'\n\n'):'')+l.obs;
+    }
+    if((d.telefone||d.email) && !proc.contatos_livres){
+      patchP.contatos_livres=[d.telefone,d.email].filter(Boolean).join(', ');
+    }
+    if(Object.keys(patchP).length) await sb.from('processos').update(patchP).eq('id',proc.id);
+
+    /* parte ré: CNPJ/CPF do card, se ainda não foi consultado neste caso */
+    if(l.reuDoc){
+      var reuDig=String(l.reuDoc).replace(/\D/g,'');
+      if(reuDig.length===14){
+        var jaTem=false;
+        try{ var an=await sb.from('andamentos').select('id').eq('processo_id',proc.id).ilike('texto','%'+reuDig+'%'); jaTem=!!(an.data&&an.data.length); }catch(eA){}
+        if(!jaTem){
+          try{
+            var rr=await fetch('/api/receita?doc='+encodeURIComponent(reuDig),{cache:'no-store'});
+            var jr=await rr.json();
+            if(jr&&jr.ok&&jr.ficha){
+              var fq=jr.ficha;
+              var op2=proc.oponente||fq.razaoSocial||'';
+              var ctReu=[].concat(fq.telefones||[], fq.email?[fq.email]:[]).filter(Boolean).slice(0,4);
+              if(ctReu.length&&op2){ var mapaReu={}; mapaReu[normClienteNome(op2)]=ctReu; await sb.from('processos').update({contatos_partes:mapaReu}).eq('id',proc.id); }
+              await sb.from('andamentos').insert({processo_id:proc.id,data:new Date().toISOString().slice(0,10),fonte:'manual',texto:'[Parte contrária] '+_receitaTexto(fq)});
+            }
+          }catch(eR){}
+        }
+      }
+    }
+
+    /* documentos do card que ainda não foram pra pasta */
+    if(l.arquivos&&l.arquivos.length){ try{ await transferirArqsLeadParaProc(l, procLocal.numero); }catch(eT){} }
+
+    alert('✓ Caso atualizado com os dados do card.');
+    fecharLead(); go('processos'); abrir(idxEx);
+  }catch(e){ alert('Erro ao atualizar: '+((e&&e.message)||e)); }
 }
 function initKanban(){
   if(KAN)return; KAN=[];
