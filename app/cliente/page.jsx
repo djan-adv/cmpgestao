@@ -40,9 +40,11 @@ export default function ClientePage() {
 
   // Alguém da equipe pode responder direto pela ficha do lead no sistema
   // (grava em crm_leads.conversa) — este polling traz essa resposta pro chat
-  // do visitante sem precisar recarregar a página.
+  // do visitante sem precisar recarregar a página. Roda assim que o lead
+  // existe (não só depois de e-mail/WhatsApp capturados): a equipe pode
+  // assumir a conversa a qualquer momento, mesmo na fase de captura.
   useEffect(() => {
-    if (passo !== 'fim') return
+    if (!leadId) return
     const iv = setInterval(async () => {
       if (!leadIdRef.current) return
       try {
@@ -58,7 +60,7 @@ export default function ClientePage() {
       } catch (e) { /* tenta de novo no próximo ciclo */ }
     }, 5000)
     return () => clearInterval(iv)
-  }, [passo, addBot])
+  }, [leadId, addBot])
 
   // Dificulta fechar a página sem querer ANTES de termos e-mail e WhatsApp — o
   // navegador mostra um aviso nativo de confirmação (o texto é fixo, definido
@@ -106,7 +108,9 @@ export default function ClientePage() {
         dados.current.nome = nomeQ
         if (emailQ) dados.current.email = emailQ
         const j = await criarLead({ nome: nomeQ, email: emailQ || undefined })
-        addBot('Oi, ' + nomeQ.split(' ')[0] + '! 👋 Aqui é do escritório Crispim Mendonça e Pinheiro' + (j.ok ? (' (atendimento ' + j.ref + ')') : '') + '. Me conta rapidinho o que está acontecendo — pode mandar prints ou documentos também, se quiser.')
+        const msgBot = 'Oi, ' + nomeQ.split(' ')[0] + '! 👋 Aqui é do escritório Crispim Mendonça e Pinheiro' + (j.ok ? (' (atendimento ' + j.ref + ')') : '') + '. Me conta rapidinho o que está acontecendo — pode mandar prints ou documentos também, se quiser.'
+        addBot(msgBot)
+        await registrarMsg('bot', msgBot)
         setPasso('mensagem')
       } else {
         addBot('Oi! 👋 Aqui é do escritório Crispim Mendonça e Pinheiro. Qual é o seu nome?')
@@ -136,6 +140,21 @@ export default function ClientePage() {
       })
     } catch (e) { /* melhor esforço — não trava a conversa */ }
   }
+  // Grava UMA entrada em crm_leads.conversa — usado na fase de captura (nome,
+  // mensagem, e-mail, telefone), que antes só ia para `obs` e por isso não
+  // aparecia na ficha do lead nem na tela "Chats" do sistema. Incrementa
+  // syncLenRef ANTES do fetch (não depois) para o polling de cima nunca
+  // reproduzir localmente uma mensagem que a própria aba acabou de mandar.
+  async function registrarMsg(de, texto) {
+    if (!leadIdRef.current || !texto) return
+    syncLenRef.current += 1
+    try {
+      await fetch('/api/lead-chat', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ acao: 'msg', id: leadIdRef.current, de, texto }),
+      })
+    } catch (e) { /* melhor esforço — não trava a conversa */ }
+  }
 
   async function enviar(e) {
     e && e.preventDefault()
@@ -148,25 +167,33 @@ export default function ClientePage() {
     if (passo === 'nome') {
       dados.current.nome = t
       const j = await criarLead({ nome: t })
-      addBot('Prazer, ' + t.split(' ')[0] + '!' + (j.ref ? (' (atendimento ' + j.ref + ')') : '') + ' Me conta rapidinho o que está acontecendo — pode mandar prints ou documentos também, se quiser.')
+      await registrarMsg('user', t)
+      const msgBot = 'Prazer, ' + t.split(' ')[0] + '!' + (j.ref ? (' (atendimento ' + j.ref + ')') : '') + ' Me conta rapidinho o que está acontecendo — pode mandar prints ou documentos também, se quiser.'
+      addBot(msgBot)
+      await registrarMsg('bot', msgBot)
       setPasso('mensagem')
     } else if (passo === 'mensagem') {
       dados.current.mensagem = t
       await atualizarLead({ mensagem: t })
+      await registrarMsg('user', t)
       if (dados.current.email) {
         // e-mail já veio no link (?email=) — não pergunta de novo
         await avancarParaTelefoneOuFim()
       } else {
-        addBot('Entendi. Qual é o seu e-mail, pra mantermos contato?')
+        const msgBot = 'Entendi. Qual é o seu e-mail, pra mantermos contato?'
+        addBot(msgBot)
+        await registrarMsg('bot', msgBot)
         setPasso('email')
       }
     } else if (passo === 'email') {
       dados.current.email = t
       await atualizarLead({ email: t })
+      await registrarMsg('user', t)
       await avancarParaTelefoneOuFim()
     } else if (passo === 'telefone') {
       dados.current.tel = t
       await atualizarLead({ tel: t })
+      await registrarMsg('user', t)
       await concluirCaptura()
     } else {
       // fase de contratação: o chat CONTINUA conversando de verdade, não fica
@@ -200,7 +227,9 @@ export default function ClientePage() {
   // repetir a lógica de "falta telefone?" em três lugares
   async function avancarParaTelefoneOuFim() {
     if (dados.current.tel) { await concluirCaptura(); return }
-    addBot('Show! E o seu WhatsApp (com DDD), pra continuarmos por lá também?')
+    const msgBot = 'Show! E o seu WhatsApp (com DDD), pra continuarmos por lá também?'
+    addBot(msgBot)
+    await registrarMsg('bot', msgBot)
     setPasso('telefone')
   }
 
@@ -217,7 +246,9 @@ export default function ClientePage() {
       const j = await r.json()
       if (j && j.ok && j.numero) setNumeroProcesso(j.numero)
     } catch (e) { /* segue mesmo sem confirmar — o atendimento já ficou registrado */ }
-    addBot('Perfeito, ' + primeiro + '! Já registrei tudo aqui e nossa equipe já foi avisada — te chamamos em breve. Se quiser adiantar, é só continuar agora mesmo no WhatsApp 👇 Ou me conta mais detalhes do caso que eu já vou anotando.')
+    const msgBot = 'Perfeito, ' + primeiro + '! Já registrei tudo aqui e nossa equipe já foi avisada — te chamamos em breve. Se quiser adiantar, é só continuar agora mesmo no WhatsApp 👇 Ou me conta mais detalhes do caso que eu já vou anotando.'
+    addBot(msgBot)
+    await registrarMsg('bot', msgBot)
     setPasso('fim')
   }
 
@@ -234,9 +265,12 @@ export default function ClientePage() {
         const up = await supabase.storage.from('leads-publicos').upload(path, f, { contentType: f.type || 'application/octet-stream', upsert: false })
         if (up.error) { addBot('Não consegui enviar "' + f.name + '". Tenta de novo?'); continue }
         await atualizarLead({ arquivo: { nome: f.name, path, tipo: f.type, tamanho: f.size } })
+        await registrarMsg('user', '📎 ' + f.name)
       } catch (err) { addBot('Não consegui enviar "' + f.name + '".') }
     }
-    addBot('Recebido! Pode continuar.')
+    const msgBot = 'Recebido! Pode continuar.'
+    addBot(msgBot)
+    await registrarMsg('bot', msgBot)
   }
 
   const placeholder = passo === 'nome' ? 'Seu nome…' : passo === 'mensagem' ? 'Como podemos ajudar?' : passo === 'email' ? 'Seu e-mail…' : passo === 'telefone' ? 'Seu WhatsApp (DDD + número)…' : 'Mensagem…'
