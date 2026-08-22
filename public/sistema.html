@@ -639,6 +639,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
             <button class="btn sm" id="wa-f-tudo" style="font-size:11px" onclick="waFiltro('tudo')">Tudo</button>
             <button class="btn sm ghost" id="wa-f-naolidas" style="font-size:11px" onclick="waFiltro('naolidas')">Não lidas</button>
             <button class="btn sm ghost" id="wa-f-clientes" style="font-size:11px" onclick="waFiltro('clientes')">Clientes</button>
+            <button class="btn sm ghost" id="wa-f-leads" style="font-size:11px" onclick="waFiltro('leads')">🆕 Leads</button>
             <button class="btn sm ghost" id="wa-f-equipe" style="font-size:11px" onclick="waFiltro('equipe')">Equipe</button>
           </div>
         </div>
@@ -20696,6 +20697,19 @@ function exportarProdutividadeCSV(){
       convs.push(c);
     });
 
+    // --- leads: conversas do chat do site (crm_leads.conversa) ---
+    var lc=await s.from('crm_leads').select('id,nome,canal,conversa,ultima_atividade,capturado_em').eq('canal','Chat do site').is('apagado_em',null).order('ultima_atividade',{ascending:false,nullsFirst:false}).limit(200);
+    (lc.data||[]).forEach(function(lg){
+      var conv=Array.isArray(lg.conversa)?lg.conversa:[];
+      if(!conv.length) return; // sem mensagem nenhuma ainda: não polui a lista
+      var ultima=conv[conv.length-1];
+      var lidoEm=localStorage.getItem('cmp_chat_lead_lido:'+lg.id)||'';
+      var naoLidas=conv.filter(function(e){ return e.de==='user' && (!lidoEm || e.quando>lidoEm); }).length;
+      convs.push({tipo:'lead',id:'l:'+lg.id,leadId:lg.id,nome:lg.nome||'Lead sem nome',sub:'🆕 lead novo — chat do site',
+        ultima:{texto:ultima.texto,autor_tipo:(ultima.de==='user'?'cliente':'escritorio')},
+        quando:(lg.ultima_atividade||ultima.quando||lg.capturado_em), naoLidas:naoLidas});
+    });
+
     // --- equipe: o grupo e o reservado com cada colega ---
     var cm=await s.from('chat_mensagens').select('id,autor_id,autor_nome,para_id,texto,anexo_nome,criado_em').order('id',{ascending:false}).limit(400);
     var msgs=(cm.data||[]);
@@ -20722,7 +20736,7 @@ function exportarProdutividadeCSV(){
 
   window.waFiltro=function(f){
     WA.filtro=f;
-    ['tudo','naolidas','clientes','equipe'].forEach(function(k){
+    ['tudo','naolidas','clientes','leads','equipe'].forEach(function(k){
       var b=document.getElementById('wa-f-'+k); if(b) b.className='btn sm'+(k===f?'':' ghost');
     });
     waRenderLista();
@@ -20787,6 +20801,7 @@ function exportarProdutividadeCSV(){
     var lista=WA.convs.filter(function(c){
       if(WA.filtro==='naolidas' && !c.naoLidas) return false;
       if(WA.filtro==='clientes' && c.tipo!=='cliente') return false;
+      if(WA.filtro==='leads' && c.tipo!=='lead') return false;
       if(WA.filtro==='equipe' && c.tipo!=='equipe') return false;
       if(q){ var alvo=(c.nome+' '+(c.sub||'')+' '+((c.ultima&&c.ultima.texto)||'')).toLowerCase(); if(alvo.indexOf(q)<0) return false; }
       return true;
@@ -20800,7 +20815,7 @@ function exportarProdutividadeCSV(){
       var sel=(WA.aberta&&WA.aberta.id===c.id);
       return '<div class="wa-item" data-id="'+c.id+'" style="display:flex;gap:10px;padding:10px 12px;cursor:pointer;border-bottom:1px solid #f0f3f7;'+(sel?'background:#e8f0fb':'')+'">'+
         '<div style="width:38px;height:38px;border-radius:50%;flex:none;background:'+waCor(c.nome)+';color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700">'+
-          (c.tipo==='cliente'?'📱':waIniciais(c.nome))+'</div>'+
+          (c.tipo==='cliente'?'📱':(c.tipo==='lead'?'🆕':waIniciais(c.nome)))+'</div>'+
         '<div style="flex:1;min-width:0">'+
           '<div style="display:flex;align-items:center;gap:6px"><b style="font-size:13px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+escx(c.nome)+'</b>'+
           '<span style="font-size:10.5px;color:#8a92a0;flex:none">'+waTempo(c.quando)+'</span></div>'+
@@ -20829,16 +20844,25 @@ function exportarProdutividadeCSV(){
     var p=(c.tipo==='cliente')?procDe(c.procId):null;
     document.getElementById('wa-cab').innerHTML=
       '<div style="width:34px;height:34px;border-radius:50%;background:'+waCor(c.nome)+';color:#fff;display:flex;align-items:center;justify-content:center;font-size:12.5px;font-weight:700">'+
-        (c.tipo==='cliente'?'📱':waIniciais(c.nome))+'</div>'+
+        (c.tipo==='cliente'?'📱':(c.tipo==='lead'?'🆕':waIniciais(c.nome)))+'</div>'+
       '<div style="flex:1;min-width:0"><b style="font-size:14px">'+escx(c.nome)+'</b>'+
-        '<div style="font-size:11.5px;color:#6b7484">'+escx(c.sub||'')+(c.tipo==='cliente'?' · a conversa fica gravada no processo':'')+'</div></div>'+
-      (p?('<button class="btn sm ghost" style="font-size:11px" onclick="irParaProcesso(\''+escx(p.numero)+'\')">abrir ficha</button>'):'');
+        '<div style="font-size:11.5px;color:#6b7484">'+escx(c.sub||'')+(c.tipo==='cliente'?' · a conversa fica gravada no processo':(c.tipo==='lead'?' · ainda sem processo — funil Comercial':''))+'</div></div>'+
+      (p?('<button class="btn sm ghost" style="font-size:11px" onclick="irParaProcesso(\''+escx(p.numero)+'\')">abrir ficha</button>'):'')+
+      (c.tipo==='lead'?('<button class="btn sm ghost" style="font-size:11px" onclick="waAbrirLead(\''+escx(c.leadId)+'\')">abrir lead</button>'):'');
     document.getElementById('wa-msgs').innerHTML='<div class="note" style="text-align:center">Carregando…</div>';
     waRenderLista();
     await waPuxarMensagens(true);
     if(WA.timer) clearInterval(WA.timer);
     WA.timer=setInterval(function(){ if(!document.getElementById('s-chats').classList.contains('hidden')) waPuxarMensagens(false); },7000);
     var tx=document.getElementById('wa-txt'); if(tx) tx.focus();
+  };
+
+  window.waAbrirLead=function(dbid){
+    var l=(window.LEADS||[]).find(function(x){return x.dbid===dbid;});
+    if(!l){ alert('Lead não encontrado na lista carregada — abra o Comercial e atualize a página.'); return; }
+    if(typeof go==='function') go('crm');
+    try{ crmView='captacao'; setCrmView('captacao'); }catch(e){}
+    setTimeout(function(){ editarLead(l.id); },60);
   };
 
   async function waPuxarMensagens(primeira){
@@ -20852,6 +20876,12 @@ function exportarProdutividadeCSV(){
       if(WA.ultimo>0) q=q.gt('id',WA.ultimo); else q=q.limit(300);
       var r=await q; ms=(r.data||[]).map(function(m){ return {id:m.id,meu:(m.autor_tipo==='escritorio'),quem:m.autor_nome,texto:m.texto,criado_em:m.criado_em,anexo_id:m.anexo_id,anexo_nome:m.anexo_nome,anexo_tipo:m.anexo_tipo,anexo_tamanho:m.anexo_tamanho}; });
       if(ms.length) { try{ await s.from('portal_chat').update({lida_escritorio:true}).eq('processo_id',c.procId).eq('autor_tipo','cliente').eq('lida_escritorio',false); }catch(e){} c.naoLidas=0; }
+    } else if(c.tipo==='lead'){
+      var lr=await s.from('crm_leads').select('conversa').eq('id',c.leadId).maybeSingle();
+      var conv=(lr.data&&Array.isArray(lr.data.conversa))?lr.data.conversa:[];
+      var todas=conv.map(function(e,i){ return {id:i+1,meu:(e.de==='staff'),quem:(e.de==='user'?c.nome:(e.de==='staff'?(e.autor||'equipe'):'assistente')),texto:e.texto,criado_em:e.quando}; });
+      ms=(WA.ultimo>0)?todas.filter(function(m){return m.id>WA.ultimo;}):todas;
+      if(ms.length){ try{ localStorage.setItem('cmp_chat_lead_lido:'+c.leadId, new Date().toISOString()); }catch(e){} c.naoLidas=0; }
     } else {
       var q2=s.from('chat_mensagens').select('id,autor_id,autor_nome,para_id,texto,criado_em,imagem_anexo_id,anexo_nome,anexo_tipo').order('id',{ascending:true});
       if(WA.ultimo>0) q2=q2.gt('id',WA.ultimo); else q2=q2.limit(300);
@@ -20917,6 +20947,18 @@ function exportarProdutividadeCSV(){
       if(c.tipo==='cliente'){
         var ok=await enviarMsg(c.procId, texto, arq);
         if(!ok){ t.value=texto; WA.anexo=arq; waPintarAnexo(); return; }
+      } else if(c.tipo==='lead'){
+        if(arq){ alert('Anexo ainda não é aceito no chat do lead — envie o arquivo pela ficha do lead, no Comercial.'); t.value=texto; WA.anexo=arq; waPintarAnexo(); return; }
+        var s4=S(), me4=WA.eu;
+        var atualL=await s4.from('crm_leads').select('conversa').eq('id',c.leadId).maybeSingle();
+        var conv4=(atualL.data&&Array.isArray(atualL.data.conversa))?atualL.data.conversa:[];
+        var quando4=new Date().toISOString();
+        conv4=conv4.concat([{de:'staff',texto:texto,autor:(me4.nome||'equipe'),quando:quando4}]).slice(-80);
+        var r4=await s4.from('crm_leads').update({conversa:conv4,ultima_atividade:quando4}).eq('id',c.leadId);
+        if(r4.error) throw new Error(r4.error.message);
+        waDesenha({id:conv4.length,meu:true,quem:me4.nome,texto:texto,criado_em:quando4});
+        if(conv4.length>WA.ultimo) WA.ultimo=conv4.length;
+        var bx4=document.getElementById('wa-msgs'); bx4.scrollTop=bx4.scrollHeight;
       } else {
         var s=S(), me=WA.eu;
         var anexo=null;

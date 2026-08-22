@@ -16,6 +16,7 @@
 //
 //   POST { acao:'criar', origem_url, nome?, email? }                        -> { ok, id, ref }
 //   POST { acao:'atualizar', id, nome?, email?, tel?, mensagem?, arquivo? } -> { ok }
+//   POST { acao:'msg', id, de:'user'|'bot', texto }                         -> { ok }
 //   POST { acao:'concluir', id }                                            -> { ok, numero }
 //   POST { acao:'responder', id, mensagem }                                 -> { ok, resposta? , humano? }
 //   POST { acao:'sincronizar', id, desde }                                  -> { ok, conversa: novas_entradas }
@@ -165,6 +166,27 @@ export async function POST(request) {
     if (patch.nome && !atual.data.nome) {
       try { fetch(new URL('/api/notificar-jader?lead=' + id, request.url).toString(), { cache: 'no-store' }).catch(() => {}) } catch (e) {}
     }
+    return Response.json({ ok: true })
+  }
+
+  // ===== 'msg': grava UMA entrada na transcrição (crm_leads.conversa), sem
+  // mexer em mais nada — usada pela fase de captura (nome/mensagem/e-mail/
+  // telefone), que antes só ia para `obs` e por isso não aparecia na ficha do
+  // lead nem na tela "Chats" (só a fase de contratação, via 'responder', virava
+  // conversa). Pedido do dono (21/08/2026): "no chat do site não aparece as
+  // mensagens que o cliente mandou" — agora a conversa inteira, do "oi" em
+  // diante, fica em crm_leads.conversa. =====
+  if (body.acao === 'msg') {
+    const id = String(body.id || '')
+    const de = String(body.de || '')
+    const texto = String(body.texto || '').trim().slice(0, MAX_TEXTO)
+    if (!id || !texto || (de !== 'user' && de !== 'bot')) return Response.json({ erro: 'dados incompletos' }, { status: 400 })
+    const atual = await sb.from('crm_leads').select('conversa').eq('id', id).eq('escritorio_id', ESCRITORIO_CMP).maybeSingle()
+    if (!atual.data) return Response.json({ erro: 'não encontrado' }, { status: 404 })
+    const conversa = (Array.isArray(atual.data.conversa) ? atual.data.conversa : [])
+      .concat([{ de, texto, quando: new Date().toISOString() }]).slice(-80)
+    const upd = await sb.from('crm_leads').update({ conversa, ultima_atividade: new Date().toISOString() }).eq('id', id)
+    if (upd.error) return Response.json({ erro: upd.error.message }, { status: 500 })
     return Response.json({ ok: true })
   }
 
