@@ -13,9 +13,23 @@ const WHATS_NUM = '+55 0800 591 7259'.replace(/\D/g, '')
 // mesma URL do convite que já sai nos e-mails pro cliente (app/api/portal/convite-lib.js)
 const URL_PORTAL = 'https://gestao.cmpadvogados.com.br/portal.html'
 
+// A primeira pergunta é "qual é o seu nome?", mas muita gente responde contando
+// logo o caso inteiro (pedido do dono, 23/08/2026: "Trabalhei 4 anos e 5 meses
+// registrada..." virou o NOME do lead). Heurística simples pra pegar isso: nome
+// de verdade é curto, só letras/espaço/hífen, sem dígito e sem pontuação de frase.
+function pareceNome(t) {
+  const s = String(t || '').trim()
+  if (!s || s.length > 45) return false
+  if (/\d/.test(s)) return false
+  if (/[.!?;:]/.test(s)) return false
+  const palavras = s.split(/\s+/).filter(Boolean)
+  if (!palavras.length || palavras.length > 5) return false
+  return /^[A-Za-zÀ-ÿ' -]+$/.test(s)
+}
+
 export default function ClientePage() {
   const [msgs, setMsgs] = useState([])
-  const [passo, setPasso] = useState('nome')     // nome -> mensagem -> email -> telefone -> fim
+  const [passo, setPasso] = useState('nome')     // nome -> [nome_pendente] -> mensagem -> email -> telefone -> fim
   const [texto, setTexto] = useState('')
   const [enviando, setEnviando] = useState(false)
   const [leadId, setLeadId] = useState(null)
@@ -165,13 +179,38 @@ export default function ClientePage() {
     setTexto('')
 
     if (passo === 'nome') {
+      if (pareceNome(t)) {
+        dados.current.nome = t
+        const j = await criarLead({ nome: t })
+        await registrarMsg('user', t)
+        const msgBot = 'Prazer, ' + t.split(' ')[0] + '!' + (j.ref ? (' (atendimento ' + j.ref + ')') : '') + ' Me conta rapidinho o que está acontecendo — pode mandar prints ou documentos também, se quiser.'
+        addBot(msgBot)
+        await registrarMsg('bot', msgBot)
+        setPasso('mensagem')
+      } else {
+        // a pessoa já contou o caso em vez de dizer o nome — não descarta,
+        // guarda como a mensagem e só pede o nome separadamente
+        dados.current.mensagem = t
+        await criarLead({})
+        await atualizarLead({ mensagem: t })
+        await registrarMsg('user', t)
+        const msgBot = 'Entendi! Antes de mais nada, qual é o seu nome?'
+        addBot(msgBot)
+        await registrarMsg('bot', msgBot)
+        setPasso('nome_pendente')
+      }
+    } else if (passo === 'nome_pendente') {
       dados.current.nome = t
-      const j = await criarLead({ nome: t })
+      await atualizarLead({ nome: t })
       await registrarMsg('user', t)
-      const msgBot = 'Prazer, ' + t.split(' ')[0] + '!' + (j.ref ? (' (atendimento ' + j.ref + ')') : '') + ' Me conta rapidinho o que está acontecendo — pode mandar prints ou documentos também, se quiser.'
-      addBot(msgBot)
-      await registrarMsg('bot', msgBot)
-      setPasso('mensagem')
+      if (dados.current.email) {
+        await avancarParaTelefoneOuFim()
+      } else {
+        const msgBot = 'Prazer, ' + t.split(' ')[0] + '! Qual é o seu e-mail, pra mantermos contato?'
+        addBot(msgBot)
+        await registrarMsg('bot', msgBot)
+        setPasso('email')
+      }
     } else if (passo === 'mensagem') {
       dados.current.mensagem = t
       await atualizarLead({ mensagem: t })
@@ -273,7 +312,7 @@ export default function ClientePage() {
     await registrarMsg('bot', msgBot)
   }
 
-  const placeholder = passo === 'nome' ? 'Seu nome…' : passo === 'mensagem' ? 'Como podemos ajudar?' : passo === 'email' ? 'Seu e-mail…' : passo === 'telefone' ? 'Seu WhatsApp (DDD + número)…' : 'Mensagem…'
+  const placeholder = (passo === 'nome' || passo === 'nome_pendente') ? 'Seu nome…' : passo === 'mensagem' ? 'Como podemos ajudar?' : passo === 'email' ? 'Seu e-mail…' : passo === 'telefone' ? 'Seu WhatsApp (DDD + número)…' : 'Mensagem…'
   const referenciaWa = numeroProcesso ? ('processo nº ' + numeroProcesso) : (ref ? ('atendimento ' + ref) : '')
   const textoWa = 'Olá! Sou ' + (dados.current.nome || '') + ', vim pelo chat do site' + (referenciaWa ? (' (' + referenciaWa + ')') : '') + '.'
     + (dados.current.mensagem ? (' ' + dados.current.mensagem) : '')
