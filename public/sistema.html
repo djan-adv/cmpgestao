@@ -9985,6 +9985,17 @@ try{
 window.__LOTES=window.__LOTES||[];
 function loteById(id){ return (window.__LOTES||[]).find(function(x){return String(x.id)===String(id);}); }
 function processosDoLote(id){ return (DADOS.processos||[]).filter(function(p){ return String(p.lote_id||'')===String(id); }); }
+/* processo na pasta "Alvarás expedidos e a expedir" entra no Financeiro na hora,
+   sem depender da fase (pedido do dono, 24/08/2026: jogar pra pasta = já é
+   alvará). Casa pelo NOME do lote — não por id fixo, pra sobreviver a
+   renomear/recriar a pasta. */
+function _ehLoteAlvara(p){
+  if(!p||!p.lote_id) return false;
+  var l=loteById(p.lote_id);
+  return !!(l && /alvar/i.test(l.nome||''));
+}
+/* verdade única do painel de alvarás: fase "Expedir Alvará" OU pasta de alvarás */
+function _ehAlvara(p){ try{ return faseDoProc(p)==='alvara' || _ehLoteAlvara(p); }catch(e){ return false; } }
 function renderNavLotes(){
   var host=document.getElementById('proc-subnav-lotes'); if(!host) return;
   host.innerHTML=(window.__LOTES||[]).map(function(l){
@@ -16436,7 +16447,7 @@ function setDilView(v){
 var FIN_VIEW='abertas', FIN_ROWS=[], FIN_MES='todos';
 /* alvarás com depósito conferido (qualquer bloco — escritório e Inove) */
 function _alvarasConferidos(){
-  return (DADOS.processos||[]).filter(function(p){ try{ return faseDoProc(p)==='alvara' && p.alvara_valor_confirmado!=null && p.alvara_data_deposito; }catch(e){ return false; } });
+  return (DADOS.processos||[]).filter(function(p){ try{ return _ehAlvara(p) && p.alvara_valor_confirmado!=null && p.alvara_data_deposito; }catch(e){ return false; } });
 }
 function _mesDeISO(s){ var m=/^(\d{4})-(\d{2})/.exec(String(s||'')); return m?(m[1]+'-'+m[2]):''; }
 function setFinMes(v){ FIN_MES=v||'todos'; finRenderTabela(); }
@@ -16624,6 +16635,15 @@ async function confirmarDepositoAlvara(numEnc){
   var envio=await _avisarClienteAlvaraDepositado(p);
   if(envio&&envio.ok) alert('Depósito confirmado. Avisamos o cliente por e-mail para conferir a conta (com alerta de golpe).');
   else alert('Depósito confirmado.'+(envio&&envio.erro==='sem e-mail cadastrado'?' Não enviamos aviso ao cliente por falta de e-mail cadastrado.':(' Não foi possível avisar o cliente por e-mail: '+((envio&&envio.erro)||'erro desconhecido'))));
+  /* dinheiro conferido = fim do processo na prática. Pergunta em vez de encerrar
+     sozinho: às vezes ainda falta um alvará do cliente ou uma pendência
+     (pedido do dono, 24/08/2026). */
+  if(!/encerr/i.test(p.status||'') && confirm('Encerrar o processo '+p.numero+' agora?\n\nEle sai da lista principal e vai para a aba "Encerrados" (nada é apagado, e continua aparecendo no Financeiro).')){
+    if(sb&&p._id){ var rE=await sb.from('processos').update({status:'Encerrado'}).eq('id',p._id).select('id'); if(rE&&rE.error){ alert('Não consegui encerrar: '+rE.error.message); return; } }
+    p.status='Encerrado';
+    try{ renderAlvarasMes(); }catch(e){}
+    try{ if(atual&&atual._id===p._id){ var iE=DADOS.processos.indexOf(p); if(iE>=0) abrir(iE); } }catch(e){}
+  }
 }
 /* aviso ao cliente de que o alvará (a parte dele) provavelmente também já caiu
    na conta — sempre com o alerta de golpe (o escritório nunca pede depósito/PIX
@@ -16665,12 +16685,12 @@ function renderAlvarasMes(){
   /* o painel respeita a aba do Financeiro: "Em aberto" lista só os alvarás a
      conferir; "Recebidas" lista só os já conferidos no extrato */
   var modo=(typeof FIN_VIEW!=='undefined'&&FIN_VIEW==='pagas')?'recebidos':'abertos';
-  var todos=(DADOS.processos||[]).filter(function(p){ try{ return faseDoProc(p)==='alvara'; }catch(e){ return false; } });
+  var todos=(DADOS.processos||[]).filter(_ehAlvara);
   /* aba Recebidas com mês escolhido: só os alvarás conferidos NAQUELE mês */
   if(modo==='recebidos' && typeof FIN_MES!=='undefined' && FIN_MES!=='todos'){
     todos=todos.filter(function(p){ return !(p.alvara_valor_confirmado!=null&&p.alvara_data_deposito) || _mesDeISO(p.alvara_data_deposito)===FIN_MES; });
   }
-  if(!todos.length){ el.innerHTML='<p class="sectlabel" style="margin:0 0 4px">Alvarás expedidos por mês</p><p class="note" style="margin:0">Nenhum processo na fase "Expedir Alvará" no momento. (Quando um processo entra nessa fase, aparece aqui, agrupado pelo mês da última movimentação — inclusive se depois for encerrado.)</p>'; return; }
+  if(!todos.length){ el.innerHTML='<p class="sectlabel" style="margin:0 0 4px">Alvarás expedidos por mês</p><p class="note" style="margin:0">Nenhum processo na fase "Expedir Alvará" nem na pasta de alvarás no momento. (Assim que um processo entra nessa fase — ou é jogado na pasta "Alvarás expedidos e a expedir" — aparece aqui, agrupado pelo mês da última movimentação, inclusive se depois for encerrado.)</p>'; return; }
   var doEscritorio=todos.filter(function(p){ return !isInove(p); });
   var daInove=todos.filter(function(p){ return isInove(p); });
   el.innerHTML=_blocoAlvaras('Alvarás expedidos por mês — escritório', doEscritorio, '#127a53', modo)
