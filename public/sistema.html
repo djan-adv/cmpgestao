@@ -8600,6 +8600,16 @@ function _casoSetHas(n){ var s=_casoSet(); return !!s[_casoKey(n)]; }
 function marcaCasoLocal(n){ var s=_casoSet(); s[_casoKey(n)]=1; _casoSetSave(s); }
 function desmarcaCasoLocal(n){ var s=_casoSet(); delete s[_casoKey(n)]; _casoSetSave(s); }
 function _ehCasoProc(p){ if(!p) return false; if(p.ehCaso===true) return true; if(p.fonte==='caso') return true; return _casoSetHas(p.numero); }
+/* "Em contratação" é só o caso NOVO, sem identificação nenhuma ainda (lead
+   aguardando protocolo/CNJ). Caso/assessoria já identificado por CNPJ (14
+   dígitos) ou CPF (11 dígitos) é PASTA PRINCIPAL definitiva — nunca vai ter
+   nº CNJ (não é processo judicial) — e por isso mora na lista de Processos,
+   não em "Em contratação" (ver virarAssessoria/monitTrazerAssessoria). */
+function _ehCasoEmContratacao(p){
+  if(!_ehCasoProc(p)) return false;
+  var dig=String((p&&p.numero)||'').replace(/\D/g,'');
+  return dig.length!==14 && dig.length!==11;
+}
 function origemProc(p){
   if(_ehCasoProc(p)) return 'caso';
   /* movimentação no histórico nos últimos 5 dias => atualizado */
@@ -9056,7 +9066,7 @@ function renderProc(){
        mora numa dessas subpastas. Encerrado continua fora sempre, buscando ou não. */
     var buscando=_buscaAtiva();
     var okf=true; if(window.__faseFiltro){ try{ okf=(faseDoProc(p)===window.__faseFiltro); }catch(eF){ okf=false; } }
-    return okq&&oke&&okf&&movFiltroOk(p)&&origemFiltroOk(p)&&!/encerr/i.test(p.status||'')&&(!isInove(p)||buscando)&&(!p.lote_id||buscando)&&(!isSuspenso(p)||buscando)&&(!_ehCasoProc(p)||buscando);
+    return okq&&oke&&okf&&movFiltroOk(p)&&origemFiltroOk(p)&&!/encerr/i.test(p.status||'')&&(!isInove(p)||buscando)&&(!p.lote_id||buscando)&&(!isSuspenso(p)||buscando)&&(!_ehCasoEmContratacao(p)||buscando);
   });
   /* Processos vinculados (mesmo caso, ex.: original + agravo) viram UMA linha só
      na listagem principal — sem buscar, sem repetir o nome do cliente várias
@@ -10142,8 +10152,10 @@ function atualizaNavContagens(){
     /* processo em lote (p.lote_id) sai da lista principal — mesma regra de
        Inove/Encerrados/James — por isso não soma em "ativ" (nem em nenhum dos
        outros baldes: continua contado à parte, no badge do próprio lote).
-       Caso sem CNJ (fonte 'caso', ver _ehCasoProc) sai pra "Em contratação". */
-    (DADOS.processos||[]).forEach(function(p){ if(/encerr/i.test(p.status||''))enc++; else if(_ehCasoProc(p))contr++; else if(isSuspenso(p))jam++; else if(isInove(p))inv++; else if(!p.lote_id) ativ++; });
+       Caso novo, ainda sem CNJ nem CNPJ/CPF (ver _ehCasoEmContratacao), sai
+       pra "Em contratação" — pasta de assessoria (já com CNPJ/CPF) conta
+       normalmente como processo ativo. */
+    (DADOS.processos||[]).forEach(function(p){ if(/encerr/i.test(p.status||''))enc++; else if(_ehCasoEmContratacao(p))contr++; else if(isSuspenso(p))jam++; else if(isInove(p))inv++; else if(!p.lote_id) ativ++; });
     var e1=document.getElementById('nav-n-proc'); if(e1)e1.textContent=ativ;
     var e2=document.getElementById('nav-n-inove'); if(e2)e2.textContent=inv;
     var e3=document.getElementById('nav-n-enc'); if(e3)e3.textContent=enc;
@@ -10153,7 +10165,7 @@ function atualizaNavContagens(){
 }
 function renderContratacao(){
   atualizaNavContagens();
-  var lista=DADOS.processos.filter(function(p){return _ehCasoProc(p)&&!/encerr/i.test(p.status||'');});
+  var lista=DADOS.processos.filter(function(p){return _ehCasoEmContratacao(p)&&!/encerr/i.test(p.status||'');});
   var pc=document.getElementById('contrat-count'); if(pc) pc.textContent=lista.length+' caso(s) em contratação';
   var b=document.getElementById('contrat-body'); if(!b) return; b.innerHTML='';
   lista.forEach(function(p){
