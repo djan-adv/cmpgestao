@@ -13,10 +13,25 @@ const WHATS_NUM = '+55 0800 591 7259'.replace(/\D/g, '')
 // mesma URL do convite que já sai nos e-mails pro cliente (app/api/portal/convite-lib.js)
 const URL_PORTAL = 'https://gestao.cmpadvogados.com.br/portal.html'
 
-// A primeira pergunta é "qual é o seu nome?", mas muita gente responde contando
-// logo o caso inteiro (pedido do dono, 23/08/2026: "Trabalhei 4 anos e 5 meses
-// registrada..." virou o NOME do lead). Heurística simples pra pegar isso: nome
-// de verdade é curto, só letras/espaço/hífen, sem dígito e sem pontuação de frase.
+// Precisamos de nome + relato do caso + e-mail + telefone, mas NÃO em ordem
+// fixa — pedido do dono, 24/08/2026: gente respondendo fora de ordem (ou
+// mandando dois dados juntos) virava lead com dado errado no campo errado.
+// Cada mensagem que chega é classificada pelo FORMATO (parece e-mail? parece
+// telefone? parece nome curto?); o que não casar com nenhum vira parte do
+// relato. Depois de cada mensagem, pergunta-se só o que ainda falta.
+function extraiEmail(t) {
+  const m = String(t || '').match(/[\w.+-]+@[\w-]+\.[\w.-]{2,}/)
+  return m ? m[0] : null
+}
+function pareceTelefone(t) {
+  const s = String(t || '').trim()
+  const digitos = s.replace(/\D/g, '')
+  if (digitos.length < 10 || digitos.length > 13) return false
+  const semFormatacao = s.replace(/[\s()\-+.]/g, '')
+  return semFormatacao === digitos   // sobrou só dígito — não tinha texto solto junto
+}
+// nome de verdade é curto, só letras/espaço/hífen, sem dígito e sem
+// pontuação de frase (evita "Trabalhei 4 anos e 5 meses..." virar nome)
 function pareceNome(t) {
   const s = String(t || '').trim()
   if (!s || s.length > 45) return false
@@ -29,7 +44,7 @@ function pareceNome(t) {
 
 export default function ClientePage() {
   const [msgs, setMsgs] = useState([])
-  const [passo, setPasso] = useState('nome')     // nome -> [nome_pendente] -> mensagem -> email -> telefone -> fim
+  const [passo, setPasso] = useState('coletando')   // coletando (nome/mensagem/email/tel, em qualquer ordem) -> fim
   const [texto, setTexto] = useState('')
   const [enviando, setEnviando] = useState(false)
   const [leadId, setLeadId] = useState(null)
@@ -122,10 +137,10 @@ export default function ClientePage() {
         dados.current.nome = nomeQ
         if (emailQ) dados.current.email = emailQ
         const j = await criarLead({ nome: nomeQ, email: emailQ || undefined })
-        const msgBot = 'Oi, ' + nomeQ.split(' ')[0] + '! 👋 Aqui é do escritório Crispim Mendonça e Pinheiro' + (j.ok ? (' (atendimento ' + j.ref + ')') : '') + '. Me conta rapidinho o que está acontecendo — pode mandar prints ou documentos também, se quiser.'
+        const msgBot = 'Oi, ' + nomeQ.split(' ')[0] + '! 👋 Aqui é do escritório Crispim Mendonça e Pinheiro' + (j.ok ? (' (atendimento ' + j.ref + ')') : '') + '.'
         addBot(msgBot)
         await registrarMsg('bot', msgBot)
-        setPasso('mensagem')
+        await perguntarProximo()
       } else {
         addBot('Oi! 👋 Aqui é do escritório Crispim Mendonça e Pinheiro. Qual é o seu nome?')
       }
@@ -170,6 +185,45 @@ export default function ClientePage() {
     } catch (e) { /* melhor esforço — não trava a conversa */ }
   }
 
+  // Classifica a mensagem pelo FORMATO (não pelo passo em que estamos) e
+  // grava tudo — sem perder nada mesmo quando a pessoa responde fora de
+  // ordem ou manda dois dados na mesma mensagem.
+  async function processarResposta(t) {
+    const emailAchado = extraiEmail(t)
+    const telAchado = (!dados.current.tel && !emailAchado && pareceTelefone(t)) ? t.replace(/\D/g, '') : null
+    const nomeAchado = (!dados.current.nome && !emailAchado && !telAchado && pareceNome(t)) ? t : null
+    const ehMensagem = !emailAchado && !telAchado && !nomeAchado
+
+    if (nomeAchado) dados.current.nome = nomeAchado
+    if (emailAchado && !dados.current.email) dados.current.email = emailAchado
+    if (telAchado) dados.current.tel = telAchado
+    if (ehMensagem) dados.current.mensagem = dados.current.mensagem ? (dados.current.mensagem + '\n' + t) : t
+
+    if (!leadIdRef.current) await criarLead({})
+    const patch = {}
+    if (nomeAchado) patch.nome = nomeAchado
+    if (emailAchado && dados.current.email === emailAchado) patch.email = emailAchado
+    if (telAchado) patch.tel = telAchado
+    if (ehMensagem) patch.mensagem = t
+    if (Object.keys(patch).length) await atualizarLead(patch)
+
+    await registrarMsg('user', t)
+  }
+
+  // Depois de cada mensagem, pergunta só o que ainda falta — nome primeiro,
+  // depois o relato, depois e-mail, depois telefone. Se já tem tudo, quem
+  // chamou já deve ter chamado concluirCaptura() em vez desta.
+  async function perguntarProximo() {
+    let msgBot
+    if (!dados.current.nome) msgBot = 'Antes de mais nada, qual é o seu nome?'
+    else if (!dados.current.mensagem) msgBot = 'Prazer, ' + dados.current.nome.split(' ')[0] + '! Me conta rapidinho o que está acontecendo — pode mandar prints ou documentos também, se quiser.'
+    else if (!dados.current.email) msgBot = 'Qual é o seu e-mail, pra mantermos contato?'
+    else if (!dados.current.tel) msgBot = 'E o seu WhatsApp (com DDD), pra continuarmos por lá também?'
+    else return
+    addBot(msgBot)
+    await registrarMsg('bot', msgBot)
+  }
+
   async function enviar(e) {
     e && e.preventDefault()
     const t = texto.trim()
@@ -178,62 +232,11 @@ export default function ClientePage() {
     addUser(t)
     setTexto('')
 
-    if (passo === 'nome') {
-      if (pareceNome(t)) {
-        dados.current.nome = t
-        const j = await criarLead({ nome: t })
-        await registrarMsg('user', t)
-        const msgBot = 'Prazer, ' + t.split(' ')[0] + '!' + (j.ref ? (' (atendimento ' + j.ref + ')') : '') + ' Me conta rapidinho o que está acontecendo — pode mandar prints ou documentos também, se quiser.'
-        addBot(msgBot)
-        await registrarMsg('bot', msgBot)
-        setPasso('mensagem')
-      } else {
-        // a pessoa já contou o caso em vez de dizer o nome — não descarta,
-        // guarda como a mensagem e só pede o nome separadamente
-        dados.current.mensagem = t
-        await criarLead({})
-        await atualizarLead({ mensagem: t })
-        await registrarMsg('user', t)
-        const msgBot = 'Entendi! Antes de mais nada, qual é o seu nome?'
-        addBot(msgBot)
-        await registrarMsg('bot', msgBot)
-        setPasso('nome_pendente')
-      }
-    } else if (passo === 'nome_pendente') {
-      dados.current.nome = t
-      await atualizarLead({ nome: t })
-      await registrarMsg('user', t)
-      if (dados.current.email) {
-        await avancarParaTelefoneOuFim()
-      } else {
-        const msgBot = 'Prazer, ' + t.split(' ')[0] + '! Qual é o seu e-mail, pra mantermos contato?'
-        addBot(msgBot)
-        await registrarMsg('bot', msgBot)
-        setPasso('email')
-      }
-    } else if (passo === 'mensagem') {
-      dados.current.mensagem = t
-      await atualizarLead({ mensagem: t })
-      await registrarMsg('user', t)
-      if (dados.current.email) {
-        // e-mail já veio no link (?email=) — não pergunta de novo
-        await avancarParaTelefoneOuFim()
-      } else {
-        const msgBot = 'Entendi. Qual é o seu e-mail, pra mantermos contato?'
-        addBot(msgBot)
-        await registrarMsg('bot', msgBot)
-        setPasso('email')
-      }
-    } else if (passo === 'email') {
-      dados.current.email = t
-      await atualizarLead({ email: t })
-      await registrarMsg('user', t)
-      await avancarParaTelefoneOuFim()
-    } else if (passo === 'telefone') {
-      dados.current.tel = t
-      await atualizarLead({ tel: t })
-      await registrarMsg('user', t)
-      await concluirCaptura()
+    if (passo === 'coletando') {
+      await processarResposta(t)
+      const d = dados.current
+      if (d.nome && d.mensagem && d.email && d.tel) await concluirCaptura()
+      else await perguntarProximo()
     } else {
       // fase de contratação: o chat CONTINUA conversando de verdade, não fica
       // mudo até o cliente ir pro WhatsApp ou alguém da equipe assumir. Se a
@@ -259,17 +262,6 @@ export default function ClientePage() {
       setPensando(false)
     }
     setEnviando(false)
-  }
-
-  // e-mail e telefone podem chegar em ordens diferentes (link com ?email= já
-  // preenchido, por exemplo) — este único ponto decide o próximo passo e evita
-  // repetir a lógica de "falta telefone?" em três lugares
-  async function avancarParaTelefoneOuFim() {
-    if (dados.current.tel) { await concluirCaptura(); return }
-    const msgBot = 'Show! E o seu WhatsApp (com DDD), pra continuarmos por lá também?'
-    addBot(msgBot)
-    await registrarMsg('bot', msgBot)
-    setPasso('telefone')
   }
 
   // e-mail + WhatsApp completos: abre o caso no Gestão AGORA, manda e-mail de
@@ -312,7 +304,15 @@ export default function ClientePage() {
     await registrarMsg('bot', msgBot)
   }
 
-  const placeholder = (passo === 'nome' || passo === 'nome_pendente') ? 'Seu nome…' : passo === 'mensagem' ? 'Como podemos ajudar?' : passo === 'email' ? 'Seu e-mail…' : passo === 'telefone' ? 'Seu WhatsApp (DDD + número)…' : 'Mensagem…'
+  // qual campo a próxima mensagem provavelmente vai preencher — só pra
+  // ajustar o placeholder/teclado do input; a classificação de verdade
+  // acontece em processarResposta() e aceita qualquer ordem
+  const campo = passo !== 'coletando' ? null
+    : !dados.current.nome ? 'nome'
+    : !dados.current.mensagem ? 'mensagem'
+    : !dados.current.email ? 'email'
+    : !dados.current.tel ? 'tel' : null
+  const placeholder = campo === 'nome' ? 'Seu nome…' : campo === 'mensagem' ? 'Como podemos ajudar?' : campo === 'email' ? 'Seu e-mail…' : campo === 'tel' ? 'Seu WhatsApp (DDD + número)…' : 'Mensagem…'
   const referenciaWa = numeroProcesso ? ('processo nº ' + numeroProcesso) : (ref ? ('atendimento ' + ref) : '')
   const textoWa = 'Olá! Sou ' + (dados.current.nome || '') + ', vim pelo chat do site' + (referenciaWa ? (' (' + referenciaWa + ')') : '') + '.'
     + (dados.current.mensagem ? (' ' + dados.current.mensagem) : '')
@@ -373,7 +373,7 @@ export default function ClientePage() {
           style={{ width: 42, height: 42, borderRadius: '50%', border: '1px solid #ddd', background: '#fff', fontSize: 17, cursor: 'pointer', flexShrink: 0 }}>📎</button>
         <input ref={inputRef} value={texto} onChange={e => setTexto(e.target.value)} placeholder={placeholder}
           autoComplete="off" enterKeyHint="send"
-          type={passo === 'email' ? 'email' : (passo === 'telefone' ? 'tel' : 'text')} inputMode={passo === 'email' ? 'email' : (passo === 'telefone' ? 'tel' : 'text')}
+          type={campo === 'email' ? 'email' : (campo === 'tel' ? 'tel' : 'text')} inputMode={campo === 'email' ? 'email' : (campo === 'tel' ? 'tel' : 'text')}
           onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); enviar(e) } }}
           style={{ flex: 1, minWidth: 0, border: '1px solid #ddd', borderRadius: 20, padding: '11px 15px', fontSize: 16 }} />
         <button type="submit" disabled={enviando || !texto.trim()}
