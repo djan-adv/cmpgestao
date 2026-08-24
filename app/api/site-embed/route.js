@@ -21,9 +21,12 @@
 //   POST { acao:'diagnosticar', site:'cmp'|'djan' }        -> home: construtor detectado, seguro?
 //   POST { acao:'inserir', site:'cmp'|'djan', forcar? }     -> home: insere
 //   POST { acao:'inserir_posts', site:'cmp'|'djan' }        -> todos os posts: insere onde for seguro
+//   POST { acao:'remover', site:'cmp'|'djan' }              -> home: tira o embed (pedido do dono, 24/08/2026 —
+//                                                               leads saindo com dado ruim, chat volta desligado)
+//   POST { acao:'remover_posts', site:'cmp'|'djan' }        -> todos os posts: tira o embed de quem tiver
 
 import { createClient } from '@supabase/supabase-js'
-import { EMBED_CHAT_HTML, EMBED_CHAT_BLOCO_GUTENBERG, MARCA_EMBED_CHAT, detectarConstrutorWP, embedChatHtmlSemTitulo } from '../../../lib/embedChat.js'
+import { EMBED_CHAT_HTML, EMBED_CHAT_BLOCO_GUTENBERG, MARCA_EMBED_CHAT, detectarConstrutorWP, embedChatHtmlSemTitulo, removerEmbedDoConteudo } from '../../../lib/embedChat.js'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
@@ -280,7 +283,40 @@ export async function POST(request) {
     return Response.json({ ok: true, ...rel })
   }
 
-  // ===== home (diagnosticar / inserir) =====
+  // ===== todos os posts: tira o embed de quem tiver =====
+  if (body.acao === 'remover_posts') {
+    const rel = { total: 0, removidos: 0, nao_tinha: 0, falhas: 0 }
+    for (let pagina = 1; pagina <= 20; pagina++) {
+      let lista
+      try {
+        const rl = await fetch(site.base + '/wp-json/wp/v2/posts?per_page=100&page=' + pagina + '&_fields=id', { headers: { Authorization: auth, 'User-Agent': 'Mozilla/5.0 (CMPGestao)' }, cache: 'no-store' })
+        if (!rl.ok) break
+        lista = await rl.json()
+      } catch (e) { break }
+      if (!Array.isArray(lista) || !lista.length) break
+      for (const p of lista) {
+        rel.total++
+        try {
+          const rp = await fetch(site.base + '/wp-json/wp/v2/posts/' + p.id + '?context=edit', { headers: { Authorization: auth, 'User-Agent': 'Mozilla/5.0 (CMPGestao)' }, cache: 'no-store' })
+          if (!rp.ok) { rel.falhas++; continue }
+          const post = await rp.json()
+          const conteudo = (post.content && post.content.raw) || ''
+          const { conteudo: limpo, mudou } = removerEmbedDoConteudo(conteudo)
+          if (!mudou) { rel.nao_tinha++; continue }
+          const ru = await fetch(site.base + '/wp-json/wp/v2/posts/' + p.id, {
+            method: 'POST', headers: { Authorization: auth, 'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0 (CMPGestao)' },
+            body: JSON.stringify({ content: limpo }),
+          })
+          if (!ru.ok) { rel.falhas++; continue }
+          rel.removidos++
+        } catch (e) { rel.falhas++ }
+      }
+      if (lista.length < 100) break
+    }
+    return Response.json({ ok: true, ...rel })
+  }
+
+  // ===== home (diagnosticar / inserir / remover) =====
   const paginaId = await acharPaginaInicial(site, auth)
   if (!paginaId) return Response.json({ erro: 'não achei a página inicial de ' + site.rotulo }, { status: 404 })
 
@@ -314,6 +350,20 @@ export async function POST(request) {
     if (!ru.ok) { const t = await ru.text().catch(() => ''); return Response.json({ erro: 'falha ao atualizar (HTTP ' + ru.status + '): ' + t.slice(0, 300) }, { status: 502 }) }
     const atualizado = await ru.json()
     return Response.json({ ok: true, pagina_id: paginaId, link_pagina: atualizado.link, construtor })
+  }
+
+  if (body.acao === 'remover') {
+    if (!jaTemEmbed) return Response.json({ erro: 'a página não tem o embed (ou entrou por um caminho que não dá pra desfazer por aqui, como substituição de widget do Elementor) — nada a fazer', link_pagina: pag.link }, { status: 409 })
+    const { conteudo: limpo, mudou } = removerEmbedDoConteudo(conteudoAtual)
+    if (!mudou) return Response.json({ erro: 'não consegui achar o bloco exato pra remover — provavelmente foi editado manualmente depois de inserido. Remova pelo editor visual do WordPress.', link_pagina: pag.link }, { status: 409 })
+    const ru2 = await fetch(site.base + '/wp-json/wp/v2/pages/' + paginaId, {
+      method: 'POST',
+      headers: { Authorization: auth, 'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0 (CMPGestao)' },
+      body: JSON.stringify({ content: limpo }),
+    })
+    if (!ru2.ok) { const t = await ru2.text().catch(() => ''); return Response.json({ erro: 'falha ao atualizar (HTTP ' + ru2.status + '): ' + t.slice(0, 300) }, { status: 502 }) }
+    const atualizado2 = await ru2.json()
+    return Response.json({ ok: true, pagina_id: paginaId, link_pagina: atualizado2.link })
   }
 
   return Response.json({ erro: 'ação inválida' }, { status: 400 })
