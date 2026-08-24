@@ -145,7 +145,17 @@ export async function GET(request) {
     let state = 'desconhecido', saida = ''
     try { state = fs.readFileSync(STATE_FILE, 'utf8').trim() } catch (e) {}
     if (state === 'error') { try { saida = fs.readFileSync(LOG_FILE, 'utf8').slice(-1500) } catch (e) {} }
-    return Response.json({ state, saida })
+    // QUAL versão está no ar. Sem isto não dava para separar "o servidor não
+    // atualizou" de "o navegador está servindo o sistema.html do cache" — e o
+    // dia 24/08/2026 foi inteiro nessa dúvida. Compare com o último commit do
+    // GitHub: igual = está tudo no ar, é cache do navegador (Ctrl+Shift+R).
+    const commit = (await run('git rev-parse --short HEAD')).stdout.trim()
+    const quando = (await run('git log -1 --format=%cI')).stdout.trim()
+    // quando o sistema.html no disco mudou pela última vez (é o arquivo que o
+    // navegador costuma segurar em cache)
+    let sistemaHtml = null
+    try { sistemaHtml = fs.statSync(path.join(REPO_DIR, 'public', 'sistema.html')).mtime.toISOString() } catch (e) {}
+    return Response.json({ state, saida, commit, commit_em: quando, sistema_html_em: sistemaHtml })
   }
   // novidades: o que o Publicar vai colocar no ar (commits entre a versão do servidor
   // e o GitHub). Exige o coordenador autenticado, como o POST.
