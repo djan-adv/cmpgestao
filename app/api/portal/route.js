@@ -99,8 +99,20 @@ async function docsDoProcesso(sb, p) {
     .in('processo_numero', chaves)
     .order('baixado_em', { ascending: false })
     .limit(400)
+  // Dedup por nome+tamanho (pedido do dono, 24/08/2026). "Carregar documentos"
+  // trava repetição pelo uuid do documento, mas o jus.br às vezes devolve a MESMA
+  // peça com uuid diferente — e aí o cliente via a mesma decisão duas, três vezes
+  // no app (aconteceu no 0744809-54.2026.8.07.0001). Mesmo nome E mesmo tamanho =
+  // mesmo arquivo: fica só o mais recente. Tamanho diferente = peça diferente
+  // (ex.: decisão nova), continua aparecendo à parte.
+  const vistos = new Set()
   const oficiais = (j.data || [])
     .filter(d => RE_OFICIAL.test((d.doc_tipo || '') + ' ' + (d.doc_nome || '')))
+    .filter(d => {
+      const chave = (d.doc_nome || '') + '|' + (d.tamanho == null ? '' : d.tamanho)
+      if (vistos.has(chave)) return false
+      vistos.add(chave); return true
+    })
     .map(d => ({ id: d.id, nome: d.doc_nome, tipo: d.doc_tipo, tamanho: d.tamanho, data: d.baixado_em }))
 
   let qp = sb.from('peticoes_protocolo')
