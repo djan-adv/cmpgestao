@@ -686,7 +686,7 @@ function abrirProc(id, irParaChat){
     if(caiuSessao(d)) return;
     if(!d.ok){ $('proc-corpo').innerHTML='<div class="vazio">'+esc(d.erro||'Não foi possível abrir agora.')+'</div>'; return; }
     ATUAL = d;
-    var nd = (d.documentos && (d.documentos.oficiais.length + d.documentos.peticoes.length)) || 0;
+    var nd = (d.documentos && (d.documentos.oficiais.length + d.documentos.peticoes.length + ((d.documentos.marcados||[]).length))) || 0;
     var bd = $('b-docs'); if(nd){ bd.textContent=nd; bd.classList.remove('hidden'); } else bd.classList.add('hidden');
     pintarFabBadge(d.chat_nao_lidas||0);
     aba('detalhes');
@@ -850,7 +850,8 @@ function abrirDoc(url,nome){
 }
 function fecharDoc(){ var v=document.getElementById('doc-viewer'); if(v) v.remove(); }
 function renderDocs(){
-  var d = ATUAL.documentos||{oficiais:[],peticoes:[]};
+  var d = ATUAL.documentos||{oficiais:[],peticoes:[],marcados:[]};
+  if(!d.marcados) d.marcados=[];
   function linha(ic, nome, sub, url){
     return '<a class="doc" href="#" data-u="'+url+'" data-n="'+escT(nome)+'" onclick="abrirDoc(this.getAttribute(\'data-u\'),this.getAttribute(\'data-n\'));return false">' +
       '<div class="di">'+ic+'</div><div class="dn"><div class="n1">'+escT(nome)+'</div>' +
@@ -868,6 +869,14 @@ function renderDocs(){
     if(x.tem_comprovante) html += linha('🧾', 'Comprovante — '+x.titulo, brData(x.data), '/api/portal?doc=comprovante:'+x.id+'&t='+TOKEN);
   });
   html += '</div>';
+  // enviados pelo escritório (pasta "App do Cliente") — só aparece se houver algum
+  if(d.marcados.length){
+    html += '<div class="sec"><p class="lab">Enviados pelo escritório</p>';
+    d.marcados.forEach(function(x){
+      html += linha('📎', x.nome, x.data?brData(x.data):'', '/api/portal?doc=appcli:'+x.id+'&t='+TOKEN);
+    });
+    html += '</div>';
+  }
   // documentos oficiais da ação principal (processo vinculado)
   (ATUAL.vinculados||[]).forEach(function(v){
     if(!(v.documentos||[]).length) return;
