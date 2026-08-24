@@ -11,7 +11,7 @@
 // contra a doc da sua conta Cora no primeiro teste com credenciais reais.
 
 import crypto from 'crypto'
-import { coraConfigurado, coraApi, sbUsuario, usuarioDoToken } from '../lib.js'
+import { coraConfigurado, coraApi, sbUsuario, usuarioDoToken, excedeLimiteCliente, LIMITE_BOLETOS_POR_CLIENTE } from '../lib.js'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -111,6 +111,12 @@ export async function POST(request) {
   } else if (soDigitos(c.cpf_cnpj).length !== 11 && soDigitos(c.cpf_cnpj).length !== 14 && (doc.length === 11 || doc.length === 14)) {
     // contato existia sem doc: completa o cadastro com o CPF/CNPJ digitado
     try { await sb.from('contatos').update({ cpf_cnpj: doc }).eq('id', contato_id) } catch (e) {}
+  }
+
+  if (await excedeLimiteCliente(sb, contato_id)) {
+    return Response.json({
+      erro: 'Este cliente já tem ' + LIMITE_BOLETOS_POR_CLIENTE + ' cobranças no Cora — trava de segurança contra emissão em excesso. Revise o Financeiro (cancele as que não servem) antes de emitir mais.'
+    }, { status: 429 })
   }
 
   // o header Idempotency-Key do Cora exige um UUID puro; o code é nossa referência interna

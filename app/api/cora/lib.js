@@ -85,6 +85,19 @@ export async function coraApi(method, path, body, extraHeaders) {
   return mtls(method, path, headers, body)
 }
 
+// Trava de segurança (pedido do dono, 24/08/2026 — um bug de reemissão em loop
+// soltou 120+ boletos duplicados pro mesmo cliente em poucas horas): nenhum
+// contato passa de 12 cobranças no Cora, não importa a origem (manual ou
+// robô). Não é limite de negócio — parcelamento normal nem chega perto disso
+// — é rede de segurança contra loop/bug, para não depender só do robô estar
+// certo.
+export const LIMITE_BOLETOS_POR_CLIENTE = 12
+export async function excedeLimiteCliente(sb, contato_id) {
+  if (!contato_id) return false
+  const { count } = await sb.from('cora_cobrancas').select('id', { count: 'exact', head: true }).eq('contato_id', contato_id)
+  return (count || 0) >= LIMITE_BOLETOS_POR_CLIENTE
+}
+
 // status do Cora que significam "pago" (OPEN|PAID|CANCELLED|LATE|DRAFT|IN_PAYMENT)
 export function estaPago(status) {
   const s = String(status || '').toUpperCase()
