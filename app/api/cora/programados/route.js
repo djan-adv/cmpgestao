@@ -11,7 +11,7 @@
 
 import crypto from 'crypto'
 import { createClient } from '@supabase/supabase-js'
-import { coraConfigurado, coraApi } from '../lib.js'
+import { coraConfigurado, coraApi, excedeLimiteCliente, LIMITE_BOLETOS_POR_CLIENTE } from '../lib.js'
 import { enviarEmailCore } from '../../enviar-email/enviar.js'
 
 export const dynamic = 'force-dynamic'
@@ -77,6 +77,14 @@ export async function GET(request) {
       if (doc.length !== 11 && doc.length !== 14) {
         await sb.from('boletos_programados').update({ status: 'erro', erro: 'cliente sem CPF/CNPJ no cadastro', atualizado_em: new Date().toISOString() }).eq('id', prog.id)
         resultados.push({ id: prog.id, ok: false, erro: 'sem CPF/CNPJ' })
+        continue
+      }
+
+      // trava de segurança contra loop/bug (ver lib.js) — marca 'erro' em vez de
+      // deixar 'agendado', pra não virar ela mesma uma fonte de reprocessamento
+      if (await excedeLimiteCliente(sb, prog.contato_id)) {
+        await sb.from('boletos_programados').update({ status: 'erro', erro: 'travado: cliente já tem ' + LIMITE_BOLETOS_POR_CLIENTE + '+ cobranças no Cora — confira o Financeiro', atualizado_em: new Date().toISOString() }).eq('id', prog.id)
+        resultados.push({ id: prog.id, ok: false, erro: 'limite por cliente atingido' })
         continue
       }
 
