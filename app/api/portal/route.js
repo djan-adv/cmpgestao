@@ -26,11 +26,18 @@ import { tipoRealDoArquivo, pdfDeTexto } from '../jusbr/lib.js'
 import { svc, confereSenha, hashSenha, sessao, tokenDo, digitos, processosPermitidos, FILTRO_HIST_CLIENTE } from './lib.js'
 import { enviarEmailCore } from '../enviar-email/enviar.js'
 import { URL_PORTAL } from './convite-lib.js'
+import { PASTA_APP_CLIENTE, RE_OFICIAL } from '../../../lib/appCliente.js'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
 const DOCS_ROOT = '/opt/cmpdocs'
+const MIMES = {
+  pdf: 'application/pdf', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', doc: 'application/msword',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', xls: 'application/vnd.ms-excel',
+  csv: 'text/csv; charset=utf-8', html: 'text/html; charset=utf-8', txt: 'text/plain; charset=utf-8',
+}
 const MAX_APARELHOS = 4         // o 5º aparelho diferente bloqueia o acesso
 const SESSAO_DIAS = 60
 const MAX_TEXTO_CHAT = 4000
@@ -56,16 +63,6 @@ function papeisDaClasse(classe, assunto, fase) {
   if (/execu|cumprimento de senten|monit[óo]r/.test(t)) return ['EXEQUENTE', 'EXECUTADO']
   return ['AUTOR(A)', 'RÉU (RÉ)']
 }
-
-/* documentos oficiais (já públicos) — filtro sobre as peças do jus.br */
-// Confere com o acervo real: pega sentença, despacho, decisão, acórdão, acordo,
-// homologação, ata/termo de audiência (onde o acordo é lavrado) e alvará; deixa de
-// fora petição de terceiro, intimação, mandado, certidão, ato ordinatório, procuração.
-// 18/08/2026: ampliado a pedido do dono — além dos atos do juízo, o cliente vê
-// as peças PRINCIPAIS do próprio caso (inicial, contestação, réplica, recursos,
-// laudo). Continuam fora: intimação, mandado, certidão, expediente, carta,
-// procuração/substabelecimento e atos ordinatórios.
-const RE_OFICIAL = /(senten|despach|decis|ac[óo]rd|acordo|homolog|(ata|termo)\s+d[aeo]s?\s+audi|alvar|peti[çc][ãa]o inicial|contesta[çc]|r[ée]plica|embargos|apela[çc]|contrarraz|agravo|laudo)/i
 
 /* HTML do jus.br → texto corrido, para a conversão em PDF na entrega ao cliente.
    O PJe grava acento como entidade NOMEADA (&Ccedil;, &atilde;, &iacute;…) — sem
@@ -129,7 +126,34 @@ async function docsDoProcesso(sb, p) {
       id: x.id, titulo: x.titulo || x.arquivo_nome || 'Petição',
       data: x.protocolada_em, tem_arquivo: !!x.arquivo_caminho, tem_comprovante: !!x.comprovante_caminho,
     }))
-  return { oficiais, peticoes }
+
+  // Pasta "App do Cliente": tudo que estiver ali dentro o cliente vê. As peças
+  // oficiais do jus.br são espelhadas nela automaticamente (ver lib/appCliente),
+  // então o mesmo arquivo apareceria duas vezes — por isso pula o que já está
+  // na lista de oficiais (mesmo nome). O que sobra é a curadoria manual: o que
+  // o escritório jogou ali de propósito para o cliente ver.
+  // O id é o caminho (processo/arquivo) em base64url — o download reconstrói e
+  // confere se continua dentro da pasta, então o cliente não consegue pedir
+  // outro arquivo do disco mudando a URL.
+  const nomesOficiais = new Set(oficiais.map(o => String(o.nome || '')))
+  const marcados = []
+  try {
+    const dirApp = path.join(DOCS_ROOT, dig, PASTA_APP_CLIENTE)
+    for (const nome of fs.readdirSync(dirApp)) {
+      if (nome.startsWith('.') || nome.endsWith('.parcial')) continue
+      if (nomesOficiais.has(nome)) continue
+      let st
+      try { st = fs.statSync(path.join(dirApp, nome)) } catch (e) { continue }
+      if (!st.isFile()) continue
+      marcados.push({
+        id: Buffer.from(dig + '/' + nome).toString('base64url'),
+        nome, tamanho: st.size, data: new Date(st.mtimeMs).toISOString(),
+      })
+    }
+    marcados.sort((a, b) => String(b.data).localeCompare(String(a.data)))
+  } catch (e) { /* pasta não existe = nada marcado, é o normal */ }
+
+  return { oficiais, peticoes, marcados }
 }
 
 /* Processo VINCULADO (ex.: a ação principal que decide o caso de todos os clientes
@@ -642,6 +666,42 @@ export async function GET(request) {
     })
   }
 
+  /* arquivo da pasta "App do Cliente" — curadoria manual do escritório */
+  if (tipo === 'appcli') {
+    let alvo = ''
+    try { alvo = Buffer.from(String(id || ''), 'base64url').toString('utf8') } catch (e) { alvo = '' }
+    const corte = alvo.indexOf('/')
+    const dig = corte > 0 ? alvo.slice(0, corte) : ''
+    const nomeArq = corte > 0 ? alvo.slice(corte + 1) : ''
+    if (!/^\d+$/.test(dig) || !nomeArq || /[/\\]/.test(nomeArq) || nomeArq.includes('..')) {
+      return Response.json({ erro: 'Documento inválido.' }, { status: 400 })
+    }
+    if (!numerosOk.has(dig)) return Response.json({ erro: 'Documento não disponível para este acesso.' }, { status: 403 })
+    const base = path.join(DOCS_ROOT, dig, PASTA_APP_CLIENTE)
+    const abs = path.resolve(base, nomeArq)
+    if (!abs.startsWith(base + path.sep)) return Response.json({ erro: 'Caminho inválido.' }, { status: 400 })
+    let buf = null
+    try { buf = fs.readFileSync(abs) } catch (e) { buf = null }
+    if (!buf || !buf.length) return Response.json({ erro: 'Arquivo não encontrado.' }, { status: 404 })
+    let mime = MIMES[((abs.match(/\.(\w+)$/) || [])[1] || '').toLowerCase()] || 'application/octet-stream'
+    let nome = nomeArq.replace(/[^\w.\- ]+/g, '_')
+    // peça em texto/HTML vira PDF na entrega — no celular abre e guarda melhor
+    if (mime.startsWith('text/plain') || mime.startsWith('text/html')) {
+      try {
+        const txt = mime.startsWith('text/html') ? _htmlParaTexto(buf.toString('utf8')) : buf.toString('utf8')
+        buf = await pdfDeTexto(txt, nomeArq); mime = 'application/pdf'
+        nome = nome.replace(/\.(html?|txt)$/i, '') + '.pdf'
+      } catch (e) { /* falhou a conversão: entrega como está */ }
+    }
+    return new Response(buf, {
+      headers: {
+        'Content-Type': mime,
+        'Content-Disposition': (dl ? 'attachment' : 'inline') + '; filename="' + nome + '"',
+        'Cache-Control': 'private, max-age=300',
+      },
+    })
+  }
+
   /* anexo do chat (o que o cliente mandou e o que o escritório respondeu) */
   if (tipo === 'anexo') {
     // o anexo só abre se estiver numa mensagem de um processo que este acesso enxerga
@@ -684,11 +744,10 @@ export async function GET(request) {
     try { buf = fs.readFileSync(abs) } catch (e) { buf = null }
     if (!buf || !buf.length) return Response.json({ erro: 'Arquivo não encontrado no servidor.' }, { status: 404 })
     const ext = (abs.match(/\.(\w+)$/) || [])[1] || ''
-    const mimes = { pdf: 'application/pdf', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', doc: 'application/msword', html: 'text/html; charset=utf-8', txt: 'text/plain; charset=utf-8' }
     const nome = String(nomeArq).replace(/[^\w.\- ]+/g, '_')
     return new Response(buf, {
       headers: {
-        'Content-Type': mimes[ext.toLowerCase()] || 'application/octet-stream',
+        'Content-Type': MIMES[ext.toLowerCase()] || 'application/octet-stream',
         'Content-Disposition': (dl ? 'attachment' : 'inline') + '; filename="' + nome + (/\.\w+$/.test(nome) ? '' : ('.' + (ext || 'pdf'))) + '"',
         'Cache-Control': 'private, max-age=300',
       },

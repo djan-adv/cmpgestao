@@ -10,6 +10,7 @@
 
 import { jusbrAdmin, getFreshToken, tipoRealDoArquivo, ESCRITORIO_CMP } from '../lib.js'
 import { camposConteudo } from '../guardar.js'
+import { ehOficial, copiarParaAppCliente } from '../../../../lib/appCliente.js'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -157,7 +158,11 @@ export async function GET(request) {
       }
       if (ehDocLeve(d.nome) || RE_PECA_OFICIAL.test(d.nome || '')) linha.expira_em = '2999-12-31T00:00:00.000Z' // permanente (coluna NOT NULL)
       const ins = await sb.from('jusbr_arquivos').insert(linha).select('id').single()
-      if (!ins.error) { baix++; total++; rel.baixados++ }
+      if (!ins.error) {
+        baix++; total++; rel.baixados++
+        // espelha na pasta "App do Cliente" (é o que o cliente vê no app)
+        if (ehOficial(d.nome, r.tipo)) { try { copiarParaAppCliente(numero, d.nome, r.buf) } catch (e) {} }
+      }
     }
     if (debug || baix) rel.detalhe.push({ numero, docs: lst.docs.length, novos: novos.length, baixados: baix })
   }
@@ -194,7 +199,10 @@ export async function GET(request) {
         const linha = { escritorio_id: ESCRITORIO_CMP, processo_numero: numero, doc_uuid: d.uuid, doc_nome: d.nome, doc_tipo: r.tipo, tamanho: r.buf.length, baixado_por: 'robo', ...camposConteudo(numero, d.nome, d.uuid, r.buf) }
         if (ehDocLeve(d.nome) || RE_PECA_OFICIAL.test(d.nome || '')) linha.expira_em = '2999-12-31T00:00:00.000Z' // permanente (coluna NOT NULL)
         const ins = await sb.from('jusbr_arquivos').insert(linha).select('id').single()
-        if (!ins.error) { baix++; total++; rel.baixados++ }
+        if (!ins.error) {
+          baix++; total++; rel.baixados++
+          if (ehOficial(d.nome, r.tipo)) { try { copiarParaAppCliente(numero, d.nome, r.buf) } catch (e) {} }
+        }
       }
       feitos++
       if (debug || baix) rel.detalhe.push({ numero, vazio: true, docs: lst.docs.length, baixados: baix })

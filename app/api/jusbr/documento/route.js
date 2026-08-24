@@ -6,6 +6,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { getFreshToken, ehFaltaDeAcessoAoProcesso, tipoRealDoArquivo } from '../lib.js'
 import { camposConteudo } from '../guardar.js'
+import { ehOficial, copiarParaAppCliente } from '../../../../lib/appCliente.js'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -150,6 +151,9 @@ export async function POST(request) {
   if (ehLeve) linhaArq.expira_em = '2999-12-31T00:00:00.000Z' // permanente (coluna é NOT NULL)
   const { data: ins, error } = await sb.from('jusbr_arquivos').insert(linhaArq).select('id,doc_nome,doc_tipo,tamanho').single()
   if (error) return Response.json({ erro: 'falha ao guardar: ' + error.message }, { status: 500 })
+  // espelha a peça oficial na pasta "App do Cliente" — é o que o cliente vê,
+  // e é onde o escritório confere o que já foi entregue a ele
+  if (ehOficial(nome, tipoFinal)) { try { copiarParaAppCliente(numero, nome, buf) } catch (e) {} }
 
   return Response.json({ ok: true, id: ins.id, nome: ins.doc_nome, tipo: ins.doc_tipo, tamanho: ins.tamanho })
 }
