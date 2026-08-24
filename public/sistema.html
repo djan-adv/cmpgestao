@@ -4143,7 +4143,13 @@ function chip(lb){return '<span class="chip2" style="background:'+lb.cor+';color
    Instrutória → Saneadora → Conhecimento. Regras conforme definição do escritório. */
 var FASE_ORDEM=["prot","post","sane","instr","decis","recur","exec"]; /* do início ao fim do fluxo, p/ comparar avanço */
 function guessFase(p){
-  var mv=(p.hist_full&&p.hist_full.length)?p.hist_full.slice(0,6).map(function(m){return m.texto||"";}).join("  "):"";
+  /* Só o COMEÇO de cada andamento entra no palpite. Desde que o sistema passa a
+     guardar o inteiro teor das decisões, um andamento pode ter milhares de
+     palavras — e a fase real aparece no título do movimento ("Cumprimento de
+     sentença iniciado", "Penhora realizada"), nunca enterrada na página 4 de
+     uma fundamentação. Sem este corte, qualquer palavra citada de passagem
+     dentro de uma decisão jogava o processo para outra fase. */
+  var mv=(p.hist_full&&p.hist_full.length)?p.hist_full.slice(0,6).map(function(m){return String(m.texto||"").slice(0,600);}).join("  "):"";
   var t=(mv+"  "+(p.hist||"")+"  "+(p.tipo||"")+"  "+(p.status||"")).toLowerCase();
   /* 0) PRIORIDADE PELA CLASSE/ASSUNTO do processo — é o sinal mais confiável e vence
      palavras soltas que aparecem no meio do texto (ex.: "execução" citada de passagem). */
@@ -4153,8 +4159,17 @@ function guessFase(p){
   if(/cumprimento de senten|cumprimento provis[óo]rio|cumprimento definitivo|execu[çc][ãa]o de t[íi]tulo|execu[çc][ãa]o fiscal/.test(cls))return "exec";
   /* 0.5) EXPEDIR ALVARÁ — fase final: dinheiro disponível para levantamento */
   if(/expedi[çc][ãa]o de alvar|expedir (o )?alvar|alvar[áa] (de levantamento|eletr[ôo]nico|judicial|expedido)|levantamento de valores|levantamento de dep[óo]sito|libera[çc][ãa]o de valores|transfer[êe]ncia dos valores|conta judicial.*levant/.test(t))return "alvara";
-  /* 1) CUMPRIMENTO — cumprimento de sentença / execução / constrição patrimonial */
-  if(/cumprimento de senten|cumprimento provis[óo]rio|cumprimento definitivo|execu[çc][ãa]o de t[íi]tulo|execu[çc][ãa]o fiscal|\bexecu[çc][ãa]o\b|\bpenhora|sisbajud|bacenjud|renajud|infojud|precat[óo]|requisi[çc][ãa]o de pequeno valor|\brpv\b|liquida[çc][ãa]o de senten|adjudica|arremata|leil[ãa]o|hasta p[úu]blica|bloqueio de valores|impugna[çc][ãa]o ao cumprimento/.test(t))return "exec";
+  /* 1) CUMPRIMENTO — cumprimento de sentença / execução / constrição patrimonial.
+     Só termos que indicam a FASE do nosso processo. Ficaram de fora, por darem
+     falso positivo em ação de conhecimento (24/08/2026):
+       • "execução" solto — casa com "execução extrajudicial" da Lei 9.514 (o
+         risco que a inicial quer EVITAR), "execução do contrato", "inexecução";
+       • "leilão"/"adjudicação"/"arrematação" soltos — são o ASSUNTO de boa
+         parte das ações imobiliárias, não a fase delas.
+     Exemplo real que motivou o ajuste: 0744809-54.2026.8.07.0001, ação recém
+     ajuizada, virou "Fase de Cumprimento" porque a decisão da tutela citava
+     "procedimento de execução extrajudicial (…) culminando em leilão". */
+  if(/cumprimento de senten|cumprimento provis[óo]rio|cumprimento definitivo|execu[çc][ãa]o de t[íi]tulo|execu[çc][ãa]o fiscal|processo de execu[çc][ãa]o|fase de execu[çc][ãa]o|inicia(da|do|r) a execu[çc][ãa]o|\bpenhora|sisbajud|bacenjud|renajud|infojud|precat[óo]|requisi[çc][ãa]o de pequeno valor|\brpv\b|liquida[çc][ãa]o de senten|hasta p[úu]blica|bloqueio de valores|impugna[çc][ãa]o ao cumprimento|carta de adjudica|auto de arremata|edital de leil|leil[ãa]o judicial|designa(do|[çc][ãa]o de) leil/.test(t))return "exec";
   /* 2) RECURSAL — só APÓS sentença, subida ao 2º grau (não classificar por embargos de declaração isolado) */
   if(/apela[çc][ãa]o|\bapelo\b|2º grau|segundo grau|inst[âa]ncia superior|superior tribunal|\bstj\b|\bstf\b|turma recursal|recurso inominado|recurso especial|recurso extraordin[áa]rio|contrarraz[õo]es (de|à) apela|subida dos autos|remessa (ao|dos autos ao) tribunal|distribu[íi]do.*(desembargador|relator)|conclus[ão].*relator|ac[óo]rd[ãa]o/.test(t))return "recur";
   /* 3) DECISÓRIA — aguardando sentença/acórdão; agravo de instrumento; tutela antecipada/urgência */
