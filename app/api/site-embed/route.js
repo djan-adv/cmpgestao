@@ -128,6 +128,30 @@ function _novoWidgetHtml(html) {
   const id = Math.random().toString(36).slice(2, 9)
   return { id, elType: 'widget', isInner: false, settings: { html }, elements: [], widgetType: 'html' }
 }
+// Tira da árvore do Elementor todo widget cujo HTML aponta para o chat, e
+// depois as seções/colunas que ficaram vazias por causa disso (uma seção só com
+// o chat dentro viraria uma faixa em branco na página). Devolve quantos widgets
+// saíram. É o desfazer de 'substituir_widget_por_chat' — o widget ORIGINAL não
+// fica guardado em lugar nenhum, então não dá para restaurá-lo: some o chat e a
+// seção volta a ser o que era sem ele.
+function _podaChatElementor(nos, conta) {
+  if (!Array.isArray(nos)) return []
+  const out = []
+  for (const no of nos) {
+    if (!no || typeof no !== 'object') continue
+    const html = String((no.settings && no.settings.html) || '')
+    if (html.includes(MARCA_EMBED_CHAT)) { conta.n++; continue }
+    if (Array.isArray(no.elements) && no.elements.length) {
+      const tinha = no.elements.length
+      no.elements = _podaChatElementor(no.elements, conta)
+      // container que existia SÓ para segurar o chat sai junto (não deixa buraco)
+      if (tinha > 0 && no.elements.length === 0 && no.elType !== 'widget') continue
+    }
+    out.push(no)
+  }
+  return out
+}
+
 function _substituiNoCaminho(nos, caminho, novoNo) {
   let atual = nos
   for (let i = 0; i < caminho.length - 1; i++) {
@@ -176,7 +200,7 @@ export async function POST(request) {
   if (!auth) return Response.json({ erro: 'credencial do WordPress não configurada para ' + site.rotulo }, { status: 500 })
 
   // ===== widgets do Elementor na home: listar (link ou geral) / trocar link / substituir por chat =====
-  const ACOES_ELEMENTOR = ['listar_botoes_elementor', 'trocar_link_botao', 'listar_elementos_elementor', 'substituir_widget_por_chat']
+  const ACOES_ELEMENTOR = ['listar_botoes_elementor', 'trocar_link_botao', 'listar_elementos_elementor', 'substituir_widget_por_chat', 'remover_chat_elementor']
   if (ACOES_ELEMENTOR.includes(body.acao)) {
     const carregado = await _carregarElementorHome(site, auth)
     if (carregado.erro) return Response.json({ erro: carregado.erro }, { status: carregado.status })
@@ -222,6 +246,15 @@ export async function POST(request) {
       const ru2 = await _gravarElementorHome(site, auth, paginaId, arvore)
       if (!ru2.ok) { const t = await ru2.text().catch(() => ''); return Response.json({ erro: 'falha ao gravar (HTTP ' + ru2.status + '): ' + t.slice(0, 300) }, { status: 502 }) }
       return Response.json({ ok: true, link_pagina: pag.link })
+    }
+
+    if (body.acao === 'remover_chat_elementor') {
+      const conta = { n: 0 }
+      const limpa = _podaChatElementor(arvore, conta)
+      if (!conta.n) return Response.json({ ok: true, removidos: 0, nada: true, aviso: 'Não achei nenhum widget com o chat nos dados do Elementor desta home. Ele pode ter entrado pelo conteúdo da página (use "remover") ou por um template do tema.' })
+      const ru4 = await _gravarElementorHome(site, auth, paginaId, limpa)
+      if (!ru4.ok) { const t = await ru4.text().catch(() => ''); return Response.json({ erro: 'falha ao gravar (HTTP ' + ru4.status + '): ' + t.slice(0, 300) }, { status: 502 }) }
+      return Response.json({ ok: true, removidos: conta.n, link_pagina: pag.link })
     }
 
     if (body.acao === 'substituir_widget_por_chat') {

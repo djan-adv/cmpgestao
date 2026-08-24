@@ -9855,13 +9855,27 @@ async function embedSiteInserir(site){
    substituição de widget do Elementor, a API avisa que precisa ser manual. */
 async function embedSiteRemover(site){
   var rotulo=(site==='djan')?'djan.com.br':'cmpadvogados.com.br';
-  if(!confirm('Remover o chat de captação da home de '+rotulo+'? A página volta a ficar como estava antes.')) return;
+  if(!confirm('Remover o chat de captação da home de '+rotulo+'?')) return;
   try{
     var tok=await docToken();
-    var r=await fetch('/api/site-embed',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({acao:'remover',site:site})});
-    var j=await r.json();
-    if(!r.ok||j.erro){ alert('Não removeu: '+(j.erro||('HTTP '+r.status))); return; }
-    alert('Removido de '+rotulo+'! Confere ao vivo: '+j.link_pagina);
+    function chamar(acao){
+      return fetch('/api/site-embed',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({acao:acao,site:site})}).then(function(r){ return r.json().then(function(j){ return {r:r,j:j}; }); });
+    }
+    /* o chat pode ter entrado de dois jeitos — pelo conteúdo da página
+       ("inserir") ou substituindo um widget do Elementor. Tenta os dois, na
+       ordem, e conta o que saiu: assim o botão funciona sem quem clica
+       precisar saber por onde ele entrou. */
+    var saiu=[];
+    var a=await chamar('remover');
+    if(a.r.ok&&a.j.ok) saiu.push('do conteúdo da página');
+    var b=await chamar('remover_chat_elementor');
+    if(b.r.ok&&b.j.ok&&b.j.removidos) saiu.push(b.j.removidos+' widget(s) do Elementor');
+    if(!saiu.length){
+      alert('Não achei o chat na home de '+rotulo+'.\n\nConteúdo da página: '+((a.j&&a.j.erro)||'nada')+'\nElementor: '+((b.j&&(b.j.aviso||b.j.erro))||'nada')
+        +'\n\nSe ele aparece no site mesmo assim, deve estar num template do tema (Aparência → Editor) — nesse caso a remoção é manual no WordPress.');
+      return;
+    }
+    alert('Chat removido de '+rotulo+' ('+saiu.join(' e ')+').\n\nConfere ao vivo: https://'+rotulo);
   }catch(e){ alert('Erro: '+(e&&e.message||e)); }
 }
 /* Chat de captação em TODOS os posts já publicados — varre post a post,
