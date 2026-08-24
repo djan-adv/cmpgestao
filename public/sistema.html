@@ -13337,6 +13337,20 @@ function alternarHonModo(){
 window.__honShow=window.__honShow||{};
 function honMostrar(campo){ window.__honShow[campo]=1; var i=DADOS.processos.indexOf(atual); if(i>=0) abrir(i); }
 function _hv(v){ var n=Number(v); return isNaN(n)?0:n; }
+/* valor da causa como número — a lista guarda ele já formatado em pt-BR
+   ("325.611,51"), então volta pra número aqui */
+function _valorCausaNum(p){
+  var n=parseFloat(String((p&&p.causa)||'').replace(/\./g,'').replace(',','.'));
+  return isNaN(n)?0:n;
+}
+/* Antes da sentença o número do processo é o VALOR DA CAUSA; depois dela, a
+   CONDENAÇÃO. Mesmo campo, rótulo que acompanha a fase (pedido do dono,
+   24/08/2026). Em processo já julgado o rótulo não muda mesmo sem valor
+   lançado — é ali que a condenação deve entrar. */
+function _rotuloCondenacao(p){
+  if(_ehJulgado(p)) return 'Total da condenação';
+  return 'Condenação (valor da causa)';
+}
 /* Quando só o % foi lançado e o R$ da verba continua zerado, calcula sozinho —
    sem isso o percentual ficava decorativo (não virava número nenhum) e o
    líquido do cliente saía como se nada tivesse sido descontado, mesmo com
@@ -13416,7 +13430,15 @@ function honQuadroHTML(p){
      base do contratual, não dava para conferir nada de cabeça. */
   var condV=_hv(p.valor_condenacao);
   if(condV!==0||window.__honShow.valor_condenacao){
-    out+='<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;line-height:1.6"><b style="color:var(--navy);font-size:10px;font-weight:700;white-space:nowrap">Total da condenação</b><b style="white-space:nowrap">'+honFmtInput('valor_condenacao',p.valor_condenacao)+'</b></div>';
+    out+='<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;line-height:1.6"><b style="color:var(--navy);font-size:10px;font-weight:700;white-space:nowrap">'+_rotuloCondenacao(p)+'</b><b style="white-space:nowrap">'+honFmtInput('valor_condenacao',p.valor_condenacao)+'</b></div>';
+    out+=div;
+  } else if(!_ehJulgado(p) && _valorCausaNum(p)>0){
+    /* ainda não julgado e sem condenação lançada: o número que existe é o VALOR
+       DA CAUSA (pedido do dono, 24/08/2026 — "valor da causa para não julgados,
+       condenação para julgados; o sistema reconhece"). Só leitura: é o valor do
+       cadastro do processo, não uma verba. Depois da sentença o quadro passa a
+       pedir a condenação sozinho. */
+    out+='<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;line-height:1.6" title="Processo ainda não julgado — este é o valor da causa do cadastro. Quando sair a sentença, lance aqui o total da condenação."><b style="color:#5f6b7a;font-size:10px;font-weight:700;white-space:nowrap">Valor da causa</b><b style="white-space:nowrap;color:#5f6b7a">R$ '+hFmt(_valorCausaNum(p))+'</b></div>';
     out+=div;
   }
   verba('Sucumbência','hon_val_sucumbencia','hon_pct_sucumbencia',true);
