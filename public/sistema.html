@@ -796,12 +796,18 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
       <button class="btn sm ghost" onclick="embedSiteInserir('cmp')">cmpadvogados.com.br</button>
       <button class="btn sm ghost" onclick="embedSiteInserir('djan')">djan.com.br</button>
       <span class="note" style="margin:0">Verifica o construtor da página antes — se for Elementor/Divi, recusa e avisa (use o método manual nesse caso).</span>
+      <span style="width:100%"></span>
+      <button class="btn sm ghost" style="color:#b5342b" onclick="embedSiteRemover('cmp')">🗑 remover — cmpadvogados.com.br</button>
+      <button class="btn sm ghost" style="color:#b5342b" onclick="embedSiteRemover('djan')">🗑 remover — djan.com.br</button>
     </div>
     <div class="coord-only" style="background:#f6f9fc;border:1px solid #dbe6f2;border-radius:10px;padding:10px 12px;margin:10px 0;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
       <b style="font-size:12.5px;color:var(--muted)">🌐 Chat de captação em TODOS os posts já publicados:</b>
       <button class="btn sm ghost" onclick="embedPostsInserir('cmp')">cmpadvogados.com.br</button>
       <button class="btn sm ghost" onclick="embedPostsInserir('djan')">djan.com.br</button>
-      <span class="note" style="margin:0">Pula posts com construtor inseguro ou que já têm o embed. Posts novos publicados por aqui já saem com o chat, sem precisar rodar isto de novo.</span>
+      <span class="note" style="margin:0">Pula posts com construtor inseguro ou que já têm o embed.</span>
+      <span style="width:100%"></span>
+      <button class="btn sm ghost" style="color:#b5342b" onclick="embedPostsRemover('cmp')">🗑 remover de todos — cmpadvogados.com.br</button>
+      <button class="btn sm ghost" style="color:#b5342b" onclick="embedPostsRemover('djan')">🗑 remover de todos — djan.com.br</button>
     </div>
     <div class="coord-only" style="background:#fff8e6;border:1px solid #e8dcbb;border-radius:10px;padding:10px 12px;margin:10px 0;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
       <b style="font-size:12.5px;color:#7a5f12">🔗 Home é Elementor — trocar link de um botão pro /cliente:</b>
@@ -9821,6 +9827,20 @@ async function embedSiteInserir(site){
     alert('Inserido em '+rotulo+'! Confere ao vivo: '+ji.link_pagina);
   }catch(e){ alert('Erro: '+(e&&e.message||e)); }
 }
+/* Tira o chat da home — desfaz exatamente o que embedSiteInserir colou. Só
+   funciona se entrou pelo caminho normal (conteúdo bruto); se foi por
+   substituição de widget do Elementor, a API avisa que precisa ser manual. */
+async function embedSiteRemover(site){
+  var rotulo=(site==='djan')?'djan.com.br':'cmpadvogados.com.br';
+  if(!confirm('Remover o chat de captação da home de '+rotulo+'? A página volta a ficar como estava antes.')) return;
+  try{
+    var tok=await docToken();
+    var r=await fetch('/api/site-embed',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({acao:'remover',site:site})});
+    var j=await r.json();
+    if(!r.ok||j.erro){ alert('Não removeu: '+(j.erro||('HTTP '+r.status))); return; }
+    alert('Removido de '+rotulo+'! Confere ao vivo: '+j.link_pagina);
+  }catch(e){ alert('Erro: '+(e&&e.message||e)); }
+}
 /* Chat de captação em TODOS os posts já publicados — varre post a post,
    pula os que têm construtor inseguro ou já têm o embed, sem confirmação
    individual (inviável pra dezenas de posts). Pode demorar — é uma
@@ -9838,6 +9858,22 @@ async function embedPostsInserir(site){
       +j.inseridos+' com o chat inserido agora\n'
       +j.ja_tinha+' já tinham o chat\n'
       +j.pulados_construtor+' pulados (construtor inseguro)\n'
+      +j.falhas+' falha(s)');
+  }catch(e){ alert('Erro: '+(e&&e.message||e)); }
+}
+/* Tira o chat de TODOS os posts que tiverem — mesma varredura de embedPostsInserir, ao contrário */
+async function embedPostsRemover(site){
+  var rotulo=(site==='djan')?'djan.com.br':'cmpadvogados.com.br';
+  if(!confirm('Vai varrer TODOS os posts de '+rotulo+' e remover o chat de quem tiver. Pode demorar um pouco. Confirma?')) return;
+  try{
+    var tok=await docToken();
+    var r=await fetch('/api/site-embed',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({acao:'remover_posts',site:site})});
+    var j=await r.json();
+    if(!r.ok||j.erro){ alert('Não concluiu: '+(j.erro||('HTTP '+r.status))); return; }
+    alert('Varredura de '+rotulo+' concluída:\n'
+      +j.total+' post(s) no total\n'
+      +j.removidos+' com o chat removido agora\n'
+      +j.nao_tinha+' não tinham\n'
       +j.falhas+' falha(s)');
   }catch(e){ alert('Erro: '+(e&&e.message||e)); }
 }

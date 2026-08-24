@@ -20,7 +20,6 @@
 
 import { createClient } from '@supabase/supabase-js'
 import { chamarClaude } from '../_ia/claude.js'
-import { EMBED_CHAT_HTML } from '../../../lib/embedChat.js'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
@@ -281,9 +280,9 @@ export async function POST(request) {
         headers: { 'Content-Type': 'application/json', Authorization: auth, 'User-Agent': 'Mozilla/5.0 (CMPGestao)' },
         body: JSON.stringify({
           title: row.titulo,
-          content: (row.conteudo_html || row.resumo || '') + '\n' + EMBED_CHAT_HTML,
+          content: (row.conteudo_html || row.resumo || ''),
           status: 'publish',
-          comment_status: 'closed',   // a caixa "Deixe um comentário" do tema sai, o chat entra no lugar
+          comment_status: 'closed',   // a caixa "Deixe um comentário" do tema sai
           excerpt: stripHtml(row.conteudo_html || '').slice(0, 200),
           ...(categoriaDe(row.tema) ? { categories: [categoriaDe(row.tema)] } : {}),
         }),
