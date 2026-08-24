@@ -4141,7 +4141,12 @@ function lblById(id){return LABELS.find(function(l){return l.id===id});}
 function chip(lb){return '<span class="chip2" style="background:'+lb.cor+';color:'+textColor(lb.cor)+'">'+esc(lb.nome)+'</span>';}
 /* Ordem de prioridade (a 1ª que casar vence): Cumprimento → Recursal → Decisória →
    Instrutória → Saneadora → Conhecimento. Regras conforme definição do escritório. */
-var FASE_ORDEM=["prot","post","sane","instr","decis","recur","exec"]; /* do início ao fim do fluxo, p/ comparar avanço */
+/* do início ao fim do fluxo, p/ comparar avanço. TEM QUE TER TODAS as fases do
+   FASES_META: quem ficasse de fora caía no fallback do _faseIdx e era tratado
+   como quase-início do fluxo. Foi o que aconteceu com "alvara" (24/08/2026):
+   processo em Expedir Alvará — a fase FINAL — recebia o aviso "pode ter
+   avançado para Fase de Cumprimento", que é um retrocesso. */
+var FASE_ORDEM=["prot","post","sane","instr","decis","recur","exec","alvara"];
 function guessFase(p){
   /* Só o COMEÇO de cada andamento entra no palpite. Desde que o sistema passa a
      guardar o inteiro teor das decisões, um andamento pode ter milhares de
@@ -4207,7 +4212,10 @@ function definirFaseManual(num, fid){
   if(typeof renderPainel==='function'){ try{ renderPainel(); }catch(e){} }
 }
 /* índice de avanço da fase no fluxo (maior = mais avançado) */
-function _faseIdx(fid){ var i=FASE_ORDEM.indexOf(fid); return i<0?1:i; }
+/* fase desconhecida devolve -1: o aviso de evolução só dispara quando o palpite
+   é comprovadamente MAIS avançado que a fase atual. Antes o desconhecido virava
+   índice 1 (quase início do fluxo) e qualquer palpite parecia avanço. */
+function _faseIdx(fid){ return FASE_ORDEM.indexOf(fid); }
 /* alerta de EVOLUÇÃO: se o processo tem fase (manual OU registrada) e o histórico agora
    indica uma fase MAIS AVANÇADA, mostra um aviso perguntando se quer atualizar.
    Só evolução (a>b); nunca sugere retroceder. Roda ao abrir a ficha. */
