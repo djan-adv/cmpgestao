@@ -459,8 +459,8 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
           <button id="ct-sw-opo" onclick="setAbaContato('oponentes')">Oponentes<sup class="ag-cnt" id="ct-n-opo"></sup></button>
           <button id="ct-sw-var" onclick="setAbaContato('varas')">Varas<sup class="ag-cnt" id="ct-n-var"></sup></button>
         </div>
-        <div class="searchbar fixa"><input id="buscaCli" placeholder="Buscar por nome, tipo, telefone, origem..." oninput="renderContatos()"><span class="note" id="cli-count" style="align-self:center"></span><button class="btn sm" style="background:#185FA5;color:#fff;border-color:#185FA5;line-height:1.15;padding:5px 12px;text-align:center" onclick="abrirContatosSemelhantes()" title="Agrupa contatos com nome, telefone ou e-mail parecidos — acha os candidatos a mesclar pra você">🔍 Achar semelhantes <span id="csm-badge" style="display:none;font-size:9px;font-weight:700;background:#fff;color:#185FA5;border-radius:9px;padding:0 6px;margin-left:2px"></span></button><button class="btn sm" style="background:#6d28a8;color:#fff;border-color:#6d28a8;line-height:1.15;padding:5px 12px;text-align:center" onclick="mesclarContatos()" title="Marque 2+ contatos da mesma pessoa (nas caixinhas): você escolhe o nome que fica e todos os processos desse cliente são sincronizados">⛒ Mesclar<span id="merge-badge" style="display:none;font-size:9px;font-weight:700;background:#fff;color:#6d28a8;border-radius:9px;padding:0 6px;margin-left:4px"></span><br><span style="font-size:9px;font-weight:400;opacity:.85">sincroniza por cliente</span></button><button class="btn sm" style="margin-left:auto" onclick="novoContato()">+ Novo contato</button></div>
-        <div class="card"><table><thead><tr><th style="width:30px" title="Marque 2+ da mesma pessoa e clique em Mesclar"></th><th style="cursor:pointer;user-select:none" onclick="ordenarContatoNome()" title="Clique para ordenar por nome (A→Z / Z→A)">Nome <span id="cli-nome-arrow" style="font-size:10px;color:var(--muted)"></span></th><th>Tipo</th><th>Telefone</th><th>E-mail</th><th>Origem</th><th style="cursor:pointer;user-select:none" onclick="ordenarContatoProc()" title="Clique para ordenar pelos processos ativos (maior primeiro)">Proc. <span id="cli-proc-arrow" style="font-size:10px;color:var(--muted)"></span></th><th>Editar</th><th>Excluir</th></tr></thead><tbody id="crm-body"></tbody></table></div>
+        <div class="searchbar fixa"><input id="buscaCli" placeholder="Buscar por nome, tipo, telefone, origem..." oninput="cliPagReset();renderContatos()"><span class="note" id="cli-count" style="align-self:center"></span><button class="btn sm" style="background:#185FA5;color:#fff;border-color:#185FA5;line-height:1.15;padding:5px 12px;text-align:center" onclick="abrirContatosSemelhantes()" title="Agrupa contatos com nome, telefone ou e-mail parecidos — acha os candidatos a mesclar pra você">🔍 Achar semelhantes <span id="csm-badge" style="display:none;font-size:9px;font-weight:700;background:#fff;color:#185FA5;border-radius:9px;padding:0 6px;margin-left:2px"></span></button><button class="btn sm" style="background:#6d28a8;color:#fff;border-color:#6d28a8;line-height:1.15;padding:5px 12px;text-align:center" onclick="mesclarContatos()" title="Marque 2+ contatos da mesma pessoa (nas caixinhas): você escolhe o nome que fica e todos os processos desse cliente são sincronizados">⛒ Mesclar<span id="merge-badge" style="display:none;font-size:9px;font-weight:700;background:#fff;color:#6d28a8;border-radius:9px;padding:0 6px;margin-left:4px"></span><br><span style="font-size:9px;font-weight:400;opacity:.85">sincroniza por cliente</span></button><button class="btn sm" style="margin-left:auto" onclick="novoContato()">+ Novo contato</button></div>
+        <div class="card"><table><thead><tr><th style="width:30px" title="Marque 2+ da mesma pessoa e clique em Mesclar"></th><th style="cursor:pointer;user-select:none" onclick="ordenarContatoNome()" title="Clique para ordenar por nome (A→Z / Z→A)">Nome <span id="cli-nome-arrow" style="font-size:10px;color:var(--muted)"></span></th><th>Tipo</th><th>Telefone</th><th>E-mail</th><th>Origem</th><th style="cursor:pointer;user-select:none" onclick="ordenarContatoProc()" title="Clique para ordenar pelos processos ativos (maior primeiro)">Proc. <span id="cli-proc-arrow" style="font-size:10px;color:var(--muted)"></span></th><th>Editar</th><th>Excluir</th></tr></thead><tbody id="crm-body"></tbody></table></div><div id="crm-pager" style="display:flex;gap:6px;align-items:center;justify-content:center;padding:14px 14px 26px;flex-wrap:wrap"></div>
       </div>
       <div id="crm-captacao" class="hidden">
         <div style="display:flex;flex-wrap:wrap;gap:24px;margin-bottom:12px;align-items:flex-end">
@@ -3159,8 +3159,8 @@ function _pintaContagemContatos(){
    clicar em "Nome" alterna A→Z / Z→A; clicar em "Proc." põe quem tem mais
    processos ativos na frente. Substituiu o seletor "Ordenar:" da barra. */
 var ordCli='az';
-function ordenarContatoNome(){ ordCli=(ordCli==='az')?'za':'az'; renderContatos(); }
-function ordenarContatoProc(){ ordCli=(ordCli==='proc')?'az':'proc'; renderContatos(); }
+function ordenarContatoNome(){ ordCli=(ordCli==='az')?'za':'az'; cliPagReset(); renderContatos(); }
+function ordenarContatoProc(){ ordCli=(ordCli==='proc')?'az':'proc'; cliPagReset(); renderContatos(); }
 function _setaOrdCli(){
   var n=document.getElementById('cli-nome-arrow'), p=document.getElementById('cli-proc-arrow');
   if(n) n.textContent=(ordCli==='az')?'▲':((ordCli==='za')?'▼':'');
@@ -3263,10 +3263,37 @@ function renderContatosClientes(){
   document.getElementById("cli-count").textContent=f.length+" contatos";
   try{ atualizaBadgeSemelhantes(); }catch(e){}
   var b=document.getElementById("crm-body");b.innerHTML="";
-  f.slice(0,300).forEach(function(c){var tr=document.createElement("tr");
+  /* Antes cortava em 300 sem avisar: com 454 contatos, tudo de L em diante
+     simplesmente não existia na tela — e o contador em cima mostrava o total,
+     então nem dava pra desconfiar. Agora pagina, igual à lista de processos. */
+  var porPag=200;
+  var pages=Math.max(1,Math.ceil(f.length/porPag));
+  if(window.__cliPag>pages) window.__cliPag=pages;
+  var pg=Math.min(Math.max(1,window.__cliPag||1),pages);
+  window.__cliPag=pg;
+  f.slice((pg-1)*porPag,pg*porPag).forEach(function(c){var tr=document.createElement("tr");
     tr.innerHTML='<td style="text-align:center"><input type="checkbox" class="cmerge" data-id="'+c.id+'"></td><td><b>'+esc(nomeBonito(c.nome))+'</b> '+chipsFor(c.labels)+'</td><td><span class="b '+(c.tipo==="lead"?"warn":"ok")+'">'+esc(c.tipo)+'</span></td><td>'+esc(c.tel)+_extrasChip(c,'telefones',c.tel)+'</td><td>'+esc(c.email)+_extrasChip(c,'emails',c.email)+'</td><td>'+esc(c.origem)+'</td><td>'+((c.proc>0)?'<a href="#" onclick="verProcessosDoContato('+c.id+');return false;" style="font-weight:700;color:var(--gold);text-decoration:none;border-bottom:1px dotted var(--gold);cursor:pointer" title="Ver os processos deste contato">'+c.proc+'</a>':'')+'</td><td><button class="btn sm ghost" onclick="editarContato('+c.id+')">Editar</button></td><td><button class="btn sm ghost" style="color:var(--danger)" onclick="excluirContato('+c.id+')">Excluir</button></td>';
     b.appendChild(tr);});
+  var pager=document.getElementById("crm-pager");
+  if(pager){
+    if(pages<=1){ pager.innerHTML=''; }
+    else{
+      var h='<span style="color:var(--muted);font-size:12px;margin-right:6px">'+((pg-1)*porPag+1)+'–'+Math.min(pg*porPag,f.length)+' de '+f.length+'</span>';
+      h+='<button class="btn sm ghost" '+(pg<=1?'disabled':'')+' onclick="cliPag('+(pg-1)+')">‹ Anterior</button>';
+      var from=Math.max(1,pg-2), to=Math.min(pages,pg+2);
+      if(from>1){ h+='<button class="btn sm ghost" onclick="cliPag(1)">1</button>'; if(from>2) h+='<span style="color:var(--muted)">…</span>'; }
+      for(var k=from;k<=to;k++){ h+='<button class="btn sm'+(k===pg?'':' ghost')+'" onclick="cliPag('+k+')">'+k+'</button>'; }
+      if(to<pages){ if(to<pages-1) h+='<span style="color:var(--muted)">…</span>'; h+='<button class="btn sm ghost" onclick="cliPag('+pages+')">'+pages+'</button>'; }
+      h+='<button class="btn sm ghost" '+(pg>=pages?'disabled':'')+' onclick="cliPag('+(pg+1)+')">Próxima ›</button>';
+      pager.innerHTML=h;
+    }
+  }
 }
+window.__cliPag=1;
+function cliPag(n){ window.__cliPag=Math.max(1,n||1); renderContatosClientes(); try{ document.getElementById('crm-body').scrollIntoView({block:'start',behavior:'smooth'}); }catch(e){} }
+/* buscar/ordenar volta pra primeira página — senão a busca "não acha" só porque
+   o resultado é menor que a página em que se estava */
+function cliPagReset(){ window.__cliPag=1; }
 /* Modal: ao clicar na quantidade de processos (coluna Proc.), lista todos os
    processos daquele contato — cada um clicável, mostrando as partes e o número,
    e leva direto à ficha. */
