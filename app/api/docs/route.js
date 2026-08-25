@@ -188,41 +188,6 @@ export async function POST(request) {
   const user = await usuario(request)
   if (!user) return Response.json({ erro: 'não autenticado' }, { status: 401 })
   const b = await request.json()
-  const rel = seguro(b.path)
-  if (!rel) return Response.json({ erro: 'informe path' }, { status: 400 })
-  const full = path.join(ROOT, rel)
-  if (!full.startsWith(ROOT)) return Response.json({ erro: 'caminho inválido' }, { status: 400 })
-
-  // mover para a Lixeira do processo (fica 30 dias, depois é apagado)
-  if (b.op === 'trash') {
-    if (!fs.existsSync(full)) return Response.json({ erro: 'item não encontrado' }, { status: 404 })
-    const seg = rel.split('/')[0]
-    const procDir = path.join(ROOT, seg)
-    if (rel.split('/').includes(TRASH)) return Response.json({ erro: 'já está na Lixeira' }, { status: 400 })
-    const tdir = path.join(procDir, TRASH); fs.mkdirSync(tdir, { recursive: true })
-    let nome = path.basename(full)
-    if (fs.existsSync(path.join(tdir, nome))) nome = Date.now() + '_' + nome
-    fs.renameSync(full, path.join(tdir, nome))
-    const m = lerMeta(procDir); m[nome] = { orig: rel, quando: new Date().toISOString() }; gravarMeta(procDir, m)
-    return Response.json({ ok: true, lixeira: nome, dias: DIAS_LIXEIRA })
-  }
-
-  // restaurar da Lixeira para o local original
-  if (b.op === 'restore') {
-    if (!fs.existsSync(full)) return Response.json({ erro: 'item não encontrado' }, { status: 404 })
-    const seg = rel.split('/')[0]
-    const procDir = path.join(ROOT, seg)
-    const nome = path.basename(rel)
-    const m = lerMeta(procDir); const info = m[nome]
-    const destRel = seguro((info && info.orig) || (seg + '/' + nome.replace(/^\d{13}_/, '')))
-    let dest = path.join(ROOT, destRel)
-    if (!dest.startsWith(ROOT)) return Response.json({ erro: 'caminho inválido' }, { status: 400 })
-    if (fs.existsSync(dest)) dest = dest.replace(/(\.[^./]*)?$/, ' (restaurado)$1')
-    fs.mkdirSync(path.dirname(dest), { recursive: true })
-    fs.renameSync(full, dest)
-    if (info) { delete m[nome]; gravarMeta(procDir, m) }
-    return Response.json({ ok: true, restaurado: path.relative(ROOT, dest) })
-  }
 
   // Trocar a CHAVE da pasta do processo (ex.: caso vira processo judicial).
   //
@@ -263,6 +228,47 @@ export async function POST(request) {
     }
     try { if (!fs.readdirSync(dirDe).length) fs.rmdirSync(dirDe) } catch (e) {}
     return Response.json({ ok: true, movidos, modo: 'mesclou' })
+  }
+
+  // Daqui para baixo toda operação age sobre UM caminho — por isso a exigência
+  // de `path`. O 'rechave' acima não usa caminho nenhum (trabalha com as duas
+  // CHAVES de pasta), e por ficar depois desta linha nunca chegava a rodar:
+  // respondia "informe path" e o botão de recuperar documentos do caso que
+  // virou processo não funcionava (achado em 25/08/2026).
+  const rel = seguro(b.path)
+  if (!rel) return Response.json({ erro: 'informe path' }, { status: 400 })
+  const full = path.join(ROOT, rel)
+  if (!full.startsWith(ROOT)) return Response.json({ erro: 'caminho inválido' }, { status: 400 })
+
+  // mover para a Lixeira do processo (fica 30 dias, depois é apagado)
+  if (b.op === 'trash') {
+    if (!fs.existsSync(full)) return Response.json({ erro: 'item não encontrado' }, { status: 404 })
+    const seg = rel.split('/')[0]
+    const procDir = path.join(ROOT, seg)
+    if (rel.split('/').includes(TRASH)) return Response.json({ erro: 'já está na Lixeira' }, { status: 400 })
+    const tdir = path.join(procDir, TRASH); fs.mkdirSync(tdir, { recursive: true })
+    let nome = path.basename(full)
+    if (fs.existsSync(path.join(tdir, nome))) nome = Date.now() + '_' + nome
+    fs.renameSync(full, path.join(tdir, nome))
+    const m = lerMeta(procDir); m[nome] = { orig: rel, quando: new Date().toISOString() }; gravarMeta(procDir, m)
+    return Response.json({ ok: true, lixeira: nome, dias: DIAS_LIXEIRA })
+  }
+
+  // restaurar da Lixeira para o local original
+  if (b.op === 'restore') {
+    if (!fs.existsSync(full)) return Response.json({ erro: 'item não encontrado' }, { status: 404 })
+    const seg = rel.split('/')[0]
+    const procDir = path.join(ROOT, seg)
+    const nome = path.basename(rel)
+    const m = lerMeta(procDir); const info = m[nome]
+    const destRel = seguro((info && info.orig) || (seg + '/' + nome.replace(/^\d{13}_/, '')))
+    let dest = path.join(ROOT, destRel)
+    if (!dest.startsWith(ROOT)) return Response.json({ erro: 'caminho inválido' }, { status: 400 })
+    if (fs.existsSync(dest)) dest = dest.replace(/(\.[^./]*)?$/, ' (restaurado)$1')
+    fs.mkdirSync(path.dirname(dest), { recursive: true })
+    fs.renameSync(full, dest)
+    if (info) { delete m[nome]; gravarMeta(procDir, m) }
+    return Response.json({ ok: true, restaurado: path.relative(ROOT, dest) })
   }
 
   // renomear arquivo/pasta (mesmo diretório)
