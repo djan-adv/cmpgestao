@@ -1424,8 +1424,8 @@ async function redistribuirTarefasDe(u,motivo){
   try{
     var rot=_rotuloDoAssento(u.nome); if(!rot) return;
     var sb=window.__sb; if(!sb) return;
-    var q=await sb.from('kanban_tarefas').select('id,prazo,data,arquivada').eq('resp',rot).neq('coluna','finalizado');
-    var abertas=(q.data||[]).filter(function(t){ return t.arquivada!==true; });
+    var q=await sb.from('kanban_tarefas').select('id,prazo,data,arquivada,cancelada').eq('resp',rot).neq('coluna','finalizado');
+    var abertas=(q.data||[]).filter(function(t){ return t.arquivada!==true && t.cancelada!==true; });
     if(!abertas.length) return;
     var cands=_rotulosResp().filter(function(r){ return r!==rot&&r!=='Estagiário(a)'&&!_nomeEstaDeFerias(r); });
     var resp=prompt(u.nome+' ('+motivo+') tem '+abertas.length+' tarefa(s) aberta(s) no Kanban.\n\nPara QUEM redistribuir? Digite um ou mais nomes separados por vírgula:\n• '+cands.join('\n• ')+'\n\n(vazio ou Cancelar = todas para Djan)','');
@@ -3796,13 +3796,13 @@ function persisteKanban(a){
       /* atrasada:false — qualquer persistência aqui é ação deliberada do usuário
          (arrastar, editar, concluir), então o chip de "adiada automaticamente"
          some: quem mexeu por último foi gente, não o robô do sábado */
-      sb.from('kanban_tarefas').update({coluna:a.col,titulo:a.titulo,resp:(a.resp||null),data:(a.data||null),prazo:(a.prazo||null),tipo:(a.tipoForm||null),descricao:(a.descricao||null),local:(a.local||null),atrasada:false,concluido_por:(a.concluidoPor||null),concluido_em:(a.concluidoEm||null),arquivada:(a.arq===true)}).eq('id',a.dbid).then(function(r){ if(r&&r.error) console.warn('kanban update:',r.error.message); });
+      sb.from('kanban_tarefas').update({coluna:a.col,titulo:a.titulo,resp:(a.resp||null),data:(a.data||null),prazo:(a.prazo||null),tipo:(a.tipoForm||null),descricao:(a.descricao||null),local:(a.local||null),atrasada:false,concluido_por:(a.concluidoPor||null),concluido_em:(a.concluidoEm||null),arquivada:(a.arq===true),cancelada:(a.canc===true),cancelada_em:(a.canceladaEm||null),cancelada_por:(a.canceladaPor||null),cancelada_motivo:(a.canceladaMotivo||null)}).eq('id',a.dbid).then(function(r){ if(r&&r.error) console.warn('kanban update:',r.error.message); });
       a.atrasada=false;
     } else { /* novo: insere e guarda o dbid */
       sb.auth.getUser().then(function(ug){ return sb.from('usuarios').select('escritorio_id').eq('id',ug.data.user.id).single(); }).then(function(pf){
         var esc=pf&&pf.data&&pf.data.escritorio_id; if(!esc) return;
         if(!a.criadoPor) a.criadoPor=_kanQuemSou();
-        return sb.from('kanban_tarefas').insert({escritorio_id:esc,titulo:a.titulo,cliente:a.cliente,numero:a.numero,coluna:a.col,resp:(a.resp||null),data:(a.data||null),prazo:(a.prazo||null),tipo:(a.tipoForm||null),descricao:(a.descricao||null),local:(a.local||null),origem:(a.origem||'sistema'),criado_por:(a.criadoPor||null),concluido_por:(a.concluidoPor||null),concluido_em:(a.concluidoEm||null),arquivada:(a.arq===true)}).select('id').single();
+        return sb.from('kanban_tarefas').insert({escritorio_id:esc,titulo:a.titulo,cliente:a.cliente,numero:a.numero,coluna:a.col,resp:(a.resp||null),data:(a.data||null),prazo:(a.prazo||null),tipo:(a.tipoForm||null),descricao:(a.descricao||null),local:(a.local||null),origem:(a.origem||'sistema'),criado_por:(a.criadoPor||null),concluido_por:(a.concluidoPor||null),concluido_em:(a.concluidoEm||null),arquivada:(a.arq===true),cancelada:(a.canc===true),cancelada_em:(a.canceladaEm||null),cancelada_por:(a.canceladaPor||null),cancelada_motivo:(a.canceladaMotivo||null)}).select('id').single();
       }).then(function(r){ if(r&&r.data&&r.data.id) a.dbid=r.data.id; }).catch(function(e){ console.warn('kanban insert:',e&&e.message||e); });
     }
   }catch(e){ console.warn('persisteKanban:',e); }
@@ -4328,6 +4328,9 @@ function renderEtiquetas(){var count={};for(var k in ASSIGN)ASSIGN[k].forEach(fu
   renderPainelTarefasEtiquetas();
 }
 function statusTarefaItem(a){
+  /* cancelada = encerrada SEM ter sido feita. Fica fora de pendente/atrasada
+     (não cobra prazo) e fora de concluída (não conta como produtividade). */
+  if(a.canc===true) return 'cancelada';
   if(a.col==='finalizado') return 'concluida';
   if(a.data){
     var hoje=new Date();hoje.setHours(0,0,0,0);
@@ -4424,18 +4427,20 @@ function renderAtivProc(){
   var tudo=(KAN||[]).filter(function(a){return a.numero===num;});
   if(!tudo.length){ el.innerHTML='<div class="note">Nenhuma tarefa ou prazo neste processo — crie em "+ Nova tarefa".</div>'; return; }
   /* arquivadas saem da tela (é o "clean" pedido) — um link discreto traz de volta */
-  var arqs=tudo.filter(function(a){return a.arq===true;});
-  var arr=window.__ativArqVer?tudo:tudo.filter(function(a){return a.arq!==true;});
+  /* canceladas ficam junto das arquivadas — foi o pedido: sai da fila, mas
+     continua no histórico de tarefas, com o motivo. */
+  var arqs=tudo.filter(function(a){return a.arq===true||a.canc===true;});
+  var arr=window.__ativArqVer?tudo:tudo.filter(function(a){return a.arq!==true&&a.canc!==true;});
   var concluidasVis=tudo.filter(function(a){return _tarConcluida(a)&&a.arq!==true;}).length;
   var topo='';
   if(concluidasVis>0||arqs.length>0){
     topo='<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 6px">'
       +(concluidasVis>0?('<button class="btn sm ghost" style="font-size:11px" onclick="arquivarConcluidasProc()" title="Tira as concluídas da tela — elas continuam guardadas (link \'ver arquivadas\' aqui embaixo)">🗄 arquivar concluídas ('+concluidasVis+')</button>'):'')
-      +(arqs.length>0?('<a onclick="window.__ativArqVer=!window.__ativArqVer;renderAtivProc();" style="cursor:pointer;color:var(--muted);font-size:11.5px;text-decoration:underline">'+(window.__ativArqVer?'esconder arquivadas':('ver arquivadas ('+arqs.length+')'))+'</a>'):'')
+      +(arqs.length>0?('<a onclick="window.__ativArqVer=!window.__ativArqVer;renderAtivProc();" style="cursor:pointer;color:var(--muted);font-size:11.5px;text-decoration:underline">'+(window.__ativArqVer?'esconder arquivadas':('ver arquivadas/canceladas ('+arqs.length+')'))+'</a>'):'')
       +'</div>';
   }
   if(!arr.length){ el.innerHTML=topo+'<div class="note">Só há tarefas arquivadas neste processo.</div>'; return; }
-  arr=arr.slice().sort(function(a,b){ var aa=(a.arq===true)?1:0, ab=(b.arq===true)?1:0; if(aa!==ab) return aa-ab; var ca=_tarConcluida(a)?1:0, cb=_tarConcluida(b)?1:0; if(ca!==cb) return ca-cb; var pa=a.prazo||a.data||'9999', pb=b.prazo||b.data||'9999'; return pa<pb?-1:(pa>pb?1:0); });
+  arr=arr.slice().sort(function(a,b){ var aa=(a.arq===true||a.canc===true)?1:0, ab=(b.arq===true||b.canc===true)?1:0; if(aa!==ab) return aa-ab; var ca=_tarConcluida(a)?1:0, cb=_tarConcluida(b)?1:0; if(ca!==cb) return ca-cb; var pa=a.prazo||a.data||'9999', pb=b.prazo||b.data||'9999'; return pa<pb?-1:(pa>pb?1:0); });
   el.innerHTML=topo+arr.map(function(a){
     var concl=_tarConcluida(a);
     var prevBR=a.data?String(a.data).slice(0,10).split('-').reverse().join('/'):'';
@@ -4445,21 +4450,27 @@ function renderAtivProc(){
     if(prevBR) meta.push('prevista: '+prevBR);
     if(fatalBR) meta.push('<span style="color:#b5342b;font-weight:700">prazo fatal: '+fatalBR+'</span>');
     if(a.hora && a.hora!=='Dia todo') meta.push(esc(a.hora));
-    meta.push(concl?'<span style="color:#127a53">concluída</span>':'<span style="color:#8a5a00">a executar</span>');
+    var canc=(a.canc===true);
+    meta.push(canc?'<span style="color:#b5342b">cancelada</span>':(concl?'<span style="color:#127a53">concluída</span>':'<span style="color:#8a5a00">a executar</span>'));
     /* autoria em linha própria: quem pediu e quem entregou. Fica de fora quando
        o robô abriu sozinho, o autor é o sistema — nunca fica em branco. */
     var aut=['criada por <b>'+_kanAutor(a)+'</b>'];
     if(concl&&a.concluidoPor) aut.push('concluída por <b>'+esc(a.concluidoPor)+'</b>'+(a.concluidoEm?(' em '+_kanQuandoBR(a.concluidoEm)):''));
-    return '<div style="display:flex;align-items:flex-start;gap:8px;padding:9px 2px;border-bottom:1px solid var(--line)'+(concl?';opacity:.6':'')+'">'
-      +'<input type="checkbox" '+(concl?'checked':'')+' onclick="toggleConcluirTarefa('+a.id+');renderAtivProc();" style="width:17px;height:17px;margin-top:2px;cursor:pointer;flex-shrink:0" title="Concluir/reabrir">'
+    if(canc) aut.push('<span style="color:#b5342b">cancelada por <b>'+esc(a.canceladaPor||'—')+'</b>'+(a.canceladaEm?(' em '+_kanQuandoBR(a.canceladaEm)):'')+(a.canceladaMotivo?(': '+esc(a.canceladaMotivo)):'')+'</span>');
+    return '<div style="display:flex;align-items:flex-start;gap:8px;padding:9px 2px;border-bottom:1px solid var(--line)'+((concl||canc)?';opacity:.6':'')+'">'
+      +(canc?'<span style="width:17px;margin-top:2px;flex-shrink:0;color:#b5342b;font-weight:700;text-align:center" title="Tarefa cancelada">✕</span>'
+            :'<input type="checkbox" '+(concl?'checked':'')+' onclick="toggleConcluirTarefa('+a.id+');renderAtivProc();" style="width:17px;height:17px;margin-top:2px;cursor:pointer;flex-shrink:0" title="Concluir/reabrir">')
       +'<div style="flex:1;min-width:0">'
-        +'<div style="font-weight:600;color:var(--navy);'+(concl?'text-decoration:line-through':'')+'">'+esc(a.titulo||'—')+'</div>'
+        +'<div style="font-weight:600;color:var(--navy);'+((concl||canc)?'text-decoration:line-through':'')+'">'+esc(a.titulo||'—')+'</div>'
         +'<div class="note" style="margin:2px 0 0">'+meta.join(' · ')+'</div>'
         +(aut.length?('<div class="note" style="margin:2px 0 0;font-size:11px;color:#8a8fa0">'+aut.join(' · ')+'</div>'):'')
         +'<div style="margin-top:5px;display:flex;gap:6px;flex-wrap:wrap">'
           +'<button class="btn sm ghost" style="font-size:11px" onclick="abrirTarefaKanban('+a.id+')">✎ editar</button>'
           +'<button class="btn sm ghost" style="font-size:11px" onclick="definirPrazoFatal('+a.id+')">⏰ prazo fatal</button>'
-          +(concl?'<button class="btn sm ghost" style="font-size:11px" onclick="toggleConcluirTarefa('+a.id+');renderAtivProc();">↩ reabrir</button>':'<button class="btn sm ghost" style="font-size:11px;color:#127a53;border-color:#bfe3d1" onclick="toggleConcluirTarefa('+a.id+');renderAtivProc();">✓ concluir</button>')
+          +(canc?'<button class="btn sm ghost" style="font-size:11px" onclick="reabrirTarefaCancelada('+a.id+')" title="Volta para a fila de tarefas">↩ reabrir</button>'
+                :(concl?'<button class="btn sm ghost" style="font-size:11px" onclick="toggleConcluirTarefa('+a.id+');renderAtivProc();">↩ reabrir</button>'
+                       :'<button class="btn sm ghost" style="font-size:11px;color:#127a53;border-color:#bfe3d1" onclick="toggleConcluirTarefa('+a.id+');renderAtivProc();">✓ concluir</button>'))
+          +((!concl&&!canc)?'<button class="btn sm ghost" style="font-size:11px;color:#b5342b;border-color:#e8c4bf" onclick="cancelarTarefaProc('+a.id+')" title="Encerra sem ter sido feita — fica guardada com o motivo">✕ cancelar</button>':'')
           +(concl?(a.arq===true
             ?'<button class="btn sm ghost" style="font-size:11px" onclick="arquivarTarefaProc('+a.id+',false)">📂 desarquivar</button>'
             :'<button class="btn sm ghost" style="font-size:11px;color:#697180" onclick="arquivarTarefaProc('+a.id+',true)" title="Tira da tela sem apagar — fica no link \'ver arquivadas\'">🗄 arquivar</button>'):'')
@@ -4467,6 +4478,36 @@ function renderAtivProc(){
       +'</div>'
     +'</div>';
   }).join('');
+}
+/* CANCELAR ≠ concluir (pedido do dono, 25/08/2026). Concluir diz "foi feito" e
+   conta produtividade; cancelar diz "não vai ser feito" — prazo que caiu, tarefa
+   duplicada, decisão que mudou. A tarefa some da fila (não cobra mais prazo) mas
+   continua guardada, junto com as arquivadas, com motivo e autor — para depois
+   dar pra explicar por que aquele prazo não foi cumprido. */
+function cancelarTarefaProc(id){
+  if(!KAN)initKanban();
+  var a=KAN.find(function(x){return x.id===id;}); if(!a) return;
+  var motivo=window.prompt('Cancelar esta tarefa?\n\n'+(a.titulo||'')+'\n\nPor quê? (fica registrado no histórico)','');
+  if(motivo===null) return;
+  var quem=''; try{ var u=usuarioVisualAtual(); quem=(u&&u.nome)||''; }catch(e){}
+  a.canc=true; a.canceladaEm=new Date().toISOString(); a.canceladaPor=(quem||'equipe'); a.canceladaMotivo=String(motivo).trim()||null;
+  a.arq=true; /* já entra no bloco das arquivadas, que é onde o dono quer ver */
+  persisteKanban(a);
+  try{ renderKanban(); }catch(e){}
+  try{ renderAtivProc(); }catch(e){}
+  try{ renderHistorico(); }catch(e){}
+  try{ renderPainelTarefasEtiquetas(); }catch(e){}
+  try{ atualizaNavContagens(); }catch(e){}
+}
+function reabrirTarefaCancelada(id){
+  if(!KAN)initKanban();
+  var a=KAN.find(function(x){return x.id===id;}); if(!a) return;
+  a.canc=false; a.canceladaEm=''; a.canceladaPor=''; a.canceladaMotivo=''; a.arq=false;
+  persisteKanban(a);
+  try{ renderKanban(); }catch(e){}
+  try{ renderAtivProc(); }catch(e){}
+  try{ renderHistorico(); }catch(e){}
+  try{ renderPainelTarefasEtiquetas(); }catch(e){}
 }
 /* arquivar = sumir da tela sem apagar: a tarefa continua no banco (arquivada=true)
    e volta pelo link "ver arquivadas". Só faz sentido para concluída. */
@@ -4528,7 +4569,7 @@ function renderPainelTarefasEtiquetas(){
   var pend=[], atr=[], hist=[];
   (KAN||[]).forEach(function(a){
     var st=statusTarefaItem(a);
-    if(st==='concluida') hist.push(a);
+    if(st==='concluida'||st==='cancelada') hist.push(a);
     else if(st==='atrasada') atr.push(a);
     else pend.push(a);
   });
@@ -4542,19 +4583,21 @@ function renderPainelTarefasEtiquetas(){
       if(a.data) datas.push('prevista: <b>'+esc(a.data)+'</b>');
       if(a.prazo) datas.push('<span style="color:var(--erro,#b3261e)">fatal: <b>'+esc(a.prazo)+'</b></span>');
       var datasHtml=datas.length?('<div style="font-size:12px;margin-bottom:6px">'+datas.join(' · ')+'</div>'):'';
-      return '<div style="border:1px solid var(--line);border-radius:10px;padding:10px 11px;margin-bottom:8px">'
-        +'<div style="font-weight:600;color:var(--navy);margin-bottom:3px">'+esc(a.titulo||'—')+'</div>'
+      return '<div style="border:1px solid var(--line);border-radius:10px;padding:10px 11px;margin-bottom:8px'+(a.canc===true?';opacity:.65':'')+'">'
+        +'<div style="font-weight:600;color:var(--navy);margin-bottom:3px'+(a.canc===true?';text-decoration:line-through':'')+'">'+esc(a.titulo||'—')+'</div>'
+        +(a.canc===true?('<div style="font-size:11.5px;color:#b5342b;margin-bottom:3px">cancelada'+(a.canceladaPor?(' por '+esc(a.canceladaPor)):'')+(a.canceladaMotivo?(' — '+esc(a.canceladaMotivo)):'')+'</div>'):'')
         +'<div style="font-size:12px;color:var(--muted);margin-bottom:6px">'+esc(a.cliente||'—')+' · <span class="proc">'+esc(fmtCNJ(a.numero||'—'))+'</span></div>'
         +datasHtml
         +'<div style="display:flex;gap:6px;flex-wrap:wrap">'
         +'<button class="btn sm ghost" onclick="abrirTarefaKanban('+a.id+')">Abrir tarefa</button>'
         +'<button class="btn sm ghost" onclick="abrirProcessoDaTarefa(\''+String(a.numero||'').replace(/'/g,'')+'\')">Abrir processo</button>'
-        +(a.col!=='finalizado'?'<button class="btn sm" onclick="concluirTarefaKanban('+a.id+')">Concluir</button>':'')
+        +((a.col!=='finalizado'&&a.canc!==true)?'<button class="btn sm" onclick="concluirTarefaKanban('+a.id+')">Concluir</button>':'')
+        +((a.col!=='finalizado'&&a.canc!==true)?'<button class="btn sm ghost" style="color:#b5342b;border-color:#e8c4bf" onclick="cancelarTarefaProc('+a.id+')">✕ Cancelar</button>':'')
         +'</div></div>';
     }).join('');
     return h+'</div>';
   }
-  el.innerHTML=bloco('Pendentes',pend,'Nenhuma tarefa pendente.')+bloco('Atrasadas',atr,'Nenhuma tarefa atrasada.')+bloco('Histórico / concluídas',hist,'Nenhuma tarefa concluída ainda.');
+  el.innerHTML=bloco('Pendentes',pend,'Nenhuma tarefa pendente.')+bloco('Atrasadas',atr,'Nenhuma tarefa atrasada.')+bloco('Histórico — concluídas e canceladas',hist,'Nenhuma tarefa concluída ou cancelada ainda.');
 }
 function renderDetEtq(){var sel=document.getElementById("det-etq-sel");if(!sel)return;
   sel.innerHTML=LABELS.map(function(l){return '<option value="'+l.id+'">'+esc(l.nome)+'</option>';}).join("");
@@ -6458,6 +6501,8 @@ function renderHistorico(){
     var pend=(KAN||[]).filter(function(a){ return a.numero===atual.numero && a.col!=='finalizado'; });
     if(!pend.length) return;
     function _iso(a){var s=a.prazo||a.data||'';s=String(s).trim();if(/^\d{4}-\d{2}-\d{2}/.test(s))return s.slice(0,10);var m=s.split('/');return m.length===3?(m[2]+'-'+String(m[1]).padStart(2,'0')+'-'+String(m[0]).padStart(2,'0')):'';}
+    pend=pend.filter(function(a){return a.canc!==true;});
+    if(!pend.length) return;
     pend.sort(function(a,b){var x=_iso(a)||'9999',y=_iso(b)||'9999';return x<y?-1:(x>y?1:0);});
     var a=pend[0];
     var fatalBR=a.prazo?String(a.prazo).slice(0,10).split('-').reverse().join('/'):'';
@@ -6474,7 +6519,7 @@ function renderHistorico(){
         +(a.resp?(' · <span style="color:var(--muted)">'+esc(a.resp)+'</span>'):'')
       +'</div>'
       +(a.prazo?_prazoAvisoHTML(String(a.prazo).slice(0,10).match(/^\d{4}-/)?String(a.prazo).slice(0,10):(String(a.prazo).split('/').reverse().join('-'))):'')
-      +'<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap"><button class="btn sm ghost" onclick="abrirTarefaKanban('+a.id+')">Abrir tarefa</button><button class="btn sm ghost" style="color:#127a53;border-color:#bfe3d1" onclick="concluirTarefaKanban('+a.id+');renderHistorico();if(typeof renderAtivProc===\'function\')renderAtivProc();">✓ Concluir</button></div>';
+      +'<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap"><button class="btn sm ghost" onclick="abrirTarefaKanban('+a.id+')">Abrir tarefa</button><button class="btn sm ghost" style="color:#127a53;border-color:#bfe3d1" onclick="concluirTarefaKanban('+a.id+');renderHistorico();if(typeof renderAtivProc===\'function\')renderAtivProc();">✓ Concluir</button><button class="btn sm ghost" style="color:#b5342b;border-color:#e8c4bf" onclick="cancelarTarefaProc('+a.id+')" title="Encerra sem ter sido feita — fica guardada com o motivo, junto das arquivadas">✕ Cancelar</button></div>';
     ul.appendChild(li);
   })();
   if(window.histFiltro==="all" && nteor && full.length>nteor*3){
@@ -7138,7 +7183,7 @@ function _kDataBR(s){
 function renderKanban(){
   var k=document.getElementById("kanban");k.innerHTML="";
   COLS.forEach(function(c){
-    var itens=KAN.filter(function(a){return a.col===c[0]});
+    var itens=KAN.filter(function(a){return a.col===c[0]&&a.canc!==true;});
     var col=document.createElement("div");col.className="col";
     col.ondragover=function(e){ if(!podeMoverAgenda()) return; e.preventDefault(); };
     col.ondrop=function(e){e.preventDefault();
@@ -7681,12 +7726,12 @@ function toggleConcluirTarefa(id){
     }catch(eAg){ console.log('agenda: '+(eAg&&eAg.message||eAg)); }
     /* carrega as tarefas do Kanban do banco (kanban_tarefas). Se a tabela não existir, ignora e usa o seed. */
     try{
-      var kt=await sb.from('kanban_tarefas').select('id,titulo,cliente,numero,coluna,resp,data,prazo,tipo,descricao,local,origem,atrasada,criado_por,concluido_por,concluido_em,arquivada').limit(3000);
+      var kt=await sb.from('kanban_tarefas').select('id,titulo,cliente,numero,coluna,resp,data,prazo,tipo,descricao,local,origem,atrasada,criado_por,concluido_por,concluido_em,arquivada,cancelada,cancelada_em,cancelada_por,cancelada_motivo').limit(3000);
       /* colunas de autoria/arquivo são novas: banco sem elas ainda derruba o select
          inteiro, então repete sem elas em vez de perder todas as tarefas */
-      if(kt.error && /criado_por|concluido_por|concluido_em|arquivada/.test(kt.error.message||'')) kt=await sb.from('kanban_tarefas').select('id,titulo,cliente,numero,coluna,resp,data,prazo,tipo,descricao,local,origem,atrasada').limit(3000);
+      if(kt.error && /criado_por|concluido_por|concluido_em|arquivada|cancelada/.test(kt.error.message||'')) kt=await sb.from('kanban_tarefas').select('id,titulo,cliente,numero,coluna,resp,data,prazo,tipo,descricao,local,origem,atrasada').limit(3000);
       if(!kt.error && kt.data){
-        window.__KANDB=kt.data.map(function(t,i){ return {id:9000+i,dbid:t.id,titulo:t.titulo||'',cliente:t.cliente||'',numero:t.numero||'—',col:t.coluna||'distribuir',resp:t.resp||'',data:t.data||'',prazo:t.prazo||'',tipoForm:t.tipo||'',descricao:t.descricao||'',local:t.local||'',org:t.origem||'',atrasada:!!t.atrasada,criadoPor:(t.criado_por||''),concluidoPor:(t.concluido_por||''),concluidoEm:(t.concluido_em||''),arq:(t.arquivada===true)}; });
+        window.__KANDB=kt.data.map(function(t,i){ return {id:9000+i,dbid:t.id,titulo:t.titulo||'',cliente:t.cliente||'',numero:t.numero||'—',col:t.coluna||'distribuir',resp:t.resp||'',data:t.data||'',prazo:t.prazo||'',tipoForm:t.tipo||'',descricao:t.descricao||'',local:t.local||'',org:t.origem||'',atrasada:!!t.atrasada,criadoPor:(t.criado_por||''),concluidoPor:(t.concluido_por||''),concluidoEm:(t.concluido_em||''),arq:(t.arquivada===true),canc:(t.cancelada===true),canceladaEm:(t.cancelada_em||''),canceladaPor:(t.cancelada_por||''),canceladaMotivo:(t.cancelada_motivo||'')}; });
         KAN=null; initKanban();
         var __ag=document.getElementById('s-agenda'); if(__ag && !__ag.classList.contains('hidden') && typeof renderAgendaView==='function') renderAgendaView();
         if(typeof renderPainelTarefasEtiquetas==='function') renderPainelTarefasEtiquetas();
