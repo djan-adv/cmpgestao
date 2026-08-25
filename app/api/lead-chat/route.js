@@ -109,10 +109,34 @@ function referencia(d) {
   return dd + '/' + mm + '-' + hh + mi
 }
 
+// Liga/desliga o chat público sem publicar nada: a chave 'chat_site' em
+// app_secrets guarda {"ativo": true|false}. Desligado, a página /cliente mostra
+// um cartão com o WhatsApp em vez do formulário — foi o que o dono pediu em
+// 25/08/2026, quando o chat estava capturando lead com dado ruim e o embed no
+// site (fora do nosso alcance) não podia ser removido na hora.
+// Sem a chave, vale ATIVO: o comportamento padrão continua o de sempre.
+async function chatSiteAtivo(sb) {
+  try {
+    const { data } = await sb.from('app_secrets').select('valor').eq('chave', 'chat_site').maybeSingle()
+    if (data && data.valor && data.valor.ativo === false) return false
+  } catch (e) {}
+  return true
+}
+
+export async function GET(request) {
+  const { searchParams } = new URL(request.url)
+  if (searchParams.get('status') === null) return Response.json({ info: 'Chat público de captação. Use ?status=1 para saber se está ligado.' })
+  const ativo = await chatSiteAtivo(admin())
+  return Response.json({ ok: true, ativo }, { headers: { 'Cache-Control': 'no-store' } })
+}
+
 export async function POST(request) {
   let body
   try { body = await request.json() } catch (e) { return Response.json({ erro: 'json inválido' }, { status: 400 }) }
   const sb = admin()
+
+  // com o chat desligado, nenhuma ação grava lead — nem por chamada direta à API
+  if (!(await chatSiteAtivo(sb))) return Response.json({ erro: 'atendimento pelo chat temporariamente indisponível', desligado: true }, { status: 503 })
 
   if (body.acao === 'criar') {
     const agora = new Date()

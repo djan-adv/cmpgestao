@@ -52,6 +52,8 @@ export default function ClientePage() {
   const [numeroProcesso, setNumeroProcesso] = useState('')  // nº do caso já aberto no Gestão (data/hora — sem risco de duplicidade)
   const [pensando, setPensando] = useState(false)   // "digitando…" enquanto a IA responde na fase de contratação
   const [saidaAviso, setSaidaAviso] = useState(false)
+  // null = ainda perguntando ao servidor; false = desligado (mostra só o WhatsApp)
+  const [ativo, setAtivo] = useState(null)
   const scrollRef = useRef(null)
   const inputRef = useRef(null)
   const fileRef = useRef(null)
@@ -126,8 +128,25 @@ export default function ClientePage() {
     return () => document.removeEventListener('mouseleave', aoMouseSairDoTopo)
   }, [])
 
+  // O chat pode estar desligado no servidor (app_secrets.chat_site). Perguntamos
+  // ANTES de abrir a conversa: desligado, a página não cria lead nenhum e vira
+  // um cartão com o WhatsApp. Falha de rede não desliga o chat (erra pro lado
+  // de continuar atendendo).
+  useEffect(() => {
+    let vivo = true
+    ;(async () => {
+      try {
+        const r = await fetch('/api/lead-chat?status=1', { cache: 'no-store' })
+        const j = await r.json()
+        if (vivo) setAtivo(!(j && j.ativo === false))
+      } catch (e) { if (vivo) setAtivo(true) }
+    })()
+    return () => { vivo = false }
+  }, [])
+
   // link personalizado (?nome=&email=) pula a pergunta de quem já sabemos
   useEffect(() => {
+    if (ativo !== true) return
     let q
     try { q = new URLSearchParams(window.location.search) } catch (e) { q = new URLSearchParams() }
     const nomeQ = (q.get('nome') || '').trim()
@@ -146,7 +165,7 @@ export default function ClientePage() {
       }
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [ativo])
 
   async function criarLead(extra) {
     if (leadIdRef.current) return { ok: true, id: leadIdRef.current, ref }
@@ -318,6 +337,29 @@ export default function ClientePage() {
     + (dados.current.mensagem ? (' ' + dados.current.mensagem) : '')
     + '\n\nJá aproveita e instala nosso app pra acompanhar tudo: ' + URL_PORTAL
   const linkWhats = WHATS_NUM ? ('https://wa.me/' + WHATS_NUM + '?text=' + encodeURIComponent(textoWa)) : ''
+
+  // chat desligado: nada de formulário — só o caminho que funciona. A moldura do
+  // embed no site continua ocupando o mesmo espaço, então o cartão preenche a
+  // altura toda e fica parecendo intencional, não defeito.
+  if (ativo === false) {
+    const waDireto = WHATS_NUM ? ('https://wa.me/' + WHATS_NUM + '?text=' + encodeURIComponent('Olá! Vim pelo site do escritório e gostaria de falar com vocês.')) : ''
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', background: NAVY, color: '#fff', fontFamily: 'system-ui,-apple-system,"Segoe UI",Roboto,sans-serif', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: 24, boxSizing: 'border-box' }}>
+        <div style={{ width: 54, height: 54, borderRadius: 14, background: GOLD, color: NAVY, display: 'grid', placeItems: 'center', fontWeight: 800, fontSize: 17, marginBottom: 16 }}>CMP</div>
+        <b style={{ fontSize: 19, lineHeight: 1.3, maxWidth: 340 }}>Fale agora com o escritório</b>
+        <p style={{ fontSize: 14.5, lineHeight: 1.5, opacity: .85, margin: '10px 0 22px', maxWidth: 330 }}>
+          Atendemos pelo WhatsApp — é mais rápido e você fala direto com a nossa equipe.
+        </p>
+        {waDireto && (
+          <a href={waDireto} target="_blank" rel="noopener noreferrer"
+            style={{ background: '#25D366', color: '#fff', textDecoration: 'none', fontWeight: 700, fontSize: 15.5, padding: '14px 26px', borderRadius: 28, display: 'inline-flex', alignItems: 'center', gap: 9, boxShadow: '0 4px 14px rgba(0,0,0,.28)' }}>
+            💬 Falar no WhatsApp
+          </a>
+        )}
+        <a href="mailto:contato@cmpadvogados.com.br" style={{ color: GOLD, fontSize: 13.5, marginTop: 18, textDecoration: 'none' }}>contato@cmpadvogados.com.br</a>
+      </div>
+    )
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', background: '#ECE5DD', fontFamily: 'system-ui,-apple-system,"Segoe UI",Roboto,sans-serif' }}>
