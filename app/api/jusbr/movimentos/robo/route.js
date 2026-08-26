@@ -44,6 +44,7 @@ export async function GET(request) {
 
   // ——— escolhe os alvos ———
   let alvos = []
+  let relFora = 0   // quantos saíram da fila por serem encerrados/sem número CNJ
   if (soNumero) {
     const { data } = await sb.from('processos')
       .select('id,numero,numero_digitos')
@@ -57,7 +58,10 @@ export async function GET(request) {
       .eq('escritorio_id', ESCRITORIO_CMP)
       .or('suspenso.is.null,suspenso.eq.false')
       .order('jusbr_mov_em', { ascending: true, nullsFirst: true })
-      .limit(lote * 4)
+      // janela folgada: se muitos descartáveis vierem seguidos, ainda sobra
+      // processo ativo para varrer na MESMA rodada, em vez de gastá-la só
+      // carimbando (ver "TRAVA DA FILA" abaixo)
+      .limit(lote * 12)
     if (error) return Response.json({ ok: false, erro: error.message }, { status: 500 })
     // processo com audiência HOJE ou AMANHÃ fura a fila do rodízio: é quando o
     // cliente está olhando o app e a linha do tempo não pode estar atrasada
@@ -83,15 +87,35 @@ export async function GET(request) {
       }
     } catch (e) {}
     const jaNoLote = new Set(prioritarios.map(p => p.id))
-    alvos = prioritarios.concat((data || [])
-      .filter(p => !jaNoLote.has(p.id))
-      .filter(p => soDig(p.numero_digitos || p.numero).length === 20)
-      .filter(p => !ENCERRADO.test(p.status || ''))).slice(0, lote)
+    const brutos = (data || []).filter(p => !jaNoLote.has(p.id))
+    // Descartáveis: encerrado/arquivado/baixado e o que não tem número CNJ.
+    const fora = (p) => soDig(p.numero_digitos || p.numero).length !== 20 || ENCERRADO.test(p.status || '')
+    const descartados = brutos.filter(fora)
+    alvos = prioritarios.concat(brutos.filter(p => !fora(p))).slice(0, lote)
+
+    // ——— TRAVA DA FILA (corrigida em 26/08/2026) ———
+    // O filtro de encerrado é feito AQUI, não no banco (status é texto livre).
+    // Só que o descartado saía da rodada SEM ser carimbado — e como a fila é
+    // ordenada por jusbr_mov_em com NULOS PRIMEIRO, ele voltava ao topo na
+    // rodada seguinte, para sempre. Com 155 encerrados sem carimbo e uma janela
+    // de lote*4, as vagas eram todas ocupadas por eles: o robô respondia
+    // "processos: 0" a cada 15 minutos e NENHUM processo ativo era varrido.
+    // Efeito real: juntada de carta de citação de 24/08 não entrou no sistema,
+    // que seguia mostrando 03/08 — risco de perda de prazo (0804936-40.2018.8.15.0251).
+    // A correção é a mesma que este arquivo já aplicava ao caso 'sem_acesso'
+    // logo abaixo: carimbar o que foi descartado, para ir ao fim da fila e não
+    // travar o rodízio. Auto-corretivo — em poucas rodadas a fila desentope.
+    if (descartados.length) {
+      const ids = descartados.map(p => p.id)
+      await sb.from('processos').update({ jusbr_mov_em: new Date().toISOString() }).in('id', ids)
+      relFora = descartados.length
+    }
   }
 
   const rel = {
     ok: true, quando: new Date().toISOString(),
     processos: alvos.length, novos: 0, jaTinha: 0, sem_acesso: 0, erros: 0, detalhe: [],
+    fora_do_rodizio: relFora,
   }
 
   for (const p of alvos) {
