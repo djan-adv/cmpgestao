@@ -1979,14 +1979,18 @@ function renderPainel(){
   var prazos7=(AGENDA||[]).filter(function(a){return (a.tipo==="vm"||a.tipo==="am") && dOf(a)>=hoje && dOf(a)<em7;}).length;
   var par30=0, mov30=0;
   try{
-    (DADOS.processos||[]).forEach(function(p){ var d=(typeof diasParadoOficial==='function')?diasParadoOficial(p):null; if(d==null) return; if(d>30) par30++; else mov30++; });
+    (DADOS.processos||[]).forEach(function(p){
+      if(typeof ehProcessoAtivo==='function' && !ehProcessoAtivo(p)) return;   /* só o acervo vivo */
+      var d=(typeof _diasParado==='function')?_diasParado(p):null; if(d==null) return;
+      if(d>30) par30++; else mov30++;
+    });
   }catch(e){}
   var hello=document.getElementById("painel-hello");
   if(hello){
     var h=new Date().getHours(), sauda=h<12?"Bom dia":(h<18?"Boa tarde":"Boa noite");
     var nome=((document.getElementById("who-name")||{}).textContent||"").split(" ")[0]||"";
     hello.innerHTML='<div style="font-size:21px;font-weight:800;color:var(--navy)">'+sauda+(nome?", "+nome:"")+'</div>'
-      +'<div style="color:var(--muted);font-size:13px;margin:2px 0 14px">'+pend+' publicações a triar · '+prazos7+' prazos nos próximos 7 dias · '+par30+' processos parados há 30+ dias</div>';
+      +'<div style="color:var(--muted);font-size:13px;margin:2px 0 14px">'+pend+' publicações a triar · '+prazos7+' prazos nos próximos 7 dias · '+par30+' de '+(par30+mov30)+' processos ativos parados há 30+ dias</div>';
   }
   /* ===== Alertas no painel: parados 30+, diligências a cobrar (7 dias) e possível retorno ===== */
   try{
@@ -1994,7 +1998,9 @@ function renderPainel(){
     if(!_host){ var _hb=document.getElementById('painel-hello'); if(_hb&&_hb.parentNode){ _host=document.createElement('div'); _host.id='painel-alertas'; _hb.parentNode.insertBefore(_host,_hb.nextSibling); } }
     if(_host){
       var _pa='';
-      if(par30>0){ _pa+='<div style="background:#fdf3e7;border:1px solid #f0d9b8;border-radius:8px;padding:9px 11px;margin-bottom:8px;font-size:13px"><b>⚠ '+par30+' processo(s) parado(s) há mais de 30 dias.</b> Sugerimos gerar diligência para dar andamento. <a onclick="go(\'diligencias\')" style="cursor:pointer;color:#b8912e;text-decoration:underline;font-weight:600">ver e diligenciar &rarr;</a></div>'; }
+      /* diz de QUANTOS: número solto de parados já foi confundido com o acervo
+         inteiro ("489" contra 205 processos no menu) */
+      if(par30>0){ _pa+='<div style="background:#fdf3e7;border:1px solid #f0d9b8;border-radius:8px;padding:9px 11px;margin-bottom:8px;font-size:13px"><b>⚠ '+par30+' de '+(par30+mov30)+' processo(s) ativo(s) parado(s) há mais de 30 dias.</b> Sugerimos gerar diligência para dar andamento. <a onclick="go(\'diligencias\')" style="cursor:pointer;color:#b8912e;text-decoration:underline;font-weight:600">ver e diligenciar &rarr;</a></div>'; }
       _pa+='<div id="painel-alertas-dilig"></div>';
       _host.innerHTML=_pa;
       if(typeof renderAlertasDiligencias==='function') renderAlertasDiligencias();
@@ -9683,6 +9689,34 @@ function ehMovimentacaoParte(texto){
     || /peti[çc][õo]es diversas/.test(t);
 }
 /* dias desde a última movimentação do JUÍZO/CARTÓRIO (ignora histórico manual e mov. das partes) */
+/* ===== Universo "processos ativos" — UMA regra só =====
+   É a mesma que o contador do menu lateral já usava (atualizaNavContagens):
+   fora encerrado, em contratação, suspenso (James), Inove e processo de lote.
+   Bug que motivou isto (26/08/2026): o painel anunciava "489 processos parados
+   há mais de 30 dias" enquanto o menu mostrava 205 processos — porque o painel
+   varria DADOS.processos inteiro, somando encerrado, arquivado, Inove e lote.
+   Agora quem conta "ativo" chama esta função; não há duas definições para
+   divergirem de novo. */
+function ehProcessoAtivo(p){
+  if(!p) return false;
+  if(/encerr/i.test(p.status||'')) return false;
+  if(typeof _ehContratacao==='function' && _ehContratacao(p)) return false;
+  if(typeof isSuspenso==='function' && isSuspenso(p)) return false;
+  if(typeof isInove==='function' && isInove(p)) return false;
+  if(p.lote_id) return false;
+  return true;
+}
+/* Dias parado, com a MESMA conta no painel e na tela de Diligências — antes o
+   painel usava diasParadoOficial (que ignora movimentação da parte e anotação
+   manual) e a tela de Diligências usava pdias(p.data) cru, então os dois
+   números nunca batiam. Prefere a conta oficial; sem histórico aproveitável,
+   cai na data da última movimentação para o processo não sumir da lista. */
+function _diasParado(p){
+  var d=diasParadoOficial(p);
+  if(d!=null) return d;
+  var f=(typeof pdias==='function')?pdias(p&&p.data):null;
+  return (f==null||isNaN(f))?null:f;
+}
 function diasParadoOficial(p){
   var melhor=null;
   ((p&&p.hist_full)||[]).forEach(function(a){
@@ -9751,7 +9785,8 @@ function buscaGlobalSugere(q){
 }
 async function renderDiligencias(){
   var min=parseInt((document.getElementById('dilig-min')||{}).value||'30',10)||30;
-  var parados=(DADOS.processos||[]).map(function(p){var d=diasParadoOficial(p); return {p:p,dias:(d==null?pdias(p.data):d)};}).filter(function(x){return x.dias>min;}).sort(function(a,b){return b.dias-a.dias;});
+  /* mesma regra do painel: só acervo VIVO (fora encerrado, contratação, suspenso, Inove e lote) e a mesma conta de dias parado */
+  var parados=(DADOS.processos||[]).filter(ehProcessoAtivo).map(function(p){return {p:p,dias:_diasParado(p)};}).filter(function(x){return x.dias!=null && x.dias>min;}).sort(function(a,b){return b.dias-a.dias;});
   var cnt=document.getElementById('dilig-count'); if(cnt) cnt.textContent=parados.length+' processo(s) parado(s)';
   var b=document.getElementById('dilig-body');
   if(b){ b.innerHTML=''; parados.slice(0,300).forEach(function(x,ix){
@@ -10495,7 +10530,7 @@ function atualizaNavContagens(){
        Caso sem CNJ (fonte 'caso') sai pra "Em contratação" — menos pasta de
        assessoria e caso tirado à mão de lá, que contam na lista principal
        (ver _ehContratacao). */
-    (DADOS.processos||[]).forEach(function(p){ if(/encerr/i.test(p.status||''))enc++; else if(_ehContratacao(p))contr++; else if(isSuspenso(p))jam++; else if(isInove(p))inv++; else if(!p.lote_id) ativ++; });
+    (DADOS.processos||[]).forEach(function(p){ if(/encerr/i.test(p.status||''))enc++; else if(_ehContratacao(p))contr++; else if(isSuspenso(p))jam++; else if(isInove(p))inv++; else if(ehProcessoAtivo(p)) ativ++; });
     var e1=document.getElementById('nav-n-proc'); if(e1)e1.textContent=ativ;
     var e2=document.getElementById('nav-n-inove'); if(e2)e2.textContent=inv;
     var e3=document.getElementById('nav-n-enc'); if(e3)e3.textContent=enc;
@@ -14149,7 +14184,8 @@ async function encerrarProcesso(){
 }
 async function renderDiligencias(){
   var min=parseInt((document.getElementById('dilig-min')||{}).value||'30',10)||30;
-  var parados=(DADOS.processos||[]).map(function(p){return {p:p,dias:pdias(p.data)};}).filter(function(x){return x.dias>min;}).sort(function(a,b){return b.dias-a.dias;});
+  /* mesma regra do painel: só acervo VIVO (fora encerrado, contratação, suspenso, Inove e lote) e a mesma conta de dias parado */
+  var parados=(DADOS.processos||[]).filter(ehProcessoAtivo).map(function(p){return {p:p,dias:_diasParado(p)};}).filter(function(x){return x.dias!=null && x.dias>min;}).sort(function(a,b){return b.dias-a.dias;});
   var cnt=document.getElementById('dilig-count'); if(cnt) cnt.textContent=parados.length+' processo(s) parado(s)';
   var b=document.getElementById('dilig-body');
   if(b){ b.innerHTML=''; parados.slice(0,300).forEach(function(x,ix){
@@ -16642,7 +16678,8 @@ async function renderDiligencias(){
   var min=parseInt((document.getElementById('dilig-min')||{}).value||'30',10)||30;
   var pp=parseInt((document.getElementById('dilig-pp')||{}).value||'20',10)||20;
   var sig=min+'|'+pp; if(sig!==window.__diligSig){ window.__diligPage=1; window.__diligSig=sig; }
-  var parados=(DADOS.processos||[]).map(function(p){return {p:p,dias:pdias(p.data)};}).filter(function(x){return x.dias>min;}).sort(function(a,b){return b.dias-a.dias;});
+  /* mesma regra do painel: só acervo VIVO (fora encerrado, contratação, suspenso, Inove e lote) e a mesma conta de dias parado */
+  var parados=(DADOS.processos||[]).filter(ehProcessoAtivo).map(function(p){return {p:p,dias:_diasParado(p)};}).filter(function(x){return x.dias!=null && x.dias>min;}).sort(function(a,b){return b.dias-a.dias;});
   var total=parados.length, pages=Math.max(1,Math.ceil(total/pp));
   if(window.__diligPage>pages) window.__diligPage=pages;
   var pg=window.__diligPage, start=(pg-1)*pp, rows=parados.slice(start,start+pp);
