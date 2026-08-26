@@ -2308,6 +2308,17 @@ function renderMeuDia(){
     var dig=String(k.numero||'').replace(/\D/g,'');
     if(dig) _fin[_kChave(k.titulo,'n:'+dig)]=1;
   });
+  /* Órfã: linha da agenda de prazo/tarefa que não tem NENHUMA tarefa
+     correspondente no Kanban — nem aberta, nem encerrada. É o rastro deixado
+     pelas edições feitas antes de _sincronizaAgendaDaTarefa existir: a tarefa
+     foi renomeada ou remarcada e a linha da agenda ficou para trás cobrando
+     sozinha. Não some sozinha (apagar o que não se entende é pior), mas fica
+     marcada, com o 🗑 do lado para resolver em um clique.
+     Audiência (tipo 'az') fica de fora: ela nasce do tribunal/Google e não tem
+     par no Kanban por natureza. */
+  var _titKan={};
+  (window.__KANDB||[]).concat(KAN||[]).forEach(function(k){ if(k&&k.titulo) _titKan[String(k.titulo).trim().toLowerCase()]=1; });
+  function _ehOrfa(a){ return a && a.tipo!=='az' && a.tt && !_titKan[String(a.tt).trim().toLowerCase()]; }
   var itens=(AGENDA||[]).filter(function(a){var d=new Date(a.data+"T00:00:00");return d>=tras&&d<=fut;})
     .filter(function(a){
       if(_fin[_kChave(a.tt,a.data)]) return false;
@@ -2331,7 +2342,9 @@ function renderMeuDia(){
       var numHtml=temProc
         ? '<span class="proc" onclick="event.stopPropagation();abrirProcessoDaTarefa(\''+String(num).replace(/'/g,"")+'\')" style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted" title="Abrir o processo">'+esc(fmtCNJ(num))+'</span>'
         : '<span class="proc">'+esc(fmtCNJ(num))+'</span>';
-      var prazo='<div style="font-size:11.5px;color:'+(atras?"var(--danger)":"var(--muted)")+';font-weight:'+(atras?"700":"400")+'">'+(atras?"⚠ Deveria ter sido feita em "+diaFull:diaFull)+(a.hora?(" · "+a.hora):"")+'</div>';
+      var orfa=_ehOrfa(a);
+      var prazo='<div style="font-size:11.5px;color:'+(atras&&!orfa?"var(--danger)":"var(--muted)")+';font-weight:'+(atras&&!orfa?"700":"400")+'">'+(atras?(orfa?"Marcada para "+diaFull:"⚠ Deveria ter sido feita em "+diaFull):diaFull)+(a.hora?(" · "+a.hora):"")+'</div>'
+        +(orfa?'<div style="font-size:11px;color:#8a5a00;background:#fdf3e7;border:1px solid #f0d9b8;border-radius:7px;padding:3px 7px;margin-top:3px;display:inline-block" title="Esta linha da agenda não tem tarefa correspondente no Kanban — sobrou de uma edição antiga. Use o 🗑 ao lado para removê-la.">⚠ sem tarefa no Kanban — resquício, pode apagar no 🗑</div>':'');
       var acoes='<div style="display:flex;gap:4px;align-items:center">'
         +'<button title="Concluir e registrar no histórico do processo" onclick="event.stopPropagation();mdConcluir('+gi+')" style="cursor:pointer;border:1px solid #cfe8db;background:#eef7f1;color:#0F6E56;border-radius:7px;padding:3px 7px;font-size:12px">✓</button>'
         +'<button title="Editar a tarefa (título, data, hora, responsável, processo)" onclick="event.stopPropagation();mdEditar('+gi+')" style="cursor:pointer;border:1px solid #e2e5ea;background:#f4f5f7;color:#3d4c60;border-radius:7px;padding:3px 7px;font-size:12px">✎</button>'
@@ -2339,7 +2352,7 @@ function renderMeuDia(){
         +'<button title="Excluir este agendamento" onclick="event.stopPropagation();mdExcluir('+gi+')" style="cursor:pointer;border:1px solid #f0d5d2;background:#fbeceb;color:#b5342b;border-radius:7px;padding:3px 7px;font-size:12px">🗑</button>'
         +'</div>';
       return '<div style="display:flex;gap:9px;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--accentbg)">'
-        +'<span style="min-width:56px;font-weight:700;font-size:12.5px;color:'+(atras?"var(--danger)":"var(--navy)")+'">'+(atras?"atrasado":dia)+'</span>'
+        +'<span style="min-width:56px;font-weight:700;font-size:12.5px;color:'+(atras&&!orfa?"var(--danger)":"var(--navy)")+'">'+(atras?(orfa?"resquício":"atrasado"):dia)+'</span>'
         +'<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:12px;white-space:nowrap;'+tg[1]+'">'+tg[0]+'</span>'
         +'<div style="flex:1;min-width:0"><div style="font-weight:600;font-size:13px">'+esc(a.tt)+'</div>'
         + prazo
@@ -5453,6 +5466,62 @@ function normData(v){
 }
 /* no onchange do campo: se a data ficou inválida (ano errado), limpa e avisa */
 function guardData(el){ if(!el) return; var v=el.value; if(v && !normData(v)){ el.value=''; try{ alert('Data inválida — verifique o ano (use o formato dd/mm/aaaa, ano entre 2000 e 2100).'); }catch(e){} } }
+/* ===== Mantém o gêmeo da agenda casado com a tarefa do Kanban =====
+   A tarefa criada com "Mostrar na agenda" vira DUAS linhas, em duas tabelas
+   diferentes: kanban_tarefas e agenda_eventos. Não há chave ligando as duas —
+   o par só se reconhece por título + data + processo. Enquanto a tarefa não
+   fosse editada isso bastava; editada, a linha da agenda ficava para trás com
+   os valores antigos e virava um fantasma eterno no "Meu dia".
+   Aqui o par é reencontrado pelos valores ANTIGOS e atualizado (ou removido,
+   se a pessoa desmarcou "Mostrar na agenda"; ou criado, se marcou agora). */
+function _sincronizaAgendaDaTarefa(antes, depois, querNaAgenda){
+  initAgenda();
+  var digA=String((antes&&antes.numero)||'').replace(/\D/g,'');
+  var tA=String((antes&&antes.titulo)||'').trim().toLowerCase();
+  function casa(e){
+    if(!e) return false;
+    if(String(e.tt||'').trim().toLowerCase()!==tA) return false;
+    var digE=String((e.p&&e.p.numero)||'').replace(/\D/g,'');
+    /* mesma data OU mesmo processo: a data pode ter sido justamente o que mudou */
+    return (String(e.data||'')===String((antes&&antes.data)||'')) || (!!digA && digE===digA);
+  }
+  var ev=(AGENDA||[]).find(casa);
+  var sb=window.__sb;
+  /* desmarcou "Mostrar na agenda": tira o gêmeo de vez */
+  if(!querNaAgenda){
+    if(!ev) return;
+    if(window.__AGDB && ev.id) window.__AGDB=window.__AGDB.filter(function(x){ return x.id!==ev.id; });
+    var i=AGENDA.indexOf(ev); if(i>=0) AGENDA.splice(i,1);
+    if(sb && ev.id){ sb.from('agenda_eventos').delete().eq('id',ev.id).then(function(){}); }
+    else { try{ _mdOcultarSemId(ev); }catch(e){} }   /* linha antiga, sem id: persiste o sumiço */
+    return;
+  }
+  if(!depois.data) return;   /* sem data não há o que mostrar na agenda */
+  /* achou o gêmeo: atualiza no lugar, na tela e no banco */
+  if(ev){
+    ev.data=depois.data; ev.hora=depois.hora; ev.tipo=depois.tipo; ev.tt=depois.titulo;
+    ev.resp=depois.resp; ev.p={numero:depois.numero, cliente:(depois.resp||'—')};
+    if(sb && ev.id){
+      sb.from('agenda_eventos').update({data:depois.data,hora:depois.hora,tipo:depois.tipo,
+        titulo:depois.titulo,resp:(depois.resp||null),processo_numero:(depois.numero||null)})
+        .eq('id',ev.id).then(function(r){ if(r&&r.error) console.warn('agenda não sincronizada:',r.error.message); });
+    }
+    return;
+  }
+  /* não havia gêmeo (a pessoa acabou de marcar "Mostrar na agenda"): cria */
+  var linha={data:depois.data,hora:depois.hora,tipo:depois.tipo,tt:depois.titulo,resp:depois.resp,
+             p:{numero:depois.numero,cliente:(depois.resp||'—')}};
+  AGENDA.push(linha);
+  if(sb){
+    sb.auth.getUser().then(function(ug){ return sb.from('usuarios').select('escritorio_id').eq('id',ug.data.user.id).single(); })
+      .then(function(pf){ var e2=pf&&pf.data&&pf.data.escritorio_id; if(!e2) return;
+        return sb.from('agenda_eventos').insert({escritorio_id:e2,data:depois.data,hora:depois.hora,
+          tipo:depois.tipo,titulo:depois.titulo,resp:(depois.resp||null),
+          processo_numero:(depois.numero||null),origem:'sistema'}).select('id').single(); })
+      .then(function(r){ if(r&&r.data&&r.data.id){ linha.id=r.data.id; window.__AGDB=window.__AGDB||[]; window.__AGDB.push(linha); } })
+      .catch(function(){});
+  }
+}
 function salvarTarefa(){
   var tit=_v("t-titulo"); if(!tit){alert("Descreva a tarefa.");return;}
   var proc=_v("t-proc"), resp=_v("t-resp"), tipo=_v("t-tipo"), data=normData(_v("t-data")), hora=_v("t-hora"), prazo=normData(_v("t-prazo"));
@@ -5510,6 +5579,10 @@ function salvarTarefa(){
   var _nova;
   if(_isEdit){
     _nova=KAN.find(function(x){return x.id===window._tarEditId;});
+    /* guarda como a tarefa ERA: é por esses valores que o gêmeo na agenda foi
+       gravado, e é só por eles que dá para reencontrá-lo (as duas tabelas não
+       têm chave em comum — ver _sincronizaAgendaDaTarefa) */
+    var _antes={titulo:_nova.titulo, data:_nova.data, numero:_nova.numero};
     _nova.titulo=tit; _nova.cliente=(resp||proc||"—"); _nova.numero=(proc||"—"); _nova.resp=resp; _nova.data=data; _nova.prazo=prazo; _nova.hora=(_dia?"Dia todo":hora); _nova.tipoForm=tipo;
     _nova.descricao=_v("t-desc"); _nova.local=_v("t-local");
     persisteKanban(_nova);
@@ -5517,6 +5590,16 @@ function salvarTarefa(){
     _nova={id:5000+KAN.length,titulo:tit,cliente:(resp||proc||"—"),numero:(proc||"—"),col:"distribuir",resp:resp,data:data,prazo:prazo,hora:(_dia?"Dia todo":hora),tipoForm:tipo,
       descricao:_v("t-desc"), local:_v("t-local")};
     KAN.push(_nova); persisteKanban(_nova);
+  }
+  /* EDIÇÃO: acerta o gêmeo que já existe na agenda. Sem isto, editar a tarefa
+     no Kanban deixava para trás uma linha órfã em agenda_eventos com o título e
+     a data ANTIGOS — e ela seguia cobrando no "Meu dia" como atrasada, mesmo
+     sem existir mais pendência nenhuma no processo (relatado em 26/08/2026,
+     processo 0801208-56.2025.8.15.0441).
+     Esconder a órfã na hora de exibir não resolvia: depois da edição o título
+     não bate mais com nada, então não havia como reconhecê-la. */
+  if(_isEdit){
+    try{ _sincronizaAgendaDaTarefa(_antes, {titulo:tit, data:data, hora:(document.getElementById("t-dia").checked?"Dia todo":(hora||"09:00")), tipo:(TIPOCOR[tipo]||"nt"), resp:resp, numero:(proc||"—")}, document.getElementById("t-agenda").checked); }catch(eSA){}
   }
   if(!_isEdit && document.getElementById("t-agenda").checked && data){
     initAgenda();
