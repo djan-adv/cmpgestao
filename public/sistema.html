@@ -1395,6 +1395,34 @@ function _nomeEstaDeFerias(nome){
     return toks.every(function(t){ return alvo.indexOf(t)>-1; });
   });
 }
+/* ===== Quem cobre quem está de férias =====
+   A redistribuição (redistribuirTarefasDe) roda UMA VEZ, no instante em que as
+   férias são registradas. Tudo que cai no nome da pessoa DEPOIS disso — robô,
+   importação, publicação triada, tarefa criada por outra pessoa — ficava órfão:
+   aparecia no painel no nome de quem está viajando e ninguém assumia.
+   Relatado em 26/08/2026: "designada para Rita que está de férias; todas as
+   tarefas dela deveriam ter vindo pra mim".
+   Agora o substituto fica gravado nas férias e a troca também acontece na hora
+   de MOSTRAR e de SALVAR — não depende mais de ter rodado no momento certo.
+   Sem substituto gravado (férias antigas), cai no Djan, o mesmo padrão que a
+   redistribuição já usava. */
+function _substitutoDeFerias(nome){
+  var toks=_normNomeAcesso(nome).split(' ').filter(Boolean);
+  if(!toks.length) return null;
+  var achou=null;
+  (USUARIOS_VISUAIS||[]).forEach(function(u){
+    if(achou||!emFerias(u)) return;
+    var alvo=_normNomeAcesso(u.nome).split(' ').filter(Boolean);
+    if(toks.every(function(t){ return alvo.indexOf(t)>-1; })) achou=u;
+  });
+  if(!achou) return null;
+  return (achou.ferias&&achou.ferias.substituto)||'Djan';
+}
+/* Responsável EFETIVO: quem realmente deve tocar a tarefa hoje. */
+function _respEfetivo(nome){
+  var sub=_substitutoDeFerias(nome);
+  return sub||nome;
+}
 /* Marca (e bloqueia) nos seletores de responsável quem está de férias. Os selects
    são de nomes fixos, então o casamento é pelo nome normalizado. */
 function marcaFeriasNosSelects(){
@@ -1509,9 +1537,17 @@ async function marcarFerias(id){
   fim=(fim||'').trim();
   if(!/^\d{4}-\d{2}-\d{2}$/.test(ini)||!/^\d{4}-\d{2}-\d{2}$/.test(fim)){ alert('Use o formato aaaa-mm-dd nas duas datas.'); return; }
   if(fim<ini){ alert('O último dia não pode ser antes do primeiro.'); return; }
-  u.ferias={ini:ini,fim:fim};
+  /* quem cobre: vale para tudo que chegar no nome dela DEPOIS, não só para o
+     que já existia no momento do registro */
+  var subs=(prompt('Quem cobre '+u.nome+' nesse período?\n\n(vazio = Djan)','Djan')||'Djan').trim()||'Djan';
+  var subOk=_rotulosResp().find(function(r){
+    var pt=_normNomeAcesso(subs).split(' ').filter(Boolean);
+    var ct=_normNomeAcesso(r).split(' ').filter(Boolean);
+    return pt.length&&pt.every(function(t){ return ct.some(function(c){ return c===t||c.indexOf(t)===0; }); });
+  })||'Djan';
+  u.ferias={ini:ini,fim:fim,substituto:subOk};
   await _salvarAssentos(); renderAcessos(); marcaFeriasNosSelects();
-  alert(u.nome+' está de férias de '+_brData(ini)+' a '+_brData(fim)+'.\n\nNesse período não recebe tarefa, não é sugerido para tratar publicação e sai da lista do chat da equipe. O acesso continua funcionando.');
+  alert(u.nome+' está de férias de '+_brData(ini)+' a '+_brData(fim)+', com '+subOk+' cobrindo.\n\nNesse período não recebe tarefa, não é sugerido para tratar publicação e sai da lista do chat da equipe. O acesso continua funcionando.\n\nTarefa que chegar no nome dela depois de hoje também vai para '+subOk+' automaticamente.');
   await redistribuirTarefasDe(u,'férias');
 }
 /* ===== Assentos (pessoas do escritório) — persistidos em produtividade_config ===== */
@@ -2237,6 +2273,17 @@ function renderProd(){
   }
   el.innerHTML=html;
 }
+/* Selo do responsável no Meu dia. Quando a pessoa está de férias, mostra para
+   QUEM a tarefa passou — sem isso o painel exibia o nome de quem está viajando
+   e ninguém sabia que aquilo era seu. */
+function _mdRespHTML(resp){
+  var nome=String(resp||'');
+  var sub=(typeof _substitutoDeFerias==='function')?_substitutoDeFerias(nome):null;
+  var base='font-size:11px;border-radius:12px;padding:2px 8px;font-weight:600;white-space:nowrap';
+  if(!sub||!nome) return '<span style="'+base+';background:var(--accentbg);color:var(--navy)">'+esc(nome)+'</span>';
+  return '<span title="'+esc(nome)+' está de férias — esta tarefa é de '+esc(sub)+'" style="'+base+';background:#fdf3e7;color:#8a5a00">'
+    +esc(sub)+' <span style="font-weight:400;opacity:.8">← '+esc(nome.split(' ')[0])+' (férias)</span></span>';
+}
 function renderMeuDia(){
   var el=document.getElementById("painel-meudia"); if(!el) return;
   initAgenda();
@@ -2247,10 +2294,30 @@ function renderMeuDia(){
   /* tarefa já CONCLUÍDA no Kanban não é pendência: esconde o gêmeo da agenda
      (a tarefa criada com "Mostrar na agenda" vira duas linhas — concluir no
      Kanban não apagava a da agenda e ela ficava assombrando o Meu dia) */
+  /* Faltavam duas coisas aqui, e o resultado era tarefa encerrada aparecendo
+     como "atrasada" no painel (relatado em 26/08/2026, processo sem nenhuma
+     pendência aberta):
+       1) só escondia o gêmeo da agenda quando o Kanban estava 'finalizado' ou
+          arquivado — tarefa CANCELADA (que encerra sem ter sido feita) não
+          entrava, e continuava cobrando para sempre;
+       2) o casamento era só por título+data. Reagendar a tarefa no Kanban muda
+          a data e o par se perdia — a linha da agenda voltava a assombrar.
+     Agora conta cancelada também, e casa por título+data OU título+processo. */
   var _fin={};
-  (window.__KANDB||[]).forEach(function(k){ if(k.col==='finalizado'||k.arq===true) _fin[String(k.titulo||'').trim().toLowerCase()+'|'+String(k.data||'')]=1; });
+  function _kChave(t,d){ return String(t||'').trim().toLowerCase()+'|'+String(d||''); }
+  (window.__KANDB||[]).forEach(function(k){
+    if(!(k.col==='finalizado'||k.arq===true||k.canc===true)) return;
+    _fin[_kChave(k.titulo,k.data)]=1;
+    var dig=String(k.numero||'').replace(/\D/g,'');
+    if(dig) _fin[_kChave(k.titulo,'n:'+dig)]=1;
+  });
   var itens=(AGENDA||[]).filter(function(a){var d=new Date(a.data+"T00:00:00");return d>=tras&&d<=fut;})
-    .filter(function(a){ return !_fin[String(a.tt||'').trim().toLowerCase()+'|'+String(a.data||'')]; })
+    .filter(function(a){
+      if(_fin[_kChave(a.tt,a.data)]) return false;
+      var dg=String((a.p&&a.p.numero)||'').replace(/\D/g,'');
+      if(dg && _fin[_kChave(a.tt,'n:'+dg)]) return false;
+      return true;
+    })
     .sort(function(a,b){return (a.data+(a.hora||""))<(b.data+(b.hora||""))?-1:1;});
   var html='<p class="sectlabel">Meu dia — hoje, atrasados e próximos 3 dias</p>';
   if(!itens.length){ html+='<p class="note" style="margin:0">Nada pendente por aqui.</p>'; }
@@ -2280,7 +2347,7 @@ function renderMeuDia(){
         +'<div style="flex:1;min-width:0"><div style="font-weight:600;font-size:13px">'+esc(a.tt)+'</div>'
         + prazo
         +'<div style="font-size:11.5px;color:var(--muted)">'+esc((a.p&&a.p.cliente)||"")+' '+numHtml+'</div></div>'
-        +'<span style="font-size:11px;background:var(--accentbg);color:var(--navy);border-radius:12px;padding:2px 8px;font-weight:600;white-space:nowrap">'+esc(a.resp||"")+'</span>'
+        +_mdRespHTML(a.resp)
         +acoes+'</div>';
     }).join("");
   }
@@ -5392,6 +5459,17 @@ function guardData(el){ if(!el) return; var v=el.value; if(v && !normData(v)){ e
 function salvarTarefa(){
   var tit=_v("t-titulo"); if(!tit){alert("Descreva a tarefa.");return;}
   var proc=_v("t-proc"), resp=_v("t-resp"), tipo=_v("t-tipo"), data=normData(_v("t-data")), hora=_v("t-hora"), prazo=normData(_v("t-prazo"));
+  /* Rede de segurança: o seletor já desabilita quem está de férias, mas tarefa
+     nasce por muitos caminhos (robô, triagem de publicação, tarefa criada a
+     partir da ficha, edição antiga reaberta). Aqui a troca é garantida — sem
+     isto, tarefa nova caía de novo no nome de quem viajou. */
+  try{
+    var _sub=(typeof _substitutoDeFerias==='function')?_substitutoDeFerias(resp):null;
+    if(_sub && _sub!==resp){
+      alert(resp+' está de férias — esta atividade vai para '+_sub+', que está cobrindo.');
+      resp=_sub;
+    }
+  }catch(eFe){}
   /* se a pessoa esquecer de por data E prazo, agenda em HOJE — assim a tarefa não
      "some" da visão mês (que não mostra atividades sem data). */
   if(!data && !prazo){ data = todayISO; }
@@ -7401,7 +7479,15 @@ function tarefasFiltradas(){
        agenda de Reuniões e audiências, e as outras quatro vão para a aba
        "🤖 Automáticas". Esta agenda fica só com prazo de verdade. */
     if(!_visivelNaAgenda(a)) return false;
-    if(tarResp!=='Todos'){ var r=(a.resp||''); if(r.split(' ')[0].toLowerCase()!==tarResp.split(' ')[0].toLowerCase()) return false; }
+    /* Filtrando por "Djan", as tarefas de quem está de férias e é coberto por
+       ele TAMBÉM aparecem — senão ficariam invisíveis justo para quem tem de
+       assumi-las. Filtrar pelo nome de quem viajou continua achando as dela. */
+    if(tarResp!=='Todos'){
+      var alvo=tarResp.split(' ')[0].toLowerCase();
+      var r=(a.resp||'').split(' ')[0].toLowerCase();
+      var ef=String((typeof _respEfetivo==='function')?_respEfetivo(a.resp||''):(a.resp||'')).split(' ')[0].toLowerCase();
+      if(r!==alvo && ef!==alvo) return false;
+    }
     if(ocultar && _tarConcluida(a)) return false;
     return true;
   });
