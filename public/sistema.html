@@ -2606,10 +2606,10 @@ function abrir(i){
   var _pb=''; try{ _pb=(typeof protoBlocoHTML==='function')?protoBlocoHTML(p.numero):''; }catch(ePB){ _pb=''; }
   html+='<div id="proto-na-ficha">'+_pb+'</div>';
   /* Dossiê do devedor: procura bens e créditos dele em OUTROS processos, pelo nome */
-  html+='<div class="card cmp-only" id="devedor-card"><p class="sectlabel" style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">🕵 Dossiê do devedor <button class="btn sm" style="font-size:12px;background:#7a4b00;color:#fff" onclick="abrirDossieDevedor()">Procurar bens e créditos</button></p><div class="note">Varre o Diário de Justiça (por nome) e o jus.br (por CPF/CNPJ, se informado) atrás de <b>'+esc(p.oponente||'parte contrária')+'</b> em <b>outros processos</b> — como réu e como autor — e destaca penhoras, avaliações, leilões, alvarás e créditos a receber. É pista de investigação, não certidão.</div></div>';
+  html+='<div class="card cmp-only" id="devedor-card"><p class="sectlabel" style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">🕵 Dossiê do devedor <button class="btn sm" style="font-size:12px;background:#7a4b00;color:#fff" onclick="abrirDossieDevedor()">Procurar bens e créditos</button></p><div class="note">Procura <b>'+esc(p.oponente||'parte contrária')+'</b> em <b>outros processos</b> — como réu e como autor — e destaca penhoras, avaliações, leilões, alvarás e créditos a receber. Duas fontes: <b>jus.br (PDPJ) pelo CPF/CNPJ</b> do devedor (usa o que estiver no cadastro da parte) e <b>Diário de Justiça pelo nome</b> — o DJEN/CNJ não aceita CPF/CNPJ, só nome. É pista de investigação, não certidão.</div></div>';
   /* Desconsideração da personalidade jurídica: busca pelo CNPJ da parte no jus.br
      (PDPJ) — diferente do dossiê acima, que busca por NOME no DJEN */
-  html+='<div class="card cmp-only" id="desconsideracao-card"><p class="sectlabel" style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">🏛 Desconsideração da personalidade jurídica <button class="btn sm" style="font-size:12px;background:#7a4b00;color:#fff" onclick="abrirDesconsideracaoPJ()">Procurar decisões (por CNPJ)</button></p><div class="note">Busca no jus.br (PDPJ), pelo <b>CNPJ</b> da empresa devedora, todos os processos em que ela é parte — inclusive de outros tribunais — e varre as movimentações atrás de decisão de desconsideração da personalidade jurídica (IDPJ). É pista de investigação, não certidão.</div></div>';
+  html+='<div class="card cmp-only" id="desconsideracao-card"><p class="sectlabel" style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">🏛 Desconsideração da personalidade jurídica <button class="btn sm" style="font-size:12px;background:#7a4b00;color:#fff" onclick="abrirDesconsideracaoPJ()">Procurar decisões (por CNPJ)</button></p><div class="note">Busca <b>exclusivamente pelo CNPJ</b> da empresa devedora, no jus.br (PDPJ): todos os processos em que ela é parte — inclusive de outros tribunais — e varre as movimentações atrás de decisão de desconsideração da personalidade jurídica (IDPJ). Sem nome, sem CPF. É pista de investigação, não certidão.</div></div>';
   html+='<div class="card cmp-only" id="jusbr-card"><p class="sectlabel" style="display:flex;justify-content:space-between;align-items:center">Documentos do jus.br <button class="btn sm" style="font-size:12px" onclick="jusbrCarregar(\''+esc(p.numero)+'\')">Carregar documentos</button> <button class="btn sm ghost" style="font-size:11px" title="Diagnóstico técnico dos documentos (para o Claude)" onclick="jusbrDiag(\''+esc(p.numero)+'\')">🔎 diag</button></p><div id="jusbr-status" class="note" style="margin-bottom:6px">Lista as peças do processo no jus.br. O arquivo escolhido é baixado sob demanda e removido do sistema após 30 dias (o original fica no tribunal).</div><div id="jusbr-barra" style="display:none;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px;padding:7px 9px;background:#f4f7fb;border:1px solid #e1e8f0;border-radius:9px"><span class="note" style="margin:0;font-weight:600">Marcados:</span><button class="btn sm ghost" style="font-size:11px" onclick="jusbrMarcarTodos()">marcar todos</button><button id="jusbr-ordem-btn" class="btn sm ghost" style="font-size:11px" title="Inverter a ordem da lista — o download e o PDF seguem esta ordem" onclick="jusbrInverterOrdem()">↓ mais recentes primeiro</button><button class="btn sm" style="font-size:11px;background:#0F6E56;color:#fff" title="Baixa os marcados numa pasta compactada (.zip)" onclick="jusbrBaixarSelecionados(\'zip\')">⬇ pasta .zip</button><button class="btn sm" style="font-size:11px;background:#185FA5;color:#fff" title="Junta todos os marcados num único arquivo PDF" onclick="jusbrBaixarSelecionados(\'pdf\')">⬇ PDF único</button><button class="btn sm ghost" style="font-size:11px" title="Baixa cada arquivo separadamente na pasta Downloads" onclick="jusbrBaixarSelecionados(\'soltos\')">⬇ soltos</button></div><div id="jusbr-lista"></div></div>';
   // IA
   if(!KAN)initKanban(); initAgenda();
@@ -2955,7 +2955,7 @@ function _parteItemHTML(nome, autor){
     +'<span onclick="copiarParte(this)" data-v="'+esc(nome)+'" title="Clique para copiar o nome" style="cursor:copy;border-radius:4px;padding:1px 3px;margin-left:-3px;'+estNome+'">'+esc(nome)+'</span>'
     +'<br><span class="parte-doc-slot" data-nk="'+esc(nk)+'" data-nome="'+esc(nome)+'" onclick="if(this.getAttribute(\'data-v\'))copiarParte(this)" title="Clique para copiar" style="cursor:copy;'+estDoc+';color:var(--muted);opacity:.8;border-radius:4px;margin-left:-3px"></span>'
     +'<a onclick="editarDocParte(this.getAttribute(\'data-nome\'))" data-nome="'+esc(nome)+'" title="Informar/corrigir o CPF ou CNPJ desta parte (grava no cadastro de Contatos)" style="cursor:pointer;color:#185FA5;font-size:11px;margin-left:5px">✎</a>'
-    +(autor?_contatoParteHTML(nome):'')
+    +_contatoParteHTML(nome, autor)
     +'</div>';
 }
 /* Contatos DESTA parte, logo abaixo do nome. Num litisconsórcio ("A; B; C") o
@@ -2966,7 +2966,11 @@ function _contatosDaParte(nome){
   var v=atual.ctlp[normClienteNome(nome)];
   return Array.isArray(v)?v.filter(Boolean):[];
 }
-function _contatoParteHTML(nome){
+function _contatoParteHTML(nome, autor){
+  /* Vale para OS DOIS polos. No réu o contato não é para atender: é para
+     tentativa de acordo (proposta, audiência de conciliação, negociação
+     direta) — por isso o e-mail e o WhatsApp dele ficam à mão na ficha,
+     do mesmo jeito que os do cliente. */
   var lista=_contatosDaParte(nome);
   var chips=lista.map(function(t){
     var eMail=/@/.test(t);
@@ -2979,10 +2983,10 @@ function _contatoParteHTML(nome){
       +';border-radius:10px;padding:1px 7px;display:inline-block">'+(eMail?'✉ ':'📞 ')+esc(t)+'</a>'+selo+'</span>';
   }).join('');
   return '<div style="margin:2px 0 0 -3px;line-height:1.5">'+chips
-    +'<a onclick="editarContatoParte(this.getAttribute(\'data-nome\'))" data-nome="'+esc(nome)+'" '
-    +'title="Telefone/e-mail desta parte especificamente" '
+    +'<a onclick="editarContatoParte(this.getAttribute(\'data-nome\'))" data-nome="'+esc(nome)+'" data-autor="'+(autor?'1':'0')+'" '
+    +'title="'+(autor?'Telefone/e-mail desta parte especificamente':'E-mail e WhatsApp do réu — para proposta de acordo, conciliação e negociação direta')+'" '
     +'style="cursor:pointer;color:var(--muted);font-size:10.5px;border-bottom:1px dotted #c8cfd8">'
-    +(lista.length?'✎ contato':'+ contato desta parte')+'</a></div>';
+    +(lista.length?'✎ contato':(autor?'+ contato desta parte':'+ contato do réu (acordo)'))+'</a></div>';
 }
 /* Repinta só os contatos de cada parte. Redesenhar a ficha inteira aqui faria a
    tela piscar toda vez que o status do app chegasse. */
@@ -2991,13 +2995,16 @@ function _repintaContatosPartes(){
   topo.querySelectorAll('a[data-nome]').forEach(function(a){
     if(!/contato/.test(a.textContent||'')) return;
     var box=a.parentElement; if(!box) return;
-    box.outerHTML=_contatoParteHTML(a.getAttribute('data-nome'));
+    box.outerHTML=_contatoParteHTML(a.getAttribute('data-nome'), a.getAttribute('data-autor')==='1');
   });
 }
 async function editarContatoParte(nome){
   if(!atual) return;
   var nk=normClienteNome(nome), atuais=_contatosDaParte(nome);
-  var v=window.prompt('Telefone(s) e/ou e-mail(s) de '+nome+', separados por vírgula.\nDeixe vazio para limpar.', atuais.join(', '));
+  var ehReu=(typeof _partesSplit==='function') && _partesSplit(atual.oponente||'').some(function(x){ return normClienteNome(x)===nk; });
+  var v=window.prompt('Telefone(s) e/ou e-mail(s) de '+nome+', separados por vírgula.'
+    +(ehReu?'\n\n(parte contrária — usado para tentativa de acordo: proposta, conciliação, negociação direta)':'')
+    +'\nDeixe vazio para limpar.', atuais.join(', '));
   if(v===null) return;
   var lista=v.split(/[,;\n]+/).map(function(t){return t.trim();}).filter(Boolean).slice(0,4);
   var mapa=Object.assign({}, atual.ctlp||{});
@@ -4204,8 +4211,20 @@ function guessFase(p){
   if(/cumprimento de senten|cumprimento provis[óo]rio|cumprimento definitivo|execu[çc][ãa]o de t[íi]tulo|execu[çc][ãa]o fiscal|processo de execu[çc][ãa]o|fase de execu[çc][ãa]o|inicia(da|do|r) a execu[çc][ãa]o|\bpenhora|sisbajud|bacenjud|renajud|infojud|precat[óo]|requisi[çc][ãa]o de pequeno valor|\brpv\b|liquida[çc][ãa]o de senten|hasta p[úu]blica|bloqueio de valores|impugna[çc][ãa]o ao cumprimento|carta de adjudica|auto de arremata|edital de leil|leil[ãa]o judicial|designa(do|[çc][ãa]o de) leil/.test(t))return "exec";
   /* 2) RECURSAL — só APÓS sentença, subida ao 2º grau (não classificar por embargos de declaração isolado) */
   if(/apela[çc][ãa]o|\bapelo\b|2º grau|segundo grau|inst[âa]ncia superior|superior tribunal|\bstj\b|\bstf\b|turma recursal|recurso inominado|recurso especial|recurso extraordin[áa]rio|contrarraz[õo]es (de|à) apela|subida dos autos|remessa (ao|dos autos ao) tribunal|distribu[íi]do.*(desembargador|relator)|conclus[ão].*relator|ac[óo]rd[ãa]o/.test(t))return "recur";
-  /* 3) DECISÓRIA — aguardando sentença/acórdão; agravo de instrumento; tutela antecipada/urgência */
-  if(/conclus[ãao].*(senten|julgamento|decis[ãa]o)|para senten[çc]a|aguardando senten|senten[çc]a|julgad|proced[êe]ncia|improced|homolog|resolvo o m[ée]rito|agravo de instrumento|tutela antecipada|tutela de urg[êe]ncia|tutela provis[óo]ria|liminar|decis[ãa]o interlocut[óo]ria/.test(t))return "decis";
+  /* 3) DECISÓRIA — SÓ com SENTENÇA ou ACÓRDÃO (ou os autos conclusos para
+     sentença/julgamento). Decisão LIMINAR não muda de fase.
+     Pedido do dono (26/08/2026): "houve uma decisão liminar, mas isso não
+     significa mudança de fase — só deveria mudar com sentença/acórdão".
+     Por isso saíram daqui: "tutela antecipada", "tutela de urgência",
+     "tutela provisória", "liminar", "decisão interlocutória", "agravo de
+     instrumento" e "homolog" solto — todos aparecem no COMEÇO do processo
+     (a liminar costuma ser a 1ª decisão, antes até da contestação) e
+     empurravam para a Fase Decisória um processo recém-ajuizado.
+     "Agravo de instrumento" continua valendo pela CLASSE do processo (item 0
+     acima): ali o processo É o agravo, não uma menção de passagem.
+     Exemplo real: 0744809-54.2026.8.07.0001 — liminar deferida em processo em
+     fase instrutória virava "Fase Decisória". */
+  if(/conclus[ãao].*(senten|julgamento)|para senten[çc]a|aguardando senten|senten[çc]a (prolatada|proferida|publicada|de m[ée]rito|homologat)|prolatada a senten|profer(ida|ido) (a )?senten|julgo (procedente|improcedente|parcialmente|extinto)|julgad[oa] (procedente|improcedente|parcialmente)|(pela )?proced[êe]ncia (do|da) (pedido|a[çc][ãa]o)|improced[êe]ncia (do|da) (pedido|a[çc][ãa]o)|resolvo o m[ée]rito|resolu[çc][ãa]o do m[ée]rito|extin[çc][ãa]o (do processo|do feito)|homologa[çc][ãa]o (do|de) acordo|homolog(o|ou|ada|ado)\s+(o\s+|a\s+)?acordo|acordo homologad|exting(o|ue|uiu|to|uindo)\s+(o\s+)?(processo|feito)|ac[óo]rd[ãa]o/.test(t))return "decis";
   /* 4) INSTRUTÓRIA — audiência (instrução), perícia, provas */
   if(/audi[êe]ncia|\baij\b|instru[çc][ãa]o e julgamento|per[íi]cia|per[íi]cial|laudo|oitiva|depoimento|testemunh|especificar provas|especifica[çc][ãa]o de provas|produ[çc][ãa]o de provas|rol de testemunh|design(ada|ado|ação) de audi/.test(t))return "instr";
   /* 5) SANEADORA (aqui = pendências de documento/emenda) — emenda à inicial, juntar documentos, gratuidade */
@@ -10633,6 +10652,10 @@ var DOC_ESCOPOS={
 };
 function _docEsc(escopo){ return DOC_ESCOPOS[escopo]||DOC_ESCOPOS.proc; }
 /* junta a base do escopo com a subpasta navegada */
+/* Nome da pasta que o app do cliente lê — precisa bater BYTE A BYTE com
+   PASTA_APP_CLIENTE de lib/appCliente.js (servidor). Se divergir, o escritório
+   larga documento numa pasta que o cliente nunca vai ver. */
+var PASTA_APP_CLIENTE='App do Cliente';
 function _docDir(escopo, sub){ var b=_docEsc(escopo).base; return b?(b+(sub?('/'+sub):'')):(sub||''); }
 async function docToken(){ var s=await window.__sb.auth.getSession(); return s&&s.data&&s.data.session&&s.data.session.access_token; }
 function _winFolderSVG(){ return '<svg width="16" height="16" viewBox="0 0 24 24" style="vertical-align:-3px;margin-right:5px"><path d="M2.5 6.5A1.5 1.5 0 0 1 4 5h4.2l1.6 1.8H20a1.5 1.5 0 0 1 1.5 1.5V18A1.5 1.5 0 0 1 20 19.5H4A1.5 1.5 0 0 1 2.5 18V6.5z" fill="#ffca43" stroke="#e0a000" stroke-width="0.8"/><path d="M2.5 9H21.5V18A1.5 1.5 0 0 1 20 19.5H4A1.5 1.5 0 0 1 2.5 18V9z" fill="#ffdd7a"/></svg> '; }
@@ -10730,6 +10753,19 @@ async function carregarDocs(numero, sub, escopo){
     var r=await fetch('/api/docs?dir='+encodeURIComponent(dir),{headers:{Authorization:'Bearer '+tok}});
     var j=await r.json(); var itens=(j&&j.itens)||[];
     if(escopo==='proc' && !sub){ itens=itens.filter(function(x){ return !(x.tipo==='pasta' && x.nome==='_OUTRA_PARTE'); }); }
+    /* Pasta "App do Cliente": é a curadoria do que o cliente enxerga no
+       aplicativo (ver lib/appCliente.js no servidor). Até agora ela só nascia
+       no momento em que a 1ª peça oficial do jus.br era espelhada — em
+       processo sem peça baixada ela simplesmente NÃO EXISTIA, e não havia
+       onde soltar um documento para o cliente ver. Agora, ao abrir a raiz dos
+       documentos do processo, ela é criada se faltar e aparece sempre. */
+    if(escopo==='proc' && !sub && !itens.some(function(x){ return x.tipo==='pasta' && x.nome===PASTA_APP_CLIENTE; })){
+      try{
+        var rc=await fetch('/api/docs',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},
+          body:JSON.stringify({path:dig+'/'+PASTA_APP_CLIENTE, mkdir:true})});
+        if(rc&&rc.ok) itens.push({tipo:'pasta',nome:PASTA_APP_CLIENTE,mod:new Date().toISOString()});
+      }catch(eAC){}
+    }
     var naLix=/(^|\/)Lixeira$/.test(sub||'');
     /* ordenação: pastas primeiro, Lixeira por último; depois A-Z/Z-A ou data */
     var sort=window.__docSort||'az';
@@ -10792,6 +10828,15 @@ async function carregarDocs(numero, sub, escopo){
       if(isFolder){ nmeWrap.style.fontWeight='600'; }
       if(isLix){ td1.style.color='#8a8f98'; td1.title='Itens excluídos ficam aqui por 30 dias'; }
       td1.appendChild(nmeWrap);
+      /* a pasta "App do Cliente" é a curadoria: tudo que estiver dentro dela o
+         cliente vê no aplicativo — inclusive o que for arrastado para cá */
+      if(isFolder && x.nome===PASTA_APP_CLIENTE){
+        var apc=document.createElement('span');
+        apc.style.cssText='font-size:9.5px;color:#0F6E56;font-weight:600;margin-left:6px;line-height:1.2';
+        apc.textContent='tudo que estiver aqui o cliente vê no app — arraste para cá o que quiser liberar';
+        apc.title='As peças oficiais do jus.br entram aqui sozinhas. Qualquer outro arquivo que você jogar nesta pasta também passa a aparecer no app do cliente.';
+        nmeWrap.appendChild(apc);
+      }
       /* a pasta "Autos (jus.br)" alimenta o app do cliente: as peças oficiais dela
          (sentença, despacho, decisão, acórdão, acordo, ata, alvará) aparecem lá */
       if(isFolder && /^autos \(jus\.?br\)$/i.test(x.nome||'')){
@@ -11412,6 +11457,89 @@ async function _syncCompletarAutor(p, folder){
   p.cliente=novo;
   return true;
 }
+/* ===== Arrastar um documento do processo para a conversa com o cliente =====
+   Pedido do dono (26/08/2026): "permita arrastar documentos do processo para o
+   chat 📲 Conversa com o cliente (app)".
+   As linhas de arquivo da seção Documentos já são arrastáveis (elas carregam o
+   caminho em 'text/docmove', usado para mover entre pastas). Aqui esse mesmo
+   arrasto ganha um segundo destino: o cartão da conversa. Soltar ali baixa o
+   arquivo do servidor, converte para base64 e o coloca no MESMO anexo que o
+   clipe usa — depois é só escrever a mensagem e clicar em Enviar.
+   Não envia sozinho de propósito: mandar documento ao cliente é irreversível,
+   então o arquivo fica "engatilhado" e a pessoa confirma no botão. */
+function _mimePorNome(nome){
+  var e=String(nome||'').toLowerCase().split('.').pop();
+  return {pdf:'application/pdf',
+    doc:'application/msword', docx:'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    xls:'application/vnd.ms-excel', xlsx:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    csv:'text/csv', txt:'text/plain', html:'text/html', htm:'text/html',
+    png:'image/png', jpg:'image/jpeg', jpeg:'image/jpeg', gif:'image/gif', webp:'image/webp',
+    mp3:'audio/mpeg', ogg:'audio/ogg', m4a:'audio/mp4', mp4:'video/mp4', zip:'application/zip'
+  }[e]||'application/octet-stream';
+}
+/* baixa o documento do processo e engatilha como anexo da conversa do cliente */
+async function _cliChatAnexarDoProcesso(rel){
+  if(!rel || !atual) return;
+  var dig=_docChaveProc(atual.numero); if(!dig){ alert('Salve o caso primeiro (sem identificação ainda).'); return; }
+  var nome=String(rel).split('/').pop();
+  var box=document.getElementById('clichat-drop');
+  var antes=box?box.innerHTML:'';
+  if(box) box.innerHTML='&#8987; preparando <b>'+esc(nome)+'</b>…';
+  try{
+    var tok=await docToken(); if(!tok) throw new Error('sessão expirada — recarregue a página');
+    var r=await fetch('/api/docs?file='+encodeURIComponent(dig+'/'+rel),{headers:{Authorization:'Bearer '+tok}});
+    if(!r.ok) throw new Error('não deu para baixar o arquivo (HTTP '+r.status+')');
+    var blob=await r.blob();
+    var b64=await new Promise(function(ok,err){
+      var fr=new FileReader();
+      fr.onload=function(){ var v=String(fr.result||''), i=v.indexOf(','); ok(i>=0?v.slice(i+1):v); };
+      fr.onerror=function(){ err(new Error('não consegui ler o arquivo')); };
+      fr.readAsDataURL(blob);
+    });
+    var tipo=blob.type||_mimePorNome(nome);
+    var ok2=(typeof window.appCliAnexoPronto==='function') && window.appCliAnexoPronto(nome, tipo, b64);
+    if(box) box.innerHTML=ok2
+      ? '&#9989; <b>'+esc(nome)+'</b> pronto para enviar — escreva a mensagem (se quiser) e clique em <b>Enviar</b>.'
+      : '&#9888; não deu para anexar este arquivo.';
+  }catch(e){
+    if(box) box.innerHTML='<span style="color:#b5342b">Erro: '+esc((e&&e.message)||String(e))+'</span>';
+    else alert('Erro ao anexar: '+((e&&e.message)||e));
+    setTimeout(function(){ var b2=document.getElementById('clichat-drop'); if(b2&&antes) b2.innerHTML=antes; },4000);
+  }
+}
+/* Liga o "soltar aqui" no cartão da conversa e na janela flutuante. Roda a cada
+   repintura do cartão — por isso é idempotente (marca o elemento já ligado). */
+window.appCliLigarDrop=function(){
+  [['clichat-card','clichat-drop'],['cmp-clichat',null]].forEach(function(par){
+    var host=document.getElementById(par[0]); if(!host||host.__dropOk) return;
+    host.__dropOk=1;
+    function temDoc(ev){
+      var t=(ev.dataTransfer&&ev.dataTransfer.types)||[];
+      return [].indexOf.call(t,'text/docmove')>=0 || [].indexOf.call(t,'text/docreorder')>=0;
+    }
+    function realce(on){
+      var alvo=par[1]?document.getElementById(par[1]):host; if(!alvo) return;
+      alvo.style.background=on?'#e3f1e8':(par[1]?'#f7fbff':'');
+      alvo.style.borderColor=on?'#0F6E56':(par[1]?'#b9cfe6':'');
+    }
+    host.addEventListener('dragover',function(ev){ if(!temDoc(ev)) return; ev.preventDefault(); try{ ev.dataTransfer.dropEffect='move'; }catch(e){} realce(true); });
+    host.addEventListener('dragleave',function(ev){ if(ev.target===host) realce(false); });
+    host.addEventListener('drop',function(ev){
+      if(!temDoc(ev)) return;
+      ev.preventDefault(); ev.stopPropagation(); realce(false);
+      var rel='';
+      try{ rel=ev.dataTransfer.getData('text/docmove')||''; }catch(e){}
+      if(!rel){
+        /* modo "⇅ manual": a linha carrega só o NOME — recompõe o caminho pela
+           pasta que está aberta na hora */
+        var nm=''; try{ nm=ev.dataTransfer.getData('text/docreorder')||''; }catch(e2){}
+        var c=window.__docCtx||{};
+        if(nm) rel=_docDir(c.escopo||'proc', (c.sub?c.sub+'/':'')+nm);
+      }
+      if(rel) _cliChatAnexarDoProcesso(rel);
+    });
+  });
+};
 /* ponto 6/13: criar uma pasta vazia dentro da pasta aberta.
    Requer que o back-end /api/docs aceite {path, mkdir:true} para criar diretório. */
 async function criarPastaDoc(escopo){
@@ -12149,26 +12277,39 @@ async function _atdExtrair(p, dig){
     if(p.cliente) _partesSplit(p.cliente).forEach(_pushNome);
     try{ var ch=(typeof _casalHistorico==='function')?_casalHistorico(p):''; if(ch) ch.split(' e ').forEach(_pushNome); }catch(e){}
     try{ var ht=(p.hist_full||[]).map(function(a){return (a&&a.texto)||'';}).join('\n'); if(ht.replace(/\s/g,'').length>40) acc.textos.push(ht); }catch(e){}
+    /* A PETIÇÃO INICIAL BASTA. Pedido do dono (26/08/2026): "existindo petição
+       inicial, basta — ela contém os dados do autor e do réu para a ficha".
+       Faz sentido: a inicial qualifica TODAS as partes (nome completo, CPF/CNPJ,
+       endereço, e-mail) logo no preâmbulo. Varrer contrato, extrato e decisão
+       depois disso só acrescenta ruído (nome de vendedor, de testemunha, de
+       preposto do banco) e faz a leitura demorar minutos à toa.
+       Então: achou a inicial e conseguiu ler texto dela → para por aqui.
+       Não achou (ou veio PDF só de imagem, sem texto) → segue varrendo o resto,
+       como antes. */
+    var achouInicial=false;
     var relP=await _acharDocRel(dig,/procura/i);
     if(relP){ setSt(SP+'lendo a procuração…'); var tP=await _lerDoc(relP); if(tP){ _colher(tP); acc.fontes.push('procuração'); } }
     var relI=await _acharDocRel(dig,/inicial|peti[çc][aã]o/i);
-    if(relI&&relI!==relP){ setSt(SP+'lendo a petição inicial…'); var tI=await _lerDoc(relI); if(tI){ _colher(tI); acc.fontes.push('petição inicial'); } }
-    var todos=[]; try{ todos=await _listarArquivosProc(dig); }catch(e){}
+    if(relI&&relI!==relP){ setSt(SP+'lendo a petição inicial…'); var tI=await _lerDoc(relI); if(tI){ _colher(tI); acc.fontes.push('petição inicial'); achouInicial=true; } }
+    /* achou a inicial: nem lista o resto da pasta (a listagem é recursiva e
+       custa uma volta ao servidor por subpasta) */
+    var todos=[]; if(!achouInicial){ try{ todos=await _listarArquivosProc(dig); }catch(e){} }
     /* íntegra dos autos ("000 - ÍNTEGRA…"): começa pela petição inicial, que é o
        documento mais completo de qualificação das partes (nomes, CPF/CNPJ, endereço).
        Lê só as primeiras páginas — o PDF inteiro pode ter centenas. */
     var relN=(todos||[]).find(function(rr){ return /^000 - .*(INTEGRA|ÍNTEGRA|PE[ÇC]AS)/i.test(rr.split('/').pop()); });
-    if(relN){
+    if(relN && !achouInicial){
       setSt(SP+'lendo o início da íntegra dos autos (petição inicial)…');
       try{
         var rN=await fetch('/api/docs?file='+encodeURIComponent(dig+'/'+relN),{headers:{Authorization:'Bearer '+tok}});
         if(rN.ok){
           var tN=await _extrairTextoPdf(await rN.arrayBuffer(),15);
-          if(tN&&tN.replace(/\s/g,'').length>=20){ _colher(tN); acc.fontes.push('íntegra dos autos (início)'); }
+          if(tN&&tN.replace(/\s/g,'').length>=20){ _colher(tN); acc.fontes.push('íntegra dos autos (início)'); achouInicial=true; }
         }
       }catch(eN){}
     }
-    var docs=(todos||[]).filter(function(rr){ return /\.(docx?|pdf|html?|xlsx?|csv)$/i.test(rr)&&rr!==relP&&rr!==relI&&rr!==relN; });
+    /* com a inicial lida, os demais documentos não são varridos (ver acima) */
+    var docs=achouInicial?[]:(todos||[]).filter(function(rr){ return /\.(docx?|pdf|html?|xlsx?|csv)$/i.test(rr)&&rr!==relP&&rr!==relI&&rr!==relN; });
     docs.sort(function(a,b){ function sc(x){ return /contrat/i.test(x)?0:(/extrat|pagament/i.test(x)?1:(/procura/i.test(x)?2:(/inicial|peti[çc]/i.test(x)?3:(/despach|senten|decis/i.test(x)?4:5)))); } return sc(a)-sc(b); });
     var totD=Math.min(docs.length,10);
     for(var di=0; di<totD; di++){
@@ -12226,7 +12367,9 @@ async function _atdExtrair(p, dig){
     var ctlAtual=String(p.ctl||'').toLowerCase();
     fill('atd-emails', acc.emails.length?acc.emails.map(function(e2){ var ja=ctlAtual.indexOf(String(e2).toLowerCase())>=0; return '<label style="display:flex;gap:6px;align-items:center;margin:0 0 4px;font-size:13px;cursor:pointer"><input type="checkbox" data-v="'+esc(e2)+'" style="width:auto">'+esc(e2)+(ja?' <span class="note" style="font-size:10.5px">(já na ficha)</span>':'')+'</label>'; }).join(''):'<span class="note">nenhum</span>');
     fill('atd-tels', acc.tels.length?acc.tels.map(function(t2){ var ja=ctlAtual.replace(/\D/g,'').indexOf(String(t2).replace(/\D/g,''))>=0&&String(t2).replace(/\D/g,'').length>=8; return '<label style="display:flex;gap:6px;align-items:center;margin:0 0 4px;font-size:13px;cursor:pointer"><input type="checkbox" data-v="'+esc(t2)+'" style="width:auto">'+esc(t2)+(ja?' <span class="note" style="font-size:10.5px">(já na ficha)</span>':'')+'</label>'; }).join(''):'<span class="note">nenhum</span>');
-    if(!completou) setSt('Lido de: <b>'+esc(_uniq(acc.fontes).slice(0,5).join(' · ')||'histórico')+'</b>. Use <b>→ autor</b> / <b>→ réu</b> em cada nome, ajuste os CPFs e clique em <b>Salvar tudo</b>.');
+    if(!completou) setSt('Lido de: <b>'+esc(_uniq(acc.fontes).slice(0,5).join(' · ')||'histórico')+'</b>.'
+      +(achouInicial?' <span style="color:#0F6E56">A petição inicial já qualifica autor e réu — os demais documentos não foram varridos.</span>':'')
+      +' Use <b>→ autor</b> / <b>→ réu</b> em cada nome, ajuste os CPFs e clique em <b>Salvar tudo</b>.');
   }catch(e){ setSt('Erro ao ler documentos: '+esc((e&&e.message)||String(e))+' — dá para editar manualmente acima.'); }
 }
 async function aplicarAtualizarDados(){
@@ -18206,6 +18349,20 @@ async function renderRobos(){
     }).join('')+'</div>';
   }catch(e){ el.innerHTML='<div class="note">Erro: '+finEsc(String(e&&e.message||e))+'</div>'; }
 }
+/* CPF/CNPJ do DEVEDOR (parte contrária) a partir do cadastro de Contatos —
+   é o mesmo mapa que preenche o doc embaixo do nome na ficha. Devolve '' quando
+   a parte ainda não tem documento cadastrado (aí a busca cai para o nome). */
+function _docDaParteContraria(){
+  try{
+    if(!atual||!window.__docsPorNome||typeof normClienteNome!=='function') return '';
+    var nomes=(typeof _partesSplit==='function')?_partesSplit(atual.oponente||''):[];
+    for(var i=0;i<nomes.length;i++){
+      var d=String(window.__docsPorNome[normClienteNome(nomes[i])]||'').replace(/\D/g,'');
+      if(d.length===11||d.length===14) return d;
+    }
+  }catch(e){}
+  return '';
+}
 /* ===== Dossiê do devedor — bens e créditos em outros processos =====
    Fonte: DJEN/Comunica do CNJ, busca por NOME da parte (o CNJ não aceita
    CPF/CNPJ). A IA lê só as publicações com cara de bem, então o custo é baixo. */
@@ -18214,10 +18371,16 @@ var _DEV_CONF={alta:'#127a53',media:'#8a5a00',baixa:'#b5342b'};
 async function abrirDossieDevedor(){
   if(!atual) return;
   var sugestao=(atual.oponente||'').split(/[;|]+/)[0].trim();
-  var nome=(window.prompt('Dossiê do devedor — nome completo ou razão social exata.\n\nDeixe em branco se for buscar só pelo CPF/CNPJ no próximo passo.',sugestao)||'').trim();
-  var docSug='';
-  try{ if(window.__docsPorNome && typeof normClienteNome==='function'){ var dd=window.__docsPorNome[normClienteNome(nome||sugestao)]; if(dd) docSug=dd; } }catch(eDD){}
-  var doc=(window.prompt('CPF ou CNPJ do devedor, se souber (opcional — busca direto no jus.br, cobre até processo sem publicação no diário).\n\nDeixe em branco para buscar só pelo nome.',docSug)||'').replace(/\D/g,'');
+  /* garante o mapa nome→CPF/CNPJ carregado antes de perguntar (na 1ª abertura da
+     ficha ele ainda pode não ter chegado do banco) */
+  try{ if(!window.__docsPorNome) await _preencherDocsPartes(); }catch(ePD){}
+  var docSug=_docDaParteContraria();
+  try{ if(!docSug && window.__docsPorNome && typeof normClienteNome==='function'){ var dd=window.__docsPorNome[normClienteNome(sugestao)]; if(dd) docSug=dd; } }catch(eDD){}
+  var nome=(window.prompt('Dossiê do devedor — nome completo ou razão social exata.'
+    +(docSug?('\n\nCPF/CNPJ já cadastrado desta parte: '+_fmtDocParte(docSug)+' — a busca no jus.br usa ELE.'):'')
+    +'\n\nDeixe em branco se for buscar só pelo CPF/CNPJ no próximo passo.',sugestao)||'').trim();
+  try{ if(nome && window.__docsPorNome && typeof normClienteNome==='function'){ var dn=window.__docsPorNome[normClienteNome(nome)]; if(dn) docSug=dn; } }catch(eDN){}
+  var doc=(window.prompt('CPF ou CNPJ do devedor (busca direto no jus.br — cobre até processo sem publicação no diário).\n\nAtenção: o DJEN/Comunica do CNJ NÃO aceita CPF/CNPJ, só nome — por isso a varredura do diário continua sendo pelo nome acima.\n\nDeixe em branco para buscar só pelo nome.',docSug)||'').replace(/\D/g,'');
   if((!nome||nome.length<5) && doc.length!==11 && doc.length!==14){ alert('Informe o nome completo (mínimo 5 letras) e/ou um CPF/CNPJ válido.'); return; }
   var meses=parseInt(window.prompt('Procurar em quantos meses para trás? (1 a 36)\n\nQuanto maior, mais demora — 12 costuma ser um bom começo.','12')||'12',10);
   if(!meses||meses<1) meses=12;
@@ -18326,12 +18489,19 @@ var _DESC_SIT={deferida:'✅ deferida',indeferida:'❌ indeferida',incidente_ins
 async function abrirDesconsideracaoPJ(){
   if(!atual) return;
   var nomeOp=(atual.oponente||'').split(/[;|]+/)[0].trim();
+  /* mapa nome→CPF/CNPJ pode não ter chegado ainda na 1ª abertura da ficha */
+  try{ if(!window.__docsPorNome) await _preencherDocsPartes(); }catch(ePD){}
   var sugestao='';
   try{ if(window.__docsPorNome && typeof normClienteNome==='function'){ var d=window.__docsPorNome[normClienteNome(nomeOp)]; if(d&&d.length===14) sugestao=d; } }catch(e){}
-  var cnpj=window.prompt('Desconsideração da personalidade jurídica — CNPJ da empresa devedora (só números ou com pontuação).\n\nBusca no jus.br (PDPJ) todos os processos em que esse CNPJ é parte, em qualquer tribunal.',sugestao||nomeOp);
+  if(!sugestao){ var dq=_docDaParteContraria(); if(dq.length===14) sugestao=dq; }
+  /* o campo só aceita 14 dígitos: sugerir o NOME aqui (como antes) só rendia
+     "CNPJ inválido" — sem CNPJ cadastrado, abre vazio e explica onde informar */
+  var cnpj=window.prompt('Desconsideração da personalidade jurídica — CNPJ da empresa devedora (14 dígitos, com ou sem pontuação).'
+    +'\n\nA busca é feita SÓ pelo CNPJ: o jus.br (PDPJ) devolve todos os processos em que esse CNPJ é parte, em qualquer tribunal.'
+    +(sugestao?('\n\nCadastrado para '+nomeOp+': '+_fmtDocParte(sugestao)):('\n\n'+(nomeOp?nomeOp:'Esta parte')+' ainda não tem CNPJ no cadastro — informe pelo ✎ ao lado do nome do réu na ficha para não ter de digitar toda vez.')),sugestao);
   if(!cnpj) return;
   cnpj=cnpj.replace(/\D/g,'');
-  if(cnpj.length!==14){ alert('CNPJ inválido — precisa ter 14 dígitos.'); return; }
+  if(cnpj.length!==14){ alert('CNPJ inválido — precisa ter 14 dígitos.\n\nEsta busca é exclusivamente por CNPJ (pessoa jurídica); não aceita nome nem CPF.'); return; }
   _descModal('<div class="note">Buscando no jus.br e varrendo as movimentações… isso pode levar até 2 minutos.</div>');
   try{
     var jwt=(typeof finToken==='function')?await finToken():await jusbrJwt();
@@ -20053,12 +20223,17 @@ function exportarProdutividadeCSV(){
            janela do chat. O leitor e o estado são os MESMOS da janela, então o
            arquivo escolhido aqui aparece lá e vice-versa. */
         h+='<div id="clichat-anx-ficha" style="display:none;align-items:center;gap:7px;margin-top:8px;background:#eef4fa;border:1px solid #d6e3f0;border-radius:8px;padding:6px 9px;font-size:11.5px"></div>';
+        h+='<div id="clichat-drop" style="margin-top:8px;border:1px dashed #b9cfe6;border-radius:9px;padding:7px 10px;font-size:11.5px;color:#41618a;background:#f7fbff">&#128194; Arraste aqui um documento da pasta do processo para mandar ao cliente.</div>';
         h+='<div style="display:flex;gap:6px;margin-top:8px;align-items:center">'
           +'<input type="file" id="clichat-file" style="display:none" onchange="appCliAnexoDaFicha(this)">'
           +'<button class="btn sm ghost" title="Enviar documento ao cliente (PDF, imagem, Word…)" onclick="document.getElementById(\'clichat-file\').click()" style="font-size:15px;padding:4px 9px">&#128206;</button>'
           +'<input id="clichat-inp" placeholder="Responder ao cliente…" style="flex:1" onkeydown="if(event.key===\'Enter\')appCliEnviarDaFicha(\''+procId+'\')">'
           +'<button class="btn sm" style="background:#185FA5;color:#fff" onclick="appCliEnviarDaFicha(\''+procId+'\')">Enviar</button></div>';
         corpo.innerHTML=h;
+        /* a repintura recria a caixa do anexo: sem isto, o documento arrastado
+           some da tela quando chega mensagem nova, mesmo continuando engatilhado */
+        pintarAnexoJan();
+        try{ if(typeof window.appCliLigarDrop==='function') window.appCliLigarDrop(); }catch(eD){}
       });
   }
   window.appCliEnviarDaFicha=function(procId){
@@ -20231,6 +20406,8 @@ function exportarProdutividadeCSV(){
       '</div>';
     document.body.appendChild(w);
     _arrastavel(w, document.getElementById('cmp-clichat-bar'));
+    /* a janela flutuante aceita o mesmo arrasto de documento do cartão da ficha */
+    try{ if(typeof window.appCliLigarDrop==='function') window.appCliLigarDrop(); }catch(eD){}
     document.getElementById('cmp-clichat-x').onclick=fecharJanela;
     document.getElementById('cmp-clichat-voltar').onclick=function(){ window.appCliListaConversas(); };
     document.getElementById('cmp-clichat-busca-txt').addEventListener('input',function(){ pintaLista(); });
@@ -20292,6 +20469,15 @@ function exportarProdutividadeCSV(){
     inp.value='';   /* permite reescolher o MESMO arquivo depois de remover */
   };
   window.appCliTirarAnexo=function(){ ANEXO_JAN=null; pintarAnexoJan(); };
+  /* Anexo vindo de FORA do módulo (documento arrastado da pasta do processo).
+     Recebe já em base64 — o mesmo formato que o FileReader produz — para cair
+     no MESMO ANEXO_JAN usado pelo clipe da ficha e pelo da janela. */
+  window.appCliAnexoPronto=function(nome, tipo, b64){
+    if(!b64) return false;
+    if(Math.round(String(b64).length*3/4)>MAX_ANEXO){ alert('O arquivo passa de 15 MB — não dá para mandar pelo app.'); return false; }
+    ANEXO_JAN={nome:(nome||'arquivo'), tipo:(tipo||'application/octet-stream'), b64:b64};
+    pintarAnexoJan(); return true;
+  };
 
   function anexoHTMLJan(m){
     if(!m.anexo_id) return '';
