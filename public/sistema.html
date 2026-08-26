@@ -864,7 +864,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
     </div>
     <div class="row2">
       <div><label>Responsável</label><select id="t-resp"><option>Djan</option><option>Maria Rita</option><option>Jader Pinheiro</option><option>Maria Eduarda</option><option>Estagiário(a)</option></select></div>
-      <div><label>Tipo</label><select id="t-tipo" onchange="onTipoTarefa()"><option value="tarefa">Tarefa</option><option value="prazo">Prazo</option><option value="audiencia">Audiência</option><option value="reuniao">Reunião</option><option value="manifestacao">Manifestação</option><option value="diligencia">Diligência</option><option value="evento">Evento</option><option value="comercial">Comercial / Captação</option></select></div>
+      <div><label>Tipo</label><select id="t-tipo" onchange="onTipoTarefa()"><option value="tarefa">Tarefa</option><option value="prazo">Prazo</option><option value="audiencia">Audiência</option><option value="reuniao">Reunião</option><option value="manifestacao">Manifestação</option><option value="diligencia">Diligência</option><option value="execucao">Execução (após trânsito)</option><option value="evento">Evento</option><option value="comercial">Comercial / Captação</option></select></div>
     </div>
     <div id="t-corrigir-tipo" style="display:none;background:#fbeceb;border:1px solid #f3d4d1;border-radius:10px;padding:8px 11px;margin:0 0 8px">
       <span style="font-size:12px;font-weight:700;color:#b5342b">Marcado como audiência por engano?</span>
@@ -874,12 +874,13 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
       <button type="button" class="btn sm ghost" style="font-size:11.5px" onclick="corrigirTipoAtividade('reuniao')">&rarr; é Reunião</button>
     </div>
     <div id="t-prazo-box" style="display:none;background:#faf7ec;border:1px solid #ecdfb8;border-radius:10px;padding:10px 12px;margin-bottom:6px">
-      <div style="font-size:12px;font-weight:700;color:#8a5a00;margin-bottom:6px">Cálculo do prazo (dias úteis · CPC art. 224)</div>
+      <div id="t-prazo-tit" style="font-size:12px;font-weight:700;color:#8a5a00;margin-bottom:6px">Cálculo do prazo (dias úteis · CPC art. 224)</div>
       <div class="row3">
-        <div><label style="font-size:12px">Publicação / intimação</label><input id="t-pub" type="date" onchange="calcPrazoFatal()"></div>
-        <div><label style="font-size:12px">Prazo</label><select id="t-prazo-dias" onchange="calcPrazoFatal()"><option value="">—</option><option value="5">5 dias úteis</option><option value="8">8 dias úteis</option><option value="10">10 dias úteis</option><option value="15">15 dias úteis</option></select></div>
-        <div><label style="font-size:12px">Prazo fatal (calculado)</label><input id="t-prazo-calc" type="text" readonly style="background:#fff;font-weight:700;color:#b3261e"></div>
+        <div><label style="font-size:12px" id="t-pub-lbl">Publicação / intimação</label><input id="t-pub" type="date" onchange="calcPrazoFatal()"></div>
+        <div><label style="font-size:12px" id="t-dias-lbl">Prazo</label><select id="t-prazo-dias" onchange="calcPrazoFatal()"><option value="">—</option><option value="5">5 dias úteis</option><option value="8">8 dias úteis</option><option value="10">10 dias úteis</option><option value="15">15 dias úteis</option></select></div>
+        <div><label style="font-size:12px" id="t-calc-lbl">Prazo fatal (calculado)</label><input id="t-prazo-calc" type="text" readonly style="background:#fff;font-weight:700;color:#b3261e"></div>
       </div>
+      <div id="t-exec-linha" style="display:none;margin-top:8px;padding:8px 10px;background:#eef6f1;border:1px solid #cfe6d8;border-radius:8px;font-size:12.5px;color:#0f4a37"></div>
       <div id="t-prazo-nota" class="note" style="margin:6px 0 0;font-size:11px">Conta em dias úteis a partir do 1º dia útil após a publicação, pulando fins de semana, feriados nacionais fixos e recesso forense (20/12–20/1). <b>Confira sempre</b> — não cobre Carnaval, Corpus Christi nem feriados estaduais/locais.</div>
     </div>
     <!-- "Tarefa" e "Descrição" viraram um quadro só: eram dois campos distantes um
@@ -4943,7 +4944,7 @@ function salvarEventoAgenda(){
    Audiência marcada na data errada ou em duplicidade é para ser corrigida ou
    apagada na hora. Como mexe na agenda de todo mundo, cada alteração deixa um
    lançamento no histórico do processo dizendo o que mudou e QUEM mudou. */
-var TIPO_ROTULO={tarefa:'Tarefa',prazo:'Prazo',audiencia:'Audiência',reuniao:'Reunião',manifestacao:'Manifestação',diligencia:'Diligência',evento:'Evento'};
+var TIPO_ROTULO={tarefa:'Tarefa',prazo:'Prazo',audiencia:'Audiência',reuniao:'Reunião',manifestacao:'Manifestação',diligencia:'Diligência',execucao:'Execução',evento:'Evento'};
 function _dBR(iso){ return String(iso||'').indexOf('-')>0?String(iso).slice(0,10).split('-').reverse().join('/'):String(iso||''); }
 function _evRotulo(e){
   if(!e) return 'agendamento';
@@ -5026,7 +5027,7 @@ async function apagarEventoDoModal(){
 }
 /* Tipos que vivem na aba "Prazos e tarefas". Audiência, reunião e evento ficam
    só na agenda — não viram tarefa. */
-var TIPOS_TAREFA={tarefa:1,prazo:1,manifestacao:1,diligencia:1};
+var TIPOS_TAREFA={tarefa:1,prazo:1,manifestacao:1,diligencia:1,execucao:1};
 /* Cria a tarefa correspondente ao evento da agenda, se ainda não houver. É o que
    faz o item convertido aparecer em "Prazos e tarefas". Devolve true se criou. */
 function _garanteTarefaDoEvento(ev,tipoNome){
@@ -5154,7 +5155,7 @@ function renderMes(){
   }
 }
 function irParaCaso(numero){var i=DADOS.processos.findIndex(function(p){return p.numero===numero});if(i>=0)abrir(i);else go("processos");}
-var TIPOCOR={audiencia:"az",reuniao:"az",manifestacao:"am",prazo:"vm",tarefa:"nt",diligencia:"nt",evento:"nt",comercial:"nt"};
+var TIPOCOR={audiencia:"az",reuniao:"az",manifestacao:"am",prazo:"vm",execucao:"am",tarefa:"nt",diligencia:"nt",evento:"nt",comercial:"nt"};
 function _v(id){var e=document.getElementById(id);return e?(e.value||"").trim():"";}
 /* assinatura padrão do escritório; comunicações em nome do DJAN levam a OAB na linha abaixo */
 function _assinaturaCMP(nome){ nome=String(nome||'').trim(); var oab=/(^|\s)djan/i.test(nome)?'\nOAB/PB 5219-A':''; return 'Atenciosamente,\n'+nome+oab+'\nCrispim Mendonça e Pinheiro Advogados'; }
@@ -5193,19 +5194,56 @@ function novaTarefaDoProcesso(){abrirNovaTarefa(atual?atual.numero:"");}
 function fecharTarefa(){document.getElementById("modal-tarefa").classList.add("hidden");triagemAtual=null;window._tarEditId=null;}
 /* ===== Cálculo de prazo em dias úteis (CPC art. 224) ===== */
 /* mostra/esconde o box de cálculo conforme o tipo */
+/* Janela recursal por rito — é o que separa o trânsito em julgado da sentença.
+   Pedido do dono (26/08/2026): "15 para cíveis, 10 para juizado, 8 para
+   trabalhista"; a execução começa 1 dia depois desse prazo vencer. */
+var RECURSO_DIAS=[['15','Cível — 15 dias úteis (apelação, CPC art. 1.003 §5º)'],
+                  ['10','Juizado — 10 dias (recurso inominado, Lei 9.099 art. 42)'],
+                  ['8','Trabalhista — 8 dias (recurso ordinário, CLT art. 895)']];
 function onTipoTarefa(){
   var tipo=(document.getElementById('t-tipo')||{}).value;
   var box=document.getElementById('t-prazo-box'); if(!box) return;
-  box.style.display=(tipo==='prazo')?'block':'none';
+  var ehExec=(tipo==='execucao'), comCalc=(tipo==='prazo'||ehExec);
+  box.style.display=comCalc?'block':'none';
+  /* o mesmo quadro serve aos dois: no PRAZO ele calcula o vencimento da nossa
+     obrigação; na EXECUÇÃO calcula quando o prazo do ADVERSÁRIO recorrer vence
+     — e a tarefa nasce no dia seguinte */
+  var tit=document.getElementById('t-prazo-tit'), pubL=document.getElementById('t-pub-lbl'),
+      diaL=document.getElementById('t-dias-lbl'), calL=document.getElementById('t-calc-lbl'),
+      selD=document.getElementById('t-prazo-dias'), notaP=document.getElementById('t-prazo-nota'),
+      exec=document.getElementById('t-exec-linha');
+  if(comCalc){
+    if(tit) tit.textContent=ehExec?'Quando podemos executar (trânsito em julgado + 1 dia)':'Cálculo do prazo (dias úteis · CPC art. 224)';
+    if(pubL) pubL.textContent=ehExec?'Publicação da sentença':'Publicação / intimação';
+    if(diaL) diaL.textContent=ehExec?'Prazo de recurso (rito)':'Prazo';
+    if(calL) calL.textContent=ehExec?'Executar a partir de':'Prazo fatal (calculado)';
+    if(notaP) notaP.innerHTML=ehExec
+      ? 'Conta o prazo do recurso em dias úteis a partir do 1º dia útil após a publicação. Vencido sem recurso, há trânsito em julgado — e a tarefa de executar cai no <b>dia seguinte</b> (se cair em fim de semana ou feriado, vai para o próximo dia útil). <b>Confira sempre</b> — não cobre Carnaval, Corpus Christi, feriados estaduais/locais nem prazo em dobro (Fazenda, litisconsortes com procuradores distintos).'
+      : 'Conta em dias úteis a partir do 1º dia útil após a publicação, pulando fins de semana, feriados nacionais fixos e recesso forense (20/12–20/1). <b>Confira sempre</b> — não cobre Carnaval, Corpus Christi nem feriados estaduais/locais.';
+    /* o seletor de dias muda de conteúdo conforme o tipo */
+    if(selD && selD.getAttribute('data-modo')!==(ehExec?'exec':'prazo')){
+      var atualSel=selD.value;
+      selD.innerHTML='<option value="">—</option>'+(ehExec
+        ? RECURSO_DIAS.map(function(r){ return '<option value="'+r[0]+'">'+r[1]+'</option>'; }).join('')
+        : ['5','8','10','15'].map(function(d){ return '<option value="'+d+'">'+d+' dias úteis</option>'; }).join(''));
+      selD.setAttribute('data-modo', ehExec?'exec':'prazo');
+      /* o valor antigo pode não existir na nova lista (ex.: 5 dias não é rito
+         recursal) — o select rejeita em silêncio, então confere e usa o padrão */
+      selD.value=atualSel||'';
+      if(!selD.value && ehExec) selD.value='15';   /* cível é o rito mais comum aqui */
+    }
+  }
+  if(exec) exec.style.display='none';
+  if(comCalc) calcPrazoFatal();
   /* tipo PRAZO: a fileira Data/Hora/Prazo fatal é desnecessária — o cálculo já
      preenche tudo (fatal calculado + alerta 2 dias úteis antes) */
   var row=document.getElementById('t-datas-row'), nota=document.getElementById('t-datas-auto');
-  if(row) row.style.display=(tipo==='prazo')?'none':'';
-  if(nota){ nota.style.display=(tipo==='prazo')?'block':'none'; if(tipo==='prazo') _notaDatasAuto(); }
+  if(row) row.style.display=comCalc?'none':'';
+  if(nota){ nota.style.display=comCalc?'block':'none'; if(comCalc) _notaDatasAuto(); }
   /* prazo fatal SÓ existe para o tipo Prazo — tarefa comum usa a Data; quem quiser
      define o fatal pelo link opcional (ou editando a tarefa depois) */
   var colPz=document.getElementById('t-prazo-col'), revPz=document.getElementById('t-prazo-rev');
-  var comum=(tipo!=='prazo');
+  var comum=!comCalc;
   var temPz=!!((document.getElementById('t-prazo')||{}).value);
   if(colPz) colPz.style.display=(comum&&!temPz)?'none':'';
   if(revPz) revPz.style.display=(comum&&!temPz)?'inline-block':'none';
@@ -5227,8 +5265,15 @@ function _subDiasUteis(baseISO, n){
 function _notaDatasAuto(){
   var nota=document.getElementById('t-datas-auto'); if(!nota) return;
   var fatal=(document.getElementById('t-prazo')||{}).value, data=(document.getElementById('t-data')||{}).value;
+  var ehExec=((document.getElementById('t-tipo')||{}).value==='execucao');
+  if(ehExec){
+    nota.innerHTML=fatal
+      ? '🔔 Agendada para <b>'+_brData(fatal)+'</b> — o primeiro dia em que dá para executar.'
+      : 'Preencha a publicação da sentença e o rito acima — o sistema calcula o trânsito em julgado e agenda a execução para o dia seguinte.';
+    return;
+  }
   nota.innerHTML=fatal
-    ? '🔔 Agendado automaticamente: <b>prazo fatal '+fatal.split('-').reverse().join('/')+'</b> · alerta e entrada no Meu dia em <b>'+String(data||'').split('-').reverse().join('/')+'</b> (2 dias úteis antes).'
+    ? '🔔 Agendado automaticamente: <b>prazo fatal '+_brData(fatal)+'</b> · alerta e entrada no Meu dia em <b>'+_brData(data)+'</b> (2 dias úteis antes).'
     : 'Preencha a publicação e o prazo acima — o sistema calcula o prazo fatal e agenda o alerta 2 dias úteis antes, sem precisar digitar datas.';
 }
 /* é dia útil? (exclui sáb/dom, feriados nacionais fixos e recesso forense 20/12–20/1) */
@@ -5254,14 +5299,53 @@ function _somaDiasUteis(baseISO, n){
   }
   return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 }
+/* dia seguinte a uma data; se cair em fim de semana/feriado, empurra para o
+   próximo dia útil — não adianta agendar execução para um sábado */
+function _proxDiaUtilApos(baseISO){
+  var parts=String(baseISO||'').slice(0,10).split('-'); if(parts.length!==3) return '';
+  var d=new Date(+parts[0], +parts[1]-1, +parts[2]);
+  var guard=0;
+  do{ d.setDate(d.getDate()+1); guard++; }while(!_ehDiaUtil(d)&&guard<400);
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+/* dia seguinte no calendário (sem pular nada) — só para dizer se houve empurrão */
+function _diaSeguinte(baseISO){
+  var parts=String(baseISO||'').slice(0,10).split('-'); if(parts.length!==3) return '';
+  var d=new Date(+parts[0], +parts[1]-1, +parts[2]); d.setDate(d.getDate()+1);
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
 /* calcula e preenche o prazo fatal a partir da publicação + dias escolhidos */
 function calcPrazoFatal(){
+  var tipo=(document.getElementById('t-tipo')||{}).value;
+  var ehExec=(tipo==='execucao');
   var pub=(document.getElementById('t-pub')||{}).value;
   var dias=parseInt((document.getElementById('t-prazo-dias')||{}).value||'0',10);
   var out=document.getElementById('t-prazo-calc');
   var campoPrazo=document.getElementById('t-prazo');
   var campoData=document.getElementById('t-data');
-  if(!pub||!dias){ if(out)out.value=''; if(typeof _notaDatasAuto==='function')_notaDatasAuto(); return; }
+  var linhaEx=document.getElementById('t-exec-linha');
+  if(!pub||!dias){ if(out)out.value=''; if(linhaEx) linhaEx.style.display='none'; if(typeof _notaDatasAuto==='function')_notaDatasAuto(); return; }
+  /* EXECUÇÃO: o prazo calculado é o do RECURSO da outra parte. Vencido sem
+     recurso, transitou em julgado — e a execução começa no dia seguinte. */
+  if(ehExec){
+    var transitoISO=_somaDiasUteis(pub, dias);
+    var execISO=_proxDiaUtilApos(transitoISO);
+    if(out) out.value=_brData(execISO);
+    if(campoPrazo) campoPrazo.value=execISO;
+    if(campoData) campoData.value=execISO;
+    if(linhaEx){
+      linhaEx.style.display='block';
+      var empurrou=(execISO!==_diaSeguinte(transitoISO));
+      linhaEx.innerHTML='⚖ <b>Prazo de recurso vence em '+_brData(transitoISO)+'</b> ('+dias+' dias úteis da publicação).'
+        +' Sem recurso, transita em julgado — <b>executar a partir de '+_brData(execISO)+'</b>.'
+        +(empurrou?' <span style="color:#8a5a00">(o dia seguinte caía em fim de semana/feriado — empurrado para o próximo dia útil)</span>':'');
+    }
+    var tit=document.getElementById('t-titulo');
+    if(tit && !tit.value.trim()) tit.value='Iniciar execução / cumprimento de sentença';
+    if(typeof _notaDatasAuto==='function')_notaDatasAuto();
+    return;
+  }
+  if(linhaEx) linhaEx.style.display='none';
   var fatalISO=_somaDiasUteis(pub, dias);
   if(out) out.value=fatalISO?fatalISO.split('-').reverse().join('/'):'';
   /* preenche tudo automaticamente: prazo fatal calculado e data prevista/alerta
@@ -5398,7 +5482,7 @@ function salvarTarefa(){
   }catch(eS){}
   /* leva para a agenda CERTA: prazo/tarefa/diligência -> "Agenda (prazos e tarefas)"; audiência/reunião -> "Agenda (reuniões)".
      Assim a atividade recém-criada aparece na hora e não "some". */
-  var _ehPrazoTarefa=(tipo==='prazo'||tipo==='tarefa'||tipo==='diligencia'||tipo==='manifestacao');
+  var _ehPrazoTarefa=(tipo==='prazo'||tipo==='tarefa'||tipo==='diligencia'||tipo==='manifestacao'||tipo==='execucao');
   go("agenda");
   if(_ehPrazoTarefa){ setViewAg("tarefas"); if(typeof setTarView==='function') setTarView('lista'); }
   else { setViewAg("agenda"); }
