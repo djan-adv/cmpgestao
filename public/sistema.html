@@ -306,10 +306,14 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
       </div>
       <!-- lotes personalizados: só aparecem dentro da área de Processos (igual Inove/Encerrados/James) -->
       <div id="proc-subnav-lotes" style="display:none"></div>
-      <a data-s="emails" onclick="go('emails')" title="Respostas das varas, cartórios e clientes — cada uma já lançada no histórico do processo"><span class="ic">✉</span> E-mails <span id="nav-n-email" style="margin-left:auto;font-size:10.5px;background:#C9A227;color:#22405f;border-radius:10px;padding:1px 7px;font-weight:800;display:none"></span></a>
+      <a data-s="emails" onclick="toggleEmailsNav()" title="Respostas das varas, cartórios e clientes — cada uma já lançada no histórico do processo"><span class="ic">✉</span> E-mails <span id="nav-n-email" style="margin-left:auto;font-size:10.5px;background:#C9A227;color:#22405f;border-radius:10px;padding:1px 7px;font-weight:800;display:none"></span></a>
+      <!-- sub-pasta de E-mails: o relatório mensal é o extrato do que FOI ENVIADO,
+           contraparte da caixa de respostas recebidas — mora aqui, não na raiz -->
+      <div id="email-subnav" style="display:none">
+        <a data-s="relatorio" onclick="go('relatorio')" title="Extrato do que o servidor enviou no mês, por cliente/processo/destinatário — com quem abriu" style="padding-left:30px;opacity:.85;font-size:13px"><span class="ic">◫</span> Relatório mensal</a>
+      </div>
       <a data-s="chats" onclick="go('chats')" title="Todas as conversas num lugar só: os clientes pelo app (por processo) e a equipe"><span class="ic">💬</span> Chats <span id="nav-n-chats" style="margin-left:auto;font-size:10.5px;background:#25D366;color:#0b3b1e;border-radius:10px;padding:1px 7px;font-weight:800;display:none"></span></a>
       <a data-s="diligencias" onclick="go('diligencias')"><span class="ic">◔</span> Diligências</a>
-      <a data-s="relatorio" onclick="go('relatorio')"><span class="ic">◫</span> Relatório mensal</a>
       <a data-s="publicacoes" class="cmp-only" onclick="go('publicacoes')" title="Portal de notícias: extrato dos artigos dos sites, rascunhos e publicação direta no WordPress (sem navegador)"><span class="ic">📰</span> Postagens</a>
       <a data-s="crm" onclick="go('crm')"><span class="ic">▣</span> Comercial</a>
       <a data-s="financeiro" onclick="go('financeiro')"><span class="ic">＄</span> Financeiro</a>
@@ -10156,6 +10160,16 @@ function go(s){
    submenu Inove/James/lotes); clicando de novo, com a lista já aberta,
    recolhe só o submenu (sem sair da tela) — clicar mais uma vez expande de
    novo. Antes só expandia, nunca recolhia. */
+/* E-mails: clicar abre a tela e mostra a sub-pasta embaixo; clicar de novo,
+   já estando lá, recolhe. Mesmo comportamento de Processos. */
+function toggleEmailsNav(){
+  var linkAtivo=document.querySelector('#nav a.active');
+  var jaEmEmails=linkAtivo&&linkAtivo.getAttribute('data-s')==='emails';
+  var sub=document.getElementById('email-subnav');
+  var aberto=sub&&sub.style.display==='block';
+  if(jaEmEmails&&aberto){ sub.style.display='none'; }
+  else { go('emails'); }
+}
 function toggleProcessosNav(){
   var linkAtivo=document.querySelector('#nav a.active');
   var jaEmProcessos=linkAtivo&&linkAtivo.getAttribute('data-s')==='processos';
@@ -10182,6 +10196,12 @@ function go(s){
     var _showSub=(['processos','inove','james','lote','contratacao'].indexOf(s)>=0);
     var _sub=document.getElementById('proc-subnav'); if(_sub) _sub.style.display=_showSub?'block':'none';
     var _subL=document.getElementById('proc-subnav-lotes'); if(_subL) _subL.style.display=_showSub?'block':'none';
+    /* sub-pasta de E-mails (Relatório mensal): mesma regra das de Processos */
+    var _subE=document.getElementById('email-subnav');
+    if(_subE) _subE.style.display=(['emails','relatorio'].indexOf(s)>=0)?'block':'none';
+    /* dentro do Relatório mensal, quem fica aceso é o pai "E-mails" — senão a
+       navegação parece ter saído da área */
+    if(s==='relatorio'){ var _le=document.querySelector('#nav a[data-s="emails"]'); if(_le) _le.classList.add('active'); }
   }catch(e){}
   var st=document.getElementById("scr-title"); if(st) st.textContent=t[s]||"Painel";
   var sw=document.querySelector('#s-crm .switch'); if(sw) sw.style.display='none';
@@ -17037,7 +17057,7 @@ function setDilView(v){
   .side .brand img{width:74px}
   /* menu compacto: cabe sem barra de rolagem, sem nomes sobrepostos */
   .nav a{padding:6px 12px!important;margin-bottom:1px!important;font-size:13.5px!important}
-  #proc-subnav a, #proc-subnav-lotes a{padding:4px 12px!important}
+  #proc-subnav a, #proc-subnav-lotes a, #email-subnav a{padding:4px 12px!important}
   .nav .sec{padding:7px 12px 3px!important}
   .side .brand .sys{margin:0 8px 8px!important}
   /* esconde a barra de rolagem do menu (continua rolável em telas muito baixas) */
@@ -17217,9 +17237,12 @@ function setDilView(v){
     if(aTri && !document.getElementById('nav-badge-triagem')){
       var bg=document.createElement('span'); bg.id='nav-badge-triagem'; aTri.appendChild(bg);
     }
-    var aRel=nav.querySelector('a[data-s="relatorio"]'), aCon=nav.querySelector('a[data-s="contatos"]'), aCrm=nav.querySelector('a[data-s="crm"]'), aEtq=nav.querySelector('a[data-s="etiquetas"]');
+    var aCon=nav.querySelector('a[data-s="contatos"]'), aCrm=nav.querySelector('a[data-s="crm"]'), aEtq=nav.querySelector('a[data-s="etiquetas"]');
     if(aCrm){ var s1=document.createElement('div'); s1.className='sec'; s1.textContent='Relacionamento'; nav.insertBefore(s1,aCrm); }
-    if(aRel && aCon){ nav.insertBefore(aRel, aCon.nextSibling); }
+    /* "Relatório mensal" era MOVIDO daqui para depois de Contatos, em tempo de
+       execução — por isso aparecia solto em "Relacionamento" mesmo estando em
+       outro lugar no HTML. Agora ele é sub-pasta de E-mails (#email-subnav) e
+       essa realocação o arrancaria de lá; por isso saiu. */
     if(aEtq){ var s2=document.createElement('div'); s2.className='sec'; s2.textContent='Configuração'; nav.insertBefore(s2,aEtq); }
   }
   var sideEl=document.querySelector('.side');
