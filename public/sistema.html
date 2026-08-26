@@ -3850,7 +3850,7 @@ function initKanban(){
   /* seed inicial de processos a distribuir */
   DADOS.kanbanSeed.forEach(function(p,i){ var a={id:i+1,titulo:p.titulo,cliente:p.cliente,numero:p.numero,col:"distribuir"}; if(_semDup(a)) KAN.push(a); });
   /* tarefas e prazos importados da agenda do Astrea (embutidos) — sempre presentes */
-  if(typeof ASTREA_TAREFAS_SEED!=='undefined'){ ASTREA_TAREFAS_SEED.forEach(function(t){ var a={id:t.id,titulo:t.titulo,cliente:t.cliente,numero:t.numero,col:t.col||'distribuir',resp:t.resp,data:t.data,prazo:t.prazo,tipoForm:t.tipoForm}; if(_semDup(a)) KAN.push(a); }); }
+  if(typeof ASTREA_TAREFAS_SEED!=='undefined'){ ASTREA_TAREFAS_SEED.forEach(function(t){ var a={id:t.id,titulo:t.titulo,cliente:t.cliente,numero:t.numero,col:t.col||'distribuir',resp:t.resp,data:t.data,prazo:t.prazo,tipoForm:t.tipoForm,__colAnt:(t.col||'distribuir')}; if(_semDup(a)) KAN.push(a); }); }
   /* re-aplica as colunas salvas localmente (cookie) por cima do seed/banco,
      para o card não voltar para "A distribuir" depois do F5. */
   _aplicarKanbanCookie();
@@ -3887,12 +3887,40 @@ function _kanCarimbaConclusao(a){
   if(!a) return;
   if(a.col==='finalizado'){
     if(!a.concluidoPor){ a.concluidoPor=_kanQuemSou(); a.concluidoEm=new Date().toISOString(); }
+    /* Marca a TRANSIÇÃO (estava aberta, virou concluída) para a produtividade
+       registrar o ponto uma vez só. __colAnt só existe para tarefa que já foi
+       vista aberta nesta sessão — assim a carga inicial, que traz tarefas já
+       finalizadas do banco, nunca gera evento retroativo. */
+    if(a.__colAnt && a.__colAnt!=='finalizado') a.__logConcl=true;
   } else if(a.concluidoPor||a.concluidoEm){
     a.concluidoPor=null; a.concluidoEm=null;
   }
 }
+/* ===== Produtividade: UM ponto de registro para a conclusão =====
+   O ponto era registrado só em concluirTarefaKanban (o botão "Concluir" do
+   cartão e do modal). Mas o jeito mais usado de concluir é o ✓ —
+   toggleConcluirTarefa — que aparece nos chips da agenda, na lista de prazos,
+   no "dia" e na ficha do processo, e que NÃO registrava nada.
+   Resultado relatado pelo dono (26/08/2026): "concluí inúmeras tarefas e a
+   pontuação de outra pessoa está maior que a minha" — as conclusões dele,
+   feitas pelo ✓, simplesmente não existiam para a produtividade.
+   Agora o registro sai daqui, de dentro do persisteKanban, por onde TODO
+   caminho de conclusão passa. Não há mais como um botão novo esquecer. */
+function _registraConclusaoKanban(a){
+  if(!a||!a.__logConcl) return;
+  a.__logConcl=false;
+  try{
+    if(typeof logEvent!=='function') return;
+    var ehAud=/audi[êe]ncia/i.test((a.titulo||'')+' '+(a.tipoForm||a.tipo||''));
+    logEvent(ehAud?'hearing_completed':'task_completed','tarefa',(a.dbid||a.id),
+      {titulo:(a.titulo||'').slice(0,140),tipo:(a.tipoForm||a.tipo||null),
+       numero:(a.numero||null),resp:(a.resp||null),concluido_por:(a.concluidoPor||null)});
+  }catch(e){}
+}
 function persisteKanban(a){
   _kanCarimbaConclusao(a);
+  _registraConclusaoKanban(a);
+  try{ if(a) a.__colAnt=a.col; }catch(eCA){}
   /* concluiu no KANBAN → o gêmeo da agenda sai (senão ficava "pendente" no Meu
      dia pra sempre). Casa por título + data (+ processo, quando os dois têm). */
   if(a&&a.col==='finalizado'){
@@ -4690,12 +4718,9 @@ function concluirTarefaKanban(id){
   a.col='finalizado';
   renderKanban();
   renderPainelTarefasEtiquetas();
+  /* o evento de produtividade sai do persisteKanban (ponto único) — antes
+     estava aqui, e por isso só este caminho pontuava */
   persisteKanban(a);
-  /* produtividade: registra a conclusão (audiência ganha evento próprio) */
-  try{ if(typeof logEvent==='function'){
-    var ehAud=/audi[êe]ncia/i.test((a.titulo||'')+' '+(a.tipoForm||a.tipo||''));
-    logEvent(ehAud?'hearing_completed':'task_completed','tarefa',(a.dbid||a.id),{titulo:(a.titulo||'').slice(0,140),tipo:(a.tipoForm||a.tipo||null),numero:(a.numero||null),resp:(a.resp||null)});
-  } }catch(e){}
 }
 function abrirProcessoDaTarefa(numero){
   if(!numero||numero==='—') return;
@@ -5587,7 +5612,7 @@ function salvarTarefa(){
     _nova.descricao=_v("t-desc"); _nova.local=_v("t-local");
     persisteKanban(_nova);
   } else {
-    _nova={id:5000+KAN.length,titulo:tit,cliente:(resp||proc||"—"),numero:(proc||"—"),col:"distribuir",resp:resp,data:data,prazo:prazo,hora:(_dia?"Dia todo":hora),tipoForm:tipo,
+    _nova={id:5000+KAN.length,titulo:tit,cliente:(resp||proc||"—"),numero:(proc||"—"),col:"distribuir",__colAnt:"distribuir",resp:resp,data:data,prazo:prazo,hora:(_dia?"Dia todo":hora),tipoForm:tipo,
       descricao:_v("t-desc"), local:_v("t-local")};
     KAN.push(_nova); persisteKanban(_nova);
   }
@@ -8117,7 +8142,10 @@ function toggleConcluirTarefa(id){
          inteiro, então repete sem elas em vez de perder todas as tarefas */
       if(kt.error && /criado_por|concluido_por|concluido_em|arquivada|cancelada/.test(kt.error.message||'')) kt=await sb.from('kanban_tarefas').select('id,titulo,cliente,numero,coluna,resp,data,prazo,tipo,descricao,local,origem,atrasada').limit(3000);
       if(!kt.error && kt.data){
-        window.__KANDB=kt.data.map(function(t,i){ return {id:9000+i,dbid:t.id,titulo:t.titulo||'',cliente:t.cliente||'',numero:t.numero||'—',col:t.coluna||'distribuir',resp:t.resp||'',data:t.data||'',prazo:t.prazo||'',tipoForm:t.tipo||'',descricao:t.descricao||'',local:t.local||'',org:t.origem||'',atrasada:!!t.atrasada,criadoPor:(t.criado_por||''),concluidoPor:(t.concluido_por||''),concluidoEm:(t.concluido_em||''),arq:(t.arquivada===true),canc:(t.cancelada===true),canceladaEm:(t.cancelada_em||''),canceladaPor:(t.cancelada_por||''),canceladaMotivo:(t.cancelada_motivo||'')}; });
+        window.__KANDB=kt.data.map(function(t,i){ return {id:9000+i,dbid:t.id,titulo:t.titulo||'',cliente:t.cliente||'',numero:t.numero||'—',col:t.coluna||'distribuir',resp:t.resp||'',data:t.data||'',prazo:t.prazo||'',tipoForm:t.tipo||'',descricao:t.descricao||'',local:t.local||'',org:t.origem||'',atrasada:!!t.atrasada,criadoPor:(t.criado_por||''),concluidoPor:(t.concluido_por||''),concluidoEm:(t.concluido_em||''),arq:(t.arquivada===true),canc:(t.cancelada===true),canceladaEm:(t.cancelada_em||''),canceladaPor:(t.cancelada_por||''),canceladaMotivo:(t.cancelada_motivo||''),
+          /* estado com que a tarefa chegou do banco — é a referência que diz se
+             uma conclusão foi feita AGORA (e pontua) ou já vinha concluída */
+          __colAnt:(t.coluna||'distribuir')}; });
         KAN=null; initKanban();
         var __ag=document.getElementById('s-agenda'); if(__ag && !__ag.classList.contains('hidden') && typeof renderAgendaView==='function') renderAgendaView();
         if(typeof renderPainelTarefasEtiquetas==='function') renderPainelTarefasEtiquetas();
