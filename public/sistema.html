@@ -923,7 +923,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
       <button class="btn sm ghost" onclick="descartarPubModal()" title="Marca a publicação como tratada (ciência) — vai para a aba Tratadas">🗂 Descartar publicação (ciência)</button>
       <button class="btn sm ghost" style="color:#0F6E56" onclick="historicoPubModal()" title="Registra a ciência no histórico do processo e arquiva a publicação">📝 Registrar ciência no histórico e arquivar</button>
     </div>
-    <div class="foot"><button class="btn ghost" onclick="fecharTarefa()">Cancelar</button><button class="btn" id="t-btn-concluir" style="display:none;background:#127a53" onclick="concluirTarefaModal()">✓ Concluir atividade</button><button class="btn" id="t-btn-salvar" onclick="salvarTarefa()">Criar e distribuir</button></div>
+    <div class="foot"><button class="btn ghost" onclick="fecharTarefa()">Cancelar</button><button class="btn ghost" id="t-btn-briefing" style="border-color:#cfd9e8;color:#185FA5" onclick="gerarBriefingTarefa()" title="Lê a ficha, a petição inicial e os últimos despachos e monta o resumo do que pedir à IA — sem baixar documento nenhum">&#128203; Resumo para a IA</button><button class="btn" id="t-btn-concluir" style="display:none;background:#127a53" onclick="concluirTarefaModal()">✓ Concluir atividade</button><button class="btn" id="t-btn-salvar" onclick="salvarTarefa()">Criar e distribuir</button></div>
   </div>
 </div>
 <div id="modal-cobranca" class="overlay hidden">
@@ -5550,6 +5550,91 @@ function _sincronizaAgendaDaTarefa(antes, depois, querNaAgenda){
       .then(function(r){ if(r&&r.data&&r.data.id){ linha.id=r.data.id; window.__AGDB=window.__AGDB||[]; window.__AGDB.push(linha); } })
       .catch(function(){});
   }
+}
+/* ===== Resumo da tarefa para a IA ("briefing") =====
+   Pedido do dono (26/08/2026): chega a intimação, ele cria a tarefa ("pedir
+   gratuidade") e quer que o sistema leia sozinho a ficha, a inicial e os
+   últimos despachos e devolva o resumo do que ele vai pedir à IA — sem baixar
+   documento nenhum.
+   Isto NÃO redige a peça: entrega o contexto (qualificação das partes, juízo,
+   número, o que a tarefa pede, o que os últimos atos determinaram) para ele
+   conferir antes de gastar IA redigindo. Ver a peça pronta é o botão de
+   petição; este mesmo resumo serve de entrada para ela depois. */
+async function gerarBriefingTarefa(){
+  var tit=_v('t-titulo'), proc=_v('t-proc'), det=_v('t-desc');
+  if(!tit){ alert('Escreva primeiro o que precisa ser feito no campo "Tarefa".'); return; }
+  var dig=String(proc||'').replace(/\D/g,'');
+  if(dig.length<8){ alert('Esta atividade não está vinculada a um processo.\n\nPreencha o campo "Processo ou caso" — é de lá que saem a ficha, a inicial e os despachos.'); return; }
+  var btn=document.getElementById('t-btn-briefing');
+  var rot=btn?btn.innerHTML:'';
+  if(btn){ btn.disabled=true; btn.innerHTML='⏳ lendo os autos…'; }
+  _briefModal('<div class="note">Lendo a ficha, a petição inicial e os últimos despachos… isso leva de 20 segundos a 2 minutos.</div>');
+  try{
+    var jwt=(typeof finToken==='function')?await finToken():await docToken();
+    var r=await fetch('/api/briefing',{method:'POST',
+      headers:{'Content-Type':'application/json',Authorization:'Bearer '+jwt},
+      body:JSON.stringify({numero:proc, tarefa:tit, detalhes:det})});
+    var j=await r.json();
+    if(!j||!j.ok){ _briefModal('<div class="note" style="color:#b5342b">'+esc((j&&j.erro)||'não deu para montar o resumo')+'</div>'); return; }
+    _briefModal(_briefHTML(j), j.briefing);
+  }catch(e){
+    _briefModal('<div class="note" style="color:#b5342b">Erro: '+esc((e&&e.message)||String(e))+'</div>');
+  }finally{ if(btn){ btn.disabled=false; btn.innerHTML=rot; } }
+}
+function _briefHTML(j){
+  var L=j.lido||{};
+  /* o que a IA NÃO teve em mãos vai em destaque: briefing montado sobre autos
+     incompletos parece completo, e é aí que se erra a peça */
+  var avisos=[];
+  if(L.sem_inicial) avisos.push('a <b>petição inicial não foi encontrada</b> na pasta do processo — a qualificação das partes não saiu dos autos');
+  if(L.sem_teor) avisos.push('<b>nenhum despacho com teor</b> foi encontrado — só os títulos dos movimentos, que não dizem o que foi determinado');
+  var h='<div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap">'
+    +'<div style="font-weight:700;font-size:16px">📋 Resumo para a IA</div>'
+    +'<div class="note" style="margin:0">'+esc(typeof fmtCNJ==='function'?fmtCNJ(j.numero):j.numero)+'</div></div>';
+  h+='<div class="note" style="margin:2px 0 10px">Lido: '+(L.despachos_com_teor||0)+' despacho(s) com teor'
+    +((L.pdfs&&L.pdfs.length)?(' · '+L.pdfs.map(function(n){return esc(n);}).join(', ')):'')
+    +(j.custo_usd?(' · custo US$ '+j.custo_usd):'')+'</div>';
+  if(avisos.length){
+    h+='<div style="background:#fdf3e7;border:1px solid #f0d9b8;border-left:4px solid #C9A227;border-radius:8px;padding:9px 11px;margin-bottom:10px;font-size:12.5px">'
+      +'<b style="color:#8a5a00">Confira antes de usar:</b> '+avisos.join(' · ')+'.</div>';
+  }
+  h+='<textarea id="brief-txt" readonly style="width:100%;min-height:46vh;font-family:ui-monospace,Menlo,monospace;font-size:12.5px;line-height:1.5;padding:12px;border:1px solid var(--line);border-radius:10px;background:#fbfcfd">'+esc(j.briefing||'')+'</textarea>';
+  return h;
+}
+function _briefModal(html, textoCopiar){
+  var id='modal-briefing'; var old=document.getElementById(id); if(old) old.remove();
+  var ov=document.createElement('div'); ov.id=id;
+  ov.style.cssText='position:fixed;inset:0;background:rgba(20,26,38,.55);z-index:130;display:flex;align-items:center;justify-content:center;padding:16px';
+  var rodape=textoCopiar
+    ? '<button class="btn" onclick="_briefCopiar(this)">📋 copiar</button>'
+      +'<button class="btn ghost" onclick="_briefParaObs()" title="Guarda o resumo nas observações do processo, para não ter de gerar de novo">💾 salvar nas observações</button>'
+    : '';
+  ov.innerHTML='<div style="background:#fff;border-radius:14px;max-width:900px;width:96vw;max-height:92vh;overflow:auto;padding:18px 20px 14px;box-shadow:0 8px 40px rgba(0,0,0,.25)">'
+    +html
+    +'<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;flex-wrap:wrap">'
+    +rodape
+    +'<button class="btn ghost" onclick="var e=document.getElementById(\''+id+'\');if(e)e.remove()">fechar</button>'
+    +'</div></div>';
+  document.body.appendChild(ov);
+}
+function _briefCopiar(btn){
+  var t=document.getElementById('brief-txt'); if(!t) return;
+  try{ navigator.clipboard.writeText(t.value); }catch(e){ t.select(); try{ document.execCommand('copy'); }catch(e2){} }
+  if(btn){ var r=btn.textContent; btn.textContent='✓ copiado'; setTimeout(function(){ btn.textContent=r; },1200); }
+}
+/* guarda o resumo nas observações do processo — assim ele não se perde ao fechar
+   a janela nem precisa ser gerado (e pago) de novo */
+async function _briefParaObs(){
+  var t=document.getElementById('brief-txt'); if(!t||!atual) return;
+  var carimbo='\n\n--- Resumo para a IA ('+new Date().toLocaleDateString('pt-BR')+') ---\n'+t.value;
+  var novo=String(atual.observacoes||'')+carimbo;
+  try{
+    var sb=window.__sb;
+    if(sb&&atual._id){ var w=await sb.from('processos').update({observacoes:novo}).eq('id',atual._id); if(w&&w.error) throw new Error(w.error.message); }
+    atual.observacoes=novo;
+    alert('✓ Guardado nas observações do processo.');
+    try{ var i=DADOS.processos.indexOf(atual); if(i>=0) abrir(i); }catch(e){}
+  }catch(e){ alert('Não consegui salvar: '+((e&&e.message)||e)); }
 }
 function salvarTarefa(){
   var tit=_v("t-titulo"); if(!tit){alert("Descreva a tarefa.");return;}
