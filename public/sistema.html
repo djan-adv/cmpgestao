@@ -2234,18 +2234,46 @@ function renderRecentes(){
   var el=document.getElementById("painel-recentes"); if(!el) return;
   var hoje=new Date(); hoje.setHours(0,0,0,0);
   var lim=new Date(hoje); lim.setDate(lim.getDate()-30);
-  var NOMES={prot:"Protocolo",post:"Conhecimento",sane:"Saneamento",instr:"Instrução",decis:"Decisória",recur:"Recursal",exec:"Cumprimento"};
-  var html='<p class="sectlabel">Processos recentes <a style="float:right;cursor:pointer;color:var(--navy);text-transform:none;letter-spacing:0" onclick="go(\'processos\')">ver todos ('+(DADOS.processos||[]).length+') &rarr;</a></p><table><thead><tr><th>Cliente × parte contrária</th><th>Última mov.</th><th>Fase</th></tr></thead><tbody>';
-  (DADOS.processos||[]).slice(0,5).forEach(function(p,i){
-    var md=null; (p.hist_full||[]).forEach(function(a){ if(a.data && (!md||a.data>md)) md=a.data; });
-    var parado=md && (new Date(md)<lim);
-    var dias=md?Math.round((hoje-new Date(md))/86400000):null;
+  var NOMES={prot:"Protocolo",post:"Conhecimento",sane:"Saneamento",instr:"Instrução",decis:"Decisória",recur:"Recursal",exec:"Cumprimento",alvara:"Expedir Alvará"};
+  /* "Recentes" não era recente nem filtrado: pegava os 5 PRIMEIROS de
+     DADOS.processos, na ordem em que o banco devolveu, com encerrado, Inove,
+     suspenso e lote no meio. Foi assim que um processo ENCERRADO apareceu no
+     topo do painel (relatado em 26/08/2026), ainda por cima com data
+     "31/12/9999" — data absurda que vem do tribunal e que agora é descartada
+     tanto na exibição quanto na ordenação.
+     Agora: só acervo vivo (mesma regra do menu e do resto do painel) e ordenado
+     pela movimentação MAIS RECENTE de verdade. */
+  function _dtMov(p){
+    var iso='';
+    (p.hist_full||[]).forEach(function(a){
+      if(!a||!a.data) return;
+      var d=String(a.data).slice(0,10), y=d.slice(0,4);
+      if(y>='2100'||y<'1990') return;          /* 31/12/9999 e afins não contam */
+      if(d>iso) iso=d;
+    });
+    return iso;
+  }
+  var vivos=(DADOS.processos||[]).filter(function(x){
+    return (typeof ehProcessoAtivo==='function') ? ehProcessoAtivo(x) : !/encerr/i.test(x.status||'');
+  });
+  var recentes=vivos.map(function(x){ return {p:x, iso:_dtMov(x)}; })
+    .sort(function(a,b){ return a.iso<b.iso?1:(a.iso>b.iso?-1:0); })
+    .slice(0,5);
+  var html='<p class="sectlabel">Processos recentes <a style="float:right;cursor:pointer;color:var(--navy);text-transform:none;letter-spacing:0" onclick="go(\'processos\')">ver todos ('+vivos.length+') &rarr;</a></p><table><thead><tr><th>Cliente × parte contrária</th><th>Última mov.</th><th>Fase</th></tr></thead><tbody>';
+  recentes.forEach(function(r){
+    var p=r.p;
+    /* índice REAL no acervo — antes usava a posição no laço, que só por sorte
+       coincidia enquanto a lista não era filtrada nem reordenada */
+    var i=DADOS.processos.indexOf(p);
+    var md=r.iso||null;
+    var parado=md && (new Date(md+'T00:00:00')<lim);
+    var dias=md?Math.round((hoje-new Date(md+'T00:00:00'))/86400000):null;
     var fase="—"; try{ fase=NOMES[faseDoProc(p)]||"—"; }catch(e){}
     var chip=parado?('<span class="b" style="background:var(--dangerbg);color:var(--danger);border:0">Parado '+dias+'d</span>')
-      :(fase==="Execução"?'<span class="b ok" style="border:0">Execução</span>':'<span class="b" style="background:var(--accentbg);color:var(--navy);border:0">'+fase+'</span>');
+      :(fase==="Cumprimento"?'<span class="b ok" style="border:0">Cumprimento</span>':'<span class="b" style="background:var(--accentbg);color:var(--navy);border:0">'+fase+'</span>');
     html+='<tr class="click" onclick="abrir('+i+')"><td><b>'+esc(p.cliente||"—")+'</b> <span style="color:var(--muted)">×</span> '+esc(p.oponente||"—")
       +'<div class="proc" style="color:var(--muted)">'+esc(fmtCNJ(p.numero))+'</div></td>'
-      +'<td style="font-size:12.5px">'+esc(p.data||"—")+'</td><td>'+chip+'</td></tr>';
+      +'<td style="font-size:12.5px">'+esc(md?md.split('-').reverse().join('/'):'—')+'</td><td>'+chip+'</td></tr>';
   });
   html+='</tbody></table>';
   el.innerHTML=html;
