@@ -22156,29 +22156,42 @@ function exportarProdutividadeCSV(){
    virar card no Kanban — tarefa tem responsável, prazo, processo e conta na
    produtividade; isto some quando você risca.
 
-   PRIVACIDADE (o pedido explícito): a lista mora no navegador (localStorage) e a
-   chave leva o id de quem está logado. No computador compartilhado do
-   escritório, trocar de usuário troca de lista. Enquanto o sistema ainda não
-   sabe QUEM está logado, o card nem monta — sem isso a chave ficaria sem
-   sufixo e viraria um balde comum, que é exatamente o que não pode acontecer.
+   ONDE MORA: tabela `lembretes` no banco, uma linha por lembrete. A primeira
+   versão guardava no localStorage do navegador e deu os dois problemas que o
+   dono relatou em 27/08/2026 — "loguei por outra máquina e não apareceu
+   lembrete lá" e "por aqui lembrete sumiu". Nota do navegador não serve para
+   isto: não segue a pessoa entre computador e celular e some quando o navegador
+   limpa os dados do site. Agora segue o usuário e não se perde.
 
-   ANEXOS: o arquivo NÃO cabe no localStorage (limite de poucos MB e é
-   desperdício guardar base64 ali). Sobe pela mesma rota do chat da equipe
-   (/api/chat/print) e o lembrete guarda só a referência {id,nome,tipo}; a
-   exibição usa /api/anexo, como o chat já faz.
+   PRIVACIDADE (o pedido explícito, "um usuário não lê os lembretes do outro"):
+   garantida pelo BANCO, com RLS — a política só devolve as linhas de
+   auth.uid(). É mais forte que a chave de navegador da versão anterior: mesmo
+   que alguém chame a API na mão, não alcança o lembrete de outra pessoa.
 
-   Se um dia os lembretes precisarem seguir a pessoa entre computador e celular,
-   é criar a tabela e trocar só ler()/gravar() — o resto não muda. */
+   ANEXOS: o arquivo não vai para a tabela. Sobe pela mesma rota do chat da
+   equipe (/api/chat/print) e a linha guarda só a referência (id, nome, tipo);
+   a exibição usa /api/anexo, como o chat já faz. */
 (function(){
   if(window.__cmpLembretes) return; window.__cmpLembretes=true;
-  var MIN='cmp_lemb_min', BASE='cmp_lemb', MAX_ANEXO=15*1024*1024;
+  /* só o "minimizado" continua no navegador: é preferência de tela, não dado */
+  var MIN='cmp_lemb_min', MAX_ANEXO=15*1024*1024;
 
   function uid(){ try{ return String(window.__prodUid||''); }catch(e){ return ''; } }
-  function chave(){ var u=uid(); return u?(BASE+'_'+u):''; }
-  /* sem usuário identificado não há lista: ler devolve vazio e gravar não faz
-     nada, para nunca escrever num balde compartilhado */
-  function ler(){ var k=chave(); if(!k) return []; try{ var a=JSON.parse(localStorage.getItem(k)||'[]'); return Array.isArray(a)?a:[]; }catch(e){ return []; } }
-  function gravar(a){ var k=chave(); if(!k) return; try{ localStorage.setItem(k, JSON.stringify(a)); }catch(e){} }
+  var LISTA=[];   /* espelho em memória do que está no banco */
+  function ler(){ return LISTA; }
+  /* Carrega do banco. O RLS já filtra por usuário; o where é só para o índice. */
+  async function carregar(){
+    try{
+      var sb=window.__sb; if(!sb) return;
+      var r=await sb.from('lembretes').select('*').eq('user_id',uid()).order('criado_em',{ascending:false}).limit(200);
+      if(r.error){ console.warn('lembretes:',r.error.message); return; }
+      LISTA=(r.data||[]).map(function(x){
+        return {id:x.id, t:x.texto||'', ok:x.ok===true, em:x.criado_em,
+          anexo:(x.anexo_id?{id:x.anexo_id,nome:x.anexo_nome||'arquivo',tipo:x.anexo_tipo||''}:null),
+          proc:(x.proc_numero?{numero:x.proc_numero,rotulo:x.proc_rotulo||x.proc_numero}:null)};
+      });
+    }catch(e){ console.warn('lembretes:',e); }
+  }
   function minimizado(){ try{ return localStorage.getItem(MIN)!=='0'; }catch(e){ return true; } }
   function setMin(v){ try{ localStorage.setItem(MIN, v?'1':'0'); }catch(e){} }
   function esc2(t){ return String(t==null?'':t).replace(/[&<>"]/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
@@ -22235,12 +22248,29 @@ function exportarProdutividadeCSV(){
       setMin(!minimizado()); aplicaMin();
       if(!minimizado()) setTimeout(function(){ try{ inp.focus(); }catch(e){} },30);
     };
-    function salvar(){
+    async function salvar(){
       var t=String(inp.value||'').trim();
       if(!t && !ANEXO) return;
-      var a=ler();
-      a.unshift({t:t, ok:false, em:new Date().toISOString(), anexo:(ANEXO||null), proc:(PROC||null)});
-      gravar(a); inp.value=''; ANEXO=null; PROC=null; pintaAnexo(); fecharBuscaProc(); pintar();
+      var linha={user_id:uid(), texto:t, ok:false,
+        anexo_id:(ANEXO?ANEXO.id:null), anexo_nome:(ANEXO?ANEXO.nome:null), anexo_tipo:(ANEXO?ANEXO.tipo:null),
+        proc_numero:(PROC?PROC.numero:null), proc_rotulo:(PROC?PROC.rotulo:null)};
+      /* limpa a tela na hora e desfaz se o banco recusar — digitar e ver o campo
+         travar até a rede responder é pior que o raro erro */
+      var eraT=inp.value, eraA=ANEXO, eraP=PROC;
+      inp.value=''; ANEXO=null; PROC=null; pintaAnexo(); fecharBuscaProc();
+      try{
+        var sb=window.__sb; if(!sb) throw new Error('sem conexão');
+        var r=await sb.from('lembretes').insert(linha).select('*').single();
+        if(r.error) throw new Error(r.error.message);
+        var x=r.data;
+        LISTA.unshift({id:x.id, t:x.texto||'', ok:false, em:x.criado_em,
+          anexo:(x.anexo_id?{id:x.anexo_id,nome:x.anexo_nome,tipo:x.anexo_tipo}:null),
+          proc:(x.proc_numero?{numero:x.proc_numero,rotulo:x.proc_rotulo}:null)});
+        pintar();
+      }catch(e){
+        inp.value=eraT; ANEXO=eraA; PROC=eraP; pintaAnexo();
+        alert('Não consegui salvar o lembrete: '+((e&&e.message)||e));
+      }
     }
     inp.addEventListener('keydown',function(ev){ if(ev.key==='Enter') salvar(); });
     document.getElementById('cmp-lemb-clip').onclick=function(ev){ ev.stopPropagation(); fil.click(); };
@@ -22261,6 +22291,7 @@ function exportarProdutividadeCSV(){
       }
     });
     aplicaMin(); pintar();
+    carregar().then(pintar);
   }
 
   /* sobe o arquivo pela MESMA rota do chat (/api/chat/print) e guarda só a
@@ -22389,14 +22420,31 @@ function exportarProdutividadeCSV(){
         pe.style.display='block';
         pe.innerHTML='<a id="cmp-lemb-limpar" style="cursor:pointer;color:#8a5a00;font-size:11.5px;text-decoration:underline">limpar '+riscados+' riscado'+(riscados>1?'s':'')+'</a>';
         var lk=document.getElementById('cmp-lemb-limpar');
-        if(lk) lk.onclick=function(){ gravar(ler().filter(function(x){ return !x.ok; })); pintar(); };
+        if(lk) lk.onclick=function(){
+          var ids=LISTA.filter(function(x){ return x.ok; }).map(function(x){ return x.id; });
+          if(!ids.length) return;
+          var antes=LISTA.slice();
+          LISTA=LISTA.filter(function(x){ return !x.ok; }); pintar();
+          try{ window.__sb.from('lembretes').delete().in('id',ids).then(function(r){
+            if(r&&r.error){ LISTA=antes; pintar(); alert('Não consegui limpar: '+r.error.message); } }); }catch(e){}
+        };
       } else pe.style.display='none';
     }
     el.querySelectorAll('.lemb-ck').forEach(function(c){
-      c.onchange=function(){ var i=+this.getAttribute('data-i'); var a2=ler(); if(a2[i]){ a2[i].ok=this.checked; gravar(a2); pintar(); } };
+      c.onchange=function(){
+        var i=+this.getAttribute('data-i'); var it=LISTA[i]; if(!it) return;
+        var novo=this.checked; it.ok=novo; pintar();
+        try{ window.__sb.from('lembretes').update({ok:novo}).eq('id',it.id).then(function(r){
+          if(r&&r.error){ it.ok=!novo; pintar(); alert('Não consegui salvar: '+r.error.message); } }); }catch(e){}
+      };
     });
     el.querySelectorAll('.lemb-x').forEach(function(b){
-      b.onclick=function(){ var i=+this.getAttribute('data-i'); var a2=ler(); a2.splice(i,1); gravar(a2); pintar(); };
+      b.onclick=function(){
+        var i=+this.getAttribute('data-i'); var it=LISTA[i]; if(!it) return;
+        LISTA.splice(i,1); pintar();
+        try{ window.__sb.from('lembretes').delete().eq('id',it.id).then(function(r){
+          if(r&&r.error){ LISTA.splice(i,0,it); pintar(); alert('Não consegui apagar: '+r.error.message); } }); }catch(e){}
+      };
     });
   }
 
