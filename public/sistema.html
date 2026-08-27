@@ -22145,5 +22145,271 @@ function exportarProdutividadeCSV(){
   },600);
 })();
 </script>
+<script>
+/* ===== Bloco de lembretes — card suspenso, no estilo do chat da equipe =====
+   Pedido do dono (27/08/2026): "um card de lembretes, suspenso, no mesmo estilo
+   do chat, com botão pra minimizar, caixa pra riscar, linhas pra digitar";
+   depois: "por usuário, um usuário não lê os lembretes do outro" e "que aceite
+   prints e documentos".
+   É o bloquinho de papel do lado do teclado: anotação solta que não é tarefa de
+   processo (ligar para fulano, levar documento, cobrar cartório) e que não vale
+   virar card no Kanban — tarefa tem responsável, prazo, processo e conta na
+   produtividade; isto some quando você risca.
+
+   PRIVACIDADE (o pedido explícito): a lista mora no navegador (localStorage) e a
+   chave leva o id de quem está logado. No computador compartilhado do
+   escritório, trocar de usuário troca de lista. Enquanto o sistema ainda não
+   sabe QUEM está logado, o card nem monta — sem isso a chave ficaria sem
+   sufixo e viraria um balde comum, que é exatamente o que não pode acontecer.
+
+   ANEXOS: o arquivo NÃO cabe no localStorage (limite de poucos MB e é
+   desperdício guardar base64 ali). Sobe pela mesma rota do chat da equipe
+   (/api/chat/print) e o lembrete guarda só a referência {id,nome,tipo}; a
+   exibição usa /api/anexo, como o chat já faz.
+
+   Se um dia os lembretes precisarem seguir a pessoa entre computador e celular,
+   é criar a tabela e trocar só ler()/gravar() — o resto não muda. */
+(function(){
+  if(window.__cmpLembretes) return; window.__cmpLembretes=true;
+  var MIN='cmp_lemb_min', BASE='cmp_lemb', MAX_ANEXO=15*1024*1024;
+
+  function uid(){ try{ return String(window.__prodUid||''); }catch(e){ return ''; } }
+  function chave(){ var u=uid(); return u?(BASE+'_'+u):''; }
+  /* sem usuário identificado não há lista: ler devolve vazio e gravar não faz
+     nada, para nunca escrever num balde compartilhado */
+  function ler(){ var k=chave(); if(!k) return []; try{ var a=JSON.parse(localStorage.getItem(k)||'[]'); return Array.isArray(a)?a:[]; }catch(e){ return []; } }
+  function gravar(a){ var k=chave(); if(!k) return; try{ localStorage.setItem(k, JSON.stringify(a)); }catch(e){} }
+  function minimizado(){ try{ return localStorage.getItem(MIN)!=='0'; }catch(e){ return true; } }
+  function setMin(v){ try{ localStorage.setItem(MIN, v?'1':'0'); }catch(e){} }
+  function esc2(t){ return String(t==null?'':t).replace(/[&<>"]/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+  function ico(tipo,nome){
+    var t=(tipo||'')+' '+(nome||'');
+    if(/^image\//i.test(tipo||'')) return '🖼';
+    if(/pdf/i.test(t)) return '📕';
+    if(/word|docx?|odt/i.test(t)) return '📘';
+    if(/sheet|excel|xlsx?|csv/i.test(t)) return '📗';
+    return '📎';
+  }
+  var ANEXO=null;   /* anexo escolhido, aguardando o texto do lembrete */
+  var PROC=null;    /* processo amarrado ao lembrete que está sendo escrito */
+
+  function montar(){
+    if(document.getElementById('cmp-lemb')) return;
+    var d=document.createElement('div'); d.id='cmp-lemb'; d.className='cmp-only';
+    /* canto inferior ESQUERDO: o chat da equipe mora na direita e é
+       redimensionável — dois cards no mesmo canto acabariam um por cima do
+       outro. Em tela estreita a lateral some e o card encosta na borda. */
+    d.style.cssText='position:fixed;left:284px;bottom:0;width:310px;max-width:92vw;z-index:94;font-family:inherit;font-size:13px;color:#1b1b1b';
+    d.innerHTML=
+      '<div id="cmp-lemb-bar" style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:rgba(250,240,170,.97);border:1px solid #e0d9a0;border-bottom:none;border-radius:12px 12px 0 0;cursor:pointer;box-shadow:0 -2px 14px rgba(0,0,0,.10)">'
+      +'<b style="color:#1b1b1b">📝 Lembretes</b>'
+      +'<span id="cmp-lemb-badge" style="display:none;background:#8a5a00;color:#fff;border-radius:10px;font-size:11px;font-weight:700;padding:1px 7px"></span>'
+      +'<button id="cmp-lemb-min" title="Minimizar" style="margin-left:auto;border:0;background:transparent;color:#5a5326;font-weight:700;font-size:15px;line-height:1;cursor:pointer;padding:2px 4px">▁</button></div>'
+      +'<div id="cmp-lemb-corpo" style="display:none;background:rgba(255,253,240,.98);border:1px solid #e0d9a0;border-top:none;box-shadow:0 -2px 14px rgba(0,0,0,.10)">'
+      +'<div id="cmp-lemb-lista" style="max-height:290px;overflow:auto;padding:6px 10px"></div>'
+      +'<div id="cmp-lemb-anx" style="display:none;align-items:center;gap:7px;margin:0 10px 6px;background:#f6f1d6;border:1px solid #e0d9a0;border-radius:8px;padding:5px 8px;font-size:11.5px"></div>'
+      +'<div id="cmp-lemb-procbox" style="display:none;margin:0 10px 6px">'
+      +'<input id="cmp-lemb-procq" placeholder="buscar processo: nome da parte ou número…" style="width:100%;box-sizing:border-box;font-size:12px;padding:6px 8px;border:1px solid #d8d093;border-radius:7px;background:#fff">'
+      +'<div id="cmp-lemb-proclist" style="max-height:150px;overflow:auto;margin-top:4px"></div></div>'
+      +'<div style="display:flex;gap:6px;padding:8px;border-top:1px solid #e0d9a0;align-items:center">'
+      +'<button id="cmp-lemb-clip" title="Anexar print ou documento (ou cole um print com Ctrl+V no campo)" style="border:0;background:transparent;font-size:16px;cursor:pointer;padding:4px 2px">📎</button>'
+      +'<button id="cmp-lemb-proc" title="Amarrar este lembrete a um processo (busca por nome da parte ou número)" style="border:0;background:transparent;font-size:16px;cursor:pointer;padding:4px 2px">⚖</button>'
+      +'<input type="file" id="cmp-lemb-file" style="display:none">'
+      +'<input id="cmp-lemb-txt" placeholder="escreva e tecle Enter…" style="flex:1;font-size:13px;padding:7px 9px;border:1px solid #d8d093;border-radius:7px;background:#fff;color:#1b1b1b">'
+      +'</div>'
+      +'<div id="cmp-lemb-pe" style="display:none;padding:0 10px 8px;text-align:right"></div>'
+      +'</div>';
+    document.body.appendChild(d);
+
+    var bar=document.getElementById('cmp-lemb-bar');
+    var corpo=document.getElementById('cmp-lemb-corpo');
+    var inp=document.getElementById('cmp-lemb-txt');
+    var fil=document.getElementById('cmp-lemb-file');
+    function aplicaMin(){
+      var m=minimizado();
+      corpo.style.display=m?'none':'block';
+      var b=document.getElementById('cmp-lemb-min');
+      if(b){ b.textContent=m?'▔':'▁'; b.title=m?'Abrir':'Minimizar'; }
+    }
+    bar.onclick=function(){
+      setMin(!minimizado()); aplicaMin();
+      if(!minimizado()) setTimeout(function(){ try{ inp.focus(); }catch(e){} },30);
+    };
+    function salvar(){
+      var t=String(inp.value||'').trim();
+      if(!t && !ANEXO) return;
+      var a=ler();
+      a.unshift({t:t, ok:false, em:new Date().toISOString(), anexo:(ANEXO||null), proc:(PROC||null)});
+      gravar(a); inp.value=''; ANEXO=null; PROC=null; pintaAnexo(); fecharBuscaProc(); pintar();
+    }
+    inp.addEventListener('keydown',function(ev){ if(ev.key==='Enter') salvar(); });
+    document.getElementById('cmp-lemb-clip').onclick=function(ev){ ev.stopPropagation(); fil.click(); };
+    document.getElementById('cmp-lemb-proc').onclick=function(ev){
+      ev.stopPropagation();
+      var bx=document.getElementById('cmp-lemb-procbox');
+      var abrindo=(bx.style.display==='none');
+      bx.style.display=abrindo?'block':'none';
+      if(abrindo){ var q=document.getElementById('cmp-lemb-procq'); q.value=''; pintaBuscaProc(''); setTimeout(function(){ try{ q.focus(); }catch(e){} },30); }
+    };
+    document.getElementById('cmp-lemb-procq').addEventListener('input',function(){ pintaBuscaProc(this.value); });
+    fil.onchange=function(){ var f=this.files&&this.files[0]; this.value=''; if(f) subir(f); };
+    /* colar print direto no campo — mesmo gesto do chat da equipe */
+    inp.addEventListener('paste',function(ev){
+      var it=(ev.clipboardData&&ev.clipboardData.items)||[];
+      for(var i=0;i<it.length;i++){
+        if(it[i].kind==='file'){ var f=it[i].getAsFile(); if(f){ ev.preventDefault(); subir(f); return; } }
+      }
+    });
+    aplicaMin(); pintar();
+  }
+
+  /* sobe o arquivo pela MESMA rota do chat (/api/chat/print) e guarda só a
+     referência no lembrete — base64 no localStorage estouraria o limite */
+  function subir(f){
+    if(f.size>MAX_ANEXO){ alert('O arquivo passa de 15 MB — escolha um menor.'); return; }
+    var cx=document.getElementById('cmp-lemb-anx');
+    if(cx){ cx.style.display='flex'; cx.innerHTML='⏳ enviando <b>'+esc2(f.name)+'</b>…'; }
+    var fr=new FileReader();
+    fr.onload=function(){
+      var s=String(fr.result||''), v=s.indexOf(',');
+      var b64=(v>=0?s.slice(v+1):s);
+      (async function(){
+        try{
+          var tok=(typeof docToken==='function')?await docToken():null;
+          var r=await fetch('/api/chat/print',{method:'POST',
+            headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},
+            body:JSON.stringify({nome:f.name,tipo:f.type||'application/octet-stream',b64:b64})});
+          var j=await r.json();
+          if(!j||!j.ok||!j.id) throw new Error((j&&j.erro)||'falha ao enviar');
+          ANEXO={id:j.id,nome:f.name,tipo:(f.type||'')};
+          pintaAnexo();
+        }catch(e){
+          ANEXO=null; pintaAnexo();
+          if(cx){ cx.style.display='flex'; cx.innerHTML='<span style="color:#b5342b">não deu para anexar: '+esc2((e&&e.message)||e)+'</span>'; }
+        }
+      })();
+    };
+    fr.onerror=function(){ if(cx) cx.innerHTML='<span style="color:#b5342b">não consegui ler o arquivo.</span>'; };
+    fr.readAsDataURL(f);
+  }
+  /* Mostra o que já está engatilhado para o próximo lembrete: o anexo e/ou o
+     processo amarrado. Os dois na mesma barrinha para não crescer o card. */
+  function pintaAnexo(){
+    var cx=document.getElementById('cmp-lemb-anx'); if(!cx) return;
+    if(!ANEXO && !PROC){ cx.style.display='none'; cx.innerHTML=''; return; }
+    cx.style.display='flex'; cx.style.flexWrap='wrap';
+    var h='';
+    if(PROC){
+      h+='<span style="display:inline-flex;align-items:center;gap:5px;background:#eef4fb;border-radius:6px;padding:2px 7px;color:#185FA5;max-width:100%">⚖ <span style="min-width:0;word-break:break-word">'+esc2(String(PROC.rotulo).slice(0,34))+'</span>'
+        +'<button id="cmp-lemb-proc-x" title="Desamarrar o processo" style="border:0;background:transparent;color:#b5342b;font-weight:700;cursor:pointer;font-size:12px">✕</button></span>';
+    }
+    if(ANEXO){
+      h+='<span style="display:inline-flex;align-items:center;gap:5px;min-width:0;flex:1">'+ico(ANEXO.tipo,ANEXO.nome)
+        +'<span style="min-width:0;word-break:break-word">'+esc2(ANEXO.nome)+'</span>'
+        +'<button id="cmp-lemb-anx-x" title="Tirar o anexo" style="border:0;background:transparent;color:#b5342b;font-weight:700;cursor:pointer;font-size:13px">✕</button></span>';
+    }
+    cx.innerHTML=h;
+    var x=document.getElementById('cmp-lemb-anx-x');
+    if(x) x.onclick=function(){ ANEXO=null; pintaAnexo(); };
+    var xp=document.getElementById('cmp-lemb-proc-x');
+    if(xp) xp.onclick=function(){ PROC=null; pintaAnexo(); };
+  }
+
+  function fecharBuscaProc(){
+    var bx=document.getElementById('cmp-lemb-procbox'); if(bx) bx.style.display='none';
+  }
+  /* Busca no acervo JÁ carregado na tela (DADOS.processos): casa por nome do
+     cliente, da parte contrária ou pelo número — com ou sem pontuação, porque
+     ninguém digita o CNJ formatado. Sem ida ao servidor: a lista já está aqui. */
+  function pintaBuscaProc(q){
+    var el=document.getElementById('cmp-lemb-proclist'); if(!el) return;
+    q=String(q||'').trim().toLowerCase();
+    var qd=q.replace(/\D/g,'');
+    if(q.length<2 && !qd){ el.innerHTML='<div style="color:#8a8355;font-size:11.5px;font-style:italic;padding:4px 2px">Digite parte do nome ou do número.</div>'; return; }
+    var todos=[]; try{ todos=(DADOS&&DADOS.processos)||[]; }catch(e){}
+    var achados=todos.filter(function(p2){
+      var alvo=((p2.cliente||'')+' '+(p2.oponente||'')).toLowerCase();
+      if(q && alvo.indexOf(q)>-1) return true;
+      if(qd && String(p2.numero||'').replace(/\D/g,'').indexOf(qd)>-1) return true;
+      return false;
+    }).slice(0,12);
+    if(!achados.length){ el.innerHTML='<div style="color:#8a8355;font-size:11.5px;font-style:italic;padding:4px 2px">Nenhum processo com esse nome ou número.</div>'; return; }
+    el.innerHTML=achados.map(function(p2,k){
+      var num=(typeof fmtCNJ==='function')?fmtCNJ(p2.numero):p2.numero;
+      return '<div class="lemb-pr" data-n="'+esc2(p2.numero)+'" style="cursor:pointer;padding:4px 6px;border-radius:6px;font-size:11.5px;line-height:1.3;border-bottom:1px solid #f0e8c4">'
+        +'<b>'+esc2(String(p2.cliente||'—').slice(0,42))+'</b>'
+        +'<div style="color:#8a8355">'+esc2(num)+'</div></div>';
+    }).join('');
+    el.querySelectorAll('.lemb-pr').forEach(function(row){
+      row.onmouseenter=function(){ this.style.background='#f6f1d6'; };
+      row.onmouseleave=function(){ this.style.background=''; };
+      row.onclick=function(){
+        var n=this.getAttribute('data-n');
+        var p2=(DADOS.processos||[]).find(function(x){ return String(x.numero)===String(n); });
+        PROC={numero:n, rotulo:((p2&&p2.cliente)||n)};
+        fecharBuscaProc(); pintaAnexo();
+      };
+    });
+  }
+  function pintar(){
+    var el=document.getElementById('cmp-lemb-lista'); if(!el) return;
+    var a=ler();
+    var abertos=a.filter(function(x){ return !x.ok; }).length;
+    var bd=document.getElementById('cmp-lemb-badge');
+    if(bd){ if(abertos){ bd.style.display='inline-block'; bd.textContent=abertos; } else bd.style.display='none'; }
+    var jwt=''; try{ jwt=encodeURIComponent(window.__jwtAnexo||''); }catch(e){}
+    if(!a.length){
+      el.innerHTML='<div style="color:#8a8355;font-size:12px;font-style:italic;padding:8px 2px">Nada anotado. Escreva abaixo e tecle Enter — dá para anexar print ou documento no 📎.</div>';
+    } else {
+      el.innerHTML=a.map(function(x,i){
+        var anx='';
+        if(x.anexo&&x.anexo.id){
+          var url='/api/anexo?id='+encodeURIComponent(x.anexo.id)+'&jwt='+jwt;
+          anx=/^image\//i.test(x.anexo.tipo||'')
+            ? '<a href="'+url+'" target="_blank" rel="noopener"><img src="'+url+'" alt="" style="max-width:100%;border-radius:6px;display:block;margin-top:4px"></a>'
+            : '<a href="'+url+'" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;margin-top:4px;font-size:11.5px;color:#185FA5;text-decoration:none;background:#eef4fb;border-radius:6px;padding:3px 7px">'+ico(x.anexo.tipo,x.anexo.nome)+' '+esc2(x.anexo.nome)+'</a>';
+        }
+        var pr='';
+        if(x.proc&&x.proc.numero){
+          pr='<a onclick="try{irParaProcesso(\''+String(x.proc.numero).replace(/'/g,"")+'\')}catch(e){}" title="Abrir o processo" '
+            +'style="display:inline-block;margin-top:3px;font-size:11px;color:#185FA5;background:#eef4fb;border-radius:6px;padding:1px 6px;cursor:pointer">⚖ '+esc2(String(x.proc.rotulo||x.proc.numero).slice(0,34))+'</a>';
+        }
+        return '<div style="display:flex;gap:7px;align-items:flex-start;padding:5px 2px;border-bottom:1px solid #f0e8c4">'
+          +'<input type="checkbox" '+(x.ok?'checked':'')+' data-i="'+i+'" class="lemb-ck" style="width:15px;height:15px;margin-top:2px;cursor:pointer;flex-shrink:0" title="'+(x.ok?'Reabrir':'Riscar')+'">'
+          +'<span style="flex:1;min-width:0;word-break:break-word;line-height:1.35">'
+            +'<span style="'+(x.ok?'text-decoration:line-through;color:#9a9480':'')+'">'+esc2(x.t)+'</span>'+pr+anx+'</span>'
+          +'<button class="lemb-x" data-i="'+i+'" title="Apagar" style="border:0;background:transparent;color:#b5342b;cursor:pointer;font-size:13px;line-height:1;padding:0 2px;flex-shrink:0">✕</button>'
+          +'</div>';
+      }).join('');
+    }
+    var pe=document.getElementById('cmp-lemb-pe');
+    var riscados=a.filter(function(x){ return x.ok; }).length;
+    if(pe){
+      if(riscados){
+        pe.style.display='block';
+        pe.innerHTML='<a id="cmp-lemb-limpar" style="cursor:pointer;color:#8a5a00;font-size:11.5px;text-decoration:underline">limpar '+riscados+' riscado'+(riscados>1?'s':'')+'</a>';
+        var lk=document.getElementById('cmp-lemb-limpar');
+        if(lk) lk.onclick=function(){ gravar(ler().filter(function(x){ return !x.ok; })); pintar(); };
+      } else pe.style.display='none';
+    }
+    el.querySelectorAll('.lemb-ck').forEach(function(c){
+      c.onchange=function(){ var i=+this.getAttribute('data-i'); var a2=ler(); if(a2[i]){ a2[i].ok=this.checked; gravar(a2); pintar(); } };
+    });
+    el.querySelectorAll('.lemb-x').forEach(function(b){
+      b.onclick=function(){ var i=+this.getAttribute('data-i'); var a2=ler(); a2.splice(i,1); gravar(a2); pintar(); };
+    });
+  }
+
+  /* Só monta quando o app entrou E o sistema já sabe QUEM está logado — ver
+     PRIVACIDADE no topo. */
+  (function tenta(n){
+    var app=document.getElementById('app');
+    var pronto=app && !app.classList.contains('hidden') && uid();
+    if(pronto){ montar(); return; }
+    if((n||0)>150) return;                       /* ~2 min: desiste em silêncio */
+    setTimeout(function(){ tenta((n||0)+1); },800);
+  })(0);
+})();
+</script>
 </body>
 </html>
