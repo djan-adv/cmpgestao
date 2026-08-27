@@ -22400,14 +22400,36 @@ function exportarProdutividadeCSV(){
     });
   }
 
-  /* Só monta quando o app entrou E o sistema já sabe QUEM está logado — ver
+  /* Descobre QUEM está logado. window.__prodUid não serve sozinho: ele só é
+     preenchido dentro de _prodIds(), que roda quando algum evento de
+     produtividade dispara — no carregamento normal pode ficar nulo para sempre.
+     Foi o que segurou o card na estreia (27/08/2026: "não apareceu"): ele
+     esperava por um dado que podia nunca chegar. A fonte de verdade é a sessão
+     do Supabase; _prodIds() é só um atalho quando já rodou. */
+  async function garanteUid(){
+    if(uid()) return uid();
+    try{ if(typeof _prodIds==='function') await _prodIds(); }catch(e){}
+    if(uid()) return uid();
+    try{
+      var sb=window.__sb; if(!sb) return '';
+      var u=await sb.auth.getUser();
+      var id=u&&u.data&&u.data.user&&u.data.user.id;
+      if(id){ window.__prodUid=id; return String(id); }
+    }catch(e){}
+    return '';
+  }
+  /* Só monta quando o app entrou E já se sabe quem está logado — ver
      PRIVACIDADE no topo. */
   (function tenta(n){
     var app=document.getElementById('app');
-    var pronto=app && !app.classList.contains('hidden') && uid();
-    if(pronto){ montar(); return; }
-    if((n||0)>150) return;                       /* ~2 min: desiste em silêncio */
-    setTimeout(function(){ tenta((n||0)+1); },800);
+    if(!app || app.classList.contains('hidden')){
+      if((n||0)<150) setTimeout(function(){ tenta((n||0)+1); },800);
+      return;
+    }
+    garanteUid().then(function(u){
+      if(u){ montar(); return; }
+      if((n||0)<150) setTimeout(function(){ tenta((n||0)+1); },800);
+    });
   })(0);
 })();
 </script>
