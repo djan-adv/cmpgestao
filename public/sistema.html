@@ -7884,10 +7884,56 @@ function renderTarefasMes(){
   var lista=tarefasFiltradas();
   var mm=String(tarM+1).padStart(2,'0');
   var prefMes=tarY+'-'+mm;
-  /* separa: deste mês, sem data, e de outros meses (para nada "sumir") */
-  var semData=lista.filter(function(a){return !_tarISO(a);});
-  var outroMes=lista.filter(function(a){var iso=_tarISO(a);return iso && iso.slice(0,7)!==prefMes;});
-  /* faixa acima do calendário: sem data + aviso de outros meses */
+  var dowsM=_tarDows();
+  /* a grade tem 7 colunas quando o fim de semana aparece (opção do usuário ou
+     tela de celular) e 5 quando ele está oculto — é a mesma conta de _tarDows */
+  var comFds=(tarFds||__ehCel);
+  var nCols=comFds?7:5;
+  var _posCol=function(dow){ return comFds?dow:((dow+6)%7); };
+  var _isoDe=function(dt){ return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0'); };
+
+  /* ===== os dias da grade =====
+     Pedido do dono (28/08/2026): "não consigo arrastar tarefa de agosto pra
+     setembro. Que tal os próximos dias da semana do mês seguinte aparecerem na
+     agenda? Agosto aparece até 31, poderia aparecer 01/09, 02/09...".
+     A causa era essa: os buracos do começo e do fim da grade eram divs mortas
+     (.day.out sem data), então não existia célula de setembro para soltar o
+     chip. Agora as bordas são dias DE VERDADE — fim do mês anterior e começo do
+     seguinte — com chip, clique e drop iguais aos do mês corrente. */
+  var dias=[];
+  var dim=new Date(tarY,tarM+1,0).getDate();
+  for(var d=1;d<=dim;d++){
+    var dt=new Date(tarY,tarM,d);
+    if(dowsM.indexOf(dt.getDay())<0) continue;   /* fim de semana oculto */
+    dias.push({iso:_isoDe(dt), dia:d, fora:false});
+  }
+  if(dias.length){
+    /* recuo do primeiro dia visível — preenchido com o fim do mês anterior */
+    var vagas=_posCol(new Date(dias[0].iso+'T00:00:00').getDay());
+    var ant=new Date(tarY,tarM,1), antes=[];
+    while(antes.length<vagas){
+      ant.setDate(ant.getDate()-1);
+      if(dowsM.indexOf(ant.getDay())<0) continue;
+      antes.unshift({iso:_isoDe(ant), dia:ant.getDate(), fora:true});
+    }
+    dias=antes.concat(dias);
+  }
+  /* fecha a última linha com o começo do mês seguinte; se a linha já terminou
+     redonda, entra uma linha inteira — no fim do mês tem de haver para onde
+     arrastar, sempre */
+  var faltam=(dias.length%nCols) ? (nCols-(dias.length%nCols)) : nCols;
+  var prox=new Date(tarY,tarM,dim);
+  while(faltam>0){
+    prox.setDate(prox.getDate()+1);
+    if(dowsM.indexOf(prox.getDay())<0) continue;
+    dias.push({iso:_isoDe(prox), dia:prox.getDate(), fora:true});
+    faltam--;
+  }
+  var naGrade={}; dias.forEach(function(x){ naGrade[x.iso]=1; });
+
+  /* faixa acima do calendário: aviso de atividades em outros meses. O que já
+     está visível nas bordas da grade não conta como "escondido". */
+  var outroMes=lista.filter(function(a){ var iso=_tarISO(a); return iso && iso.slice(0,7)!==prefMes && !naGrade[iso]; });
   var avisoHTML='';
   /* "Sem data definida" removido da visão mês a pedido — os agendamentos sem data
      não são apagados (continuam na visão Lista), apenas não aparecem aqui. */
@@ -7897,25 +7943,19 @@ function renderTarefasMes(){
   cal.innerHTML='';
   /* sábado/domingo quase nunca têm agendamento — colunas estreitas liberam espaço
      para os dias úteis, e o sábado vira um resumo da semana */
-  var dowsM=_tarDows();
-  var colunas=__ehCel?'repeat(7,1fr)':(tarFds?'0.5fr repeat(5,1fr) 0.5fr':'repeat(5,1fr)');
-  if(avisoHTML){ var av=document.createElement('div'); av.style.gridColumn='1 / -1'; av.innerHTML=avisoHTML; cal.style.gridTemplateColumns=colunas; cal.appendChild(av); }
-  else { cal.style.gridTemplateColumns=colunas; }
-  _tarNomesDow().forEach(function(d){var h=document.createElement('div');h.className='dow';h.textContent=d;cal.appendChild(h);});
-  var first=new Date(tarY,tarM,1),start=first.getDay(),dim=new Date(tarY,tarM+1,0).getDate();
-  /* com o fim de semana oculto a grade começa na segunda, então o recuo do
-     primeiro dia é contado sobre os dias úteis */
-  var _posCol=function(dow){ return tarFds?dow:((dow+6)%7); };
-  var vagas=tarFds?start:Math.min(_posCol(start),4);
-  if(!tarFds && (start===0||start===6)) vagas=0; /* mês que começa no fim de semana */
-  for(var i=0;i<vagas;i++){var o=document.createElement('div');o.className='day out';cal.appendChild(o);}
-  for(var d=1;d<=dim;d++){
-    var iso=tarY+'-'+mm+'-'+String(d).padStart(2,'0');
-    var _dw=new Date(tarY,tarM,d).getDay();
-    if(dowsM.indexOf(_dw)<0) continue; /* fim de semana oculto */
-    var cell=document.createElement('div');cell.className='day'+(iso===todayISO?' today':'');
+  cal.style.gridTemplateColumns=__ehCel?'repeat(7,1fr)':(tarFds?'0.5fr repeat(5,1fr) 0.5fr':'repeat(5,1fr)');
+  if(avisoHTML){ var av=document.createElement('div'); av.style.gridColumn='1 / -1'; av.innerHTML=avisoHTML; cal.appendChild(av); }
+  _tarNomesDow().forEach(function(dn){var h=document.createElement('div');h.className='dow';h.textContent=dn;cal.appendChild(h);});
+
+  dias.forEach(function(D){
+    var iso=D.iso;
+    var cell=document.createElement('div');
+    cell.className='day'+(iso===todayISO?' today':'')+(D.fora?' out':'');
     cell.style.cursor='pointer';
-    cell.innerHTML='<div class="dn">'+d+'</div>';
+    /* dia de outro mês mostra o mês junto (01/09) para ninguém ler "1" como
+       primeiro de agosto */
+    var rot=D.fora?(String(D.dia).padStart(2,'0')+'/'+String(new Date(iso+'T00:00:00').getMonth()+1).padStart(2,'0')):String(D.dia);
+    cell.innerHTML='<div class="dn"'+(D.fora?' style="color:#9aa3b0;font-weight:600"':'')+'>'+rot+'</div>';
     var dtasks=lista.filter(function(a){return _tarISO(a)===iso;});
     if(__ehCel){
       /* celular: os chips minúsculos ficam ilegíveis — mostra um selo com a
@@ -7938,9 +7978,9 @@ function renderTarefasMes(){
       });
       /* SÁBADO vazio = resumo da semana (pendentes e prazos fatais de dom a sáb) */
       var dowC=new Date(iso+'T00:00:00').getDay();
-      if(!dtasks.length && dowC===6){
+      if(!dtasks.length && dowC===6 && !D.fora){
         var iniD=new Date(iso+'T00:00:00'); iniD.setDate(iniD.getDate()-6);
-        var iniISO=iniD.getFullYear()+'-'+String(iniD.getMonth()+1).padStart(2,'0')+'-'+String(iniD.getDate()).padStart(2,'0');
+        var iniISO=_isoDe(iniD);
         var sem=lista.filter(function(a){var x=_tarISO(a);return x&&x>=iniISO&&x<=iso;});
         var pend=sem.filter(function(a){return !_tarConcluida(a);}).length;
         var fat=sem.filter(function(a){return a.prazo&&!_tarConcluida(a);}).length;
@@ -7963,7 +8003,7 @@ function renderTarefasMes(){
       };
     })(iso,cell);
     cal.appendChild(cell);
-  }
+  });
 }
 /* remarca a tarefa arrastada: a data vai para o novo dia; se a data exibida era o
    PRAZO FATAL, o prazo acompanha (arrastar = remarcar de verdade) */
