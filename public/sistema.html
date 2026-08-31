@@ -562,8 +562,8 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
           <p class="sectlabel" style="margin:0">Relatório diário — hora a hora</p>
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-            <input type="date" id="prd-dia" class="btn sm" onchange="renderRelatorioDiario()" style="max-width:160px">
-            <label class="note" style="display:flex;align-items:center;gap:5px;margin:0;font-size:12px"><input type="checkbox" id="prd-dia-ruido" onchange="renderRelatorioDiario()"> mostrar logins e aberturas</label>
+            <input type="date" id="prd-dia" class="btn sm" onchange="_prdRepinta()" style="max-width:160px">
+            <label class="note" style="display:flex;align-items:center;gap:5px;margin:0;font-size:12px"><input type="checkbox" id="prd-dia-ruido" onchange="_prdRepinta()"> mostrar logins e aberturas</label>
             <button class="btn sm ghost" onclick="exportarDiarioCSV()">⬇ CSV do dia</button>
           </div>
         </div>
@@ -20125,20 +20125,12 @@ function _prdPopulaMeses(){
   }
   sel.insertAdjacentHTML('beforeend','<optgroup label="Mês calendário">'+opts+'</optgroup>');
 }
-async function renderProdutividade(){
+/* Desenha as fichas a partir do que JÁ está carregado. Separado de
+   renderProdutividade porque trocar o dia no calendário repinta as colunas — e
+   ir ao banco a cada clique seria desperdício. */
+function _prdPintaCartoes(){
   var cards=document.getElementById('prd-cards'); if(!cards) return;
-  _prdPopulaMeses();
-  cards.innerHTML='<div class="note">Carregando eventos…</div>';
-  try{ await _prdCarrega(); }catch(e){ cards.innerHTML='<div class="note">Falha ao carregar: '+String(e&&e.message||e)+'</div>'; return; }
-  var evs=PRD_EVT||[];
-  /* povoamento do filtro de pessoa */
-  var selU=document.getElementById('prd-user');
-  if(selU){ var nomes={};
-    Object.keys(PRD_USERS||{}).forEach(function(id){ nomes[id]=PRD_USERS[id].nome; }); /* todos os cadastrados */
-    evs.forEach(function(e){ if(e.user_id && !nomes[e.user_id]) nomes[e.user_id]=e.user_nome||e.user_id.slice(0,8); }); /* + quem tem evento mas não está na lista */
-    var cur=selU.value; selU.innerHTML='<option value="">Todas as pessoas</option>'+Object.keys(nomes).sort(function(a,b){ return String(nomes[a]||'').localeCompare(String(nomes[b]||'')); }).map(function(id){ return '<option value="'+id+'">'+finEsc(nomes[id])+'</option>'; }).join(''); selU.value=cur; }
-  var fu=(selU||{}).value||'';
-  if(fu) evs=evs.filter(function(e){ return e.user_id===fu; });
+  var evs=window.__prdEvsVis||PRD_EVT||[];
   /* agrupa por pessoa */
   var por={};
   evs.forEach(function(e){ var nm=(PRD_USERS&&PRD_USERS[e.user_id]&&PRD_USERS[e.user_id].nome)||e.user_nome||'—'; (por[e.user_id]=por[e.user_id]||{nome:nm,evs:[]}).evs.push(e); por[e.user_id].nome=nm; });
@@ -20157,8 +20149,18 @@ async function renderProdutividade(){
       });
     } else if(e.user_id) ptsUid[e.user_id]=(ptsUid[e.user_id]||0)+p;
   });
+  window.__prdRange=_prdRangeDias();
   var html='';
-  Object.keys(por).forEach(function(uid){
+  /* o relatório hora a hora usa a MESMA ordem das fichas — colunas que não se
+     correspondem obrigam a procurar a pessoa duas vezes */
+  /* Ranking: a ficha de quem produziu mais vem primeiro. Antes a ordem era a
+     da primeira aparição no log — ou seja, sorteio. */
+  var ordem=Object.keys(por).sort(function(a,b){
+    var d=(ptsUid[b]||0)-(ptsUid[a]||0); if(d) return d;
+    return String(por[a].nome||'').localeCompare(String(por[b].nome||''),'pt');
+  });
+  window.__prdOrdem=ordem.map(function(uid){ return por[uid].nome; });
+  ordem.forEach(function(uid,pos){
     var u=por[uid]; var c={}; var pontos=(ptsUid[uid]||0); var boletosEmit=0, boletosEnv=0;
     u.evs.forEach(function(e){ c[e.event_type]=(c[e.event_type]||0)+1;
       if(e.event_type==='boleto_issued') boletosEmit++;
@@ -20167,7 +20169,9 @@ async function renderProdutividade(){
     var t=_prdTempoAtivo(u.evs);
     function linha(l,v){ if(!v) return ''; return '<div style="display:flex;justify-content:space-between;font-size:12.5px;padding:2px 0"><span style="color:var(--muted)">'+l+'</span><b>'+v+'</b></div>'; }
     html+='<div style="border:1px solid var(--line);border-radius:12px;padding:14px">'
-      +'<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px"><b style="color:var(--navy)">'+finEsc(u.nome)+'</b><span style="font-size:18px;font-weight:800;color:#127a53">'+(Math.round(pontos*10)/10)+' pts</span></div>'
+      +'<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">'
+        +'<b style="color:var(--navy)"><span style="display:inline-block;min-width:18px;color:'+(pos===0?'#b8860b':'#a6acb6')+';font-weight:800">'+(pos+1)+'º</span> '+finEsc(u.nome)+'</b>'
+        +'<span style="font-size:18px;font-weight:800;color:#127a53">'+(Math.round(pontos*10)/10)+' pts</span></div>'
       +linha('Tempo ativo (no sistema)',_prdFmtMin(t.ativo))
       +(t.entregavel?linha('Tempo em entregável (fora do sistema)',_prdFmtMin(t.entregavel)):'')
       +linha('Tarefas concluídas',c.task_completed||0)
@@ -20196,10 +20200,30 @@ async function renderProdutividade(){
       +linha('Fichas completadas (tel+e-mail)',c.contact_completed||0)
       +linha('Registros salvos',c.record_saved||0)
       +linha('Logins',c.login||0)
+      +_prdCalendarioHTML(u.evs)
+      +_prdCartaoDiaHTML(u.evs)
+      +_prdTotalPeriodoHTML(u.evs)
       +'</div>';
   });
   cards.innerHTML=html||'<div class="note">Nenhum evento no período — o log começou a registrar agora; os números aparecem conforme a equipe usa o sistema.</div>';
+}
+
+async function renderProdutividade(){
+  var cards=document.getElementById('prd-cards'); if(!cards) return;
+  _prdPopulaMeses();
+  cards.innerHTML='<div class="note">Carregando eventos…</div>';
+  try{ await _prdCarrega(); }catch(e){ cards.innerHTML='<div class="note">Falha ao carregar: '+String(e&&e.message||e)+'</div>'; return; }
+  var evs=PRD_EVT||[];
+  /* povoamento do filtro de pessoa */
+  var selU=document.getElementById('prd-user');
+  if(selU){ var nomes={};
+    Object.keys(PRD_USERS||{}).forEach(function(id){ nomes[id]=PRD_USERS[id].nome; }); /* todos os cadastrados */
+    evs.forEach(function(e){ if(e.user_id && !nomes[e.user_id]) nomes[e.user_id]=e.user_nome||e.user_id.slice(0,8); }); /* + quem tem evento mas não está na lista */
+    var cur=selU.value; selU.innerHTML='<option value="">Todas as pessoas</option>'+Object.keys(nomes).sort(function(a,b){ return String(nomes[a]||'').localeCompare(String(nomes[b]||'')); }).map(function(id){ return '<option value="'+id+'">'+finEsc(nomes[id])+'</option>'; }).join(''); selU.value=cur; }
+  var fu=(selU||{}).value||'';
+  if(fu) evs=evs.filter(function(e){ return e.user_id===fu; });
   window.__prdEvsVis=evs;          /* mesmo conjunto dos cartões: respeita o filtro de pessoa */
+  _prdPintaCartoes();
   try{ renderRelatorioDiario(); }catch(eD){ console.warn('relatório diário:',eD); }
   renderAuditoriaLogins();
   renderProdutividadeConfig();
@@ -22567,6 +22591,118 @@ function _prdTempoNaPagina(e){
     return achou?(' · '+_visDur(achou.v.segundos)+' na página'):'';
   }catch(er){ return ''; }
 }
+/* ===== Mini calendário por pessoa =====
+   Ideia do dono (31/08/2026): abaixo de cada ficha, o mês inteiro em quadradinhos
+   com o volume de cada dia — dá para ver de relance quem trabalhou quando, e um
+   clique leva o relatório hora a hora para aquele dia. Conta os mesmos registros
+   que o relatório mostra (login e abertura de tarefa ficam de fora, como lá). */
+function _prdDiaMais(iso,n){
+  var p=String(iso).split('-'); var d=new Date(Date.UTC(+p[0],+p[1]-1,+p[2]));
+  d.setUTCDate(d.getUTCDate()+n); return d.toISOString().slice(0,10);
+}
+function _prdDowSeg(iso){ /* 0 = segunda */
+  var p=String(iso).split('-'); var d=new Date(Date.UTC(+p[0],+p[1]-1,+p[2]));
+  return (d.getUTCDay()+6)%7;
+}
+function _prdRangeDias(){
+  var todos=(window.__prdEvsVis||PRD_EVT||[]); var min='',max='';
+  todos.forEach(function(e){ var d=_prdDiaISO(e.occurred_at); if(!d) return; if(!min||d<min)min=d; if(!max||d>max)max=d; });
+  return {de:min,ate:max};
+}
+function _prdCalendarioHTML(evs){
+  var r=window.__prdRange||{}; if(!r.de||!r.ate) return '';
+  var porDia={}, total=0;
+  evs.forEach(function(e){
+    if(PRD_RUIDO.indexOf(e.event_type)>-1) return;
+    var d=_prdDiaISO(e.occurred_at); if(!d) return;
+    porDia[d]=(porDia[d]||0)+1; total++;
+  });
+  var max=0; Object.keys(porDia).forEach(function(d){ if(porDia[d]>max) max=porDia[d]; });
+  var sel=(document.getElementById('prd-dia')||{}).value||'';
+  var ini=_prdDiaMais(r.de,-_prdDowSeg(r.de)), fim=_prdDiaMais(r.ate,6-_prdDowSeg(r.ate));
+  var cel='', d=ini, guarda=0;
+  while(d<=fim && guarda++<400){
+    var n=porDia[d]||0, dentro=(d>=r.de&&d<=r.ate);
+    var forca=(max&&n)?(0.14+0.66*Math.min(1,n/max)):0;
+    var fundo=n?('rgba(18,122,83,'+forca.toFixed(2)+')'):(dentro?'#f2f4f7':'transparent');
+    var cor=(forca>0.45)?'#fff':(dentro?'#4a5260':'#c9ced6');
+    var borda=(d===sel)?'2px solid #b5342b':'1px solid '+(dentro?'#e6e9ee':'transparent');
+    cel+='<div title="'+_prdBrDia(d)+' — '+n+' registro'+(n===1?'':'s')+'" '
+      +(dentro?('onclick="_prdEscolheDia(\''+d+'\')" style="cursor:pointer;'):'style="')
+      +'background:'+fundo+';color:'+cor+';border:'+borda+';border-radius:5px;font-size:9.5px;'
+      +'height:20px;display:flex;align-items:center;justify-content:center;font-weight:'+(n?'700':'400')+'">'
+      +(dentro?String(+d.slice(8,10)):'')+'</div>';
+    d=_prdDiaMais(d,1);
+  }
+  var nSel=porDia[sel]||0;
+  return '<div style="margin-top:9px;border-top:1px solid var(--line);padding-top:7px">'
+    +'<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:3px">'
+      +['S','T','Q','Q','S','S','D'].map(function(x){ return '<div style="font-size:8.5px;color:#a6acb6;text-align:center">'+x+'</div>'; }).join('')
+    +'</div>'
+    +'<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px">'+cel+'</div>'
+    +'<div class="note" style="margin:5px 0 0;font-size:11px">'
+      +(sel?('<b>'+_prdBrDia(sel)+'</b> · '+nSel+' registro'+(nSel===1?'':'s')):'clique num dia')
+      +' <span style="color:#a6acb6">· '+total+' no período</span></div>'
+  +'</div>';
+}
+function _prdBrDia(iso){ return iso?String(iso).slice(0,10).split('-').reverse().join('/'):''; }
+/* Totalizador no rodapé da ficha: quantos registros a pessoa fez no período
+   escolhido, e em quantos dias. É o número que se compara de uma coluna para a
+   outra — o ranking, no fim das contas. */
+function _prdTotalPeriodoHTML(evs){
+  var porDia={}, total=0;
+  evs.forEach(function(e){
+    if(PRD_RUIDO.indexOf(e.event_type)>-1) return;
+    var d=_prdDiaISO(e.occurred_at); if(!d) return;
+    porDia[d]=(porDia[d]||0)+1; total++;
+  });
+  var dias=Object.keys(porDia).length;
+  var media=dias?Math.round(total/dias):0;
+  return '<div style="margin-top:8px;border-top:2px solid var(--line);padding-top:7px;display:flex;justify-content:space-between;align-items:baseline">'
+    +'<span style="font-size:11.5px;color:var(--muted)">Registros no período</span>'
+    +'<b style="font-size:16px;color:var(--navy)">'+total+'</b></div>'
+    +'<div class="note" style="margin:1px 0 0;font-size:10.5px;text-align:right">'+dias+' dia'+(dias===1?'':'s')+' com trabalho · média '+media+'/dia</div>';
+}
+/* Os registros do dia escolhido, DENTRO da coluna da pessoa — logo abaixo do
+   calendário dela. Fica numa caixa com rolagem própria: 191 registros num dia
+   esticariam a coluna até o fim do mundo. */
+function _prdCartaoDiaHTML(evs){
+  var dia=(document.getElementById('prd-dia')||{}).value||''; if(!dia) return '';
+  var ruido=!!((document.getElementById('prd-dia-ruido')||{}).checked);
+  var doDia=evs.filter(function(e){
+    if(_prdDiaISO(e.occurred_at)!==dia) return false;
+    if(!ruido && PRD_RUIDO.indexOf(e.event_type)>-1) return false;
+    return true;
+  }).sort(function(a,b){ return String(a.occurred_at||'')<String(b.occurred_at||'')?-1:1; });
+  if(!doDia.length) return '<div class="note" style="margin-top:6px;font-size:11px;color:#a6acb6">nada em '+_prdBrDia(dia)+'</div>';
+  return '<div style="margin-top:7px;border-top:1px dashed var(--line);padding-top:6px">'
+    +'<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px">'
+      +'<b style="font-size:11px;color:var(--navy)">'+_prdBrDia(dia)+'</b>'
+      +'<span class="note" style="margin:0;font-size:10.5px">'+doDia.length+' registro'+(doDia.length===1?'':'s')+' · '+_prdHora(doDia[0].occurred_at)+'–'+_prdHora(doDia[doDia.length-1].occurred_at)+'</span>'
+    +'</div>'
+    +'<div style="max-height:300px;overflow:auto;padding-right:3px">'
+      +doDia.map(function(e){
+        var proc=_prdProcTexto(e), fatal=((e.metadata||{}).tipo==='prazo');
+        return '<div style="display:flex;gap:6px;align-items:flex-start;padding:2px 0;font-size:11.5px;line-height:1.35">'
+          +'<span style="min-width:34px;font-weight:700;color:var(--navy);font-variant-numeric:tabular-nums">'+_prdHora(e.occurred_at)+'</span>'
+          +'<div style="flex:1;min-width:0"><span>'+finEsc(_prdAcaoTexto(e))+'</span>'
+            +(fatal?' <span style="font-size:8.5px;font-weight:800;color:#b5342b;border:1px solid #e8c4bf;border-radius:7px;padding:0 4px">FATAL</span>':'')
+            +(proc?('<div style="color:var(--muted);font-size:10.5px;word-break:break-word">'+finEsc(proc)+'</div>'):'')
+          +'</div></div>';
+      }).join('')
+    +'</div></div>';
+}
+/* trocar o dia mexe nas fichas (calendário + registros da coluna) e no
+   relatório de baixo — mas sem ir ao banco de novo: os eventos já estão aqui */
+window._prdRepinta=function(){
+  try{ _prdPintaCartoes(); }catch(e){}
+  try{ renderRelatorioDiario(); }catch(e){}
+};
+window._prdEscolheDia=function(dia){
+  var inp=document.getElementById('prd-dia'); if(inp) inp.value=dia;
+  _prdRepinta();
+};
+
 function renderRelatorioDiario(){
   var el=document.getElementById('prd-diario'); if(!el) return;
   var inp=document.getElementById('prd-dia');
