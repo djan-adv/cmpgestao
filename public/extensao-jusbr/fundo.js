@@ -71,6 +71,32 @@ async function aprender(dados) {
   } catch (e) {}
 }
 
+/* ===== O comprovante do protocolo =====
+   O dono quer que o sistema guarde o comprovante na pasta do processo, junto da
+   petição. Para isso é preciso saber por qual endereço ele vem — e o "Baixar
+   protocolo" do portal não passa pelos ganchos da página quando é um link
+   comum: o navegador baixa direto, sem fetch nenhum.
+   Aqui a extensão olha os DOWNLOADS: quando o arquivo salvo tem cara de
+   comprovante (protocoloPeticao_20264000000012906.pdf), o endereço é anotado.
+   Só o endereço e o nome — o arquivo não é lido nem reenviado. */
+function ehComprovante(item) {
+  var alvo = String((item && (item.filename || '')) + ' ' + (item && (item.finalUrl || item.url) || ''));
+  return /protocolopeticao|comprovante|recibo/i.test(alvo);
+}
+try {
+  chrome.downloads.onCreated.addListener(function (item) {
+    try {
+      if (!ehComprovante(item)) return;
+      aprender({
+        metodo: 'GET', url: String(item.finalUrl || item.url || '').split('?')[0],
+        cabecalhos: ['download: ' + String(item.filename || '').split(/[\\/]/).pop()],
+        corpo_forma: null, resposta_status: 200,
+        resposta_forma: '<arquivo baixado pelo navegador ' + (item.fileSize || item.totalBytes || 0) + ' bytes>',
+      });
+    } catch (e) {}
+  });
+} catch (e) {}
+
 chrome.runtime.onMessage.addListener((msg, remetente, responder) => {
   if (!msg) return;
   if (msg.tipo === 'token') { enviar(msg); return; }
