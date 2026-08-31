@@ -434,8 +434,11 @@ async function faseDossie(sb) {
 }
 
 // ————— fase 3: íntegra dos autos na pasta do processo —————
-// Só para intimação que EXIGE PEÇA — é quando alguém vai de fato ler os autos.
-// Baixar a íntegra de toda publicação encheria o disco à toa.
+// SOB PEDIDO, nunca sozinha. Antes bastava a triagem marcar "exige peça" para o
+// robô baixar os autos inteiros; o dono viu 126 MB aparecerem numa pasta e
+// disse, em 31/08/2026: "o Estagiário Virtual baixou a íntegra desse processo,
+// eu não pedi". Agora a fila é só o que alguém marcou na tela (integra_pedida),
+// e a íntegra que ninguém pediu simplesmente não é baixada.
 // Sem custo de IA: é download do jus.br. Um PDF único por processo, em ordem
 // crescente (começa pela petição inicial e vai até a peça mais recente), com
 // prefixo "000 - " para ser o primeiro arquivo da pasta. A íntegra anterior é
@@ -444,10 +447,10 @@ async function faseIntegra(sb) {
   // a mais urgente primeiro: prazo mais curto na frente
   const { data: pend } = await sb.from('robo_minutas')
     .select('id,processo_id,processo_numero,prazo_em,integra_em')
-    .eq('exige_peca', true).is('integra_em', null)
+    .eq('integra_pedida', true).is('integra_em', null)
     .order('prazo_em', { ascending: true, nullsFirst: false }).limit(1)
   const alvo = pend && pend[0]
-  if (!alvo) return { pulou: 'nada na fila' }
+  if (!alvo) return { pulou: 'ninguém pediu íntegra' }
 
   const dig = String(alvo.processo_numero || '').replace(/\D/g, '')
   if (dig.length < 16) {
@@ -581,7 +584,7 @@ async function _get(request) {
   if (searchParams.get('status') != null) {
     const orc = await orcamento(sb)
     const { data: fila, error: erroFila } = await sb.from('robo_minutas')
-      .select('id,tarefa_id,processo_id,processo_numero,status,tipo_peca,prazo_em,urgencia,resumo,dossie_nome,dossie_path,dossie_bytes,integra_path,integra_bytes,integra_erro,minuta_anexo_id,erro,criado_em')
+      .select('id,tarefa_id,processo_id,processo_numero,status,tipo_peca,prazo_em,urgencia,resumo,dossie_nome,dossie_path,dossie_bytes,integra_path,integra_bytes,integra_erro,integra_pedida,integra_pedida_por,minuta_anexo_id,erro,criado_em')
       // prazo mais próximo primeiro — é a ordem em que o trabalho tem que sair.
       // Sem prazo vai para o fim; empate desempata pela triagem mais recente.
       .eq('exige_peca', true)

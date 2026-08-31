@@ -20324,15 +20324,41 @@ async function renderEstagiario(){
         +'<div style="font-size:12px;color:'+(venceu?'#b5342b':'var(--ink)')+'">Prazo: <b>'+finEsc(prazo)+'</b>'+(x.urgencia?(' · urgência '+finEsc(x.urgencia)):'')+'</div>'
         +(x.resumo?'<div class="note" style="font-size:11px;margin-top:4px;max-height:52px;overflow:auto">'+finEsc(x.resumo)+'</div>':'')
         +(x.erro?'<div class="note" style="font-size:11px;color:#b5342b;margin-top:4px">'+finEsc(String(x.erro).slice(0,160))+'</div>':'')
-        +(x.integra_path?('<div class="note" style="font-size:11px;color:#127a53;margin-top:4px">📚 íntegra dos autos na pasta ('+_estKb(x.integra_bytes)+')</div>'):(x.integra_erro?('<div class="note" style="font-size:11px;color:#8a5a00;margin-top:4px">íntegra: '+finEsc(String(x.integra_erro).slice(0,120))+'</div>'):''))
+        +(x.integra_path?('<div class="note" style="font-size:11px;color:#127a53;margin-top:4px">📚 íntegra dos autos na pasta ('+_estKb(x.integra_bytes)+')</div>'):(x.integra_erro?('<div class="note" style="font-size:11px;color:#8a5a00;margin-top:4px">íntegra: '+finEsc(String(x.integra_erro).slice(0,120))+'</div>'):(x.integra_pedida?('<div class="note" style="font-size:11px;color:#185FA5;margin-top:4px">📚 íntegra pedida'+(x.integra_pedida_por?(' por '+finEsc(x.integra_pedida_por)):'')+' — o robô baixa na próxima rodada</div>'):'')))
         +'<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">'
           +(x.dossie_path?('<button class="btn sm" style="font-size:11px" onclick="baixarDossie(\''+String(x.dossie_path).replace(/'/g,"")+'\',this)">⬇ baixar dossiê ('+_estKb(x.dossie_bytes)+')</button>'):'')
-          +(x.integra_path?('<button class="btn sm ghost" style="font-size:11px" onclick="baixarDossie(\''+String(x.integra_path).replace(/'/g,"")+'\',this)">📚 íntegra</button>'):'')
+          +(x.integra_path?('<button class="btn sm ghost" style="font-size:11px" onclick="baixarDossie(\''+String(x.integra_path).replace(/'/g,"")+'\',this)">📚 íntegra</button>')
+            :(x.integra_pedida?'':('<button class="btn sm ghost" style="font-size:11px" onclick="pedirIntegraAutos(\''+String(x.id).replace(/'/g,"")+'\',this)" title="Baixa os autos inteiros do jus.br para a pasta deste processo. Pode passar de 100 MB — por isso só acontece quando alguém pede.">📚 pedir íntegra dos autos</button>')))
           +'<button class="btn sm ghost" style="font-size:11px" onclick="irParaProcesso(\''+String(x.processo_numero||'').replace(/'/g,"")+'\')">abrir processo</button>'
         +'</div>'
         +'</div>';
     }).join('')+'</div>';
   }catch(e){ el.innerHTML='<div class="note">Erro: '+finEsc(String(e&&e.message||e))+'</div>'; }
+}
+/* ===== Íntegra dos autos: só quando alguém pede =====
+   O robô baixava sozinho sempre que a triagem marcasse "exige peça", e o dono
+   viu 126 MB entrarem numa pasta sem ter pedido (31/08/2026). Agora o download
+   é um botão: marca o pedido na fila e chama a fase na hora, para não esperar
+   os 20 minutos do robô. */
+async function pedirIntegraAutos(id, btn){
+  if(!confirm('Baixar a ÍNTEGRA dos autos deste processo para a pasta dele?\n\nSão todas as peças do jus.br em um PDF único — em processo grande passa de 100 MB e pode demorar alguns minutos.')) return;
+  var t0=btn?btn.textContent:'';
+  if(btn){ btn.disabled=true; btn.textContent='pedindo…'; }
+  try{
+    var quem=(typeof _kanQuemSou==='function'&&_kanQuemSou())||'equipe';
+    var sb=window.__sb; if(!sb) throw new Error('sessão não encontrada');
+    var up=await sb.from('robo_minutas').update({integra_pedida:true,integra_pedida_por:quem,integra_pedida_em:new Date().toISOString()}).eq('id',id).select('id');
+    if(up.error) throw new Error(up.error.message);
+    if(!up.data||!up.data.length) throw new Error('o banco não confirmou o pedido (permissão)');
+    if(btn) btn.textContent='baixando…';
+    /* chama a fase agora; se demorar, o robô termina sozinho na próxima rodada */
+    try{ await fetch('/api/robo/minutas?fase=integra'); }catch(eF){}
+    try{ if(typeof logEvent==='function') logEvent('integra_requested','processo',null,{id:id}); }catch(eL){}
+    await renderEstagiario();
+  }catch(e){
+    alert('Não consegui pedir a íntegra: '+((e&&e.message)||e));
+    if(btn){ btn.disabled=false; btn.textContent=t0; }
+  }
 }
 /* contador no menu "Movimentar" — o que está esperando peça agora */
 function _badgeMov(n){
@@ -21788,6 +21814,7 @@ function _prdAcaoTexto(e){
   if(t==='document_uploaded') return 'documento'+((md.quantos>1)?('s ('+md.quantos+')'):'')+' enviado'+((md.quantos>1)?'s':'')+' para a pasta'+(md.pasta&&md.pasta!=='raiz'?(' '+md.pasta):'')+(md.nomes?(': '+md.nomes):'');
   if(t==='nf_issued') return 'nota fiscal emitida'+(md.nf?(' — nº '+md.nf):'');
   if(t==='alvara_confirmed') return 'depósito de alvará confirmado';
+  if(t==='integra_requested') return 'pediu a íntegra dos autos ao Estagiário Virtual';
   if(t==='process_updated') return 'processo atualizado (busca no DJEN e no jus.br)'+((md.novos!=null)?(' — '+md.novos+' andamento'+(md.novos===1?'':'s')+' novo'+(md.novos===1?'':'s')):'');
   if(t==='task_opened') return 'tarefa aberta'+(tit?(': '+tit):'');
   if(t==='login') return 'entrou no sistema';
