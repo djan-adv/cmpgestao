@@ -19753,12 +19753,31 @@ function _protoAlertaDoDia(){
     faixa.style.cssText='position:fixed;left:0;right:0;bottom:0;z-index:9998;background:#7b1e3a;color:#fff;padding:9px 14px;font:13px system-ui;display:flex;gap:12px;align-items:center;justify-content:center;flex-wrap:wrap;box-shadow:0 -2px 10px rgba(0,0,0,.2)';
     document.body.appendChild(faixa);
   }
-  var lista=venc.slice(0,3).map(function(x){ return esc(x.titulo)+' ('+esc(fmtCNJ(x.processo_numero))+')'; }).join(' · ');
-  var umSo=(venc.length===1)?venc[0]:null;
-  faixa.innerHTML='<b>⚠ PRAZO FATAL HOJE — '+venc.length+' petição(ões) a protocolar:</b> <span style="opacity:.95">'+lista+(venc.length>3?(' + '+(venc.length-3)+' …'):'')+'</span>'
-    +(umSo?('<button onclick="protoMarcarProtocolada(\''+umSo.id+'\')" style="background:#0F6E56;color:#fff;border:0;border-radius:8px;padding:4px 12px;font-weight:700;cursor:pointer" title="Encerra o prazo na hora — sem esperar a peça entrar nos autos">✓ já protocolei</button>'):'')
-    +'<button onclick="go(\'painel\');" style="background:#fff;color:#7b1e3a;border:0;border-radius:8px;padding:4px 12px;font-weight:700;cursor:pointer">ver no painel</button>'
+  /* Enviada pelo Gestão e esperando o tribunal NÃO é "a protocolar": a faixa
+     vermelha dizendo isso fazia parecer que a peça não tinha saído (perguntado
+     em 31/08/2026, "precisamos confirmar protocolo?"). Recusada, sim, volta
+     para a fila vermelha — aquela ninguém entregou. */
+  var esperando=venc.filter(function(x){ return x.enviada_em && !/recus|rejeit|erro|falh|inval|cancel/i.test(String(x.jusbr_status||'')); });
+  var aFazer=venc.filter(function(x){ return esperando.indexOf(x)<0; });
+  var nomes=function(arr){ return arr.slice(0,3).map(function(x){ return esc(x.titulo)+' ('+esc(fmtCNJ(x.processo_numero))+')'; }).join(' · ')+(arr.length>3?(' + '+(arr.length-3)+' …'):''); };
+  var btnPainel='<button onclick="go(\'painel\');" style="background:#fff;color:#7b1e3a;border:0;border-radius:8px;padding:4px 12px;font-weight:700;cursor:pointer">ver no painel</button>'
     +'<button onclick="document.getElementById(\'proto-faixa\').remove()" style="background:transparent;color:#fff;border:1px solid rgba(255,255,255,.5);border-radius:8px;padding:4px 10px;cursor:pointer">fechar</button>';
+
+  if(!aFazer.length){
+    /* tudo que vencia hoje já saiu daqui: aviso calmo, sem "já protocolei" —
+       quem confirma é o jus.br, não o advogado no olho */
+    faixa.style.background='#6b5a1f';
+    faixa.innerHTML='<b>📨 '+esperando.length+' petição(ões) enviada(s) — aguardando o tribunal confirmar:</b> <span style="opacity:.95">'+nomes(esperando)+'</span>'
+      +'<button onclick="protoConferirEnviadas(1)" style="background:#fff;color:#6b5a1f;border:0;border-radius:8px;padding:4px 12px;font-weight:700;cursor:pointer" title="Perguntar agora ao jus.br se o tribunal já recebeu">↻ conferir agora</button>'
+      +btnPainel;
+    return;
+  }
+  faixa.style.background='#7b1e3a';
+  var umSo=(aFazer.length===1)?aFazer[0]:null;
+  faixa.innerHTML='<b>⚠ PRAZO FATAL HOJE — '+aFazer.length+' petição(ões) a protocolar:</b> <span style="opacity:.95">'+nomes(aFazer)+'</span>'
+    +(esperando.length?('<span style="opacity:.8">· '+esperando.length+' já enviada(s), aguardando o tribunal</span>'):'')
+    +(umSo?('<button onclick="protoMarcarProtocolada(\''+umSo.id+'\')" style="background:#0F6E56;color:#fff;border:0;border-radius:8px;padding:4px 12px;font-weight:700;cursor:pointer" title="Encerra o prazo na hora — sem esperar a peça entrar nos autos">✓ já protocolei</button>'):'')
+    +btnPainel;
 }
 /* bloco no painel e na ficha do processo */
 function protoBlocoHTML(numero){
