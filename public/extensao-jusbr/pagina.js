@@ -55,12 +55,25 @@
      o endereço de upload). Sem esse passo não há como protocolar de fora. */
   function ehEscritaDoPortal(u, metodo) {
     u = String(u || '');
-    if (!u || String(metodo || 'GET').toUpperCase() === 'GET') return false;
+    if (!u) return false;
     if (ehEndpointToken(u)) return false;                                  /* login/refresh não interessa */
     if (/\.(js|css|png|jpe?g|gif|svg|woff2?|ico|map)(\?|$)/i.test(u)) return false;
     if (/google-analytics|googletagmanager|hotjar|clarity|sentry|newrelic/i.test(u)) return false;
-    return true;
+    if (String(metodo || 'GET').toUpperCase() !== 'GET') return true;      /* escrita: sempre interessa */
+    /* LEITURA (GET) entra em dois casos, e só neles — senão a fila enche com o
+       carregamento normal das telas:
+         a) estando na tela de peticionamento, onde o portal busca as listas que
+            o formulário precisa (tipos de documento, dados do processo);
+         b) o comprovante/recibo do protocolo, em qualquer tela — é o arquivo
+            que o dono quer que o sistema guarde na pasta sozinho. */
+    var api = /portaldeservicos\.pdpj\.jus\.br\/api\//i.test(u) || u.charAt(0) === '/';
+    if (!api) return false;
+    if (/recibo|comprovante|protocolo/i.test(u)) return true;
+    try { if (/^\/peticao/i.test(location.pathname)) return true; } catch (e) {}
+    return false;
   }
+  /* o mesmo endereço não precisa ser mandado duas vezes na mesma visita */
+  var jaVistos = {};
   function esqueleto(v, prof) {
     prof = prof || 0;
     if (v == null) return null;
@@ -106,6 +119,8 @@
   }
   function aprender(metodo, url, cabs, body, status, respTxt) {
     try {
+      var chave = String(metodo) + ' ' + String(url).split('?')[0];
+      if (String(metodo).toUpperCase() === 'GET') { if (jaVistos[chave]) return; jaVistos[chave] = 1; }
       var respForma = null;
       try { if (respTxt && respTxt.length < 20000) respForma = esqueleto(JSON.parse(respTxt), 0); } catch (e) { if (respTxt) respForma = '<texto ' + respTxt.length + ' chars>'; }
       window.postMessage({
