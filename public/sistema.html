@@ -3378,13 +3378,192 @@ function renderContatosOponentes(){
   var b=document.getElementById("crm-body"); b.innerHTML="";
   if(!lista.length){ b.innerHTML='<tr><td colspan="9" class="note" style="padding:10px">Nenhuma parte contrária encontrada.</td></tr>'; return; }
   lista.slice(0,400).forEach(function(o){
+    var c=_opoContato(o.nome);
+    var tel=(c&&(_primeiroValor(c.telefone||c.telefones)))||'';
+    var mail=(c&&(_primeiroValor(c.email||c.emails)))||'';
+    var doc=(c&&c.cpf_cnpj)||'';
     var tr=document.createElement('tr');
-    tr.innerHTML='<td></td><td><b>'+esc(nomeBonito(o.nome))+'</b></td>'
-      +'<td><span class="b warn">oponente</span></td><td>—</td><td>—</td>'
+    /* a caixinha usa a MESMA classe dos clientes (.cmerge) para o contador do
+       botão Mesclar continuar valendo; o data-op guarda o nome, porque oponente
+       não é linha de tabela — nasce do campo "oponente" dos processos */
+    tr.innerHTML='<td><input type="checkbox" class="cmerge" data-op="'+esc(o.nome).replace(/"/g,'&quot;')+'" title="Marque 2+ grafias do mesmo réu e clique em Mesclar"></td>'
+      +'<td><b>'+esc(nomeBonito(o.nome))+'</b>'+(doc?('<br><span class="note" style="font-size:11px">'+esc(doc)+'</span>'):'')+'</td>'
+      +'<td><span class="b warn">oponente</span></td>'
+      +'<td>'+(tel?esc(tel):'—')+'</td>'
+      +'<td>'+(mail?('<a href="https://mail.google.com/mail/?view=cm&fs=1&to='+encodeURIComponent(mail)+'" target="_blank" rel="noopener" style="color:#185FA5">'+esc(mail)+'</a>'):'—')+'</td>'
       +'<td><span class="note" style="font-size:11px">'+esc(o.numeros.slice(0,2).join(' · '))+(o.proc>2?(' +'+(o.proc-2)):'')+'</span></td>'
-      +'<td>'+o.proc+'</td><td></td><td></td>';
+      +'<td>'+o.proc+'</td>'
+      +'<td><button class="btn sm ghost" onclick="editarOponente(this.getAttribute(\'data-n\'))" data-n="'+esc(o.nome).replace(/"/g,'&quot;')+'">Editar</button></td>'
+      +'<td></td>';
     b.appendChild(tr);
   });
+}
+/* ===== Réu/oponente também é contato =====
+   Pedido do dono (31/08/2026): "oponente/réu não há opção de clicar para
+   escolher para mesclar — para aproveitarmos dados como CNPJ, telefone e e-mail
+   do réu".
+   O oponente não era um cadastro: a lista nascia do campo "oponente" dos
+   processos, então não havia onde guardar CNPJ/telefone/e-mail nem como juntar
+   as cinco grafias do mesmo réu. Agora ele vira linha em `contatos` com
+   tipo='oponente' (mesma tabela dos clientes), casada pelo nome normalizado. */
+function _opoContato(nome){
+  var nk=normClienteNome(nome); if(!nk) return null;
+  return (window.__CONTATOSDB||[]).find(function(c){
+    return c && /oponente|reu|r[ée]u/i.test(String(c.tipo||'')) && normClienteNome(c.nome)===nk;
+  })||null;
+}
+async function _opoSalvarContato(nome, doc, tel, mail){
+  var sb=window.__sb; if(!sb) throw new Error('sessão não encontrada');
+  var ex=_opoContato(nome);
+  var reg={nome:nome, cpf_cnpj:(doc||null), telefone:(tel||null), email:(mail||null), tipo:'oponente'};
+  if(ex&&ex.id){ var up=await sb.from('contatos').update(reg).eq('id',ex.id); if(up.error) throw new Error(up.error.message); return ex.id; }
+  var e2=null; try{ e2=await escId(); }catch(e){}
+  if(e2) reg.escritorio_id=e2;
+  var ins=await sb.from('contatos').insert(reg).select('id').single();
+  if(ins.error) throw new Error(ins.error.message);
+  return ins.data.id;
+}
+async function _opoRecarrega(){
+  try{ var sb=window.__sb; var ct=await sb.from('contatos').select('*').limit(5000); if(!ct.error) window.__CONTATOSDB=ct.data; }catch(e){}
+}
+function editarOponente(nome){
+  var c=_opoContato(nome)||{};
+  var old=document.getElementById('opo-ov'); if(old) old.remove();
+  var ov=document.createElement('div'); ov.id='opo-ov';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(20,28,40,.45);z-index:10000;display:flex;align-items:center;justify-content:center;padding:16px';
+  var campo=function(id,rot,v,ph){ return '<label style="display:block;font-size:12.5px;font-weight:700;color:var(--navy);margin:10px 0 3px">'+rot+'</label>'
+    +'<input id="'+id+'" type="text" value="'+esc(String(v||'')).replace(/"/g,'&quot;')+'" placeholder="'+ph+'" style="display:block;width:100%;box-sizing:border-box;font-size:13px;padding:7px 9px;border:1px solid var(--line);border-radius:6px">'; };
+  ov.innerHTML='<div style="background:#fff;border-radius:12px;max-width:480px;width:100%;padding:18px 20px;text-align:left">'
+    +'<h3 style="margin:0 0 4px">'+esc(nomeBonito(nome))+'</h3>'
+    +'<p class="note" style="margin:0 0 6px">Dados da parte contrária — servem para acordo, notificação e para a qualificação nas peças.</p>'
+    +campo('opo-doc','CPF / CNPJ',c.cpf_cnpj,'00.000.000/0001-00')
+    +campo('opo-tel','Telefone',(c.telefone||_primeiroValor(c.telefones)),'(83) 90000-0000')
+    +campo('opo-mail','E-mail',(c.email||_primeiroValor(c.emails)),'contato@empresa.com.br')
+    +'<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px"><button class="btn sm ghost" onclick="document.getElementById(\'opo-ov\').remove()">Cancelar</button><button class="btn sm gold" id="opo-ok">✓ Salvar</button></div>'
+  +'</div>';
+  ov.onmousedown=function(e){ ov.__bd=(e.target===ov); };
+  ov.onclick=function(e){ if(e.target===ov&&ov.__bd) ov.remove(); };
+  document.body.appendChild(ov);
+  document.getElementById('opo-ok').onclick=async function(){
+    var g=function(id){ var e=document.getElementById(id); return e?e.value.trim():''; };
+    try{
+      await _opoSalvarContato(nome, g('opo-doc'), g('opo-tel'), g('opo-mail'));
+      await _opoRecarrega();
+      ov.remove(); renderContatos();
+      try{ if(typeof logEvent==='function') logEvent('record_saved','contato',nome,{campo:'dados do oponente'}); }catch(e){}
+    }catch(e){ alert('Não consegui salvar: '+(e&&e.message||e)); }
+  };
+}
+/* Troca o nome do réu DENTRO do campo "oponente", que pode ter mais de uma
+   parte ("A; B" ou "A e B"). Devolve null quando não achou — nesse caso o
+   processo não é tocado, em vez de reescrever o campo inteiro por engano. */
+function _opoTrocaNome(txt, velho, novo){
+  var s0=String(txt||''); if(!s0) return null;
+  if(normClienteNome(s0)===normClienteNome(velho)) return novo;
+  var partes=s0.split(/([;\n]+)/), mudou=false;
+  for(var i=0;i<partes.length;i+=2){
+    if(normClienteNome(partes[i])===normClienteNome(velho)){
+      var esp=partes[i].match(/^(\s*)[\s\S]*?(\s*)$/);   /* preserva o espaçamento em volta */
+      partes[i]=(esp?esp[1]:'')+novo+(esp?esp[2]:'');
+      mudou=true;
+    }
+  }
+  if(mudou) return partes.join('');
+  var ix=s0.toLowerCase().indexOf(String(velho||'').toLowerCase());
+  if(ix>=0 && velho) return s0.slice(0,ix)+novo+s0.slice(ix+String(velho).length);
+  return null;
+}
+function mesclarOponentes(){
+  var checks=Array.prototype.slice.call(document.querySelectorAll('#crm-body .cmerge:checked'));
+  var nomes=checks.map(function(x){ return x.getAttribute('data-op'); }).filter(Boolean);
+  if(nomes.length<2){ alert('Marque 2 ou mais grafias do MESMO réu (nas caixinhas) para mesclar.'); return; }
+  var base=_oponentesDaBase();
+  var sel=nomes.map(function(n){ var nk=normClienteNome(n); return base.find(function(o){ return normClienteNome(o.nome)===nk; })||{nome:n,proc:0,numeros:[]}; });
+  /* sugestão: o nome mais completo — mas quem decide é você */
+  var sug=sel.slice().sort(function(a,b){ return String(b.nome||'').length-String(a.nome||'').length; })[0];
+  function _pego(campo){
+    for(var i=0;i<sel.length;i++){ var c=_opoContato(sel[i].nome); if(!c) continue;
+      var v=(campo==='cpf_cnpj')?c.cpf_cnpj:(campo==='telefone'?(c.telefone||_primeiroValor(c.telefones)):(c.email||_primeiroValor(c.emails)));
+      if(v) return v; }
+    return '';
+  }
+  var old=document.getElementById('merge-ov'); if(old) old.remove();
+  var ov=document.createElement('div'); ov.id='merge-ov';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(20,28,40,.45);z-index:10000;display:flex;align-items:center;justify-content:center;padding:16px';
+  var radios=sel.map(function(o,i){ return '<label style="display:flex;gap:8px;align-items:flex-start;text-align:left;padding:7px 9px;border:1px solid var(--line);border-radius:8px;margin-bottom:6px;cursor:pointer;font-size:13px"><input type="radio" name="mo-nome" value="'+i+'"'+(o===sug?' checked':'')+' style="margin-top:2px"><span>'+esc(o.nome)+' <span class="note" style="font-size:11px">('+o.proc+' processo'+(o.proc===1?'':'s')+')</span></span></label>'; }).join('');
+  var campo=function(id,rot,v,ph){ return '<label style="display:block;font-size:12.5px;font-weight:700;color:var(--navy);margin:10px 0 3px">'+rot+'</label>'
+    +'<input id="'+id+'" type="text" value="'+esc(String(v||'')).replace(/"/g,'&quot;')+'" placeholder="'+ph+'" style="display:block;width:100%;box-sizing:border-box;font-size:13px;padding:7px 9px;border:1px solid var(--line);border-radius:6px">'; };
+  ov.innerHTML='<div style="background:#fff;border-radius:12px;max-width:560px;width:100%;max-height:85vh;overflow:auto;padding:18px 20px;text-align:left">'
+    +'<h3 style="margin:0 0 4px">Mesclar '+sel.length+' grafias do mesmo réu</h3>'
+    +'<p class="note" style="margin:0 0 10px">Escolha o <b>nome que fica</b>. Ao confirmar, o campo "parte contrária" de <b>todos os processos</b> dessas grafias passa a usar esse nome, e os dados abaixo ficam guardados na ficha do réu.</p>'
+    +radios
+    +'<div style="padding:8px 10px;border:1px dashed var(--line);border-radius:8px;font-size:13px">'
+      +'<label style="display:block;cursor:pointer;margin-bottom:6px"><input type="radio" name="mo-nome" value="outro"> Outro nome (digite abaixo)</label>'
+      +'<input id="mo-outro" type="text" placeholder="Ex.: Morada Incorporações LTDA" style="display:block;width:100%;box-sizing:border-box;font-size:13px;padding:7px 9px;border:1px solid var(--line);border-radius:6px" oninput="var r=document.querySelector(\'input[name=mo-nome][value=outro]\'); if(r) r.checked=true" onfocus="var r=document.querySelector(\'input[name=mo-nome][value=outro]\'); if(r) r.checked=true">'
+    +'</div>'
+    +campo('mo-doc','CPF / CNPJ do réu',_pego('cpf_cnpj'),'00.000.000/0001-00')
+    +campo('mo-tel','Telefone',_pego('telefone'),'(83) 90000-0000')
+    +campo('mo-mail','E-mail',_pego('email'),'contato@empresa.com.br')
+    +'<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px"><button class="btn sm ghost" onclick="document.getElementById(\'merge-ov\').remove()">Cancelar</button><button class="btn sm gold" id="mo-ok">✓ Mesclar e sincronizar processos</button></div>'
+  +'</div>';
+  ov.onmousedown=function(e){ ov.__bd=(e.target===ov); };
+  ov.onclick=function(e){ if(e.target===ov&&ov.__bd) ov.remove(); };
+  document.body.appendChild(ov);
+  document.getElementById('mo-ok').onclick=function(){
+    var r=document.querySelector('input[name="mo-nome"]:checked'); var nomeFinal='';
+    if(r && r.value==='outro') nomeFinal=(document.getElementById('mo-outro').value||'').trim();
+    else if(r) nomeFinal=String((sel[parseInt(r.value,10)]||{}).nome||'').trim();
+    if(!nomeFinal){ alert('Escolha um dos nomes ou digite o nome final.'); return; }
+    var g=function(id){ var e=document.getElementById(id); return e?e.value.trim():''; };
+    var doc=g('mo-doc'), tel=g('mo-tel'), mail=g('mo-mail');
+    ov.remove();
+    _mesclarOponentesExec(sel.map(function(o){return o.nome;}), nomeFinal, doc, tel, mail);
+  };
+}
+async function _mesclarOponentesExec(nomes, nomeFinal, doc, tel, mail){
+  var sb=window.__sb; if(!sb){ alert('Sessão não encontrada.'); return; }
+  try{
+    var nkFinal=normClienteNome(nomeFinal), tocados=0, naoAchou=0;
+    for(var i=0;i<nomes.length;i++){
+      /* comparação EXATA, não normalizada: "Morada Incorporacoes" e "Morada
+         Incorporações" são o mesmo nome depois de tirar os acentos, e pular por
+         isso deixaria o processo gravado sem acento — justamente a correção que
+         a pessoa pediu ao escolher o nome final. */
+      var velho=nomes[i]; if(velho===nomeFinal) continue;
+      var alvos=(DADOS.processos||[]).filter(function(p){
+        if(!p||!p.oponente) return false;
+        var partes=(typeof _partesSplit==='function')?_partesSplit(p.oponente):[p.oponente];
+        return partes.some(function(x){ return normClienteNome(x)===normClienteNome(velho); });
+      });
+      for(var j=0;j<alvos.length;j++){
+        var pr=alvos[j];
+        var novo=_opoTrocaNome(pr.oponente, velho, nomeFinal);
+        if(novo==null){ naoAchou++; continue; }
+        if(novo===pr.oponente) continue;   /* já estava certo — não gasta gravação */
+        if(pr._id){
+          var up=await sb.from('processos').update({oponente:novo}).eq('id',pr._id).select('id');
+          if(up.error) throw new Error(up.error.message);
+        }
+        pr.oponente=novo; tocados++;
+      }
+    }
+    /* a ficha do réu: um cadastro só, com o que foi preenchido */
+    await _opoSalvarContato(nomeFinal, doc, tel, mail);
+    /* as fichas das grafias antigas somem — o nome delas deixou de existir */
+    for(var k=0;k<nomes.length;k++){
+      if(normClienteNome(nomes[k])===nkFinal) continue;
+      var c=_opoContato(nomes[k]);
+      if(c&&c.id){ try{ await sb.from('contatos').delete().eq('id',c.id); }catch(e){} }
+    }
+    await _opoRecarrega();
+    renderContatos();
+    try{ if(typeof renderProc==='function') renderProc(); }catch(e){}
+    try{ if(typeof logEvent==='function') logEvent('contacts_merged','contato',nomeFinal,{tipo:'oponente',grafias:nomes.length,processos:tocados}); }catch(e){}
+    alert('✓ Mesclado em "'+nomeFinal+'".'
+      +'\n'+tocados+' processo(s) passaram a usar esse nome.'
+      +(naoAchou?('\n'+naoAchou+' processo(s) NÃO foram alterados: o nome aparece escrito de um jeito que eu não consegui trocar com segurança (ex.: dentro de "A e B"). Edite a parte contrária na ficha desses processos.'):'')
+      +'\n\nCPF/CNPJ, telefone e e-mail ficaram guardados na ficha do réu.');
+  }catch(e){ alert('Erro ao mesclar: '+(e&&e.message||e)); }
 }
 function editarVara(id){
   var v=(window.__VARAS||[]).find(function(x){return String(x.id)===String(id);}); if(!v) return;
@@ -6172,6 +6351,9 @@ function _mgLido(campo, itens){
   return (itens[i]||itens[0]).v;
 }
 function mesclarContatos(idsForce){
+  /* na aba Oponentes o que se mescla é o NOME do réu nos processos, não linhas
+     de contato — caminho próprio (ver mesclarOponentes) */
+  if(!idsForce && typeof abaContato!=='undefined' && abaContato==='oponentes') return mesclarOponentes();
   var ids;
   if(idsForce && idsForce.length){ ids=idsForce.slice(); }
   else {
