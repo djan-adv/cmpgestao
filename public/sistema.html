@@ -4916,6 +4916,8 @@ function _comEnviar(id,devolver,ctx){
       try{ if(typeof renderMeuDia==='function') renderMeuDia(); }catch(e){}
       try{ if(typeof atualizaNavContagens==='function') atualizaNavContagens(); }catch(e){}
     }
+    try{ if(typeof logEvent==='function') logEvent(devolver?'task_returned':'task_comment','tarefa',(a.numero||a.dbid||a.id),
+      {titulo:String(a.titulo||'').slice(0,140),numero:(a.numero||null),para:(devolver?alvo:null),texto:String(txt).slice(0,200)}); }catch(eLg){}
     window.__comAberto[id]=!devolver;   /* devolveu: fecha a caixa. comentou: segue aberta para continuar */
     _comRepinta(id);
     try{
@@ -5007,6 +5009,8 @@ function cancelarTarefaProc(id){
   a.canc=true; a.canceladaEm=new Date().toISOString(); a.canceladaPor=(quem||'equipe'); a.canceladaMotivo=String(motivo).trim()||null;
   a.arq=true; /* já entra no bloco das arquivadas, que é onde o dono quer ver */
   persisteKanban(a);
+  try{ if(typeof logEvent==='function') logEvent('task_canceled','tarefa',(a.numero||a.dbid||a.id),
+    {titulo:String(a.titulo||'').slice(0,140),numero:(a.numero||null),motivo:String(a.canceladaMotivo||'').slice(0,140)}); }catch(eLg){}
   try{ renderKanban(); }catch(e){}
   try{ renderAtivProc(); }catch(e){}
   try{ renderHistorico(); }catch(e){}
@@ -5044,6 +5048,8 @@ function definirPrazoFatal(id){
   if(v===null) return; v=v.trim();
   if(v && !normData(v)){ alert('Data inválida — use aaaa-mm-dd.'); return; }
   a.prazo=v||null; if(v && !a.data) a.data=v; persisteKanban(a);
+  try{ if(typeof logEvent==='function') logEvent('deadline_set','tarefa',(a.numero||a.dbid||a.id),
+    {titulo:String(a.titulo||'').slice(0,140),numero:(a.numero||null),prazo:(a.prazo||null),removido:(!v)}); }catch(eLg){}
   try{ if(typeof renderAtivProc==='function') renderAtivProc(); if(typeof renderHistorico==='function') renderHistorico(); if(typeof renderAgendaView==='function') renderAgendaView(); }catch(e){}
 }
 /* mostra/esconde o botão "Abrir processo" no modal de tarefa conforme houver processo resolvível */
@@ -6096,6 +6102,14 @@ function salvarTarefa(){
       alert('A tarefa foi criada. Para registrar no histórico ou guardar os anexos, abra a tarefa a partir de um processo (com número), pois não foi possível identificar o processo pelo texto informado.');
     }
   }
+  /* PRODUTIVIDADE: criar e editar tarefa não deixavam rastro nenhum. O dono
+     relatou (31/08/2026): "estou acessando processos, atualizando processos,
+     criando tarefas, editando, e nada aparece na minha produtividade" — e
+     estava certo: o log só conhecia login, abertura e conclusão de tarefa.
+     Quem monta a agenda do escritório trabalha aqui, e esse trabalho era
+     invisível. */
+  try{ if(typeof logEvent==='function') logEvent(_isEdit?'task_edited':'task_created','tarefa',(proc||tit),
+    {titulo:String(tit||'').slice(0,140),tipo:(tipo||null),numero:(proc||null),resp:(resp||null),prazo:(prazo||null),data:(data||null)}); }catch(eLg){}
   limparTarefaFiles();
   fecharTarefa();
   ["t-proc","t-titulo","t-data","t-hora","t-prazo","t-local","t-desc"].forEach(function(id){var e=document.getElementById(id);if(e)e.value="";});
@@ -7635,7 +7649,10 @@ async function atualizarHistorico(){
   try{ if(typeof registrarVistoProcesso==='function') registrarVistoProcesso(atual); }catch(eVi){}
   var btn=document.getElementById('btn-atu-hist'); var t0=btn?btn.textContent:'';
   if(btn){ btn.disabled=true; btn.textContent='atualizando…'; }
+  var _numAtu=atual.numero;
   var djenNovos=0, mvNovos=0, notas='', jbMeta=null, fichaUpd=false;
+  /* o resultado (quantos andamentos novos) só existe no fim — o evento sai lá
+     embaixo, com o número; aqui fica só a marcação de que a busca começou */
   try{
     var jwt=await jusbrJwt();
     /* 1) DJEN — publicações/intimações (por número) */
@@ -7668,6 +7685,11 @@ async function atualizarHistorico(){
         if(q&&q.data){ atual.hist_full=q.data.map(function(a){return {id:a.id,data:(a.data?a.data+'T00:00:00.000Z':null),texto:a.texto,f:a.fonte||'',pr:(a.providencia===true),vc:(a.visivel_cliente===true)};}); histShown=5; }
       }catch(e){}
     }
+    /* PRODUTIVIDADE: clicar em atualizar é trabalho — e o número de andamentos
+       novos diz se aquele clique rendeu alguma coisa. Sai aqui, no fim, porque
+       antes de terminar a busca esse número não existe. */
+    try{ if(typeof logEvent==='function') logEvent('process_updated','processo',(_numAtu||null),
+      {numero:(_numAtu||null),novos:tot,djen:djenNovos,jusbr:mvNovos,ficha:!!fichaUpd}); }catch(eLg){}
     /* re-renderiza a ficha inteira (recalcula o selo "vinculado" e preenche os dados) */
     if(tot>0 || fichaUpd){ var _i=DADOS.processos.indexOf(atual); if(_i>=0){ abrir(_i); } else { renderHistorico(); } }
     alert((tot>0
@@ -8498,6 +8520,8 @@ function moverTarefaParaDia(id,novoISO){
   if(a.prazo && String(a.prazo).slice(0,10)===antigo) a.prazo=novoISO;
   a.data=novoISO;
   persisteKanban(a);
+  try{ if(typeof logEvent==='function') logEvent('task_rescheduled','tarefa',(a.numero||a.dbid||a.id),
+    {titulo:String(a.titulo||'').slice(0,140),numero:(a.numero||null),de:antigo,para:novoISO}); }catch(eLg){}
   renderTarefasView();
   try{ if(typeof renderMeuDia==='function') renderMeuDia(); }catch(e){}
 }
@@ -19558,6 +19582,14 @@ async function renderProdutividade(){
       +linha('Processos cadastrados',c.case_registered||0)
       +linha('Processos vinculados',c.case_linked||0)
       +linha('Processos consultados',c.process_viewed||0)
+      +linha('Processos atualizados',c.process_updated||0)
+      +linha('Tarefas criadas',c.task_created||0)
+      +linha('Tarefas editadas',c.task_edited||0)
+      +linha('Tarefas remarcadas',c.task_rescheduled||0)
+      +linha('Tarefas devolvidas',c.task_returned||0)
+      +linha('Comentários em tarefas',c.task_comment||0)
+      +linha('Prazos fatais definidos',c.deadline_set||0)
+      +linha('Tarefas canceladas',c.task_canceled||0)
       +linha('Fichas completadas (tel+e-mail)',c.contact_completed||0)
       +linha('Registros salvos',c.record_saved||0)
       +linha('Logins',c.login||0)
@@ -21494,6 +21526,14 @@ function _prdAcaoTexto(e){
   if(t==='noticia_publicada') return 'notícia '+(md.acao==='editar'?'editada':'publicada')+' no portal';
   if(t==='config_changed') return 'configuração alterada'+(e.entity_id?(' — '+e.entity_id):'');
   if(t==='process_viewed') return 'consultou o processo';
+  if(t==='task_created') return 'tarefa criada'+(tit?(': '+tit):'')+(md.resp?(' — para '+md.resp):'')+(md.prazo?(' · prazo fatal '+String(md.prazo).slice(0,10).split('-').reverse().join('/')):'');
+  if(t==='task_edited') return 'tarefa editada'+(tit?(': '+tit):'');
+  if(t==='task_returned') return 'tarefa devolvida'+(md.para?(' para '+md.para):'')+(tit?(': '+tit):'');
+  if(t==='task_comment') return 'comentário na tarefa'+(tit?(': '+tit):'');
+  if(t==='task_rescheduled') return 'tarefa remarcada'+(md.de&&md.para?(' de '+String(md.de).split('-').reverse().join('/')+' para '+String(md.para).split('-').reverse().join('/')):'')+(tit?(': '+tit):'');
+  if(t==='task_canceled') return 'tarefa cancelada'+(tit?(': '+tit):'')+(md.motivo?(' — '+md.motivo):'');
+  if(t==='deadline_set') return (md.removido?'prazo fatal removido':'prazo fatal definido'+(md.prazo?(' para '+String(md.prazo).slice(0,10).split('-').reverse().join('/')):''))+(tit?(': '+tit):'');
+  if(t==='process_updated') return 'processo atualizado (busca no DJEN e no jus.br)'+((md.novos!=null)?(' — '+md.novos+' andamento'+(md.novos===1?'':'s')+' novo'+(md.novos===1?'':'s')):'');
   if(t==='task_opened') return 'tarefa aberta'+(tit?(': '+tit):'');
   if(t==='login') return 'entrou no sistema';
   if(t==='logout') return 'saiu do sistema';
@@ -21548,7 +21588,12 @@ function _prdTempoNaPagina(e){
     var achou=null;
     vs.forEach(function(v){
       if(dig && String(v.numero||'').replace(/\D/g,'')!==dig) return;
-      if(nm && _prdNorm(v.quem)!==nm) return;
+      /* a visita guarda o nome do ASSENTO ("Djan"); o evento, o nome do
+         cadastro ("Djan Mendonça"). Comparar os textos deixaria de casar quase
+         sempre — os dois viram o mesmo usuário antes de comparar. */
+      var uidV=_prdUidPorNome(v.quem);
+      if(e.user_id && uidV){ if(uidV!==e.user_id) return; }
+      else if(nm && _prdNorm(v.quem)!==nm) return;
       var d=Math.abs(new Date(v.entrou_em).getTime()-t);
       if(d<=180000 && (!achou||d<achou.d)) achou={d:d,v:v};
     });
@@ -21561,7 +21606,17 @@ function renderRelatorioDiario(){
   if(inp && !inp.value) inp.value=(typeof todayISO==='string'?todayISO:_prdDiaISO(new Date().toISOString()));
   try{ _prdCarregaVisitas((document.getElementById('prd-dia')||{}).value||''); }catch(eV){}
   var linhas=_prdLinhasDoDia();
-  if(!linhas.length){ el.innerHTML='<div class="note">Nenhum registro neste dia. Confira se a data está dentro do período escolhido acima.</div>'; return; }
+  if(!linhas.length){
+    /* "nada aconteceu" e "só aconteceu o que está escondido" são coisas
+       diferentes — dizer a primeira quando é a segunda faz o relatório parecer
+       quebrado (foi o que o dono viu em 31/08/2026). */
+    var dia0=(document.getElementById('prd-dia')||{}).value||'';
+    var ruido0=(window.__prdEvsVis||PRD_EVT||[]).filter(function(e){ return (!dia0||_prdDiaISO(e.occurred_at)===dia0) && PRD_RUIDO.indexOf(e.event_type)>-1; }).length;
+    el.innerHTML='<div class="note">'+(ruido0
+      ? ('Neste dia só há '+ruido0+' registro(s) de login e abertura de tarefa — marque <b>mostrar logins e aberturas</b> aqui em cima para vê-los.')
+      : 'Nenhum registro neste dia. Confira se a data está dentro do período escolhido acima.')+'</div>';
+    return;
+  }
   /* por pessoa, e dentro de cada uma em ordem de relógio */
   var por={};
   linhas.forEach(function(e){
