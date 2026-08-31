@@ -2313,9 +2313,11 @@ function _mdRespHTML(resp,ev){
   /* Devolvida: mostra o caminho («Djan Jader», o primeiro riscado). Vale também
      quando a linha da agenda ficou com o nome antigo — o par vem da tarefa. */
   var _t=(typeof _tarefaDoEvento==='function')?_tarefaDoEvento(ev):null;
-  var _d=(_t&&typeof _devolucaoDaTarefa==='function')?_devolucaoDaTarefa(_t):null;
-  if(_d) return '<span title="devolvida por '+esc(_d.de)+' para '+esc(_d.para)+'" style="'+base+';background:#fdf3e7;color:#8a5a00">'
-    +'<s style="opacity:.6">'+esc(_primeiroNome(_d.de))+'</s> '+esc(_primeiroNome(_d.para))+'</span>';
+  var _c=(_t&&typeof _cadeiaDaTarefa==='function')?_cadeiaDaTarefa(_t):null;
+  if(_c){ var _cc=_cadeiaCurta(_c), _u=_cc.nomes.length-1;
+    return '<span title="'+esc(_cadeiaTitulo(_c))+'" style="'+base+';background:#fdf3e7;color:#8a5a00">'+(_cc.cortou?'… ':'')
+      +_cc.nomes.map(function(x,i){ return i===_u?esc(_primeiroNome(x)):('<s style="opacity:.6">'+esc(_primeiroNome(x))+'</s>'); }).join(' ')
+      +'</span>'; }
   if(!sub||!nome) return '<span style="'+base+';background:var(--accentbg);color:var(--navy)">'+esc(nome)+'</span>';
   return '<span title="'+esc(nome)+' está de férias — esta tarefa é de '+esc(sub)+'" style="'+base+';background:#fdf3e7;color:#8a5a00">'
     +esc(sub)+' <span style="font-weight:400;opacity:.8">← '+esc(nome.split(' ')[0])+' (férias)</span></span>';
@@ -2458,7 +2460,8 @@ async function mdConcluir(gi){
     /* produtividade: o evento sai daqui também — o ponto é de quem clicou */
     try{ if(typeof logEvent==='function'){
       var ehAudMd=/audi[êe]ncia/i.test((a.tt||'')+' '+(a.tipo||''))||a.tipo==='az';
-      logEvent(ehAudMd?'hearing_completed':'task_completed','agenda',(a.id||''),{titulo:(a.tt||'').slice(0,140),numero:((a.p&&a.p.numero)||null),resp:(a.resp||null),concluido_por:(quemC||null),via:'meu_dia'});
+      var _pt=null; try{ var _tk=(typeof _tarefaDoEvento==='function')?_tarefaDoEvento(a):null; if(_tk){ var _ps=_participantesDaTarefa(_tk); if(_ps.length>1) _pt=_ps; } }catch(ePt){}
+      logEvent(ehAudMd?'hearing_completed':'task_completed','agenda',(a.id||''),{titulo:(a.tt||'').slice(0,140),numero:((a.p&&a.p.numero)||null),resp:(a.resp||null),concluido_por:(quemC||null),via:'meu_dia',participantes:_pt});
     } }catch(eL){}
     /* remove o evento do banco (concluído sai da agenda) e da memória */
     if(sb && a.id){ var dl=await sb.from('agenda_eventos').delete().eq('id',a.id).select('id'); if(dl&&!dl.error&&(!dl.data||!dl.data.length)){ console.warn('agenda: delete não afetou linhas (id '+a.id+')'); } }
@@ -3945,6 +3948,23 @@ function _kanCarimbaConclusao(a){
    feitas pelo ✓, simplesmente não existiam para a produtividade.
    Agora o registro sai daqui, de dentro do persisteKanban, por onde TODO
    caminho de conclusão passa. Não há mais como um botão novo esquecer. */
+/* Todas as mãos por que a tarefa passou, na ordem, terminando em quem concluiu.
+   Pedido do dono (31/08/2026): "a pontuação deve ser distribuída entre os que
+   revisaram e protocolaram". Antes o ponto inteiro ia para quem clicou em
+   concluir — quem redigiu e devolveu para revisão não levava nada. */
+function _participantesDaTarefa(a){
+  var out=[];
+  var add=function(n){
+    n=String(n||'').trim(); if(!n) return;
+    if(typeof _respDoSelect==='function') n=_respDoSelect(n);
+    for(var i=0;i<out.length;i++){ if(_normNomeAcesso(out[i])===_normNomeAcesso(n)) return; }
+    out.push(n);
+  };
+  var cad=(typeof _cadeiaDaTarefa==='function')?_cadeiaDaTarefa(a):null;
+  if(cad) cad.nomes.forEach(add); else add(a&&a.resp);
+  add(a&&a.concluidoPor);
+  return out;
+}
 function _registraConclusaoKanban(a){
   if(!a||!a.__logConcl) return;
   a.__logConcl=false;
@@ -3953,7 +3973,9 @@ function _registraConclusaoKanban(a){
     var ehAud=/audi[êe]ncia/i.test((a.titulo||'')+' '+(a.tipoForm||a.tipo||''));
     logEvent(ehAud?'hearing_completed':'task_completed','tarefa',(a.dbid||a.id),
       {titulo:(a.titulo||'').slice(0,140),tipo:(a.tipoForm||a.tipo||null),
-       numero:(a.numero||null),resp:(a.resp||null),concluido_por:(a.concluidoPor||null)});
+       numero:(a.numero||null),resp:(a.resp||null),concluido_por:(a.concluidoPor||null),
+       /* passou por mais de uma pessoa: o ponto é rateado (ver renderProdutividade) */
+       participantes:(function(){ var ps=_participantesDaTarefa(a); return ps.length>1?ps:null; })()});
   }catch(e){}
 }
 function persisteKanban(a){
@@ -4674,6 +4696,18 @@ function _respDoSelect(nome){
   }
   return pts>0?melhor:n;
 }
+/* Para quem se pode devolver. Sai do próprio seletor de responsável da tarefa —
+   assim a devolução grava exatamente o nome que o formulário entende, e ninguém
+   novo precisa ser cadastrado em dois lugares. */
+function _comDestinos(){
+  var out=[], sel=document.getElementById('t-resp');
+  if(sel){ for(var i=0;i<sel.options.length;i++){
+    var b=(sel.options[i].getAttribute('data-nome')||sel.options[i].textContent||'').replace(/\s*\(em férias\)\s*$/,'').trim();
+    if(b&&out.indexOf(b)<0) out.push(b);
+  } }
+  if(!out.length) out=['Djan','Maria Rita','Jader Pinheiro','Maria Eduarda','Estagiário(a)'];
+  return out;
+}
 /* A tarefa precisa existir no banco para receber comentário: as importadas do
    Astrea só viram linha quando alguém mexe nelas. Aqui a linha é criada na hora
    e o comentário espera por ela (persisteKanban guarda a promessa do insert). */
@@ -4710,17 +4744,31 @@ function _comBlocoHTML(a,ctx){
     }).join('')+'</div>';
   }
   if(window.__comAberto[a.id]){
+    /* Devolver não é só "voltar para quem pediu": o pedido pode ter caído na
+       pessoa errada, ou depender de outra área. Por isso o destino é escolhido
+       — vem marcado quem criou a tarefa, que é o caso comum. */
     var cri=_comCriador(a);
-    var alvo=cri?_respDoSelect(cri):'';
-    var jaEhDele=(alvo && String(a.resp||'').trim() && _normNomeAcesso(_respDoSelect(a.resp))===_normNomeAcesso(alvo));
+    var padrao=cri?_respDoSelect(cri):'';
+    var atualN=_normNomeAcesso(_respDoSelect(String(a.resp||'').trim()));
+    var todos=_comDestinos();
+    var achouPadrao=false;
+    var opcoes=todos.map(function(n,ix){
+      if(_normNomeAcesso(n)===atualN) return '';   /* já é o responsável de agora */
+      var fer=(typeof _nomeEstaDeFerias==='function')&&_nomeEstaDeFerias(n);
+      var ehPadrao=(padrao&&_normNomeAcesso(n)===_normNomeAcesso(padrao));
+      if(ehPadrao) achouPadrao=true;
+      return '<option value="'+ix+'"'+(ehPadrao?' selected':'')+'>'+esc(n)+(fer?' (em férias)':'')+(ehPadrao?' — criou a tarefa':'')+'</option>';
+    }).filter(Boolean).join('');
     h+='<div style="margin-top:7px;background:#f7f9fc;border:1px solid var(--line);border-radius:9px;padding:7px 8px">'
       +'<textarea id="com-txt-'+ctx+'-'+a.id+'" rows="2" placeholder="Escreva o recado — o que faltou, o que já foi feito, por que volta…" style="width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:8px;padding:6px 8px;font:inherit;font-size:12.5px;resize:vertical"></textarea>'
       +'<div style="display:flex;gap:6px;margin-top:5px;flex-wrap:wrap;align-items:center">'
         +'<button class="btn sm" style="font-size:11px" onclick="_comEnviar('+a.id+',false,\''+ctx+'\')">💬 comentar</button>'
-        +(cri&&!jaEhDele
-          ?('<button class="btn sm ghost" style="font-size:11px;color:#8a5a00;border-color:#e8d5b0" onclick="_comEnviar('+a.id+',true,\''+ctx+'\')" title="Grava o recado e passa a tarefa de volta para quem a criou — ela reaparece no Meu dia dele">↩ devolver para '+esc(String(alvo).split(' ')[0])+'</button>')
-          :(cri?'<span class="note" style="font-size:11px">já está com quem criou</span>'
-               :'<span class="note" style="font-size:11px">criada pelo sistema — não há para quem devolver</span>'))
+        +(opcoes
+          ?('<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:#697180">'
+              +'<button class="btn sm ghost" style="font-size:11px;color:#8a5a00;border-color:#e8d5b0" onclick="_comEnviar('+a.id+',true,\''+ctx+'\')" title="Grava o recado e passa a tarefa para a pessoa escolhida — ela reaparece no Meu dia dessa pessoa">↩ devolver para</button>'
+              +'<select id="com-para-'+ctx+'-'+a.id+'" style="font:inherit;font-size:11.5px;border:1px solid var(--line);border-radius:7px;padding:3px 5px;max-width:170px">'+opcoes+'</select>'
+            +'</span>')
+          :'<span class="note" style="font-size:11px">não há outra pessoa para receber</span>')
         +'<button class="btn sm ghost" style="font-size:11px;color:#697180" onclick="_comFechar('+a.id+')">fechar</button>'
       +'</div>'
     +'</div>';
@@ -4729,7 +4777,7 @@ function _comBlocoHTML(a,ctx){
 }
 function _comBotaoHTML(a,ctx){
   var n=_comLista(a).length;
-  return '<button class="btn sm ghost" style="font-size:11px'+(n?';color:#185FA5;border-color:#cfd9e8':'')+'" onclick="_comAbrir('+a.id+',\''+(ctx||'p')+'\')" title="Comentar ou devolver a tarefa a quem a criou">💬 comentar'+(n?(' ('+n+')'):'')+'</button>';
+  return '<button class="btn sm ghost" style="font-size:11px'+(n?';color:#185FA5;border-color:#cfd9e8':'')+'" onclick="_comAbrir('+a.id+',\''+(ctx||'p')+'\')" title="Comentar na tarefa ou devolvê-la a outra pessoa">💬 comentar'+(n?(' ('+n+')'):'')+'</button>';
 }
 /* A tarefa criada com "Mostrar na agenda" vive em duas linhas: a do Kanban e a
    do agenda_eventos. Devolver mudando só o Kanban deixaria o "Meu dia" exibindo
@@ -4764,33 +4812,41 @@ function _comRespNaAgenda(a,alvo){
    que aquilo saiu das mãos de alguém. Agora fica «Djan Jader» — o primeiro
    riscado. A informação sai do próprio comentário de devolução (autor → para),
    sem coluna nova no banco. */
-function _devolucaoDaTarefa(a){
+function _cadeiaDaTarefa(a){
   if(!a||typeof _comLista!=='function') return null;
-  var l=_comLista(a);
-  for(var i=l.length-1;i>=0;i--){
-    var c=l[i]; if(!c||c.devolucao!==true) continue;
-    var de=String(c.autor||'').trim(), para=String(c.para||'').trim();
-    if(!de||!para) return null;
-    var nde=_normNomeAcesso(_respDoSelect(de)), npara=_normNomeAcesso(_respDoSelect(para));
-    if(nde===npara) return null;
-    /* Só mostra o risco enquanto a tarefa AINDA está com quem a recebeu de
-       volta. Reatribuída depois a um terceiro, o caminho já é outro e o risco
-       contaria uma história que deixou de ser verdade. */
-    var atual=_normNomeAcesso(_respDoSelect(String(a.resp||'').trim()));
-    if(atual && atual!==npara) return null;
-    return {de:_respDoSelect(de), para:_respDoSelect(para), em:(c.criado_em||'')};
-  }
-  return null;
+  var l=_comLista(a), cad=[], quando=[];
+  var por=function(n,em){
+    n=String(n||'').trim(); if(!n) return;
+    n=_respDoSelect(n);
+    if(cad.length && _normNomeAcesso(cad[cad.length-1])===_normNomeAcesso(n)) return;
+    cad.push(n); quando.push(em||'');
+  };
+  for(var i=0;i<l.length;i++){ var c=l[i]; if(c&&c.devolucao===true){ por(c.autor,''); por(c.para,c.criado_em||''); } }
+  if(!cad.length) return null;
+  /* fecha com quem está com ela AGORA: se foi reatribuída depois da última
+     devolução, essa mão também entrou no caminho */
+  por(a.resp||'','');
+  return cad.length>1?{nomes:cad,quando:quando}:null;
 }
 /* Primeiro nome — "Maria Rita" e "Maria Eduarda" só se distinguem no segundo */
 function _primeiroNome(x){ var t=String(x||'').trim().split(/\s+/); return (/^maria$/i.test(t[0])&&t[1])?t[1]:(t[0]||''); }
-/* Texto simples: «Djan Jader», o primeiro riscado. Para as listas em que o
-   responsável aparece sem cor (ficha do processo, histórico, dia). */
+/* Caminho enxuto para caber no chip: no máximo três mãos, com reticências
+   quando passou por mais gente (o title continua trazendo o caminho inteiro). */
+function _cadeiaCurta(cad){
+  var n=cad.nomes;
+  return { nomes:(n.length>3?n.slice(n.length-3):n), cortou:(n.length>3) };
+}
+function _cadeiaTitulo(cad){ return 'passou por '+cad.nomes.join(' → '); }
+/* Texto simples: «Djan Eduarda Jader», com todas as mãos anteriores riscadas.
+   Para as listas em que o responsável aparece sem cor (ficha do processo,
+   histórico, dia). */
 function _respTextoHTML(nome,a){
-  var dev=_devolucaoDaTarefa(a);
-  if(!dev) return esc(String(nome||''));
-  return '<span title="devolvida por '+esc(dev.de)+' para '+esc(dev.para)+(dev.em?(' em '+_kanQuandoBR(dev.em)):'')+'">'
-    +'<s style="opacity:.6">'+esc(dev.de)+'</s> <b>'+esc(dev.para)+'</b></span>';
+  var cad=_cadeiaDaTarefa(a);
+  if(!cad) return esc(String(nome||''));
+  var c=_cadeiaCurta(cad), ult=c.nomes.length-1;
+  return '<span title="'+esc(_cadeiaTitulo(cad))+'">'+(c.cortou?'… ':'')
+    +c.nomes.map(function(n,i){ return i===ult?('<b>'+esc(n)+'</b>'):('<s style="opacity:.6">'+esc(n)+'</s>'); }).join(' ')
+    +'</span>';
 }
 /* O evento da agenda não conhece a tarefa: casa por título + processo (ou data),
    o mesmo par que o resto do sistema usa para achar o gêmeo. */
@@ -4814,9 +4870,18 @@ function _comEnviar(id,devolver,ctx){
   var ta=document.getElementById('com-txt-'+(ctx||'p')+'-'+id);
   var txt=String((ta&&ta.value)||'').trim();
   if(!txt){ alert(devolver?'Escreva por que está devolvendo — é o que a outra pessoa precisa ler.':'Escreva o comentário.'); if(ta) ta.focus(); return; }
-  var cri=devolver?_comCriador(a):'';
-  var alvo=devolver?_respDoSelect(cri):String(a.resp||'');
-  if(devolver&&!alvo){ alert('Esta tarefa não tem autor humano registrado — não há para quem devolver.'); return; }
+  var alvo=String(a.resp||'');
+  if(devolver){
+    var selD=document.getElementById('com-para-'+(ctx||'p')+'-'+id);
+    var escolhido=selD?_comDestinos()[parseInt(selD.value,10)]:'';
+    if(!escolhido){ alert('Escolha para quem devolver.'); return; }
+    /* De férias: a tarefa iria para uma tela que ninguém abre — vai para quem
+       cobre, e o aviso diz isso na cara, sem devolução silenciosa. */
+    var efet=(typeof _respEfetivo==='function')?_respEfetivo(escolhido):escolhido;
+    if(_normNomeAcesso(efet)!==_normNomeAcesso(escolhido)) alert(escolhido+' está de férias — a tarefa vai para '+efet+'.');
+    alvo=_respDoSelect(efet);
+    if(!alvo){ alert('Não consegui identificar para quem devolver.'); return; }
+  }
   var quem=_kanQuemSou()||'equipe';
   var reg={autor:quem, para:(alvo||null), texto:txt, devolucao:!!devolver, criado_em:new Date().toISOString()};
   if(ta) ta.value='';
@@ -8083,11 +8148,14 @@ function _respTinta(nome){
 function _respSeloHTML(nome,a){
   var n=String(nome||'').trim(); if(!n) return '';
   var curto=_primeiroNome(n);
-  /* devolvida: o nome de quem devolveu vai riscado ANTES do de quem assumiu */
-  var dev=(typeof _devolucaoDaTarefa==='function')?_devolucaoDaTarefa(a):null;
-  if(dev) return '<span class="l1-resp" style="font-weight:700" title="devolvida por '+esc(dev.de)+' para '+esc(dev.para)+'">'
-    +'<s style="color:'+_respCor(dev.de)+';opacity:.55">'+esc(_primeiroNome(dev.de))+'</s> '
-    +'<span style="color:'+_respCor(dev.para)+'">'+esc(_primeiroNome(dev.para))+'</span></span>';
+  /* passou de mão em mão: cada mão anterior fica riscada, na cor da pessoa */
+  var cad=(typeof _cadeiaDaTarefa==='function')?_cadeiaDaTarefa(a):null;
+  if(cad){ var cc=_cadeiaCurta(cad), ult=cc.nomes.length-1;
+    return '<span class="l1-resp" style="font-weight:700" title="'+esc(_cadeiaTitulo(cad))+'">'+(cc.cortou?'… ':'')
+      +cc.nomes.map(function(x,i){ return i===ult
+        ?('<span style="color:'+_respCor(x)+'">'+esc(_primeiroNome(x))+'</span>')
+        :('<s style="color:'+_respCor(x)+';opacity:.55">'+esc(_primeiroNome(x))+'</s>'); }).join(' ')
+      +'</span>'; }
   return '<span class="l1-resp" style="font-weight:700;color:'+_respCor(n)+';opacity:.95">'+esc(curto)+'</span>';
 }
 /* Chip de três linhas: processo · partes · o que fazer. Uma linha só obrigava a
@@ -19179,6 +19247,31 @@ function _prdPontosTarefa(ev){
   return parseFloat(_prdCfg('peso_default','1'))||1;
 }
 var PRD_TIPOS_FIXOS=['peticao_inicial','contestacao','agravo','contrarrazoes','recurso','calculos','correcao_endereco_gratuidade'];
+/* ===== Rateio do ponto entre quem trabalhou na tarefa =====
+   Pedido do dono (31/08/2026): "a pontuação deve ser distribuída entre os que
+   revisaram e protocolaram". O evento de conclusão carrega os NOMES (metadata
+   .participantes); aqui eles viram usuários do banco. O casamento é por
+   palavras do nome — o cadastro guarda "Maria Rita Caldas" e a tarefa, "Maria
+   Rita". Quem não for reconhecido não some do rateio da tarefa: apenas não
+   recebe cartão (não há a quem creditar), e o ponto é dividido entre os que
+   foram reconhecidos. */
+function _prdNorm(x){ return String(x||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim(); }
+function _prdUidPorNome(nome){
+  var tok=_prdNorm(nome).split(' ').filter(Boolean); if(!tok.length) return '';
+  var melhor='', pts=0;
+  Object.keys(PRD_USERS||{}).forEach(function(id){
+    var alvo=_prdNorm((PRD_USERS[id]||{}).nome).split(' ').filter(Boolean);
+    var p=0; alvo.forEach(function(t){ if(tok.indexOf(t)>-1) p++; });
+    if(p>pts){ pts=p; melhor=id; }
+  });
+  return pts>0?melhor:'';
+}
+function _prdUidsParticipantes(nomes){
+  if(!nomes||!nomes.length) return [];
+  var out=[];
+  nomes.forEach(function(n){ var u=_prdUidPorNome(n); if(u&&out.indexOf(u)<0) out.push(u); });
+  return out;
+}
 /* pontos de QUALQUER evento (não só tarefa concluída) — alguns tipos de peso
    viram ponto sozinhos, direto do evento que o próprio sistema já registra
    (fechar negócio no CRM, gerar contrato, publicar/editar no portal de
@@ -19249,11 +19342,25 @@ async function renderProdutividade(){
   /* agrupa por pessoa */
   var por={};
   evs.forEach(function(e){ var nm=(PRD_USERS&&PRD_USERS[e.user_id]&&PRD_USERS[e.user_id].nome)||e.user_nome||'—'; (por[e.user_id]=por[e.user_id]||{nome:nm,evs:[]}).evs.push(e); por[e.user_id].nome=nm; });
+  /* pontos ANTES dos cartões: tarefa que passou por várias mãos divide o ponto
+     entre elas. Quem só revisou pode não ter evento nenhum no período — por
+     isso o cartão da pessoa é criado aqui se ainda não existir. */
+  var ptsUid={}, rateadas={};
+  evs.forEach(function(e){
+    var p=_prdPontosEvento(e); if(!p) return;
+    var uids=_prdUidsParticipantes((e.metadata||{}).participantes);
+    if(uids.length>1){
+      uids.forEach(function(u2){
+        ptsUid[u2]=(ptsUid[u2]||0)+p/uids.length;
+        rateadas[u2]=(rateadas[u2]||0)+1;
+        if(!por[u2]) por[u2]={nome:((PRD_USERS&&PRD_USERS[u2]&&PRD_USERS[u2].nome)||'—'),evs:[]};
+      });
+    } else if(e.user_id) ptsUid[e.user_id]=(ptsUid[e.user_id]||0)+p;
+  });
   var html='';
   Object.keys(por).forEach(function(uid){
-    var u=por[uid]; var c={}; var pontos=0; var boletosEmit=0, boletosEnv=0;
+    var u=por[uid]; var c={}; var pontos=(ptsUid[uid]||0); var boletosEmit=0, boletosEnv=0;
     u.evs.forEach(function(e){ c[e.event_type]=(c[e.event_type]||0)+1;
-      pontos+=_prdPontosEvento(e);
       if(e.event_type==='boleto_issued') boletosEmit++;
       if(e.event_type==='boleto_sent') boletosEnv++;
     });
@@ -19264,6 +19371,7 @@ async function renderProdutividade(){
       +linha('Tempo ativo (no sistema)',_prdFmtMin(t.ativo))
       +(t.entregavel?linha('Tempo em entregável (fora do sistema)',_prdFmtMin(t.entregavel)):'')
       +linha('Tarefas concluídas',c.task_completed||0)
+      +linha('Tarefas em que dividiu o ponto',rateadas[uid]||0)
       +linha('Audiências concluídas',c.hearing_completed||0)
       +linha('Publicações tratadas',c.publication_handled||0)
       +linha('E-mails enviados',c.email_sent||0)
