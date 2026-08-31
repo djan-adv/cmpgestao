@@ -936,7 +936,10 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
       <button class="btn sm ghost" onclick="descartarPubModal()" title="Marca a publicação como tratada (ciência) — vai para a aba Tratadas">🗂 Descartar publicação (ciência)</button>
       <button class="btn sm ghost" style="color:#0F6E56" onclick="historicoPubModal()" title="Registra a ciência no histórico do processo e arquiva a publicação">📝 Registrar ciência no histórico e arquivar</button>
     </div>
-    <div class="foot"><button class="btn ghost" onclick="fecharTarefa()">Cancelar</button><button class="btn ghost" id="t-btn-briefing" style="border-color:#cfd9e8;color:#185FA5" onclick="gerarBriefingTarefa()" title="Lê a ficha, a petição inicial e os últimos despachos e monta o resumo do que pedir à IA — sem baixar documento nenhum">&#128203; Resumo para a IA</button><button class="btn" id="t-btn-concluir" style="display:none;background:#127a53" onclick="concluirTarefaModal()">✓ Concluir atividade</button><button class="btn" id="t-btn-salvar" onclick="salvarTarefa()">Criar e distribuir</button></div>
+    <div class="foot"><button class="btn ghost" onclick="fecharTarefa()">Cancelar</button><button class="btn ghost" id="t-btn-briefing" style="border-color:#cfd9e8;color:#185FA5" onclick="gerarBriefingTarefa()" title="Lê a ficha, a petição inicial e os últimos despachos e monta o resumo do que pedir à IA — sem baixar documento nenhum">&#128203; Resumo para a IA</button><!-- "Concluir atividade" saiu daqui a pedido do dono (31/08/2026): dentro da
+       ficha da tarefa, ao lado de "Salvar alterações", o botão verde atrapalhava
+       — quem entra para editar não quer encerrar. Concluir continua no cartão do
+       Kanban, no ✓ dos chips da agenda e na lista da ficha do processo. --><button class="btn" id="t-btn-salvar" onclick="salvarTarefa()">Criar e distribuir</button></div>
   </div>
 </div>
 <div id="modal-cobranca" class="overlay hidden">
@@ -2260,6 +2263,9 @@ function renderRecentes(){
     var iso='';
     (p.hist_full||[]).forEach(function(a){
       if(!a||!a.data) return;
+      /* movimento escrito pelo próprio sistema não faz o processo aparecer como
+         "recente" — ver _andamentoNaoOficial */
+      if(typeof _andamentoNaoOficial==='function' && _andamentoNaoOficial(a)) return;
       var d=String(a.data).slice(0,10), y=d.slice(0,4);
       if(y>='2100'||y<'1990') return;          /* 31/12/9999 e afins não contam */
       if(d>iso) iso=d;
@@ -4782,7 +4788,6 @@ function abrirTarefaKanban(id){
   /* modo edição: atualiza a MESMA atividade (não duplica) e mostra "Concluir" */
   window._tarEditId=id;
   try{ if(typeof logEvent==='function') logEvent('task_opened','tarefa',(a.dbid||a.id),{titulo:(a.titulo||'').slice(0,140),numero:(a.numero||null)}); }catch(e){}
-  var _cb=document.getElementById('t-btn-concluir'); if(_cb) _cb.style.display=(a.col==='finalizado'?'none':'');
   var _sb=document.getElementById('t-btn-salvar'); if(_sb) _sb.textContent='Salvar alterações';
   var _ct=document.getElementById('t-corrigir-tipo');
   if(_ct) _ct.style.display=(a.tipoForm==='audiencia'?'block':'none');
@@ -7398,6 +7403,9 @@ function tipoAto(txt){
   return 'and';
 }
 function classMov(t){
+  /* linha escrita pelo próprio sistema: dizer "Andamento do juízo" nela é
+     mentira — o juízo não fez nada. Fica cinza, com o nome certo. */
+  if(typeof _RE_ANDAMENTO_INTERNO!=='undefined' && _RE_ANDAMENTO_INTERNO.test(String(t||''))) return ["Registro do sistema","#6D7A8C","sis"];
   var k=tipoAto(t);
   if(k==='peca')    return ["Peça / petição","#0F6E56","peca"];
   if(k==='decisao') return ["Decisão","#6d28a8","decisao"];
@@ -10984,10 +10992,30 @@ function _diasParado(p){
   var f=(typeof pdias==='function')?pdias(p&&p.data):null;
   return (f==null||isNaN(f))?null:f;
 }
+/* ===== O que conta como movimentação do PROCESSO =====
+   Regra do dono (31/08/2026): "o histórico só deve contar movimentações
+   oficiais do jus.br ou PDPJ — despachos, movimentações, protocolos, petições,
+   acórdãos. Não deve ser utilizado para fins de prazo e contagem a data de um
+   movimento gerado pelo Gestão, robô ou histórico manual".
+   O caso real: o Estagiário Virtual guardou a íntegra dos autos e escreveu isso
+   no histórico (fonte 'minuta'). A data dele virou a "última movimentação" e o
+   processo saiu da fila dos parados com "0 dias" — sem que o juízo tivesse feito
+   absolutamente nada.
+   As linhas do sistema continuam aparecendo no histórico (elas contam a
+   história); só não servem de régua para prazo nem para dizer que andou. */
+var _FONTE_NAO_OFICIAL=/^(manual|minuta|sistema|robo|robô|agenda|chat|portal|app|email|e-mail|assinatura|cobranca|cobrança|estagi)/i;
+function _andamentoNaoOficial(a){
+  if(!a) return true;
+  if(_FONTE_NAO_OFICIAL.test(String(a.f||a.fonte||''))) return true;
+  /* marcador no próprio texto: [ESTAGIÁRIO VIRTUAL], [AGENDA], [E-mail]… */
+  if(typeof _RE_ANDAMENTO_INTERNO!=='undefined' && _RE_ANDAMENTO_INTERNO.test(String(a.texto||''))) return true;
+  return false;
+}
 function diasParadoOficial(p){
   var melhor=null;
   ((p&&p.hist_full)||[]).forEach(function(a){
-    if(!a||a.f==='manual'||!a.data) return;
+    if(!a||!a.data) return;
+    if(_andamentoNaoOficial(a)) return;
     var iso=String(a.data).slice(0,10), y=iso.slice(0,4);
     if(y>='2100'||y<'1990') return;
     if(ehMovimentacaoParte(a.texto)) return;
@@ -14276,6 +14304,28 @@ var _RE_ANDAMENTO_INTERNO=/^\s*\[(AGENDA|Aviso ao cliente|App|E-?mail|ESTAGI[ÁA
    enviado, pedido de confirmação. A data que aparece aqui é a de uma audiência
    que já está (ou deveria estar) marcada em outro lugar. */
 var _RE_SO_LEMBRETE=/(lembrar|lembrete|avisar|aviso|comunica[çc][ãa]o|confirmar? (a )?presen[çc]a)[^.]{0,40}audi[êe]ncia|audi[êe]ncia[^.]{0,40}(lembrete|aviso ao cliente)/i;
+/* ===== Tarefa SOBRE a audiência não é a audiência =====
+   Relatado pelo dono (31/08/2026): "a audiência é dia 10/09; aparece 01/09, que
+   é uma tarefa — está no lugar errado".
+   O card de audiências aceitava qualquer evento da agenda cujo título contivesse
+   a palavra "audiência". Só que uma audiência gera uma família de tarefas em
+   volta — lembrar o cliente, definir quem vai, enviar instruções, confirmar as
+   testemunhas, buscar a ata — cada uma com data PRÓPRIA (véspera, dia seguinte).
+   Elas entravam no card como se fossem outra audiência, em data errada, e ainda
+   disparavam o aviso de "2 audiências futuras — pode ser duplicidade". */
+/* O satélite se reconhece pelo VERBO no começo do título ("Lembrar…",
+   "Confirmar…", "Buscar a ata…"). Procurar palavras soltas no meio não serve:
+   "Audiência de INSTRUÇÃO e julgamento" cairia junto com "Enviar INSTRUÇÕES
+   sobre a audiência". Título que começa com "Audiência" é sempre a audiência. */
+var _RE_AUD_ACAO=/^\s*(lembr|avis|confirmar|enviar|definir|contratar|preparar|buscar|comparecer|checar|verificar|ligar|whats|instru|solicitar|marcar|remarcar\s+lembrete)/i;
+function _ehAudienciaDeVerdade(e){
+  var tt=String((e&&e.tt)||'').trim();
+  if(String((e&&e.org)||'')==='auto-audiencia') return false;   /* satélite criado pelo sistema */
+  var comecaAud=/^audi[êe]ncia\b/i.test(tt);
+  if(!comecaAud && _RE_AUD_ACAO.test(tt)) return false;
+  if(!comecaAud && typeof _RE_SO_LEMBRETE!=='undefined' && _RE_SO_LEMBRETE.test(tt)) return false;
+  return (e&&e.tipo==='az') || /audi[êe]ncia/i.test(tt);
+}
 function _audienciasFuturasDoHist(p){
   var hoje=new Date(); hoje.setHours(0,0,0,0);
   var out={}, res=[];
@@ -14394,7 +14444,7 @@ function renderAudienciaSugestao(){
        funil comercial (reunião de lead, sem processo) aparecia grudado no
        primeiro caso sem número que se abrisse. */
     return e && dig && e.data>=hoje && String((e.p&&e.p.numero)||'').replace(/\D/g,'')===dig
-      && (e.tipo==='az'||/audi[êe]ncia/i.test(e.tt||''));
+      && _ehAudienciaDeVerdade(e);
   }).sort(function(a,b){return a.data<b.data?-1:1;});
   var datasMarcadas={};
   /* guardamos as que estão na tela para os botões de alterar/apagar acharem o
