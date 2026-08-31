@@ -198,6 +198,34 @@ function esqueleto(o, prof) {
   return out
 }
 
+/* O endereço assinado de upload nem sempre vem em urlPreSigned na raiz — já
+   apareceu aninhado e com outro nome. Em vez de exigir uma chave só, procuramos
+   a URL http de upload em qualquer profundidade. */
+function achaUrlUpload(o, prof) {
+  prof = prof || 0
+  if (!o || typeof o !== 'object' || prof > 6) return null
+  if (Array.isArray(o)) { for (const x of o) { const v = achaUrlUpload(x, prof + 1); if (v) return v } return null }
+  for (const k of Object.keys(o)) {
+    const v = o[k]
+    if (typeof v === 'string' && /^https?:\/\//i.test(v) && /presign|upload/i.test(k)) return v
+  }
+  for (const k of Object.keys(o)) {
+    const v = o[k]
+    if (typeof v === 'string' && /^https?:\/\//i.test(v) && /^url$/i.test(k)) return v
+  }
+  for (const k of Object.keys(o)) { const v = achaUrlUpload(o[k], prof + 1); if (v) return v }
+  return null
+}
+/* nome de arquivo que o PDPJ aceita sem discutir: parêntese e sinal exótico já
+   derrubaram um envio ("… ELEN (2).pdf", 31/08/2026). O arquivo local não muda —
+   só o nome que viaja. */
+function nomePdpj(n) {
+  let x = String(n || 'documento').replace(/\.pdf$/i, '')
+  x = x.replace(/[^\p{L}\p{N} ._-]/gu, ' ').replace(/\s+/g, ' ').trim()
+  if (!x) x = 'documento'
+  return x.slice(0, 100) + '.pdf'
+}
+
 async function pdpj(url, token, opts) {
   return fetch(url, { ...(opts || {}), headers: { ...CAB, Authorization: 'Bearer ' + token, Accept: 'application/json', ...((opts && opts.headers) || {}) }, cache: 'no-store', signal: AbortSignal.timeout(60000) })
 }
@@ -513,7 +541,7 @@ export async function POST(request) {
   const docs = []
   for (let i = 0; i < pecas.length; i++) {
     const pc = pecas[i]
-    const nm = path.basename(pc.rel)
+    const nm = nomePdpj(path.basename(pc.rel))
     const meta = {
       id: null, file: {}, hash: crypto.createHash('sha1').update(pc.bytes).digest('hex'),
       nome: nm, ordem: i, tamanho: pc.bytes.length,
@@ -524,10 +552,20 @@ export async function POST(request) {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(meta),
     })
     const j1 = await r1.json().catch(() => null)
-    if (!r1.ok || !j1 || !j1.urlPreSigned) {
-      return Response.json({ erro: 'o jus.br não liberou o envio de "' + nm + '"', http: r1.status, resposta: j1 || null }, { status: 502 })
+    const urlUp = achaUrlUpload(j1)
+    if (!r1.ok || !j1 || !urlUp) {
+      /* mensagem que serve para consertar: o que o servidor respondeu e o que
+         faltou nela. "não liberou o envio" sozinho não diz nada a ninguém. */
+      const chaves = (j1 && typeof j1 === 'object' && !Array.isArray(j1)) ? Object.keys(j1).slice(0, 25).join(', ') : ''
+      const motivo = (j1 && (j1.message || j1.erro || j1.error || j1.detail)) || ''
+      return Response.json({
+        erro: 'o jus.br não liberou o envio de "' + nm + '" (HTTP ' + r1.status + ')'
+          + (motivo ? (' — ' + String(motivo).slice(0, 200)) : (r1.ok ? ' — respondeu sem o endereço de upload' : ''))
+          + (chaves ? (' [campos: ' + chaves + ']') : ''),
+        http: r1.status, sem_url_upload: !!(r1.ok && !urlUp), resposta: j1 || null,
+      }, { status: 502 })
     }
-    const r2 = await fetch(j1.urlPreSigned, { method: 'PUT', body: pc.bytes, headers: { 'Content-Type': 'application/pdf' }, signal: AbortSignal.timeout(180000) })
+    const r2 = await fetch(urlUp, { method: 'PUT', body: pc.bytes, headers: { 'Content-Type': 'application/pdf' }, signal: AbortSignal.timeout(180000) })
     if (!r2.ok) return Response.json({ erro: 'falha ao enviar "' + nm + '" ao jus.br (HTTP ' + r2.status + ')' }, { status: 502 })
     docs.push({ documento: { ...meta, id: j1.id != null ? j1.id : null, url: null, base64: null, idTipoDocumento: pc.idT } })
   }
