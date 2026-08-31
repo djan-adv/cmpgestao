@@ -2641,6 +2641,7 @@ function abrir(i){
   atual=DADOS.processos[i]; var p=atual, resp="Djan Henrique";
   /* abrir a ficha JÁ é o "visto" — é isso que responde "você viu o processo de fulano?" */
   try{ if(typeof registrarVistoProcesso==='function') registrarVistoProcesso(p); }catch(eVi){}
+  try{ if(typeof _visIniciar==='function') _visIniciar(p); }catch(eVs){}
   /* ficha aberta antes de os históricos de fundo chegarem: busca SÓ o histórico
      deste processo agora e re-renderiza quando ele descer (nada se perde) */
   if(p && p._id && !p._histOk && !p._histLoading && window.__sb){
@@ -7404,12 +7405,106 @@ function _vistoPorHTML(p){
      O nome inteiro fica no title. text-transform:none porque o .sectlabel põe
      tudo em maiúscula, e NOME EM CAIXA ALTA aqui parece grito. */
   var curto=(typeof _primeiroNome==='function')?_primeiroNome(p.visto_por):String(p.visto_por).split(' ')[0];
-  return '<span id="det-visto" title="'+esc(p.visto_por)+' foi a última pessoa a abrir ou atualizar este processo — '+esc(_kanQuandoBR(p.visto_em)||q)+'" style="text-transform:none;font-size:11.5px;font-weight:600;color:#185FA5;background:#eef4fb;border:1px solid #cfe0f2;border-radius:20px;padding:3px 10px;white-space:nowrap">👁 visto por '+esc(curto)+' '+esc(q)+'</span>';
+  return '<span style="position:relative;display:inline-flex">'
+    +'<span id="det-visto" onclick="toggleVisitasProc()" title="'+esc(p.visto_por)+' foi a última pessoa a abrir ou atualizar este processo — '+esc(_kanQuandoBR(p.visto_em)||q)+'. Clique para ver todas as visualizações e o tempo em cada uma." style="cursor:pointer;text-transform:none;font-size:11.5px;font-weight:600;color:#185FA5;background:#eef4fb;border:1px solid #cfe0f2;border-radius:20px;padding:3px 10px;white-space:nowrap">👁 visto por '+esc(curto)+' '+esc(q)+' <span style="opacity:.7">▾</span></span>'
+    +'<div id="det-visitas" style="display:none;position:absolute;top:26px;right:0;z-index:40;min-width:340px;background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 24px rgba(15,23,42,.14);text-transform:none;font-weight:400"></div>'
+  +'</span>';
 }
 /* repinta só o selo, sem re-renderizar a ficha inteira */
 function _pintaVistoPor(){
   var el=document.getElementById('det-visto-box'); if(!el) return;
   el.innerHTML=(typeof atual!=='undefined'&&atual)?_vistoPorHTML(atual):'';
+}
+/* ===== Histórico de visualizações e tempo na página =====
+   Pergunta do dono (31/08/2026): "só aparecerá o visto por último ou o histórico
+   de visualizações dos usuários? Poderia constar o histórico e o tempo na
+   página."
+   O selo azul continua mostrando o último — é o que responde de relance. Cada
+   passagem pela ficha, porém, vira uma linha em processo_visitas (quem, quando,
+   quanto tempo), e clicar no selo abre a lista.
+   O tempo é contado por batidas de 30 s e só enquanto a aba está VISÍVEL: deixar
+   o processo aberto e ir almoçar não vira "2 h de leitura". Cada batida grava,
+   então fechar o navegador no meio perde 30 s, não a visita inteira. */
+var VIS={id:null,proc:null,numero:'',quem:'',seg:0,ultimo:0,timer:null};
+function _visDur(seg){
+  seg=Math.max(0,parseInt(seg,10)||0);
+  if(seg<60) return 'menos de 1 min';
+  var m=Math.round(seg/60);
+  if(m<60) return m+' min';
+  var h=Math.floor(m/60);
+  return h+' h'+((m%60)?(' '+(m%60)+' min'):'');
+}
+function _visGravar(fim){
+  try{
+    var sb=window.__sb; if(!sb||!VIS.id) return;
+    var upd={segundos:VIS.seg}; if(fim) upd.saiu_em=new Date().toISOString();
+    sb.from('processo_visitas').update(upd).eq('id',VIS.id).then(function(){},function(){});
+  }catch(e){}
+}
+function _visTic(){
+  try{
+    if(!VIS.id&&!VIS.proc) return;
+    var agora=Date.now();
+    /* aba escondida (outra janela, celular no bolso): o relógio não anda */
+    if(document.visibilityState==='hidden'){ VIS.ultimo=agora; return; }
+    VIS.seg+=Math.round((agora-VIS.ultimo)/1000); VIS.ultimo=agora;
+    _visGravar(false);
+  }catch(e){}
+}
+function _visEncerrar(){
+  try{
+    if(!VIS.proc) return;
+    _visTic(); _visGravar(true);
+    if(VIS.timer) clearInterval(VIS.timer);
+    VIS={id:null,proc:null,numero:'',quem:'',seg:0,ultimo:0,timer:null};
+  }catch(e){}
+}
+function _visIniciar(p){
+  try{
+    _visEncerrar();
+    if(!p||!p._id) return;
+    var quem=(typeof _kanQuemSou==='function'&&_kanQuemSou())||'';
+    VIS={id:null,proc:p._id,numero:(p.numero||''),quem:quem,seg:0,ultimo:Date.now(),timer:null};
+    VIS.timer=setInterval(_visTic,30000);
+    var sb=window.__sb; if(!sb) return;
+    var meu=VIS.proc;
+    escId().then(function(e){
+      if(!e||VIS.proc!==meu) return;
+      return sb.from('processo_visitas').insert({escritorio_id:e,processo_id:meu,numero:VIS.numero,quem:quem,entrou_em:new Date().toISOString(),segundos:0}).select('id').single();
+    }).then(function(r){ if(r&&r.data&&r.data.id&&VIS.proc===meu) VIS.id=r.data.id; }).catch(function(){});
+  }catch(e){}
+}
+try{
+  document.addEventListener('visibilitychange',function(){ _visTic(); });
+  window.addEventListener('pagehide',function(){ _visTic(); _visGravar(true); });
+}catch(e){}
+/* ===== A lista: quem abriu este processo, quando e por quanto tempo ===== */
+function toggleVisitasProc(){
+  var cx=document.getElementById('det-visitas'); if(!cx) return;
+  if(cx.style.display==='block'){ cx.style.display='none'; return; }
+  cx.style.display='block';
+  cx.innerHTML='<div class="note" style="margin:0;padding:8px 10px">carregando…</div>';
+  var p=(typeof atual!=='undefined')?atual:null;
+  var sb=window.__sb;
+  if(!p||!p._id||!sb){ cx.innerHTML='<div class="note" style="margin:0;padding:8px 10px">Sem histórico para este processo.</div>'; return; }
+  sb.from('processo_visitas').select('quem,entrou_em,segundos').eq('processo_id',p._id).order('entrou_em',{ascending:false}).limit(40)
+    .then(function(r){
+      if(r&&r.error){ cx.innerHTML='<div class="note" style="margin:0;padding:8px 10px">Não consegui ler o histórico: '+esc(r.error.message)+'</div>'; return; }
+      var lin=(r&&r.data)||[];
+      /* a visita em curso ainda não foi gravada com o tempo cheio — mostra o
+         relógio de agora, para não parecer que o próprio usuário nunca abriu */
+      if(!lin.length){ cx.innerHTML='<div class="note" style="margin:0;padding:8px 10px">Ninguém abriu este processo desde que o registro começou.</div>'; return; }
+      cx.innerHTML='<div style="padding:8px 10px;border-bottom:1px solid var(--line);font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:#9aa3b0">Quem abriu este processo</div>'
+        +'<div style="max-height:260px;overflow:auto">'
+        +lin.map(function(v){
+          return '<div style="display:flex;gap:8px;align-items:baseline;padding:5px 10px;border-bottom:1px solid var(--accentbg);font-size:12.5px">'
+            +'<b style="color:var(--navy);white-space:nowrap">'+esc(v.quem||'—')+'</b>'
+            +'<span style="flex:1;color:var(--muted);white-space:nowrap;text-align:right">'+esc(_vistoQuando(v.entrou_em)||'')+'</span>'
+            +'<span style="color:#185FA5;font-weight:600;white-space:nowrap">'+esc(_visDur(v.segundos))+'</span>'
+          +'</div>';
+        }).join('')
+        +'</div>';
+    },function(){ cx.innerHTML='<div class="note" style="margin:0;padding:8px 10px">Não consegui ler o histórico.</div>'; });
 }
 /* editar/excluir histórico manual (só fonte manual — os oficiais são intocáveis) */
 async function editarHistManual(ev,hix){
@@ -10845,6 +10940,8 @@ function toggleProcessosNav(){
 }
 function go(s){
   try{ localStorage.setItem('cmp_secao', s); if(s!=='proc-det') localStorage.removeItem('cmp_proc'); }catch(e){}
+  /* saiu da ficha: fecha a visita e grava o tempo */
+  try{ if(s!=='proc-det' && typeof _visEncerrar==='function') _visEncerrar(); }catch(eVg){}
   var showId=(s==='contatos')?'crm':s;
   ["painel","triagem","agenda","processos","proc-det","crm","financeiro","etiquetas","procedimentos","diligencias","relatorio","publicacoes","encerrados","inove","james","contratacao","cadastros","fases","sugestoes","lote","produtividade","monitoramento","robos","movimentar","emails","chats"].forEach(function(id){var e=document.getElementById("s-"+id);if(e)e.classList.add("hidden")});
   var sec=document.getElementById("s-"+showId); if(sec) sec.classList.remove("hidden");
@@ -21424,10 +21521,45 @@ function _prdLinhasDoDia(){
   });
   return evs.slice().sort(function(a,b){ return String(a.occurred_at||'')<String(b.occurred_at||'')?-1:1; });
 }
+/* Tempo na página, no relatório do dia. As visitas moram em processo_visitas
+   (quem/quando/quanto); aqui elas só encostam na linha "consultou o processo"
+   correspondente — mesma pessoa, mesmo processo, no mesmo minuto. Carrega uma
+   vez por dia consultado e repinta quando chega. */
+window.__prdVisitas={dia:null,linhas:[],carregando:false};
+function _prdCarregaVisitas(dia){
+  if(!dia||window.__prdVisitas.carregando) return;
+  if(window.__prdVisitas.dia===dia) return;
+  var sb=window.__sb; if(!sb) return;
+  window.__prdVisitas.carregando=true;
+  sb.from('processo_visitas').select('quem,numero,entrou_em,segundos').gte('entrou_em',dia+'T00:00:00').lte('entrou_em',dia+'T23:59:59.999').limit(3000)
+    .then(function(r){
+      window.__prdVisitas={dia:dia,linhas:((r&&r.data)||[]),carregando:false};
+      try{ renderRelatorioDiario(); }catch(e){}
+    },function(){ window.__prdVisitas={dia:dia,linhas:[],carregando:false}; });
+}
+function _prdTempoNaPagina(e){
+  try{
+    if(e.event_type!=='process_viewed') return '';
+    var vs=window.__prdVisitas.linhas||[]; if(!vs.length) return '';
+    var md=e.metadata||{};
+    var dig=String(md.numero||e.entity_id||'').replace(/\D/g,'');
+    var nm=_prdNorm((PRD_USERS&&PRD_USERS[e.user_id]&&PRD_USERS[e.user_id].nome)||e.user_nome||'');
+    var t=new Date(e.occurred_at).getTime();
+    var achou=null;
+    vs.forEach(function(v){
+      if(dig && String(v.numero||'').replace(/\D/g,'')!==dig) return;
+      if(nm && _prdNorm(v.quem)!==nm) return;
+      var d=Math.abs(new Date(v.entrou_em).getTime()-t);
+      if(d<=180000 && (!achou||d<achou.d)) achou={d:d,v:v};
+    });
+    return achou?(' · '+_visDur(achou.v.segundos)+' na página'):'';
+  }catch(er){ return ''; }
+}
 function renderRelatorioDiario(){
   var el=document.getElementById('prd-diario'); if(!el) return;
   var inp=document.getElementById('prd-dia');
   if(inp && !inp.value) inp.value=(typeof todayISO==='string'?todayISO:_prdDiaISO(new Date().toISOString()));
+  try{ _prdCarregaVisitas((document.getElementById('prd-dia')||{}).value||''); }catch(eV){}
   var linhas=_prdLinhasDoDia();
   if(!linhas.length){ el.innerHTML='<div class="note">Nenhum registro neste dia. Confira se a data está dentro do período escolhido acima.</div>'; return; }
   /* por pessoa, e dentro de cada uma em ordem de relógio */
@@ -21450,6 +21582,7 @@ function renderRelatorioDiario(){
           +'<span style="min-width:42px;font-weight:700;color:var(--navy);font-variant-numeric:tabular-nums">'+_prdHora(e.occurred_at)+'</span>'
           +'<div style="flex:1;min-width:0">'
             +'<span>'+finEsc(_prdAcaoTexto(e))+'</span>'
+            +'<span style="color:#185FA5">'+finEsc(_prdTempoNaPagina(e))+'</span>'
             +(fatal?' <span style="font-size:9px;font-weight:800;color:#b5342b;border:1px solid #e8c4bf;border-radius:8px;padding:0 5px;letter-spacing:.04em">FATAL</span>':'')
             +(proc?('<div style="color:var(--muted);font-size:11.5px">'+finEsc(proc)+'</div>'):'')
           +'</div>'
@@ -21462,10 +21595,10 @@ function exportarDiarioCSV(){
   var linhas=_prdLinhasDoDia();
   if(!linhas.length){ alert('Nada para exportar neste dia.'); return; }
   var dia=(document.getElementById('prd-dia')||{}).value||'';
-  var head='hora;pessoa;o_que_fez;processo';
+  var head='hora;pessoa;o_que_fez;processo;tempo_na_pagina';
   var rows=linhas.map(function(e){
     var nm=(PRD_USERS&&PRD_USERS[e.user_id]&&PRD_USERS[e.user_id].nome)||e.user_nome||'—';
-    return [_prdHora(e.occurred_at),nm,_prdAcaoTexto(e),_prdProcTexto(e)].map(function(x){ return String(x||'').replace(/;/g,','); }).join(';');
+    return [_prdHora(e.occurred_at),nm,_prdAcaoTexto(e),_prdProcTexto(e),String(_prdTempoNaPagina(e)||'').replace(/^ · /,'').replace(/ na página$/,'')].map(function(x){ return String(x||'').replace(/;/g,','); }).join(';');
   });
   var blob=new Blob(['\ufeff'+head+'\n'+rows.join('\n')],{type:'text/csv;charset=utf-8'});
   var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='relatorio-diario-'+(dia||'dia')+'.csv'; a.click();
