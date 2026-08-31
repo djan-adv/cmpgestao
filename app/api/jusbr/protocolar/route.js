@@ -330,9 +330,23 @@ async function montarEnvelope(token, dig, sb) {
        processo pode ter mudado de vara ou subido de grau) — por isso a tela
        mostra em vez de decidir sozinha. */
     if (cap && cap.env) {
+      /* Comparar texto na bruta dava alarme falso: o envelope guardado pode vir
+         com o nome da vara CORTADO ("… CONSUMIDOR - S…"), e aí "13ª VARA …
+         SALVADOR" parecia divergente de si mesma. Compara sem acento, sem
+         caixa, e aceita um lado ser começo do outro. */
+      const norm = (v) => String(v == null ? '' : v).normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase().replace(/[…]|\.\.\.$/g, '').replace(/\s+/g, ' ').trim()
+      const igual = (a, b) => {
+        const x = norm(a), y = norm(b)
+        if (!x || !y) return true
+        return x === y || x.startsWith(y) || y.startsWith(x)
+      }
+      const codigosBatem = String(env.codOrgaoJulgadorCorporativo || '') === String(cap.env.codOrgaoJulgadorCorporativo || '')
       for (const k of ['codOrgaoJulgadorCorporativo', 'idOrigemTramitacao', 'codigoClasseProcessual', 'nomeOrgaoJulgadorCorporativo']) {
+        // o nome é rótulo do código: com o código igual, diferença de texto não é divergência
+        if (k === 'nomeOrgaoJulgadorCorporativo' && codigosBatem) continue
         const meu = env[k], dele = cap.env[k]
-        if (meu != null && meu !== '' && dele != null && dele !== '' && String(meu) !== String(dele)) {
+        if (meu != null && meu !== '' && dele != null && dele !== '' && !igual(meu, dele)) {
           divergencias.push({ campo: k, jusbr: String(meu), protocolo_anterior: String(dele), quando: cap.quando })
         }
       }

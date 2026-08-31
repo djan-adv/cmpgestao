@@ -20785,7 +20785,6 @@ async function abrirProtocolarJusbr(numero){
       return;
     }
     window.__protDados={numero:numero, tipos:(j.tipos||[]), env:(j.envelope||{})};
-    setTimeout(_protResumo,0);
     /* arquivos PDF da pasta Protocolo — é de lá que sai a peça */
     var arqs=[];
     try{
@@ -20861,6 +20860,9 @@ async function abrirProtocolarJusbr(numero){
         +((j.permite_peticionar===false)||(j.faltando&&j.faltando.length)||!arqs.length||!(j.tipos&&j.tipos.length)?''
           :'<button class="btn sm" id="prot-ok" style="background:#0F6E56;border-color:#0F6E56" onclick="protocolarAgora()">⚖ Protocolar agora</button>')
       +'</div>';
+    /* só agora os campos existem na tela: antes isto rodava antes do innerHTML
+       (a lista de arquivos vem de um await) e o resumo nunca aparecia */
+    try{ _protResumo(); }catch(e2){}
   }catch(e){
     cx.innerHTML='<div class="note" style="color:#b5342b">Erro: '+esc((e&&e.message)||e)+'</div>';
   }
