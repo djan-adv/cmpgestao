@@ -390,6 +390,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
         <div id="tar-legenda" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:-2px 0 10px;font-size:11px;color:var(--muted)"></div>
         <div class="calnav" id="tar-nav"><button class="navbtn" onclick="navegaTar(-1)">‹ anterior</button><b id="tar-label"></b><button class="navbtn" onclick="navegaTar(1)">próximo ›</button></div>
         <div class="cal" id="tar-cal"></div>
+        <div id="tar-empilhadas"></div>
       </div></div>
     </section>
 
@@ -8501,6 +8502,7 @@ function renderTarefasView(){
   if(tarView==='lista') renderTarefasLista();
   else if(tarView==='semana') renderTarefasSemana();
   else renderTarefasMes();
+  try{ _empilharAgendas(); }catch(eE){}
 }
 /* Visão Semana: a semana em curso, segunda a sexta (ou os 7 dias, se a caixa
    estiver marcada). Cada dia mostra todas as atividades, sem corte. */
@@ -8648,6 +8650,135 @@ function _tarChipHTML(a){
     +(temPrazo?('<span title="prazo fatal'+(a.prazo?(' em '+_brData(a.prazo)):'')+'" style="position:absolute;right:5px;bottom:1px;font-size:9px;font-weight:800;color:#b5342b;letter-spacing:.06em;line-height:1;pointer-events:none">FATAL</span>'):'')
     +'</div>';
 }
+/* ===== As outras agendas, empilhadas embaixo =====
+   Pedido do dono (31/08/2026): "na agenda de prazos e tarefas, repita abaixo a
+   mesma semana para cada agenda — reuniões e audiências, automáticas e
+   diligências — para a pessoa ver tudo rolando a tela. As outras abas ficam como
+   estão; só esta abre assim".
+   O período é sempre o mesmo de cima: escolheu semana, vêm as semanas; escolheu
+   mês, vêm os meses. Estes blocos são de LEITURA — quem quiser mexer clica no
+   chip e cai na atividade, ou abre a aba própria. */
+function _diasDaSemanaTar(){
+  var seg=_segundaDe(tarSemRef), dows=_tarDows();
+  return dows.map(function(dw){
+    var x=new Date(seg); x.setDate(seg.getDate()+((dw+6)%7));
+    return {iso:x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0'), dia:x.getDate(), fora:false};
+  });
+}
+/* As tarefas de UMA categoria, com os mesmos filtros de cima (responsável,
+   ocultar concluídas). Reaproveita tarefasFiltradas trocando a categoria por um
+   instante — assim os filtros nunca divergem entre a agenda de cima e as de
+   baixo. */
+function _tarefasDaCategoria(cat){
+  var ant=VIEWAG; VIEWAG=cat;
+  var l=[]; try{ l=tarefasFiltradas(); }catch(e){ l=[]; } finally{ VIEWAG=ant; }
+  return l;
+}
+function _chipEventoHTML(e){
+  var tinta=(typeof _respTinta==='function')?_respTinta(e.resp):{fundo:'#eef1f5',borda:'#d7dde5',texto:'#2E3A4B'};
+  var hora=(e.hora&&e.hora!=='Dia todo')?(esc(e.hora)+' '):'';
+  var proc=(e.p&&e.p.numero&&e.p.numero!=='—')?((typeof fmtCNJ==='function')?fmtCNJ(e.p.numero):e.p.numero):'';
+  var ehAud=(e.tipo==='az');
+  return '<div class="cev" title="'+esc((e.tt||'')+(e.resp?('\n👤 '+e.resp):''))+'" style="cursor:default;display:block;'
+    +'background:'+(ehAud?'var(--dangerbg)':tinta.fundo)+';border:1px solid '+(ehAud?'#f0c8c4':tinta.borda)+';color:'+(ehAud?'#b5342b':tinta.texto)+';'
+    +'font-size:10.5px;line-height:1.35;padding:3px 5px;margin-bottom:3px;border-radius:6px">'
+    +(proc?('<div style="opacity:.75;font-size:9.5px">'+esc(proc)+'</div>'):'')
+    +'<div style="font-weight:600">'+hora+esc(String(e.tt||'—').slice(0,60))+'</div>'
+    +(e.resp?('<div style="opacity:.8;font-size:9.5px">'+esc(_primeiroNome(e.resp))+'</div>'):'')
+  +'</div>';
+}
+function _blocoAgendaHTML(titulo, dias, porDia, vazio){
+  var colunas=__ehCel?'repeat(7,1fr)':(tarFds?'0.5fr repeat(5,1fr) 0.5fr':'repeat(5,1fr)');
+  var nomes=_tarNomesDow();
+  var total=0; dias.forEach(function(d){ total+=(porDia[d.iso]||[]).length; });
+  var h='<div class="card" style="margin-top:14px">'
+    +'<p class="sectlabel" style="display:flex;justify-content:space-between;align-items:center">'+titulo
+      +'<span class="note" style="margin:0;text-transform:none;font-weight:400">'+(total?(total+' no período'):'nada no período')+'</span></p>';
+  if(!total){ return h+'<div class="note" style="margin:0">'+esc(vazio)+'</div></div>'; }
+  h+='<div class="cal" style="grid-template-columns:'+colunas+'">';
+  h+=nomes.map(function(n){ return '<div class="dow">'+esc(n)+'</div>'; }).join('');
+  dias.forEach(function(d){
+    var itens=porDia[d.iso]||[];
+    h+='<div class="day'+(d.iso===todayISO?' today':'')+(d.fora?' out':'')+'" style="min-height:60px">'
+      +'<div class="dn"'+(d.fora?' style="color:#9aa3b0;font-weight:600"':'')+'>'+(d.fora?(String(d.dia).padStart(2,'0')+'/'+String(new Date(d.iso+'T00:00:00').getMonth()+1).padStart(2,'0')):d.dia)+'</div>'
+      +itens.join('')
+    +'</div>';
+  });
+  return h+'</div></div>';
+}
+function _empilharAgendas(){
+  var box=document.getElementById('tar-empilhadas'); if(!box) return;
+  box.innerHTML='';
+  /* só na agenda principal, e só quando há uma grade de datas para repetir */
+  if(VIEWAG!=='tarefas' || tarView==='lista') return;
+  try{
+    if(!KAN) initKanban();
+    initAgenda();
+    var dias=(tarView==='semana')?_diasDaSemanaTar():_gradeDoMes(tarY,tarM);
+    var noPeriodo={}; dias.forEach(function(d){ noPeriodo[d.iso]=1; });
+    var html='';
+
+    /* 1) Reuniões e audiências — vêm da agenda de eventos, não do Kanban */
+    var porDiaEv={};
+    (AGENDA||[]).forEach(function(e){
+      var iso=String(e&&e.data||'').slice(0,10);
+      if(!iso||!noPeriodo[iso]) return;
+      if(agResp!=='Todos'){
+        var alvo=String(agResp).split(' ')[0].toLowerCase();
+        if(String(e.resp||'').split(' ')[0].toLowerCase()!==alvo) return;
+      }
+      (porDiaEv[iso]=porDiaEv[iso]||[]).push(_chipEventoHTML(e));
+    });
+    html+=_blocoAgendaHTML('📅 Reuniões e audiências', dias, porDiaEv, 'Nenhuma reunião ou audiência marcada neste período.');
+
+    /* 2) e 3) as duas categorias de tarefa, com os mesmos filtros de cima */
+    [['🤖 Automáticas','auto','Nenhuma tarefa automática neste período.'],
+     ['🔎 Diligências','diligencias','Nenhuma diligência neste período.']].forEach(function(b){
+      var porDia={};
+      _tarefasDaCategoria(b[1]).forEach(function(a){
+        var iso=_tarISO(a); if(!iso||!noPeriodo[iso]) return;
+        (porDia[iso]=porDia[iso]||[]).push(_tarChipHTML(a));
+      });
+      html+=_blocoAgendaHTML(b[0], dias, porDia, b[2]);
+    });
+    box.innerHTML=html;
+  }catch(e){ box.innerHTML='<div class="note" style="color:#b5342b">Não consegui montar as agendas de baixo: '+esc((e&&e.message)||e)+'</div>'; }
+}
+/* A grade de um mês — os dias visíveis, na ordem, com as bordas dos meses
+   vizinhos. Ficou numa função só porque agora duas telas desenham a mesma grade
+   (a agenda de prazos e as agendas empilhadas embaixo dela); duas cópias iam
+   divergir no primeiro ajuste, como já aconteceu com a lista de processos. */
+function _gradeDoMes(ano,mes){
+  var dowsM=_tarDows();
+  var comFds=(tarFds||__ehCel), nCols=comFds?7:5;
+  var _posCol=function(dow){ return comFds?dow:((dow+6)%7); };
+  var _isoDe=function(dt){ return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0'); };
+  var dias=[], dim=new Date(ano,mes+1,0).getDate();
+  for(var d=1;d<=dim;d++){
+    var dt=new Date(ano,mes,d);
+    if(dowsM.indexOf(dt.getDay())<0) continue;   /* fim de semana oculto */
+    dias.push({iso:_isoDe(dt), dia:d, fora:false});
+  }
+  if(dias.length){
+    var vagas=_posCol(new Date(dias[0].iso+'T00:00:00').getDay());
+    var ant=new Date(ano,mes,1), antes=[];
+    while(antes.length<vagas){
+      ant.setDate(ant.getDate()-1);
+      if(dowsM.indexOf(ant.getDay())<0) continue;
+      antes.unshift({iso:_isoDe(ant), dia:ant.getDate(), fora:true});
+    }
+    dias=antes.concat(dias);
+  }
+  var faltam=(dias.length%nCols) ? (nCols-(dias.length%nCols)) : nCols;
+  var prox=new Date(ano,mes,dim);
+  while(faltam>0){
+    prox.setDate(prox.getDate()+1);
+    if(dowsM.indexOf(prox.getDay())<0) continue;
+    dias.push({iso:_isoDe(prox), dia:prox.getDate(), fora:true});
+    faltam--;
+  }
+  return dias;
+}
 function renderTarefasMes(){
   var cal=document.getElementById('tar-cal'); if(!cal) return;
   document.getElementById('tar-label').textContent=MESES[tarM]+' de '+tarY;
@@ -8670,35 +8801,7 @@ function renderTarefasMes(){
      (.day.out sem data), então não existia célula de setembro para soltar o
      chip. Agora as bordas são dias DE VERDADE — fim do mês anterior e começo do
      seguinte — com chip, clique e drop iguais aos do mês corrente. */
-  var dias=[];
-  var dim=new Date(tarY,tarM+1,0).getDate();
-  for(var d=1;d<=dim;d++){
-    var dt=new Date(tarY,tarM,d);
-    if(dowsM.indexOf(dt.getDay())<0) continue;   /* fim de semana oculto */
-    dias.push({iso:_isoDe(dt), dia:d, fora:false});
-  }
-  if(dias.length){
-    /* recuo do primeiro dia visível — preenchido com o fim do mês anterior */
-    var vagas=_posCol(new Date(dias[0].iso+'T00:00:00').getDay());
-    var ant=new Date(tarY,tarM,1), antes=[];
-    while(antes.length<vagas){
-      ant.setDate(ant.getDate()-1);
-      if(dowsM.indexOf(ant.getDay())<0) continue;
-      antes.unshift({iso:_isoDe(ant), dia:ant.getDate(), fora:true});
-    }
-    dias=antes.concat(dias);
-  }
-  /* fecha a última linha com o começo do mês seguinte; se a linha já terminou
-     redonda, entra uma linha inteira — no fim do mês tem de haver para onde
-     arrastar, sempre */
-  var faltam=(dias.length%nCols) ? (nCols-(dias.length%nCols)) : nCols;
-  var prox=new Date(tarY,tarM,dim);
-  while(faltam>0){
-    prox.setDate(prox.getDate()+1);
-    if(dowsM.indexOf(prox.getDay())<0) continue;
-    dias.push({iso:_isoDe(prox), dia:prox.getDate(), fora:true});
-    faltam--;
-  }
+  var dias=_gradeDoMes(tarY,tarM);
   var naGrade={}; dias.forEach(function(x){ naGrade[x.iso]=1; });
 
   /* faixa acima do calendário: aviso de atividades em outros meses. O que já
