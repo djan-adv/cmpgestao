@@ -19592,7 +19592,6 @@ function abrirProtocolarPeticao(numero){
        O que sobe aqui é peça pronta, em PDF. */
     +'<div style="margin-top:10px"><label>Arquivo da petição (PDF)</label><input type="file" id="proto-arq" accept=".pdf"></div>'
     +'<div style="margin-top:8px"><label>Anexos (opcional — pode escolher vários)</label><input type="file" id="proto-anexos" multiple><div class="note" style="margin:2px 0 0">Documentos que acompanham a peça (procuração, comprovantes, laudos). Para protocolo, prefira PDF.</div></div>'
-    +'<div class="row2" style="margin-top:10px"><div><label>Prazo fatal (dia do protocolo)</label><input type="date" id="proto-prazo" value="'+_protoHoje()+'"></div><div><label>Responsável</label><input id="proto-resp" value="'+esc(((document.getElementById('who-name')||{}).textContent)||'')+'"></div></div>'
     +'<label style="display:flex;gap:8px;align-items:flex-start;margin-top:12px;background:#f4f7fb;border:1px solid #dbe6f2;border-radius:9px;padding:10px;cursor:pointer">'
       +'<input type="checkbox" id="proto-ok"><span style="font-size:12.5px;color:#2E3A4B"><b>Conferi a peça inteira.</b> Não há recados, campos a preencher, comentários nem destaques pendentes.</span></label>'
     +'<div class="foot" style="margin-top:14px"><button class="btn ghost" onclick="document.getElementById(\'proto-modal\').remove()">Cancelar</button><button class="btn" style="background:#7b1e3a;border-color:#7b1e3a" onclick="salvarProtocolarPeticao(\''+esc(numero)+'\',this)">Anexar e criar prazo</button></div>'
@@ -19603,14 +19602,17 @@ function abrirProtocolarPeticao(numero){
 }
 async function salvarProtocolarPeticao(numero,btn){
   var titulo=(document.getElementById('proto-titulo')||{}).value||'';
-  var prazo=(document.getElementById('proto-prazo')||{}).value||'';
-  var resp=(document.getElementById('proto-resp')||{}).value||'';
+  /* Prazo e responsável saíram da tela: a peça sobe pronta, para protocolar
+     HOJE, e quem sobe é quem está logado. Perguntar o que já se sabe é campo
+     a mais para errar. Os dois continuam gravados — é deles que vivem a faixa
+     de prazo fatal e o prazo na agenda. */
+  var prazo=_protoHoje();
+  var resp=((document.getElementById('who-name')||{}).textContent||'').trim();
   var ok=(document.getElementById('proto-ok')||{}).checked;
   var inp=document.getElementById('proto-arq'); var f=inp&&inp.files&&inp.files[0];
   titulo=titulo.trim();
   if(titulo.length<3){ alert('Dê um título à peça (ex.: "Contrarrazões de apelação").'); return; }
   if(!f){ alert('Anexe o arquivo da petição.'); return; }
-  if(!prazo){ alert('Informe o prazo fatal (o dia do protocolo).'); return; }
   if(!ok){ alert('Confirme que conferiu a peça (sem recados, campos a preencher ou comentários).'); return; }
   var ehPdf=/\.pdf$/i.test(f.name);
   if(!ehPdf){ alert('O arquivo precisa ser o PDF final da peça.'); return; }
