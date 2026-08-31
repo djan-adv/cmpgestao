@@ -1,16 +1,20 @@
 // Roteamento por domínio: a mesma raiz (um processo Next, um PM2, uma VPS) serve o
-// CMPGestão E o site do corretor, sem misturar marca — só quem responde por
-// djan.net.br é redirecionado por dentro para as rotas em app/corretor/*.
+// CMPGestão E o site do corretor, sem misturar marca — quem responde por
+// corretor.djan.net.br (ou djan.net.br) é redirecionado por dentro para as rotas em
+// app/corretor/*.
 //
-// `corretor.djan.app.br` é um subdomínio de testes (mesmo padrão do
-// inove.djan.app.br — ver ops/PROJETO-INOVE.md), útil para conferir o site antes do
-// DNS de djan.net.br apontar pra cá. O nginx da VPS ainda precisa de um server block
-// novo para cada domínio (proxy_pass genérico para 127.0.0.1:3000) — isso fica fora
-// do repositório, é configuração da VPS. Ver ops/PROJETO-CORRETOR-IMOVEIS.md.
+// `corretor.djan.net.br` é o domínio definitivo escolhido pelo Djan (subdomínio do
+// djan.net.br dele, na Hostinger). `corretor.djan.app.br` continua como subdomínio de
+// testes (mesmo padrão do inove.djan.app.br — ver ops/PROJETO-INOVE.md), e djan.net.br
+// puro/www seguem valendo como alternativa caso ele prefira usar o domínio raiz. O
+// nginx da VPS ainda precisa de um server block novo por domínio (proxy_pass genérico
+// para 127.0.0.1:3000) e o DNS da Hostinger precisa apontar o subdomínio pra VPS —
+// isso fica fora do repositório. Ver ops/PROJETO-CORRETOR-IMOVEIS.md.
 
 import { NextResponse } from 'next/server'
 
 const HOSTS_CORRETOR = new Set([
+  'corretor.djan.net.br',
   'djan.net.br',
   'www.djan.net.br',
   'corretor.djan.app.br',

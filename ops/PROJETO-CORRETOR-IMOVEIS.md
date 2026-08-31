@@ -25,9 +25,12 @@ atividades no material de divulogação do corretor. Marca, cores, favicon e tex
 
 ## 2. Decisões tomadas com o Djan
 
-1. **Domínio:** `djan.net.br` (já é do Djan). Enquanto o DNS não aponta pra cá, o site
-   já responde em `corretor.djan.app.br` (mesmo padrão do `inove.djan.app.br`), pra dar
-   pra revisar antes de trocar o domínio de verdade.
+1. **Domínio:** decidido usar o **subdomínio `corretor.djan.net.br`** (dentro do
+   `djan.net.br`, que já é do Djan, na Hostinger) — não o domínio raiz. Enquanto o DNS
+   não aponta pra cá, o site já responde em `corretor.djan.app.br` (mesmo padrão do
+   `inove.djan.app.br`), pra dar pra revisar antes de trocar. `middleware.js` já aceita
+   os dois hosts (`corretor.djan.net.br` e `corretor.djan.app.br`), além de
+   `djan.net.br`/`www` puro como alternativa — falta só o DNS/nginx (ver seção 4).
 2. **Banco:** mesmo projeto Supabase da CMP, mas em **schema isolado (`imoveis`)** com
    role dedicado (`imoveis_app`) sem nenhum privilégio no `public` — mesmo desenho já
    validado com a Inove (ver `ops/PROJETO-INOVE.md`, seção 4). Não é um projeto Supabase
@@ -147,11 +150,23 @@ atividades no material de divulogação do corretor. Marca, cores, favicon e tex
    - `IMOVEIS_ADMIN_SENHA_HASH` — já gerei um hash (senha e hash enviados no chat).
      Se preferir escolher sua própria senha do painel, é só rodar
      `node scripts/hash-senha-imoveis.mjs "sua-senha"` e colar o resultado no lugar.
-4. **DNS + nginx:** apontar `djan.net.br` (e `www`) para a VPS (Hostinger), e criar o
-   `server_name` correspondente no nginx (proxy genérico pra `127.0.0.1:3000`, igual ao
-   que já existe pro `inove.djan.app.br`) + certificado SSL (certbot). Enquanto isso não
-   acontece, dá pra testar por `corretor.djan.app.br` (mesmo esquema, precisa do DNS
-   desse subdomínio apontando pra VPS, se ainda não apontar).
+4. **DNS + nginx do subdomínio `corretor.djan.net.br`** (decisão nova — seção 2, item 1):
+   - **Na Hostinger** (painel do domínio `djan.net.br` → DNS / Zona DNS): criar um
+     registro pro nome `corretor`. Duas formas, escolha uma:
+     - **CNAME** `corretor` → `inove.djan.app.br` (mais simples: reaproveita o mesmo
+       hostname que já funciona e já aponta pra VPS certa, sem precisar saber o IP).
+     - ou **A** `corretor` → o mesmo IP que o registro A de `inove.djan.app.br` usa
+       hoje (confira esse IP no DNS de onde `djan.app.br` está registrado).
+   - **Na VPS, no nginx:** criar um `server` block novo com
+     `server_name corretor.djan.net.br;` e `proxy_pass http://127.0.0.1:3000;` — copiar
+     a configuração que já existe pro `inove.djan.app.br` e só trocar o `server_name`.
+   - **Certificado SSL:** `certbot --nginx -d corretor.djan.net.br` (depois do DNS já
+     estar propagado, senão o certbot falha ao validar).
+   - Enquanto isso não estiver pronto, dá pra revisar por `corretor.djan.app.br`
+     (mesmo esquema, já deve estar respondendo se o DNS desse subdomínio já aponta
+     pra VPS).
+   - Se preferir usar o domínio raiz (`djan.net.br`/`www`) em vez do subdomínio, o
+     código já aceita os dois — é só apontar o DNS raiz pra VPS em vez do `corretor`.
 5. **Rebuild:** `npm install` (novo pacote `pg` já é dependência existente, nada novo)
    + `npm run build` + `pm2 restart cmpgestao`.
 6. **Conteúdo real:** foto de perfil, telefone/WhatsApp, bio definitiva, completar
