@@ -761,6 +761,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
         <p class="note" style="margin:6px 0 10px">Gera o script já com o segredo embutido — é só copiar e colar no Tampermonkey. Não precisa digitar nada. Depois, faça login no jus.br uma vez.</p>
         <div id="robos-jusbr-status" class="note" style="margin-bottom:8px"></div>
         <button class="btn sm" onclick="gerarUserscriptJusbr()">📄 Gerar meu userscript</button>
+        <button class="btn sm ghost" style="color:#b5342b;border-color:#e8c4bf" onclick="desconectarJusbr(this)" title="Apaga o token que o SERVIDOR guarda. Sair do portal no navegador não faz isso — o sistema tem a própria cópia, é o que faz os robôs rodarem de madrugada.">🧹 desconectar o jus.br do sistema</button>
         <div id="robos-userscript" style="display:none;margin-top:10px">
           <textarea id="robos-userscript-txt" readonly style="width:100%;height:180px;font-family:monospace;font-size:11px;border:1px solid var(--line);border-radius:8px;padding:8px"></textarea>
           <div style="margin-top:6px"><button class="btn sm" onclick="copiarUserscriptJusbr()">📋 Copiar</button> <span class="note">Cole no Tampermonkey (novo script) e salve.</span></div>
@@ -20430,6 +20431,24 @@ async function _renderGoogleStatus(){
 }
 /* Baixa o .zip da extensão já com a chave deste escritório dentro. O fetch leva
    o login (a rota é autenticada), então não dá para usar um link simples. */
+/* Sair do portal do jus.br no navegador NÃO desconecta o sistema: o servidor
+   guarda a própria cópia do token (é assim que os robôs trabalham de
+   madrugada). Para testar a ponte de verdade — ou para cortar o acesso na hora
+   — o token do servidor tem de ser apagado aqui. */
+async function desconectarJusbr(btn){
+  if(!confirm('Apagar o token do jus.br guardado no SERVIDOR?\n\nTudo que depende do jus.br (baixar peças, íntegra, movimentos) para de funcionar até alguém entrar no portal de novo com a extensão ou o userscript ligado.\n\nÉ o jeito de testar a ponte do zero.')) return;
+  var t0=btn?btn.textContent:'';
+  if(btn){ btn.disabled=true; btn.textContent='apagando…'; }
+  try{
+    var tok=(typeof finToken==='function')?await finToken():null;
+    var r=await fetch('/api/jusbr/token',{method:'DELETE',headers:tok?{Authorization:'Bearer '+tok}:{}});
+    var j=await r.json().catch(function(){ return {}; });
+    if(!r.ok||j.erro) throw new Error(j.erro||('HTTP '+r.status));
+    alert('✓ Token apagado do servidor.\n\nAgora entre no portal do jus.br com o certificado: a extensão deve capturar e mandar o novo token em segundos. Confira aqui em cima — a validade tem de aparecer de novo.');
+    try{ if(typeof renderRobos==='function') renderRobos(); }catch(e){}
+  }catch(e){ alert('Não consegui apagar: '+((e&&e.message)||e)); }
+  finally{ if(btn){ btn.disabled=false; btn.textContent=t0; } }
+}
 async function baixarExtensaoJusbr(btn){
   var t0=btn?btn.textContent:'';
   if(btn){ btn.disabled=true; btn.textContent='preparando…'; }

@@ -189,3 +189,24 @@ export async function GET(request) {
   const autoRenova = !!(data && data.refresh_cif)
   return Response.json({ ok: true, valido, auto_renova: autoRenova, expira: data && data.expira || null, atualizado_em: data && data.atualizado_em || null, refresh_em: data && data.refresh_em || null })
 }
+
+// DELETE /api/jusbr/token  (Authorization: Bearer <jwt do Supabase>)
+// Apaga o token que o SERVIDOR guarda deste escritório.
+//
+// Existe por um motivo prático descoberto no primeiro teste da extensão: sair
+// do portal do jus.br no navegador NÃO desconecta o sistema. O servidor tem a
+// própria cópia do token (é isso que faz os robôs rodarem de madrugada, com
+// todo mundo deslogado), e ela vale até expirar. Sem isto não havia como voltar
+// ao estado "sem token" para ver a ponte funcionar de verdade.
+//
+// Depois de apagar, o que depende do jus.br para de funcionar até a próxima
+// captura — que é justamente o que se quer observar.
+export async function DELETE(request) {
+  const user = await usuario(request)
+  if (!user) return Response.json({ erro: 'não autenticado' }, { status: 401 })
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) return Response.json({ erro: 'servidor sem service key' }, { status: 500 })
+  const sb = admin()
+  const { error } = await sb.from('jusbr_sessao').delete().eq('escritorio_id', ESCRITORIO_CMP)
+  if (error) return Response.json({ erro: error.message }, { status: 500 })
+  return Response.json({ ok: true, apagado: true })
+}
