@@ -20604,6 +20604,34 @@ async function renderEstagiario(){
    qualquer dado do processo, não deixa seguir: diz o que faltou.
    Quando o tribunal recusa (o TJSE recusa), a resposta dele vai inteira para a
    tela, sem tradução nossa. */
+/* Opções do tipo de documento: em ordem alfabética, com "Petição (outras)"
+   — o tipo genérico, que serve para a maioria — já selecionado. Deixar a
+   escolha por conta da ordem em que o jus.br devolveu é convite a protocolar
+   com o rótulo errado. */
+function _protTipoOpcoes(tipos){
+  var lista=(tipos||[]).slice().sort(function(a,b){
+    return String(a.descricao||'').localeCompare(String(b.descricao||''),'pt-BR');
+  });
+  var iPad=-1;
+  for(var i=0;i<lista.length;i++){ if(/peti[çc][ãa]o\s*\(outras\)/i.test(lista[i].descricao||'')){ iPad=i; break; } }
+  if(iPad<0) for(var k=0;k<lista.length;k++){ if(/^peti[çc][ãa]o\b/i.test(lista[k].descricao||'')){ iPad=k; break; } }
+  return lista.map(function(t,ix){
+    return '<option value="'+esc(String(t.id))+'" data-nome="'+esc(t.descricao)+'"'+((ix===iPad)?' selected':'')+'>'+esc(t.descricao)+'</option>';
+  }).join('');
+}
+/* filtro por digitação: em lista de centenas de tipos, rolar é onde se erra */
+function _protTipoFiltra(){
+  var q=((document.getElementById('prot-tipo-busca')||{}).value||'').toLowerCase().trim();
+  var sel=document.getElementById('prot-tipo'); if(!sel) return;
+  var achou=null;
+  [].slice.call(sel.options).forEach(function(o){
+    var bate=!q || o.textContent.toLowerCase().indexOf(q)>=0;
+    o.hidden=!bate; o.disabled=!bate;
+    if(bate && !achou) achou=o;
+  });
+  /* se o que estava escolhido sumiu do filtro, passa para o primeiro que sobrou */
+  if(achou && (sel.selectedIndex<0 || sel.options[sel.selectedIndex].hidden)) achou.selected=true;
+}
 async function abrirProtocolarJusbr(numero){
   var ov=document.getElementById('prot-ov'); if(ov) ov.remove();
   ov=document.createElement('div'); ov.id='prot-ov';
@@ -20668,10 +20696,17 @@ async function abrirProtocolarJusbr(numero){
              ? ('<select id="prot-arq" style="width:100%;box-sizing:border-box;font:inherit;font-size:13px;padding:7px 9px;border:1px solid var(--line);border-radius:7px">'
                 +arqs.map(function(a2){ return '<option value="'+esc(a2.nome)+'">'+esc(a2.nome)+'</option>'; }).join('')+'</select>')
              : '<div class="note" style="color:#b5342b">Nenhum PDF na pasta Protocolo. Use "📤 Subir petição para protocolo" antes.</div>')
+           /* A lista vinha na ordem do jus.br e o navegador já deixava a PRIMEIRA
+              escolhida — foi assim que uma "Petição Prosseguimento" do TJPB saiu
+              como "Agravo de Instrumento em Recurso de Revista" (31/08/2026).
+              Agora a lista é ordenada, começa em "Petição (outras)" quando existe,
+              e tem filtro para achar o tipo certo digitando. */
            +'<label style="display:block;font-size:12.5px;font-weight:700;color:var(--navy);margin:10px 0 3px">Tipo (Juntada de Petição de)</label>'
-           +'<select id="prot-tipo" style="width:100%;box-sizing:border-box;font:inherit;font-size:13px;padding:7px 9px;border:1px solid var(--line);border-radius:7px">'
-             +(j.tipos||[]).map(function(t){ return '<option value="'+esc(String(t.id))+'" data-nome="'+esc(t.descricao)+'">'+esc(t.descricao)+'</option>'; }).join('')
+           +'<input id="prot-tipo-busca" placeholder="filtrar (ex.: contestação, embargos, prosseguimento…)" oninput="_protTipoFiltra()" style="width:100%;box-sizing:border-box;font:inherit;font-size:12px;padding:5px 9px;border:1px solid var(--line);border-radius:7px;margin-bottom:4px">'
+           +'<select id="prot-tipo" size="1" style="width:100%;box-sizing:border-box;font:inherit;font-size:13px;padding:7px 9px;border:1px solid var(--line);border-radius:7px">'
+             +_protTipoOpcoes(j.tipos||[])
            +'</select>'
+           +'<div class="note" style="margin:3px 0 0;color:#8a6d1a">Confira o tipo — é o rótulo com que a peça entra nos autos.</div>'
            +((j.tipos&&j.tipos.length)?'':'<div class="note" style="color:#b5342b">O jus.br não devolveu a lista de tipos — sem ela não dá para protocolar daqui.</div>')))
       +'<div id="prot-msg" class="note" style="margin-top:10px"></div>'
       +'<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">'
