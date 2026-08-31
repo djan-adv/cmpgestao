@@ -2639,6 +2639,8 @@ function abrir(i){
     var bv=document.getElementById('btn-voltar-proc'); if(bv) bv.textContent=rotV[window.__voltarPara||'processos']||'← voltar';
   }catch(eV){}
   atual=DADOS.processos[i]; var p=atual, resp="Djan Henrique";
+  /* abrir a ficha JÁ é o "visto" — é isso que responde "você viu o processo de fulano?" */
+  try{ if(typeof registrarVistoProcesso==='function') registrarVistoProcesso(p); }catch(eVi){}
   /* ficha aberta antes de os históricos de fundo chegarem: busca SÓ o histórico
      deste processo agora e re-renderiza quando ele descer (nada se perde) */
   if(p && p._id && !p._histOk && !p._histLoading && window.__sb){
@@ -2740,7 +2742,7 @@ function abrir(i){
   if(typeof renderAudLink==='function') setTimeout(renderAudLink,0);
   // histórico (termos oficiais)
   /* aba "Publicações com inteiro teor (DJEN)" removida a pedido — sem utilidade prática */
-  html+='<div class="card"><p class="sectlabel" style="display:flex;justify-content:space-between;align-items:center">Histórico completo (termos oficiais)'+(p.hist_full&&p.hist_full.length?(' — '+p.hist_full.length+' andamentos'):'')+'<span style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn sm ghost" style="font-size:12px" id="btn-atu-hist" onclick="atualizarHistorico()" title="Busca no DJEN as publicações novas deste processo (com o inteiro teor) e os movimentos do jus.br">&#8635; atualizar</button><button class="btn sm ghost" style="font-size:12px" onclick="addHistManual()">+ histórico manual</button></span></p><ul class="timeline" id="det-hist"></ul><div id="det-hist-more" style="margin-top:8px"></div></div>';
+  html+='<div class="card"><p class="sectlabel" style="display:flex;justify-content:space-between;align-items:center">Histórico completo (termos oficiais)'+(p.hist_full&&p.hist_full.length?(' — '+p.hist_full.length+' andamentos'):'')+'<span style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><span id="det-visto-box" style="display:inline-flex">'+((typeof _vistoPorHTML==='function')?_vistoPorHTML(p):'')+'</span><button class="btn sm ghost" style="font-size:12px" id="btn-atu-hist" onclick="atualizarHistorico()" title="Busca no DJEN as publicações novas deste processo (com o inteiro teor) e os movimentos do jus.br">&#8635; atualizar</button><button class="btn sm ghost" style="font-size:12px" onclick="addHistManual()">+ histórico manual</button></span></p><ul class="timeline" id="det-hist"></ul><div id="det-hist-more" style="margin-top:8px"></div></div>';
   // histórico do chat da equipe sobre este processo (respostas vinculadas no dock)
   html+='<div class="card" id="chatproc-card" style="background:#fffdf0;border-color:#e6dfae"><p class="sectlabel" style="display:flex;justify-content:space-between;align-items:center">💬 Histórico do chat sobre este processo<span id="chatproc-acoes"></span></p><div id="chatproc-corpo"><div class="note">Carregando…</div></div></div>';
   if(p._id) setTimeout(function(){ renderChatDoProcesso(p._id); }, 0);
@@ -7349,6 +7351,66 @@ function renderHistorico(){
   else if(arr.length>7){more.innerHTML='<button class="btn sm ghost" onclick="verMenosHist()">ver menos</button>';}
   else{more.innerHTML="";}
 }
+/* ===== "Visto por" — quem abriu o processo por último =====
+   Pedido do dono (31/08/2026): "apenas atualizei (visto) pode constar. Poderia
+   constar antes do botão atualizar: visto por … hoje às 08:00, em tom azul.
+   Eliminaria a pergunta: você viu o processo de fulano?"
+   O carimbo é gravado na própria ficha (processos.visto_por/visto_em) — assim
+   aparece na hora, sem consultar o log — e o mesmo ato vira evento, para entrar
+   no relatório diário da produtividade.
+   Só o ÚLTIMO visto é guardado: é o que responde à pergunta. E é represado por
+   30 minutos por pessoa/processo, senão abrir a ficha três vezes seguidas
+   encheria o relatório do dia de linhas iguais. */
+var VISTO_INTERVALO_MS=30*60*1000;
+window.__vistoLocal=window.__vistoLocal||{};
+function registrarVistoProcesso(p){
+  try{
+    if(!p||!p._id) return;
+    var quem=(typeof _kanQuemSou==='function'&&_kanQuemSou())||'';
+    if(!quem) return;
+    var agora=Date.now();
+    var chave=p._id+'|'+quem;
+    if(window.__vistoLocal[chave] && (agora-window.__vistoLocal[chave])<VISTO_INTERVALO_MS) return;
+    /* já consta esta mesma pessoa há pouco (outra aba, F5): não regrava */
+    if(p.visto_em && String(p.visto_por||'')===quem && (agora-new Date(p.visto_em).getTime())<VISTO_INTERVALO_MS){ window.__vistoLocal[chave]=agora; return; }
+    window.__vistoLocal[chave]=agora;
+    var iso=new Date().toISOString();
+    p.visto_por=quem; p.visto_em=iso;
+    var sb=window.__sb;
+    if(sb) sb.from('processos').update({visto_por:quem,visto_em:iso}).eq('id',p._id).then(function(r){ if(r&&r.error) console.warn('visto:',r.error.message); },function(){});
+    try{ if(typeof logEvent==='function') logEvent('process_viewed','processo',(p.numero||null),{numero:(p.numero||null),cliente:(p.cliente||null)}); }catch(eL){}
+    try{ _pintaVistoPor(); }catch(eP){}
+  }catch(e){}
+}
+/* "hoje às 08:00", "ontem às 17:42", "28/08 às 09:15" — quem lê quer saber se
+   foi visto HOJE, não decorar data. */
+function _vistoQuando(iso){
+  try{
+    var d=new Date(iso); if(isNaN(d)) return '';
+    var hh=String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+    var dia=new Date(d); dia.setHours(0,0,0,0);
+    var hoje=new Date(); hoje.setHours(0,0,0,0);
+    var difD=Math.round((hoje-dia)/86400000);
+    if(difD===0) return 'hoje às '+hh;
+    if(difD===1) return 'ontem às '+hh;
+    return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+(dia.getFullYear()!==hoje.getFullYear()?('/'+d.getFullYear()):'')+' às '+hh;
+  }catch(e){ return ''; }
+}
+function _vistoPorHTML(p){
+  if(!p||!p.visto_por||!p.visto_em) return '';
+  var q=_vistoQuando(p.visto_em); if(!q) return '';
+  /* primeiro nome: o selo mora dentro do título da ficha, que é em caixa alta e
+     estreito — "visto por Maria Rita Caldas" empurraria os botões para baixo.
+     O nome inteiro fica no title. text-transform:none porque o .sectlabel põe
+     tudo em maiúscula, e NOME EM CAIXA ALTA aqui parece grito. */
+  var curto=(typeof _primeiroNome==='function')?_primeiroNome(p.visto_por):String(p.visto_por).split(' ')[0];
+  return '<span id="det-visto" title="'+esc(p.visto_por)+' foi a última pessoa a abrir ou atualizar este processo — '+esc(_kanQuandoBR(p.visto_em)||q)+'" style="text-transform:none;font-size:11.5px;font-weight:600;color:#185FA5;background:#eef4fb;border:1px solid #cfe0f2;border-radius:20px;padding:3px 10px;white-space:nowrap">👁 visto por '+esc(curto)+' '+esc(q)+'</span>';
+}
+/* repinta só o selo, sem re-renderizar a ficha inteira */
+function _pintaVistoPor(){
+  var el=document.getElementById('det-visto-box'); if(!el) return;
+  el.innerHTML=(typeof atual!=='undefined'&&atual)?_vistoPorHTML(atual):'';
+}
 /* editar/excluir histórico manual (só fonte manual — os oficiais são intocáveis) */
 async function editarHistManual(ev,hix){
   if(ev)ev.stopPropagation();
@@ -7475,6 +7537,7 @@ function _msgRotaFaltando(){ return 'Esta função ainda não está publicada no
 /* ===== Atualizar histórico agora (DJEN por número, só os novos) ===== */
 async function atualizarHistorico(){
   if(typeof atual==='undefined' || !atual || !atual.numero) return;
+  try{ if(typeof registrarVistoProcesso==='function') registrarVistoProcesso(atual); }catch(eVi){}
   var btn=document.getElementById('btn-atu-hist'); var t0=btn?btn.textContent:'';
   if(btn){ btn.disabled=true; btn.textContent='atualizando…'; }
   var djenNovos=0, mvNovos=0, notas='', jbMeta=null, fichaUpd=false;
@@ -8538,7 +8601,7 @@ function toggleConcluirTarefa(id){
     /* PERFORMANCE: a lista carrega SEM os andamentos (que somam dezenas de MB) —
        os históricos descem logo depois, em segundo plano (carregarHistoricosFundo),
        e a ficha busca o histórico do processo na hora se for aberta antes disso. */
-    var selExt='id,numero,cliente_nome,oponente,assunto,classe,orgao,orgao_atual,grau_atual,tramitacoes,foro,status,valor_causa,distribuido_em,ultima_movimentacao,criado_em,contatos_livres,contatos_partes,receita_doc,hon_faturado,hon_afaturar,hon_pct_contratual,hon_pct_sucumbencia,hon_pct_execucao,hon_pct_ma_fe,hon_pro_labore,valor_condenacao,hon_val_contratual,hon_val_sucumbencia,hon_val_execucao,hon_modo,hon_atualizado_em,hon_indice,suspenso,vinculados,fora_inove,inove,fonte,fase,observacoes,lote_id,valor_alvara_escritorio,alvara_valor_confirmado,alvara_data_deposito,alvara_nf_status,alvara_nf_numero,audiencia_link,audiencia_link_por,audiencia_link_em,aud_link_descartados,fora_contratacao';
+    var selExt='id,numero,cliente_nome,oponente,assunto,classe,orgao,orgao_atual,grau_atual,tramitacoes,foro,status,valor_causa,distribuido_em,ultima_movimentacao,criado_em,contatos_livres,contatos_partes,receita_doc,hon_faturado,hon_afaturar,hon_pct_contratual,hon_pct_sucumbencia,hon_pct_execucao,hon_pct_ma_fe,hon_pro_labore,valor_condenacao,hon_val_contratual,hon_val_sucumbencia,hon_val_execucao,hon_modo,hon_atualizado_em,hon_indice,suspenso,vinculados,fora_inove,inove,fonte,fase,observacoes,lote_id,valor_alvara_escritorio,alvara_valor_confirmado,alvara_data_deposito,alvara_nf_status,alvara_nf_numero,audiencia_link,audiencia_link_por,audiencia_link_em,aud_link_descartados,fora_contratacao,visto_por,visto_em';
     var selBas='id,numero,cliente_nome,oponente,assunto,classe,orgao,orgao_atual,grau_atual,tramitacoes,foro,status,valor_causa,distribuido_em,ultima_movimentacao,criado_em,contatos_livres,lote_id';
     var res=await sb.from('processos').select(selExt).order('ultima_movimentacao',{ascending:false,nullsFirst:false}).limit(3000);
     if(res.error){ res=await sb.from('processos').select(selBas).order('ultima_movimentacao',{ascending:false,nullsFirst:false}).limit(3000); }
@@ -8547,7 +8610,7 @@ function toggleConcluirTarefa(id){
     DADOS.processos=rows.map(function(p){
       var hf=[]; /* históricos chegam em segundo plano — ver carregarHistoricosFundo */
       var vinc=Array.isArray(p.vinculados)?p.vinculados:(p.vinculados?[].concat(p.vinculados):[]);
-      return {_id:p.id, cliente:p.cliente_nome||'', numero:p.numero, oponente:p.oponente||'', tipo:p.assunto||'', classe:p.classe||'', orgao:p.orgao||'', orgao_atual:p.orgao_atual||'', grau_atual:p.grau_atual||'', tramitacoes:(Array.isArray(p.tramitacoes)?p.tramitacoes:[]), distribuido_em:(p.distribuido_em||null), criado_em:(p.criado_em||null), foro:p.foro||'', status:p.status||'', data:fmtData(p.ultima_movimentacao), hist:'', causa:fmtCausa(p.valor_causa), hist_full:hf, ctl:p.contatos_livres||'', receita_doc:(p.receita_doc||''), ctlp:(p.contatos_partes&&typeof p.contatos_partes==='object'?p.contatos_partes:{}), hon_faturado:(p.hon_faturado!=null?p.hon_faturado:0), hon_afaturar:(p.hon_afaturar!=null?p.hon_afaturar:0), hon_pct_contratual:(p.hon_pct_contratual!=null?p.hon_pct_contratual:null), hon_pct_sucumbencia:(p.hon_pct_sucumbencia!=null?p.hon_pct_sucumbencia:null), hon_pct_execucao:(p.hon_pct_execucao!=null?p.hon_pct_execucao:null), hon_pct_ma_fe:(p.hon_pct_ma_fe!=null?p.hon_pct_ma_fe:null), hon_pro_labore:(p.hon_pro_labore!=null?p.hon_pro_labore:0), valor_condenacao:(p.valor_condenacao!=null?p.valor_condenacao:0), hon_val_contratual:(p.hon_val_contratual!=null?p.hon_val_contratual:null), hon_val_sucumbencia:(p.hon_val_sucumbencia!=null?p.hon_val_sucumbencia:null), hon_val_execucao:(p.hon_val_execucao!=null?p.hon_val_execucao:null), hon_modo:(p.hon_modo||null), hon_atualizado_em:(p.hon_atualizado_em||null), hon_indice:(p.hon_indice||null), suspenso:(p.suspenso===true), vinculados:vinc, fora_inove:!!p.fora_inove, fora_contratacao:(p.fora_contratacao===true), inove:(p.inove===true), fonte:p.fonte||'', ehCaso:(p.fonte==='caso'), fase_manual:(p.fase||''), observacoes:(p.observacoes||''), lote_id:(p.lote_id||null), valor_alvara_escritorio:(p.valor_alvara_escritorio!=null?p.valor_alvara_escritorio:null), alvara_valor_confirmado:(p.alvara_valor_confirmado!=null?p.alvara_valor_confirmado:null), alvara_data_deposito:(p.alvara_data_deposito||null), alvara_nf_status:(p.alvara_nf_status||null), alvara_nf_numero:(p.alvara_nf_numero||null), aud_link:(p.audiencia_link||''), aud_link_por:(p.audiencia_link_por||''), aud_link_em:(p.audiencia_link_em||null), aud_link_descartados:(Array.isArray(p.aud_link_descartados)?p.aud_link_descartados:[])};
+      return {_id:p.id, cliente:p.cliente_nome||'', numero:p.numero, oponente:p.oponente||'', tipo:p.assunto||'', classe:p.classe||'', orgao:p.orgao||'', orgao_atual:p.orgao_atual||'', grau_atual:p.grau_atual||'', tramitacoes:(Array.isArray(p.tramitacoes)?p.tramitacoes:[]), distribuido_em:(p.distribuido_em||null), criado_em:(p.criado_em||null), foro:p.foro||'', status:p.status||'', data:fmtData(p.ultima_movimentacao), hist:'', causa:fmtCausa(p.valor_causa), hist_full:hf, ctl:p.contatos_livres||'', receita_doc:(p.receita_doc||''), ctlp:(p.contatos_partes&&typeof p.contatos_partes==='object'?p.contatos_partes:{}), hon_faturado:(p.hon_faturado!=null?p.hon_faturado:0), hon_afaturar:(p.hon_afaturar!=null?p.hon_afaturar:0), hon_pct_contratual:(p.hon_pct_contratual!=null?p.hon_pct_contratual:null), hon_pct_sucumbencia:(p.hon_pct_sucumbencia!=null?p.hon_pct_sucumbencia:null), hon_pct_execucao:(p.hon_pct_execucao!=null?p.hon_pct_execucao:null), hon_pct_ma_fe:(p.hon_pct_ma_fe!=null?p.hon_pct_ma_fe:null), hon_pro_labore:(p.hon_pro_labore!=null?p.hon_pro_labore:0), valor_condenacao:(p.valor_condenacao!=null?p.valor_condenacao:0), hon_val_contratual:(p.hon_val_contratual!=null?p.hon_val_contratual:null), hon_val_sucumbencia:(p.hon_val_sucumbencia!=null?p.hon_val_sucumbencia:null), hon_val_execucao:(p.hon_val_execucao!=null?p.hon_val_execucao:null), hon_modo:(p.hon_modo||null), hon_atualizado_em:(p.hon_atualizado_em||null), hon_indice:(p.hon_indice||null), suspenso:(p.suspenso===true), vinculados:vinc, fora_inove:!!p.fora_inove, fora_contratacao:(p.fora_contratacao===true), inove:(p.inove===true), fonte:p.fonte||'', ehCaso:(p.fonte==='caso'), fase_manual:(p.fase||''), observacoes:(p.observacoes||''), lote_id:(p.lote_id||null), valor_alvara_escritorio:(p.valor_alvara_escritorio!=null?p.valor_alvara_escritorio:null), alvara_valor_confirmado:(p.alvara_valor_confirmado!=null?p.alvara_valor_confirmado:null), alvara_data_deposito:(p.alvara_data_deposito||null), alvara_nf_status:(p.alvara_nf_status||null), alvara_nf_numero:(p.alvara_nf_numero||null), aud_link:(p.audiencia_link||''), aud_link_por:(p.audiencia_link_por||''), aud_link_em:(p.audiencia_link_em||null), aud_link_descartados:(Array.isArray(p.aud_link_descartados)?p.aud_link_descartados:[]), visto_por:(p.visto_por||''), visto_em:(p.visto_em||null)};
     });
     if(DADOS.kpis){ DADOS.kpis.total=DADOS.processos.length; }
     /* mostra a tela JÁ — a lista não depende de históricos/triagem/agenda */
@@ -19397,6 +19460,7 @@ async function renderProdutividade(){
       +linha('Boletos enviados ao cliente',boletosEnv)
       +linha('Processos cadastrados',c.case_registered||0)
       +linha('Processos vinculados',c.case_linked||0)
+      +linha('Processos consultados',c.process_viewed||0)
       +linha('Fichas completadas (tel+e-mail)',c.contact_completed||0)
       +linha('Registros salvos',c.record_saved||0)
       +linha('Logins',c.login||0)
@@ -21332,6 +21396,7 @@ function _prdAcaoTexto(e){
   if(t==='document_generated') return 'documento gerado'+(md.tipo?(' ('+md.tipo+')'):'');
   if(t==='noticia_publicada') return 'notícia '+(md.acao==='editar'?'editada':'publicada')+' no portal';
   if(t==='config_changed') return 'configuração alterada'+(e.entity_id?(' — '+e.entity_id):'');
+  if(t==='process_viewed') return 'consultou o processo';
   if(t==='task_opened') return 'tarefa aberta'+(tit?(': '+tit):'');
   if(t==='login') return 'entrou no sistema';
   if(t==='logout') return 'saiu do sistema';
