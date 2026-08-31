@@ -2306,10 +2306,16 @@ function renderProd(){
 /* Selo do responsável no Meu dia. Quando a pessoa está de férias, mostra para
    QUEM a tarefa passou — sem isso o painel exibia o nome de quem está viajando
    e ninguém sabia que aquilo era seu. */
-function _mdRespHTML(resp){
+function _mdRespHTML(resp,ev){
   var nome=String(resp||'');
   var sub=(typeof _substitutoDeFerias==='function')?_substitutoDeFerias(nome):null;
   var base='font-size:11px;border-radius:12px;padding:2px 8px;font-weight:600;white-space:nowrap';
+  /* Devolvida: mostra o caminho («Djan Jader», o primeiro riscado). Vale também
+     quando a linha da agenda ficou com o nome antigo — o par vem da tarefa. */
+  var _t=(typeof _tarefaDoEvento==='function')?_tarefaDoEvento(ev):null;
+  var _d=(_t&&typeof _devolucaoDaTarefa==='function')?_devolucaoDaTarefa(_t):null;
+  if(_d) return '<span title="devolvida por '+esc(_d.de)+' para '+esc(_d.para)+'" style="'+base+';background:#fdf3e7;color:#8a5a00">'
+    +'<s style="opacity:.6">'+esc(_primeiroNome(_d.de))+'</s> '+esc(_primeiroNome(_d.para))+'</span>';
   if(!sub||!nome) return '<span style="'+base+';background:var(--accentbg);color:var(--navy)">'+esc(nome)+'</span>';
   return '<span title="'+esc(nome)+' está de férias — esta tarefa é de '+esc(sub)+'" style="'+base+';background:#fdf3e7;color:#8a5a00">'
     +esc(sub)+' <span style="font-weight:400;opacity:.8">← '+esc(nome.split(' ')[0])+' (férias)</span></span>';
@@ -2390,7 +2396,7 @@ function renderMeuDia(){
         +'<div style="flex:1;min-width:0"><div style="font-weight:600;font-size:13px">'+esc(a.tt)+'</div>'
         + prazo
         +'<div style="font-size:11.5px;color:var(--muted)">'+esc((a.p&&a.p.cliente)||"")+' '+numHtml+'</div></div>'
-        +_mdRespHTML(a.resp)
+        +_mdRespHTML(a.resp,a)
         +acoes+'</div>';
     }).join("");
   }
@@ -2554,7 +2560,7 @@ function renderAudSemana(){
         +'<span style="min-width:86px;font-weight:700;color:var(--navy);font-size:13px">'+dia+' '+(a.hora||"")+'</span>'
         +'<div style="flex:1"><div style="font-weight:600;font-size:13.5px">'+esc(a.tt)+selos+'</div>'
         +'<div style="font-size:12px;color:var(--muted)">'+esc((a.p&&a.p.cliente)||"")+' · <span class="proc" style="cursor:pointer" onclick="irParaProcesso(\''+String(num).replace(/'/g,"")+'\')">'+esc(fmtCNJ(num))+'</span></div></div>'
-        +'<span style="font-size:11px;background:var(--accentbg);color:var(--navy);border-radius:12px;padding:2px 8px;font-weight:600;white-space:nowrap">'+esc(a.resp||"")+'</span></div>';
+        +'<span style="font-size:11px;background:var(--accentbg);color:var(--navy);border-radius:12px;padding:2px 8px;font-weight:600;white-space:nowrap">'+((typeof _respTextoHTML==='function')?_respTextoHTML(a.resp||"",_tarefaDoEvento(a)):esc(a.resp||""))+'</span></div>';
     }).join("");
   }
   html+='<div style="margin-top:10px"><button class="btn sm ghost" onclick="go(\'agenda\')">abrir agenda &rarr;</button></div>';
@@ -4751,6 +4757,57 @@ function _comRespNaAgenda(a,alvo){
     (AGENDA||[]).filter(bate).forEach(function(e){ e.resp=alvo; });
   }catch(e){}
 }
+/* ===== O rastro da devolução na tela =====
+   Pedido do dono (31/08/2026): "na agenda consta meu nome, mas eu devolvi.
+   Poderia ser meu nome riscado e o de Jader aparecendo ao lado".
+   Trocar o responsável em silêncio apaga a história: quem olha a agenda não vê
+   que aquilo saiu das mãos de alguém. Agora fica «Djan Jader» — o primeiro
+   riscado. A informação sai do próprio comentário de devolução (autor → para),
+   sem coluna nova no banco. */
+function _devolucaoDaTarefa(a){
+  if(!a||typeof _comLista!=='function') return null;
+  var l=_comLista(a);
+  for(var i=l.length-1;i>=0;i--){
+    var c=l[i]; if(!c||c.devolucao!==true) continue;
+    var de=String(c.autor||'').trim(), para=String(c.para||'').trim();
+    if(!de||!para) return null;
+    var nde=_normNomeAcesso(_respDoSelect(de)), npara=_normNomeAcesso(_respDoSelect(para));
+    if(nde===npara) return null;
+    /* Só mostra o risco enquanto a tarefa AINDA está com quem a recebeu de
+       volta. Reatribuída depois a um terceiro, o caminho já é outro e o risco
+       contaria uma história que deixou de ser verdade. */
+    var atual=_normNomeAcesso(_respDoSelect(String(a.resp||'').trim()));
+    if(atual && atual!==npara) return null;
+    return {de:_respDoSelect(de), para:_respDoSelect(para), em:(c.criado_em||'')};
+  }
+  return null;
+}
+/* Primeiro nome — "Maria Rita" e "Maria Eduarda" só se distinguem no segundo */
+function _primeiroNome(x){ var t=String(x||'').trim().split(/\s+/); return (/^maria$/i.test(t[0])&&t[1])?t[1]:(t[0]||''); }
+/* Texto simples: «Djan Jader», o primeiro riscado. Para as listas em que o
+   responsável aparece sem cor (ficha do processo, histórico, dia). */
+function _respTextoHTML(nome,a){
+  var dev=_devolucaoDaTarefa(a);
+  if(!dev) return esc(String(nome||''));
+  return '<span title="devolvida por '+esc(dev.de)+' para '+esc(dev.para)+(dev.em?(' em '+_kanQuandoBR(dev.em)):'')+'">'
+    +'<s style="opacity:.6">'+esc(dev.de)+'</s> <b>'+esc(dev.para)+'</b></span>';
+}
+/* O evento da agenda não conhece a tarefa: casa por título + processo (ou data),
+   o mesmo par que o resto do sistema usa para achar o gêmeo. */
+function _tarefaDoEvento(e){
+  try{
+    if(!e||!e.tt) return null;
+    if(!KAN) initKanban();
+    var tt=String(e.tt).trim().toLowerCase();
+    var dig=String((e.p&&e.p.numero)||'').replace(/\D/g,'');
+    return (KAN||[]).find(function(k){
+      if(String(k.titulo||'').trim().toLowerCase()!==tt) return false;
+      var dk=String(k.numero||'').replace(/\D/g,'');
+      if(dig&&dk) return dig===dk;
+      return !(k.data&&e.data&&k.data!==e.data);
+    })||null;
+  }catch(er){ return null; }
+}
 function _comEnviar(id,devolver,ctx){
   if(!KAN)initKanban();
   var a=(KAN||[]).find(function(x){return x.id===id;}); if(!a) return;
@@ -4821,7 +4878,7 @@ function renderAtivProc(){
     var prevBR=a.data?String(a.data).slice(0,10).split('-').reverse().join('/'):'';
     var fatalBR=a.prazo?String(a.prazo).slice(0,10).split('-').reverse().join('/'):'';
     var meta=[];
-    if(a.resp) meta.push('executa: '+esc(a.resp));
+    if(a.resp) meta.push('executa: '+_respTextoHTML(a.resp,a));
     if(prevBR) meta.push('prevista: '+prevBR);
     if(fatalBR) meta.push('<span style="color:#b5342b;font-weight:700">prazo fatal: '+fatalBR+'</span>');
     if(a.hora && a.hora!=='Dia todo') meta.push(esc(a.hora));
@@ -7140,7 +7197,7 @@ function renderHistorico(){
         +(fatalBR?('<span style="color:#7b1e3a;font-weight:700">prazo fatal: '+esc(fatalBR)+'</span>'):'')
         +((fatalBR&&prevBR)?' · ':'')
         +(prevBR?('<span style="color:var(--muted)">prevista: '+esc(prevBR)+'</span>'):'')
-        +(a.resp?(' · <span style="color:var(--muted)">'+esc(a.resp)+'</span>'):'')
+        +(a.resp?(' · <span style="color:var(--muted)">'+_respTextoHTML(a.resp,a)+'</span>'):'')
       +'</div>'
       +(a.prazo?_prazoAvisoHTML(String(a.prazo).slice(0,10).match(/^\d{4}-/)?String(a.prazo).slice(0,10):(String(a.prazo).split('/').reverse().join('-'))):'')
       +'<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap"><button class="btn sm ghost" onclick="abrirTarefaKanban('+a.id+')">Abrir tarefa</button><button class="btn sm ghost" style="color:#127a53;border-color:#bfe3d1" onclick="concluirTarefaKanban('+a.id+');renderHistorico();if(typeof renderAtivProc===\'function\')renderAtivProc();">✓ Concluir</button><button class="btn sm ghost" style="color:#b5342b;border-color:#e8c4bf" onclick="cancelarTarefaProc('+a.id+')" title="Encerra sem ter sido feita — fica guardada com o motivo, junto das arquivadas">✕ Cancelar</button></div>';
@@ -8023,11 +8080,14 @@ function _respTinta(nome){
 }
 /* Primeiro nome do responsável, na cor dele, ao lado do número do processo —
    para quem enxerga mal a diferença entre dois tons da mesma família. */
-function _respSeloHTML(nome){
+function _respSeloHTML(nome,a){
   var n=String(nome||'').trim(); if(!n) return '';
-  var toks=n.split(/\s+/);
-  /* "Maria Rita" e "Maria Eduarda" só se distinguem no 2º nome */
-  var curto=(/^maria$/i.test(toks[0])&&toks[1])?toks[1]:toks[0];
+  var curto=_primeiroNome(n);
+  /* devolvida: o nome de quem devolveu vai riscado ANTES do de quem assumiu */
+  var dev=(typeof _devolucaoDaTarefa==='function')?_devolucaoDaTarefa(a):null;
+  if(dev) return '<span class="l1-resp" style="font-weight:700" title="devolvida por '+esc(dev.de)+' para '+esc(dev.para)+'">'
+    +'<s style="color:'+_respCor(dev.de)+';opacity:.55">'+esc(_primeiroNome(dev.de))+'</s> '
+    +'<span style="color:'+_respCor(dev.para)+'">'+esc(_primeiroNome(dev.para))+'</span></span>';
   return '<span class="l1-resp" style="font-weight:700;color:'+_respCor(n)+';opacity:.95">'+esc(curto)+'</span>';
 }
 /* Chip de três linhas: processo · partes · o que fazer. Uma linha só obrigava a
@@ -8051,7 +8111,7 @@ function _tarChipHTML(a){
   return '<div class="cev tar3 '+(a.prazo?'vm':'nt')+'" style="'+estilo+'" title="'+esc(title)+'">'
     +'<span onclick="event.stopPropagation();toggleConcluirTarefa('+a.id+')" title="'+(concl?'Reabrir':'Concluir')+'" style="cursor:pointer;flex-shrink:0;margin-top:1px;width:13px;height:13px;border:1.5px solid currentColor;border-radius:3px;display:inline-flex;align-items:center;justify-content:center;font-size:9px;line-height:1">'+(concl?'✓':'')+'</span>'
     +'<span class="tar3-txt" style="'+risco+'" onclick="event.stopPropagation();abrirTarefaKanban('+a.id+')">'
-      +'<span class="l1"><span class="l1-num">'+esc(numFmt||'sem processo')+'</span>'+_respSeloHTML(a.resp)+'</span>'
+      +'<span class="l1"><span class="l1-num">'+esc(numFmt||'sem processo')+'</span>'+_respSeloHTML(a.resp,a)+'</span>'
       +'<span class="l2">'+esc(partes||'—')+'</span>'
       +'<span class="l3">'+esc(a.titulo||'—')+((typeof _comLista==='function'&&_comLista(a).length)?(' <span title="tem comentário" style="opacity:.85">💬</span>'):'')+'</span>'
     +'</span>'
@@ -8216,7 +8276,7 @@ function renderTarDia(){
       +'<input type="checkbox" '+(concl?'checked':'')+' onclick="event.stopPropagation();toggleConcluirTarefa('+a.id+');renderTarDia();" style="width:18px;height:18px;margin-top:2px;cursor:pointer" title="Concluir/reabrir">'
       +'<div style="flex:1;min-width:0;cursor:pointer" onclick="fecharTarDia();abrirTarefaKanban('+a.id+')">'
         +'<div style="font-weight:600;color:var(--navy);'+(concl?'text-decoration:line-through':'')+'">'+esc(a.titulo||'—')+'</div>'
-        +'<div class="note" style="margin:2px 0 0">'+esc(a.cliente||'—')+(a.numero&&a.numero!=='—'?(' · '+esc(a.numero)):'')+' · <span style="color:'+cor+';font-weight:600">'+(a.prazo?'prazo fatal':'previsto')+'</span>'+(a.resp?(' · executa: '+esc(a.resp)):'')+((a.hora&&a.hora!=='Dia todo')?(' · '+esc(a.hora)):'')+'</div>'
+        +'<div class="note" style="margin:2px 0 0">'+esc(a.cliente||'—')+(a.numero&&a.numero!=='—'?(' · '+esc(a.numero)):'')+' · <span style="color:'+cor+';font-weight:600">'+(a.prazo?'prazo fatal':'previsto')+'</span>'+(a.resp?(' · executa: '+_respTextoHTML(a.resp,a)):'')+((a.hora&&a.hora!=='Dia todo')?(' · '+esc(a.hora)):'')+'</div>'
         +((concl&&a.concluidoPor)?('<div class="note" style="margin:2px 0 0;font-size:11px;color:#8a8fa0">concluída por <b>'+esc(a.concluidoPor)+'</b>'+(a.concluidoEm?(' em '+_kanQuandoBR(a.concluidoEm)):'')+'</div>'):'')
       +'</div>'
       +'<button class="btn sm ghost" style="flex-shrink:0" onclick="fecharTarDia();abrirTarefaKanban('+a.id+')">Abrir</button>'
