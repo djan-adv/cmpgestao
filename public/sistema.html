@@ -8506,6 +8506,42 @@ function renderTarefasView(){
 }
 /* Visão Semana: a semana em curso, segunda a sexta (ou os 7 dias, se a caixa
    estiver marcada). Cada dia mostra todas as atividades, sem corte. */
+/* ===== O que venceu e ninguém fez volta para HOJE =====
+   Pedido do dono (31/08/2026): "tudo que venceu na semana anterior, traga para o
+   dia atual, marcando atrasado. Audiências e reuniões não precisam, porque se
+   encerram no respectivo dia".
+   O problema real: na segunda-feira a agenda mostra a semana nova, e o prazo de
+   quinta passada simplesmente sai da tela. Ele não foi feito, mas some — e o que
+   some não é cobrado. Agora ele aparece na célula de hoje, com a data original
+   escrita e a tarja ATRASADO.
+   Audiência e reunião ficam de fora de propósito: acontecem no dia e acabam ali;
+   arrastá-las para hoje seria mentira. */
+var ATRASO_DIAS=7;   /* a "semana anterior" — o que é mais velho já vive nas listas */
+function _atrasadasParaHoje(isosVisiveis){
+  try{
+    var hoje=new Date(todayISO+'T00:00:00');
+    var limite=new Date(hoje); limite.setDate(limite.getDate()-ATRASO_DIAS);
+    var lim=limite.getFullYear()+'-'+String(limite.getMonth()+1).padStart(2,'0')+'-'+String(limite.getDate()).padStart(2,'0');
+    return tarefasFiltradas().filter(function(a){
+      if(!a||a.canc===true||_tarConcluida(a)) return false;
+      var t=String(a.tipoForm||a.tipo||'');
+      if(/audi[êe]ncia|reuni[ãa]o/i.test(t)) return false;      /* acabam no dia */
+      var iso=_tarISO(a); if(!iso) return false;
+      if(iso>=todayISO || iso<lim) return false;
+      if(isosVisiveis && isosVisiveis[iso]) return false;       /* já está à vista na grade */
+      return true;
+    }).sort(function(x,y){ var a1=_tarISO(x), b1=_tarISO(y); return a1<b1?-1:(a1>b1?1:0); });
+  }catch(e){ return []; }
+}
+/* o chip de sempre, com a tarja e a data em que era para ter sido feito */
+function _chipAtrasadoHTML(a){
+  var iso=String(_tarISO(a)||'').slice(0,10);
+  var br=iso.split('-').reverse().join('/');
+  return '<div style="position:relative;border-left:3px solid #b5342b;padding-left:4px;margin-bottom:2px">'
+    +'<div style="font-size:9px;font-weight:800;color:#b5342b;letter-spacing:.04em;line-height:1.2">ATRASADO · era '+esc(br)+'</div>'
+    +_tarChipHTML(a)
+  +'</div>';
+}
 function renderTarefasSemana(){
   var cal=document.getElementById('tar-cal'); if(!cal) return;
   var seg=_segundaDe(tarSemRef);
@@ -8514,6 +8550,7 @@ function renderTarefasSemana(){
   var isoDe=function(dt){ return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0'); };
   /* deslocamento: a grade começa na segunda, então o índice 0 (domingo) fica no fim */
   var datas=dows.map(function(dw){ var x=new Date(seg); x.setDate(seg.getDate()+((dw+6)%7)); return x; });
+  var _isosDaSemana={}; datas.forEach(function(x){ _isosDaSemana[isoDe(x)]=1; });
   var ini=datas[0], fim=datas[datas.length-1];
   var fmt=function(d){ return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0'); };
   document.getElementById('tar-label').textContent='Semana de '+fmt(ini)+' a '+fmt(fim)+'/'+fim.getFullYear();
@@ -8527,7 +8564,20 @@ function renderTarefasSemana(){
     var dtasks=lista.filter(function(a){ return _tarISO(a)===iso; });
     var nPz=dtasks.filter(function(a){ return a.prazo&&!_tarConcluida(a); }).length;
     cell.innerHTML='<div class="dn">'+dt.getDate()+(nPz?(' <span style="color:#b5342b;font-weight:800" title="prazo fatal">●</span>'):'')+'</div>';
-    if(!dtasks.length){
+    /* atrasadas da semana passada entram na célula de HOJE, antes das de hoje */
+    var atras=(iso===todayISO)?_atrasadasParaHoje(_isosDaSemana):[];
+    if(atras.length){
+      var wrapA=document.createElement('div'); wrapA.innerHTML=atras.map(_chipAtrasadoHTML).join('');
+      Array.prototype.slice.call(wrapA.children).forEach(function(div,ix){
+        var chip=div.querySelector('.cev');
+        if(chip){
+          chip.setAttribute('draggable', podeMoverAgenda()?'true':'false');
+          chip.addEventListener('dragstart',(function(idT){ return function(ev){ try{ ev.dataTransfer.setData('text/plain','tar:'+idT); ev.dataTransfer.effectAllowed='move'; }catch(eD){} }; })(atras[ix].id));
+        }
+        cell.appendChild(div);
+      });
+    }
+    if(!dtasks.length && !atras.length){
       var vz=document.createElement('div'); vz.className='note'; vz.style.cssText='font-size:11px;color:#b9c0ca;margin-top:4px'; vz.textContent='livre';
       cell.appendChild(vz);
     } else dtasks.forEach(function(a){
@@ -8718,16 +8768,15 @@ function _empilharAgendas(){
     var noPeriodo={}; dias.forEach(function(d){ noPeriodo[d.iso]=1; });
     var html='';
 
-    /* 1) Reuniões e audiências — vêm da agenda de eventos, não do Kanban */
+    /* 1) Reuniões e audiências — reaproveita eventosDoDia, a MESMA fonte da aba.
+       Varrer AGENDA por conta própria trouxe tarefa para dentro das audiências
+       (relatado em 31/08/2026: "segunda e terça que estão aí são tarefas"): a
+       tabela de eventos guarda também o gêmeo de agenda das tarefas, e só o
+       filtro da aba — tipo 'az' — separa uma coisa da outra. */
     var porDiaEv={};
-    (AGENDA||[]).forEach(function(e){
-      var iso=String(e&&e.data||'').slice(0,10);
-      if(!iso||!noPeriodo[iso]) return;
-      if(agResp!=='Todos'){
-        var alvo=String(agResp).split(' ')[0].toLowerCase();
-        if(String(e.resp||'').split(' ')[0].toLowerCase()!==alvo) return;
-      }
-      (porDiaEv[iso]=porDiaEv[iso]||[]).push(_chipEventoHTML(e));
+    dias.forEach(function(d){
+      var evs=[]; try{ evs=eventosDoDia(d.iso)||[]; }catch(e){ evs=[]; }
+      if(evs.length) porDiaEv[d.iso]=evs.map(_chipEventoHTML);
     });
     html+=_blocoAgendaHTML('📅 Reuniões e audiências', dias, porDiaEv, 'Nenhuma reunião ou audiência marcada neste período.');
 
@@ -8841,6 +8890,18 @@ function renderTarefasMes(){
         cell.appendChild(sel);
       }
     } else {
+      /* o que venceu na semana passada e não está à vista na grade volta para HOJE */
+      if(iso===todayISO){
+        _atrasadasParaHoje(naGrade).forEach(function(a){
+          var wA=document.createElement('div'); wA.innerHTML=_chipAtrasadoHTML(a);
+          var divA=wA.firstChild, chipA=divA&&divA.querySelector('.cev');
+          if(chipA){
+            chipA.setAttribute('draggable', podeMoverAgenda()?'true':'false');
+            chipA.addEventListener('dragstart',(function(idT){ return function(ev){ try{ ev.dataTransfer.setData('text/plain','tar:'+idT); ev.dataTransfer.effectAllowed='move'; }catch(eD){} }; })(a.id));
+          }
+          if(divA) cell.appendChild(divA);
+        });
+      }
       dtasks.forEach(function(a){
         var w=document.createElement('div'); w.innerHTML=_tarChipHTML(a);
         var chip=w.firstChild;
