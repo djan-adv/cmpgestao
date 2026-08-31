@@ -102,6 +102,18 @@ export async function GET(request) {
   const dias = Math.min(parseInt(searchParams.get('dias') || '2', 10) || 2, 30)
   const porProc = Math.min(parseInt(searchParams.get('porproc') || '3', 10) || 3, 10)
   const maxTotal = Math.min(parseInt(searchParams.get('max') || '120', 10) || 120, 400)
+  /* VARREDURA AUTOMÁTICA ≠ PEDIDO DE ALGUÉM.
+     A rotina diária baixava os 3 documentos mais recentes de todo processo que
+     se mexeu, fossem eles quais fossem — e assim caíam na pasta do processo
+     coisas que ninguém pediu: "Imagem obras mal acabadas.pdf", "ENTREGA
+     2021.pdf", "DECLARAÇÃO DE QUITAÇÃO" (reclamado em 31/08/2026). Agora, na
+     varredura sem dono, só entra PEÇA OFICIAL — sentença, acórdão, decisão,
+     despacho, acordo, homologação, ata/termo de audiência, alvará — que é o que
+     alimenta o app do cliente e a contagem de prazo. Anexo de parte só vem
+     quando alguém clica em "⬇ puxar".
+     Quando a chamada traz ?numero= (alguém pediu aquele processo — a ficha, a
+     Inove) ou ?tudo=1, o comportamento antigo continua valendo. */
+  const soPecas = !soNumero && searchParams.get('tudo') == null
   const sb = jusbrAdmin()
 
   const tk = await getFreshToken(sb)
@@ -125,7 +137,7 @@ export async function GET(request) {
     alvos = (data || []).filter(p => soDig(p.numero_digitos || p.numero).length === 20 && !/encerrad|arquivad|baixad/i.test(p.status || ''))
   }
 
-  const rel = { ok: true, dia: new Date().toISOString().slice(0, 10), processos: alvos.length, baixados: 0, pulados: 0, detalhe: [] }
+  const rel = { ok: true, dia: new Date().toISOString().slice(0, 10), modo: soPecas ? 'só peças oficiais' : 'todos os documentos novos', processos: alvos.length, baixados: 0, pulados: 0, detalhe: [] }
   let total = 0
 
   for (const p of alvos) {
@@ -138,11 +150,16 @@ export async function GET(request) {
     const { data: jaTem } = await sb.from('jusbr_arquivos').select('doc_uuid').eq('escritorio_id', ESCRITORIO_CMP).eq('processo_numero', numero)
     const tem = new Set((jaTem || []).map(r => r.doc_uuid))
     const naoTem = ordenados.filter(d => d.uuid && !tem.has(d.uuid))
-    const novos = naoTem.slice(0, porProc)
-    // peça oficial nova fora do top-N entra mesmo assim (até +5 por processo)
-    for (const d of naoTem.slice(porProc)) {
-      if (novos.length >= porProc + 5) break
-      if (RE_PECA_OFICIAL.test(d.nome || '')) novos.push(d)
+    let novos
+    if (soPecas) {
+      novos = naoTem.filter(d => RE_PECA_OFICIAL.test(d.nome || '')).slice(0, porProc + 5)
+    } else {
+      novos = naoTem.slice(0, porProc)
+      // peça oficial nova fora do top-N entra mesmo assim (até +5 por processo)
+      for (const d of naoTem.slice(porProc)) {
+        if (novos.length >= porProc + 5) break
+        if (RE_PECA_OFICIAL.test(d.nome || '')) novos.push(d)
+      }
     }
     let baix = 0
     for (const d of novos) {
@@ -188,8 +205,14 @@ export async function GET(request) {
       const numero = soDig(p.numero_digitos || p.numero)
       const lst = await listarDocs(token, numero)
       if (lst.erro) { if (lst.erro === 'expirado') break; continue }
-      // os primeiros documentos (inicial, procuração, docs pessoais) = ordem crescente de data
-      const primeiros = lst.docs.slice().sort((a, b) => String(a.data || '').localeCompare(String(b.data || ''))).slice(0, porProc)
+      /* os primeiros documentos = ordem crescente de data. Na varredura sem dono
+         ficamos na inicial/procuração e nas peças oficiais: "docs pessoais" é
+         onde entram foto, comprovante e declaração de terceiro — material que
+         ninguém pediu e que só enche a pasta. */
+      const primeiros = lst.docs.slice()
+        .sort((a, b) => String(a.data || '').localeCompare(String(b.data || '')))
+        .filter(d => !soPecas || ehDocLeve(d.nome) || RE_PECA_OFICIAL.test(d.nome || ''))
+        .slice(0, porProc)
       let baix = 0
       for (const d of primeiros) {
         if (total >= maxTotal) break

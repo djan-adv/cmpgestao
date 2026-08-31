@@ -8026,7 +8026,7 @@ function jusbrItemHtml(doc){
     ? '<a class="btn sm ghost" style="font-size:11px" href="#" onclick="jusbrAbrir(event,\''+doc.baixado_id+'\',\''+esc(doc.tipo||'')+'\',\''+esc(nomeJs)+'\',this)">📄 ver</a> <a class="btn sm ghost" style="font-size:11px;color:#b5342b" href="#" onclick="jusbrExcluir(event,\''+doc.baixado_id+'\',this)">🗑</a>'
     : '<button class="btn sm" style="font-size:11px" onclick="jusbrBaixar(this,\''+esc(doc.uuid||'')+'\',\''+esc(doc.href||'')+'\',\''+esc(nomeJs)+'\',\''+esc(doc.hrefTexto||'')+'\')">⬇ puxar</button>';
   var chk='<input type="checkbox" class="jbr-sel" value="'+esc(doc.uuid||'')+'" title="Marcar para baixar" style="cursor:pointer">';
-  return '<div class="jusbr-item" data-uuid="'+esc(doc.uuid||'')+'" style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #eee"><label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;flex:1">'+chk+'<span><span style="color:#888">'+dt+'</span> '+esc(doc.nome||'documento')+'</span></label><div class="jusbr-acao" style="white-space:nowrap">'+acao+'</div></div>';
+  return '<div class="jusbr-item" data-uuid="'+esc(doc.uuid||'')+'" data-href="'+esc(doc.href||'')+'" data-hreftexto="'+esc(doc.hrefTexto||'')+'" style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #eee"><label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;flex:1">'+chk+'<span><span style="color:#888">'+dt+'</span> '+esc(doc.nome||'documento')+'</span></label><div class="jusbr-acao" style="white-space:nowrap">'+acao+'</div></div>';
 }
 /* ordena a lista de peças por data — crescente (autos na ordem) ou decrescente */
 function _jusbrPintaLista(){
@@ -8187,8 +8187,13 @@ async function jusbrBaixar(btn,uuid,href,nome,hrefTexto){
       alert('jus.br: '+((d&&d.erro)||'falha ao puxar')); btn.disabled=false; btn.textContent=t0; return;
     }
     var acao=btn.closest('.jusbr-acao');
+    /* o "⬇ puxar" nasceu de um clique em "ver"? então abre — antes o arquivo era
+       trazido e ficava parado, e o advogado tinha de clicar em "ver" de novo
+       (relatado em 31/08/2026: "o despacho nem abriu") */
+    var abrirDepois=(btn.getAttribute('data-abrir')==='1');
     var _nmJs=esc(String(nome||'documento').replace(/['"\\]/g,' '));
     if(acao) acao.innerHTML='<a class="btn sm ghost" style="font-size:11px" href="#" onclick="jusbrAbrir(event,\''+d.id+'\',\''+esc(d.tipo||'')+'\',\''+_nmJs+'\',this)">📄 ver</a> <a class="btn sm ghost" style="font-size:11px;color:#b5342b" href="#" onclick="jusbrExcluir(event,\''+d.id+'\',this)">🗑</a>';
+    if(abrirDepois&&d&&d.id) jusbrAbrir(null,d.id,d.tipo||'',nome,(acao?acao.querySelector('a'):null));
   }catch(e){ alert('Falha: '+(e&&e.message||e)); btn.disabled=false; btn.textContent=t0; }
 }
 /* Abrir uma peça já puxada.
@@ -8209,9 +8214,14 @@ async function jusbrAbrir(ev,id,tipo,nome,el){
   if(r.status===404){
     var item=el?el.closest('.jusbr-item'):null, acao=el?el.closest('.jusbr-acao'):null;
     var uuid=item?(item.getAttribute('data-uuid')||''):'';
+    /* os endereços do documento vêm do próprio item: sem eles o "puxar de novo"
+       saía pior que o primeiro puxão — e é justamente o .html (despacho,
+       expediente) que depende do hrefTexto para vir inteiro */
+    var _hf=item?(item.getAttribute('data-href')||''):'';
+    var _ht=item?(item.getAttribute('data-hreftexto')||''):'';
     if(acao){
-      acao.innerHTML='<button class="btn sm" style="font-size:11px" onclick="jusbrBaixar(this,\''+esc(uuid)+'\',\'\',\''+esc(String(nome||'documento').replace(/[\'"\\]/g,' '))+'\')">⬇ puxar</button>';
-      if(uuid && confirm('Este arquivo saiu do cache do sistema (o cache tem validade).\n\nO documento continua no jus.br. Puxar de novo agora?')){
+      acao.innerHTML='<button class="btn sm" style="font-size:11px" data-abrir="1" onclick="jusbrBaixar(this,\''+esc(uuid)+'\',\''+esc(_hf)+'\',\''+esc(String(nome||'documento').replace(/[\'"\\]/g,' '))+'\',\''+esc(_ht)+'\')">⬇ puxar</button>';
+      if(uuid && confirm('Este arquivo saiu do cache do sistema (o cache tem validade).\n\nO documento continua no jus.br. Puxar de novo agora? Ele abre em seguida.')){
         var b=acao.querySelector('button'); if(b) b.click();
       }
     } else {
