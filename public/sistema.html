@@ -22219,6 +22219,7 @@ function _prdAcaoTexto(e){
   if(t==='integra_requested') return 'pediu a íntegra dos autos ao Estagiário Virtual';
   if(t==='process_updated') return 'processo atualizado (busca no DJEN e no jus.br)'+((md.novos!=null)?(' — '+md.novos+' andamento'+(md.novos===1?'':'s')+' novo'+(md.novos===1?'':'s')):'');
   if(t==='chat_message_deleted') return 'apagou uma mensagem da conversa com o cliente';
+  if(t==='chat_archived') return 'arquivou '+((md.quantas>1)?(md.quantas+' mensagens'):'uma mensagem')+' da conversa com o cliente';
   if(t==='task_opened') return 'tarefa aberta'+(tit?(': '+tit):'');
   if(t==='login') return 'entrou no sistema';
   if(t==='logout') return 'saiu do sistema';
@@ -22453,20 +22454,22 @@ function exportarProdutividadeCSV(){
       + ' <button class="btn sm" style="font-size:11px;background:#185FA5;color:#fff" onclick="appCliFalarComCliente(\''+procId+'\')">&#128488; abrir janela</button>';
     }
     var s=S(); if(!s){ corpo.innerHTML='<div class="note">Sem conexão com o banco.</div>'; return; }
-    s.from('portal_chat').select('id,autor_tipo,autor_nome,texto,criado_em,anexo_id,anexo_nome,anexo_tipo,anexo_tamanho,apagada_em,apagada_por').eq('processo_id',procId)
-      .order('id',{ascending:false}).limit(40).then(function(r){
+    var cols='id,autor_tipo,autor_nome,texto,criado_em,anexo_id,anexo_nome,anexo_tipo,anexo_tamanho,apagada_em,apagada_por,arquivada_em,arquivada_por';
+    var qm=s.from('portal_chat').select(cols).eq('processo_id',procId);
+    if(!VER_ARQ) qm=qm.is('arquivada_em',null);
+    /* o total de arquivadas vai à parte porque a consulta de cima já as tirou —
+       sem ele, o botão "ver arquivadas" não teria como aparecer */
+    Promise.all([
+      qm.order('id',{ascending:false}).limit(40),
+      s.from('portal_chat').select('id',{count:'exact',head:true}).eq('processo_id',procId).not('arquivada_em','is',null)
+    ]).then(function(res){
         if(!(FICHA_PROC&&FICHA_PROC._id===procId)) return;
+        var r=res[0]||{}, nArq=(res[1]&&res[1].count)||0;
         var ms=(r.data||[]).slice().reverse();
-        var h= ms.length? ms.map(function(m){
-            var cli=(m.autor_tipo==='cliente');
-            var apg=!!m.apagada_em;
-            var anx = (m.anexo_id&&!apg) ? (' <a href="/api/anexo?id='+m.anexo_id+'&jwt='+encodeURIComponent(window.__jwtAnexo||'')+'" target="_blank" rel="noopener" style="color:#185FA5;font-weight:600">'+icoArq(m.anexo_tipo,m.anexo_nome)+' '+escx(m.anexo_nome||'arquivo')+'</a>') : '';
-            var corpo = apg
-              ? ('<s style="color:#8a92a0">'+escx(m.texto||(m.anexo_nome?('anexo: '+m.anexo_nome):''))+'</s>'+_seloApagada(m))
-              : (escx(m.texto||'')+anx);
-            return '<div style="margin:4px 0;font-size:13px"><span class="note" style="font-size:11px">'+ddmmhh(m.criado_em)+'</span> <b style="color:'+(cli?'#185FA5':'#0F6E56')+'">'+(cli?'&#128242; ':'')+escx(m.autor_nome||(cli?'Cliente':'Escritório'))+':</b> '+corpo+_btnApagar(m,procId)+'</div>';
-          }).join('')
-          : '<div class="note">Nenhuma mensagem ainda. '+(acessos.length?'O cliente já pode escrever pelo app.':'Dê acesso ao app para o cliente poder conversar por aqui.')+'</div>';
+        var h= ms.length? ms.map(function(m){ return _msgFichaHTML(m,procId); }).join('')
+          : '<div class="note">'+(nArq?('Nenhuma mensagem à vista — '+nArq+' arquivada'+(nArq===1?'':'s')+'.')
+              :('Nenhuma mensagem ainda. '+(acessos.length?'O cliente já pode escrever pelo app.':'Dê acesso ao app para o cliente poder conversar por aqui.')))+'</div>';
+        h+=_barraArquivo(procId, ms.length, nArq);
         /* anexo direto da ficha: mandar documento ao cliente exigia abrir a
            janela do chat. O leitor e o estado são os MESMOS da janela, então o
            arquivo escolhido aqui aparece lá e vice-versa. */
@@ -22495,6 +22498,81 @@ function exportarProdutividadeCSV(){
     return ' <span class="note" style="font-size:10.5px;color:#b5342b">&#128683; apagada'+
       (m.apagada_por?(' por '+escx(m.apagada_por)):'')+(q?(' · '+q):'')+'</span>';
   }
+  /* ------------------------- arquivar (só a NOSSA tela) -------------------------
+     Apagar é sobre o que o cliente vê. Arquivar é sobre o que NÓS vemos: tira a
+     mensagem da conversa aqui para ela voltar a ser legível — vale tanto para as
+     apagadas (que ficam riscadas ocupando meia tela) quanto para as ativas, como
+     um relatório imenso já lido. Não encosta no aparelho do cliente e desfaz. */
+  var VER_ARQ=false;
+  function _seloArquivada(m){
+    var q=m.arquivada_em?ddmmhh(m.arquivada_em):'';
+    return ' <span class="note" style="font-size:10.5px;color:#5f6b7a">&#128451; arquivada'+
+      (m.arquivada_por?(' por '+escx(m.arquivada_por)):'')+(q?(' · '+q):'')+'</span>';
+  }
+  function _btnArquivar(m,procId){
+    if(m.arquivada_em)
+      return ' <button title="Trazer de volta para a conversa" onclick="appCliArquivarMsg('+m.id+',\''+procId+'\',1)" '+
+        'style="border:none;background:none;cursor:pointer;color:#0F6E56;font-size:11px;opacity:.75;padding:0 3px">&#8617; desarquivar</button>';
+    return ' <button title="Tirar esta mensagem da nossa conversa — o cliente não é afetado" onclick="appCliArquivarMsg('+m.id+',\''+procId+'\',0)" '+
+      'style="border:none;background:none;cursor:pointer;color:#5f6b7a;font-size:11px;opacity:.65;padding:0 3px">&#128451; arquivar</button>';
+  }
+  /* uma linha da conversa na ficha — apagada, arquivada ou normal */
+  function _msgFichaHTML(m,procId){
+    var cli=(m.autor_tipo==='cliente'), apg=!!m.apagada_em, arq=!!m.arquivada_em;
+    var anx = (m.anexo_id&&!apg) ? (' <a href="/api/anexo?id='+m.anexo_id+'&jwt='+encodeURIComponent(window.__jwtAnexo||'')+'" target="_blank" rel="noopener" style="color:#185FA5;font-weight:600">'+icoArq(m.anexo_tipo,m.anexo_nome)+' '+escx(m.anexo_nome||'arquivo')+'</a>') : '';
+    var corpo = apg
+      ? ('<s style="color:#8a92a0">'+escx(m.texto||(m.anexo_nome?('anexo: '+m.anexo_nome):''))+'</s>'+_seloApagada(m))
+      : (escx(m.texto||'')+anx);
+    return '<div style="margin:4px 0;font-size:13px'+(arq?';opacity:.62':'')+'"><span class="note" style="font-size:11px">'+ddmmhh(m.criado_em)+'</span> '+
+      '<b style="color:'+(cli?'#185FA5':'#0F6E56')+'">'+(cli?'&#128242; ':'')+escx(m.autor_nome||(cli?'Cliente':'Escritório'))+':</b> '+
+      corpo+(arq?_seloArquivada(m):'')+_btnApagar(m,procId)+_btnArquivar(m,procId)+'</div>';
+  }
+  function _barraArquivo(procId, quantasNaTela, nArq){
+    var b='';
+    if(quantasNaTela) b+='<button class="btn sm ghost" style="font-size:11px" title="Tira TODAS as mensagens desta conversa da nossa tela. O cliente continua vendo o que ele vê hoje." onclick="appCliArquivarTudo(\''+procId+'\')">&#128451; arquivar a conversa</button>';
+    if(nArq) b+=' <button class="btn sm ghost" style="font-size:11px" onclick="appCliVerArquivadas(\''+procId+'\')">'+(VER_ARQ?'esconder':'ver')+' '+nArq+' arquivada'+(nArq===1?'':'s')+'</button>';
+    return b?('<div style="margin-top:7px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">'+b+'</div>'):'';
+  }
+  window.appCliVerArquivadas=function(procId){ VER_ARQ=!VER_ARQ; fichaConversa(procId);
+    if(JAN.aberta&&JAN.procId===procId){ JAN.ultimo=0; JAN.dia=null; puxarJanela(true); }
+    try{ if(typeof window.__waRepintaCliente==='function') window.__waRepintaCliente(procId); }catch(e){} };
+  window.appCliArquivarMsg=function(id, procId, desfazer){
+    id=parseInt(id,10); if(!id) return;
+    var s=S(); if(!s) return;
+    eu().then(function(me){
+      var vals = desfazer ? {arquivada_em:null, arquivada_por:null}
+                          : {arquivada_em:new Date().toISOString(), arquivada_por:((me&&me.nome)||'Escritório')};
+      return s.from('portal_chat').update(vals).eq('id',id).select('id,processo_id').maybeSingle();
+    }).then(function(r){ _depoisDeArquivar(r, procId, id, desfazer?1:1); })
+      .catch(function(e){ alert('Não foi possível arquivar: '+((e&&e.message)||e)); });
+  };
+  window.appCliArquivarTudo=function(procId){
+    if(!confirm('Arquivar TODAS as mensagens desta conversa?\n\nElas saem da nossa tela — a conversa volta a caber na ficha. O cliente não é afetado: no app dele continua tudo como está.\n\nDá para trazer de volta pelo botão "ver arquivadas".')) return;
+    var s=S(); if(!s) return;
+    eu().then(function(me){
+      return s.from('portal_chat')
+        .update({arquivada_em:new Date().toISOString(), arquivada_por:((me&&me.nome)||'Escritório')})
+        .eq('processo_id',procId).is('arquivada_em',null).select('id');
+    }).then(function(r){
+      if(r&&r.error){ alert('Não foi possível arquivar: '+r.error.message); return; }
+      var n=(r&&r.data)?r.data.length:0;
+      try{ if(typeof logEvent==='function') logEvent('chat_archived','processo',procId,{quantas:n}); }catch(e){}
+      VER_ARQ=false;
+      _repintaTudo(procId);
+    }).catch(function(e){ alert('Não foi possível arquivar: '+((e&&e.message)||e)); });
+  };
+  function _depoisDeArquivar(r, procId, id, logar){
+    if(!r||r.error||!r.data){ alert('Não foi possível arquivar'+((r&&r.error)?(': '+r.error.message):'.')); return; }
+    var pid=procId||r.data.processo_id;
+    if(logar){ try{ if(typeof logEvent==='function') logEvent('chat_archived','processo',pid,{quantas:1,msg_id:id}); }catch(e){} }
+    _repintaTudo(pid);
+  }
+  function _repintaTudo(pid){
+    if(FICHA_PROC&&FICHA_PROC._id===pid) fichaConversa(pid);
+    if(JAN.aberta&&JAN.procId===pid){ JAN.ultimo=0; JAN.dia=null; puxarJanela(true); }
+    try{ if(typeof window.__waRepintaCliente==='function') window.__waRepintaCliente(pid); }catch(e){}
+  }
+
   function _btnApagar(m,procId){
     if(m.autor_tipo!=='escritorio'||m.apagada_em) return '';
     return ' <button title="Apagar esta mensagem — sai da tela do cliente" onclick="appCliApagarMsg('+m.id+',\''+procId+'\')" '+
@@ -22513,9 +22591,7 @@ function exportarProdutividadeCSV(){
       if(!r||r.error||!r.data){ alert('Não foi possível apagar'+((r&&r.error)?(': '+r.error.message):'.')); return; }
       var pid=procId||r.data.processo_id;
       try{ if(typeof logEvent==='function') logEvent('chat_message_deleted','processo',pid,{msg_id:id}); }catch(e){}
-      if(FICHA_PROC&&FICHA_PROC._id===pid) fichaConversa(pid);
-      if(JAN.aberta&&JAN.procId===pid){ JAN.ultimo=0; JAN.dia=null; puxarJanela(true); }
-      try{ if(typeof window.__waRepintaCliente==='function') window.__waRepintaCliente(pid); }catch(e){}
+      _repintaTudo(pid);
     }).catch(function(e){ alert('Não foi possível apagar: '+((e&&e.message)||e)); });
   };
 
@@ -22786,24 +22862,26 @@ function exportarProdutividadeCSV(){
       if(k&&k!==JAN.dia){ JAN.dia=k; var fx=document.createElement('div'); fx.innerHTML=D.faixa(m.criado_em); box.appendChild(fx); }
     }
     var cli=(m.autor_tipo==='cliente');
-    var apg=!!m.apagada_em;
+    var apg=!!m.apagada_em, arq=!!m.arquivada_em;
     var d=document.createElement('div');
-    d.style.cssText='margin:0 0 7px;'+(cli?'':'text-align:right');
+    d.style.cssText='margin:0 0 7px;'+(cli?'':'text-align:right')+(arq?';opacity:.62':'');
     var titHora=D.dataHora?D.dataHora(m.criado_em):'';
     d.innerHTML='<div style="display:inline-block;max-width:88%;text-align:left;background:'+(apg?'#f4f5f7':(cli?'#fffdf3':'#fff6c9'))+';'+
       'border:1px solid #e6dfae;border-left:4px solid '+(apg?'#b5342b':(cli?'#185FA5':'#8a8355'))+';border-radius:9px;padding:6px 9px;white-space:pre-line;word-break:break-word">'+
       '<div style="font-size:11px;font-weight:700;color:'+(cli?'#185FA5':'#8a8355')+'">'+escx(cli?(m.autor_nome||'Cliente'):'você')+
       ' · <span title="'+escx(titHora)+'" style="color:#6b6540;font-weight:400">'+hhmm(m.criado_em)+'</span>'+
-      (apg?'':_btnApagar(m,JAN.procId))+'</div>'+
+      (apg?'':_btnApagar(m,JAN.procId))+_btnArquivar(m,JAN.procId)+'</div>'+
       (apg?('<s style="color:#8a92a0">'+escx(m.texto||(m.anexo_nome?('anexo: '+m.anexo_nome):''))+'</s>'+_seloApagada(m))
-         :(anexoHTMLJan(m)+(m.texto?escx(m.texto):'')))+'</div>';
+         :(anexoHTMLJan(m)+(m.texto?escx(m.texto):'')))+
+      (arq?_seloArquivada(m):'')+'</div>';
     box.appendChild(d); box.scrollTop=box.scrollHeight;
   }
   function puxarJanela(primeira){
     if(!JAN.aberta||!JAN.procId) return;
     var s=S(); if(!s) return;
-    var cols='id,autor_tipo,autor_nome,texto,criado_em,anexo_id,anexo_nome,anexo_tipo,anexo_tamanho,apagada_em,apagada_por';
+    var cols='id,autor_tipo,autor_nome,texto,criado_em,anexo_id,anexo_nome,anexo_tipo,anexo_tamanho,apagada_em,apagada_por,arquivada_em,arquivada_por';
     var base=s.from('portal_chat').select(cols).eq('processo_id',JAN.procId);
+    if(!VER_ARQ) base=base.is('arquivada_em',null);
     /* Na primeira carga pega as MAIS RECENTES e inverte. Antes era
        order(id asc).limit(200), que devolve as 200 mais ANTIGAS: numa conversa
        longa a janela abria no começo de tudo e escondia o que acabara de chegar.
@@ -22818,7 +22896,25 @@ function exportarProdutividadeCSV(){
       if(primeiraCarga) ms=ms.slice().reverse();
       if(primeira){ var box=document.getElementById('cmp-clichat-msgs'); if(box) box.innerHTML= ms.length?'':'<div style="text-align:center;color:#6b7484;font-size:11.5px;margin-top:10px">Nenhuma mensagem ainda — escreva a primeira. O cliente recebe pelo app.</div>'; }
       if(ms.length){ ms.forEach(function(m){ desenhaMsg(m); if(m.id>JAN.ultimo) JAN.ultimo=m.id; }); marcaLidas(JAN.procId); }
+      if(primeira) _avisoArquivadasJan(JAN.procId);
     });
+  }
+  /* Conversa com mensagem arquivada não pode parecer conversa incompleta: a
+     janela avisa quantas estão fora e abre elas ali mesmo. */
+  function _avisoArquivadasJan(procId){
+    var s=S(); if(!s) return;
+    var box=document.getElementById('cmp-clichat-msgs'); if(!box) return;
+    s.from('portal_chat').select('id',{count:'exact',head:true}).eq('processo_id',procId).not('arquivada_em','is',null)
+     .then(function(r){
+       var n=(r&&r.count)||0; if(!n) return;
+       if(!(JAN.aberta&&JAN.procId===procId)) return;
+       var b=document.getElementById('cmp-clichat-msgs'); if(!b) return;
+       var av=document.createElement('div');
+       av.style.cssText='text-align:center;margin:2px 0 8px';
+       av.innerHTML='<button onclick="appCliVerArquivadas(\''+procId+'\')" style="border:1px solid #e0d9ab;background:#fffdf3;color:#6b6540;border-radius:20px;font-size:10.5px;padding:2px 10px;cursor:pointer">&#128451; '+
+         (VER_ARQ?('mostrando '+n+' arquivada'+(n===1?'':'s')+' — esconder'):(n+' mensagem'+(n===1?'':'ns')+' arquivada'+(n===1?'':'s')+' — ver'))+'</button>';
+       b.insertBefore(av, b.firstChild);
+     });
   }
   function marcaLidas(procId){
     var s=S(); if(!s) return;
@@ -22876,13 +22972,16 @@ function exportarProdutividadeCSV(){
        em ordem decrescente, a PRIMEIRA de cada processo já é a última da conversa.
        O teto de 800 limita a "conversas recentes" — conversa parada há muito tempo
        pode ficar de fora, e é por isso que o rodapé avisa. */
-    s.from('portal_chat').select('id,processo_id,autor_tipo,autor_nome,texto,anexo_nome,criado_em,lida_escritorio,apagada_em')
+    s.from('portal_chat').select('id,processo_id,autor_tipo,autor_nome,texto,anexo_nome,criado_em,lida_escritorio,apagada_em,arquivada_em')
      .order('id',{ascending:false}).limit(800).then(function(r){
        if(JAN.modo!=='lista') return;
        var conv={};
        (r.data||[]).forEach(function(m){
          var c=conv[m.processo_id];
-         if(!c) c=conv[m.processo_id]={pid:m.processo_id, ultima:m, naoLidas:0, nomeCli:''};
+         if(!c) c=conv[m.processo_id]={pid:m.processo_id, ultima:m, viva:null, naoLidas:0, nomeCli:''};
+         /* a prévia mostra a última NÃO arquivada: arquivar é justamente para
+            aquilo sair da nossa vista, inclusive daqui */
+         if(!c.viva && !m.arquivada_em) c.viva=m;
          if(m.autor_tipo==='cliente'){
            if(!c.nomeCli) c.nomeCli=m.autor_nome||'';
            if(!m.lida_escritorio) c.naoLidas++;
@@ -22911,11 +23010,12 @@ function exportarProdutividadeCSV(){
       var p=procDe(c.pid);
       var nome=c.nomeCli||(p&&p.cliente)||'Cliente';
       var num=(p&&p.numero)?numCurto(p.numero):'—';
-      var dia=D.rotulo?D.rotulo(c.ultima.criado_em):'';
-      var quando=(dia==='hoje')?hhmm(c.ultima.criado_em):dia;
+      var u=c.viva||c.ultima;
+      var dia=D.rotulo?D.rotulo(u.criado_em):'';
+      var quando=(dia==='hoje')?hhmm(u.criado_em):dia;
       /* prévia de mensagem apagada não pode repetir o texto errado */
-      var pre=c.ultima.apagada_em?'🚫 mensagem apagada':(c.ultima.texto||(c.ultima.anexo_nome?('📎 '+c.ultima.anexo_nome):''));
-      var meu=(c.ultima.autor_tipo!=='cliente');
+      var pre=c.viva?(u.apagada_em?'🚫 mensagem apagada':(u.texto||(u.anexo_nome?('📎 '+u.anexo_nome):''))):'🗃 conversa arquivada';
+      var meu=(u.autor_tipo!=='cliente');
       return '<div data-pid="'+escx(c.pid)+'" style="display:flex;gap:8px;align-items:center;padding:8px 4px;border-bottom:1px solid #ece5b8;cursor:pointer">'
         +'<div style="width:31px;height:31px;border-radius:50%;background:#e6dfae;color:#5a5326;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:11.5px;flex:none">'+escx(_iniciais(nome))+'</div>'
         +'<div style="flex:1;min-width:0">'
@@ -23361,11 +23461,12 @@ function exportarProdutividadeCSV(){
 
     var convs=[];
     // --- clientes (app), agrupado por processo ---
-    var pc=await s.from('portal_chat').select('id,processo_id,autor_tipo,autor_nome,texto,anexo_nome,criado_em,lida_escritorio,apagada_em').order('id',{ascending:false}).limit(600);
+    var pc=await s.from('portal_chat').select('id,processo_id,autor_tipo,autor_nome,texto,anexo_nome,criado_em,lida_escritorio,apagada_em,arquivada_em').order('id',{ascending:false}).limit(600);
     var porProc={};
     (pc.data||[]).forEach(function(m){
       var c=porProc[m.processo_id];
-      if(!c){ c=porProc[m.processo_id]={tipo:'cliente',id:'c:'+m.processo_id,procId:m.processo_id,ultima:m,naoLidas:0,nome:''}; }
+      if(!c){ c=porProc[m.processo_id]={tipo:'cliente',id:'c:'+m.processo_id,procId:m.processo_id,ultima:m,viva:null,naoLidas:0,nome:''}; }
+      if(!c.viva && !m.arquivada_em) c.viva=m;
       if(m.autor_tipo==='cliente' && !m.lida_escritorio) c.naoLidas++;
     });
     // processos que já têm acesso ao app mas ainda sem conversa entram como "sem mensagem"
@@ -23492,9 +23593,11 @@ function exportarProdutividadeCSV(){
     if(tot){ var nl=WA.convs.reduce(function(a,c){return a+(c.naoLidas||0);},0); tot.textContent=lista.length+' conversa'+(lista.length===1?'':'s')+(nl?(' · '+nl+' não lida'+(nl===1?'':'s')):''); }
     if(!lista.length){ box.innerHTML='<div class="note" style="padding:16px">Nenhuma conversa aqui.</div>'; return; }
     box.innerHTML=lista.map(function(c){
-      var prev=c.ultima?((c.ultima.autor_tipo==='escritorio'||c.ultima.autor_id===(WA.eu&&WA.eu.id)?'✓ ':'')+
-        (c.ultima.apagada_em?'<i style="color:#98a1ad">mensagem apagada</i>'
-          :escx(String(c.ultima.texto||(c.ultima.anexo_nome?('📎 '+c.ultima.anexo_nome):'')||'').slice(0,52)))):'<i style="color:#98a1ad">sem mensagens ainda</i>';
+      var uv=c.viva||c.ultima;
+      var prev=c.ultima?((uv.autor_tipo==='escritorio'||uv.autor_id===(WA.eu&&WA.eu.id)?'✓ ':'')+
+        ((c.tipo==='cliente'&&!c.viva)?'<i style="color:#98a1ad">conversa arquivada</i>'
+          :(uv.apagada_em?'<i style="color:#98a1ad">mensagem apagada</i>'
+            :escx(String(uv.texto||(uv.anexo_nome?('📎 '+uv.anexo_nome):'')||'').slice(0,52))))):'<i style="color:#98a1ad">sem mensagens ainda</i>';
       var sel=(WA.aberta&&WA.aberta.id===c.id);
       return '<div class="wa-item" data-id="'+c.id+'" style="display:flex;gap:10px;padding:10px 12px;cursor:pointer;border-bottom:1px solid #f0f3f7;'+(sel?'background:#e8f0fb':'')+'">'+
         '<div style="width:38px;height:38px;border-radius:50%;flex:none;background:'+waCor(c.nome)+';color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700">'+
@@ -23565,7 +23668,8 @@ function exportarProdutividadeCSV(){
     try{ var tk=await jwtCli(); window.__jwtAnexo=tk; }catch(e){}
     var ms=[];
     if(c.tipo==='cliente'){
-      var q=s.from('portal_chat').select('id,autor_tipo,autor_nome,texto,criado_em,anexo_id,anexo_nome,anexo_tipo,anexo_tamanho,apagada_em,apagada_por').eq('processo_id',c.procId).order('id',{ascending:true});
+      var q=s.from('portal_chat').select('id,autor_tipo,autor_nome,texto,criado_em,anexo_id,anexo_nome,anexo_tipo,anexo_tamanho,apagada_em,apagada_por,arquivada_em,arquivada_por').eq('processo_id',c.procId).order('id',{ascending:true});
+      if(!VER_ARQ) q=q.is('arquivada_em',null);   /* mesmo interruptor da ficha */
       if(WA.ultimo>0) q=q.gt('id',WA.ultimo); else q=q.limit(300);
       var r=await q; ms=(r.data||[]).map(function(m){ return {id:m.id,meu:(m.autor_tipo==='escritorio'),quem:m.autor_nome,texto:m.texto,criado_em:m.criado_em,anexo_id:m.anexo_id,anexo_nome:m.anexo_nome,anexo_tipo:m.anexo_tipo,anexo_tamanho:m.anexo_tamanho,apagada_em:m.apagada_em,apagada_por:m.apagada_por,procId:c.procId}; });
       if(ms.length) { try{ await s.from('portal_chat').update({lida_escritorio:true}).eq('processo_id',c.procId).eq('autor_tipo','cliente').eq('lida_escritorio',false); }catch(e){} c.naoLidas=0; }
@@ -23619,6 +23723,7 @@ function exportarProdutividadeCSV(){
         :(m.texto?escx(m.texto):''))+
       '<div style="font-size:10px;color:#667781;text-align:right;margin-top:2px">'+
       (podeApagar?('<button title="Apagar esta mensagem — sai da tela do cliente" onclick="appCliApagarMsg('+m.id+',\''+m.procId+'\')" style="border:none;background:none;cursor:pointer;color:#b5342b;font-size:10px;opacity:.7;padding:0 4px 0 0">&#128465; apagar</button>'):'')+
+      ((m.procId&&typeof window.appCliArquivarMsg==='function')?('<button title="Arquivar — sai da nossa tela, o cliente não é afetado" onclick="appCliArquivarMsg('+m.id+',\''+m.procId+'\',0)" style="border:none;background:none;cursor:pointer;color:#5f6b7a;font-size:10px;opacity:.7;padding:0 4px 0 0">&#128451;</button>'):'')+
       hhmm(m.criado_em)+'</div></div>';
     box.appendChild(d);
   }
