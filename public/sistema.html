@@ -20679,6 +20679,25 @@ async function renderEstagiario(){
    qualquer dado do processo, não deixa seguir: diz o que faltou.
    Quando o tribunal recusa (o TJSE recusa), a resposta dele vai inteira para a
    tela, sem tradução nossa. */
+/* "Acho que ele juntou os documentos antes de enviar" (31/08/2026). Não juntou —
+   cada arquivo sobe como documento próprio —, mas a tela não mostrava isso: a
+   peça aparecia também na lista de anexos e nada dizia o que ia sair. Este
+   resumo mostra, em ordem, o que o tribunal vai receber. */
+function _protResumo(){
+  var box=document.getElementById('prot-resumo'); if(!box) return;
+  var sel=document.getElementById('prot-arq');
+  var peca=sel?sel.value:'';
+  /* a peça não pode aparecer como anexo dela mesma */
+  [].slice.call(document.querySelectorAll('.prot-ax-lin')).forEach(function(l){
+    var eu=(l.getAttribute('data-nome')===peca);
+    l.style.display=eu?'none':'flex';
+    if(eu){ var c=l.querySelector('input'); if(c) c.checked=false; }
+  });
+  var ax=[].slice.call(document.querySelectorAll('.prot-ax:checked')).map(function(c){ return c.value; });
+  box.innerHTML='<b>O tribunal vai receber '+(1+ax.length)+' documento'+(ax.length?'s':'')+', separados:</b>'
+    +'<div style="margin-top:3px">1. <b>'+esc(peca||'—')+'</b> <span class="note">(peça principal)</span></div>'
+    +ax.map(function(n,i){ return '<div>'+(i+2)+'. '+esc(n)+' <span class="note">(anexo)</span></div>'; }).join('');
+}
 /* Subir o PDF sem sair do protocolo: dois botões na ficha viraram um só, e a
    peça que ainda não está na pasta entra por aqui mesmo. */
 async function protSubirPDF(inp, numero){
@@ -20747,6 +20766,7 @@ async function abrirProtocolarJusbr(numero){
       return;
     }
     window.__protDados={numero:numero, tipos:(j.tipos||[]), env:(j.envelope||{})};
+    setTimeout(_protResumo,0);
     /* arquivos PDF da pasta Protocolo — é de lá que sai a peça */
     var arqs=[];
     try{
@@ -20791,7 +20811,7 @@ async function abrirProtocolarJusbr(numero){
            +'</div>')
         : ('<label style="display:block;font-size:12.5px;font-weight:700;color:var(--navy);margin:8px 0 3px">Arquivo da petição (pasta Protocolo)</label>'
            +(arqs.length
-             ? ('<select id="prot-arq" style="width:100%;box-sizing:border-box;font:inherit;font-size:13px;padding:7px 9px;border:1px solid var(--line);border-radius:7px">'
+             ? ('<select id="prot-arq" onchange="_protResumo()" style="width:100%;box-sizing:border-box;font:inherit;font-size:13px;padding:7px 9px;border:1px solid var(--line);border-radius:7px">'
                 +arqs.map(function(a2){ return '<option value="'+esc(a2.nome)+'">'+esc(a2.nome)+'</option>'; }).join('')+'</select>')
              : '<div class="note" style="color:#b5342b">Nenhum PDF na pasta Protocolo — escolha o arquivo abaixo.</div>')
            +'<div style="margin-top:5px;font-size:11.5px"><input type="file" id="prot-novo" accept=".pdf" onchange="protSubirPDF(this,\''+esc(numero)+'\')" style="font-size:11.5px"> <span class="note">sobe para a pasta Protocolo</span></div>'
@@ -20799,8 +20819,8 @@ async function abrirProtocolarJusbr(numero){
            +'<label style="display:block;font-size:12.5px;font-weight:700;color:var(--navy);margin:10px 0 3px">Anexos (opcional)</label>'
            +(arqs.length>1
              ? ('<div id="prot-anexos" style="max-height:120px;overflow:auto;border:1px solid var(--line);border-radius:7px;padding:6px 8px">'
-                +arqs.map(function(a3){ return '<label style="display:flex;gap:6px;align-items:center;font-size:12px;padding:1px 0"><input type="checkbox" class="prot-ax" value="'+esc(a3.nome)+'"> '+esc(a3.nome)+'</label>'; }).join('')
-                +'</div><div class="note" style="margin:2px 0 0">Marque o que vai junto (procuração, comprovantes, laudos). O arquivo escolhido acima como peça é ignorado se estiver marcado.</div>')
+                +arqs.map(function(a3){ return '<label class="prot-ax-lin" data-nome="'+esc(a3.nome)+'" style="display:flex;gap:6px;align-items:center;font-size:12px;padding:1px 0"><input type="checkbox" class="prot-ax" value="'+esc(a3.nome)+'" onchange="_protResumo()"> '+esc(a3.nome)+'</label>'; }).join('')
+                +'</div><div class="note" style="margin:2px 0 0">Marque o que vai junto (procuração, comprovantes, laudos). Cada um entra como documento separado — nada é fundido num PDF só.</div>')
              : '<div class="note">Só há um PDF na pasta. Suba os anexos acima para poder marcá-los.</div>')
            /* A lista vinha na ordem do jus.br e o navegador já deixava a PRIMEIRA
               escolhida — foi assim que uma "Petição Prosseguimento" do TJPB saiu
@@ -20814,6 +20834,7 @@ async function abrirProtocolarJusbr(numero){
            +'</select>'
            +'<div class="note" style="margin:3px 0 0;color:#8a6d1a">Confira o tipo — é o rótulo com que a peça entra nos autos.</div>'
            +((j.tipos&&j.tipos.length)?'':'<div class="note" style="color:#b5342b">O jus.br não devolveu a lista de tipos — sem ela não dá para protocolar daqui.</div>')))
+      +'<div id="prot-resumo" style="margin-top:10px;background:#f4f7fb;border:1px solid #dbe6f2;border-radius:9px;padding:8px 11px;font-size:12.5px;color:#2E3A4B"></div>'
       +'<div id="prot-msg" class="note" style="margin-top:10px"></div>'
       +'<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">'
         +'<button class="btn sm ghost" style="margin-right:auto" title="Só guardar a peça com prazo fatal, para protocolar mais tarde" onclick="document.getElementById(\'prot-ov\').remove();abrirProtocolarPeticao(\''+esc(numero)+'\')">📤 só guardar com prazo</button>'
@@ -20885,8 +20906,11 @@ async function protocolarAgora(){
   var selA=document.getElementById('prot-arq'), selT=document.getElementById('prot-tipo');
   var arq=selA?selA.value:'', idT=selT?selT.value:'', nomeT=selT?(selT.options[selT.selectedIndex]||{}).getAttribute('data-nome'):'';
   if(!arq||!idT) return;
-  var _nAx=document.querySelectorAll('.prot-ax:checked').length;
-  if(!confirm('Protocolar "'+arq+'" como "'+nomeT+'"'+(_nAx?(' + '+_nAx+' anexo(s)'):'')+' no processo '+(d.env&&d.env.numeroProcesso||d.numero)+'?\n\nIsto envia ao tribunal AGORA e não tem volta.')) return;
+  var _ax=[].slice.call(document.querySelectorAll('.prot-ax:checked')).map(function(c){ return c.value; }).filter(function(n){ return n!==arq; });
+  if(!confirm('Protocolar no processo '+(d.env&&d.env.numeroProcesso||d.numero)+':\n\n'
+    +'1. '+arq+'  ← peça ('+nomeT+')\n'
+    +_ax.map(function(n,i){ return (i+2)+'. '+n+'  ← anexo'; }).join('\n')
+    +'\n\nSão '+(1+_ax.length)+' documento(s) SEPARADOS, não um PDF só.\nIsto envia ao tribunal AGORA e não tem volta.')) return;
   var btn=document.getElementById('prot-ok'); if(btn){ btn.disabled=true; btn.textContent='enviando…'; }
   var msg=document.getElementById('prot-msg'); if(msg) msg.innerHTML='Enviando ao jus.br… não feche esta janela.';
   try{
@@ -20922,6 +20946,7 @@ async function protocolarAgora(){
         +'<div><b>Recibo CNJ:</b> '+esc(j.protocolo||'—')+'</div>'
         +'<div><b>Situação:</b> '+esc(j.status||'—')+' · '+esc(j.tribunal||'')+'</div>'
         +'<div><b>Data:</b> '+esc(String(j.data||'').replace('T',' '))+'</div>'
+        +'<div><b>Enviados:</b> '+esc(arq)+' (peça)'+(anexos.length?(' + '+anexos.length+' anexo(s): '+esc(anexos.map(function(n){ return n.replace(/^Protocolo\//,''); }).join(', '))):'')+' — documentos separados</div>'
         +(j.recibo?('<div><b>Comprovante:</b> '+esc(j.recibo.arquivo)+' (guardado na pasta Protocolo)</div>'):'<div class="note">O comprovante não veio agora — baixe pelo portal se precisar.</div>')
         +(_conf
           ? ((_marc&&_marc.fechada)?('<div style="color:#0F6E56"><b>Prazo encerrado:</b> '+esc(_marc.titulo)+'.</div>'):'')
