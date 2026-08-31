@@ -72,6 +72,34 @@ function achaNo(o, nomes, prof) {
   for (const k of Object.keys(o)) { const v = achaNo(o[k], nomes, prof + 1); if (v) return v }
   return null
 }
+// mesma ideia, para chave cujo valor é uma LISTA (assuntos vem no plural em
+// vários tribunais, e era por isso que peticaoAssuntos saía vazio)
+function achaArr(o, nomes, prof) {
+  prof = prof || 0
+  if (!o || typeof o !== 'object' || prof > 8) return null
+  if (Array.isArray(o)) { for (const x of o) { const v = achaArr(x, nomes, prof + 1); if (v) return v } return null }
+  for (const k of Object.keys(o)) if (nomes.some(n => k.toLowerCase() === n.toLowerCase()) && Array.isArray(o[k]) && o[k].length) return o[k]
+  for (const k of Object.keys(o)) { const v = achaArr(o[k], nomes, prof + 1); if (v) return v }
+  return null
+}
+const numOu = (v) => { if (v == null || typeof v === 'object') return null; const n = Number(String(v).replace(/[^\d.-]/g, '')); return (Number.isFinite(n) && n !== 0) ? n : null }
+const txtOu = (v) => (v == null || typeof v === 'object') ? null : (String(v).trim() || null)
+
+// a tramitação onde o processo está — é lá que moram órgão, classe e o id que o
+// portal chama de idOrigemTramitacao
+function noTramitacao(f) {
+  if (!f || typeof f !== 'object') return null
+  if (f.tramitacaoAtual && typeof f.tramitacaoAtual === 'object') return f.tramitacaoAtual
+  if (Array.isArray(f.tramitacoes) && f.tramitacoes.length) return f.tramitacoes[0]
+  const n = achaNo(f, ['tramitacaoAtual'])
+  if (n) return n
+  const a = achaArr(f, ['tramitacoes'])
+  return (a && a[0]) || null
+}
+function primeiro(fontes, nomes) { for (const f of fontes) { const v = acha(f, nomes); if (v != null && v !== '') return v } return null }
+function primeiroNo(fontes, nomes) { for (const f of fontes) { const n = achaNo(f, nomes); if (n) return n } return null }
+function primeiroArr(fontes, nomes) { for (const f of fontes) { const a = achaArr(f, nomes); if (a && a.length) return a } return null }
+
 // "AT" (ativo) / "PA" (passivo) — é o que o portal manda em modalidadePolo
 function poloDe(p) {
   const t = String(p.polo || p.tipoPolo || p.modalidadePolo || '').toUpperCase()
@@ -109,64 +137,163 @@ function partesDoProcesso(proc) {
   return out
 }
 
+// Assunto com CÓDIGO — nome sozinho o tribunal não aceita (o envelope que passou
+// no TJBA levava {codigo:7780}). Aceita 'assuntos' (plural, lista) e 'assunto'.
+function assuntosDe(fontes) {
+  const arr = primeiroArr(fontes, ['peticaoAssuntos', 'assuntos'])
+  let cru = (arr && arr.length) ? arr : []
+  if (!cru.length) { const n = primeiroNo(fontes, ['assunto', 'assuntoPrincipal']); if (n) cru = [n] }
+  const out = []
+  for (const a of cru) {
+    if (!a || typeof a !== 'object') continue
+    const codigo = numOu(a.codigo != null ? a.codigo : (a.codigoNacional != null ? a.codigoNacional : a.id))
+    const nome = txtOu(a.nome || a.descricao)
+    if (codigo == null && !nome) continue
+    out.push({ nome, codigo, descricao: txtOu(a.descricao || a.nome), hierarquia: txtOu(a.hierarquia) })
+  }
+  return out
+}
+
+// ——— rede de segurança: o envelope que o PRÓPRIO PORTAL mandou neste processo ———
+// Nos juizados do TJBA o /api/v2/processos devolve a vara como TEXTO ("3VARA DO
+// SISTEMA DO JUIZADO ESPECIAL - ILHEUS"), sem código de órgão, sem código de
+// classe e sem o id da tramitação — dados que o portal tem porque os carrega de
+// outra rota interna. Como a extensão guardou o POST /peticoes/protocolar de
+// cada protocolo feito à mão, quando falta um campo ESTRUTURAL nós o tiramos de
+// lá: mesmo processo, mesmo órgão, envelope que o tribunal já aceitou (201).
+// A tela diz quais campos vieram daí e de quando, para conferência antes do envio.
+async function envelopeDeCaptura(sb, dig) {
+  try {
+    const { data } = await sb.from('pdpj_capturas')
+      .select('corpo_forma,criado_em').eq('escritorio_id', ESCRITORIO_CMP)
+      .eq('metodo', 'POST').eq('resposta_status', 201).like('url', '%peticoes/protocolar%')
+      .order('criado_em', { ascending: false }).limit(50)
+    for (const c of (data || [])) {
+      const e = c && c.corpo_forma
+      if (e && typeof e === 'object' && soDig(e.numeroProcesso) === dig) return { env: e, quando: c.criado_em }
+    }
+  } catch (e) {}
+  return null
+}
+
 async function pdpj(url, token, opts) {
   return fetch(url, { ...(opts || {}), headers: { ...CAB, Authorization: 'Bearer ' + token, Accept: 'application/json', ...((opts && opts.headers) || {}) }, cache: 'no-store', signal: AbortSignal.timeout(60000) })
 }
 
 // monta o envelope do POST /peticoes/protocolar a partir do processo do PDPJ
-async function montarEnvelope(token, dig) {
+async function montarEnvelope(token, dig, sb) {
   const r = await pdpj(`${PDPJ}/api/v2/processos/${dig}`, token)
   if (!r.ok) return { erro: 'não consegui ler o processo no jus.br (HTTP ' + r.status + ')', http: r.status }
   const j = await r.json().catch(() => null)
   if (!j) return { erro: 'o jus.br respondeu algo que não é JSON' }
   const proc = (Array.isArray(j) ? j[0] : (j.content && j.content[0]) || j) || {}
 
+  /* Segunda fonte: a rota que o próprio portal chama ao abrir o peticionamento.
+     É de lá que ele tira os códigos de órgão e classe — o /api/v2/processos, nos
+     juizados, devolve só os nomes. Pode falhar (o TJPB devolveu 500); quando
+     falha, seguimos com o que há. */
+  let pp = null, ppHttp = null
+  try {
+    const rp = await pdpj(`${PDPJ}/api/v1/peticoes/processo/${dig}`, token)
+    ppHttp = rp.status
+    if (rp.ok) pp = await rp.json().catch(() => null)
+  } catch (e) { ppHttp = 0 }
+
+  // ordem de leitura: peticionamento → tramitação dele → processo → tramitação do processo
+  const fontes = [pp, noTramitacao(pp), proc, noTramitacao(proc)].filter(Boolean)
+
   // jtrTribunal sai do próprio número CNJ (J + TR): 8.15 → 815, 5.05 → 505.
   // Confirmado nas três capturas; não depende de tabela nenhuma.
   const d = soDig(dig)
   const jtr = d.length === 20 ? (d.slice(13, 14) + d.slice(14, 16)) : null
 
-  const grauTxt = String(acha(proc, ['grau', 'siglaGrau', 'instancia']) || '')
+  const grauTxt = String(primeiro(fontes, ['siglaGrau', 'grau', 'instancia']) || '')
   const siglaGrau = /2|segundo|g2/i.test(grauTxt) ? 'G2' : 'G1'
 
-  const assuntoNo = achaNo(proc, ['assunto', 'assuntoPrincipal']) || {}
-  const assuntos = []
-  if (assuntoNo && (assuntoNo.codigo || assuntoNo.descricao || assuntoNo.nome)) {
-    assuntos.push({
-      nome: assuntoNo.nome || assuntoNo.descricao || null, codigo: assuntoNo.codigo != null ? Number(assuntoNo.codigo) : null,
-      descricao: assuntoNo.descricao || assuntoNo.nome || null, hierarquia: assuntoNo.hierarquia || null,
-    })
-  }
-  const orgaoNo = achaNo(proc, ['orgaoJulgador', 'orgaoJulgadorOrigem', 'unidadeJudiciaria']) || {}
+  const assuntos = assuntosDe(fontes)
+
+  /* Órgão julgador: pode vir como objeto {codigo,nome} OU como texto puro. Era
+     esse o caso do 0009652-03.2026.8.05.0103 — achaNo() só devolve objeto, então
+     não achava nada e a tela dizia "Vara: —". */
+  const orgaoNo = primeiroNo(fontes, ['orgaoJulgador', 'orgaoJulgadorOrigem', 'unidadeJudiciaria', 'orgao']) || {}
+  const orgaoCod = numOu(primeiro(fontes, ['codOrgaoJulgadorCorporativo', 'codigoOrgaoJulgadorCorporativo', 'codigoOrgaoJulgador', 'idOrgaoJulgador']))
+    || numOu(orgaoNo.codigo != null ? orgaoNo.codigo : (orgaoNo.codigoOrgao != null ? orgaoNo.codigoOrgao : orgaoNo.id))
+  const orgaoNome = txtOu(primeiro(fontes, ['nomeOrgaoJulgadorCorporativo', 'nomeOrgaoJulgador']))
+    || txtOu(orgaoNo.nome || orgaoNo.descricao || orgaoNo.nomeOrgao)
+    || txtOu(primeiro(fontes, ['orgaoJulgador', 'unidadeJudiciaria', 'orgao']))
+
+  const classeNo = primeiroNo(fontes, ['classe', 'classeProcessual', 'classeJudicial']) || {}
+  const classeCod = numOu(primeiro(fontes, ['codigoClasseProcessual', 'codClasseProcessual', 'codigoClasse']))
+    || numOu(classeNo.codigo != null ? classeNo.codigo : (classeNo.codigoNacional != null ? classeNo.codigoNacional : classeNo.id))
+
+  const tramId = primeiro(fontes, ['idOrigemTramitacao', 'idTramitacao'])
+    || (() => { for (const f of [noTramitacao(pp), noTramitacao(proc)]) { if (f && (f.idOrigemTramitacao || f.idTramitacao || f.id)) return f.idOrigemTramitacao || f.idTramitacao || f.id } return null })()
 
   const env = {
     id: null, tipo: 'A', sigiloso: 'nao',
     siglaGrau, numeroGrau: siglaGrau === 'G2' ? '2' : '1',
-    valorCausa: Number(acha(proc, ['valorCausa', 'valorAcao']) || 0) || null,
+    valorCausa: numOu(primeiro(fontes, ['valorCausa', 'valorAcao'])),
     jtrTribunal: jtr,
-    distribuidoEm: String(acha(proc, ['dataHoraAjuizamento', 'dataAjuizamento', 'dataDistribuicao', 'dataHoraDistribuicao']) || '').replace('T', ' ').slice(0, 19) || null,
-    peticaoPartes: partesDoProcesso(proc),
-    siglaTribunal: acha(proc, ['siglaTribunal', 'tribunal']) || null,
+    distribuidoEm: String(primeiro(fontes, ['dataHoraAjuizamento', 'dataAjuizamento', 'dataDistribuicao', 'dataHoraDistribuicao']) || '').replace('T', ' ').slice(0, 19) || null,
+    peticaoPartes: (partesDoProcesso(pp || {}).length ? partesDoProcesso(pp) : partesDoProcesso(proc)),
+    siglaTribunal: txtOu(primeiro(fontes, ['siglaTribunal', 'tribunal'])),
     numeroProcesso: mascara(d),
     idTipoDocumento: null,             // vem da escolha na tela
     peticaoAssuntos: assuntos,
     idComunicacaoDjen: null,
-    idFonteDadosCodex: Number(acha(proc, ['idFonteDadosCodex', 'fonteDadosCodex', 'idCodex'])) || null,
+    idFonteDadosCodex: numOu(primeiro(fontes, ['idFonteDadosCodex', 'fonteDadosCodex', 'idCodex'])),
     peticaoDocumentos: [],             // preenchido depois do upload
-    idOrigemTramitacao: (acha(proc, ['idOrigemTramitacao', 'idTramitacao']) != null) ? String(acha(proc, ['idOrigemTramitacao', 'idTramitacao'])) : null,
-    codigoClasseProcessual: Number(acha(proc, ['codigoClasseProcessual', 'classeProcessual', 'classe'])) || null,
+    idOrigemTramitacao: tramId != null ? String(tramId) : null,
+    codigoClasseProcessual: classeCod,
     peticaoDadosComplementares: [],
-    codOrgaoJulgadorCorporativo: Number(orgaoNo.codigo != null ? orgaoNo.codigo : (orgaoNo.id != null ? orgaoNo.id : acha(proc, ['codOrgaoJulgadorCorporativo']))) || null,
-    nomeOrgaoJulgadorCorporativo: orgaoNo.nome || orgaoNo.descricao || null,
+    codOrgaoJulgadorCorporativo: orgaoCod,
+    nomeOrgaoJulgadorCorporativo: orgaoNome,
   }
 
-  // o que ficou sem preencher — a tela não deixa protocolar assim
-  const faltando = []
-  const obrig = ['jtrTribunal', 'siglaTribunal', 'valorCausa', 'distribuidoEm', 'idFonteDadosCodex', 'idOrigemTramitacao', 'codigoClasseProcessual', 'codOrgaoJulgadorCorporativo', 'nomeOrgaoJulgadorCorporativo']
-  for (const k of obrig) if (env[k] == null || env[k] === '') faltando.push(k)
-  if (!env.peticaoPartes.length) faltando.push('peticaoPartes')
-  if (!env.peticaoAssuntos.length) faltando.push('peticaoAssuntos')
-  return { env, faltando, proc_bruto_chaves: Object.keys(proc).slice(0, 40) }
+  const OBRIG = ['jtrTribunal', 'siglaTribunal', 'valorCausa', 'distribuidoEm', 'idFonteDadosCodex', 'idOrigemTramitacao', 'codigoClasseProcessual', 'codOrgaoJulgadorCorporativo', 'nomeOrgaoJulgadorCorporativo']
+  const oQueFalta = () => {
+    const f = []
+    for (const k of OBRIG) if (env[k] == null || env[k] === '') f.push(k)
+    if (!env.peticaoPartes.length) f.push('peticaoPartes')
+    if (!env.peticaoAssuntos.some(a => a.codigo != null)) f.push('peticaoAssuntos')
+    return f
+  }
+
+  // faltou campo estrutural? tenta o envelope que o portal já usou neste processo
+  let reaproveitado = null
+  if (oQueFalta().length && sb) {
+    const cap = await envelopeDeCaptura(sb, d)
+    if (cap && cap.env) {
+      const usados = []
+      for (const k of ['idOrigemTramitacao', 'codigoClasseProcessual', 'codOrgaoJulgadorCorporativo', 'nomeOrgaoJulgadorCorporativo', 'idFonteDadosCodex', 'siglaTribunal', 'valorCausa', 'distribuidoEm', 'jtrTribunal']) {
+        if ((env[k] == null || env[k] === '') && cap.env[k] != null && cap.env[k] !== '') { env[k] = cap.env[k]; usados.push(k) }
+      }
+      if (!env.peticaoAssuntos.some(a => a.codigo != null) && Array.isArray(cap.env.peticaoAssuntos) && cap.env.peticaoAssuntos.length) {
+        env.peticaoAssuntos = cap.env.peticaoAssuntos; usados.push('peticaoAssuntos')
+      }
+      if (!env.peticaoPartes.length && Array.isArray(cap.env.peticaoPartes) && cap.env.peticaoPartes.length) {
+        env.peticaoPartes = cap.env.peticaoPartes; usados.push('peticaoPartes')
+      }
+      /* o grau tem de casar com o órgão: se o código do órgão veio da captura, o
+         grau dela manda mais do que o nosso palpite pelo texto */
+      if (usados.indexOf('codOrgaoJulgadorCorporativo') >= 0 && cap.env.siglaGrau && cap.env.siglaGrau !== env.siglaGrau) {
+        env.siglaGrau = cap.env.siglaGrau
+        env.numeroGrau = cap.env.numeroGrau || (cap.env.siglaGrau === 'G2' ? '2' : '1')
+        usados.push('siglaGrau')
+      }
+      if (usados.length) reaproveitado = { campos: usados, quando: cap.quando }
+    }
+  }
+
+  const faltando = oQueFalta()
+  // o que o jus.br REALMENTE devolveu — sem isto, campo faltando vira adivinhação
+  const visto = {
+    v2_chaves: Object.keys(proc || {}).slice(0, 40),
+    v2_tramitacao: Object.keys(noTramitacao(proc) || {}).slice(0, 40),
+    peticionamento_http: ppHttp,
+    peticionamento_chaves: Object.keys((Array.isArray(pp) ? pp[0] : pp) || {}).slice(0, 40),
+  }
+  return { env, faltando, reaproveitado, visto }
 }
 
 export async function GET(request) {
@@ -180,7 +307,7 @@ export async function GET(request) {
   const tk = await getFreshToken(sb)
   if (!tk || !tk.token) return Response.json({ erro: 'sem acesso ao jus.br — entre no portal (a extensão sincroniza)', sem_sessao: true }, { status: 409 })
 
-  const m = await montarEnvelope(tk.token, dig)
+  const m = await montarEnvelope(tk.token, dig, sb)
   if (m.erro) return Response.json({ erro: m.erro }, { status: m.http === 401 ? 409 : 502 })
 
   // lista de tipos de documento (é o "Juntada de Petição de" da tela do portal)
@@ -192,7 +319,11 @@ export async function GET(request) {
     tipos = cont.map(x => ({ id: x.id, codigo: x.codigo, descricao: x.descricao || x.nome })).filter(x => x.descricao)
   } catch (e) {}
 
-  return Response.json({ ok: true, numero: mascara(dig), envelope: m.env, faltando: m.faltando, tipos, pronto: m.faltando.length === 0 })
+  return Response.json({
+    ok: true, numero: mascara(dig), envelope: m.env, faltando: m.faltando,
+    reaproveitado: m.reaproveitado || null, visto: m.visto || null,
+    tipos, pronto: m.faltando.length === 0,
+  })
 }
 
 export async function POST(request) {
@@ -221,9 +352,9 @@ export async function POST(request) {
   const tk = await getFreshToken(sb)
   if (!tk || !tk.token) return Response.json({ erro: 'sem acesso ao jus.br — entre no portal (a extensão sincroniza)', sem_sessao: true }, { status: 409 })
 
-  const m = await montarEnvelope(tk.token, dig)
+  const m = await montarEnvelope(tk.token, dig, sb)
   if (m.erro) return Response.json({ erro: m.erro }, { status: 502 })
-  if (m.faltando.length) return Response.json({ erro: 'faltam dados do processo para montar a petição: ' + m.faltando.join(', '), faltando: m.faltando }, { status: 422 })
+  if (m.faltando.length) return Response.json({ erro: 'faltam dados do processo para montar a petição: ' + m.faltando.join(', '), faltando: m.faltando, visto: m.visto || null }, { status: 422 })
 
   const nomeArq = path.basename(rel)
   const hash = crypto.createHash('sha1').update(bytes).digest('hex')
