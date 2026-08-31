@@ -2,6 +2,21 @@
    real da última tentativa — a pessoa precisa saber se o token chegou, sem ter
    de abrir o sistema para conferir. */
 const $ = (id) => document.getElementById(id);
+
+/* Abrir este arquivo com dois cliques (file:///…/opcoes.html) não instala nada:
+   é uma página solta, sem acesso ao armazenamento da extensão. Aconteceu no
+   primeiro teste, e a tela aparecia vazia sem explicar por quê. */
+if (typeof chrome === 'undefined' || !chrome.storage || !chrome.storage.local) {
+  document.body.innerHTML =
+    '<h1>Esta tela é da extensão</h1>'
+    + '<p class="n">Você abriu o arquivo <b>opcoes.html</b> direto da pasta. Assim ele é só uma página — a extensão não está instalada, e por isso os campos aparecem vazios.</p>'
+    + '<p class="n"><b>Para instalar:</b><br>1. Abra <b>chrome://extensions</b> (no Edge: <b>edge://extensions</b>).<br>'
+    + '2. Ligue o <b>Modo do desenvolvedor</b>.<br>'
+    + '3. Clique em <b>Carregar sem compactação</b> (Edge: <b>Carregar descompactado</b>) e escolha a pasta <b>cmpgestao-jusbr</b> inteira — a pasta, não um arquivo.<br>'
+    + '4. Depois clique no ícone da extensão (quebra-cabeça na barra do navegador).</p>'
+    + '<p class="n">Baixando o .zip pelo sistema (Robôs → jus.br), a chave já vem dentro: não há nada para colar.</p>';
+  throw new Error('fora da extensão');
+}
 const CORES = { verde: ['#e9f6f0', '#0f5c46'], amarelo: ['#fdf3e7', '#8a5a00'], vermelho: ['#fbeceb', '#b5342b'] };
 
 async function pintar() {
