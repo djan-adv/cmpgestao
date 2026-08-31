@@ -928,6 +928,7 @@ function puxarChat(primeira){
       ms.forEach(function(m){ desenhaMsg(m); if(m.id>CHAT_ULTIMO) CHAT_ULTIMO=m.id; });
       var c=$('chat-corpo'); c.scrollTop = c.scrollHeight;
     }
+    aplicarApagadas(d.apagadas||[]);
   }).catch(function(){});
 }
 function iconeArquivo(tipo,nome){
@@ -971,10 +972,32 @@ function linkifica(t){
 function desenhaMsg(m){
   var eu = m.autor_tipo==='cliente';
   var d=document.createElement('div'); d.className='cmsg '+(eu?'eu':'eles');
+  d.setAttribute('data-mid', m.id);
+  if(m.apagada){ d.innerHTML=bolhaApagada(m); $('chat-corpo').appendChild(d); return; }
   d.innerHTML='<div class="bolha">'+(!eu?('<div class="quem">'+esc(m.autor_nome||'CMP Advogados')+'</div>'):'')+
     anexoHTML(m)+
     (m.texto?linkifica(m.texto):'')+'<div class="hora">'+brHora(m.criado_em)+'</div></div>';
   $('chat-corpo').appendChild(d);
+}
+/* Mensagem que o escritório apagou (foi enviada por engano). O aviso substitui
+   o conteúdo — texto e anexo não vêm mais do servidor. */
+function bolhaApagada(m){
+  return '<div class="bolha" style="opacity:.72;font-style:italic;color:var(--muted)">'+
+    '&#128683; Mensagem apagada pelo escritório'+
+    (m.criado_em?('<div class="hora">'+brHora(m.criado_em)+'</div>'):'')+'</div>';
+}
+/* Apagar tem de valer para quem está com a conversa ABERTA agora: o polling
+   traz só o que é novo, então a lista de apagadas vem à parte e reescreve o que
+   já está na tela. Sem isso a mensagem errada continuaria à vista até o cliente
+   fechar e abrir o app. */
+function aplicarApagadas(lista){
+  (lista||[]).forEach(function(a){
+    var el=document.querySelector('#chat-corpo [data-mid="'+a.id+'"]');
+    if(!el || el.getAttribute('data-apagada')==='1') return;
+    el.setAttribute('data-apagada','1');
+    if(a.aviso) el.innerHTML=bolhaApagada({});
+    else el.parentNode.removeChild(el);
+  });
 }
 /* ---------- anexo do chat (documento, foto, PDF, áudio…) ---------- */
 var ANEXO=null;   // {nome, tipo, b64}

@@ -22218,6 +22218,7 @@ function _prdAcaoTexto(e){
   if(t==='alvara_confirmed') return 'depósito de alvará confirmado';
   if(t==='integra_requested') return 'pediu a íntegra dos autos ao Estagiário Virtual';
   if(t==='process_updated') return 'processo atualizado (busca no DJEN e no jus.br)'+((md.novos!=null)?(' — '+md.novos+' andamento'+(md.novos===1?'':'s')+' novo'+(md.novos===1?'':'s')):'');
+  if(t==='chat_message_deleted') return 'apagou uma mensagem da conversa com o cliente';
   if(t==='task_opened') return 'tarefa aberta'+(tit?(': '+tit):'');
   if(t==='login') return 'entrou no sistema';
   if(t==='logout') return 'saiu do sistema';
@@ -22452,14 +22453,18 @@ function exportarProdutividadeCSV(){
       + ' <button class="btn sm" style="font-size:11px;background:#185FA5;color:#fff" onclick="appCliFalarComCliente(\''+procId+'\')">&#128488; abrir janela</button>';
     }
     var s=S(); if(!s){ corpo.innerHTML='<div class="note">Sem conexão com o banco.</div>'; return; }
-    s.from('portal_chat').select('id,autor_tipo,autor_nome,texto,criado_em,anexo_id,anexo_nome,anexo_tipo,anexo_tamanho').eq('processo_id',procId)
+    s.from('portal_chat').select('id,autor_tipo,autor_nome,texto,criado_em,anexo_id,anexo_nome,anexo_tipo,anexo_tamanho,apagada_em,apagada_por').eq('processo_id',procId)
       .order('id',{ascending:false}).limit(40).then(function(r){
         if(!(FICHA_PROC&&FICHA_PROC._id===procId)) return;
         var ms=(r.data||[]).slice().reverse();
         var h= ms.length? ms.map(function(m){
             var cli=(m.autor_tipo==='cliente');
-            var anx = m.anexo_id ? (' <a href="/api/anexo?id='+m.anexo_id+'&jwt='+encodeURIComponent(window.__jwtAnexo||'')+'" target="_blank" rel="noopener" style="color:#185FA5;font-weight:600">'+icoArq(m.anexo_tipo,m.anexo_nome)+' '+escx(m.anexo_nome||'arquivo')+'</a>') : '';
-            return '<div style="margin:4px 0;font-size:13px"><span class="note" style="font-size:11px">'+ddmmhh(m.criado_em)+'</span> <b style="color:'+(cli?'#185FA5':'#0F6E56')+'">'+(cli?'&#128242; ':'')+escx(m.autor_nome||(cli?'Cliente':'Escritório'))+':</b> '+escx(m.texto||'')+anx+'</div>';
+            var apg=!!m.apagada_em;
+            var anx = (m.anexo_id&&!apg) ? (' <a href="/api/anexo?id='+m.anexo_id+'&jwt='+encodeURIComponent(window.__jwtAnexo||'')+'" target="_blank" rel="noopener" style="color:#185FA5;font-weight:600">'+icoArq(m.anexo_tipo,m.anexo_nome)+' '+escx(m.anexo_nome||'arquivo')+'</a>') : '';
+            var corpo = apg
+              ? ('<s style="color:#8a92a0">'+escx(m.texto||(m.anexo_nome?('anexo: '+m.anexo_nome):''))+'</s>'+_seloApagada(m))
+              : (escx(m.texto||'')+anx);
+            return '<div style="margin:4px 0;font-size:13px"><span class="note" style="font-size:11px">'+ddmmhh(m.criado_em)+'</span> <b style="color:'+(cli?'#185FA5':'#0F6E56')+'">'+(cli?'&#128242; ':'')+escx(m.autor_nome||(cli?'Cliente':'Escritório'))+':</b> '+corpo+_btnApagar(m,procId)+'</div>';
           }).join('')
           : '<div class="note">Nenhuma mensagem ainda. '+(acessos.length?'O cliente já pode escrever pelo app.':'Dê acesso ao app para o cliente poder conversar por aqui.')+'</div>';
         /* anexo direto da ficha: mandar documento ao cliente exigia abrir a
@@ -22479,6 +22484,41 @@ function exportarProdutividadeCSV(){
         try{ if(typeof window.appCliLigarDrop==='function') window.appCliLigarDrop(); }catch(eD){}
       });
   }
+  /* ------------------------- apagar mensagem enviada por engano -------------------------
+     Mensagem errada saía e ficava. Agora dá para tirar da tela do cliente — mas
+     só o que SAIU DAQUI: o que o cliente escreveu é palavra dele, não se mexe.
+     No banco a linha continua, marcada com quem apagou e quando, e aqui no
+     Gestão ela aparece riscada: conversa com cliente é registro do processo,
+     some é da tela dele, não da nossa memória. */
+  function _seloApagada(m){
+    var q=m.apagada_em?ddmmhh(m.apagada_em):'';
+    return ' <span class="note" style="font-size:10.5px;color:#b5342b">&#128683; apagada'+
+      (m.apagada_por?(' por '+escx(m.apagada_por)):'')+(q?(' · '+q):'')+'</span>';
+  }
+  function _btnApagar(m,procId){
+    if(m.autor_tipo!=='escritorio'||m.apagada_em) return '';
+    return ' <button title="Apagar esta mensagem — sai da tela do cliente" onclick="appCliApagarMsg('+m.id+',\''+procId+'\')" '+
+      'style="border:none;background:none;cursor:pointer;color:#b5342b;font-size:11px;opacity:.65;padding:0 3px">&#128465; apagar</button>';
+  }
+  window.appCliApagarMsg=function(id, procId){
+    id=parseInt(id,10); if(!id) return;
+    if(!confirm('Apagar esta mensagem?\n\nEla sai da tela do cliente. Se ele ainda não tinha aberto a conversa, some sem deixar rastro; se já tinha lido, fica no lugar o aviso "mensagem apagada pelo escritório".\n\nAqui no Gestão ela continua registrada, riscada, com o seu nome.\n\nAviso do celular já entregue não volta atrás.')) return;
+    var s=S(); if(!s) return;
+    eu().then(function(me){
+      return s.from('portal_chat')
+        .update({apagada_em:new Date().toISOString(), apagada_por:((me&&me.nome)||'Escritório')})
+        .eq('id',id).eq('autor_tipo','escritorio').is('apagada_em',null)
+        .select('id,processo_id').maybeSingle();
+    }).then(function(r){
+      if(!r||r.error||!r.data){ alert('Não foi possível apagar'+((r&&r.error)?(': '+r.error.message):'.')); return; }
+      var pid=procId||r.data.processo_id;
+      try{ if(typeof logEvent==='function') logEvent('chat_message_deleted','processo',pid,{msg_id:id}); }catch(e){}
+      if(FICHA_PROC&&FICHA_PROC._id===pid) fichaConversa(pid);
+      if(JAN.aberta&&JAN.procId===pid){ JAN.ultimo=0; JAN.dia=null; puxarJanela(true); }
+      try{ if(typeof window.__waRepintaCliente==='function') window.__waRepintaCliente(pid); }catch(e){}
+    }).catch(function(e){ alert('Não foi possível apagar: '+((e&&e.message)||e)); });
+  };
+
   window.appCliEnviarDaFicha=function(procId){
     var i=document.getElementById('clichat-inp'); if(!i) return;
     var texto=(i.value||'').trim(), arq=ANEXO_JAN;
@@ -22746,21 +22786,23 @@ function exportarProdutividadeCSV(){
       if(k&&k!==JAN.dia){ JAN.dia=k; var fx=document.createElement('div'); fx.innerHTML=D.faixa(m.criado_em); box.appendChild(fx); }
     }
     var cli=(m.autor_tipo==='cliente');
+    var apg=!!m.apagada_em;
     var d=document.createElement('div');
     d.style.cssText='margin:0 0 7px;'+(cli?'':'text-align:right');
     var titHora=D.dataHora?D.dataHora(m.criado_em):'';
-    d.innerHTML='<div style="display:inline-block;max-width:88%;text-align:left;background:'+(cli?'#fffdf3':'#fff6c9')+';'+
-      'border:1px solid #e6dfae;border-left:4px solid '+(cli?'#185FA5':'#8a8355')+';border-radius:9px;padding:6px 9px;white-space:pre-line;word-break:break-word">'+
+    d.innerHTML='<div style="display:inline-block;max-width:88%;text-align:left;background:'+(apg?'#f4f5f7':(cli?'#fffdf3':'#fff6c9'))+';'+
+      'border:1px solid #e6dfae;border-left:4px solid '+(apg?'#b5342b':(cli?'#185FA5':'#8a8355'))+';border-radius:9px;padding:6px 9px;white-space:pre-line;word-break:break-word">'+
       '<div style="font-size:11px;font-weight:700;color:'+(cli?'#185FA5':'#8a8355')+'">'+escx(cli?(m.autor_nome||'Cliente'):'você')+
-      ' · <span title="'+escx(titHora)+'" style="color:#6b6540;font-weight:400">'+hhmm(m.criado_em)+'</span></div>'+
-      anexoHTMLJan(m)+
-      (m.texto?escx(m.texto):'')+'</div>';
+      ' · <span title="'+escx(titHora)+'" style="color:#6b6540;font-weight:400">'+hhmm(m.criado_em)+'</span>'+
+      (apg?'':_btnApagar(m,JAN.procId))+'</div>'+
+      (apg?('<s style="color:#8a92a0">'+escx(m.texto||(m.anexo_nome?('anexo: '+m.anexo_nome):''))+'</s>'+_seloApagada(m))
+         :(anexoHTMLJan(m)+(m.texto?escx(m.texto):'')))+'</div>';
     box.appendChild(d); box.scrollTop=box.scrollHeight;
   }
   function puxarJanela(primeira){
     if(!JAN.aberta||!JAN.procId) return;
     var s=S(); if(!s) return;
-    var cols='id,autor_tipo,autor_nome,texto,criado_em,anexo_id,anexo_nome,anexo_tipo,anexo_tamanho';
+    var cols='id,autor_tipo,autor_nome,texto,criado_em,anexo_id,anexo_nome,anexo_tipo,anexo_tamanho,apagada_em,apagada_por';
     var base=s.from('portal_chat').select(cols).eq('processo_id',JAN.procId);
     /* Na primeira carga pega as MAIS RECENTES e inverte. Antes era
        order(id asc).limit(200), que devolve as 200 mais ANTIGAS: numa conversa
@@ -22834,7 +22876,7 @@ function exportarProdutividadeCSV(){
        em ordem decrescente, a PRIMEIRA de cada processo já é a última da conversa.
        O teto de 800 limita a "conversas recentes" — conversa parada há muito tempo
        pode ficar de fora, e é por isso que o rodapé avisa. */
-    s.from('portal_chat').select('id,processo_id,autor_tipo,autor_nome,texto,anexo_nome,criado_em,lida_escritorio')
+    s.from('portal_chat').select('id,processo_id,autor_tipo,autor_nome,texto,anexo_nome,criado_em,lida_escritorio,apagada_em')
      .order('id',{ascending:false}).limit(800).then(function(r){
        if(JAN.modo!=='lista') return;
        var conv={};
@@ -22871,7 +22913,8 @@ function exportarProdutividadeCSV(){
       var num=(p&&p.numero)?numCurto(p.numero):'—';
       var dia=D.rotulo?D.rotulo(c.ultima.criado_em):'';
       var quando=(dia==='hoje')?hhmm(c.ultima.criado_em):dia;
-      var pre=c.ultima.texto||(c.ultima.anexo_nome?('📎 '+c.ultima.anexo_nome):'');
+      /* prévia de mensagem apagada não pode repetir o texto errado */
+      var pre=c.ultima.apagada_em?'🚫 mensagem apagada':(c.ultima.texto||(c.ultima.anexo_nome?('📎 '+c.ultima.anexo_nome):''));
       var meu=(c.ultima.autor_tipo!=='cliente');
       return '<div data-pid="'+escx(c.pid)+'" style="display:flex;gap:8px;align-items:center;padding:8px 4px;border-bottom:1px solid #ece5b8;cursor:pointer">'
         +'<div style="width:31px;height:31px;border-radius:50%;background:#e6dfae;color:#5a5326;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:11.5px;flex:none">'+escx(_iniciais(nome))+'</div>'
@@ -23318,7 +23361,7 @@ function exportarProdutividadeCSV(){
 
     var convs=[];
     // --- clientes (app), agrupado por processo ---
-    var pc=await s.from('portal_chat').select('id,processo_id,autor_tipo,autor_nome,texto,anexo_nome,criado_em,lida_escritorio').order('id',{ascending:false}).limit(600);
+    var pc=await s.from('portal_chat').select('id,processo_id,autor_tipo,autor_nome,texto,anexo_nome,criado_em,lida_escritorio,apagada_em').order('id',{ascending:false}).limit(600);
     var porProc={};
     (pc.data||[]).forEach(function(m){
       var c=porProc[m.processo_id];
@@ -23450,7 +23493,8 @@ function exportarProdutividadeCSV(){
     if(!lista.length){ box.innerHTML='<div class="note" style="padding:16px">Nenhuma conversa aqui.</div>'; return; }
     box.innerHTML=lista.map(function(c){
       var prev=c.ultima?((c.ultima.autor_tipo==='escritorio'||c.ultima.autor_id===(WA.eu&&WA.eu.id)?'✓ ':'')+
-        escx(String(c.ultima.texto||(c.ultima.anexo_nome?('📎 '+c.ultima.anexo_nome):'')||'').slice(0,52))):'<i style="color:#98a1ad">sem mensagens ainda</i>';
+        (c.ultima.apagada_em?'<i style="color:#98a1ad">mensagem apagada</i>'
+          :escx(String(c.ultima.texto||(c.ultima.anexo_nome?('📎 '+c.ultima.anexo_nome):'')||'').slice(0,52)))):'<i style="color:#98a1ad">sem mensagens ainda</i>';
       var sel=(WA.aberta&&WA.aberta.id===c.id);
       return '<div class="wa-item" data-id="'+c.id+'" style="display:flex;gap:10px;padding:10px 12px;cursor:pointer;border-bottom:1px solid #f0f3f7;'+(sel?'background:#e8f0fb':'')+'">'+
         '<div style="width:38px;height:38px;border-radius:50%;flex:none;background:'+waCor(c.nome)+';color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700">'+
@@ -23504,6 +23548,16 @@ function exportarProdutividadeCSV(){
     setTimeout(function(){ editarLead(l.id); },60);
   };
 
+  /* Apagar uma mensagem em QUALQUER tela tem de valer nesta também. Quem apaga é
+     o módulo do app do cliente, que daqui de dentro não enxerga o WA — por isso
+     o gancho pelo window. */
+  window.__waRepintaCliente=function(procId){
+    try{
+      if(!WA.aberta||WA.aberta.tipo!=='cliente'||WA.aberta.procId!==procId) return;
+      WA.ultimo=0; waPuxarMensagens(true);
+    }catch(e){}
+  };
+
   async function waPuxarMensagens(primeira){
     var c=WA.aberta; if(!c) return;
     var s=S(); if(!s) return;
@@ -23511,9 +23565,9 @@ function exportarProdutividadeCSV(){
     try{ var tk=await jwtCli(); window.__jwtAnexo=tk; }catch(e){}
     var ms=[];
     if(c.tipo==='cliente'){
-      var q=s.from('portal_chat').select('id,autor_tipo,autor_nome,texto,criado_em,anexo_id,anexo_nome,anexo_tipo,anexo_tamanho').eq('processo_id',c.procId).order('id',{ascending:true});
+      var q=s.from('portal_chat').select('id,autor_tipo,autor_nome,texto,criado_em,anexo_id,anexo_nome,anexo_tipo,anexo_tamanho,apagada_em,apagada_por').eq('processo_id',c.procId).order('id',{ascending:true});
       if(WA.ultimo>0) q=q.gt('id',WA.ultimo); else q=q.limit(300);
-      var r=await q; ms=(r.data||[]).map(function(m){ return {id:m.id,meu:(m.autor_tipo==='escritorio'),quem:m.autor_nome,texto:m.texto,criado_em:m.criado_em,anexo_id:m.anexo_id,anexo_nome:m.anexo_nome,anexo_tipo:m.anexo_tipo,anexo_tamanho:m.anexo_tamanho}; });
+      var r=await q; ms=(r.data||[]).map(function(m){ return {id:m.id,meu:(m.autor_tipo==='escritorio'),quem:m.autor_nome,texto:m.texto,criado_em:m.criado_em,anexo_id:m.anexo_id,anexo_nome:m.anexo_nome,anexo_tipo:m.anexo_tipo,anexo_tamanho:m.anexo_tamanho,apagada_em:m.apagada_em,apagada_por:m.apagada_por,procId:c.procId}; });
       if(ms.length) { try{ await s.from('portal_chat').update({lida_escritorio:true}).eq('processo_id',c.procId).eq('autor_tipo','cliente').eq('lida_escritorio',false); }catch(e){} c.naoLidas=0; }
     } else if(c.tipo==='lead'){
       var lr=await s.from('crm_leads').select('conversa').eq('id',c.leadId).maybeSingle();
@@ -23552,11 +23606,20 @@ function exportarProdutividadeCSV(){
       else anx='<a href="'+url+'" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:6px;text-decoration:none;color:inherit;background:rgba(0,0,0,.07);border-radius:7px;padding:5px 7px;margin-bottom:3px">'+
         '<span style="font-size:16px">'+icoArq(m.anexo_tipo,m.anexo_nome)+'</span><b style="font-size:11.5px;word-break:break-word">'+escx(m.anexo_nome||'arquivo')+'</b></a>';
     }
+    var apg=!!m.apagada_em;
+    if(apg) anx='';
+    /* apagar só vale na conversa do CLIENTE (portal_chat) e só no que saiu daqui */
+    var podeApagar=(!apg&&m.meu&&m.procId&&typeof window.appCliApagarMsg==='function');
     d.innerHTML='<div style="max-width:72%;padding:7px 10px;border-radius:9px;white-space:pre-line;word-break:break-word;font-size:13.5px;box-shadow:0 1px 1px rgba(0,0,0,.10);'+
-      (m.meu?'background:#d9fdd3':'background:#fff')+'">'+
+      (apg?'background:#f1f2f4':(m.meu?'background:#d9fdd3':'background:#fff'))+'">'+
       (!m.meu&&m.quem?('<div style="font-size:10.5px;color:'+waCor(m.quem)+';font-weight:700;margin-bottom:1px">'+escx(m.quem)+'</div>'):'')+
-      anx+(m.texto?escx(m.texto):'')+
-      '<div style="font-size:10px;color:#667781;text-align:right;margin-top:2px">'+hhmm(m.criado_em)+'</div></div>';
+      anx+(apg
+        ?('<s style="color:#8a92a0">'+escx(m.texto||(m.anexo_nome?('anexo: '+m.anexo_nome):''))+'</s>'+
+          '<div style="font-size:10px;color:#b5342b;margin-top:2px">&#128683; apagada'+(m.apagada_por?(' por '+escx(m.apagada_por)):'')+'</div>')
+        :(m.texto?escx(m.texto):''))+
+      '<div style="font-size:10px;color:#667781;text-align:right;margin-top:2px">'+
+      (podeApagar?('<button title="Apagar esta mensagem — sai da tela do cliente" onclick="appCliApagarMsg('+m.id+',\''+m.procId+'\')" style="border:none;background:none;cursor:pointer;color:#b5342b;font-size:10px;opacity:.7;padding:0 4px 0 0">&#128465; apagar</button>'):'')+
+      hhmm(m.criado_em)+'</div></div>';
     box.appendChild(d);
   }
 

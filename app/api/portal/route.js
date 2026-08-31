@@ -413,7 +413,8 @@ export async function POST(request) {
     for (const m of (movs || [])) if (!ultima[m.processo_id]) ultima[m.processo_id] = m
     // não lidas do chat (mensagens do escritório que o cliente ainda não viu)
     const { data: naoLidas } = await sb.from('portal_chat')
-      .select('processo_id').in('processo_id', ids).eq('autor_tipo', 'escritorio').eq('lida_cliente', false).limit(1000)
+      .select('processo_id').in('processo_id', ids).eq('autor_tipo', 'escritorio').eq('lida_cliente', false)
+      .is('apagada_em', null).limit(1000)
     const badge = {}
     for (const n of (naoLidas || [])) badge[n.processo_id] = (badge[n.processo_id] || 0) + 1
 
@@ -483,7 +484,7 @@ export async function POST(request) {
     ]
     const { count } = await sb.from('portal_chat')
       .select('id', { count: 'exact', head: true })
-      .eq('processo_id', id).eq('autor_tipo', 'escritorio').eq('lida_cliente', false)
+      .eq('processo_id', id).eq('autor_tipo', 'escritorio').eq('lida_cliente', false).is('apagada_em', null)
     /* Audiência de HOJE (Brasília): o app mostra o link da sala SÓ no dia — o
        servidor para de devolver no dia seguinte, então o botão some sozinho e
        ninguém clica fora de hora (pedido do dono, 18/08/2026). */
@@ -524,16 +525,37 @@ export async function POST(request) {
     const pid = String(body.processo_id || '')
     const ids = await processosPermitidos(sb, acesso)
     if (!ids.includes(pid)) return Response.json({ erro: 'Processo não disponível.' }, { status: 403 })
-    let q = sb.from('portal_chat').select('id,autor_tipo,autor_nome,texto,criado_em,anexo_id,anexo_nome,anexo_tipo,anexo_tamanho').eq('processo_id', pid).order('id', { ascending: true })
+    let q = sb.from('portal_chat').select('id,autor_tipo,autor_nome,texto,criado_em,anexo_id,anexo_nome,anexo_tipo,anexo_tamanho,apagada_em,lida_cliente').eq('processo_id', pid).order('id', { ascending: true })
     const desde = parseInt(body.desde_id || 0, 10)
     if (desde > 0) q = q.gt('id', desde); else q = q.limit(200)
     const { data: msgs } = await q
+    /* Mensagem apagada pelo escritório (enviada por engano):
+       — se o cliente NUNCA chegou a ver, some sem deixar rastro;
+       — se ele já tinha aberto o chat, fica o aviso discreto de que foi
+         apagada. Sumir do nada com algo que a pessoa leu é pior do que
+         assumir que a mensagem saiu. O texto e o anexo não vão em nenhum
+         dos dois casos. */
+    const visiveis = []
+    for (const m of (msgs || [])) {
+      if (!m.apagada_em) { delete m.apagada_em; delete m.lida_cliente; visiveis.push(m); continue }
+      if (!m.lida_cliente) continue
+      visiveis.push({ id: m.id, autor_tipo: m.autor_tipo, autor_nome: m.autor_nome, criado_em: m.criado_em, apagada: true })
+    }
+    /* Quem está com a conversa aberta na tela recebe só o que é NOVO (desde_id),
+       então a lista de apagadas vai à parte — é assim que a mensagem também
+       desaparece de quem já estava lendo, sem precisar fechar o app. */
+    const { data: apg } = await sb.from('portal_chat').select('id,lida_cliente')
+      .eq('processo_id', pid).not('apagada_em', 'is', null).limit(300)
     // abrir o chat marca como lidas as mensagens do escritório
     try {
       await sb.from('portal_chat').update({ lida_cliente: true })
-        .eq('processo_id', pid).eq('autor_tipo', 'escritorio').eq('lida_cliente', false)
+        .eq('processo_id', pid).eq('autor_tipo', 'escritorio').eq('lida_cliente', false).is('apagada_em', null)
     } catch (e) {}
-    return Response.json({ ok: true, mensagens: msgs || [] })
+    return Response.json({
+      ok: true,
+      mensagens: visiveis,
+      apagadas: (apg || []).map(m => ({ id: m.id, aviso: !!m.lida_cliente })),
+    })
   }
 
   if (acao === 'chat_enviar') {
