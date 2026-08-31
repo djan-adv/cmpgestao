@@ -6114,6 +6114,32 @@ async function gerarBriefingTarefa(){
   if(dig.length<8){ alert('Esta atividade não está vinculada a um processo.\n\nPreencha o campo "Processo ou caso" — é de lá que saem a ficha, a inicial e os despachos.'); return; }
   var btn=document.getElementById('t-btn-briefing');
   var rot=btn?btn.innerHTML:'';
+  /* ===== o melhor momento de baixar os autos =====
+     Observação do dono (31/08/2026): "o melhor momento para pedir a íntegra é
+     quando pedimos à IA o resumo na tarefa". É verdade — é o instante em que
+     alguém vai de fato ler o processo. Continua sendo uma PERGUNTA, nunca
+     automático: a íntegra passa de 100 MB e foi por baixar sozinha que ela
+     virou reclamação. */
+  if(confirm('Baixar a íntegra dos autos deste processo antes de montar o resumo?\n\nOK = baixa agora (todas as peças, da inicial para a mais recente, num PDF só na pasta do processo). Pode passar de 100 MB e levar alguns minutos.\n\nCancelar = monta o resumo com o que já está na pasta.')){
+    if(btn){ btn.disabled=true; btn.innerHTML='⏳ baixando os autos…'; }
+    _briefModal('<div class="note">Baixando os autos do jus.br, da petição inicial para a peça mais recente. Em processo grande isso leva alguns minutos — pode deixar esta janela aberta.</div>');
+    try{
+      var jwtI=(typeof finToken==='function')?await finToken():await docToken();
+      var quemI=(typeof _kanQuemSou==='function'&&_kanQuemSou())||'';
+      var ri=await fetch('/api/jusbr/integra/guardar',{method:'POST',
+        headers:{'Content-Type':'application/json',Authorization:'Bearer '+jwtI},
+        body:JSON.stringify({numero:proc, quem:quemI})});
+      var ji=await ri.json().catch(function(){ return {}; });
+      if(ji&&ji.ok){
+        try{ if(typeof logEvent==='function') logEvent('integra_requested','processo',proc,{numero:proc, ja_existia:!!ji.ja_existia, pecas:(ji.pecas||null)}); }catch(e){}
+        if(ji.ja_existia) alert('Já havia uma íntegra recente na pasta ('+ji.arquivo+', de '+(ji.dias||0)+' dia(s) atrás) — usei essa em vez de baixar de novo.');
+        else alert('✓ Íntegra guardada: '+ji.arquivo+'\n'+(ji.pecas||0)+' de '+(ji.total||0)+' peça(s), da mais antiga para a mais recente.'+(ji.parcial?('\n\nAtenção: '+ji.parcial+' peça(s) ficaram de fora por tamanho/formato.'):''));
+        try{ if(typeof carregarDocs==='function'&&typeof atual!=='undefined'&&atual) carregarDocs(atual.numero); }catch(e){}
+      } else {
+        alert('Não consegui baixar a íntegra: '+((ji&&ji.erro)||('HTTP '+ri.status))+(ji&&ji.sem_sessao?'\n\nEntre no jus.br (a extensão sincroniza o acesso) e tente de novo.':'')+'\n\nSigo montando o resumo com o que já está na pasta.');
+      }
+    }catch(eI){ alert('Falha ao baixar a íntegra: '+((eI&&eI.message)||eI)+'\n\nSigo montando o resumo com o que já está na pasta.'); }
+  }
   if(btn){ btn.disabled=true; btn.innerHTML='⏳ lendo os autos…'; }
   _briefModal('<div class="note">Lendo a ficha, a petição inicial e os últimos despachos… isso leva de 20 segundos a 2 minutos.</div>');
   try{
@@ -6134,6 +6160,7 @@ function _briefHTML(j){
      incompletos parece completo, e é aí que se erra a peça */
   var avisos=[];
   if(L.sem_inicial) avisos.push('a <b>petição inicial não foi encontrada</b> na pasta do processo — a qualificação das partes não saiu dos autos');
+  if(L.grande_demais) avisos.push('o arquivo <b>'+esc(L.grande_demais)+'</b> está na pasta, mas é <b>grande demais</b> para a IA ler aqui — confira a qualificação nele');
   if(L.sem_teor) avisos.push('<b>nenhum despacho com teor</b> foi encontrado — só os títulos dos movimentos, que não dizem o que foi determinado');
   var h='<div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap">'
     +'<div style="font-weight:700;font-size:16px">📋 Resumo para a IA</div>'

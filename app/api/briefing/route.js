@@ -122,25 +122,31 @@ export async function POST(request) {
   const arr = []
   try { coletaPdfs(path.join(ROOT, dig), arr) } catch (e) {}
   const ehInicial = (f) => /inicial|peti[cç]/.test(semAcento(f.nome))
-  arr.sort((a, b2) => (ehInicial(b2) - ehInicial(a)) || (b2.mtime - a.mtime))
+  // a íntegra dos autos COMEÇA pela petição inicial — para efeito de
+  // qualificação das partes ela vale como inicial, e é a melhor fonte quando o
+  // arquivo da inicial não está solto na pasta (ver /api/jusbr/integra/guardar)
+  const ehIntegra = (f) => /^000 - integra dos autos/.test(semAcento(f.nome))
+  const serve = (f) => ehInicial(f) || ehIntegra(f)
+  arr.sort((a, b2) => (serve(b2) - serve(a)) || (ehInicial(b2) - ehInicial(a)) || (b2.mtime - a.mtime))
 
   const content = []
   const nomesPdf = []
   let bytes = 0
   let achouInicial = false
+  let grandeDemais = null   // a inicial/íntegra existe, mas não cabe nesta leitura
   for (const f of arr) {
     if (nomesPdf.length >= MAX_PDFS) break
     // depois da inicial não varre a pasta inteira; sem inicial, manda só o PDF
     // mais recente — é melhor que nada, mas NÃO conta como inicial (ver
     // achouInicial): dizer que leu a inicial quando leu outra coisa faria o
     // advogado confiar numa qualificação que não veio dos autos certos.
-    if (!ehInicial(f) && nomesPdf.length) break
-    if (bytes + f.size > MAX_PDF_BYTES) continue
+    if (!serve(f) && nomesPdf.length) break
+    if (bytes + f.size > MAX_PDF_BYTES) { if (serve(f)) grandeDemais = f.nome; continue }
     try {
       const buf = fs.readFileSync(f.full)
       content.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: buf.toString('base64') } })
       bytes += f.size; nomesPdf.push(f.nome)
-      if (ehInicial(f)) achouInicial = true
+      if (serve(f)) achouInicial = true
     } catch (e) {}
   }
 
@@ -168,7 +174,8 @@ export async function POST(request) {
     (nomesPdf.length
       ? ('PDFs anexados a esta mensagem: ' + nomesPdf.join(', ') + '\n' +
          (achouInicial ? '' : 'ATENÇÃO: NENHUM destes é a petição inicial — ela não está na pasta. A qualificação das partes NÃO pôde ser lida dos autos; diga isso na seção "O que falta" em vez de deduzi-la.\n'))
-      : 'Nenhum documento foi encontrado na pasta do processo — a qualificação das partes não pôde ser lida dos autos. Diga isso na seção "O que falta".\n')
+      : 'Nenhum documento foi encontrado na pasta do processo — a qualificação das partes não pôde ser lida dos autos. Diga isso na seção "O que falta".\n') +
+    (grandeDemais ? ('ATENÇÃO: o arquivo "' + grandeDemais + '" está na pasta do processo mas é grande demais para ser lido aqui. A qualificação precisa ser conferida nele à mão.\n') : '')
 
   content.push({ type: 'text', text: variavel })
 
@@ -193,6 +200,7 @@ export async function POST(request) {
       // o que a IA NÃO teve — para a tela poder avisar sem depender do texto dela
       sem_teor: comTeor.length === 0,
       sem_inicial: !achouInicial,
+      grande_demais: grandeDemais,
     },
     custo_usd: r.custoUsd || null,
   })
