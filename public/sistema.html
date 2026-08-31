@@ -11905,8 +11905,13 @@ function renderNavLotes(){
   host.innerHTML=(window.__LOTES||[]).filter(function(l){
     return !/^sem contrato$/i.test(String(l.nome||'').trim());
   }).map(function(l){
-    var n=processosDoLote(l.id).length;
-    return '<a onclick="irParaLote(\''+l.id+'\')" style="padding-left:30px;opacity:.85;font-size:13px"><span class="ic" style="color:'+(l.cor||'#185FA5')+'">▣</span> '+esc(l.nome)+' <span style="margin-left:auto;font-size:10.5px;background:var(--navy2);border-radius:10px;padding:1px 7px">'+n+'</span></a>';
+    /* o badge tem de contar o que a pasta MOSTRA: encerrado mora em "Processos
+       encerrados" e some da lista do lote — mas continuava somando aqui.
+       Assessorias aparecia 9 tendo 5 (4 encerrados dentro). */
+    var doLote=processosDoLote(l.id);
+    var n=doLote.filter(function(p){ return !/encerr/i.test(p.status||''); }).length;
+    var encL=doLote.length-n;
+    return '<a onclick="irParaLote(\''+l.id+'\')" style="padding-left:30px;opacity:.85;font-size:13px"><span class="ic" style="color:'+(l.cor||'#185FA5')+'">▣</span> '+esc(l.nome)+' <span title="'+n+' na pasta'+(encL?(' · '+encL+' encerrado(s), em Processos encerrados'):'')+'" style="margin-left:auto;font-size:10.5px;background:var(--navy2);border-radius:10px;padding:1px 7px">'+n+'</span></a>';
   }).join('');
 }
 function irParaLote(id){ window.__loteAtual=id; go('lote'); }
@@ -11946,8 +11951,11 @@ function abrirConfig(){ if(!souCoordenador()){ alert('Configurações restritas 
 function fecharConfig(){ document.getElementById('modal-config').classList.add('hidden'); }
 function renderCfgLotes(){
   var host=document.getElementById('cfg-lotes');
-  if(host){ host.innerHTML=(window.__LOTES||[]).length? (window.__LOTES||[]).map(function(l){ var n=processosDoLote(l.id).length;
-    return '<div style="display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line)"><span style="width:12px;height:12px;border-radius:3px;background:'+(l.cor||'#185FA5')+';flex:0 0 auto"></span><b style="flex:1">'+esc(l.nome)+' <span class="note" style="font-weight:400">· '+n+' processo'+(n===1?'':'s')+'</span></b><a onclick="renomearLote(\''+l.id+'\')" style="cursor:pointer;color:#185FA5;font-size:12px">renomear</a><a onclick="excluirLote(\''+l.id+'\')" style="cursor:pointer;color:#b5342b;font-size:12px">excluir</a></div>';
+  if(host){ host.innerHTML=(window.__LOTES||[]).length? (window.__LOTES||[]).map(function(l){
+    var _dl=processosDoLote(l.id);
+    var n=_dl.filter(function(p){ return !/encerr/i.test(p.status||''); }).length;
+    var _ec=_dl.length-n;   /* aqui os encerrados aparecem à parte: excluir o lote mexe neles também */
+    return '<div style="display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line)"><span style="width:12px;height:12px;border-radius:3px;background:'+(l.cor||'#185FA5')+';flex:0 0 auto"></span><b style="flex:1">'+esc(l.nome)+' <span class="note" style="font-weight:400">· '+n+' processo'+(n===1?'':'s')+(_ec?(' · '+_ec+' encerrado'+(_ec===1?'':'s')):'')+'</span></b><a onclick="renomearLote(\''+l.id+'\')" style="cursor:pointer;color:#185FA5;font-size:12px">renomear</a><a onclick="excluirLote(\''+l.id+'\')" style="cursor:pointer;color:#b5342b;font-size:12px">excluir</a></div>';
   }).join(''):'<div class="note">Nenhum lote criado ainda.</div>'; }
   var selM=document.getElementById('cfg-mv-lote');
   if(selM){ selM.innerHTML='<option value="__none">(tirar do lote)</option>'+(window.__LOTES||[]).map(function(l){return '<option value="'+l.id+'">'+esc(l.nome)+'</option>';}).join(''); }
@@ -12100,8 +12108,21 @@ function atualizaNavContagens(){
        Caso sem CNJ (fonte 'caso') sai pra "Em contratação" — menos pasta de
        assessoria e caso tirado à mão de lá, que contam na lista principal
        (ver _ehContratacao). */
-    (DADOS.processos||[]).forEach(function(p){ if(/encerr/i.test(p.status||''))enc++; else if(_ehSemContrato(p))contr++; else if(isSuspenso(p))jam++; else if(isInove(p))inv++; else if(ehProcessoAtivo(p)) ativ++; });
-    var e1=document.getElementById('nav-n-proc'); if(e1)e1.textContent=ativ;
+    var geral=0, emLote=0;
+    (DADOS.processos||[]).forEach(function(p){
+      if(/encerr/i.test(p.status||'')){ enc++; return; }
+      geral++;                                   /* total geral = tudo que não está encerrado */
+      if(p.lote_id) emLote++;
+      if(_ehSemContrato(p))contr++; else if(isSuspenso(p))jam++; else if(isInove(p))inv++; else if(ehProcessoAtivo(p)) ativ++;
+    });
+    /* O número ao lado de "Processos" mostrava só a LISTA PRINCIPAL, e não o
+       total — quem lia via 205 com 505 processos em andamento espalhados pelas
+       pastas de baixo. Agora é o total geral; a dica abre a conta. */
+    var e1=document.getElementById('nav-n-proc');
+    if(e1){ e1.textContent=geral;
+      e1.title='Total geral: '+geral+' fora dos encerrados.\n'
+        +'• lista principal: '+ativ+'\n• sem contrato: '+contr+'\n• Inove: '+inv+'\n• James Laurence: '+jam+'\n• em pastas: '+emLote
+        +'\nEncerrados ('+enc+') ficam em "Processos encerrados".'; }
     var e2=document.getElementById('nav-n-inove'); if(e2)e2.textContent=inv;
     var e3=document.getElementById('nav-n-enc'); if(e3)e3.textContent=enc;
     var e4=document.getElementById('nav-n-james'); if(e4)e4.textContent=jam;
