@@ -2795,7 +2795,8 @@ function abrir(i){
       '<button class="btn sm" style="background:#e8f4f0;color:#0F6E56;border:1px solid #bfe0d4;font-weight:700;font-size:11px;padding:3px 8px" onclick="criarSalaReuniao(\''+p.numero+'\')" title="Sala do próprio escritório: o cliente entra pelo navegador, sem instalar nada, e a conversa é transcrita para o histórico. Não guarda gravação.">&#127909; Sala de vídeo (nossa)</button>'+
       '<button class="btn sm" style="background:#eef3fa;color:#185FA5;border:1px solid #cfe0f2;font-weight:700;font-size:11px;padding:3px 8px" onclick="criarMeetExterno(\''+p.numero+'\')" title="Cria uma reunião no Google Meet e põe no calendário — para quando o cliente já usa Meet ou a reunião tem mais de duas pessoas">&#128197; Meet (externo)</button>'+
       '<button class="btn sm" style="background:#eef3fa;color:#185FA5;border:1px solid #cfe0f2;font-weight:700;font-size:11px;padding:3px 8px" onclick="abrirGerarContrato(\''+p.numero+'\')" title="Gera o contrato de honorários pronto (Word + PDF, padrão CMP) — pergunta objeto, honorários iniciais/parcelamento e percentual de êxito">&#128220; Gerar contrato</button>'+
-      '<button class="btn sm" style="background:#7b1e3a;color:#fff;border:1px solid #7b1e3a;font-weight:700;font-size:11px;padding:3px 8px" onclick="abrirProtocolarPeticao(\''+p.numero+'\')" title="Guarda a peça no sistema com prazo fatal e alerta — pronta para protocolo (PDF) ou aguardando ajuste (Word). O protocolo em si é feito no jus.br.">&#128228; Subir petição para protocolo</button>'+
+      '<button class="btn sm" style="background:#7b1e3a;color:#fff;border:1px solid #7b1e3a;font-weight:700;font-size:11px;padding:3px 8px" onclick="abrirProtocolarPeticao(\''+p.numero+'\')" title="Guarda a peça no sistema com prazo fatal e alerta — pronta para protocolo (PDF) ou aguardando ajuste (Word).">&#128228; Subir petição para protocolo</button>'+
+      '<button class="btn sm" style="background:#0F6E56;color:#fff;border:1px solid #0F6E56;font-weight:700;font-size:11px;padding:3px 8px;margin-left:4px" onclick="abrirProtocolarJusbr(\''+p.numero+'\')" title="Protocola de verdade no jus.br, daqui: sobe o PDF, envia ao tribunal e guarda o recibo do CNJ na pasta.">&#9878; Protocolar no jus.br</button>'+
     '</div>'+
     '<div class="card" id="doc-card"><p class="sectlabel">Documentos do processo'+
       '<span style="float:right;display:flex;gap:10px;text-transform:none;letter-spacing:0;font-weight:600">'+
@@ -20407,6 +20408,115 @@ async function renderEstagiario(){
         +'</div>';
     }).join('')+'</div>';
   }catch(e){ el.innerHTML='<div class="note">Erro: '+finEsc(String(e&&e.message||e))+'</div>'; }
+}
+/* ===== Protocolar no jus.br, daqui =====
+   A receita saiu de três protocolos que o dono fez pelo portal com a extensão
+   ligada (TJBA, TRT5, TJPB): pedir o endereço de upload, subir o PDF, protocolar,
+   buscar o recibo. Protocolar é IRREVERSÍVEL, então a tela é montada ao
+   contrário do resto do sistema: primeiro mostra o que vai ser enviado — processo,
+   vara, classe, partes, arquivo e tipo — e só então libera o botão. Faltando
+   qualquer dado do processo, não deixa seguir: diz o que faltou.
+   Quando o tribunal recusa (o TJSE recusa), a resposta dele vai inteira para a
+   tela, sem tradução nossa. */
+async function abrirProtocolarJusbr(numero){
+  var ov=document.getElementById('prot-ov'); if(ov) ov.remove();
+  ov=document.createElement('div'); ov.id='prot-ov';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(20,28,40,.5);z-index:10001;display:flex;align-items:center;justify-content:center;padding:16px';
+  ov.innerHTML='<div style="background:#fff;border-radius:12px;max-width:640px;width:100%;max-height:88vh;overflow:auto;padding:18px 20px" id="prot-cx">'
+    +'<div class="note">Conferindo o processo no jus.br…</div></div>';
+  ov.onmousedown=function(e){ ov.__bd=(e.target===ov); };
+  ov.onclick=function(e){ if(e.target===ov&&ov.__bd) ov.remove(); };
+  document.body.appendChild(ov);
+  var cx=document.getElementById('prot-cx');
+  try{
+    var jwt=(typeof finToken==='function')?await finToken():await docToken();
+    var r=await fetch('/api/jusbr/protocolar?numero='+encodeURIComponent(numero),{headers:{Authorization:'Bearer '+jwt}});
+    var j=await r.json().catch(function(){ return {}; });
+    if(!r.ok||!j.ok){
+      cx.innerHTML='<h3 style="margin:0 0 6px">⚖ Protocolar no jus.br</h3>'
+        +'<div class="note" style="color:#b5342b">'+esc((j&&j.erro)||('HTTP '+r.status))+'</div>'
+        +(j&&j.sem_sessao?'<div class="note">Entre no portal do jus.br (a extensão sincroniza o acesso) e tente de novo.</div>':'')
+        +'<div style="margin-top:12px;text-align:right"><button class="btn sm ghost" onclick="document.getElementById(\'prot-ov\').remove()">Fechar</button></div>';
+      return;
+    }
+    window.__protDados={numero:numero, tipos:(j.tipos||[]), env:(j.envelope||{})};
+    /* arquivos PDF da pasta Protocolo — é de lá que sai a peça */
+    var arqs=[];
+    try{
+      var tok=await docToken(), dig=_docChaveProc(numero);
+      var rd=await fetch('/api/docs?dir='+encodeURIComponent(dig+'/'+_docDir('proc','')+'/Protocolo').replace(/%2F/g,'%2F'),{headers:{Authorization:'Bearer '+tok}});
+      var jd=await rd.json().catch(function(){ return {}; });
+      arqs=((jd&&jd.itens)||[]).filter(function(x){ return x.tipo!=='pasta' && /\.pdf$/i.test(x.nome||''); });
+    }catch(e){}
+    var E=j.envelope||{};
+    var linha=function(r,v){ return '<div style="display:flex;gap:8px;font-size:12.5px;padding:2px 0"><span style="color:var(--muted);min-width:120px">'+r+'</span><b style="color:var(--navy)">'+esc(String(v==null?'—':v))+'</b></div>'; };
+    var partes=(E.peticaoPartes||[]).map(function(p){ return (p.modalidadePolo==='AT'?'autor: ':'réu: ')+(p.pessoa&&p.pessoa.nome||'—'); }).join(' · ');
+    cx.innerHTML='<h3 style="margin:0 0 2px;color:var(--navy)">⚖ Protocolar no jus.br</h3>'
+      +'<p class="note" style="margin:0 0 10px">Confira o que vai ser enviado. <b>Protocolo não se desfaz.</b></p>'
+      +'<div style="background:#f7f9fc;border:1px solid var(--line);border-radius:9px;padding:9px 11px;margin-bottom:10px">'
+        +linha('Processo', E.numeroProcesso)+linha('Tribunal', (E.siglaTribunal||'')+' ('+(E.jtrTribunal||'')+')')
+        +linha('Vara', E.nomeOrgaoJulgadorCorporativo)+linha('Grau', E.siglaGrau)
+        +linha('Valor da causa', E.valorCausa)+linha('Partes', partes||'—')
+      +'</div>'
+      +(j.faltando&&j.faltando.length
+        ? ('<div style="background:#fbeceb;border:1px solid #f0c8c4;border-radius:9px;padding:9px 11px;font-size:12.5px;color:#b5342b">'
+           +'<b>Não dá para protocolar daqui.</b> O jus.br não devolveu: '+esc(j.faltando.join(', '))+'.<br>Protocole pelo portal desta vez e me avise — com esse retorno eu ajusto a leitura.</div>')
+        : ('<label style="display:block;font-size:12.5px;font-weight:700;color:var(--navy);margin:8px 0 3px">Arquivo da petição (pasta Protocolo)</label>'
+           +(arqs.length
+             ? ('<select id="prot-arq" style="width:100%;box-sizing:border-box;font:inherit;font-size:13px;padding:7px 9px;border:1px solid var(--line);border-radius:7px">'
+                +arqs.map(function(a2){ return '<option value="'+esc(a2.nome)+'">'+esc(a2.nome)+'</option>'; }).join('')+'</select>')
+             : '<div class="note" style="color:#b5342b">Nenhum PDF na pasta Protocolo. Use "📤 Subir petição para protocolo" antes.</div>')
+           +'<label style="display:block;font-size:12.5px;font-weight:700;color:var(--navy);margin:10px 0 3px">Tipo (Juntada de Petição de)</label>'
+           +'<select id="prot-tipo" style="width:100%;box-sizing:border-box;font:inherit;font-size:13px;padding:7px 9px;border:1px solid var(--line);border-radius:7px">'
+             +(j.tipos||[]).map(function(t){ return '<option value="'+esc(String(t.id))+'" data-nome="'+esc(t.descricao)+'">'+esc(t.descricao)+'</option>'; }).join('')
+           +'</select>'
+           +((j.tipos&&j.tipos.length)?'':'<div class="note" style="color:#b5342b">O jus.br não devolveu a lista de tipos — sem ela não dá para protocolar daqui.</div>')))
+      +'<div id="prot-msg" class="note" style="margin-top:10px"></div>'
+      +'<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">'
+        +'<button class="btn sm ghost" onclick="document.getElementById(\'prot-ov\').remove()">Cancelar</button>'
+        +((j.faltando&&j.faltando.length)||!arqs.length||!(j.tipos&&j.tipos.length)?''
+          :'<button class="btn sm" id="prot-ok" style="background:#0F6E56;border-color:#0F6E56" onclick="protocolarAgora()">⚖ Protocolar agora</button>')
+      +'</div>';
+  }catch(e){
+    cx.innerHTML='<div class="note" style="color:#b5342b">Erro: '+esc((e&&e.message)||e)+'</div>';
+  }
+}
+async function protocolarAgora(){
+  var d=window.__protDados||{}; var cx=document.getElementById('prot-cx');
+  var selA=document.getElementById('prot-arq'), selT=document.getElementById('prot-tipo');
+  var arq=selA?selA.value:'', idT=selT?selT.value:'', nomeT=selT?(selT.options[selT.selectedIndex]||{}).getAttribute('data-nome'):'';
+  if(!arq||!idT) return;
+  if(!confirm('Protocolar "'+arq+'" como "'+nomeT+'" no processo '+(d.env&&d.env.numeroProcesso||d.numero)+'?\n\nIsto envia ao tribunal AGORA e não tem volta.')) return;
+  var btn=document.getElementById('prot-ok'); if(btn){ btn.disabled=true; btn.textContent='enviando…'; }
+  var msg=document.getElementById('prot-msg'); if(msg) msg.innerHTML='Enviando ao jus.br… não feche esta janela.';
+  try{
+    var jwt=(typeof finToken==='function')?await finToken():await docToken();
+    var quem=(typeof _kanQuemSou==='function'&&_kanQuemSou())||'';
+    var r=await fetch('/api/jusbr/protocolar',{method:'POST',
+      headers:{'Content-Type':'application/json',Authorization:'Bearer '+jwt},
+      body:JSON.stringify({numero:d.numero, arquivo:'Protocolo/'+arq, idTipoDocumento:idT, nomeTipoDocumento:nomeT, quem:quem})});
+    var j=await r.json().catch(function(){ return {}; });
+    if(!r.ok||!j.ok){
+      cx.innerHTML='<h3 style="margin:0 0 6px;color:#b5342b">O jus.br não protocolou</h3>'
+        +'<div style="font-size:13px;margin-bottom:8px">'+esc((j&&j.erro)||('HTTP '+r.status))+'</div>'
+        +(j&&j.recusado?'<div class="note">Essa recusa vem do tribunal, não do sistema. Protocole pelo portal — e, se o tribunal não aceitar por lá também, ele não protocola pelo jus.br.</div>':'')
+        +(j&&j.resposta?('<pre style="font-size:11px;background:#f6f7fa;border-radius:8px;padding:8px;overflow:auto;max-height:180px">'+esc(JSON.stringify(j.resposta,null,1))+'</pre>'):'')
+        +'<div style="margin-top:12px;text-align:right"><button class="btn sm ghost" onclick="document.getElementById(\'prot-ov\').remove()">Fechar</button></div>';
+      return;
+    }
+    try{ if(typeof logEvent==='function') logEvent('task_completed','peticao',d.numero,{titulo:arq,tipo:'protocolo',recibo:(j.protocolo||null),via:'gestao'}); }catch(e){}
+    cx.innerHTML='<h3 style="margin:0 0 6px;color:#0F6E56">✓ Protocolado</h3>'
+      +'<div style="font-size:13px;line-height:1.7">'
+        +'<div><b>Recibo CNJ:</b> '+esc(j.protocolo||'—')+'</div>'
+        +'<div><b>Situação:</b> '+esc(j.status||'—')+' · '+esc(j.tribunal||'')+'</div>'
+        +'<div><b>Data:</b> '+esc(String(j.data||'').replace('T',' '))+'</div>'
+        +(j.recibo?('<div><b>Comprovante:</b> '+esc(j.recibo.arquivo)+' (guardado na pasta Protocolo)</div>'):'<div class="note">O comprovante não veio agora — baixe pelo portal se precisar.</div>')
+      +'</div>'
+      +'<div style="margin-top:12px;text-align:right"><button class="btn sm" onclick="document.getElementById(\'prot-ov\').remove();if(typeof atual!==\'undefined\'&&atual)carregarDocs(atual.numero,\'Protocolo\');">Fechar</button></div>';
+  }catch(e){
+    if(msg) msg.innerHTML='<span style="color:#b5342b">Falha: '+esc((e&&e.message)||e)+'</span>';
+    if(btn){ btn.disabled=false; btn.textContent='⚖ Protocolar agora'; }
+  }
 }
 /* ===== Íntegra dos autos: só quando alguém pede =====
    O robô baixava sozinho sempre que a triagem marcasse "exige peça", e o dono
