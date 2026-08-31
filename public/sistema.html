@@ -558,6 +558,18 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
         <div id="prd-cards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px"></div>
       </div>
       <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+          <p class="sectlabel" style="margin:0">Relatório diário — hora a hora</p>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <input type="date" id="prd-dia" class="btn sm" onchange="renderRelatorioDiario()" style="max-width:160px">
+            <label class="note" style="display:flex;align-items:center;gap:5px;margin:0;font-size:12px"><input type="checkbox" id="prd-dia-ruido" onchange="renderRelatorioDiario()"> mostrar logins e aberturas</label>
+            <button class="btn sm ghost" onclick="exportarDiarioCSV()">⬇ CSV do dia</button>
+          </div>
+        </div>
+        <p class="note" style="margin:6px 0 10px">O que cada pessoa fez no dia, com a hora do registro — sai do mesmo log de eventos. Serve para prestar contas do dia e reconstituir o que foi feito num processo. O dia precisa estar dentro do período escolhido acima.</p>
+        <div id="prd-diario"></div>
+      </div>
+      <div class="card">
         <p class="sectlabel">Auditoria de logins</p>
         <p class="note" style="margin:0 0 8px">Todos os acessos do escritório, com o último login registrado no log de eventos. <b>Faltoso</b> = sem login há mais dias que o limite configurado. Ações de gestão de login (criar/desativar) também ficam auditadas no log.</p>
         <div id="prd-logins"></div>
@@ -8170,9 +8182,14 @@ function _tarChipHTML(a){
   /* cor pela pessoa; a faixa vermelha à esquerda continua marcando prazo fatal */
   var tinta=_respTinta(a.resp);
   var temPrazo=!!(a.prazo&&!concl);
-  var estilo='cursor:pointer;display:flex;align-items:flex-start;gap:5px;'
+  /* PRAZO FATAL escrito com todas as letras, no canto inferior direito do card
+     (pedido do dono, 31/08/2026: "dê atenção especial aos prazos fatais").
+     A faixa vermelha à esquerda dizia a mesma coisa em código de cor — que só
+     entende quem já sabe. A palavra não depende de decorar convenção nenhuma.
+     position:relative + espaço embaixo para a palavra não cair sobre o título. */
+  var estilo='cursor:pointer;display:flex;align-items:flex-start;gap:5px;position:relative;'
     +'background:'+tinta.fundo+';border:1px solid '+tinta.borda+';color:'+tinta.texto+';'
-    +(temPrazo?'border-left:3px solid #b5342b;':'')
+    +(temPrazo?'border-left:3px solid #b5342b;padding-bottom:11px;':'')
     +(concl?'opacity:.55;':'');
   var risco=concl?'text-decoration:line-through;':'';
   var chipAtraso=(a.atrasada&&!concl)?'<span title="adiada automaticamente — não foi concluída até sexta" style="flex-shrink:0;background:rgba(236,64,122,.16);color:#ad1457;border-radius:9px;font-size:9px;font-weight:800;letter-spacing:.02em;padding:1px 6px;margin-top:1px;white-space:nowrap">atraso</span>':'';
@@ -8184,6 +8201,7 @@ function _tarChipHTML(a){
       +'<span class="l3">'+esc(a.titulo||'—')+((typeof _comLista==='function'&&_comLista(a).length)?(' <span title="tem comentário" style="opacity:.85">💬</span>'):'')+'</span>'
     +'</span>'
     +chipAtraso
+    +(temPrazo?('<span title="prazo fatal'+(a.prazo?(' em '+_brData(a.prazo)):'')+'" style="position:absolute;right:5px;bottom:1px;font-size:9px;font-weight:800;color:#b5342b;letter-spacing:.06em;line-height:1;pointer-events:none">FATAL</span>'):'')
     +'</div>';
 }
 function renderTarefasMes(){
@@ -19385,6 +19403,8 @@ async function renderProdutividade(){
       +'</div>';
   });
   cards.innerHTML=html||'<div class="note">Nenhum evento no período — o log começou a registrar agora; os números aparecem conforme a equipe usa o sistema.</div>';
+  window.__prdEvsVis=evs;          /* mesmo conjunto dos cartões: respeita o filtro de pessoa */
+  try{ renderRelatorioDiario(); }catch(eD){ console.warn('relatório diário:',eD); }
   renderAuditoriaLogins();
   renderProdutividadeConfig();
 }
@@ -21276,6 +21296,114 @@ async function _cpDesarquivarTudo(processoId){
   if(r.error){ alert('Erro: '+r.error.message); return; }
   window.__chatProcMostrando[processoId]=false;
   renderChatDoProcesso(processoId, false);
+}
+/* ===== Relatório diário — o que cada pessoa fez, com hora =====
+   Pedido do dono (31/08/2026): "uma ficha pra relatório diário — horário e o
+   que cada pessoa fez. Ex.: processo 0819443-91… James x Fulano — protocolada
+   petição — hora do registro 08:00".
+   Os cartões de produtividade dizem QUANTO cada um fez; não diziam O QUÊ. Este
+   relatório lê os mesmos eventos e os conta em ordem de relógio — dá para
+   prestar contas do dia e para reconstituir o que foi feito num processo.
+   Nada de novo é gravado: é leitura do log que já existe. */
+var PRD_RUIDO=['login','logout','task_opened'];   /* escondidos por padrão: enchem o dia e não são entrega */
+function _prdHora(iso){ try{ var d=new Date(iso); if(isNaN(d)) return '—'; return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }catch(e){ return '—'; } }
+function _prdDiaISO(iso){ try{ var d=new Date(iso); if(isNaN(d)) return ''; return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }catch(e){ return ''; } }
+function _prdBRL(cent){ var v=(parseInt(cent,10)||0)/100; return 'R$ '+v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+/* O QUE foi feito, em português de gente — o event_type cru ("record_saved")
+   não serve para um relatório que outra pessoa vai ler. */
+function _prdAcaoTexto(e){
+  var md=e.metadata||{}, t=e.event_type||'', et=e.entity_type||'';
+  var tit=String(md.titulo||'').trim();
+  if(t==='task_completed'){
+    if(et==='peticao'||md.tipo==='protocolo') return 'petição protocolada'+(tit?(': '+tit):'');
+    if(md.tipo==='reuniao') return 'reunião/atendimento'+(tit?(': '+tit):'');
+    return 'tarefa concluída'+(tit?(': '+tit):'');
+  }
+  if(t==='hearing_completed') return 'audiência concluída'+(tit?(': '+tit):'');
+  if(t==='publication_handled') return 'publicação tratada'+(tit?(': '+tit):'');
+  if(t==='email_sent') return 'e-mail enviado'+(md.para?(' para '+md.para):'')+(md.assunto?(' — '+md.assunto):'');
+  if(t==='email_scheduled') return 'e-mail agendado'+(md.para?(' para '+md.para):'');
+  if(t==='boleto_issued') return 'boleto emitido'+(md.valor_centavos?(' — '+_prdBRL(md.valor_centavos)):'');
+  if(t==='boleto_sent') return 'boleto enviado ao cliente'+(md.para?(' ('+md.para+')'):'');
+  if(t==='case_registered') return 'processo cadastrado'+(md.modo?(' ('+md.modo+')'):'');
+  if(t==='case_linked') return 'processos vinculados';
+  if(t==='contact_completed') return 'ficha do cliente completada (telefone + e-mail)';
+  if(t==='record_saved') return 'registro salvo'+(md.campo?(' — '+md.campo):(md.campos?(' — '+md.campos):(tit?(' — '+tit):'')));
+  if(t==='document_generated') return 'documento gerado'+(md.tipo?(' ('+md.tipo+')'):'');
+  if(t==='noticia_publicada') return 'notícia '+(md.acao==='editar'?'editada':'publicada')+' no portal';
+  if(t==='config_changed') return 'configuração alterada'+(e.entity_id?(' — '+e.entity_id):'');
+  if(t==='task_opened') return 'tarefa aberta'+(tit?(': '+tit):'');
+  if(t==='login') return 'entrou no sistema';
+  if(t==='logout') return 'saiu do sistema';
+  return String(t).replace(/_/g,' ');
+}
+/* "0819443-91.2025.8.15.2001 — James × Fulano": o número sozinho não diz de
+   quem é o processo, e é o nome das partes que o dono reconhece. */
+function _prdProcTexto(e){
+  var md=e.metadata||{};
+  var num=md.numero||(((e.entity_type==='processo')||(e.entity_type==='peticao'))?e.entity_id:'');
+  num=String(num||'').trim(); if(!num||num==='—') return '';
+  var fmt=(typeof fmtCNJ==='function')?fmtCNJ(num):num;
+  var partes=''; try{ partes=(typeof _tarPartes==='function')?_tarPartes(num,''):''; }catch(er){}
+  return fmt+(partes?(' — '+partes):'');
+}
+/* Linhas do dia escolhido, já em ordem de relógio. window.__prdEvsVis é o mesmo
+   conjunto que alimenta os cartões (respeita o filtro de pessoa). */
+function _prdLinhasDoDia(){
+  var dia=(document.getElementById('prd-dia')||{}).value||'';
+  var ruido=!!((document.getElementById('prd-dia-ruido')||{}).checked);
+  var evs=(window.__prdEvsVis||PRD_EVT||[]).filter(function(e){
+    if(dia && _prdDiaISO(e.occurred_at)!==dia) return false;
+    if(!ruido && PRD_RUIDO.indexOf(e.event_type)>-1) return false;
+    return true;
+  });
+  return evs.slice().sort(function(a,b){ return String(a.occurred_at||'')<String(b.occurred_at||'')?-1:1; });
+}
+function renderRelatorioDiario(){
+  var el=document.getElementById('prd-diario'); if(!el) return;
+  var inp=document.getElementById('prd-dia');
+  if(inp && !inp.value) inp.value=(typeof todayISO==='string'?todayISO:_prdDiaISO(new Date().toISOString()));
+  var linhas=_prdLinhasDoDia();
+  if(!linhas.length){ el.innerHTML='<div class="note">Nenhum registro neste dia. Confira se a data está dentro do período escolhido acima.</div>'; return; }
+  /* por pessoa, e dentro de cada uma em ordem de relógio */
+  var por={};
+  linhas.forEach(function(e){
+    var nm=(PRD_USERS&&PRD_USERS[e.user_id]&&PRD_USERS[e.user_id].nome)||e.user_nome||'—';
+    (por[nm]=por[nm]||[]).push(e);
+  });
+  el.innerHTML=Object.keys(por).sort(function(a,b){ return a.localeCompare(b,'pt'); }).map(function(nm){
+    var evs=por[nm];
+    return '<div style="margin:0 0 14px">'
+      +'<div style="display:flex;justify-content:space-between;align-items:baseline;border-bottom:1px solid var(--line);padding-bottom:4px;margin-bottom:5px">'
+        +'<b style="color:var(--navy)">'+finEsc(nm)+'</b>'
+        +'<span class="note" style="margin:0">'+evs.length+' registro'+(evs.length===1?'':'s')+' · '+_prdHora(evs[0].occurred_at)+'–'+_prdHora(evs[evs.length-1].occurred_at)+'</span>'
+      +'</div>'
+      +evs.map(function(e){
+        var proc=_prdProcTexto(e);
+        var fatal=((e.metadata||{}).tipo==='prazo');
+        return '<div style="display:flex;gap:9px;align-items:flex-start;padding:3px 0;font-size:12.5px">'
+          +'<span style="min-width:42px;font-weight:700;color:var(--navy);font-variant-numeric:tabular-nums">'+_prdHora(e.occurred_at)+'</span>'
+          +'<div style="flex:1;min-width:0">'
+            +'<span>'+finEsc(_prdAcaoTexto(e))+'</span>'
+            +(fatal?' <span style="font-size:9px;font-weight:800;color:#b5342b;border:1px solid #e8c4bf;border-radius:8px;padding:0 5px;letter-spacing:.04em">FATAL</span>':'')
+            +(proc?('<div style="color:var(--muted);font-size:11.5px">'+finEsc(proc)+'</div>'):'')
+          +'</div>'
+        +'</div>';
+      }).join('')
+    +'</div>';
+  }).join('');
+}
+function exportarDiarioCSV(){
+  var linhas=_prdLinhasDoDia();
+  if(!linhas.length){ alert('Nada para exportar neste dia.'); return; }
+  var dia=(document.getElementById('prd-dia')||{}).value||'';
+  var head='hora;pessoa;o_que_fez;processo';
+  var rows=linhas.map(function(e){
+    var nm=(PRD_USERS&&PRD_USERS[e.user_id]&&PRD_USERS[e.user_id].nome)||e.user_nome||'—';
+    return [_prdHora(e.occurred_at),nm,_prdAcaoTexto(e),_prdProcTexto(e)].map(function(x){ return String(x||'').replace(/;/g,','); }).join(';');
+  });
+  var blob=new Blob(['\ufeff'+head+'\n'+rows.join('\n')],{type:'text/csv;charset=utf-8'});
+  var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='relatorio-diario-'+(dia||'dia')+'.csv'; a.click();
 }
 function exportarProdutividadeCSV(){
   var evs=PRD_EVT||[]; if(!evs.length){ alert('Nada para exportar no período.'); return; }
