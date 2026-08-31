@@ -19580,23 +19580,19 @@ function abrirProtocolarPeticao(numero){
     +'</div>'
     +'<div style="background:#fdecec;border:1px solid #f3c2c2;border-radius:10px;padding:11px 13px;margin-bottom:12px">'
       +'<div style="font-weight:800;color:#b5342b;font-size:13px;margin-bottom:4px">⚠ Antes de anexar, confira a peça</div>'
-      +'<div style="font-size:12.5px;color:#7b2b26;line-height:1.5">Não pode haver <b>recados internos</b>, <b>campos a preencher</b> (XXX, [nome], ____), <b>comentários</b>, marcações de revisão ou trechos destacados. Vale para as duas opções — inclusive a que vai para ajuste.</div>'
+      +'<div style="font-size:12.5px;color:#7b2b26;line-height:1.5">Não pode haver <b>recados internos</b>, <b>campos a preencher</b> (XXX, [nome], ____), <b>comentários</b>, marcações de revisão ou trechos destacados. A peça sobe pronta para protocolo.</div>'
     +'</div>'
     +'<div style="background:#eef4fb;border:1px solid #cfe0f2;border-radius:10px;padding:10px 12px;margin-bottom:12px">'
       +'<div style="font-weight:800;color:#185FA5;font-size:12.5px;margin-bottom:3px">📄 Formato exigido pelo jus.br</div>'
       +'<div style="font-size:12.5px;color:#22405f;line-height:1.5">A <b>peça principal</b> precisa ser <b>PDF/A</b> (no Word: Salvar como → PDF → Opções → <i>Compatível com PDF/A</i>). Os <b>anexos</b> podem ser PDF comum. Limite de 10 MB por arquivo.</div>'
     +'</div>'
     +'<label>Título da peça</label><input id="proto-titulo" placeholder="Ex.: Contrarrazões de apelação">'
-    +'<div style="margin-top:10px"><label>O que fazer com ela</label>'
-      +'<label style="display:flex;gap:8px;align-items:flex-start;border:1px solid var(--line);border-radius:9px;padding:9px;margin-bottom:6px;cursor:pointer">'
-        +'<input type="radio" name="proto-modo" value="protocolo" checked onchange="_protoModo()"><span><b>Protocolar direto</b><div class="note" style="margin:0">A peça está pronta. Anexe o <b>PDF</b> final.</div></span></label>'
-      +'<label style="display:flex;gap:8px;align-items:flex-start;border:1px solid var(--line);border-radius:9px;padding:9px;cursor:pointer">'
-        +'<input type="radio" name="proto-modo" value="correcao" onchange="_protoModo()"><span><b>Aguardar ajuste / correção</b><div class="note" style="margin:0">Anexe o <b>Word</b> para revisão antes do protocolo.</div></span></label>'
-    +'</div>'
-    +'<div style="margin-top:10px"><label id="proto-lbl-arq">Arquivo da petição (PDF)</label><input type="file" id="proto-arq" accept=".pdf"></div>'
+    /* A escolha "protocolar direto / aguardar ajuste" e o campo de observações
+       saíram: a revisão da peça acontece em etapa anterior, no fluxo da tarefa.
+       O que sobe aqui é peça pronta, em PDF. */
+    +'<div style="margin-top:10px"><label>Arquivo da petição (PDF)</label><input type="file" id="proto-arq" accept=".pdf"></div>'
     +'<div style="margin-top:8px"><label>Anexos (opcional — pode escolher vários)</label><input type="file" id="proto-anexos" multiple><div class="note" style="margin:2px 0 0">Documentos que acompanham a peça (procuração, comprovantes, laudos). Para protocolo, prefira PDF.</div></div>'
     +'<div class="row2" style="margin-top:10px"><div><label>Prazo fatal (dia do protocolo)</label><input type="date" id="proto-prazo" value="'+_protoHoje()+'"></div><div><label>Responsável</label><input id="proto-resp" value="'+esc(((document.getElementById('who-name')||{}).textContent)||'')+'"></div></div>'
-    +'<label style="margin-top:10px">Observações (opcional)</label><textarea id="proto-obs" rows="2" placeholder="Algo que o revisor precisa saber"></textarea>'
     +'<label style="display:flex;gap:8px;align-items:flex-start;margin-top:12px;background:#f4f7fb;border:1px solid #dbe6f2;border-radius:9px;padding:10px;cursor:pointer">'
       +'<input type="checkbox" id="proto-ok"><span style="font-size:12.5px;color:#2E3A4B"><b>Conferi a peça inteira.</b> Não há recados, campos a preencher, comentários nem destaques pendentes.</span></label>'
     +'<div class="foot" style="margin-top:14px"><button class="btn ghost" onclick="document.getElementById(\'proto-modal\').remove()">Cancelar</button><button class="btn" style="background:#7b1e3a;border-color:#7b1e3a" onclick="salvarProtocolarPeticao(\''+esc(numero)+'\',this)">Anexar e criar prazo</button></div>'
@@ -19605,28 +19601,19 @@ function abrirProtocolarPeticao(numero){
   ov.onclick=function(e){ if(e.target===ov&&ov.__bd) ov.remove(); };
   document.body.appendChild(ov);
 }
-function _protoModo(){
-  var m=(document.querySelector('input[name="proto-modo"]:checked')||{}).value||'protocolo';
-  var lbl=document.getElementById('proto-lbl-arq'), arq=document.getElementById('proto-arq');
-  if(m==='correcao'){ if(lbl) lbl.textContent='Arquivo da petição (Word)'; if(arq) arq.setAttribute('accept','.doc,.docx'); }
-  else { if(lbl) lbl.textContent='Arquivo da petição (PDF)'; if(arq) arq.setAttribute('accept','.pdf'); }
-}
 async function salvarProtocolarPeticao(numero,btn){
   var titulo=(document.getElementById('proto-titulo')||{}).value||'';
-  var modo=(document.querySelector('input[name="proto-modo"]:checked')||{}).value||'protocolo';
   var prazo=(document.getElementById('proto-prazo')||{}).value||'';
   var resp=(document.getElementById('proto-resp')||{}).value||'';
-  var obs=(document.getElementById('proto-obs')||{}).value||'';
   var ok=(document.getElementById('proto-ok')||{}).checked;
   var inp=document.getElementById('proto-arq'); var f=inp&&inp.files&&inp.files[0];
   titulo=titulo.trim();
   if(titulo.length<3){ alert('Dê um título à peça (ex.: "Contrarrazões de apelação").'); return; }
   if(!f){ alert('Anexe o arquivo da petição.'); return; }
   if(!prazo){ alert('Informe o prazo fatal (o dia do protocolo).'); return; }
-  if(!ok){ alert('Confirme que conferiu a peça (sem recados, campos a preencher ou comentários).\n\nEssa conferência é obrigatória — inclusive na peça que vai para ajuste.'); return; }
-  var ehPdf=/\.pdf$/i.test(f.name), ehWord=/\.docx?$/i.test(f.name);
-  if(modo==='protocolo' && !ehPdf){ alert('Para protocolar direto, o arquivo precisa ser o PDF final.'); return; }
-  if(modo==='correcao' && !ehWord){ alert('Para ajuste/correção, anexe o arquivo em Word (.doc/.docx).'); return; }
+  if(!ok){ alert('Confirme que conferiu a peça (sem recados, campos a preencher ou comentários).'); return; }
+  var ehPdf=/\.pdf$/i.test(f.name);
+  if(!ehPdf){ alert('O arquivo precisa ser o PDF final da peça.'); return; }
   if(f.size>25*1024*1024){ alert('Arquivo grande demais (máx. 25 MB).'); return; }
   if(btn){ btn.disabled=true; btn.textContent='Enviando…'; }
   try{
@@ -19639,7 +19626,7 @@ async function salvarProtocolarPeticao(numero,btn){
         var dir=dig+'/'+_docDir('proc','')+'/Protocolo';
         await fetch('/api/docs',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({path:dir,mkdir:true})});
         var b64=await new Promise(function(res,rej){ var rd=new FileReader(); rd.onload=function(){ res(String(rd.result).split(',')[1]||''); }; rd.onerror=rej; rd.readAsDataURL(f); });
-        var nomeArq=(prazo+' - '+titulo).replace(/[\\/:*?"<>|]+/g,'-').slice(0,110)+(ehPdf?'.pdf':(f.name.match(/\.docx?$/i)||['.docx'])[0]);
+        var nomeArq=(prazo+' - '+titulo).replace(/[\\/:*?"<>|]+/g,'-').slice(0,110)+'.pdf';
         var rr=await fetch('/api/docs',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({path:dir+'/'+nomeArq,b64:b64})});
         if(rr.ok) caminho=dir+'/'+nomeArq;
         /* anexos que acompanham a peça */
@@ -19660,19 +19647,19 @@ async function salvarProtocolarPeticao(numero,btn){
     /* 2) registra a pendência com prazo fatal */
     var ins=await window.__sb.from('peticoes_protocolo').insert({
       escritorio_id:esc2, processo_numero:numero, processo_id:(atual&&atual._id)||null,
-      titulo:titulo, modo:modo, status:'pendente', prazo_fatal:prazo,
-      arquivo_nome:f.name, arquivo_caminho:caminho||null, observacoes:obs||null,
+      titulo:titulo, modo:'protocolo', status:'pendente', prazo_fatal:prazo,
+      arquivo_nome:f.name, arquivo_caminho:caminho||null,
       conferida:true, criado_por:resp||null, anexos:anexos
     }).select('id').single();
     if(ins&&ins.error) throw new Error(ins.error.message);
     /* 3) tarefa/prazo na agenda, para não depender só do alerta */
     try{
-      var rot=(modo==='correcao'?'AJUSTAR e protocolar: ':'PROTOCOLAR: ')+titulo;
+      var rot='PROTOCOLAR: '+titulo;
       await window.__sb.from('agenda_eventos').insert({escritorio_id:esc2,data:prazo,hora:null,tipo:'prazo',titulo:rot,resp:(resp||null),processo_numero:numero,origem:'protocolo'});
     }catch(e){}
-    try{ if(typeof logEvent==='function') logEvent('record_saved','peticao',numero,{titulo:titulo,modo:modo,prazo:prazo}); }catch(e){}
+    try{ if(typeof logEvent==='function') logEvent('record_saved','peticao',numero,{titulo:titulo,prazo:prazo}); }catch(e){}
     var mo=document.getElementById('proto-modal'); if(mo) mo.remove();
-    alert('✓ Petição anexada NO SISTEMA.'+(anexos.length?(' ('+anexos.length+' anexo(s))'):'')+'\n\n⚠ ATENÇÃO: o tribunal NÃO recebeu nada ainda.\nO protocolo é feito no portal do jus.br — depois volte aqui e clique em "✓ protocolada".\n\n'+(modo==='correcao'?'Situação: aguardando ajuste.':'Situação: pronta para protocolar.')+'\nPrazo fatal: '+_protoFmt(prazo)+'.\n\nO sistema vai cobrar esse prazo e fechar a pendência quando a peça aparecer nos autos.');
+    alert('✓ Petição anexada NO SISTEMA.'+(anexos.length?(' ('+anexos.length+' anexo(s))'):'')+'\n\n⚠ ATENÇÃO: o tribunal NÃO recebeu nada ainda.\nO protocolo é feito no portal do jus.br — depois volte aqui e clique em "✓ protocolada".\n\n'+'Situação: pronta para protocolar.\nPrazo fatal: '+_protoFmt(prazo)+'.\n\nO sistema vai cobrar esse prazo e fechar a pendência quando a peça aparecer nos autos.');
     try{ await carregarProtocolosPendentes(); }catch(e){}
     try{ var i=DADOS.processos.indexOf(atual); if(i>=0) abrir(i); }catch(e){}
   }catch(e){ alert('Não foi possível anexar: '+(e&&e.message||e)); }
