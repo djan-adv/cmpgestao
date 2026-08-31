@@ -293,9 +293,23 @@ async function montarEnvelope(token, dig, sb) {
 
   // faltou campo estrutural? tenta o envelope que o portal já usou neste processo
   let reaproveitado = null
-  if (oQueFalta().length && sb) {
+  let divergencias = []
+  if (sb) {
     const cap = await envelopeDeCaptura(sb, d)
+    /* Mesmo com tudo preenchido, se existe um protocolo ACEITO neste processo,
+       vale comparar: nome de vara certo com CÓDIGO errado não se vê na tela, e
+       protocolo não se desfaz. Diferença aqui não é necessariamente erro (o
+       processo pode ter mudado de vara ou subido de grau) — por isso a tela
+       mostra em vez de decidir sozinha. */
     if (cap && cap.env) {
+      for (const k of ['codOrgaoJulgadorCorporativo', 'idOrigemTramitacao', 'codigoClasseProcessual', 'nomeOrgaoJulgadorCorporativo']) {
+        const meu = env[k], dele = cap.env[k]
+        if (meu != null && meu !== '' && dele != null && dele !== '' && String(meu) !== String(dele)) {
+          divergencias.push({ campo: k, jusbr: String(meu), protocolo_anterior: String(dele), quando: cap.quando })
+        }
+      }
+    }
+    if (cap && cap.env && oQueFalta().length) {
       const usados = []
       for (const k of ['idOrigemTramitacao', 'codigoClasseProcessual', 'codOrgaoJulgadorCorporativo', 'nomeOrgaoJulgadorCorporativo', 'idFonteDadosCodex', 'siglaTribunal', 'valorCausa', 'distribuidoEm', 'jtrTribunal']) {
         if ((env[k] == null || env[k] === '') && cap.env[k] != null && cap.env[k] !== '') { env[k] = cap.env[k]; usados.push(k) }
@@ -330,7 +344,7 @@ async function montarEnvelope(token, dig, sb) {
     peticionamento_chaves: Object.keys((Array.isArray(pp) ? pp[0] : pp) || {}).slice(0, 40),
     amostra: faltando.length ? esqueleto(umNo(noTramitacao(proc)) || proc, 0) : undefined,
   }
-  return { env, faltando, reaproveitado, visto }
+  return { env, faltando, reaproveitado, divergencias, visto }
 }
 
 export async function GET(request) {
@@ -358,7 +372,7 @@ export async function GET(request) {
 
   return Response.json({
     ok: true, numero: mascara(dig), envelope: m.env, faltando: m.faltando,
-    reaproveitado: m.reaproveitado || null, visto: m.visto || null,
+    reaproveitado: m.reaproveitado || null, divergencias: m.divergencias || [], visto: m.visto || null,
     tipos, pronto: m.faltando.length === 0,
   })
 }
@@ -454,9 +468,13 @@ export async function POST(request) {
   try {
     const { data: proc } = await sb.from('processos').select('id').eq('escritorio_id', ESCRITORIO_CMP).eq('numero_digitos', dig).maybeSingle()
     if (proc && proc.id) {
+      /* mesma fonte do protocolo confirmado à mão ('protocolo', providência):
+         é o mesmo ato jurídico, e registrá-lo de dois jeitos diferentes fazia a
+         mesma petição contar de um jeito quando saía daqui e de outro quando
+         saía pelo portal */
       await sb.from('andamentos').insert({
-        processo_id: proc.id, data: new Date().toISOString().slice(0, 10), fonte: 'minuta',
-        texto: '[ESTAGIÁRIO VIRTUAL] Petição protocolada pelo sistema' + (quem ? (' por ' + quem) : '') +
+        processo_id: proc.id, data: new Date().toISOString().slice(0, 10), fonte: 'protocolo', providencia: true,
+        texto: '[PROTOCOLO] Petição protocolada pelo Gestão' + (quem ? (' por ' + quem) : '') +
           ': "' + nomeArq + '" (' + (nomeTipo || idTipo) + '). Recibo CNJ ' + (j3.numeroReciboCnj || '—') +
           ', ' + (j3.status || 'enviado') + ' ao ' + (j3.siglaTribunal || env.siglaTribunal || 'tribunal') +
           (recibo ? ('. Comprovante guardado em "' + recibo.arquivo + '".') : '.'),

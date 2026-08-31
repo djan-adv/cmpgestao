@@ -20651,6 +20651,13 @@ async function abrirProtocolarJusbr(numero){
         +linha('Vara', E.nomeOrgaoJulgadorCorporativo)+linha('Grau', E.siglaGrau)
         +linha('Valor da causa', E.valorCausa)+linha('Partes', partes||'—')
       +'</div>'
+      +((j.divergencias&&j.divergencias.length)
+        ? ('<div style="background:#fbeceb;border:1px solid #f0c8c4;border-radius:9px;padding:8px 11px;font-size:12px;color:#8a3a33;margin-bottom:10px">'
+           +'&#9888; O que o jus.br devolve agora não bate com o último protocolo aceito neste processo'
+           +(j.divergencias[0].quando?(' ('+esc(fmtDataHora(j.divergencias[0].quando))+')'):'')+':<br>'
+           +j.divergencias.map(function(x){ return '&nbsp;• <b>'+esc(x.campo)+'</b>: agora <b>'+esc(x.jusbr)+'</b> · antes <b>'+esc(x.protocolo_anterior)+'</b>'; }).join('<br>')
+           +'<br>Pode ser mudança de vara ou de grau — mas confira antes, porque protocolo não se desfaz.</div>')
+        : '')
       +((j.reaproveitado&&j.reaproveitado.campos&&j.reaproveitado.campos.length)
         ? ('<div style="background:#fdf7e6;border:1px solid #e8dcbb;border-radius:9px;padding:8px 11px;font-size:12px;color:#7a6420;margin-bottom:10px">'
            +'&#9888; Nos juizados o jus.br não devolve os códigos de vara/classe. Estes campos vieram do <b>último protocolo deste mesmo processo feito pelo portal</b>'
@@ -20683,6 +20690,43 @@ async function abrirProtocolarJusbr(numero){
     cx.innerHTML='<div class="note" style="color:#b5342b">Erro: '+esc((e&&e.message)||e)+'</div>';
   }
 }
+/* Fecha a pendência de protocolo depois de um protocolo feito PELO GESTÃO.
+   É o mesmo que "✓ já protocolei" faz à mão, só que sem perguntar nada: o
+   número do recibo do CNJ e o comprovante em PDF já vieram do jus.br.
+   Com mais de uma petição pendente no processo, tenta casar pelo nome do
+   arquivo; não dando para saber qual é, não fecha nenhuma e avisa — encerrar
+   o prazo errado é pior do que deixar a faixa na tela. */
+async function _protoFecharPelaGestao(numero, j, arqNome){
+  try{
+    var dig=String(numero||'').replace(/\D/g,''); if(!dig) return null;
+    var q=await window.__sb.from('peticoes_protocolo').select('id,titulo,processo_numero,processo_id').eq('status','pendente');
+    var pend=((q&&q.data)||[]).filter(function(x){ return String(x.processo_numero||'').replace(/\D/g,'')===dig; });
+    if(!pend.length) return null;
+    var alvo=pend[0];
+    if(pend.length>1){
+      var base=String(arqNome||'').toLowerCase().replace(/\.pdf$/,'').replace(/[^a-zà-ú0-9]+/g,' ').trim();
+      var toks=base.split(/\s+/).filter(function(t){ return t.length>3; });
+      var pont=pend.map(function(x){
+        var t=String(x.titulo||'').toLowerCase();
+        return {x:x, n:toks.filter(function(k){ return t.indexOf(k)>=0; }).length};
+      }).sort(function(a,b){ return b.n-a.n; });
+      if(!pont[0].n || (pont[1] && pont[1].n===pont[0].n)) return {ambiguo:pend.length};
+      alvo=pont[0].x;
+    }
+    var quem=((document.getElementById('who-name')||{}).textContent||'').trim()||'(não identificado)';
+    var caminho=(j&&j.recibo&&j.recibo.arquivo)?(dig+'/'+_docDir('proc','')+'/Protocolo/'+j.recibo.arquivo):null;
+    var w=await window.__sb.from('peticoes_protocolo').update({
+      status:'protocolada', protocolada_em:new Date().toISOString(),
+      protocolo_ref:(j&&j.protocolo)||null, fechada_por:'gestao:'+quem,
+      comprovante_nome:(j&&j.recibo&&j.recibo.arquivo)||null, comprovante_caminho:caminho,
+    }).eq('id',alvo.id).select('id');
+    if(w&&w.error) return {erro:w.error.message};
+    try{ await carregarProtocolosPendentes(); }catch(e){}
+    try{ await carregarProtocolados(numero); }catch(e){}
+    try{ var i=DADOS.processos.indexOf(atual); if(i>=0) abrir(i); }catch(e){}
+    return {fechada:true, titulo:alvo.titulo||'petição'};
+  }catch(e){ return {erro:(e&&e.message)||String(e)}; }
+}
 async function protocolarAgora(){
   var d=window.__protDados||{}; var cx=document.getElementById('prot-cx');
   var selA=document.getElementById('prot-arq'), selT=document.getElementById('prot-tipo');
@@ -20707,12 +20751,18 @@ async function protocolarAgora(){
       return;
     }
     try{ if(typeof logEvent==='function') logEvent('task_completed','peticao',d.numero,{titulo:arq,tipo:'protocolo',recibo:(j.protocolo||null),via:'gestao'}); }catch(e){}
+    /* protocolou PELO GESTÃO: o sistema tem o recibo do CNJ e o comprovante na
+       mão — não faz sentido a faixa vermelha continuar perguntando "já
+       protocolei?". Fecha a pendência sozinha. */
+    var _fech=await _protoFecharPelaGestao(d.numero, j, arq);
     cx.innerHTML='<h3 style="margin:0 0 6px;color:#0F6E56">✓ Protocolado</h3>'
       +'<div style="font-size:13px;line-height:1.7">'
         +'<div><b>Recibo CNJ:</b> '+esc(j.protocolo||'—')+'</div>'
         +'<div><b>Situação:</b> '+esc(j.status||'—')+' · '+esc(j.tribunal||'')+'</div>'
         +'<div><b>Data:</b> '+esc(String(j.data||'').replace('T',' '))+'</div>'
         +(j.recibo?('<div><b>Comprovante:</b> '+esc(j.recibo.arquivo)+' (guardado na pasta Protocolo)</div>'):'<div class="note">O comprovante não veio agora — baixe pelo portal se precisar.</div>')
+        +(_fech&&_fech.fechada?('<div style="color:#0F6E56"><b>Prazo encerrado:</b> '+esc(_fech.titulo)+' — a faixa de prazo fatal já saiu.</div>'):'')
+        +(_fech&&_fech.ambiguo?('<div class="note" style="color:#8a6d1a">Há '+_fech.ambiguo+' petições pendentes neste processo — não dá para saber qual foi esta. Encerre a certa em "✓ já protocolei".</div>'):'')
       +'</div>'
       +'<div style="margin-top:12px;text-align:right"><button class="btn sm" onclick="document.getElementById(\'prot-ov\').remove();if(typeof atual!==\'undefined\'&&atual)carregarDocs(atual.numero,\'Protocolo\');">Fechar</button></div>';
   }catch(e){
