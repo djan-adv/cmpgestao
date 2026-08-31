@@ -10917,6 +10917,7 @@ async function salvarDiligencia(){
   var msg=document.getElementById('dil-msg').value;
   var ins=await sb.from('diligencias').insert({escritorio_id:esc2,processo_id:ctx.pid,status:'a_fazer',canal:canal,mensagem:msg});
   if(ins.error){ alert('Erro ao salvar: '+ins.error.message); return; }
+  try{ if(typeof logEvent==='function') logEvent('diligence_created','processo',(ctx.numero||ctx.pid||null),{numero:(ctx.numero||null),canal:canal}); }catch(eLg){}
   try{ await navigator.clipboard.writeText(msg); }catch(e){}
   fecharDilig(); renderDiligencias(); alert('Diligência criada. Mensagem copiada para a área de transferência.');
 }
@@ -12485,6 +12486,8 @@ async function enviarDocs(inp, escopo){
         off+=CH;
       }while(off<bytes.length);
     }
+    try{ if(typeof logEvent==='function') logEvent('document_uploaded','processo',(atual.numero||null),
+      {numero:(atual.numero||null),quantos:files.length,pasta:(sub||'raiz'),nomes:files.slice(0,5).map(function(f){return f.name;}).join(', ')}); }catch(eLg){}
   }catch(e){ alert('Erro no envio: '+(e&&e.message||e)); }
   finally{ try{ if(inp&&inp.value!==undefined) inp.value=''; }catch(e2){} carregarDocs(atual.numero, sub, escopo); }
 }
@@ -14159,6 +14162,7 @@ async function salvarAudLink(){
   var quem=''; try{ var u=usuarioVisualAtual(); quem=(u&&u.nome)||''; }catch(e2){}
   var upd=v?{audiencia_link:v,audiencia_link_por:(quem||'equipe'),audiencia_link_em:new Date().toISOString()}:{audiencia_link:null,audiencia_link_por:null,audiencia_link_em:null};
   var r=await window.__sb.from('processos').update(upd).eq('id',atual._id);
+  try{ if(!(r&&r.error) && typeof logEvent==='function') logEvent('record_saved','processo',(atual.numero||null),{numero:(atual.numero||null),campo:(v?'link da audiência':'link da audiência (removido)')}); }catch(eLg){}
   if(r&&r.error){ alert('Erro ao salvar: '+r.error.message); return; }
   atual.aud_link=v; atual.aud_link_por=upd.audiencia_link_por||''; atual.aud_link_em=upd.audiencia_link_em||null;
   renderAudLink(); try{ renderAudienciaSugestao(); }catch(e3){}
@@ -14595,6 +14599,7 @@ async function salvarObservacoes(){
   var v=ta.value.trim();
   atual.observacoes=v;
   try{ var sb=window.__sb; if(sb&&atual._id){ var r=await sb.from('processos').update({observacoes:(v||null)}).eq('id',atual._id); if(r&&r.error){ alert('Não foi possível salvar a observação: '+r.error.message); } } }catch(e){ alert('Erro ao salvar: '+(e&&e.message||e)); }
+  try{ if(typeof logEvent==='function') logEvent('record_saved','processo',(atual.numero||null),{numero:(atual.numero||null),campo:'observações'}); }catch(eLg){}
   renderObservacoes();
 }
 /* modal do "+ histórico manual": texto + prints/fotos (arquivo, ou Ctrl+V direto
@@ -15297,6 +15302,10 @@ async function encerrarProcesso(){
   var sb=window.__sb;
   if(sb && atual._id){ var r=await sb.from('processos').update({status:novo}).eq('id',atual._id); if(r.error){ alert('Erro ao salvar: '+r.error.message); return; } }
   atual.status=novo;
+  /* encerrar um processo é das coisas mais definitivas que se faz aqui, e não
+     aparecia em lugar nenhum (relatado pelo dono em 31/08/2026) */
+  try{ if(typeof logEvent==='function') logEvent(enc?'case_reopened':'case_closed','processo',(atual.numero||null),
+    {numero:(atual.numero||null),cliente:(atual.cliente||null)}); }catch(eLg){}
   var i=DADOS.processos.indexOf(atual);
   if(i>=0) abrir(i);
 }
@@ -18255,6 +18264,7 @@ async function confirmarDepositoAlvara(numEnc){
   try{ renderAlvarasMes(); }catch(e){}
   /* assim que o ESCRITÓRIO confirma que recebeu, avisamos o cliente para ele
      também conferir a conta dele — com alerta de golpe — antes de emitir a NF */
+  try{ if(typeof logEvent==='function') logEvent('alvara_confirmed','processo',(p.numero||null),{numero:(p.numero||null),valor:(p.alvara_valor_confirmado!=null?p.alvara_valor_confirmado:null)}); }catch(eLg){}
   var envio=await _avisarClienteAlvaraDepositado(p);
   if(envio&&envio.ok) alert('Depósito confirmado. Avisamos o cliente por e-mail para conferir a conta (com alerta de golpe).');
   else alert('Depósito confirmado.'+(envio&&envio.erro==='sem e-mail cadastrado'?' Não enviamos aviso ao cliente por falta de e-mail cadastrado.':(' Não foi possível avisar o cliente por e-mail: '+((envio&&envio.erro)||'erro desconhecido'))));
@@ -18264,6 +18274,7 @@ async function confirmarDepositoAlvara(numEnc){
   if(!/encerr/i.test(p.status||'') && confirm('Encerrar o processo '+p.numero+' agora?\n\nEle sai da lista principal e vai para a aba "Encerrados" (nada é apagado, e continua aparecendo no Financeiro).')){
     if(sb&&p._id){ var rE=await sb.from('processos').update({status:'Encerrado'}).eq('id',p._id).select('id'); if(rE&&rE.error){ alert('Não consegui encerrar: '+rE.error.message); return; } }
     p.status='Encerrado';
+    try{ if(typeof logEvent==='function') logEvent('case_closed','processo',(p.numero||null),{numero:(p.numero||null),cliente:(p.cliente||null),via:'alvara'}); }catch(eLg){}
     try{ renderAlvarasMes(); }catch(e){}
     try{ if(atual&&atual._id===p._id){ var iE=DADOS.processos.indexOf(p); if(iE>=0) abrir(iE); } }catch(e){}
   }
@@ -19007,6 +19018,7 @@ async function salvarNf(){
     var p=_nfAtual.p;
     var r2=await window.__sb.from('processos').update({alvara_nf_status:'emitida',alvara_nf_numero:num}).eq('id',p._id).select('id');
     if(r2&&r2.error){ alert('Não foi possível salvar: '+r2.error.message); return; }
+    try{ if(typeof logEvent==='function') logEvent('nf_issued','processo',(p.numero||null),{numero:(p.numero||null),nf:num}); }catch(eLg){}
     p.alvara_nf_status='emitida'; p.alvara_nf_numero=num;
     fecharNf(); try{ renderAlvarasMes(); }catch(e){}
     return;
@@ -19583,6 +19595,11 @@ async function renderProdutividade(){
       +linha('Processos vinculados',c.case_linked||0)
       +linha('Processos consultados',c.process_viewed||0)
       +linha('Processos atualizados',c.process_updated||0)
+      +linha('Processos encerrados',c.case_closed||0)
+      +linha('Documentos enviados',c.document_uploaded||0)
+      +linha('Diligências criadas',c.diligence_created||0)
+      +linha('Alvarás confirmados',c.alvara_confirmed||0)
+      +linha('Notas fiscais emitidas',c.nf_issued||0)
       +linha('Tarefas criadas',c.task_created||0)
       +linha('Tarefas editadas',c.task_edited||0)
       +linha('Tarefas remarcadas',c.task_rescheduled||0)
@@ -21533,6 +21550,12 @@ function _prdAcaoTexto(e){
   if(t==='task_rescheduled') return 'tarefa remarcada'+(md.de&&md.para?(' de '+String(md.de).split('-').reverse().join('/')+' para '+String(md.para).split('-').reverse().join('/')):'')+(tit?(': '+tit):'');
   if(t==='task_canceled') return 'tarefa cancelada'+(tit?(': '+tit):'')+(md.motivo?(' — '+md.motivo):'');
   if(t==='deadline_set') return (md.removido?'prazo fatal removido':'prazo fatal definido'+(md.prazo?(' para '+String(md.prazo).slice(0,10).split('-').reverse().join('/')):''))+(tit?(': '+tit):'');
+  if(t==='case_closed') return 'processo ENCERRADO'+(md.via==='alvara'?' (depois do alvará)':'');
+  if(t==='case_reopened') return 'processo reaberto';
+  if(t==='diligence_created') return 'diligência criada'+(md.canal?(' ('+md.canal+')'):'');
+  if(t==='document_uploaded') return 'documento'+((md.quantos>1)?('s ('+md.quantos+')'):'')+' enviado'+((md.quantos>1)?'s':'')+' para a pasta'+(md.pasta&&md.pasta!=='raiz'?(' '+md.pasta):'')+(md.nomes?(': '+md.nomes):'');
+  if(t==='nf_issued') return 'nota fiscal emitida'+(md.nf?(' — nº '+md.nf):'');
+  if(t==='alvara_confirmed') return 'depósito de alvará confirmado';
   if(t==='process_updated') return 'processo atualizado (busca no DJEN e no jus.br)'+((md.novos!=null)?(' — '+md.novos+' andamento'+(md.novos===1?'':'s')+' novo'+(md.novos===1?'':'s')):'');
   if(t==='task_opened') return 'tarefa aberta'+(tit?(': '+tit):'');
   if(t==='login') return 'entrou no sistema';
