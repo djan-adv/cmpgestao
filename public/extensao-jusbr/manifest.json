@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "CMPGestão — ponte jus.br",
   "version": "1.0.0",
-  "description": "Leva o token da sua sessão do jus.br (PDPJ) para o CMPGestão. Sem senha, sem Tampermonkey.",
+  "description": "Leva o token da sua sessão do jus.br (PDPJ) para o CMPGestão. Sem senha, sem Tampermonkey. Chrome e Edge.",
   "permissions": ["storage"],
   "host_permissions": [
     "https://portaldeservicos.pdpj.jus.br/*",

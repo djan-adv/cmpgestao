@@ -1,10 +1,13 @@
 CMPGestão — ponte jus.br (extensão do Chrome/Edge)
 
+Serve para Chrome e para Edge — os dois são Chromium, e o pacote é o mesmo.
+
 PARA TESTAR AGORA (sem loja):
 1. Baixe esta pasta inteira para o seu computador.
-2. No Chrome, abra  chrome://extensions
-3. Ligue o "Modo do desenvolvedor" (canto superior direito).
-4. Clique em "Carregar sem compactação" e escolha esta pasta.
+2. Abra  chrome://extensions   (no Edge:  edge://extensions )
+3. Ligue o "Modo do desenvolvedor" (canto da tela).
+4. Clique em "Carregar sem compactação" (no Edge: "Carregar descompactado")
+   e escolha esta pasta.
 5. Clique no ícone da extensão (quebra-cabeça → CMPGestão) e cole a chave de
    pareamento que o sistema mostra em Robôs → jus.br. Salve.
 6. Entre no https://portaldeservicos.pdpj.jus.br com o seu certificado.
