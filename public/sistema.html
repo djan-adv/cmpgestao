@@ -746,6 +746,17 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
         <a class="btn sm" href="/api/google/auth" target="_blank" rel="noopener" style="text-decoration:none;display:inline-block">🔗 Conectar / reconectar o Google Calendar</a>
       </div>
       <div class="card">
+        <p class="sectlabel">🧩 jus.br — extensão do Chrome <span style="font-size:10px;background:#eaf7f1;color:#0F6E56;border-radius:10px;padding:1px 7px;font-weight:700;text-transform:none">novo</span></p>
+        <p class="note" style="margin:6px 0 10px">Faz o mesmo que o userscript, sem Tampermonkey — e resolve o limite dele: o portal do jus.br bloqueia envios saindo das páginas dele, então o userscript precisa guardar o token e esperar a aba do sistema aberta. A extensão manda na hora, com o sistema fechado. O download já vem pareado com este escritório: não há nada para colar.</p>
+        <button class="btn sm" onclick="baixarExtensaoJusbr(this)">⬇ Baixar a extensão (.zip)</button>
+        <ol class="note" style="margin:10px 0 0;padding-left:18px;line-height:1.7">
+          <li>Descompacte o arquivo (vai virar a pasta <b>cmpgestao-jusbr</b>).</li>
+          <li>No Chrome, abra <b>chrome://extensions</b> e ligue o <b>Modo do desenvolvedor</b>.</li>
+          <li>Clique em <b>Carregar sem compactação</b> e escolha a pasta.</li>
+          <li>Entre no <b>portaldeservicos.pdpj.jus.br</b> com o seu certificado. O ícone da extensão fica com o selo <b>ok</b> verde quando o token chega.</li>
+        </ol>
+      </div>
+      <div class="card">
         <p class="sectlabel">🔐 jus.br — meu userscript (Tampermonkey)</p>
         <p class="note" style="margin:6px 0 10px">Gera o script já com o segredo embutido — é só copiar e colar no Tampermonkey. Não precisa digitar nada. Depois, faça login no jus.br uma vez.</p>
         <div id="robos-jusbr-status" class="note" style="margin-bottom:8px"></div>
@@ -20416,6 +20427,24 @@ async function _renderGoogleStatus(){
     else if(j&&j.ok) el.innerHTML='<b style="color:#127a53">conectado ✓</b>'+((j.detalhes&&j.detalhes.length)?(' · '+j.detalhes.length+' evento(s) pendente(s) de sincronizar'):' · agenda em dia');
     else el.innerHTML='<span class="note">Não foi possível ler o status.</span>';
   }catch(e){ el.innerHTML='<span class="note">Status indisponível (recompile o build).</span>'; }
+}
+/* Baixa o .zip da extensão já com a chave deste escritório dentro. O fetch leva
+   o login (a rota é autenticada), então não dá para usar um link simples. */
+async function baixarExtensaoJusbr(btn){
+  var t0=btn?btn.textContent:'';
+  if(btn){ btn.disabled=true; btn.textContent='preparando…'; }
+  try{
+    var tok=(typeof finToken==='function')?await finToken():null;
+    var r=await fetch('/api/jusbr/extensao',{headers:tok?{Authorization:'Bearer '+tok}:{}});
+    if(!r.ok){ alert('Não foi possível baixar: '+(await r.text()).slice(0,200)); return; }
+    var blob=await r.blob();
+    var a=document.createElement('a');
+    a.href=URL.createObjectURL(blob); a.download='cmpgestao-jusbr.zip';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); },4000);
+    try{ if(typeof logEvent==='function') logEvent('record_saved','extensao',null,{campo:'baixou a extensão do jus.br'}); }catch(e){}
+  }catch(e){ alert('Erro: '+((e&&e.message)||e)); }
+  finally{ if(btn){ btn.disabled=false; btn.textContent=t0; } }
 }
 async function gerarUserscriptJusbr(){
   try{

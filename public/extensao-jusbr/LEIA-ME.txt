@@ -1,0 +1,19 @@
+CMPGestão — ponte jus.br (extensão do Chrome/Edge)
+
+PARA TESTAR AGORA (sem loja):
+1. Baixe esta pasta inteira para o seu computador.
+2. No Chrome, abra  chrome://extensions
+3. Ligue o "Modo do desenvolvedor" (canto superior direito).
+4. Clique em "Carregar sem compactação" e escolha esta pasta.
+5. Clique no ícone da extensão (quebra-cabeça → CMPGestão) e cole a chave de
+   pareamento que o sistema mostra em Robôs → jus.br. Salve.
+6. Entre no https://portaldeservicos.pdpj.jus.br com o seu certificado.
+   O selo da extensão fica verde ("sincronizado") assim que o token é capturado.
+
+O QUE ELA FAZ: reconhece o token que o próprio portal já usa na sua sessão e o
+entrega ao sistema. Não lê senha, não usa o seu certificado, não altera as
+páginas do jus.br.
+
+DIFERENÇA PARA O TAMPERMONKEY: o portal bloqueia envios saindo das páginas dele,
+então o userscript precisava guardar o token e esperar a aba do sistema aberta
+para entregá-lo. A extensão envia direto, na hora — o sistema pode estar fechado.

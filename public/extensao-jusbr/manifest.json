@@ -1,0 +1,28 @@
+{
+  "manifest_version": 3,
+  "name": "CMPGestão — ponte jus.br",
+  "version": "1.0.0",
+  "description": "Leva o token da sua sessão do jus.br (PDPJ) para o CMPGestão. Sem senha, sem Tampermonkey.",
+  "permissions": ["storage"],
+  "host_permissions": [
+    "https://portaldeservicos.pdpj.jus.br/*",
+    "https://sso.cloud.pje.jus.br/*"
+  ],
+  "optional_host_permissions": ["https://*/*"],
+  "background": { "service_worker": "fundo.js" },
+  "content_scripts": [
+    {
+      "matches": ["https://portaldeservicos.pdpj.jus.br/*", "https://sso.cloud.pje.jus.br/*"],
+      "js": ["pagina.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["https://portaldeservicos.pdpj.jus.br/*", "https://sso.cloud.pje.jus.br/*"],
+      "js": ["ponte.js"],
+      "run_at": "document_start"
+    }
+  ],
+  "options_page": "opcoes.html",
+  "action": { "default_popup": "opcoes.html", "default_title": "CMPGestão — ponte jus.br" }
+}
