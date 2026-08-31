@@ -53,9 +53,28 @@ async function enviar(msg) {
   }
 }
 
+/* O que o portal faz para protocolar, em esqueleto — sem token, sem conteúdo de
+   arquivo. Vai para a mesma rota do userscript (/api/jusbr/aprender), com a
+   mesma chave. Aqui não há o rodeio do cofre: sai na hora. */
+async function aprender(dados) {
+  const { endpoint, segredo } = await cfg();
+  if (!segredo || !dados) return;
+  try {
+    await fetch(endpoint.replace(/\/token$/, '/aprender'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-jusbr-relay': segredo },
+      body: JSON.stringify(dados),
+    });
+    const o = await chrome.storage.local.get(['aprendidos']);
+    const n = (o.aprendidos || 0) + 1;
+    await chrome.storage.local.set({ aprendidos: n });
+  } catch (e) {}
+}
+
 chrome.runtime.onMessage.addListener((msg, remetente, responder) => {
   if (!msg) return;
   if (msg.tipo === 'token') { enviar(msg); return; }
+  if (msg.tipo === 'aprender') { aprender(msg.dados); return; }
   if (msg.tipo === 'testar') { ultimoToken = ''; enviar({ token: msg.token || '', refresh_token: null }).then(() => responder({ ok: true })); return true; }
 });
 /* baixada pelo próprio sistema, a extensão já vem pareada: nada a colar */

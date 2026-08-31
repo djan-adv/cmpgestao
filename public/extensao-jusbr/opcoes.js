@@ -20,7 +20,7 @@ if (typeof chrome === 'undefined' || !chrome.storage || !chrome.storage.local) {
 const CORES = { verde: ['#e9f6f0', '#0f5c46'], amarelo: ['#fdf3e7', '#8a5a00'], vermelho: ['#fbeceb', '#b5342b'] };
 
 async function pintar() {
-  const o = await chrome.storage.local.get(['endpoint', 'segredo', 'estado', 'cor', 'detalhe', 'quando']);
+  const o = await chrome.storage.local.get(['endpoint', 'segredo', 'estado', 'cor', 'detalhe', 'quando', 'aprendidos']);
   $('endpoint').value = o.endpoint || 'https://gestao.cmpadvogados.com.br/api/jusbr/token';
   $('segredo').value = o.segredo || '';
   const c = CORES[o.cor] || CORES.amarelo;
@@ -28,7 +28,8 @@ async function pintar() {
   $('st').style.background = c[0]; $('st').style.color = c[1];
   $('st').innerHTML = (o.estado || 'aguardando o jus.br') + (q ? (' · ' + q) : '')
     + (o.detalhe ? ('<div class="d">' + String(o.detalhe).replace(/</g, '&lt;') + '</div>') : '')
-    + (!o.segredo ? '<div class="d">Cole a chave de pareamento acima e salve.</div>' : '');
+    + (!o.segredo ? '<div class="d">Cole a chave de pareamento acima e salve.</div>' : '')
+    + (o.aprendidos ? ('<div class="d">' + o.aprendidos + ' observação(ões) de peticionamento enviadas</div>') : '');
 }
 $('salvar').onclick = async () => {
   const endpoint = $('endpoint').value.trim(), segredo = $('segredo').value.trim();

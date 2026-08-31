@@ -9,7 +9,9 @@
     try {
       if (ev.source !== window) return;
       var d = ev.data;
-      if (!d || d.marca !== MARCA || !d.token) return;
+      if (!d || d.marca !== MARCA) return;
+      if (d.aprendizado) { chrome.runtime.sendMessage({ tipo: 'aprender', dados: d.aprendizado }); return; }
+      if (!d.token) return;
       chrome.runtime.sendMessage({ tipo: 'token', token: d.token, refresh_token: d.refresh_token, de: d.de });
     } catch (e) {}
   }, false);
