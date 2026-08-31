@@ -565,6 +565,25 @@ async function faseMinuta(sb) {
   return { minuta: true, processo: alvo.processo_numero, arquivo: r.arquivo, docs_usados: r.docs_usados, custo_usd: r.custo_usd }
 }
 
+/* Tira da fila os cards cujo trabalho já foi concluído em ALGUMA tarefa — a
+   própria ou uma gêmea. Separado da rota para poder ser testado sozinho. */
+export function tirarJaFeitas(lista, tarefas) {
+  const norm = (v) => String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim()
+  const perto = (a, b) => {
+    if (!a || !b) return false
+    const d = Math.abs((new Date(a).getTime() - new Date(b).getTime()) / 86400000)
+    return Number.isFinite(d) && d <= 7
+  }
+  const feitas = (tarefas || []).filter(t => t.coluna === 'finalizado' || t.arquivada === true)
+  if (!feitas.length) return lista
+  return lista.filter(x => !feitas.some(t => {
+    if (String(t.numero || '') !== String(x.processo_numero || '')) return false
+    if (t.id && x.tarefa_id && t.id === x.tarefa_id) return true
+    if (!x.tipo_peca) return false
+    return norm(t.titulo).indexOf(norm(x.tipo_peca)) >= 0 && perto(t.prazo, x.prazo_em)
+  }))
+}
+
 export async function GET(request) {
   try {
     return await _get(request)
@@ -608,14 +627,19 @@ async function _get(request) {
       const abertas = new Set((ts || []).filter(t => t.coluna !== 'finalizado' && t.arquivada !== true).map(t => t.id))
       lista = lista.filter(x => !x.tarefa_id || abertas.has(x.tarefa_id))
     }
-    // linhas antigas sem tarefa_id: casa a tarefa da triagem pelo processo + prazo
-    const semTid = lista.filter(x => !x.tarefa_id && x.prazo_em && x.processo_numero)
-    if (semTid.length) {
-      const nums = [...new Set(semTid.map(x => x.processo_numero))]
+    // ——— tarefas GÊMEAS ———
+    // A mesma decisão já chegou duas vezes do DJEN e gerou DUAS linhas e DUAS
+    // tarefas quase idênticas (0000348-93.2026.5.05.0017: prazos 26 e 27/08,
+    // mesmo tipo de peça). Concluída uma, a outra continuava na fila e o dono
+    // via na tela um trabalho que já tinha feito. Para a fila, tarefa gêmea
+    // concluída é o mesmo trabalho concluído: mesmo processo, mesmo tipo de
+    // peça e prazo a até 7 dias de distância — a folga cobre a diferença de um
+    // dia entre a contagem da triagem e a da tarefa.
+    const nums = [...new Set(lista.map(x => x.processo_numero).filter(Boolean))]
+    if (nums.length) {
       const { data: ts2 } = await sb.from('kanban_tarefas')
-        .select('numero,prazo,coluna,arquivada').eq('origem', 'robo_minuta').in('numero', nums)
-      const feitas = new Set((ts2 || []).filter(t => t.coluna === 'finalizado' || t.arquivada === true).map(t => t.numero + '|' + t.prazo))
-      lista = lista.filter(x => x.tarefa_id || !x.prazo_em || !feitas.has(x.processo_numero + '|' + x.prazo_em))
+        .select('id,numero,titulo,prazo,coluna,arquivada').eq('origem', 'robo_minuta').in('numero', nums)
+      lista = tirarJaFeitas(lista, ts2 || [])
     }
     const { count: semPeca } = await sb.from('robo_minutas').select('id', { count: 'exact', head: true }).eq('exige_peca', false)
     return Response.json({ ok: true, orcamento: orc, modo: await modoAtual(sb), fila: lista, arquivadas_sem_peca: semPeca || 0 })
