@@ -82,6 +82,11 @@ function achaArr(o, nomes, prof) {
   for (const k of Object.keys(o)) { const v = achaArr(o[k], nomes, prof + 1); if (v) return v }
   return null
 }
+/* No PDPJ o mesmo campo vem ora como objeto, ora como LISTA de um item só:
+   classe:[{codigo,descricao}], assunto:[{...}], orgaoJulgador:[{...}]. Ler só o
+   objeto fazia classe.codigo virar undefined e a tela dizer que o jus.br não
+   devolveu nada — quando devolveu, só que dentro de uma lista. */
+const umNo = (x) => Array.isArray(x) ? (x.find(v => v && typeof v === 'object') || null) : x
 const numOu = (v) => { if (v == null || typeof v === 'object') return null; const n = Number(String(v).replace(/[^\d.-]/g, '')); return (Number.isFinite(n) && n !== 0) ? n : null }
 const txtOu = (v) => (v == null || typeof v === 'object') ? null : (String(v).trim() || null)
 
@@ -140,9 +145,9 @@ function partesDoProcesso(proc) {
 // Assunto com CÓDIGO — nome sozinho o tribunal não aceita (o envelope que passou
 // no TJBA levava {codigo:7780}). Aceita 'assuntos' (plural, lista) e 'assunto'.
 function assuntosDe(fontes) {
-  const arr = primeiroArr(fontes, ['peticaoAssuntos', 'assuntos'])
+  const arr = primeiroArr(fontes, ['peticaoAssuntos', 'assuntos', 'assunto'])
   let cru = (arr && arr.length) ? arr : []
-  if (!cru.length) { const n = primeiroNo(fontes, ['assunto', 'assuntoPrincipal']); if (n) cru = [n] }
+  if (!cru.length) { const n = primeiroNo(fontes, ['assunto', 'assuntoPrincipal']); if (n) cru = Array.isArray(n) ? n : [n] }
   const out = []
   for (const a of cru) {
     if (!a || typeof a !== 'object') continue
@@ -174,6 +179,23 @@ async function envelopeDeCaptura(sb, dig) {
     }
   } catch (e) {}
   return null
+}
+
+/* Esqueleto do JSON: mesma forma, valores encurtados. Lista vira ["(lista de
+   N)", <esqueleto do 1º>]; movimentos/documentos ficam de fora. É o que permite
+   consertar a leitura de um tribunal novo sem pedir o processo inteiro. */
+function esqueleto(o, prof) {
+  prof = prof || 0
+  if (o == null) return null
+  if (Array.isArray(o)) return o.length ? ['(lista de ' + o.length + ')', esqueleto(o[0], prof + 1)] : []
+  if (typeof o !== 'object') return String(o).slice(0, 60)
+  if (prof > 2) return '{…}'
+  const out = {}
+  for (const k of Object.keys(o).slice(0, 25)) {
+    if (/moviment|documento|anexo/i.test(k)) { out[k] = '(omitido)'; continue }
+    out[k] = esqueleto(o[k], prof + 1)
+  }
+  return out
 }
 
 async function pdpj(url, token, opts) {
@@ -215,19 +237,29 @@ async function montarEnvelope(token, dig, sb) {
   /* Órgão julgador: pode vir como objeto {codigo,nome} OU como texto puro. Era
      esse o caso do 0009652-03.2026.8.05.0103 — achaNo() só devolve objeto, então
      não achava nada e a tela dizia "Vara: —". */
-  const orgaoNo = primeiroNo(fontes, ['orgaoJulgador', 'orgaoJulgadorOrigem', 'unidadeJudiciaria', 'orgao']) || {}
-  const orgaoCod = numOu(primeiro(fontes, ['codOrgaoJulgadorCorporativo', 'codigoOrgaoJulgadorCorporativo', 'codigoOrgaoJulgador', 'idOrgaoJulgador']))
-    || numOu(orgaoNo.codigo != null ? orgaoNo.codigo : (orgaoNo.codigoOrgao != null ? orgaoNo.codigoOrgao : orgaoNo.id))
+  const orgaoNo = umNo(primeiroNo(fontes, ['orgaoJulgador', 'orgaoJulgadorOrigem', 'unidadeJudiciaria', 'orgao'])) || {}
+  const orgaoCod = numOu(primeiro(fontes, ['codOrgaoJulgadorCorporativo', 'codigoOrgaoJulgadorCorporativo']))
+    || numOu(orgaoNo.codigoOrgao != null ? orgaoNo.codigoOrgao : (orgaoNo.codigo != null ? orgaoNo.codigo : orgaoNo.id))
+    || numOu(primeiro(fontes, ['codigoOrgaoJulgador', 'idOrgaoJulgador', 'codigoOrgao']))
   const orgaoNome = txtOu(primeiro(fontes, ['nomeOrgaoJulgadorCorporativo', 'nomeOrgaoJulgador']))
-    || txtOu(orgaoNo.nome || orgaoNo.descricao || orgaoNo.nomeOrgao)
+    || txtOu(orgaoNo.nome || orgaoNo.nomeOrgao || orgaoNo.descricao)
     || txtOu(primeiro(fontes, ['orgaoJulgador', 'unidadeJudiciaria', 'orgao']))
 
-  const classeNo = primeiroNo(fontes, ['classe', 'classeProcessual', 'classeJudicial']) || {}
+  const classeNo = umNo(primeiroNo(fontes, ['classe', 'classeProcessual', 'classeJudicial'])) || {}
   const classeCod = numOu(primeiro(fontes, ['codigoClasseProcessual', 'codClasseProcessual', 'codigoClasse']))
     || numOu(classeNo.codigo != null ? classeNo.codigo : (classeNo.codigoNacional != null ? classeNo.codigoNacional : classeNo.id))
 
+  /* o id da tramitação, no v2, chama-se idOrigem dentro de tramitacaoAtual —
+     não idOrigemTramitacao (esse é o nome que o PORTAL usa no envelope) */
   const tramId = primeiro(fontes, ['idOrigemTramitacao', 'idTramitacao'])
-    || (() => { for (const f of [noTramitacao(pp), noTramitacao(proc)]) { if (f && (f.idOrigemTramitacao || f.idTramitacao || f.id)) return f.idOrigemTramitacao || f.idTramitacao || f.id } return null })()
+    || (() => {
+      for (const f of [umNo(noTramitacao(pp)), umNo(noTramitacao(proc))]) {
+        if (!f) continue
+        const v = f.idOrigemTramitacao != null ? f.idOrigemTramitacao : (f.idTramitacao != null ? f.idTramitacao : (f.idOrigem != null ? f.idOrigem : f.id))
+        if (v != null && v !== '') return v
+      }
+      return null
+    })()
 
   const env = {
     id: null, tipo: 'A', sigiloso: 'nao',
@@ -286,12 +318,17 @@ async function montarEnvelope(token, dig, sb) {
   }
 
   const faltando = oQueFalta()
-  // o que o jus.br REALMENTE devolveu — sem isto, campo faltando vira adivinhação
+  /* o que o jus.br REALMENTE devolveu — sem isto, campo faltando vira
+     adivinhação. A primeira versão trazia só os NOMES das chaves, e nome de
+     chave não diz se o valor é objeto, lista ou texto — que é exatamente onde
+     a leitura se perdia. Agora vai o esqueleto com os tipos e uma amostra
+     curta, sem movimentos nem documentos (que são listas enormes). */
   const visto = {
     v2_chaves: Object.keys(proc || {}).slice(0, 40),
-    v2_tramitacao: Object.keys(noTramitacao(proc) || {}).slice(0, 40),
+    v2_tramitacao: Object.keys(umNo(noTramitacao(proc)) || {}).slice(0, 40),
     peticionamento_http: ppHttp,
     peticionamento_chaves: Object.keys((Array.isArray(pp) ? pp[0] : pp) || {}).slice(0, 40),
+    amostra: faltando.length ? esqueleto(umNo(noTramitacao(proc)) || proc, 0) : undefined,
   }
   return { env, faltando, reaproveitado, visto }
 }
