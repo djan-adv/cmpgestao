@@ -331,6 +331,15 @@ async function montarEnvelope(token, dig, sb) {
     }
   }
 
+  /* O próprio jus.br diz, processo a processo, se aceita peticionamento pelo
+     portal — é o campo permitePeticionar da tramitação. Tribunal com sistema
+     próprio fora da integração (o Projudi do TJPR, por exemplo) responde false,
+     e aí não adianta montar envelope nenhum: o protocolo é no sistema dele.
+     Dizer isso na cara é melhor do que listar campos faltando. */
+  const permiteBruto = primeiro(fontes, ['permitePeticionar', 'permitePeticionamento'])
+  const permitePeticionar = (permiteBruto === false || String(permiteBruto).toLowerCase() === 'false') ? false
+    : ((permiteBruto === true || String(permiteBruto).toLowerCase() === 'true') ? true : null)
+
   const faltando = oQueFalta()
   /* o que o jus.br REALMENTE devolveu — sem isto, campo faltando vira
      adivinhação. A primeira versão trazia só os NOMES das chaves, e nome de
@@ -344,7 +353,7 @@ async function montarEnvelope(token, dig, sb) {
     peticionamento_chaves: Object.keys((Array.isArray(pp) ? pp[0] : pp) || {}).slice(0, 40),
     amostra: faltando.length ? esqueleto(umNo(noTramitacao(proc)) || proc, 0) : undefined,
   }
-  return { env, faltando, reaproveitado, divergencias, visto }
+  return { env, faltando, reaproveitado, divergencias, permitePeticionar, visto }
 }
 
 /* "Protocolei — e chegou?" O recibo do CNJ prova que o CNJ recebeu e mandou ao
@@ -440,7 +449,8 @@ export async function GET(request) {
 
   return Response.json({
     ok: true, numero: mascara(dig), envelope: m.env, faltando: m.faltando,
-    reaproveitado: m.reaproveitado || null, divergencias: m.divergencias || [], visto: m.visto || null,
+    reaproveitado: m.reaproveitado || null, divergencias: m.divergencias || [],
+    permite_peticionar: (m.permitePeticionar === undefined ? null : m.permitePeticionar), visto: m.visto || null,
     tipos, pronto: m.faltando.length === 0,
   })
 }
@@ -473,6 +483,9 @@ export async function POST(request) {
 
   const m = await montarEnvelope(tk.token, dig, sb)
   if (m.erro) return Response.json({ erro: m.erro }, { status: 502 })
+  if (m.permitePeticionar === false) {
+    return Response.json({ erro: 'o jus.br informa que este processo não aceita peticionamento pelo portal — protocole pelo sistema do próprio tribunal', nao_permite: true }, { status: 422 })
+  }
   if (m.faltando.length) return Response.json({ erro: 'faltam dados do processo para montar a petição: ' + m.faltando.join(', '), faltando: m.faltando, visto: m.visto || null }, { status: 422 })
 
   const nomeArq = path.basename(rel)
