@@ -918,6 +918,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
     <div id="t-files" style="font-size:13px"></div>
     <div class="flags" style="margin-top:6px"><label><input type="checkbox" id="t-hist"> Registrar também no histórico do processo</label></div>
     <div id="t-autoria" class="note" style="display:none;margin-top:8px;font-size:11.5px;color:#8a8fa0"></div>
+    <div id="t-coment" style="display:none;border-top:1px dashed var(--line);margin-top:10px;padding-top:9px"></div>
     <div id="t-pub-acoes" style="display:none;border-top:1px dashed var(--line);margin-top:10px;padding-top:10px">
       <div class="note" style="margin:0 0 6px">Sem tarefa? A publicação pode sair da fila mesmo assim:</div>
       <button class="btn sm ghost" onclick="descartarPubModal()" title="Marca a publicação como tratada (ciência) — vai para a aba Tratadas">🗂 Descartar publicação (ciência)</button>
@@ -3985,7 +3986,8 @@ function persisteKanban(a){
       sb.from('kanban_tarefas').update({coluna:a.col,titulo:a.titulo,resp:(a.resp||null),data:(a.data||null),prazo:(a.prazo||null),tipo:(a.tipoForm||null),descricao:(a.descricao||null),local:(a.local||null),atrasada:false,concluido_por:(a.concluidoPor||null),concluido_em:(a.concluidoEm||null),arquivada:(a.arq===true),cancelada:(a.canc===true),cancelada_em:(a.canceladaEm||null),cancelada_por:(a.canceladaPor||null),cancelada_motivo:(a.canceladaMotivo||null)}).eq('id',a.dbid).then(function(r){ if(r&&r.error) console.warn('kanban update:',r.error.message); });
       a.atrasada=false;
     } else { /* novo: insere e guarda o dbid */
-      sb.auth.getUser().then(function(ug){ return sb.from('usuarios').select('escritorio_id').eq('id',ug.data.user.id).single(); }).then(function(pf){
+      /* a promessa fica guardada: quem precisa do id da linha (comentários) espera por ela */
+      a.__insertP=sb.auth.getUser().then(function(ug){ return sb.from('usuarios').select('escritorio_id').eq('id',ug.data.user.id).single(); }).then(function(pf){
         var esc=pf&&pf.data&&pf.data.escritorio_id; if(!esc) return;
         if(!a.criadoPor) a.criadoPor=_kanQuemSou();
         return sb.from('kanban_tarefas').insert({escritorio_id:esc,titulo:a.titulo,cliente:a.cliente,numero:a.numero,coluna:a.col,resp:(a.resp||null),data:(a.data||null),prazo:(a.prazo||null),tipo:(a.tipoForm||null),descricao:(a.descricao||null),local:(a.local||null),origem:(a.origem||'sistema'),criado_por:(a.criadoPor||null),concluido_por:(a.concluidoPor||null),concluido_em:(a.concluidoEm||null),arquivada:(a.arq===true),cancelada:(a.canc===true),cancelada_em:(a.canceladaEm||null),cancelada_por:(a.canceladaPor||null),cancelada_motivo:(a.canceladaMotivo||null)}).select('id').single();
@@ -4571,6 +4573,18 @@ function abrirTarefaKanban(id){
     _au.innerHTML=l.join(' · ');
     _au.style.display=l.length?'block':'none';
   }
+  _comPintaModal(id);
+}
+/* Conversa da tarefa dentro do modal — é onde quem recebeu a tarefa a abre. */
+function _comPintaModal(id){
+  var el=document.getElementById('t-coment'); if(!el) return;
+  var a=(KAN||[]).find(function(x){return x.id===id;});
+  if(!a){ el.style.display='none'; el.innerHTML=''; return; }
+  el.style.display='block';
+  el.innerHTML='<div style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:#9aa3b0;margin:0 0 5px">Comentários</div>'
+    +(_comLista(a).length?'':'<div class="note" style="margin:0 0 4px">Nenhum comentário ainda.</div>')
+    +_comBlocoHTML(a,'m')
+    +(window.__comAberto[a.id]?'':('<div style="margin-top:6px">'+_comBotaoHTML(a,'m')+'</div>'));
 }
 /* Corrige o tipo de uma atividade já criada e salva na hora. Nasceu de um erro
    real: "Audiência" era a primeira opção do seletor, então tarefa criada às
@@ -4617,6 +4631,169 @@ function _kanAutor(a){
   if(/^robo|^auto/.test(o)) return 'sistema ('+esc(o.replace(/[_-]/g,' '))+')';
   return 'não registrado';
 }
+/* ===== Comentários da tarefa — o caminho de volta =====
+   Pedido do dono (31/08/2026): "permita comentários pelo destinatário na tarefa
+   pra devolver pra quem a criou".
+   Antes a tarefa só andava para a frente: quem recebia podia concluir ou
+   cancelar. Faltava dizer "isto não é comigo", "faltou o documento X", "já
+   protocolei, confere" — e mandar de volta a quem pediu.
+   Agora cada tarefa tem uma conversa (tabela kanban_comentarios) e um botão
+   DEVOLVER: grava o comentário, marca-o como devolução e passa o responsável
+   para quem criou a tarefa — que é como ela reaparece no "Meu dia" dele. Sem
+   trocar o responsável, o recado ficaria numa tela que o autor não abre. */
+window.__KANCOM=window.__KANCOM||{};   /* tarefa_id (uuid) -> [comentários] */
+window.__comAberto=window.__comAberto||{};
+function _comLista(a){ var k=(a&&a.dbid)?String(a.dbid):''; return (k&&window.__KANCOM[k])||[]; }
+/* Autor humano da tarefa. A que o robô abriu sozinho não tem para quem voltar —
+   e é melhor dizer isso do que devolver para um nome que não existe. */
+function _comCriador(a){
+  var n=String((a&&a.criadoPor)||'').trim();
+  if(!n||/^sistema/i.test(n)) return '';
+  return n;
+}
+/* O select de responsável tem nomes curtos ("Maria Rita"), o cadastro guarda os
+   longos ("Maria Rita Caldas"). Devolver gravando o nome longo deixaria o campo
+   do modal em branco — e a próxima gravação jogaria a tarefa para o primeiro da
+   lista. Casa pelo maior número de palavras em comum. */
+function _respDoSelect(nome){
+  var n=String(nome||'').trim(); if(!n) return '';
+  var s=document.getElementById('t-resp'); if(!s) return n;
+  var tok=_normNomeAcesso(n).split(' ').filter(Boolean); if(!tok.length) return n;
+  var melhor=null, pts=0;
+  for(var i=0;i<s.options.length;i++){
+    var base=(s.options[i].getAttribute('data-nome')||s.options[i].textContent||'').replace(/\s*\(em férias\)\s*$/,'');
+    var alvo=_normNomeAcesso(base).split(' ').filter(Boolean);
+    var pt=0; alvo.forEach(function(t){ if(tok.indexOf(t)>-1) pt++; });
+    if(pt>pts){ pts=pt; melhor=base; }
+  }
+  return pts>0?melhor:n;
+}
+/* A tarefa precisa existir no banco para receber comentário: as importadas do
+   Astrea só viram linha quando alguém mexe nelas. Aqui a linha é criada na hora
+   e o comentário espera por ela (persisteKanban guarda a promessa do insert). */
+function _comGarantirDbid(a){
+  if(!a) return Promise.resolve(null);
+  if(a.dbid) return Promise.resolve(a.dbid);
+  try{ persisteKanban(a); }catch(e){}
+  return Promise.resolve(a.__insertP).then(function(){ return a.dbid||null; }).catch(function(){ return null; });
+}
+function _comAbrir(id,ctx){ window.__comAberto[id]=true; _comRepinta(id); setTimeout(function(){ var t=document.getElementById('com-txt-'+(ctx||'p')+'-'+id); if(t) t.focus(); },30); }
+function _comFechar(id){ window.__comAberto[id]=false; _comRepinta(id); }
+function _comRepinta(id){
+  try{ if(typeof renderAtivProc==='function') renderAtivProc(); }catch(e){}
+  try{ if(window._tarEditId===id) _comPintaModal(id); }catch(e){}
+  try{ if(typeof renderTarefasView==='function' && document.getElementById('tar-cal')) renderTarefasView(); }catch(e){}
+}
+/* Uma conversa, dois lugares: a ficha do processo (ctx 'p') e o modal da tarefa
+   (ctx 'm'). Os ids do campo levam o contexto porque os dois podem estar na tela
+   ao mesmo tempo — e id repetido faria o "enviar" do modal ler a caixa de trás. */
+function _comBlocoHTML(a,ctx){
+  ctx=ctx||'p';
+  var lst=_comLista(a), h='';
+  if(lst.length){
+    h+='<div style="margin-top:6px;border-left:2px solid #e3e8f0;padding-left:9px">'+lst.map(function(c){
+      var dev=(c.devolucao===true);
+      return '<div style="margin:0 0 6px">'
+        +'<div style="font-size:11px;color:#8a8fa0">'
+          +(dev?'<span style="color:#8a5a00;font-weight:800">↩ devolvida</span> · ':'')
+          +'<b>'+esc(c.autor||'—')+'</b>'+(c.para?(' <span style="opacity:.8">→ '+esc(c.para)+'</span>'):'')
+          +(c.criado_em?(' · '+_kanQuandoBR(c.criado_em)):'')
+        +'</div>'
+        +'<div style="font-size:12.5px;color:var(--navy);white-space:pre-wrap;word-break:break-word">'+esc(c.texto||'')+'</div>'
+      +'</div>';
+    }).join('')+'</div>';
+  }
+  if(window.__comAberto[a.id]){
+    var cri=_comCriador(a);
+    var alvo=cri?_respDoSelect(cri):'';
+    var jaEhDele=(alvo && String(a.resp||'').trim() && _normNomeAcesso(_respDoSelect(a.resp))===_normNomeAcesso(alvo));
+    h+='<div style="margin-top:7px;background:#f7f9fc;border:1px solid var(--line);border-radius:9px;padding:7px 8px">'
+      +'<textarea id="com-txt-'+ctx+'-'+a.id+'" rows="2" placeholder="Escreva o recado — o que faltou, o que já foi feito, por que volta…" style="width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:8px;padding:6px 8px;font:inherit;font-size:12.5px;resize:vertical"></textarea>'
+      +'<div style="display:flex;gap:6px;margin-top:5px;flex-wrap:wrap;align-items:center">'
+        +'<button class="btn sm" style="font-size:11px" onclick="_comEnviar('+a.id+',false,\''+ctx+'\')">💬 comentar</button>'
+        +(cri&&!jaEhDele
+          ?('<button class="btn sm ghost" style="font-size:11px;color:#8a5a00;border-color:#e8d5b0" onclick="_comEnviar('+a.id+',true,\''+ctx+'\')" title="Grava o recado e passa a tarefa de volta para quem a criou — ela reaparece no Meu dia dele">↩ devolver para '+esc(String(alvo).split(' ')[0])+'</button>')
+          :(cri?'<span class="note" style="font-size:11px">já está com quem criou</span>'
+               :'<span class="note" style="font-size:11px">criada pelo sistema — não há para quem devolver</span>'))
+        +'<button class="btn sm ghost" style="font-size:11px;color:#697180" onclick="_comFechar('+a.id+')">fechar</button>'
+      +'</div>'
+    +'</div>';
+  }
+  return h;
+}
+function _comBotaoHTML(a,ctx){
+  var n=_comLista(a).length;
+  return '<button class="btn sm ghost" style="font-size:11px'+(n?';color:#185FA5;border-color:#cfd9e8':'')+'" onclick="_comAbrir('+a.id+',\''+(ctx||'p')+'\')" title="Comentar ou devolver a tarefa a quem a criou">💬 comentar'+(n?(' ('+n+')'):'')+'</button>';
+}
+/* A tarefa criada com "Mostrar na agenda" vive em duas linhas: a do Kanban e a
+   do agenda_eventos. Devolver mudando só o Kanban deixaria o "Meu dia" exibindo
+   o nome antigo — o recado voltaria e o painel continuaria cobrando a pessoa
+   errada. Casa como o resto do sistema: título + (data OU processo). */
+function _comRespNaAgenda(a,alvo){
+  try{
+    var tt=String(a.titulo||'').trim(); if(!tt||!alvo) return;
+    var dig=String(a.numero||'').replace(/\D/g,'');
+    var bate=function(e){
+      if(!e||String(e.tt||'').trim()!==tt) return false;
+      if(a.data&&e.data&&e.data!==a.data){
+        var dE0=String((e.p&&e.p.numero)||'').replace(/\D/g,'');
+        if(!(dig&&dE0&&dig===dE0)) return false;
+      }
+      var dE=String((e.p&&e.p.numero)||'').replace(/\D/g,'');
+      if(dig&&dE&&dig!==dE) return false;
+      return true;
+    };
+    var sb=window.__sb;
+    (window.__AGDB||[]).filter(bate).forEach(function(e){
+      e.resp=alvo;
+      if(sb&&e.id) sb.from('agenda_eventos').update({resp:alvo}).eq('id',e.id).then(function(){},function(){});
+    });
+    (AGENDA||[]).filter(bate).forEach(function(e){ e.resp=alvo; });
+  }catch(e){}
+}
+function _comEnviar(id,devolver,ctx){
+  if(!KAN)initKanban();
+  var a=(KAN||[]).find(function(x){return x.id===id;}); if(!a) return;
+  var ta=document.getElementById('com-txt-'+(ctx||'p')+'-'+id);
+  var txt=String((ta&&ta.value)||'').trim();
+  if(!txt){ alert(devolver?'Escreva por que está devolvendo — é o que a outra pessoa precisa ler.':'Escreva o comentário.'); if(ta) ta.focus(); return; }
+  var cri=devolver?_comCriador(a):'';
+  var alvo=devolver?_respDoSelect(cri):String(a.resp||'');
+  if(devolver&&!alvo){ alert('Esta tarefa não tem autor humano registrado — não há para quem devolver.'); return; }
+  var quem=_kanQuemSou()||'equipe';
+  var reg={autor:quem, para:(alvo||null), texto:txt, devolucao:!!devolver, criado_em:new Date().toISOString()};
+  if(ta) ta.value='';
+  _comGarantirDbid(a).then(function(dbid){
+    if(!dbid){ alert('Não consegui gravar o comentário: a tarefa ainda não está no banco. Tente de novo em alguns segundos.'); return; }
+    reg.tarefa_id=dbid;
+    (window.__KANCOM[String(dbid)]=window.__KANCOM[String(dbid)]||[]).push(reg);
+    if(devolver){
+      a.resp=alvo;
+      /* devolvida = volta para a fila: concluída/arquivada não some da vista de
+         quem tem de resolver */
+      if(a.col==='finalizado'){ a.col='executar'; a.concluidoPor=null; a.concluidoEm=null; }   /* coluna real do quadro (ver COLS) */
+      a.arq=false;
+      try{ persisteKanban(a); }catch(e){}
+      _comRespNaAgenda(a,alvo);
+      try{ if(typeof renderKanban==='function') renderKanban(); }catch(e){}
+      try{ if(typeof renderMeuDia==='function') renderMeuDia(); }catch(e){}
+      try{ if(typeof atualizaNavContagens==='function') atualizaNavContagens(); }catch(e){}
+    }
+    window.__comAberto[id]=!devolver;   /* devolveu: fecha a caixa. comentou: segue aberta para continuar */
+    _comRepinta(id);
+    try{
+      var sb=window.__sb; if(!sb) return;
+      escId().then(function(escr){
+        if(!escr) return;
+        sb.from('kanban_comentarios').insert({escritorio_id:escr,tarefa_id:dbid,autor:reg.autor,para:reg.para,texto:reg.texto,devolucao:reg.devolucao,criado_em:reg.criado_em})
+          .select('id').single().then(function(r){
+            if(r&&r.error){ console.warn('comentário:',r.error.message); alert('O comentário apareceu na tela mas NÃO foi gravado: '+r.error.message); return; }
+            if(r&&r.data&&r.data.id) reg.id=r.data.id;
+          });
+      });
+    }catch(e){ console.warn('comentário:',e); }
+  });
+}
 /* ===== Painel "Atividades do escritório neste processo" (tarefas/prazos deste processo) ===== */
 function renderAtivProc(){
   var el=document.getElementById('ativ-proc'); if(!el) return;
@@ -4662,9 +4839,11 @@ function renderAtivProc(){
         +'<div style="font-weight:600;color:var(--navy);'+((concl||canc)?'text-decoration:line-through':'')+'">'+esc(a.titulo||'—')+'</div>'
         +'<div class="note" style="margin:2px 0 0">'+meta.join(' · ')+'</div>'
         +(aut.length?('<div class="note" style="margin:2px 0 0;font-size:11px;color:#8a8fa0">'+aut.join(' · ')+'</div>'):'')
+        +_comBlocoHTML(a,'p')
         +'<div style="margin-top:5px;display:flex;gap:6px;flex-wrap:wrap">'
           +'<button class="btn sm ghost" style="font-size:11px" onclick="abrirTarefaKanban('+a.id+')">✎ editar</button>'
           +'<button class="btn sm ghost" style="font-size:11px" onclick="definirPrazoFatal('+a.id+')">⏰ prazo fatal</button>'
+          +_comBotaoHTML(a,'p')
           +(canc?'<button class="btn sm ghost" style="font-size:11px" onclick="reabrirTarefaCancelada('+a.id+')" title="Volta para a fila de tarefas">↩ reabrir</button>'
                 :(concl?'<button class="btn sm ghost" style="font-size:11px" onclick="toggleConcluirTarefa('+a.id+');renderAtivProc();">↩ reabrir</button>'
                        :'<button class="btn sm ghost" style="font-size:11px;color:#127a53;border-color:#bfe3d1" onclick="toggleConcluirTarefa('+a.id+');renderAtivProc();">✓ concluir</button>'))
@@ -5314,6 +5493,7 @@ function abrirNovaTarefa(proc){window._tarEditId=null;
   /* autoria é da tarefa aberta antes — some na tarefa nova (abrirTarefaKanban
      preenche de novo logo depois, quando é edição) */
   var _au0=document.getElementById('t-autoria'); if(_au0){ _au0.innerHTML=''; _au0.style.display='none'; }
+  var _co0=document.getElementById('t-coment'); if(_co0){ _co0.innerHTML=''; _co0.style.display='none'; }
   var ov=document.getElementById("modal-tarefa");
   /* pano de fundo: abre a FICHA do processo atrás do formulário, com rolagem e
      leitura livres — agendar olhando o processo evita erro de data */
@@ -7873,7 +8053,7 @@ function _tarChipHTML(a){
     +'<span class="tar3-txt" style="'+risco+'" onclick="event.stopPropagation();abrirTarefaKanban('+a.id+')">'
       +'<span class="l1"><span class="l1-num">'+esc(numFmt||'sem processo')+'</span>'+_respSeloHTML(a.resp)+'</span>'
       +'<span class="l2">'+esc(partes||'—')+'</span>'
-      +'<span class="l3">'+esc(a.titulo||'—')+'</span>'
+      +'<span class="l3">'+esc(a.titulo||'—')+((typeof _comLista==='function'&&_comLista(a).length)?(' <span title="tem comentário" style="opacity:.85">💬</span>'):'')+'</span>'
     +'</span>'
     +chipAtraso
     +'</div>';
@@ -8309,6 +8489,16 @@ function toggleConcluirTarefa(id){
         console.log('CMPGestao: '+window.__KANDB.length+' tarefas do Kanban carregadas do banco.');
       }
     }catch(eKt){ console.log('kanban: '+(eKt&&eKt.message||eKt)); }
+    /* comentários das tarefas (kanban_comentarios). Tabela nova: se não existir, ignora. */
+    try{
+      var kc=await sb.from('kanban_comentarios').select('id,tarefa_id,autor,para,texto,devolucao,criado_em').order('criado_em',{ascending:true}).limit(5000);
+      if(!kc.error && kc.data){
+        var mapaC={}; kc.data.forEach(function(c){ (mapaC[String(c.tarefa_id)]=mapaC[String(c.tarefa_id)]||[]).push(c); });
+        window.__KANCOM=mapaC;
+        try{ if(typeof renderAtivProc==='function') renderAtivProc(); }catch(eRc){}
+        console.log('CMPGestao: '+kc.data.length+' comentários de tarefa carregados.');
+      }
+    }catch(eKc){ console.log('comentários: '+(eKc&&eKc.message||eKc)); }
     /* audiências trabalhistas futuras já marcadas → garante a tarefa de ATA do dia seguinte */
     try{ if(typeof varreAtasTrabalhistas==='function') varreAtasTrabalhistas(); }catch(eVa){}
     /* lembrete de véspera das audiências de amanhã (aviso ao cliente) */
