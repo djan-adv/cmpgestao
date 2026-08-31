@@ -42,7 +42,11 @@ async function enviar(msg) {
     }
     if (res && res.ignorado) return situacao('ignorado: ' + res.ignorado, 'amarelo');
     if (!r.ok) return situacao('erro HTTP ' + r.status, 'vermelho', (res && res.erro) || '');
-    return situacao('sincronizado', 'verde', res && res.expira ? ('vale até ' + String(res.expira).slice(11, 16)) : '');
+    /* a validade vem em UTC; mostrada crua, aparecia 3 horas à frente do relógio
+       de quem lê (20:23 para um token que vence às 17:23 aqui) */
+    let ate = ''
+    try { if (res && res.expira) ate = 'vale até ' + new Date(res.expira).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) } catch (e) {}
+    return situacao('sincronizado', 'verde', ate);
   } catch (e) {
     ultimoToken = '';
     return situacao('falha de rede ao falar com o sistema', 'vermelho', String((e && e.message) || e));
