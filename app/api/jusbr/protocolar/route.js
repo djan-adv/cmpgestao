@@ -347,6 +347,69 @@ async function montarEnvelope(token, dig, sb) {
   return { env, faltando, reaproveitado, divergencias, visto }
 }
 
+/* "Protocolei — e chegou?" O recibo do CNJ prova que o CNJ recebeu e mandou ao
+   tribunal (ENVIADO_AO_TRIBUNAL). A juntada nos autos é assíncrona: entra numa
+   fila do tribunal e pode levar de minutos a horas. Isto pergunta ao jus.br em
+   que pé está, para ninguém ficar recarregando o PJe no dia do prazo.
+   Lê defensivamente: o formato de /peticoes varia, então varremos o JSON atrás
+   dos objetos que têm cara de petição. */
+/* Três destinos possíveis, e só um deles encerra o prazo:
+   RECUSADA  — o tribunal não recebeu. O prazo continua correndo.
+   CONFIRMADA— entrou nos autos.
+   ENVIADA   — o CNJ mandou e o tribunal ainda não respondeu. */
+function classeDoStatus(st) {
+  const t = String(st || '').toLowerCase()
+  if (/recus|rejeit|erro|falh|inval|n[ãa]o[\s_-]*protocol|cancel|devolv/.test(t)) return 'recusada'
+  if (/protocolad|juntad|conclu|sucesso|aceit|receb.*tribunal.*ok/.test(t)) return 'confirmada'
+  if (/envi|process|aguard|andamento|fila/.test(t)) return 'enviada'
+  return 'desconhecida'
+}
+function coletaPeticoes(o, out, prof) {
+  out = out || []; prof = prof || 0
+  if (!o || typeof o !== 'object' || prof > 6 || out.length > 60) return out
+  if (Array.isArray(o)) { for (const x of o) coletaPeticoes(x, out, prof + 1); return out }
+  const k = Object.keys(o)
+  const tem = (re) => k.find(x => re.test(x))
+  const cRecibo = tem(/^(numeroReciboCnj|nroProtocolo|numeroProtocolo|protocolo)$/i)
+  const cStatus = tem(/^(status|situacao|situação)$/i)
+  const cProc = tem(/^(numeroProcesso|processo)$/i)
+  if ((cRecibo && cStatus) || (cProc && cStatus)) {
+    const st = String(o[cStatus] && typeof o[cStatus] === 'object' ? (o[cStatus].descricao || o[cStatus].nome || '') : o[cStatus] || '')
+    out.push({
+      recibo: cRecibo ? String(o[cRecibo]) : null,
+      status: st,
+      classe: classeDoStatus(st),
+      motivo: (o.motivo || o.mensagem || o.erro || o.descricaoErro || o.observacao || null),
+      processo: cProc ? String(o[cProc]) : null,
+      quando: o.dataProtocolo || o.dataHoraProtocolo || o.dataEnvio || o.dataHoraEnvio || o.criadoEm || null,
+      tipo: (o.nomeTipoDocumento || o.tipoDocumento || null),
+      id: (o.idPeticao != null ? o.idPeticao : (o.id != null ? o.id : null)),
+    })
+    return out
+  }
+  for (const x of k) coletaPeticoes(o[x], out, prof + 1)
+  return out
+}
+async function situacaoDasPeticoes(token, dig) {
+  const tentativas = []
+  const urls = [
+    `${PDPJ}/api/v1/peticoes/processo/${dig}`,
+    `${PDPJ}/api/v1/peticoes?numeroProcesso=${mascara(dig)}`,
+    `${PDPJ}/api/v1/peticoes`,
+  ]
+  for (const u of urls) {
+    let r, j = null
+    try { r = await pdpj(u, token); j = await r.json().catch(() => null) } catch (e) { tentativas.push({ url: u.replace(PDPJ, ''), erro: String((e && e.message) || e) }); continue }
+    tentativas.push({ url: u.replace(PDPJ, ''), status: r.status })
+    if (!r.ok || !j) continue
+    const todas = coletaPeticoes(j, [])
+    // a lista geral traz as de todos os processos: filtra pela deste
+    const minhas = todas.filter(p => !p.processo || soDig(p.processo) === dig)
+    if (minhas.length) return { peticoes: minhas, tentativas }
+  }
+  return { peticoes: [], tentativas }
+}
+
 export async function GET(request) {
   const user = await usuario(request)
   if (!user) return Response.json({ erro: 'não autenticado' }, { status: 401 })
@@ -357,6 +420,11 @@ export async function GET(request) {
   const sb = jusbrAdmin()
   const tk = await getFreshToken(sb)
   if (!tk || !tk.token) return Response.json({ erro: 'sem acesso ao jus.br — entre no portal (a extensão sincroniza)', sem_sessao: true }, { status: 409 })
+
+  if (searchParams.get('situacao') != null) {
+    const r = await situacaoDasPeticoes(tk.token, dig)
+    return Response.json({ ok: true, numero: mascara(dig), peticoes: r.peticoes, tentativas: r.tentativas })
+  }
 
   const m = await montarEnvelope(tk.token, dig, sb)
   if (m.erro) return Response.json({ erro: m.erro }, { status: m.http === 401 ? 409 : 502 })
@@ -408,32 +476,53 @@ export async function POST(request) {
   if (m.faltando.length) return Response.json({ erro: 'faltam dados do processo para montar a petição: ' + m.faltando.join(', '), faltando: m.faltando, visto: m.visto || null }, { status: 422 })
 
   const nomeArq = path.basename(rel)
-  const hash = crypto.createHash('sha1').update(bytes).digest('hex')
-  const descricao = nomeArq.replace(/\.pdf$/i, '').slice(0, 200)
   const numMasc = mascara(dig)
 
-  // 1) pede o endereço de upload
-  const docMeta = {
-    id: null, file: {}, hash, nome: nomeArq, ordem: 0, tamanho: bytes.length,
-    mimeType: 'application/pdf', sigiloso: false, descricao, principal: true,
-    idTipoDocumento: String(idTipo), nomeTipoDocumento: nomeTipo || null, idOrigemTipoDocumento: '3',
-  }
-  const r1 = await pdpj(`${PDPJ}/api/v1/documentos/${numMasc}/upload/url`, tk.token, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(docMeta),
-  })
-  const j1 = await r1.json().catch(() => null)
-  if (!r1.ok || !j1 || !j1.urlPreSigned) {
-    return Response.json({ erro: 'o jus.br não liberou o envio do arquivo', http: r1.status, resposta: j1 || null }, { status: 502 })
+  /* Petição não vai sozinha: procuração, comprovante, laudo. O envelope aceita
+     vários documentos (foi assim que o portal mandou nas capturas) — o primeiro
+     é a peça (principal:true) e os demais entram como Anexo, na ordem. */
+  const idAnexo = Number(b.idTipoAnexo || 0) || idTipo
+  const nomeTipoAnexo = String(b.nomeTipoAnexo || 'Anexo')
+  const pecas = [{ rel, bytes, principal: true, idT: idTipo, nomeT: nomeTipo || null }]
+  for (const ra of (Array.isArray(b.anexos) ? b.anexos : []).slice(0, 20)) {
+    const relA = String(ra || '')
+    if (!relA) continue
+    const alvoA = path.resolve(ROOT, dig, relA)
+    if (!alvoA.startsWith(path.resolve(ROOT, dig) + path.sep)) return Response.json({ erro: 'caminho de anexo inválido' }, { status: 400 })
+    let bufA
+    try { bufA = fs.readFileSync(alvoA) } catch (e) { return Response.json({ erro: 'não achei o anexo "' + path.basename(relA) + '" na pasta' }, { status: 404 }) }
+    if (!bufA.length) return Response.json({ erro: 'o anexo "' + path.basename(relA) + '" está vazio' }, { status: 400 })
+    if (bufA.slice(0, 5).toString('latin1') !== '%PDF-') return Response.json({ erro: 'o anexo "' + path.basename(relA) + '" precisa ser PDF' }, { status: 400 })
+    pecas.push({ rel: relA, bytes: bufA, principal: false, idT: idAnexo, nomeT: nomeTipoAnexo })
   }
 
-  // 2) sobe os bytes no endereço assinado (S3 da PDPJ)
-  const r2 = await fetch(j1.urlPreSigned, { method: 'PUT', body: bytes, headers: { 'Content-Type': 'application/pdf' }, signal: AbortSignal.timeout(180000) })
-  if (!r2.ok) return Response.json({ erro: 'falha ao enviar o arquivo ao jus.br (HTTP ' + r2.status + ')' }, { status: 502 })
+  // 1 e 2) para cada documento: pede o endereço de upload e sobe os bytes
+  const docs = []
+  for (let i = 0; i < pecas.length; i++) {
+    const pc = pecas[i]
+    const nm = path.basename(pc.rel)
+    const meta = {
+      id: null, file: {}, hash: crypto.createHash('sha1').update(pc.bytes).digest('hex'),
+      nome: nm, ordem: i, tamanho: pc.bytes.length,
+      mimeType: 'application/pdf', sigiloso: false, descricao: nm.replace(/\.pdf$/i, '').slice(0, 200),
+      principal: pc.principal, idTipoDocumento: String(pc.idT), nomeTipoDocumento: pc.nomeT, idOrigemTipoDocumento: '3',
+    }
+    const r1 = await pdpj(`${PDPJ}/api/v1/documentos/${numMasc}/upload/url`, tk.token, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(meta),
+    })
+    const j1 = await r1.json().catch(() => null)
+    if (!r1.ok || !j1 || !j1.urlPreSigned) {
+      return Response.json({ erro: 'o jus.br não liberou o envio de "' + nm + '"', http: r1.status, resposta: j1 || null }, { status: 502 })
+    }
+    const r2 = await fetch(j1.urlPreSigned, { method: 'PUT', body: pc.bytes, headers: { 'Content-Type': 'application/pdf' }, signal: AbortSignal.timeout(180000) })
+    if (!r2.ok) return Response.json({ erro: 'falha ao enviar "' + nm + '" ao jus.br (HTTP ' + r2.status + ')' }, { status: 502 })
+    docs.push({ documento: { ...meta, id: j1.id != null ? j1.id : null, url: null, base64: null, idTipoDocumento: pc.idT } })
+  }
 
   // 3) protocola
   const env = m.env
   env.idTipoDocumento = idTipo
-  env.peticaoDocumentos = [{ documento: { ...docMeta, id: j1.id != null ? j1.id : null, url: null, base64: null, idTipoDocumento: idTipo } }]
+  env.peticaoDocumentos = docs
   const r3 = await pdpj(`${PDPJ}/api/v1/peticoes/protocolar`, tk.token, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(env),
   })
@@ -475,7 +564,7 @@ export async function POST(request) {
       await sb.from('andamentos').insert({
         processo_id: proc.id, data: new Date().toISOString().slice(0, 10), fonte: 'protocolo', providencia: true,
         texto: '[PROTOCOLO] Petição protocolada pelo Gestão' + (quem ? (' por ' + quem) : '') +
-          ': "' + nomeArq + '" (' + (nomeTipo || idTipo) + '). Recibo CNJ ' + (j3.numeroReciboCnj || '—') +
+          ': "' + nomeArq + '" (' + (nomeTipo || idTipo) + ')' + (docs.length > 1 ? (' + ' + (docs.length - 1) + ' anexo(s)') : '') + '. Recibo CNJ ' + (j3.numeroReciboCnj || '—') +
           ', ' + (j3.status || 'enviado') + ' ao ' + (j3.siglaTribunal || env.siglaTribunal || 'tribunal') +
           (recibo ? ('. Comprovante guardado em "' + recibo.arquivo + '".') : '.'),
       })

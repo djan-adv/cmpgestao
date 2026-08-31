@@ -2796,7 +2796,6 @@ function abrir(i){
       '<button class="btn sm" style="background:#e8f4f0;color:#0F6E56;border:1px solid #bfe0d4;font-weight:700;font-size:11px;padding:3px 8px" onclick="criarSalaReuniao(\''+p.numero+'\')" title="Sala do próprio escritório: o cliente entra pelo navegador, sem instalar nada, e a conversa é transcrita para o histórico. Não guarda gravação.">&#127909; Sala de vídeo (nossa)</button>'+
       '<button class="btn sm" style="background:#eef3fa;color:#185FA5;border:1px solid #cfe0f2;font-weight:700;font-size:11px;padding:3px 8px" onclick="criarMeetExterno(\''+p.numero+'\')" title="Cria uma reunião no Google Meet e põe no calendário — para quando o cliente já usa Meet ou a reunião tem mais de duas pessoas">&#128197; Meet (externo)</button>'+
       '<button class="btn sm" style="background:#eef3fa;color:#185FA5;border:1px solid #cfe0f2;font-weight:700;font-size:11px;padding:3px 8px" onclick="abrirGerarContrato(\''+p.numero+'\')" title="Gera o contrato de honorários pronto (Word + PDF, padrão CMP) — pergunta objeto, honorários iniciais/parcelamento e percentual de êxito">&#128220; Gerar contrato</button>'+
-      '<button class="btn sm" style="background:#7b1e3a;color:#fff;border:1px solid #7b1e3a;font-weight:700;font-size:11px;padding:3px 8px" onclick="abrirProtocolarPeticao(\''+p.numero+'\')" title="Guarda a peça no sistema com prazo fatal e alerta — pronta para protocolo (PDF) ou aguardando ajuste (Word).">&#128228; Subir petição para protocolo</button>'+
       '<button class="btn sm" style="background:#0F6E56;color:#fff;border:1px solid #0F6E56;font-weight:700;font-size:11px;padding:3px 8px;margin-left:4px" onclick="abrirProtocolarJusbr(\''+p.numero+'\')" title="Protocola de verdade no jus.br, daqui: sobe o PDF, envia ao tribunal e guarda o recibo do CNJ na pasta.">&#9878; Protocolar no jus.br</button>'+
     '</div>'+
     '<div class="card" id="doc-card"><p class="sectlabel">Documentos do processo'+
@@ -19667,6 +19666,68 @@ async function salvarProtocolarPeticao(numero,btn){
   }catch(e){ alert('Não foi possível anexar: '+(e&&e.message||e)); }
   if(btn){ btn.disabled=false; btn.textContent='Anexar e criar prazo'; }
 }
+/* ===== Vigia do protocolo enviado =====
+   "Enviado ao tribunal" é meio do caminho: o CNJ recebeu e repassou, e o
+   tribunal ainda pode RECUSAR. Em 31/08/2026 uma petição do TJPB foi recusada
+   depois de o sistema já ter dado o prazo por encerrado — ninguém seria avisado.
+   Este vigia pergunta ao jus.br em que pé está cada petição enviada e ainda
+   pendente: confirmando, encerra o prazo; recusando, GRITA na tela e mantém o
+   prazo aberto. Roda ao abrir o sistema e de 10 em 10 minutos. */
+var PROTO_VIGIA_MS=10*60*1000;
+async function protoConferirEnviadas(forcar){
+  try{
+    var alvos=(PROTO_PEND||[]).filter(function(x){ return x.enviada_em && x.status==='pendente'; });
+    if(!alvos.length) return;
+    var procs={}; alvos.forEach(function(x){ procs[String(x.processo_numero)]=1; });
+    var jwt=(typeof finToken==='function')?await finToken():await docToken();
+    for(var num in procs){
+      var r=await fetch('/api/jusbr/protocolar?situacao=1&numero='+encodeURIComponent(String(num).replace(/\D/g,'')),{headers:{Authorization:'Bearer '+jwt}});
+      var j=await r.json().catch(function(){ return {}; });
+      if(!r.ok||!j.ok) continue;
+      var doProc=alvos.filter(function(x){ return String(x.processo_numero)===String(num); });
+      for(var i=0;i<doProc.length;i++){
+        var x=doProc[i];
+        /* casa pelo número do recibo; sem ele, pela única petição do processo */
+        var p=(j.peticoes||[]).find(function(y){ return x.protocolo_ref && y.recibo && String(y.recibo).replace(/\D/g,'')===String(x.protocolo_ref).replace(/\D/g,''); });
+        if(!p && (j.peticoes||[]).length===1) p=j.peticoes[0];
+        if(!p||!p.classe||p.classe==='desconhecida'||p.classe==='enviada'){
+          if(p) { try{ await window.__sb.from('peticoes_protocolo').update({jusbr_status:p.status||null,jusbr_checado_em:new Date().toISOString()}).eq('id',x.id); }catch(e){} }
+          continue;
+        }
+        if(p.classe==='confirmada'){
+          try{ await window.__sb.from('peticoes_protocolo').update({status:'protocolada',protocolada_em:new Date().toISOString(),fechada_por:'jusbr:confirmado',jusbr_status:p.status||null,jusbr_checado_em:new Date().toISOString()}).eq('id',x.id); }catch(e){}
+        }else if(p.classe==='recusada'){
+          try{ await window.__sb.from('peticoes_protocolo').update({jusbr_status:p.status||null,jusbr_checado_em:new Date().toISOString()}).eq('id',x.id); }catch(e){}
+          _protoAlertaRecusa(x,p);
+        }
+      }
+    }
+    await carregarProtocolosPendentes();
+    try{ var i2=DADOS.processos.indexOf(atual); if(i2>=0) abrir(i2); else if(typeof renderPainel==='function') renderPainel(); }catch(e){}
+  }catch(e){}
+}
+/* O alerta que faltava: tela cheia, vermelho, com o que fazer agora. */
+function _protoAlertaRecusa(x,p){
+  var chave='cmp_proto_recusa_'+x.id+'_'+String(p.status||'');
+  try{ if(sessionStorage.getItem(chave)) return; sessionStorage.setItem(chave,'1'); }catch(e){}
+  var ov=document.createElement('div'); ov.id='proto-recusa';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(60,10,10,.62);z-index:100002;display:flex;align-items:center;justify-content:center;padding:18px';
+  ov.innerHTML='<div style="background:#fff;border-radius:14px;max-width:560px;width:100%;padding:20px;border-top:6px solid #b5342b">'
+    +'<h3 style="margin:0 0 4px;color:#b5342b">⛔ O tribunal RECUSOU a petição</h3>'
+    +'<p style="margin:0 0 10px;font-size:13.5px;line-height:1.6"><b>'+esc(x.titulo||'petição')+'</b><br>'
+      +'Processo '+esc(fmtCNJ(x.processo_numero))+'<br>'
+      +'Situação no jus.br: <b>'+esc(p.status||'recusada')+'</b>'+(p.motivo?('<br>Motivo: '+esc(p.motivo)):'')
+      +(x.protocolo_ref?('<br>Recibo: '+esc(x.protocolo_ref)):'')+'</p>'
+    +'<div style="background:#fdecec;border:1px solid #f3c2c2;border-radius:9px;padding:10px 12px;font-size:12.5px;color:#7b2b26;line-height:1.55">'
+      +'<b>O prazo NÃO está cumprido.</b> A peça não entrou nos autos — o prazo segue aberto e a faixa vermelha continua na tela até protocolar de novo.<br>'
+      +'Causa mais comum: o <b>tipo de documento</b> escolhido não vale naquela vara/classe. Refaça com <b>Petição (outras)</b> ou o tipo específico do ato.</div>'
+    +'<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;flex-wrap:wrap">'
+      +'<a class="btn sm ghost" style="text-decoration:none" target="_blank" rel="noopener" href="https://portaldeservicos.pdpj.jus.br/minhas-peticoes">↗ ver no jus.br</a>'
+      +'<button class="btn sm" style="background:#0F6E56;border-color:#0F6E56" onclick="document.getElementById(\'proto-recusa\').remove();abrirProtocolarJusbr(\''+esc(x.processo_numero)+'\')">⚖ protocolar de novo</button>'
+      +'<button class="btn sm ghost" onclick="document.getElementById(\'proto-recusa\').remove()">Fechar</button>'
+    +'</div></div>';
+  document.body.appendChild(ov);
+}
 /* carrega as pendências e dispara o alerta do dia */
 async function carregarProtocolosPendentes(){
   try{
@@ -19674,6 +19735,11 @@ async function carregarProtocolosPendentes(){
     PROTO_PEND=(r&&r.data)||[];
   }catch(e){ PROTO_PEND=[]; }
   _protoAlertaDoDia();
+  /* uma vez por carga do sistema, e depois de 10 em 10 minutos */
+  if(!window.__protoVigia){
+    window.__protoVigia=setInterval(function(){ protoConferirEnviadas(); }, PROTO_VIGIA_MS);
+    setTimeout(function(){ protoConferirEnviadas(); }, 4000);
+  }
   return PROTO_PEND;
 }
 /* alerta no DIA do prazo (e vencidos), em qualquer aba — 1x por sessão */
@@ -19705,6 +19771,14 @@ function protoBlocoHTML(numero){
     var cor=atrasado?'#b5342b':(hojeSim?'#7b1e3a':'#8a6d1a');
     var selo=atrasado?'VENCIDO':(hojeSim?'HOJE':_protoFmt(x.prazo_fatal));
     var tag=(x.modo==='correcao')?'<span style="background:#fff4e5;color:#8a5a00;border-radius:8px;padding:1px 7px;font-size:10.5px;font-weight:700">aguardando ajuste</span>':'<span style="background:#e5f4ed;color:#127a53;border-radius:8px;padding:1px 7px;font-size:10.5px;font-weight:700">pronta p/ protocolo</span>';
+    /* enviada mas ainda não confirmada pelo tribunal: o prazo continua vivo, e a
+       linha tem de dizer isso — "enviado" já foi confundido com "protocolado" */
+    if(x.enviada_em){
+      var _rec=/recus|rejeit|erro|falh|inval|cancel/i.test(String(x.jusbr_status||''));
+      tag=_rec
+        ? '<span style="background:#fdecec;color:#b5342b;border-radius:8px;padding:1px 7px;font-size:10.5px;font-weight:700" title="'+esc(x.jusbr_status||'')+'">⛔ RECUSADA pelo tribunal</span>'
+        : '<span style="background:#fdf7e6;color:#7a6420;border-radius:8px;padding:1px 7px;font-size:10.5px;font-weight:700" title="'+esc(x.jusbr_status||'')+'">📨 enviada — aguardando o tribunal</span>';
+    }
     return '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:7px 0;border-top:1px dashed #e4e8ef;flex-wrap:wrap">'
       +'<div style="font-size:13px"><b style="color:'+cor+'">'+selo+'</b> · '+esc(x.titulo)+' '+tag
       +(numero?'':(' <span class="proc" style="font-size:12px">'+esc(fmtCNJ(x.processo_numero))+'</span>'))
@@ -19712,6 +19786,7 @@ function protoBlocoHTML(numero){
       +'</div>'
       +'<span style="white-space:nowrap">'
       +(x.arquivo_caminho?('<button class="btn sm ghost" style="font-size:11px" onclick="protoAbrirArquivo(\''+x.id+'\')">📎 arquivo</button> '):'')
+      +(x.enviada_em?('<button class="btn sm ghost" style="font-size:11px" title="Perguntar ao jus.br se o tribunal já recebeu" onclick="protoConferirEnviadas(1)">↻ conferir</button> '):'')
       /* protocolar SEM sair do sistema: o botão abre o envio pelo Gestão (sobe o
          PDF, envia ao tribunal e guarda o recibo). O link do portal fica ao lado,
          discreto, para quando o tribunal não deixar sair daqui. */
@@ -20604,6 +20679,24 @@ async function renderEstagiario(){
    qualquer dado do processo, não deixa seguir: diz o que faltou.
    Quando o tribunal recusa (o TJSE recusa), a resposta dele vai inteira para a
    tela, sem tradução nossa. */
+/* Subir o PDF sem sair do protocolo: dois botões na ficha viraram um só, e a
+   peça que ainda não está na pasta entra por aqui mesmo. */
+async function protSubirPDF(inp, numero){
+  var f=inp&&inp.files&&inp.files[0]; if(!f) return;
+  if(!/\.pdf$/i.test(f.name)){ alert('O arquivo da petição precisa ser PDF.'); inp.value=''; return; }
+  if(f.size>25*1024*1024){ alert('Arquivo grande demais (máx. 25 MB).'); inp.value=''; return; }
+  var msg=document.getElementById('prot-msg'); if(msg) msg.textContent='Enviando o arquivo para a pasta Protocolo…';
+  try{
+    var tok=await docToken(), dig=_docChaveProc(numero);
+    var dir=dig+'/'+_docDir('proc','')+'/Protocolo';
+    await fetch('/api/docs',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({path:dir,mkdir:true})});
+    var b64=await new Promise(function(res,rej){ var rd=new FileReader(); rd.onload=function(){ res(String(rd.result).split(',')[1]||''); }; rd.onerror=rej; rd.readAsDataURL(f); });
+    var nome=(_protoHoje()+' - '+f.name.replace(/\.pdf$/i,'')).replace(/[\\/:*?"<>|]+/g,'-').slice(0,110)+'.pdf';
+    var r=await fetch('/api/docs',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({path:dir+'/'+nome,b64:b64})});
+    if(!r.ok) throw new Error('o servidor recusou o arquivo');
+    abrirProtocolarJusbr(numero);   /* recarrega a lista já com o arquivo novo */
+  }catch(e){ if(msg) msg.innerHTML='<span style="color:#b5342b">Não consegui subir o arquivo: '+esc((e&&e.message)||e)+'</span>'; }
+}
 /* Opções do tipo de documento: em ordem alfabética, com "Petição (outras)"
    — o tipo genérico, que serve para a maioria — já selecionado. Deixar a
    escolha por conta da ordem em que o jus.br devolveu é convite a protocolar
@@ -20695,7 +20788,15 @@ async function abrirProtocolarJusbr(numero){
            +(arqs.length
              ? ('<select id="prot-arq" style="width:100%;box-sizing:border-box;font:inherit;font-size:13px;padding:7px 9px;border:1px solid var(--line);border-radius:7px">'
                 +arqs.map(function(a2){ return '<option value="'+esc(a2.nome)+'">'+esc(a2.nome)+'</option>'; }).join('')+'</select>')
-             : '<div class="note" style="color:#b5342b">Nenhum PDF na pasta Protocolo. Use "📤 Subir petição para protocolo" antes.</div>')
+             : '<div class="note" style="color:#b5342b">Nenhum PDF na pasta Protocolo — escolha o arquivo abaixo.</div>')
+           +'<div style="margin-top:5px;font-size:11.5px"><input type="file" id="prot-novo" accept=".pdf" onchange="protSubirPDF(this,\''+esc(numero)+'\')" style="font-size:11.5px"> <span class="note">sobe para a pasta Protocolo</span></div>'
+           /* anexos: vão no MESMO protocolo, como documentos secundários */
+           +'<label style="display:block;font-size:12.5px;font-weight:700;color:var(--navy);margin:10px 0 3px">Anexos (opcional)</label>'
+           +(arqs.length>1
+             ? ('<div id="prot-anexos" style="max-height:120px;overflow:auto;border:1px solid var(--line);border-radius:7px;padding:6px 8px">'
+                +arqs.map(function(a3){ return '<label style="display:flex;gap:6px;align-items:center;font-size:12px;padding:1px 0"><input type="checkbox" class="prot-ax" value="'+esc(a3.nome)+'"> '+esc(a3.nome)+'</label>'; }).join('')
+                +'</div><div class="note" style="margin:2px 0 0">Marque o que vai junto (procuração, comprovantes, laudos). O arquivo escolhido acima como peça é ignorado se estiver marcado.</div>')
+             : '<div class="note">Só há um PDF na pasta. Suba os anexos acima para poder marcá-los.</div>')
            /* A lista vinha na ordem do jus.br e o navegador já deixava a PRIMEIRA
               escolhida — foi assim que uma "Petição Prosseguimento" do TJPB saiu
               como "Agravo de Instrumento em Recurso de Revista" (31/08/2026).
@@ -20710,6 +20811,7 @@ async function abrirProtocolarJusbr(numero){
            +((j.tipos&&j.tipos.length)?'':'<div class="note" style="color:#b5342b">O jus.br não devolveu a lista de tipos — sem ela não dá para protocolar daqui.</div>')))
       +'<div id="prot-msg" class="note" style="margin-top:10px"></div>'
       +'<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">'
+        +'<button class="btn sm ghost" style="margin-right:auto" title="Só guardar a peça com prazo fatal, para protocolar mais tarde" onclick="document.getElementById(\'prot-ov\').remove();abrirProtocolarPeticao(\''+esc(numero)+'\')">📤 só guardar com prazo</button>'
         +'<button class="btn sm ghost" onclick="document.getElementById(\'prot-ov\').remove()">Cancelar</button>'
         +((j.faltando&&j.faltando.length)||!arqs.length||!(j.tipos&&j.tipos.length)?''
           :'<button class="btn sm" id="prot-ok" style="background:#0F6E56;border-color:#0F6E56" onclick="protocolarAgora()">⚖ Protocolar agora</button>')
@@ -20724,12 +20826,26 @@ async function abrirProtocolarJusbr(numero){
    Com mais de uma petição pendente no processo, tenta casar pelo nome do
    arquivo; não dando para saber qual é, não fecha nenhuma e avisa — encerrar
    o prazo errado é pior do que deixar a faixa na tela. */
-async function _protoFecharPelaGestao(numero, j, arqNome){
+async function _protoMarcarEnvio(numero, j, arqNome, confirmado){
   try{
     var dig=String(numero||'').replace(/\D/g,''); if(!dig) return null;
     var q=await window.__sb.from('peticoes_protocolo').select('id,titulo,processo_numero,processo_id').eq('status','pendente');
     var pend=((q&&q.data)||[]).filter(function(x){ return String(x.processo_numero||'').replace(/\D/g,'')===dig; });
-    if(!pend.length) return null;
+    /* protocolou uma peça que não tinha pendência cadastrada? cria uma agora:
+       sem linha aqui, ninguém vigia se o tribunal recusou */
+    if(!pend.length){
+      try{
+        var escN=await _escBusca();
+        var ins=await window.__sb.from('peticoes_protocolo').insert({
+          escritorio_id:escN, processo_numero:numero, processo_id:(atual&&atual._id)||null,
+          titulo:String(arqNome||'petição').replace(/\.pdf$/i,''), modo:'protocolo', status:'pendente',
+          prazo_fatal:_protoHoje(), arquivo_nome:String(arqNome||''), conferida:true,
+          criado_por:((document.getElementById('who-name')||{}).textContent||'').trim()||null, anexos:[],
+        }).select('id,titulo').single();
+        if(ins&&ins.data) pend=[ins.data];
+      }catch(e){}
+      if(!pend.length) return null;
+    }
     var alvo=pend[0];
     if(pend.length>1){
       var base=String(arqNome||'').toLowerCase().replace(/\.pdf$/,'').replace(/[^a-zà-ú0-9]+/g,' ').trim();
@@ -20743,16 +20859,20 @@ async function _protoFecharPelaGestao(numero, j, arqNome){
     }
     var quem=((document.getElementById('who-name')||{}).textContent||'').trim()||'(não identificado)';
     var caminho=(j&&j.recibo&&j.recibo.arquivo)?(dig+'/'+_docDir('proc','')+'/Protocolo/'+j.recibo.arquivo):null;
-    var w=await window.__sb.from('peticoes_protocolo').update({
-      status:'protocolada', protocolada_em:new Date().toISOString(),
-      protocolo_ref:(j&&j.protocolo)||null, fechada_por:'gestao:'+quem,
+    var campos={
+      enviada_em:new Date().toISOString(), jusbr_status:(j&&j.status)||null,
+      jusbr_peticao_id:(j&&j.idPeticao!=null)?String(j.idPeticao):null, jusbr_checado_em:new Date().toISOString(),
+      protocolo_ref:(j&&j.protocolo)||null,
       comprovante_nome:(j&&j.recibo&&j.recibo.arquivo)||null, comprovante_caminho:caminho,
-    }).eq('id',alvo.id).select('id');
+    };
+    /* só o tribunal confirmando é que o prazo morre */
+    if(confirmado){ campos.status='protocolada'; campos.protocolada_em=new Date().toISOString(); campos.fechada_por='gestao:'+quem; }
+    var w=await window.__sb.from('peticoes_protocolo').update(campos).eq('id',alvo.id).select('id');
     if(w&&w.error) return {erro:w.error.message};
     try{ await carregarProtocolosPendentes(); }catch(e){}
     try{ await carregarProtocolados(numero); }catch(e){}
     try{ var i=DADOS.processos.indexOf(atual); if(i>=0) abrir(i); }catch(e){}
-    return {fechada:true, titulo:alvo.titulo||'petição'};
+    return {fechada:!!confirmado, titulo:alvo.titulo||'petição'};
   }catch(e){ return {erro:(e&&e.message)||String(e)}; }
 }
 async function protocolarAgora(){
@@ -20760,15 +20880,22 @@ async function protocolarAgora(){
   var selA=document.getElementById('prot-arq'), selT=document.getElementById('prot-tipo');
   var arq=selA?selA.value:'', idT=selT?selT.value:'', nomeT=selT?(selT.options[selT.selectedIndex]||{}).getAttribute('data-nome'):'';
   if(!arq||!idT) return;
-  if(!confirm('Protocolar "'+arq+'" como "'+nomeT+'" no processo '+(d.env&&d.env.numeroProcesso||d.numero)+'?\n\nIsto envia ao tribunal AGORA e não tem volta.')) return;
+  var _nAx=document.querySelectorAll('.prot-ax:checked').length;
+  if(!confirm('Protocolar "'+arq+'" como "'+nomeT+'"'+(_nAx?(' + '+_nAx+' anexo(s)'):'')+' no processo '+(d.env&&d.env.numeroProcesso||d.numero)+'?\n\nIsto envia ao tribunal AGORA e não tem volta.')) return;
   var btn=document.getElementById('prot-ok'); if(btn){ btn.disabled=true; btn.textContent='enviando…'; }
   var msg=document.getElementById('prot-msg'); if(msg) msg.innerHTML='Enviando ao jus.br… não feche esta janela.';
   try{
     var jwt=(typeof finToken==='function')?await finToken():await docToken();
     var quem=(typeof _kanQuemSou==='function'&&_kanQuemSou())||'';
+    var anexos=[].slice.call(document.querySelectorAll('.prot-ax:checked'))
+      .map(function(c){ return c.value; }).filter(function(n){ return n!==arq; })
+      .map(function(n){ return 'Protocolo/'+n; });
+    /* o tipo "Anexo" da lista do jus.br — sem ele o anexo entraria como peça */
+    var tAx=(d.tipos||[]).find(function(t){ return /^anexo$/i.test(String(t.descricao||'')); });
     var r=await fetch('/api/jusbr/protocolar',{method:'POST',
       headers:{'Content-Type':'application/json',Authorization:'Bearer '+jwt},
-      body:JSON.stringify({numero:d.numero, arquivo:'Protocolo/'+arq, idTipoDocumento:idT, nomeTipoDocumento:nomeT, quem:quem})});
+      body:JSON.stringify({numero:d.numero, arquivo:'Protocolo/'+arq, idTipoDocumento:idT, nomeTipoDocumento:nomeT,
+        anexos:anexos, idTipoAnexo:(tAx?tAx.id:null), nomeTipoAnexo:(tAx?tAx.descricao:'Anexo'), quem:quem})});
     var j=await r.json().catch(function(){ return {}; });
     if(!r.ok||!j.ok){
       cx.innerHTML='<h3 style="margin:0 0 6px;color:#b5342b">O jus.br não protocolou</h3>'
@@ -20779,18 +20906,24 @@ async function protocolarAgora(){
       return;
     }
     try{ if(typeof logEvent==='function') logEvent('task_completed','peticao',d.numero,{titulo:arq,tipo:'protocolo',recibo:(j.protocolo||null),via:'gestao'}); }catch(e){}
-    /* protocolou PELO GESTÃO: o sistema tem o recibo do CNJ e o comprovante na
-       mão — não faz sentido a faixa vermelha continuar perguntando "já
-       protocolei?". Fecha a pendência sozinha. */
-    var _fech=await _protoFecharPelaGestao(d.numero, j, arq);
-    cx.innerHTML='<h3 style="margin:0 0 6px;color:#0F6E56">✓ Protocolado</h3>'
+    /* ENVIADO_AO_TRIBUNAL NÃO É PROTOCOLADO. O CNJ recebe e repassa; o tribunal
+       ainda pode RECUSAR — foi o que aconteceu em 31/08/2026, com o sistema já
+       tendo dado o prazo por encerrado e a faixa vermelha fora da tela. Agora o
+       envio fica registrado e o prazo SEGUE ABERTO até o jus.br confirmar. */
+    var _conf=/protocolad|juntad|aceit/i.test(String(j.status||''));
+    var _marc=await _protoMarcarEnvio(d.numero, j, arq, _conf);
+    cx.innerHTML='<h3 style="margin:0 0 6px;color:'+(_conf?'#0F6E56':'#8a6d1a')+'">'+(_conf?'✓ Protocolado':'📨 Enviado ao tribunal')+'</h3>'
       +'<div style="font-size:13px;line-height:1.7">'
         +'<div><b>Recibo CNJ:</b> '+esc(j.protocolo||'—')+'</div>'
         +'<div><b>Situação:</b> '+esc(j.status||'—')+' · '+esc(j.tribunal||'')+'</div>'
         +'<div><b>Data:</b> '+esc(String(j.data||'').replace('T',' '))+'</div>'
         +(j.recibo?('<div><b>Comprovante:</b> '+esc(j.recibo.arquivo)+' (guardado na pasta Protocolo)</div>'):'<div class="note">O comprovante não veio agora — baixe pelo portal se precisar.</div>')
-        +(_fech&&_fech.fechada?('<div style="color:#0F6E56"><b>Prazo encerrado:</b> '+esc(_fech.titulo)+' — a faixa de prazo fatal já saiu.</div>'):'')
-        +(_fech&&_fech.ambiguo?('<div class="note" style="color:#8a6d1a">Há '+_fech.ambiguo+' petições pendentes neste processo — não dá para saber qual foi esta. Encerre a certa em "✓ já protocolei".</div>'):'')
+        +(_conf
+          ? ((_marc&&_marc.fechada)?('<div style="color:#0F6E56"><b>Prazo encerrado:</b> '+esc(_marc.titulo)+'.</div>'):'')
+          : ('<div style="background:#fdf7e6;border:1px solid #e8dcbb;border-radius:8px;padding:8px 10px;margin-top:6px;color:#7a6420">'
+             +'<b>O prazo continua aberto de propósito.</b> "Enviado ao tribunal" quer dizer que o CNJ recebeu e repassou — o tribunal ainda pode recusar. '
+             +'O Gestão vai conferir sozinho e avisar: confirmando, encerra o prazo; recusando, grita na tela.</div>'))
+        +(_marc&&_marc.ambiguo?('<div class="note" style="color:#8a6d1a">Há '+_marc.ambiguo+' petições pendentes neste processo — não dá para saber qual foi esta. Confira em "✓ protocolada".</div>'):'')
       +'</div>'
       +'<div style="margin-top:12px;text-align:right"><button class="btn sm" onclick="document.getElementById(\'prot-ov\').remove();if(typeof atual!==\'undefined\'&&atual)carregarDocs(atual.numero,\'Protocolo\');">Fechar</button></div>';
   }catch(e){
