@@ -19895,9 +19895,28 @@ async function _prdCarrega(){
   else if(/^\d{4}-\d{2}$/.test(per)){ /* mês calendário, ex.: "2026-08" */
     var mm=per.split('-'); d0=new Date(+mm[0],(+mm[1])-1,1); d1=new Date(+mm[0],(+mm[1]),1);
   } else { d0=new Date(Date.now()-parseInt(per,10)*86400000); }
-  var qEvt=sb.from('activity_events').select('user_id,user_nome,event_type,entity_type,entity_id,occurred_at,metadata').gte('occurred_at',d0.toISOString());
-  if(d1) qEvt=qEvt.lt('occurred_at',d1.toISOString());
-  qEvt=qEvt.order('occurred_at',{ascending:true}).limit(20000);
+  /* ===== O log vem em páginas =====
+     O .limit(20000) era ilusão: o PostgREST corta em 1000 linhas por resposta,
+     e como pedíamos em ordem CRESCENTE, vinham as 1000 mais ANTIGAS — o dia de
+     hoje ficava de fora. Foi assim que o relatório diário disse "nenhum
+     registro" num dia com 118 eventos gravados (31/08/2026), enquanto os
+     cartões mostravam números velhos sem ninguém desconfiar.
+     Agora busca por páginas até acabar. */
+  var qEvt=(async function(){
+    var todos=[], passo=1000, de=0;
+    for(var i=0;i<30;i++){
+      var q=sb.from('activity_events').select('user_id,user_nome,event_type,entity_type,entity_id,occurred_at,metadata').gte('occurred_at',d0.toISOString());
+      if(d1) q=q.lt('occurred_at',d1.toISOString());
+      q=q.order('occurred_at',{ascending:true}).range(de,de+passo-1);
+      var r=await q;
+      if(r&&r.error) return r;
+      var lote=(r&&r.data)||[];
+      todos=todos.concat(lote);
+      if(lote.length<passo) break;
+      de+=passo;
+    }
+    return {data:todos,error:null};
+  })();
   var rs=await Promise.all([
     qEvt,
     PRD_PESOS?null:sb.from('task_weights').select('tipo,rotulo,pontos'),
@@ -22276,10 +22295,24 @@ function renderRelatorioDiario(){
        diferentes — dizer a primeira quando é a segunda faz o relatório parecer
        quebrado (foi o que o dono viu em 31/08/2026). */
     var dia0=(document.getElementById('prd-dia')||{}).value||'';
-    var ruido0=(window.__prdEvsVis||PRD_EVT||[]).filter(function(e){ return (!dia0||_prdDiaISO(e.occurred_at)===dia0) && PRD_RUIDO.indexOf(e.event_type)>-1; }).length;
+    var todos=(window.__prdEvsVis||PRD_EVT||[]);
+    var ruido0=todos.filter(function(e){ return (!dia0||_prdDiaISO(e.occurred_at)===dia0) && PRD_RUIDO.indexOf(e.event_type)>-1; }).length;
+    /* Dizer só "nenhum registro" esconde a causa: pode ser dia errado, período
+       errado ou o log não ter chegado. O contador abaixo separa os três casos —
+       nasceu de um dia em que o log tinha 118 eventos e a tela dizia que não
+       havia nada (31/08/2026). */
+    var diasCarregados={}; var maisNovo='';
+    todos.forEach(function(e){ var d=_prdDiaISO(e.occurred_at); if(d){ diasCarregados[d]=(diasCarregados[d]||0)+1; if(d>maisNovo) maisNovo=d; } });
+    var noDia=diasCarregados[dia0]||0;
+    var brDia=function(x){ return x?String(x).split('-').reverse().join('/'):'—'; };
     el.innerHTML='<div class="note">'+(ruido0
       ? ('Neste dia só há '+ruido0+' registro(s) de login e abertura de tarefa — marque <b>mostrar logins e aberturas</b> aqui em cima para vê-los.')
-      : 'Nenhum registro neste dia. Confira se a data está dentro do período escolhido acima.')+'</div>';
+      : 'Nenhum registro neste dia.')
+      +'<div style="margin-top:6px;font-size:11px;color:#8a8fa0">'
+        +todos.length+' evento(s) carregados no período · '+noDia+' em '+brDia(dia0)
+        +' · o mais recente que chegou é de '+brDia(maisNovo)
+        +(noDia===0&&maisNovo&&maisNovo<dia0?' — ou seja, o período escolhido acima não alcança este dia.':'')
+      +'</div></div>';
     return;
   }
   /* por pessoa, e dentro de cada uma em ordem de relógio */
