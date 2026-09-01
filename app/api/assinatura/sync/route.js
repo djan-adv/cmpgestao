@@ -41,10 +41,14 @@ function cmpAdmin() {
 // admin do assinador: chave secreta OU conta de serviço (credencial no app_secrets do CMP).
 // A chave secreta é TESTADA antes de valer: em 20/08/2026 ela estava expirada no
 // servidor ("JWT expired") e o sync inteiro parava — agora cai pra conta de serviço.
-async function signAdmin(cmp) {
-  if (process.env.SIGN_SUPABASE_SERVICE_ROLE_KEY) {
+async function signAdmin(cmp, soContaDeServico) {
+  if (process.env.SIGN_SUPABASE_SERVICE_ROLE_KEY && !soContaDeServico) {
     const c = createClient(SIGN_URL, process.env.SIGN_SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } })
-    const teste = await c.from('documentos').select('id', { head: true, count: 'exact' }).limit(1)
+    /* O teste era um HEAD com count — que voltava SEM erro mesmo com a chave
+       expirada, e aí o fallback nunca entrava: o sync seguia com a chave morta e
+       morria na consulta de verdade com "JWT expired" (01/09/2026). Agora o
+       teste é uma leitura de verdade, igual à que o sync faz. */
+    const teste = await c.from('documentos').select('id').limit(1)
     if (!teste.error) return c
     console.warn('assinatura/sync: chave secreta inválida (' + teste.error.message + ') — usando a conta de serviço')
   }
@@ -291,9 +295,18 @@ export async function GET(request) {
   try { sign = await signAdmin(cmp) } catch (e) { return Response.json({ ok: false, erro: String((e && e.message) || e) }, { status: 502 }) }
 
   const SEL_DOC = 'id, titulo, tipo, modelo, finalidade, processo, status, sync_cmp_em, signatarios(nome, cpf, email, telefone, ip, dados, status, assinado_em, selfie_path, selfie_em)'
-  const { data: docs, error } = await sign.from('documentos')
-    .select(SEL_DOC)
+  const buscaPendentes = (cli) => cli.from('documentos').select(SEL_DOC)
     .is('sync_cmp_em', null).eq('status', 'assinado').limit(10)
+  let { data: docs, error } = await buscaPendentes(sign)
+  /* segunda trava: credencial que morre NO MEIO do caminho não pode derrubar o
+     robô — refaz com a conta de serviço e segue */
+  if (error && /jwt|expired|invalid|token/i.test(String(error.message || ''))) {
+    try {
+      sign = await signAdmin(cmp, true)
+      const r2 = await buscaPendentes(sign)
+      docs = r2.data; error = r2.error
+    } catch (e) { return Response.json({ ok: false, erro: 'assinador: ' + String((e && e.message) || e) }, { status: 502 }) }
+  }
   if (error) return Response.json({ ok: false, erro: error.message }, { status: 500 })
   // selfie que chegou DEPOIS do sync: re-gera a via A4 na pasta (com a selfie)
   try {
