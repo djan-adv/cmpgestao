@@ -2393,6 +2393,8 @@ function renderMeuDia(){
   function _ehOrfa(a){ return a && a.tipo!=='az' && a.tt && !_titKan[String(a.tt).trim().toLowerCase()]; }
   var itens=(AGENDA||[]).filter(function(a){var d=new Date(a.data+"T00:00:00");return d>=tras&&d<=fut;})
     .filter(function(a){
+      /* processo encerrado não cobra nada — nem aqui (ver _procEncerradoNum) */
+      if(_procEncerradoNum((a.p&&a.p.numero)||'')) return false;
       if(_fin[_kChave(a.tt,a.data)]) return false;
       var dg=String((a.p&&a.p.numero)||'').replace(/\D/g,'');
       if(dg && _fin[_kChave(a.tt,'n:'+dg)]) return false;
@@ -5389,6 +5391,8 @@ function _tarefaDiligencia(t){ return !!t && String(t.tipoForm||'')==='diligenci
    Tirar as diligências dos prazos é o ponto: elas têm agenda própria agora, e
    repeti-las nos prazos seria contar a mesma coisa duas vezes. */
 function _visivelNaAgenda(t){
+  /* tarefa de processo encerrado sai de todas as agendas — ver _procEncerradoNum */
+  if(t && _procEncerradoNum(t.numero||t.processo_numero)) return false;
   if(VIEWAG==='auto') return _tarefaAuto(t);
   if(VIEWAG==='diligencias') return _tarefaDiligencia(t) && !_tarefaAuto(t);
   return !_tarefaAuto(t) && !_tarefaDiligencia(t);
@@ -5411,7 +5415,20 @@ function isoOf(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"
 function addD(d,n){var x=new Date(d);x.setDate(x.getDate()+n);return x;}
 function firstName(r){return r?String(r).split(" ")[0]:"";}
 function setAgResp(v){agResp=v;renderAgViewInner();}
-function eventosDoDia(iso){initAgenda();return AGENDA.filter(function(e){var okTipo=(e.tipo==='az'); return e.data===iso && okTipo && (agResp==="Todos"||e.resp===agResp);}).sort(function(a,b){return a.hora<b.hora?-1:1;});}
+/* Processo ENCERRADO não tem mais audiência nem tarefa a cumprir. O
+   0800682-10.2026.8.10.0016 foi encerrado e continuava com a audiência de 02/09
+   na agenda e seis tarefas abertas (relatado em 01/09/2026). Filtro aqui, na
+   leitura, para valer também no que já está gravado.
+   Número que não está na base não é escondido: sumir com o que não se conhece
+   é pior do que mostrar demais. */
+function _procEncerradoNum(numero){
+  try{
+    var d=String(numero||'').replace(/\D/g,''); if(!d) return false;
+    var p=(DADOS.processos||[]).find(function(x){ return String(x.numero||'').replace(/\D/g,'')===d; });
+    return !!(p && /encerr|arquivad|baixad/i.test(String(p.status||'')));
+  }catch(e){ return false; }
+}
+function eventosDoDia(iso){initAgenda();return AGENDA.filter(function(e){var okTipo=(e.tipo==='az'); return e.data===iso && okTipo && !_procEncerradoNum((e.p&&e.p.numero)||e.processo_numero||e.numero) && (agResp==="Todos"||e.resp===agResp);}).sort(function(a,b){return a.hora<b.hora?-1:1;});}
 function evChip(e){var ev=document.createElement("div");ev.className="cev "+e.tipo;ev.title=e.hora+" "+e.tt+(e.resp?(" · "+e.resp):"");ev.textContent=e.hora+" "+e.tt+(e.resp?(" · "+firstName(e.resp)):"");ev.onclick=(function(ref){return function(){abrirEventoAgenda(ref);};})(e);return ev;}
 /* ponto 10: clicar no evento abre a edição do próprio evento, com link para o processo */
 var _evEdit=null, _evAntes=null;
