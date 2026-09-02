@@ -327,10 +327,25 @@ export async function POST(request) {
 
   // ——— a peça, quando pedida ———
   if (querPeca && diag.instrucao_para_redigir) {
+    /* Quem redige recebe o diagnóstico INTEIRO, não só a instrução: a leitura dos
+       autos já foi paga uma vez, seria desperdício redigir sem ela. E vai no
+       mesmo modelo do diagnóstico — a peça é o produto, economizar aqui foi o
+       que fez sair peça genérica (02/09/2026). */
+    const ctx = 'DIAGNÓSTICO JÁ FEITO SOBRE ESTES AUTOS (use como base — a leitura já foi feita):\n' +
+      'Onde o processo está: ' + (diag.situacao || '—') + '\n' +
+      (diag.travado_por ? ('O que trava: ' + diag.travado_por + '\n') : '') +
+      ((diag.providencias && diag.providencias.length) ? ('Providências mapeadas:\n' + diag.providencias.map((pv, i) =>
+        (i + 1) + '. ' + (pv.titulo || '') + (pv.porque ? (' — ' + pv.porque) : '') +
+        (pv.fundamento ? (' [fundamento: ' + pv.fundamento + ']') : '') +
+        (pv.o_que_pedir ? (' [pedir: ' + pv.o_que_pedir + ']') : '') +
+        (pv.prazo ? (' [prazo: ' + pv.prazo + ']') : '')).join('\n') + '\n') : '') +
+      ((diag.riscos && diag.riscos.length) ? ('Riscos a enfrentar no texto: ' + diag.riscos.join(' · ') + '\n') : '') +
+      ((diag.falta_nos_autos && diag.falta_nos_autos.length) ? ('Falta nos autos (marque [A PREENCHER] onde depender disto): ' + diag.falta_nos_autos.join(' · ') + '\n') : '')
     const m = await gerarMinuta(sb, {
       numero: proc.numero, instrucao: diag.instrucao_para_redigir, autor: quem || 'diagnóstico',
       rotina: 'peca_diagnostico', pecaNome: diag.peca_recomendada || 'Petição',
       tarefaTitulo: 'Revisar e protocolar: ' + (diag.peca_recomendada || 'petição'),
+      modelo: 'claude-opus-5', contexto: ctx,
     })
     if (m.erro) saida.peca = { erro: m.erro }
     else {

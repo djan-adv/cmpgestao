@@ -12967,9 +12967,20 @@ async function visualizarDoc(dig, relFull, nome){
        baixa o blob como arquivo sem nome/extensão (só o uuid do blob: URL). */
     var MIME={'.pdf':'application/pdf','.jpg':'image/jpeg','.jpeg':'image/jpeg','.png':'image/png','.gif':'image/gif','.webp':'image/webp','.svg':'image/svg+xml','.txt':'text/plain','.csv':'text/csv','.json':'application/json','.log':'text/plain'};
     var tipo=MIME[ext]||'';
+    /* as minutas que o sistema grava têm extensão .doc mas são HTML por dentro
+       (é o que faz o Word abrir com a formatação). Se for HTML, mostra na tela;
+       .doc de verdade, vindo de fora, continua caindo no "baixar para abrir". */
+    if(!tipo&&/^\.docx?$/.test(ext)){
+      try{
+        var ini=new TextDecoder('utf-8').decode(new Uint8Array(buf).subarray(0,400)).toLowerCase();
+        if(ini.indexOf('<html')>-1||ini.indexOf('<!doctype html')>-1||ini.indexOf('<body')>-1) tipo='text/html';
+      }catch(x){}
+    }
     var blob=new Blob([buf], tipo?{type:tipo}:undefined);
     var url=URL.createObjectURL(blob);
-    if(tipo==='application/pdf'){
+    if(tipo==='text/html'){
+      api.corpo.innerHTML='<iframe src="'+url+'" style="width:100%;height:100%;border:0;background:#fff"></iframe>';
+    }else if(tipo==='application/pdf'){
       api.corpo.innerHTML='<iframe src="'+url+'" style="width:100%;height:100%;border:0"></iframe>';
     }else if(/^image\//.test(tipo)){
       api.corpo.innerHTML='<div style="padding:10px;text-align:center"><img src="'+url+'" style="max-width:100%;border-radius:6px"></div>';
@@ -20878,6 +20889,14 @@ async function renderDiagCard(){
       +'<div class="note" style="margin-top:8px">Total gasto em diagnósticos deste processo: <b>US$ '+total.toFixed(4)+'</b>.</div>';
   }catch(e){ box.innerHTML='<div class="note" style="color:#b5342b">Não consegui listar: '+esc((e&&e.message)||e)+'</div>'; }
 }
+/* abrir a peça na tela, num clique — no painel lateral que já existe para os
+   documentos do processo. Pedido em 02/09/2026. */
+function _dgVer(numero, rel){
+  var num=numero||((typeof atual!=='undefined'&&atual)?atual.numero:'');
+  var dig=String(num||'').replace(/\D/g,'');
+  if(!dig||!rel){ alert('Não sei em qual processo está esse arquivo — abra a ficha dele.'); return; }
+  visualizarDoc(dig, rel, String(rel).split('/').pop());
+}
 function _dgQuando(iso){
   var t=String(iso||''); if(!t) return '';
   var d=t.slice(0,10).split('-'); return (d[2]||'')+'/'+(d[1]||'')+'/'+(d[0]||'')+' '+t.slice(11,16);
@@ -20906,7 +20925,10 @@ function _dgFichaTexto(d){
     +(g.travado_por?'<div style="font-size:13px;margin-top:8px"><b style="color:var(--navy)">O que trava:</b> '+esc(g.travado_por)+'</div>':'')
     +(provs?'<div style="margin-top:12px"><div class="sectlabel" style="margin:0 0 7px">O que fazer</div>'+provs+'</div>':'')
     +(pc&&pc.arquivo_word?('<div class="note" style="margin-top:6px">&#128196; Peça redigida: <b>'+esc(pc.arquivo_word)+'</b>'
-        +(pc.arquivo_pdf?(' · PDF <b>'+esc(pc.arquivo_pdf)+'</b> na pasta Protocolo'):'')+' — rascunho, confira antes de protocolar.</div>'):'')
+        +' <button class="btn sm ghost" style="font-size:10.5px;padding:1px 7px" onclick="_dgVer(null,\''+esc(pc.arquivo_word)+'\')">abrir na tela</button>'
+        +(pc.arquivo_pdf?(' · PDF <b>'+esc(pc.arquivo_pdf)+'</b> na pasta Protocolo'
+          +' <button class="btn sm ghost" style="font-size:10.5px;padding:1px 7px" onclick="_dgVer(null,\'Protocolo/'+esc(pc.arquivo_pdf)+'\')">abrir na tela</button>'):'')
+        +' — rascunho, confira antes de protocolar.</div>'):'')
     +'<div style="margin-top:10px;text-align:right"><button class="btn sm ghost" style="font-size:11px" onclick="_dgAbrirSalvo(\''+d.id+'\')">ver completo (riscos, o que falta, instrução da peça)</button></div>'
   +'</div>';
 }
@@ -21078,7 +21100,9 @@ function _dgResultado(j){
             +(/maximum size|too large|exceeds/i.test(String(pc.erro))?'<div class="note" style="margin-top:5px">Os documentos da pasta passaram do limite de uma requisição. O sistema já corta pelo tamanho — se repetir, tire da pasta os PDFs que não interessam à peça e rode de novo.</div>':''))
           :('<b style="color:#0F6E56">Peça redigida</b><div style="margin-top:5px">'
             +'&#128196; <b>'+esc(pc.arquivo_word||'')+'</b> <span class="note">— na pasta do processo, para editar</span>'
-            +(pc.arquivo_pdf?('<br>&#128209; <b>'+esc(pc.arquivo_pdf)+'</b> <span class="note">— na pasta Protocolo, pronta para conferir e protocolar</span>'):'')
+            +(pc.arquivo_word?(' <button class="btn sm ghost" style="font-size:10.5px;padding:1px 7px" onclick="_dgVer(\''+esc((j.processo&&j.processo.numero)||'')+'\',\''+esc(pc.arquivo_word)+'\')">abrir na tela</button>'):'')
+            +(pc.arquivo_pdf?('<br>&#128209; <b>'+esc(pc.arquivo_pdf)+'</b> <span class="note">— na pasta Protocolo, pronta para conferir e protocolar</span>'
+                +' <button class="btn sm ghost" style="font-size:10.5px;padding:1px 7px" onclick="_dgVer(\''+esc((j.processo&&j.processo.numero)||'')+'\',\'Protocolo/'+esc(pc.arquivo_pdf)+'\')">abrir na tela</button>'):'')
             +(pc.erro_pdf?('<br><span class="note" style="color:#8a5a00">O PDF não foi gerado: '+esc(pc.erro_pdf)+'</span>'):'')
             +'<div class="note" style="margin-top:7px">É rascunho. Confira e assine antes de protocolar.</div></div>'))
         +'</div>'):'')

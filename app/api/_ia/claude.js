@@ -39,7 +39,7 @@ const TIMEOUT_MS = 900000
 /* Remonta a resposta a partir do SSE, no MESMO formato do modo não-streaming
    (content[], usage, stop_reason) — assim nada mais no sistema muda. */
 async function montarDoStream(r) {
-  const out = { content: [], usage: {}, stop_reason: null }
+  const out = { content: [], usage: {}, stop_reason: null, completo: false }
   const parciais = {}          // índice → json cru do tool_use
   const dec = new TextDecoder()
   let buf = ''
@@ -74,6 +74,8 @@ async function montarDoStream(r) {
         } else if (ev.type === 'message_delta') {
           if (ev.delta && ev.delta.stop_reason) out.stop_reason = ev.delta.stop_reason
           if (ev.usage) out.usage = Object.assign({}, out.usage, ev.usage)
+        } else if (ev.type === 'message_stop') {
+          out.completo = true
         } else if (ev.type === 'error') {
           out.erroStream = (ev.error && ev.error.message) || 'erro no streaming'
         }
@@ -144,6 +146,12 @@ export async function chamarClaude({
     return { erro: 'IA indisponível: ' + ((e && e.message) || e), status: 502 }
   }
   if (data && data.erroStream) return { erro: 'IA: ' + data.erroStream, status: 502 }
+  /* Stream que morre no meio devolve texto pela metade — e uma petição pela
+     metade é pior que petição nenhuma: em 02/09/2026 saiu um .doc de 2.827
+     bytes cortado no meio da frase, salvo como se estivesse pronto. Só aceita
+     resposta que chegou ao fim (message_stop). */
+  if (!data || !data.completo) return { erro: 'a resposta da IA foi cortada no meio (conexão interrompida) — nada foi gravado; rode de novo', status: 502, cortada: true }
+  if (data.stop_reason === 'max_tokens') return { erro: 'a peça ficou maior que o limite de saída do modelo e foi cortada — nada foi gravado; peça um recorte menor', status: 502, cortada: true }
 
   const usage = data.usage || {}
   const custo = custoUsd(modelo, usage)
@@ -168,7 +176,7 @@ export async function chamarClaude({
   try { texto = (data.content || []).map(c => c.text || '').join('\n').trim() } catch (e) {}
   const ferramentaUsada = (data.content || []).find(c => c && c.type === 'tool_use') || null
 
-  return { texto, ferramenta: ferramentaUsada, usage, custoUsd: custo, modelo, bruto: data }
+  return { texto, ferramenta: ferramentaUsada, usage, custoUsd: custo, modelo, stopReason: data.stop_reason || null, bruto: data }
 }
 
 // ————— teto mensal —————

@@ -116,11 +116,32 @@ export function minutaDoc(proc, texto) {
 // bloco FIXO (persona + Manual de Padrão CMP + formato de saída) — idêntico em toda
 // chamada, então vai no `system` com cache_control: a IA reaproveita o cache em vez
 // de reprocessar as ~8 mil palavras do Manual a cada minuta.
+/* As skills do escritório (as mesmas que ele usa no Claude: peticoes-cmp,
+   civel-consumidor-cmp, rebater-cmp). Até 02/09/2026 quem redigia só via o
+   "Manual de Padrão CMP" — o método de escrita, o enquadramento das teses e o
+   red team ficavam de fora, e a peça saía genérica ("não aproveitou nada das
+   minhas skills"). Texto fixo, byte a byte, para o cache pegar. */
+let _skillsPeca = null
+export function skillsDeRedacao() {
+  if (_skillsPeca != null) return _skillsPeca
+  const dir = path.join(process.cwd(), 'lib', 'skills-cmp')
+  const ordem = ['peticoes-cmp.md', 'civel-consumidor-cmp.md', 'rebater-cmp.md']
+  const partes = []
+  for (const nome of ordem) {
+    try { partes.push('===== ' + nome.replace('.md', '') + ' =====\n' + fs.readFileSync(path.join(dir, nome), 'utf8')) } catch (e) {}
+  }
+  _skillsPeca = partes.join('\n\n')
+  return _skillsPeca
+}
+
 export function sistemaBase() {
   const modelo = carregaModelo()
+  const skills = skillsDeRedacao()
   return 'Você é o(a) redator(a) de peças do escritório Crispim, Mendonça e Pinheiro (CMP). Redija uma MINUTA (rascunho para revisão do advogado) da peça solicitada, seguindo RIGOROSAMENTE o "Manual de Padrão CMP" abaixo: método IRAC em prosa (sem rótulos visíveis), estrutura de seções, endereçamento no padrão do escritório ("AO JUÍZO DE DIREITO DA/DO ..."), fecho "Nestes termos, / Pede deferimento." e dupla subscrição (Djan Henrique Mendonça do Nascimento — OAB/PB 5.219-A e Jader Gabriel Pinheiro — OAB/PB 33.567).\n\n' +
     'REGRAS CRÍTICAS (do Manual): NUNCA invente dados (CPF, CNPJ, valores, nº de processo, endereços) — use [A PREENCHER]; números calculados/inferidos marque [CONFIRMAR]; NUNCA cite jurisprudência de memória — se não puder verificar, use [JURISPRUDÊNCIA A CONFIRMAR: tese]; baseie-se SOMENTE no histórico e nos documentos anexados; sinalize riscos/prazos, mas a decisão estratégica é do advogado.\n\n' +
     (modelo ? ('===== MANUAL DE PADRÃO CMP (siga fielmente) =====\n' + modelo + '\n===== FIM DO MANUAL =====\n\n') : '') +
+    (skills ? ('===== SKILLS DO ESCRITÓRIO (método de escrita, enquadramento das teses e red team — aplique-as) =====\n' + skills + '\n===== FIM DAS SKILLS =====\n\n' +
+      'Antes de escrever: enquadre a tese pela skill civel-consumidor-cmp, escreva pelo método da skill peticoes-cmp (IRAC em prosa, sem rótulos) e, antes de fechar, passe a peça pelo crivo da skill rebater-cmp — o que o adversário alegaria contra ela deve estar respondido no próprio texto.\n\n') : '') +
     'FORMATO DE SAÍDA: escreva a PEÇA COMPLETA no padrão CMP, começando DIRETO pela peça (sem comentários antes). Ao final, em uma NOVA seção iniciada EXATAMENTE pela linha "===RELATORIO DE TESES===", escreva o Relatório de Teses (fora da peça), conforme o Manual (tese adotada e por quê, subsidiárias, alternativas descartadas, status da jurisprudência, pendências [A PREENCHER]/[CONFIRMAR]). Não escreva nada após o relatório.'
 }
 
@@ -139,6 +160,7 @@ export async function dinheiroIA(sb, usd) {
 export async function gerarMinuta(sb, {
   numero, instrucao, autor = 'robo', maxFiles = 6, docsPreferidos = [], rotina = 'minuta',
   tarefaTitulo = null, prazoEm = null, resp = null, origemTarefa = 'minuta', pecaNome = null,
+  modelo = 'claude-sonnet-5', contexto = '',
 }) {
   const dig = String(numero || '').replace(/\D/g, '')
   // CNJ tem 20 dígitos; casos administrativos (sem CNJ) usam a numeração interna
@@ -203,6 +225,7 @@ export async function gerarMinuta(sb, {
   const pedidoTexto =
     'DADOS DO PROCESSO — nº ' + (proc.numero || '') + ' | Cliente: ' + (proc.cliente_nome || '') + ' | Parte contrária: ' + (proc.oponente || '') + ' | Classe/Assunto: ' + ((proc.classe || '') + ' ' + (proc.assunto || '')).trim() + ' | Órgão: ' + (proc.orgao || '') + '.\n\n' +
     'PEDIDO DO ADVOGADO: ' + instrucao + '\n\n' +
+    (contexto ? (contexto + '\n\n') : '') +
     'HISTÓRICO RECENTE (mais novo primeiro):\n' + (histTxt || '(sem histórico)') + '\n\n' +
     (usados ? ('Documentos anexados (PDF do processo): ' + nomesUsados.join('; ') + '.') : 'Nenhum PDF localizado na pasta do processo — redija com base no histórico e marque [A PREENCHER]/[VERIFICAR] onde faltar documento.') +
     (nomesPlanilhas.length ? (' Planilhas anexadas: ' + nomesPlanilhas.join('; ') + '.') : '')
@@ -210,7 +233,7 @@ export async function gerarMinuta(sb, {
 
   const r = await chamarClaude({
     rotina, sb, ref: proc.numero, escritorioId: ESCRITORIO_CMP,
-    modelo: 'claude-sonnet-5', maxTokens: 16000,
+    modelo, maxTokens: 16000,
     sistemaFixo: sistemaBase(), conteudo: content,
   })
   if (r.erro) return { erro: r.erro, status: r.status || 502 }
