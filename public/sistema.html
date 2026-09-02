@@ -7513,9 +7513,17 @@ function temTeor(mv){
   return t.length>180;
 }
 function setFiltroHist(f){window.histFiltro=f;histShown=5;renderHistorico();}
+function _ehEmailVara(t){ return /^\s*\[E-?mail\s+(à|a)\s+vara/i.test(String(t||'')); }
 function renderHistorico(){
   var ul=document.getElementById("det-hist");if(!ul)return;
   var full=(atual.hist_full&&atual.hist_full.length)?atual.hist_full:(atual.hist?[{data:atual.data,texto:atual.hist}]:[]);
+  /* E-mail à vara sai do histórico completo. Cada cobrança de andamento gerava
+     uma linha e, num processo cobrado toda semana, elas afogavam decisão e
+     despacho — que é o que se lê aqui. Continuam guardadas e visíveis: a linha
+     "* pedido de … feito por e-mail em …" no quadro Dados do processo abre
+     todas, com o texto de cada uma. E-mail ao CLIENTE continua no histórico:
+     aquilo é comunicação com a parte, não cobrança de cartório. */
+  full=full.filter(function(mv){ return !_ehEmailVara(mv&&mv.texto); });
   var nteor=full.filter(temTeor).length;
   /* abre no que tem conteúdo — é o que o advogado precisa ler. Se o processo não
      tiver nenhum teor, cai em "Tudo" sozinho, para a aba não abrir vazia. */
@@ -17973,8 +17981,40 @@ async function renderPedidoVara(){
       :(/CUMPRIMENTO do despacho|DESPACHO\/DECIS/i.test(t)?'cumprimento de despacho':'andamento'));
     var canal=(d.canal==='whatsapp')?'WhatsApp':((d.canal==='email')?'e-mail':(d.canal||'—'));
     var dt=String(d.ultima_cobranca).slice(0,10).split('-').reverse().join('/');
-    el.innerHTML='<span style="color:#8a5a00;font-weight:700">*</span> pedido de <b>'+tipo+'</b> feito por <b>'+canal+'</b> em <b>'+dt+'</b>'+(d.status==='resolvida'?' <span style="color:#127a53">(resolvido)</span>':'');
+    el.innerHTML='<span onclick="abrirEmailsVara()" style="cursor:pointer" title="Ver todos os e-mails enviados à vara neste processo, com o texto de cada um">'
+      +'<span style="color:#8a5a00;font-weight:700">*</span> pedido de <b>'+tipo+'</b> feito por <b>'+canal+'</b> em <b>'+dt+'</b>'
+      +(d.status==='resolvida'?' <span style="color:#127a53">(resolvido)</span>':'')
+      +' <span style="color:#185FA5;font-size:11px;border-bottom:1px dotted #9fbadb">ver texto</span></span>';
   }catch(e){ el.innerHTML=''; }
+}
+/* Todos os e-mails à vara deste processo, com o texto — é o que saiu do
+   histórico completo. Lê os próprios andamentos, então nada foi perdido. */
+async function abrirEmailsVara(){
+  if(typeof atual==='undefined'||!atual) return;
+  var ov=document.getElementById('emv-ov'); if(ov) ov.remove();
+  ov=document.createElement('div'); ov.id='emv-ov';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(20,28,40,.5);z-index:10002;display:flex;align-items:center;justify-content:center;padding:16px';
+  ov.innerHTML='<div id="emv-cx" style="background:#fff;border-radius:12px;max-width:760px;width:100%;max-height:86vh;overflow:auto;padding:18px 20px"><div class="note">Carregando…</div></div>';
+  ov.onmousedown=function(e){ ov.__bd=(e.target===ov); };
+  ov.onclick=function(e){ if(e.target===ov&&ov.__bd) ov.remove(); };
+  document.body.appendChild(ov);
+  var cx=ov.querySelector('#emv-cx');
+  var linhas=((atual.hist_full||[]).filter(function(mv){ return _ehEmailVara(mv&&mv.texto); }))
+    .sort(function(a,b){ return String(b.data||'')<String(a.data||'')?-1:1; });
+  var corpo=linhas.length?linhas.map(function(mv){
+    var dt=String(mv.data||'').slice(0,10).split('-').reverse().join('/');
+    var txt=String(mv.teor||mv.texto||'');
+    var cab=(txt.match(/^\s*\[([^\]]{0,300})\]/)||[])[1]||'E-mail à vara';
+    var resto=txt.replace(/^\s*\[[^\]]{0,300}\]\s*/,'').trim();
+    return '<div style="border-left:3px solid #185FA5;padding:4px 0 4px 12px;margin-bottom:14px">'
+      +'<div style="font-size:12px;color:var(--muted)"><b style="color:var(--navy)">'+esc(dt)+'</b> · '+esc(cab)+'</div>'
+      +(resto?('<pre style="margin:6px 0 0;white-space:pre-wrap;word-break:break-word;font:12.5px/1.55 inherit">'+esc(resto)+'</pre>'):'<div class="note" style="margin:4px 0 0">(sem texto guardado)</div>')
+      +'</div>';
+  }).join(''):'<div class="note">Nenhum e-mail à vara registrado neste processo.</div>';
+  cx.innerHTML='<h3 style="margin:0 0 2px;color:var(--navy)">&#9993; E-mails à vara</h3>'
+    +'<p class="note" style="margin:0 0 12px">'+esc(fmtCNJ(atual.numero||''))+' · '+linhas.length+' envio(s). Ficam fora do histórico completo para não afogar decisões e despachos.</p>'
+    +corpo
+    +'<div style="margin-top:8px;text-align:right"><button class="btn sm ghost" onclick="document.getElementById(\'emv-ov\').remove()">Fechar</button></div>';
 }
 /* registra/atualiza a diligência ao enviar pela página do processo, para aparecer
    em "Diligências em andamento". Se já houver uma aberta para o processo, atualiza
