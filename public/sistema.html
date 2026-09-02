@@ -20897,9 +20897,19 @@ function _dgVer(numero, rel){
   if(!dig||!rel){ alert('Não sei em qual processo está esse arquivo — abra a ficha dele.'); return; }
   visualizarDoc(dig, rel, String(rel).split('/').pop());
 }
+/* O banco grava em UTC; a tela tem que mostrar a hora de quem está lendo. Sem
+   isto o cartão dizia 14:55 num diagnóstico rodado às 11:55 (02/09/2026).
+   O Postgres devolve "2026-09-02 15:05:10.659+00" — com espaço, que o Safari
+   não aceita —, por isso normaliza antes. */
 function _dgQuando(iso){
   var t=String(iso||''); if(!t) return '';
-  var d=t.slice(0,10).split('-'); return (d[2]||'')+'/'+(d[1]||'')+'/'+(d[0]||'')+' '+t.slice(11,16);
+  var norm=t.replace(' ','T');
+  norm=norm.replace(/([+-]\d{2})$/,'$1:00');          /* "+00" → "+00:00" */
+  if(!/([Zz]|[+-]\d{2}:\d{2})$/.test(norm)) norm+='Z'; /* sem fuso = UTC */
+  var d=new Date(norm);
+  if(isNaN(d.getTime())){ var p2=t.slice(0,10).split('-'); return (p2[2]||'')+'/'+(p2[1]||'')+'/'+(p2[0]||'')+' '+t.slice(11,16); }
+  var dd=function(n){ return (n<10?'0':'')+n; };
+  return dd(d.getDate())+'/'+dd(d.getMonth()+1)+'/'+d.getFullYear()+' '+dd(d.getHours())+':'+dd(d.getMinutes());
 }
 /* O texto do último diagnóstico fica gravado AQUI, com a data — pedido em
    02/09/2026. Sem clicar em nada: quem abre o processo lê o que a IA disse. */

@@ -31,6 +31,18 @@ export function custoUsd(modelo, usage) {
   return Math.round(total * 1e6) / 1e6
 }
 
+/* A Anthropic responde em inglês. Quem lê isso na tela é advogado no meio de um
+   prazo — as mensagens que aparecem de verdade viram português, com o que fazer. */
+function emPortugues(msg) {
+  const m = String(msg || '')
+  if (/credit balance is too low/i.test(m)) return 'acabaram os créditos da API da Anthropic — recarregue em Robôs › conta da API › "abrir conta / créditos" (nada foi cobrado nesta tentativa)'
+  if (/rate.?limit|429/i.test(m)) return 'a Anthropic limitou a velocidade agora (muitas chamadas seguidas) — espere um minuto e rode de novo'
+  if (/overloaded/i.test(m)) return 'a Anthropic está sobrecarregada neste momento — rode de novo em alguns minutos'
+  if (/invalid.*api.?key|authentication/i.test(m)) return 'a chave da API da Anthropic foi recusada — confira a ANTHROPIC_API_KEY no servidor'
+  if (/exceeds the maximum size|request too large/i.test(m)) return 'os documentos enviados passaram do tamanho máximo de uma requisição — tire da pasta os PDFs que não interessam e rode de novo'
+  return 'IA: ' + m
+}
+
 /* Teto de tempo de uma chamada. Alto de propósito: um diagnóstico lê a íntegra
    inteira dos autos. Em streaming o servidor manda evento o tempo todo, então
    este relógio só dispara se a Anthropic realmente parar de responder. */
@@ -139,7 +151,8 @@ export async function chamarClaude({
     if (!r.ok) {
       let err = null
       try { err = await r.json() } catch (e) {}
-      return { erro: 'IA: ' + ((err && err.error && err.error.message) || r.status), status: 502 }
+      const msg = (err && err.error && err.error.message) || String(r.status)
+      return { erro: emPortugues(msg), status: 502, semCredito: /credit balance is too low/i.test(msg) }
     }
     data = await montarDoStream(r)
   } catch (e) {
