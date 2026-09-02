@@ -18128,9 +18128,28 @@ function _grauCurto(g){
   if(/(^|[^0-9])1|primeiro|g1/i.test(t)) return '1º grau';
   return t.slice(0,24);
 }
+/* Mesmo órgão escrito de dois jeitos. O jus.br devolve "9º JUIZADO ESPECIAL
+   CÍVEL DE JOÃO PESSOA E DE CABEDELO" e a ficha guarda "9ª Juizado Especial
+   Cível da Capital e de Cabedelo João Pess" (truncado): comparação literal dizia
+   que eram lugares diferentes e a ficha repetia a vara como se o processo
+   tivesse ido a outro lugar. Compara pelas palavras que importam, aceitando
+   palavra cortada — mas o NÚMERO tem que bater, senão a 1ª e a 2ª Vara Cível
+   virariam a mesma coisa. */
+function _orgaoTokens(v){
+  return String(v||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/[ºª°]/g,' ').replace(/[^a-z0-9]+/g,' ').trim().split(/\s+/)
+    .filter(function(t){ return t && !/^(de|da|do|das|dos|e|em|a|o|as|os|no|na)$/.test(t); });
+}
 function _mesmoOrgao(a,b){
-  var n=function(v){ return String(v||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim(); };
-  return !!n(a) && n(a)===n(b);
+  var A=_orgaoTokens(a), B=_orgaoTokens(b);
+  if(!A.length||!B.length) return false;
+  var num=function(L){ return L.filter(function(t){ return /^\d+$/.test(t); }).sort().join(','); };
+  if(num(A)!==num(B)) return false;              /* 1ª Vara não é 2ª Vara */
+  var casa=function(t,L){ return L.some(function(u){
+    return u===t || (t.length>=4&&u.indexOf(t)===0) || (u.length>=4&&t.indexOf(u)===0); }); };
+  var menor=(A.length<=B.length)?A:B, maior=(menor===A)?B:A;
+  var iguais=menor.filter(function(t){ return casa(t,maior); }).length;
+  return (iguais/menor.length)>=0.7;
 }
 /* O caminho do processo cabe num botão.
    A ficha trazia "Vara de origem", depois "LOCAL ATUAL", depois "PASSOU POR" e
@@ -18153,8 +18172,13 @@ function _localAtualHTML(p){
   var origem=p.foro||p.orgao||'';
   var agora=_ondeEstaAgora(tr);
   var fora=!!(agora&&agora.orgao&&!_mesmoOrgao(agora.orgao,origem));
-  if(tr.length<2&&!fora) return '';
-  var onde=fora?((agora.tribunal?String(agora.tribunal)+' · ':'')+(_grauCurto(agora.grau)||'')).replace(/ · $/,''):'';
+  /* o processo está na própria vara: não repete o nome, só confirma que é ali */
+  if(!fora){
+    if(tr.length<2) return '';
+    return ' <button class="btn sm ghost" style="font-size:11px;padding:1px 8px;vertical-align:baseline;color:#0F6E56;border-color:#bfe0cf" '
+      +'onclick="abrirCaminhoProcesso()" title="O processo está nesta vara. Clique para ver por onde ele passou.">&#9679; local atual</button>';
+  }
+  var onde=((agora.tribunal?String(agora.tribunal)+' · ':'')+(_grauCurto(agora.grau)||'')).replace(/ · $/,'');
   return ' <button class="btn sm ghost" style="font-size:11px;padding:1px 8px;vertical-align:baseline" onclick="abrirCaminhoProcesso()" '
     +'title="Por onde o processo passou e onde ele está agora">&#129517; caminho'
     +(onde?(' <span style="color:#8a4b00;font-weight:700">· '+esc(onde)+'</span>'):'')+'</button>';
