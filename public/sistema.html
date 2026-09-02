@@ -2764,7 +2764,7 @@ function abrir(i){
   if(typeof renderAudLink==='function') setTimeout(renderAudLink,0);
   // histórico (termos oficiais)
   /* aba "Publicações com inteiro teor (DJEN)" removida a pedido — sem utilidade prática */
-  html+='<div class="card"><p class="sectlabel" style="display:flex;justify-content:space-between;align-items:center"><span style="display:inline-flex;align-items:center;gap:9px;min-width:0;flex-wrap:wrap">Histórico completo (termos oficiais)'+(p.hist_full&&p.hist_full.length?(' — '+p.hist_full.length+' andamentos'):'')+'<span id="det-visto-box" style="display:inline-flex">'+((typeof _vistoPorHTML==='function')?_vistoPorHTML(p):'')+'</span></span><span style="display:flex;gap:6px;align-items:center;flex-shrink:0"><button class="btn sm ghost" style="font-size:12px" id="btn-atu-hist" onclick="atualizarHistorico()" title="Busca no DJEN as publicações novas deste processo (com o inteiro teor) e os movimentos do jus.br">&#8635; atualizar</button><button class="btn sm ghost" style="font-size:12px" onclick="addHistManual()">+ histórico manual</button></span></p><ul class="timeline" id="det-hist"></ul><div id="det-hist-more" style="margin-top:8px"></div></div>';
+  html+='<div class="card"><p class="sectlabel" style="display:flex;justify-content:space-between;align-items:center"><span style="display:inline-flex;align-items:center;gap:9px;min-width:0;flex-wrap:wrap">Histórico completo (termos oficiais)'+(p.hist_full&&p.hist_full.length?(' — '+p.hist_full.length+' andamentos'):'')+'<span id="det-visto-box" style="display:inline-flex">'+((typeof _vistoPorHTML==='function')?_vistoPorHTML(p):'')+'</span></span></p><ul class="timeline" id="det-hist"></ul><div id="det-hist-more" style="margin-top:8px"></div></div>';
   // histórico do chat da equipe sobre este processo (respostas vinculadas no dock)
   html+='<div class="card" id="chatproc-card" style="background:#fffdf0;border-color:#e6dfae"><p class="sectlabel" style="display:flex;justify-content:space-between;align-items:center">💬 Histórico do chat sobre este processo<span id="chatproc-acoes"></span></p><div id="chatproc-corpo"><div class="note">Carregando…</div></div></div>';
   if(p._id) setTimeout(function(){ renderChatDoProcesso(p._id); }, 0);
@@ -7509,7 +7509,12 @@ function renderHistorico(){
   var more=document.getElementById("det-hist-more");
   var nped=full.filter(function(mv){return classMov(mv.texto)[2]==="peca";}).length;
   var bar=document.createElement("li");bar.style.cssText="list-style:none;margin:0 0 12px;padding:0;border:none";
-  bar.innerHTML='<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:12px">'
+  /* uma linha só: os dois botões de ação ficavam no cabeçalho do card e os
+     filtros aqui embaixo — três controles do mesmo assunto em dois lugares */
+  bar.innerHTML='<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;font-size:12px">'
+    +'<button class="btn sm ghost" id="btn-atu-hist" onclick="atualizarHistorico()" title="Busca no DJEN as publicações novas deste processo (com o inteiro teor) e os movimentos do jus.br">&#8635; atualizar</button>'
+    +'<button class="btn sm ghost" onclick="addHistManual()">+ histórico manual</button>'
+    +'<span style="width:1px;height:18px;background:var(--line);margin:0 3px"></span>'
     +'<button class="btn sm '+(window.histFiltro==="teor"?"":"ghost")+'" onclick="setFiltroHist(\'teor\')" title="Só os andamentos que trazem o inteiro teor — decisões, despachos e intimações com texto">Com teor ('+nteor+')</button>'
     +'<button class="btn sm '+(window.histFiltro==="all"?"":"ghost")+'" onclick="setFiltroHist(\'all\')" title="Inclui os títulos de movimento do DataJud, que não trazem texto">Tudo ('+full.length+')</button>'
     +'<button class="btn sm '+(window.histFiltro==="peca"?"":"ghost")+'" onclick="setFiltroHist(\'peca\')">Só nossas peças ('+nped+')</button>'
