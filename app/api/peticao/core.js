@@ -7,12 +7,18 @@
 import crypto from 'crypto'
 import fs from 'fs'
 import path from 'path'
-import { chamarClaude } from '../_ia/claude.js'
+import { chamarClaude, orcamento } from '../_ia/claude.js'
 import { lerPlanilhaTexto } from '../../../lib/planilha.js'
 
 export const ROOT = '/opt/cmpdocs'
 export const ESCRITORIO_CMP = '908f77fc-19f5-4d86-9576-f5590af09e0a'
-const MAX_DOC_BYTES = 24 * 1024 * 1024 // orçamento total de PDFs enviados à IA
+/* Orçamento de PDFs enviados à IA. A conta que importa NÃO é a do arquivo no
+   disco: o PDF viaja em base64, que cresce 4/3, e a API recusa a requisição
+   inteira acima de 32 MB ("Request exceeds the maximum size" — 02/09/2026, um
+   diagnóstico com laudo contábil). Por isso o teto é medido já em base64, com
+   folga para o texto do pedido e o histórico. */
+export const MAX_B64_BYTES = 22 * 1024 * 1024
+export function tamB64(bytes) { return Math.ceil(Number(bytes || 0) / 3) * 4 }
 
 function escHtml(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') }
 
@@ -121,6 +127,15 @@ export function sistemaBase() {
 // Gera a minuta e grava tudo (histórico + Word + tarefa). `sb` é o client admin.
 // `docsPreferidos`: palavras-chave dos documentos que a triagem apontou como
 // necessários — entram na frente da fila de PDFs enviados à IA.
+/* O custo da IA sai em dólar; quem lê o histórico do processo pensa em real.
+   O câmbio é o mesmo do teto mensal (ia_config.cambio_usd_brl). */
+export async function dinheiroIA(sb, usd) {
+  const u = Number(usd) || 0
+  let cambio = 5.4
+  try { const o = await orcamento(sb); cambio = Number(o.cambio) || 5.4 } catch (e) {}
+  return 'R$ ' + (Math.round(u * cambio * 100) / 100).toFixed(2).replace('.', ',') + ' (US$ ' + u.toFixed(4) + ')'
+}
+
 export async function gerarMinuta(sb, {
   numero, instrucao, autor = 'robo', maxFiles = 6, docsPreferidos = [], rotina = 'minuta',
   tarefaTitulo = null, prazoEm = null, resp = null, origemTarefa = 'minuta', pecaNome = null,
@@ -157,15 +172,16 @@ export async function gerarMinuta(sb, {
   arr.sort((a, b) => (pontua(b) - pontua(a)) || (b.mtime - a.mtime))
 
   const content = []
-  let bytes = 0, usados = 0
+  let b64 = 0, usados = 0
   const nomesUsados = []
+  const nomesForaPorTamanho = []
   for (const f of arr) {
     if (usados >= maxFiles) break
-    if (bytes + f.size > MAX_DOC_BYTES) continue
+    if (b64 + tamB64(f.size) > MAX_B64_BYTES) { nomesForaPorTamanho.push(f.nome); continue }
     try {
       const buf = fs.readFileSync(f.full)
       content.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: buf.toString('base64') } })
-      bytes += f.size; usados++; nomesUsados.push(f.nome)
+      b64 += tamB64(f.size); usados++; nomesUsados.push(f.nome)
     } catch (e) {}
   }
 
@@ -211,7 +227,9 @@ export async function gerarMinuta(sb, {
   const fileName = (slug || 'minuta') + '_' + hoje + '.doc'
 
   // 1) lançamento no histórico (na data do pedido) — inclui o Relatório de teses
-  const corpo = '[MINUTA] ' + instrucao + ' (rascunho Claude para revisão, ' + hoje.split('-').reverse().join('/') + ')' + (relatorio ? ('\n\n— RELATÓRIO DE TESES —\n' + relatorio) : '')
+  const corpo = '[MINUTA] ' + instrucao + ' (rascunho Claude para revisão, ' + hoje.split('-').reverse().join('/') + ')' +
+    '\n\nCusto: ' + (await dinheiroIA(sb, r.custoUsd)) +
+    (relatorio ? ('\n\n— RELATÓRIO DE TESES —\n' + relatorio) : '')
   const { data: a } = await sb.from('andamentos').insert({ processo_id: proc.id, data: hoje, texto: corpo, fonte: 'minuta' }).select('id').single()
   const andId = a && a.id
 
@@ -263,7 +281,8 @@ export async function gerarMinuta(sb, {
 
   return {
     ok: true, processo: proc, andamento_id: andId, anexo_id: anexoId, tarefa_id: tarefaId,
-    arquivo: fileName, arquivo_pasta: arquivoPasta, docs_usados: nomesUsados, tarefa_para: quando,
+    arquivo: fileName, arquivo_pasta: arquivoPasta, docs_usados: nomesUsados,
+    docs_fora_por_tamanho: nomesForaPorTamanho, tarefa_para: quando,
     custo_usd: r.custoUsd, preview: texto.slice(0, 500),
   }
 }

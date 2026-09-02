@@ -2821,6 +2821,18 @@ function abrir(i){
       '<div id="docop-panel"><div class="note">Carregando documentos…</div></div></div>'+
     '</div>'+
     '</div>';
+  /* Ficha do diagnóstico — no fim da página, depois das etiquetas. Pedida assim
+     (02/09/2026): o botão da barra abre o modal, mas o histórico de diagnósticos
+     do processo (e o que cada um custou) precisava de lugar fixo. */
+  html+='<div class="card cmp-only" id="diag-card"><p class="sectlabel" style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">'
+    +'&#129517; Diagnóstico processual (IA)'
+    +'<span style="display:inline-flex;gap:6px">'
+      +'<button class="btn sm ghost" style="font-size:11px" onclick="renderDiagCard()" title="Recarregar a lista">&#8635; atualizar</button>'
+      +'<button class="btn sm ghost" style="font-size:11px" onclick="abrirContaIA()" title="Quanto o escritório já gastou de IA no mês, o teto e o link para recarregar os créditos da Anthropic">&#128179; créditos da Anthropic</button>'
+      +'<button class="btn sm" style="font-size:11px;background:#2E3A4B;color:#fff;border-color:#2E3A4B" onclick="abrirDiagnostico(\''+esc(p.numero)+'\')">&#129517; rodar diagnóstico</button>'
+    +'</span></p>'
+    +'<div class="note" style="margin-bottom:8px">Atualiza o processo no tribunal, lê a íntegra dos autos e o histórico e diz <b>o que fazer para o processo andar</b> — recurso, impugnação, cumprimento, o que for. Se você marcar, já redige a peça em Word e PDF na pasta Protocolo. O custo de cada rodada fica gravado aqui e no histórico do processo.</div>'
+    +'<div id="diag-lista"><div class="note">Carregando…</div></div></div>';
   document.getElementById("det-body").innerHTML=html;
   posicionarHonMobile();
   histShown=5; renderHistorico(); if(typeof loadAnexosProc==='function') loadAnexosProc(p.numero);
@@ -2829,6 +2841,7 @@ function abrir(i){
   renderDetEtq();
   renderObservacoes();
   renderProcVinculados();
+  try{ renderDiagCard(); }catch(e){}
   try{ _checaAcompNaFicha(p.numero); }catch(e){}
   go("proc-det");
 }
@@ -20785,6 +20798,38 @@ async function abrirDiagnostico(numero){
       +'<button class="btn sm ghost" onclick="document.getElementById(\'dg-ov\').remove()">Cancelar</button>'
       +'<button class="btn sm" id="dg-ok" style="background:#2E3A4B;border-color:#2E3A4B" onclick="_dgRodar()">Analisar os autos</button></div>');
 }
+/* A lista da ficha: cada diagnóstico já rodado neste processo, com o que custou.
+   Clicar reabre o resultado inteiro (o mesmo do modal). */
+async function renderDiagCard(){
+  var box=document.getElementById('diag-lista'); if(!box) return;
+  if(typeof atual==='undefined'||!atual){ box.innerHTML=''; return; }
+  var num=atual.numero;
+  try{
+    var r=await window.__sb.from('ia_diagnosticos')
+      .select('id,status,erro,com_peca,com_integra,custo_usd,criado_em,concluido_em,pedido_por,peca')
+      .eq('processo_numero',num).order('criado_em',{ascending:false}).limit(12);
+    var itens=(r&&r.data)||[];
+    if(!itens.length){ box.innerHTML='<div class="note">Nenhum diagnóstico rodado neste processo ainda.</div>'; return; }
+    var total=itens.reduce(function(a,x){ return a+(Number(x.custo_usd)||0); },0);
+    box.innerHTML=itens.map(function(d){
+      var quando=String(d.criado_em||'').slice(0,16).replace('T',' ');
+      var cor=d.status==='pronto'?'#0F6E56':(d.status==='erro'?'#b5342b':'#8a5a00');
+      var rot=d.status==='pronto'?'pronto':(d.status==='erro'?'falhou':'rodando…');
+      var custo=Number(d.custo_usd)||0;
+      return '<div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;border-bottom:1px solid #eef1f5;padding:6px 0">'
+        +'<span style="font-size:10px;font-weight:800;letter-spacing:.04em;color:'+cor+';border:1px solid '+cor+'44;border-radius:9px;padding:1px 7px">'+rot.toUpperCase()+'</span>'
+        +'<span style="font-size:12.5px">'+esc(quando)+'</span>'
+        +(d.com_peca?'<span class="note" style="margin:0">com peça</span>':'')
+        +(d.pedido_por?'<span class="note" style="margin:0">· '+esc(d.pedido_por)+'</span>':'')
+        +(custo?'<span class="note" style="margin:0">· US$ '+custo.toFixed(4)+'</span>':'')
+        +(d.status==='erro'&&d.erro?'<span class="note" style="margin:0;color:#b5342b">· '+esc(String(d.erro).slice(0,90))+'</span>':'')
+        +'<span style="margin-left:auto">'
+          +(d.status==='pronto'?'<button class="btn sm ghost" style="font-size:11px" onclick="_dgAbrirSalvo(\''+d.id+'\')">ver</button>':'')
+        +'</span></div>';
+    }).join('')
+      +'<div class="note" style="margin-top:8px">Total gasto em diagnósticos deste processo: <b>US$ '+total.toFixed(4)+'</b>.</div>';
+  }catch(e){ box.innerHTML='<div class="note" style="color:#b5342b">Não consegui listar: '+esc((e&&e.message)||e)+'</div>'; }
+}
 function _dgPinta(html){ var cx=document.getElementById('dg-cx'); if(cx) cx.innerHTML=html; }
 async function _dgRodar(){
   var numero=window.__dgNum;
@@ -20821,7 +20866,7 @@ async function _dgRodar(){
       }
       if(aberto) _dgResultado(res.j);
       else _dgAvisa({processo_numero:numero, id:res.j.id, pronto:true, com_peca:comPeca});
-      try{ if(typeof renderHistorico==='function' && typeof atual!=='undefined' && atual && String(atual.numero).replace(/\D/g,'')===String(numero).replace(/\D/g,'')) renderHistorico(); }catch(e){}
+      try{ if(typeof renderHistorico==='function' && typeof atual!=='undefined' && atual && String(atual.numero).replace(/\D/g,'')===String(numero).replace(/\D/g,'')){ renderHistorico(); renderDiagCard(); } }catch(e){}
     })
     .catch(function(e){
       window.__dgRodando=Math.max(0,(window.__dgRodando||1)-1); _dgPintaBadge();
@@ -20902,6 +20947,23 @@ async function _dgVarrePendentes(){
   }catch(e){}
 }
 try{ setTimeout(_dgVarrePendentes, 6000); }catch(e){}
+/* O processo é atualizado no tribunal ANTES de analisar — a tela diz se deu certo,
+   porque diagnóstico com histórico velho é diagnóstico do processo de semana passada. */
+function _dgAtualizacao(j){
+  var a=j.atualizacao; if(!a) return '';
+  if(a.erro) return ' · <span style="color:#8a5a00">não consegui atualizar no tribunal antes de analisar ('+esc(String(a.erro).slice(0,90))+') — leu o que já estava gravado</span>';
+  return ' · Processo atualizado no tribunal antes de analisar'+(a.novos?(': '+a.novos+' andamento(s) novo(s)'):' (nada novo)');
+}
+/* O que este diagnóstico custou. Fica na tela e também no histórico do
+   processo (o andamento [DIAGNÓSTICO] leva a mesma conta). */
+function _dgCusto(j){
+  var tot=Number(j.custo_total_usd||j.custo_usd||0);
+  if(!tot) return '';
+  var brl=Number(j.custo_total_brl||j.custo_brl||0);
+  var pc=Number(j.custo_peca_usd||0);
+  return ' · <b>Custo: '+(brl?('R$ '+brl.toFixed(2).replace('.',',')+' '):'')+'(US$ '+tot.toFixed(4)+')</b>'
+    +(pc?(' <span style="opacity:.8">— diagnóstico US$ '+(Number(j.custo_usd)||0).toFixed(4)+' + peça US$ '+pc.toFixed(4)+'</span>'):'');
+}
 function _dgResultado(j){
   var d=j.diagnostico||{};
   var provs=(d.providencias||[]).map(function(p,i){
@@ -20932,7 +20994,8 @@ function _dgResultado(j){
     +lista('Riscos',d.riscos,'#b5342b')
     +lista('O que falta nos autos',d.falta_nos_autos,'#8a5a00')
     +(pc?('<div style="margin-top:16px;background:'+(pc.erro?'#fdecec':'#e9f5f0')+';border:1px solid '+(pc.erro?'#f3c2c2':'#bfe3d2')+';border-radius:9px;padding:12px 14px;font-size:13px">'
-        +(pc.erro?('<b style="color:#b5342b">A peça não saiu:</b> '+esc(pc.erro))
+        +(pc.erro?('<b style="color:#b5342b">A peça não saiu:</b> '+esc(pc.erro)
+            +(/maximum size|too large|exceeds/i.test(String(pc.erro))?'<div class="note" style="margin-top:5px">Os documentos da pasta passaram do limite de uma requisição. O sistema já corta pelo tamanho — se repetir, tire da pasta os PDFs que não interessam à peça e rode de novo.</div>':''))
           :('<b style="color:#0F6E56">Peça redigida</b><div style="margin-top:5px">'
             +'&#128196; <b>'+esc(pc.arquivo_word||'')+'</b> <span class="note">— na pasta do processo, para editar</span>'
             +(pc.arquivo_pdf?('<br>&#128209; <b>'+esc(pc.arquivo_pdf)+'</b> <span class="note">— na pasta Protocolo, pronta para conferir e protocolar</span>'):'')
@@ -20942,6 +21005,9 @@ function _dgResultado(j){
     +'<div class="note" style="margin-top:14px;font-size:11.5px">'
       +(j.docs_lidos&&j.docs_lidos.length?('Leu: '+esc(j.docs_lidos.join(' · '))):'Nenhum PDF dos autos foi lido — o diagnóstico saiu só do histórico.')
       +((j.integra&&j.integra.erro)?(' · <span style="color:#8a5a00">íntegra: '+esc(j.integra.erro)+'</span>'):'')
+      +(j.docs_fora_por_tamanho&&j.docs_fora_por_tamanho.length?(' · <span style="color:#8a5a00">Ficou de fora por tamanho: '+esc(j.docs_fora_por_tamanho.join(' · '))+'</span>'):'')
+      +_dgAtualizacao(j)
+      +_dgCusto(j)
       +'</div>'
     +'<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;flex-wrap:wrap">'
       +(d.instrucao_para_redigir?'<button class="btn sm ghost" onclick="_dgCopiar()" title="Copia a instrução completa para você colar em qualquer IA">&#128203; copiar instrução da peça</button>':'')
