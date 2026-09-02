@@ -4155,7 +4155,15 @@ function _aplicarKanbanCookie(){ try{ var mapa=_kanCookieLer(); if(!mapa||!KAN) 
    os dois deixaria a tarefa dizendo "criada por djan.adv@gmail.com". */
 /* timestamp do banco → "10/08/2026 16:44" */
 function _kanQuandoBR(iso){
-  try{ var d=new Date(iso); if(isNaN(d)) return ''; return d.toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}); }catch(e){ return ''; }
+  try{
+    /* o Postgres devolve "2026-09-02 15:14:51.59+00": com espaço e offset de dois
+       dígitos, que o Safari recusa — normaliza antes de datar */
+    var t=String(iso||''); if(!t) return '';
+    var n=t.replace(' ','T').replace(/([+-]\d{2})$/,'$1:00');
+    if(!/([Zz]|[+-]\d{2}:\d{2})$/.test(n)&&/T\d{2}:/.test(n)) n+='Z';
+    var d=new Date(n); if(isNaN(d)) return '';
+    return d.toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  }catch(e){ return ''; }
 }
 function _kanQuemSou(){
   try{ var u=usuarioVisualAtual(); return (u&&u.nome)||''; }catch(e){ return ''; }
@@ -5189,7 +5197,9 @@ function renderAtivProc(){
     meta.push(canc?'<span style="color:#b5342b">cancelada</span>':(concl?'<span style="color:#127a53">concluída</span>':'<span style="color:#8a5a00">a executar</span>'));
     /* autoria em linha própria: quem pediu e quem entregou. Fica de fora quando
        o robô abriu sozinho, o autor é o sistema — nunca fica em branco. */
-    var aut=['criada por <b>'+_kanAutor(a)+'</b>'];
+    /* quando a tarefa nasceu — "criada por sistema (minuta)" sem data não diz se
+       o rascunho é de hoje ou de três semanas atrás (pedido em 02/09/2026) */
+    var aut=['criada por <b>'+_kanAutor(a)+'</b>'+(a.criadoEm?(' em '+_kanQuandoBR(a.criadoEm)):'')];
     if(concl&&a.concluidoPor) aut.push('concluída por <b>'+esc(a.concluidoPor)+'</b>'+(a.concluidoEm?(' em '+_kanQuandoBR(a.concluidoEm)):''));
     if(canc) aut.push('<span style="color:#b5342b">cancelada por <b>'+esc(a.canceladaPor||'—')+'</b>'+(a.canceladaEm?(' em '+_kanQuandoBR(a.canceladaEm)):'')+(a.canceladaMotivo?(': '+esc(a.canceladaMotivo)):'')+'</span>');
     return '<div style="display:flex;align-items:flex-start;gap:8px;padding:9px 2px;border-bottom:1px solid var(--line)'+((concl||canc)?';opacity:.6':'')+'">'
@@ -9283,12 +9293,12 @@ function toggleConcluirTarefa(id){
     }catch(eAg){ console.log('agenda: '+(eAg&&eAg.message||eAg)); }
     /* carrega as tarefas do Kanban do banco (kanban_tarefas). Se a tabela não existir, ignora e usa o seed. */
     try{
-      var kt=await sb.from('kanban_tarefas').select('id,titulo,cliente,numero,coluna,resp,data,prazo,tipo,descricao,local,origem,atrasada,criado_por,concluido_por,concluido_em,arquivada,cancelada,cancelada_em,cancelada_por,cancelada_motivo').limit(3000);
+      var kt=await sb.from('kanban_tarefas').select('id,titulo,cliente,numero,coluna,resp,data,prazo,tipo,descricao,local,origem,atrasada,criado_por,criado_em,concluido_por,concluido_em,arquivada,cancelada,cancelada_em,cancelada_por,cancelada_motivo').limit(3000);
       /* colunas de autoria/arquivo são novas: banco sem elas ainda derruba o select
          inteiro, então repete sem elas em vez de perder todas as tarefas */
-      if(kt.error && /criado_por|concluido_por|concluido_em|arquivada|cancelada/.test(kt.error.message||'')) kt=await sb.from('kanban_tarefas').select('id,titulo,cliente,numero,coluna,resp,data,prazo,tipo,descricao,local,origem,atrasada').limit(3000);
+      if(kt.error && /criado_por|criado_em|concluido_por|concluido_em|arquivada|cancelada/.test(kt.error.message||'')) kt=await sb.from('kanban_tarefas').select('id,titulo,cliente,numero,coluna,resp,data,prazo,tipo,descricao,local,origem,atrasada').limit(3000);
       if(!kt.error && kt.data){
-        window.__KANDB=kt.data.map(function(t,i){ return {id:9000+i,dbid:t.id,titulo:t.titulo||'',cliente:t.cliente||'',numero:t.numero||'—',col:t.coluna||'distribuir',resp:t.resp||'',data:t.data||'',prazo:t.prazo||'',tipoForm:t.tipo||'',descricao:t.descricao||'',local:t.local||'',org:t.origem||'',atrasada:!!t.atrasada,criadoPor:(t.criado_por||''),concluidoPor:(t.concluido_por||''),concluidoEm:(t.concluido_em||''),arq:(t.arquivada===true),canc:(t.cancelada===true),canceladaEm:(t.cancelada_em||''),canceladaPor:(t.cancelada_por||''),canceladaMotivo:(t.cancelada_motivo||''),
+        window.__KANDB=kt.data.map(function(t,i){ return {id:9000+i,dbid:t.id,titulo:t.titulo||'',cliente:t.cliente||'',numero:t.numero||'—',col:t.coluna||'distribuir',resp:t.resp||'',data:t.data||'',prazo:t.prazo||'',tipoForm:t.tipo||'',descricao:t.descricao||'',local:t.local||'',org:t.origem||'',atrasada:!!t.atrasada,criadoPor:(t.criado_por||''),criadoEm:(t.criado_em||''),concluidoPor:(t.concluido_por||''),concluidoEm:(t.concluido_em||''),arq:(t.arquivada===true),canc:(t.cancelada===true),canceladaEm:(t.cancelada_em||''),canceladaPor:(t.cancelada_por||''),canceladaMotivo:(t.cancelada_motivo||''),
           /* estado com que a tarefa chegou do banco — é a referência que diz se
              uma conclusão foi feita AGORA (e pontua) ou já vinha concluída */
           __colAnt:(t.coluna||'distribuir')}; });

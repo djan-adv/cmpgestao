@@ -215,7 +215,7 @@ async function faseTriagem(sb, limite) {
       escritorio_id: ESCRITORIO_CMP, processo_id: p.id, processo_numero: p.numero, andamento_id: a.id,
       status: (t.exige_peca && !duplicado) ? 'triado' : 'sem_peca',
       exige_peca: !!t.exige_peca && !duplicado,
-      tipo_peca: String(t.tipo_peca || '').slice(0, 120) || null,
+      tipo_peca: limpaCampo(t.tipo_peca, 120),
       prazo_dias: parseInt(t.prazo_dias, 10) || null,
       prazo_em: prazoEm,
       urgencia: t.urgencia || null,
@@ -319,6 +319,17 @@ function pedidoMd({ proc, alvo, intimacao, histTxt, docs, faltando }) {
     (faltando ? ('\n> ⚠️ ' + faltando + '\n') : '') + '\n' +
     '## Histórico recente do processo\n\n' +
     '```\n' + (histTxt || '(sem histórico)').slice(0, 12000) + '\n```\n'
+}
+
+/* De vez em quando a ferramenta volta com tag de marcação dentro do campo — em
+   02/09/2026 havia linhas com tipo_peca = "</parameter><parameter name=...>".
+   São linhas descartadas (sem_peca), mas o lixo aparecia na tela e no título da
+   tarefa. Limpa na entrada: campo com marcação é campo vazio. */
+function limpaCampo(v, max) {
+  let t = String(v == null ? '' : v)
+  if (/<\/?\s*(parameter|antml|function_calls|invoke)/i.test(t)) return null
+  t = t.replace(/<[^>]{0,200}>/g, ' ').replace(/\s+/g, ' ').trim()
+  return t ? t.slice(0, max) : null
 }
 
 async function faseDossie(sb) {
