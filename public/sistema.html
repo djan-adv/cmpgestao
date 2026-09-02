@@ -11611,7 +11611,38 @@ function go(s){
   if(s==="sugestoes" && typeof renderSugestoes==='function'){ var _an=document.getElementById('sg-autor'); if(_an && !_an.value){ _an.value=((document.getElementById('who-name')||{}).textContent||'').trim(); } renderSugestoes(); }
   if(s==="lote") renderLote();
   try{ if(typeof renderNavLotes==='function') renderNavLotes(); }catch(e){}
+  try{ _tbProcTopo(s==='proc-det'); }catch(e){}
   window.scrollTo(0,0);
+}
+/* Dentro de um processo, a barra de cima troca a busca pelo NÚMERO e pelos
+   processos vinculados — pedido em 02/09/2026. Dentro da ficha, procurar outro
+   processo é raro; saber em qual você está e pular para o vinculado é o tempo
+   todo. Fora da ficha a busca volta, intacta. */
+function _tbProcTopo(dentro){
+  var box=document.getElementById('tb-proc'), busca=document.getElementById('gbusca-wrap');
+  if(!box) return;
+  var p=(typeof atual!=='undefined')?atual:null;
+  if(!dentro||!p||!p.numero){
+    box.style.display='none';
+    if(busca) busca.style.display='';
+    return;
+  }
+  var num=String(p.numero||'');
+  var dig=num.replace(/\D/g,'');
+  var html='<span style="color:var(--muted)">Processo</span>'
+    +'<b onclick="copiarNumero(this,\''+esc(num).replace(/'/g,'')+'\')" title="Clique para copiar o número" style="cursor:pointer;color:var(--navy);border-bottom:1px dotted var(--line)">'+esc(num)+'</b>';
+  if(dig.length>=16) html+='<a href="https://portaldeservicos.pdpj.jus.br/consulta/autosdigitais?numeroProcesso='+dig+'" target="_blank" rel="noopener" title="Abrir no jus.br" style="color:#185FA5;font-size:11.5px">↗ jus.br</a>';
+  var vinc=[];
+  try{ vinc=(typeof procVincList==='function')?procVincList(p):[]; }catch(e){}
+  if(vinc.length){
+    html+='<span style="color:var(--line)">|</span><span class="note" style="margin:0">vinculados:</span>';
+    vinc.forEach(function(n){
+      html+='<span class="quick-link" onclick="irParaCaso(\''+String(n).replace(/'/g,'')+'\')" title="Abrir processo vinculado">↗ '+esc(n)+'</span>';
+    });
+  }
+  box.innerHTML=html;
+  box.style.display='inline-flex';
+  if(busca) busca.style.display='none';
 }
 /* ===== Relatório mensal · extrato de e-mails enviados pelo servidor ===== */
 window.__relMes=window.__relMes||(function(){ var d=new Date(); return {a:d.getFullYear(), m:d.getMonth()}; })();
@@ -18409,6 +18440,7 @@ function renderProcVinculados(){
   /* apenas o bloco do cabeçalho; o do rodapé (abaixo de "Encerrar") foi removido */
   var elv=document.getElementById('proc-vinculados'); if(elv) elv.innerHTML=html;
   var elr=document.getElementById('proc-vinculados-rodape'); if(elr) elr.innerHTML='';
+  try{ _tbProcTopo(!document.getElementById('s-proc-det').classList.contains('hidden')); }catch(e){}
 }
 function _sanitizeProcNum(s){ return String(s||'').trim(); }
 /* Acha um processo já cadastrado pelos DÍGITOS — a base tem número com e sem
@@ -18666,6 +18698,9 @@ function setDilView(v){
   .kpi.v2:hover{transform:translateY(-2px);box-shadow:0 6px 16px rgba(46,58,75,.10)}
   .kpi.v2.gold{border-top-color:var(--gold)} .kpi.v2.warn{border-top-color:#d9a441}
   #tb-tools{display:flex;align-items:center;gap:14px;flex:1;justify-content:flex-end;margin-right:14px}
+  /* dentro da ficha, o número do processo ocupa o lugar da busca */
+  #tb-proc{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #tb-proc .quick-link{font-size:11.5px}
   #gbusca-wrap{position:relative;max-width:440px;flex:1}
   #gbusca{width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:8px 12px;font-size:13px}
   #gbusca-drop{position:absolute;top:calc(100% + 4px);left:0;right:0;background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:0 12px 30px rgba(30,42,59,.16);max-height:60vh;overflow:auto;z-index:200;display:none}
@@ -18768,7 +18803,8 @@ function setDilView(v){
     var dias=['domingo','segunda-feira','terça-feira','quarta-feira','quinta-feira','sexta-feira','sábado'];
     var ms=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
     var n=new Date();
-    w.innerHTML='<span id="gbusca-wrap"><input id="gbusca" placeholder="Buscar processo, cliente ou CPF…  (Ctrl+K)" autocomplete="off"><div id="gbusca-drop"></div></span>'
+    w.innerHTML='<span id="tb-proc" style="display:none;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px"></span>'
+      +'<span id="gbusca-wrap"><input id="gbusca" placeholder="Buscar processo, cliente ou CPF…  (Ctrl+K)" autocomplete="off"><div id="gbusca-drop"></div></span>'
       +'<span id="tb-data">'+dias[n.getDay()]+', '+n.getDate()+' de '+ms[n.getMonth()]+'</span>'
       +'<span id="tb-sino" title="Publicações a triar — abrir a triagem">⚑<i id="tb-badge"></i></span>';
     var who=tb.querySelector('.who');
