@@ -18710,11 +18710,14 @@ function setDilView(v){
   .kpi.v2.gold{border-top-color:var(--gold)} .kpi.v2.warn{border-top-color:#d9a441}
   #tb-tools{display:flex;align-items:center;gap:14px;flex:1;justify-content:flex-end;margin-right:14px}
   /* dentro da ficha, o número do processo ocupa o lugar da busca.
-     Cada número anda colado no seu × (par indivisível) e a linha só quebra
-     quando o quarto número não couber — até três, tudo numa linha só. */
-  #tb-proc{flex:1 1 auto;min-width:0;display:flex;flex-wrap:wrap;align-items:center;column-gap:9px;row-gap:3px}
+     Cada número anda colado no seu × (par indivisível) e TUDO fica numa linha
+     só: passando da largura, a faixa rola para o lado em vez de quebrar. */
+  #tb-proc{flex:1 1 auto;min-width:0;display:flex;flex-wrap:nowrap;align-items:center;column-gap:9px;overflow-x:auto;scrollbar-width:thin}
+  #tb-proc::-webkit-scrollbar{height:5px}
+  #tb-proc::-webkit-scrollbar-thumb{background:var(--line);border-radius:3px}
   #tb-proc .tb-num{font-size:17px;font-weight:700;color:var(--navy);cursor:pointer;border-bottom:1px dotted var(--line);white-space:nowrap}
-  #tb-proc .tb-par{display:inline-flex;align-items:center;gap:1px;white-space:nowrap}
+  #tb-proc .tb-par{display:inline-flex;align-items:center;gap:1px;white-space:nowrap;flex:0 0 auto}
+  #tb-proc>*{flex:0 0 auto}
   #tb-proc .quick-link{font-size:11.5px;margin:0}
   #tb-proc .quick-link.del{padding:4px 7px}
   #tb-proc .tb-mais{font-size:11.5px;margin:0}
@@ -18736,10 +18739,9 @@ function setDilView(v){
   .cm-drop .cm-item:hover,.cm-drop .cm-item.sel{background:#eef4fb}
   .cm-drop .cm-sub{font-size:11px;color:var(--muted)}
   #tb-tools{justify-content:flex-start}
-  #tb-data{font-size:12px;color:var(--muted);white-space:nowrap}
   #tb-sino{position:relative;cursor:pointer;font-size:17px}
   #tb-badge{position:absolute;top:-6px;right:-9px;background:var(--danger);color:#fff;font-size:10px;font-weight:700;border-radius:10px;min-width:16px;height:16px;display:none;place-items:center;padding:0 4px;font-style:normal}
-  @media (max-width:860px){ #tb-data{display:none} #gbusca{max-width:150px} }
+  @media (max-width:860px){ #gbusca{max-width:150px} }
   #hamb,#scrim{display:none}
   @media (max-width:860px){
     body{font-size:14px}
@@ -18818,12 +18820,12 @@ function setDilView(v){
   var tb=document.querySelector('.topbar');
   if(tb && !document.getElementById('tb-tools')){
     var w=document.createElement('div'); w.id='tb-tools';
-    var dias=['domingo','segunda-feira','terça-feira','quarta-feira','quinta-feira','sexta-feira','sábado'];
-    var ms=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
-    var n=new Date();
-    w.innerHTML='<span id="tb-proc" style="display:none;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px"></span>'
+    /* a data de hoje saiu da barra (02/09/2026): ninguém precisa que o sistema
+       diga que dia é hoje, e ela roubava a largura que o número do processo e os
+       vinculados precisam para caber numa linha só. Era enfeite — nenhuma
+       contagem, prazo ou relatório lia daqui. */
+    w.innerHTML='<span id="tb-proc" style="display:none"></span>'
       +'<span id="gbusca-wrap"><input id="gbusca" placeholder="Buscar processo, cliente ou CPF…  (Ctrl+K)" autocomplete="off"><div id="gbusca-drop"></div></span>'
-      +'<span id="tb-data">'+dias[n.getDay()]+', '+n.getDate()+' de '+ms[n.getMonth()]+'</span>'
       +'<span id="tb-sino" title="Publicações a triar — abrir a triagem">⚑<i id="tb-badge"></i></span>';
     var who=tb.querySelector('.who');
     tb.insertBefore(w, who||null);
