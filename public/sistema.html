@@ -20084,11 +20084,35 @@ async function carregarProtocolosPendentes(){
   }
   return PROTO_PEND;
 }
+/* "Fechar" tem de fechar. A faixa era só removida do DOM e o vigia de 10 em 10
+   minutos (e qualquer recarga) a punha de volta — "já cliquei em fechar várias
+   vezes, mas volta" (02/09/2026). Agora o fechar é lembrado, com uma chave que
+   junta o DIA e as petições que estão na faixa: some pelo resto do dia, e volta
+   sozinha se entrar petição nova, se alguma for recusada ou se virar o dia —
+   que são exatamente os casos em que ela tem algo novo a dizer. */
+function _protoVencidos(){
+  var hoje=_protoHoje();
+  return (PROTO_PEND||[]).filter(function(x){ return x.prazo_fatal && String(x.prazo_fatal)<=hoje; });
+}
+function _protoFaixaChave(venc){
+  var ids=(venc||[]).map(function(x){ return String(x.id)+':'+String(x.jusbr_status||'')+':'+(x.enviada_em?'e':'-'); }).sort().join('|');
+  return _protoHoje()+'#'+ids;
+}
+function _protoFaixaFechar(){
+  /* recalcula a chave na hora do clique — depender de uma variável global posta
+     na pintura anterior é o tipo de amarração que quebra calada */
+  try{ localStorage.setItem('cmp_proto_faixa_off', _protoFaixaChave(_protoVencidos())); }catch(e){}
+  var f=document.getElementById('proto-faixa'); if(f) f.remove();
+}
+function _protoFaixaDispensada(chave){
+  try{ return localStorage.getItem('cmp_proto_faixa_off')===chave; }catch(e){ return false; }
+}
 /* alerta no DIA do prazo (e vencidos), em qualquer aba — 1x por sessão */
 function _protoAlertaDoDia(){
   var hoje=_protoHoje();
-  var venc=(PROTO_PEND||[]).filter(function(x){ return x.prazo_fatal && String(x.prazo_fatal)<=hoje; });
+  var venc=_protoVencidos();
   if(!venc.length){ var b0=document.getElementById('proto-faixa'); if(b0) b0.remove(); return; }
+  if(_protoFaixaDispensada(_protoFaixaChave(venc))){ var b1=document.getElementById('proto-faixa'); if(b1) b1.remove(); return; }
   var faixa=document.getElementById('proto-faixa');
   if(!faixa){
     faixa=document.createElement('div'); faixa.id='proto-faixa';
@@ -20103,7 +20127,7 @@ function _protoAlertaDoDia(){
   var aFazer=venc.filter(function(x){ return esperando.indexOf(x)<0; });
   var nomes=function(arr){ return arr.slice(0,3).map(function(x){ return esc(x.titulo)+' ('+esc(fmtCNJ(x.processo_numero))+')'; }).join(' · ')+(arr.length>3?(' + '+(arr.length-3)+' …'):''); };
   var btnPainel='<button onclick="go(\'painel\');" style="background:#fff;color:#7b1e3a;border:0;border-radius:8px;padding:4px 12px;font-weight:700;cursor:pointer">ver no painel</button>'
-    +'<button onclick="document.getElementById(\'proto-faixa\').remove()" style="background:transparent;color:#fff;border:1px solid rgba(255,255,255,.5);border-radius:8px;padding:4px 10px;cursor:pointer">fechar</button>';
+    +'<button onclick="_protoFaixaFechar()" title="Some até entrar petição nova, o tribunal responder ou virar o dia" style="background:transparent;color:#fff;border:1px solid rgba(255,255,255,.5);border-radius:8px;padding:4px 10px;cursor:pointer">fechar</button>';
 
   if(!aFazer.length){
     /* tudo que vencia hoje já saiu daqui: aviso calmo, sem "já protocolei" —
