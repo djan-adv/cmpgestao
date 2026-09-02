@@ -3134,8 +3134,30 @@ function copiarParte(el){
   var bg=el.style.background; el.style.background='#d9f2e4'; el.appendChild(tip);
   setTimeout(function(){ el.style.background=bg||''; try{ el.removeChild(tip); }catch(e){} el.__tip=null; },900);
 }
+/* Nome de parte na ficha: até TRÊS nomes, sem contar as partículas.
+   "JOSÉ CARLOS DE ALMEIDA PEREIRA SANTOS" vira "JOSÉ CARLOS DE ALMEIDA" — as
+   preposições ficam onde estão, senão o nome sai errado ("CARLOS ALMEIDA"), mas
+   não gastam uma das três vagas. O nome inteiro continua a um passo: fica no
+   título e é ele que o clique copia. */
+var _PART_PARTICULA=/^(de|do|da|dos|das|e|d[aeo]s?)$/i;
+function _nomeCurtoParte(nome){
+  var toks=String(nome||'').trim().split(/\s+/).filter(Boolean);
+  if(!toks.length) return '';
+  var out=[], cheios=0;
+  for(var i=0;i<toks.length;i++){
+    var ehPart=_PART_PARTICULA.test(toks[i]);
+    if(!ehPart&&cheios>=3) break;
+    out.push(toks[i]);
+    if(!ehPart) cheios++;
+  }
+  /* não termina em preposição solta ("JOSÉ CARLOS DE") */
+  while(out.length&&_PART_PARTICULA.test(out[out.length-1])) out.pop();
+  return out.join(' ');
+}
 function _parteItemHTML(nome, autor){
   var nk=normClienteNome(nome);
+  var curto=_nomeCurtoParte(nome);
+  var cortou=(curto&&curto!==String(nome||'').trim());
   /* o réu costuma vir em lista (litisconsórcio) e empurrava a ficha para baixo:
      vai 30% menor que o autor, com o doc encolhido junto para o nome não
      empatar em tamanho com o próprio CPF/CNPJ */
@@ -3143,10 +3165,14 @@ function _parteItemHTML(nome, autor){
     ? 'font-size:17px;font-weight:700;color:var(--navy);line-height:1.2'
     : 'font-size:12px;font-weight:500;color:var(--ink);line-height:1.1';
   var estDoc=autor ? 'font-size:11.5px;padding:1px 3px' : 'font-size:10px;line-height:1;padding:0 3px';
+  /* CPF/CNPJ na MESMA linha do nome — antes ia embaixo e cada parte ocupava
+     duas linhas, empurrando a ficha para baixo num litisconsórcio. */
   return '<div style="margin:0 0 '+(autor?'8px':'3px')+'">'
-    +'<span onclick="copiarParte(this)" data-v="'+esc(nome)+'" title="Clique para copiar o nome" style="cursor:copy;border-radius:4px;padding:1px 3px;margin-left:-3px;'+estNome+'">'+esc(nome)+'</span>'
-    +'<br><span class="parte-doc-slot" data-nk="'+esc(nk)+'" data-nome="'+esc(nome)+'" onclick="if(this.getAttribute(\'data-v\'))copiarParte(this)" title="Clique para copiar" style="cursor:copy;'+estDoc+';color:var(--muted);opacity:.8;border-radius:4px;margin-left:-3px"></span>'
-    +'<a onclick="editarDocParte(this.getAttribute(\'data-nome\'))" data-nome="'+esc(nome)+'" title="Informar/corrigir o CPF ou CNPJ desta parte (grava no cadastro de Contatos)" style="cursor:pointer;color:#185FA5;font-size:11px;margin-left:5px">✎</a>'
+    +'<span style="display:flex;gap:8px;align-items:baseline;flex-wrap:wrap">'
+      +'<span onclick="copiarParte(this)" data-v="'+esc(nome)+'" title="'+esc(cortou?nome:'Clique para copiar o nome')+'" style="cursor:copy;border-radius:4px;padding:1px 3px;margin-left:-3px;'+estNome+'">'+esc(curto||nome)+'</span>'
+      +'<span class="parte-doc-slot" data-nk="'+esc(nk)+'" data-nome="'+esc(nome)+'" onclick="if(this.getAttribute(\'data-v\'))copiarParte(this)" title="Clique para copiar" style="cursor:copy;'+estDoc+';color:var(--muted);opacity:.8;border-radius:4px;white-space:nowrap"></span>'
+      +'<a onclick="editarDocParte(this.getAttribute(\'data-nome\'))" data-nome="'+esc(nome)+'" title="Informar/corrigir o CPF ou CNPJ desta parte (grava no cadastro de Contatos)" style="cursor:pointer;color:#185FA5;font-size:11px">✎</a>'
+    +'</span>'
     +_contatoParteHTML(nome, autor)
     +'</div>';
 }
@@ -3294,7 +3320,7 @@ async function _preencherDocsPartes(){
     var d=window.__docsPorNome[s.getAttribute('data-nk')||''];
     if(d){ s.setAttribute('data-v',_fmtDocParte(d)); s.textContent=_fmtDocParte(d); s.title='Clique para copiar'; s.style.cursor='copy'; s.style.opacity='.8'; s.style.fontStyle=''; s.onclick=null; }
     else {
-      s.removeAttribute('data-v'); s.textContent='CPF/CNPJ não cadastrado — informar';
+      s.removeAttribute('data-v'); s.textContent='CPF/CNPJ — informar';
       s.style.cursor='pointer'; s.style.opacity='.5'; s.style.fontStyle='italic';
       s.title='Clique para informar o CPF/CNPJ';
       s.onclick=function(){ editarDocParte(this.getAttribute('data-nome')); };
