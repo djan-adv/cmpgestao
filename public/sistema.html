@@ -21707,6 +21707,32 @@ async function _protoMarcarEnvio(numero, j, arqNome, confirmado){
     return {fechada:!!confirmado, titulo:alvo.titulo||'petição'};
   }catch(e){ return {erro:(e&&e.message)||String(e)}; }
 }
+/* segunda tentativa, com o aviso de duplicata aceito de forma explícita */
+async function _protReenviarMesmo(){
+  var g=window.__protReenvio; if(!g) return;
+  if(!confirm('Protocolar mesmo assim?\n\nO jus.br já tem este arquivo. Se a petição anterior NÃO foi recusada, este envio cria uma segunda petição com a mesma peça — e protocolo não se desfaz.')) return;
+  var cx=document.getElementById('prot-cx'); if(cx) cx.innerHTML='<div class="note">Enviando ao jus.br… não feche esta janela.</div>';
+  try{
+    var jwt=(typeof finToken==='function')?await finToken():await docToken();
+    var r=await fetch('/api/jusbr/protocolar',{method:'POST',
+      headers:{'Content-Type':'application/json',Authorization:'Bearer '+jwt},
+      body:JSON.stringify({numero:g.numero, arquivo:'Protocolo/'+g.arq, idTipoDocumento:g.idT, nomeTipoDocumento:g.nomeT,
+        anexos:g.anexos, idTipoAnexo:(g.tAx?g.tAx.id:null), nomeTipoAnexo:(g.tAx?g.tAx.descricao:'Anexo'), quem:g.quem,
+        confirmar_reenvio:true})});
+    var j=await r.json().catch(function(){ return {}; });
+    if(cx){
+      if(!r.ok||!j.ok) cx.innerHTML='<h3 style="margin:0 0 6px;color:#b5342b">O jus.br não protocolou</h3><div style="font-size:13px">'+esc((j&&j.erro)||('HTTP '+r.status))+'</div>'
+        +'<div style="margin-top:12px;text-align:right"><button class="btn sm ghost" onclick="document.getElementById(\'prot-ov\').remove()">Fechar</button></div>';
+      else {
+        try{ await _protoMarcarEnvio(g.numero, j, g.arq, /protocolad|juntad|aceit/i.test(String(j.status||''))); }catch(e){}
+        cx.innerHTML='<h3 style="margin:0 0 6px;color:#8a6d1a">📨 Enviado ao tribunal</h3>'
+          +'<div style="font-size:13px;line-height:1.7"><div><b>Recibo CNJ:</b> '+esc(j.protocolo||'—')+'</div>'
+          +'<div><b>Situação:</b> '+esc(j.status||'—')+'</div></div>'
+          +'<div style="margin-top:12px;text-align:right"><button class="btn sm ghost" onclick="document.getElementById(\'prot-ov\').remove()">Fechar</button></div>';
+      }
+    }
+  }catch(e){ if(cx) cx.innerHTML='<div style="color:#b5342b">Falha: '+esc((e&&e.message)||e)+'</div>'; }
+}
 async function protocolarAgora(){
   var d=window.__protDados||{}; var cx=document.getElementById('prot-cx');
   var selA=document.getElementById('prot-arq'), selT=document.getElementById('prot-tipo');
@@ -21732,6 +21758,22 @@ async function protocolarAgora(){
       body:JSON.stringify({numero:d.numero, arquivo:'Protocolo/'+arq, idTipoDocumento:idT, nomeTipoDocumento:nomeT,
         anexos:anexos, idTipoAnexo:(tAx?tAx.id:null), nomeTipoAnexo:(tAx?tAx.descricao:'Anexo'), quem:quem})});
     var j=await r.json().catch(function(){ return {}; });
+    if(j&&j.duplicado){
+      /* mesmo arquivo já guardado no jus.br: parar aqui é o certo. Protocolo não
+         se desfaz, e duas petições com a mesma peça no mesmo processo é dor de
+         cabeça para desfazer. Mas a decisão é do advogado — às vezes é mesmo
+         para reenviar (a primeira foi recusada, por exemplo). */
+      window.__protReenvio={numero:d.numero, arq:arq, idT:idT, nomeT:nomeT, anexos:anexos, tAx:tAx, quem:quem};
+      cx.innerHTML='<h3 style="margin:0 0 6px;color:#8a5a00">⚠ Esta peça já está no jus.br</h3>'
+        +'<div style="font-size:13px;line-height:1.6;margin-bottom:10px">'+esc(j.erro)+'</div>'
+        +'<div class="note" style="background:#fdf7e6;border:1px solid #e8dcbb;border-radius:8px;padding:8px 10px">'
+          +'Confira em <b>Protocolos</b> se já existe uma petição deste processo aguardando o tribunal. '
+          +'Só reenvie se a anterior tiver sido <b>recusada</b> — nesse caso o reenvio é o certo.</div>'
+        +'<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;flex-wrap:wrap">'
+          +'<button class="btn sm ghost" onclick="document.getElementById(\'prot-ov\').remove()">Cancelar</button>'
+          +'<button class="btn sm" style="background:#8a5a00;border-color:#8a5a00" onclick="_protReenviarMesmo()">Protocolar assim mesmo</button></div>';
+      return;
+    }
     if(!r.ok||!j.ok){
       cx.innerHTML='<h3 style="margin:0 0 6px;color:#b5342b">O jus.br não protocolou</h3>'
         +'<div style="font-size:13px;margin-bottom:8px">'+esc((j&&j.erro)||('HTTP '+r.status))+'</div>'

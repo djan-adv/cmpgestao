@@ -567,6 +567,25 @@ export async function POST(request) {
     })
     const j1 = await r1.json().catch(() => null)
     const urlUp = achaUrlUpload(j1)
+    /* HTTP 200, com id e hash, mas SEM endereço de upload: o PDPJ já tem estes
+       bytes — ele deduplica pelo sha1 e não pede de novo o que já guardou.
+       Aconteceu em 02/09/2026 reenviando a mesma "Petição Prosseguimento.pdf"
+       que já fora protocolada dias antes e ainda esperava confirmação.
+       Aqui não se segue calado: protocolo não se desfaz, e mandar duas vezes a
+       mesma peça é pior que não mandar. Avisa e só continua se o advogado
+       confirmar — aí sobe nada e vai direto protocolar, que é o que o portal faz. */
+    const jaGuardado = !!(r1.ok && !urlUp && j1 && j1.id != null && j1.hash)
+    if (jaGuardado && b.confirmar_reenvio !== true) {
+      return Response.json({
+        erro: 'o jus.br respondeu que JÁ TEM este arquivo — "' + nm + '" é idêntico, byte a byte, a um documento que você já enviou a este processo.'
+          + ' Ele foi registrado lá como documento ' + j1.id + '. Protocolar de novo criaria uma segunda petição com a mesma peça.',
+        duplicado: true, documento_id: j1.id, hash: j1.hash, arquivo: nm, resposta: j1,
+      }, { status: 409 })
+    }
+    if (jaGuardado) {
+      docs.push({ documento: { ...meta, id: j1.id, url: null, base64: null, idTipoDocumento: pc.idT } })
+      continue
+    }
     if (!r1.ok || !j1 || !urlUp) {
       /* mensagem que serve para consertar: o que o servidor respondeu e o que
          faltou nela. "não liberou o envio" sozinho não diz nada a ninguém. */
