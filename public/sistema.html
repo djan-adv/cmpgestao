@@ -4464,7 +4464,37 @@ function limparTeor(txt){
   t=t.replace(/(\S+)\s+(DECIS[ÃA]O|DESPACHO|SENTEN[ÇC]A|ATO ORDINAT[ÓO]RIO|CERTID[ÃA]O)\s+/g,function(m,ant,rot){
     return /^(DE|DA|DO|E|EM|COM|DAS|DOS)$/i.test(ant)?m:(ant+'\n\n'+rot+'\n\n');
   });
+  /* o buraco branco vinha daqui: o HTML do tribunal deixa linhas só com espaço,
+     e o \n{3,} não as enxergava como vazias — a tela abria com meia página em
+     branco entre o cabeçalho e o texto (02/09/2026). Limpa o fim de cada linha
+     ANTES de juntar as vazias. */
+  t=t.replace(/[ \t\u00a0]+(?=\n)/g,'');
+  t=t.replace(/\n[ \t\u00a0]*(?=\n)/g,'\n');
+  /* "[Inteiro teor — Despacho.html]" repete o rótulo que já está no título */
+  t=t.replace(/^\s*\[\s*inteiro\s+teor[^\]]{0,80}\]\s*/i,'');
   return t.replace(/[ \t]{2,}/g,' ').replace(/\n{3,}/g,'\n\n').trim();
+}
+/* O teor na tela: cabeçalho (vara, processo, partes) e o rótulo da peça em
+   destaque, o resto em corpo de leitura. Sem isto tudo saía do mesmo cinza e do
+   mesmo tamanho, e achar "DESPACHO" no meio do bloco dava trabalho. */
+var _TEOR_TITULO=/^(DESPACHO|DECIS[ÃA]O|SENTEN[ÇC]A|ATO ORDINAT[ÓO]RIO|CERTID[ÃA]O|ACÓRD[ÃA]O|EMENTA|RELAT[ÓO]RIO|VOTO|DISPOSITIVO)\s*:?\s*$/i;
+var _TEOR_CAMPO=/^(PROCESSO|AUTOR|AUTORA|EXEQUENTE|REQUERENTE|EMBARGANTE|R[EÉ]U|R[EÉ]|RECLAMANTE|RECLAMADO|EXECUTADO|REQUERIDO|EMBARGADO|CLASSE|ASSUNTO)(S)?\s*(N?[ºo°]?\s*)?:/i;
+var _TEOR_ORGAO=/^(poder judici[áa]rio|tribunal|\d+[ªa]?\s*vara|\d+[ºo°]?\s*juizado|gabinete|comarca|ju[íi]zo)\b/i;
+var _TEOR_MARCO=/^(DECIDO|DETERMINO|DEFIRO|INDEFIRO|Diante do exposto|Ante o exposto|Isso posto|Posto isso|Intime-se|Cite-se|P\.\s?I\.|P\.\s?R\.\s?I\.)/i;
+function _teorHTML(txt){
+  var linhas=String(txt||'').split('\n');
+  return linhas.map(function(l){
+    var t=l.trim();
+    if(!t) return '<div style="height:8px"></div>';
+    if(_TEOR_TITULO.test(t)) return '<div style="margin:14px 0 6px;font-weight:800;letter-spacing:.06em;color:var(--navy)">'+esc(t)+'</div>';
+    if(_TEOR_ORGAO.test(t)) return '<div style="font-weight:600;color:#5f6b7a">'+esc(t)+'</div>';
+    if(_TEOR_CAMPO.test(t)){
+      var i=t.indexOf(':');
+      return '<div><b style="color:var(--navy)">'+esc(t.slice(0,i+1))+'</b>'+esc(t.slice(i+1))+'</div>';
+    }
+    if(_TEOR_MARCO.test(t)) return '<div style="margin-top:10px"><b>'+esc(t)+'</b></div>';
+    return '<div>'+esc(t)+'</div>';
+  }).join('');
 }
 /* trecho inicial + botão, para o card não abrir com 6 mil caracteres na cara */
 var TEOR_CORTE=1200;
@@ -7532,7 +7562,11 @@ function temTeor(mv){
   return t.length>180;
 }
 function setFiltroHist(f){window.histFiltro=f;histShown=5;renderHistorico();}
-function _ehEmailVara(t){ return /^\s*\[E-?mail\s+(à|a)\s+vara/i.test(String(t||'')); }
+/* ATENÇÃO ao nome: já existe um _ehEmailVara() que testa ENDEREÇO de e-mail
+   (@tjpb.jus.br). Ter dois com o mesmo nome no escopo global fez a segunda
+   declaração vencer e este filtro nunca rodar — os e-mails continuaram no
+   histórico completo depois de "corrigidos" (02/09/2026). */
+function _ehRegistroEmailVara(t){ return /^\s*\[E-?mail\s+(à|a|a\u0300)\s+vara/i.test(String(t||'')); }
 function renderHistorico(){
   var ul=document.getElementById("det-hist");if(!ul)return;
   var full=(atual.hist_full&&atual.hist_full.length)?atual.hist_full:(atual.hist?[{data:atual.data,texto:atual.hist}]:[]);
@@ -7542,7 +7576,7 @@ function renderHistorico(){
      "* pedido de … feito por e-mail em …" no quadro Dados do processo abre
      todas, com o texto de cada uma. E-mail ao CLIENTE continua no histórico:
      aquilo é comunicação com a parte, não cobrança de cartório. */
-  full=full.filter(function(mv){ return !_ehEmailVara(mv&&mv.texto); });
+  full=full.filter(function(mv){ return !_ehRegistroEmailVara(mv&&mv.texto); });
   var nteor=full.filter(temTeor).length;
   /* abre no que tem conteúdo — é o que o advogado precisa ler. Se o processo não
      tiver nenhum teor, cai em "Tudo" sozinho, para a aba não abrir vazia. */
@@ -7658,7 +7692,7 @@ function renderHistorico(){
       +(ehEmail?('<div style="margin-top:6px"><button class="btn sm" style="font-size:11px;background:#0F6E56;color:#fff" onclick="responderDoHistorico(event,'+atual.hist_full.indexOf(mv)+')">✉ responder</button> <button class="btn sm ghost" style="font-size:11px" onclick="event.stopPropagation();go(\'emails\')" title="Abrir a caixa de e-mails">abrir caixa</button></div>'):'')
       +anexosHtml(mv.id)
       +((/^\[MINUTA/.test(String(mv.texto||'')) && mv.id)?('<div style="margin-top:5px">'+(/APROVADA/.test(mv.texto)?'<span style="font-size:11px;color:#127a53;font-weight:700">✓ aprovada — cópia em Documentos do processo</span>':'<button class="btn sm" style="font-size:11px;background:#127a53" onclick="aprovarMinuta(event,'+mv.id+')">✔ Aprovar (copiar p/ Documentos do processo)</button>')+'</div>'):'')
-      +'<div class="hist-det" style="display:none;font-size:13px;color:var(--muted);margin-top:4px;white-space:pre-wrap;max-height:260px;overflow:auto"></div>'
+      +'<div class="hist-det" style="display:none;font-size:13.5px;line-height:1.62;color:#26303c;margin-top:8px;max-height:60vh;overflow:auto;background:#fbfcfd;border:1px solid #e8edf3;border-left:3px solid var(--gold);border-radius:0 8px 8px 0;padding:12px 14px"></div>'
       +'<div class="hist-act" style="display:none;margin-top:6px">'+(isMan?('<button class="btn sm ghost" style="font-size:11px" onclick="editarHistManual(event,'+atual.hist_full.indexOf(mv)+')">✎ editar</button> <button class="btn sm ghost" style="font-size:11px;color:#b5342b" onclick="excluirHistManual(event,'+atual.hist_full.indexOf(mv)+')">🗑 excluir</button> '):'')+'<button class="btn sm ghost" style="font-size:11px;color:'+(mv.pr?'#0b7285':'#697180')+'" onclick="_togglePro(event,'+atual.hist_full.indexOf(mv)+')" title="Marcar como providência adotada pelo escritório — passa a constar no resumo dos e-mails de atualização ao cliente">'+(mv.pr?'★ providência (remover)':'☆ marcar providência do escritório')+'</button>'
       +(jaVisivelApp?'':(' <button class="btn sm ghost" style="font-size:11px;color:'+(mv.vc?'#127a53':'#697180')+'" onclick="_toggleAppCliente(event,'+atual.hist_full.indexOf(mv)+')" title="'+(mv.vc?'Tirar do app do cliente':'Ex.: pedido de conclusão ao cartório — o cliente vê que o escritório agiu, mesmo sem publicação oficial ainda')+'">'+(mv.vc?'📲 visível no app (remover)':'📲 enviar ao app do cliente')+'</button>'))
       +(ehDecisao?(' <button class="btn sm ghost" style="font-size:11px;color:#6d28a8" onclick="noticiaDoHistorico(event,'+atual.hist_full.indexOf(mv)+')" title="A IA transforma esta decisão em notícia anonimizada (sem nomes nem número do processo — só comarca, vara/tribunal e resultado) e salva como rascunho na aba Postagens para você aprovar antes de publicar">📰 virar notícia no site</button>'):'')
@@ -7670,7 +7704,7 @@ function renderHistorico(){
          dava pra copiar nada daqui. */
       var sel=window.getSelection?window.getSelection():null;
       if(sel && String(sel.toString()||'').trim()) return;
-      var d=li.querySelector(".hist-det");var a=li.querySelector(".hist-act");if(d.style.display==="none"){d.textContent=cont;d.style.display="block";if(a)a.style.display="block";}else{d.style.display="none";if(a)a.style.display="none";}};})(content);
+      var d=li.querySelector(".hist-det");var a=li.querySelector(".hist-act");if(d.style.display==="none"){d.innerHTML=_teorHTML(cont);d.style.display="block";if(a)a.style.display="block";}else{d.style.display="none";if(a)a.style.display="none";}};})(content);
     ul.appendChild(li);
   })(arr[k]);}
   if(arr.length>histShown){more.innerHTML='<button class="btn sm ghost" onclick="verMaisHist()">ver mais ('+(arr.length-histShown)+' andamentos)</button>';}
@@ -18018,7 +18052,7 @@ async function abrirEmailsVara(){
   ov.onclick=function(e){ if(e.target===ov&&ov.__bd) ov.remove(); };
   document.body.appendChild(ov);
   var cx=ov.querySelector('#emv-cx');
-  var linhas=((atual.hist_full||[]).filter(function(mv){ return _ehEmailVara(mv&&mv.texto); }))
+  var linhas=((atual.hist_full||[]).filter(function(mv){ return _ehRegistroEmailVara(mv&&mv.texto); }))
     .sort(function(a,b){ return String(b.data||'')<String(a.data||'')?-1:1; });
   var corpo=linhas.length?linhas.map(function(mv){
     var dt=String(mv.data||'').slice(0,10).split('-').reverse().join('/');
