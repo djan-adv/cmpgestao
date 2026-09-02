@@ -17883,7 +17883,7 @@ function contatoBlocoHTML(p){
   h+='<span style="white-space:nowrap"><b>Balcão virtual</b> ('+trib+'): <a href="'+bl.url+'" target="_blank" rel="noopener" style="color:#185FA5">abrir</a>'+(bl.verificado?'':' <span style="color:#888;font-size:11px">(via busca)</span>')+'</span>';
   if(c){
     var ne=encodeURIComponent(p.numero);
-    h+='<span><b>Vara</b>'+(c.orgao?(' — '+esc(c.orgao)):'')+':</span>';
+    h+='<span>'+(c.orgao?('<b>'+esc(c.orgao)+'</b>'):'<b>Vara</b>')+':</span>';
     /* contatos expostos (clique copia); × remove com motivo (só os salvos no banco) */
     function chip(icone,val,cor,corb,campo){
       var x=(c.id?(' <a onclick="removerContatoVara(\''+c.id+'\',\''+campo+'\',\''+encodeURIComponent(val)+'\')" title="Remover este contato da vara (pergunta o motivo)" style="cursor:pointer;color:#b5342b;font-weight:700">×</a>'):'');
@@ -18132,25 +18132,62 @@ function _mesmoOrgao(a,b){
   var n=function(v){ return String(v||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim(); };
   return !!n(a) && n(a)===n(b);
 }
-/* Devolve '' quando o processo está na origem — não poluir a ficha do caso comum. */
+/* O caminho do processo cabe num botão.
+   A ficha trazia "Vara de origem", depois "LOCAL ATUAL", depois "PASSOU POR" e
+   ainda o nome da vara na linha de contato: a mesma vara escrita quatro vezes,
+   e o gabinete duas (relatado em 02/09/2026). Fica a vara de origem, uma vez, e
+   um botão que abre a trilha inteira — que é o que se consulta de vez em quando,
+   não o que se lê toda vez que abre o processo. */
+function _ondeEstaAgora(tr){
+  if(!tr||!tr.length) return null;
+  /* com data em todas, a última é a atual. Sem data, posição não é cronologia:
+     o processo só sobe por recurso, então o de MAIOR grau é onde ele está —
+     era isto que punha "2º grau" num processo que estava no STJ. */
+  if(tr.every(function(t){ return t.desde; })) return tr[tr.length-1];
+  var ordem=function(t){ var m=String(t.grau||'').match(/(\d)/); return m?+m[1]:0; };
+  return tr.slice().sort(function(a,b){ return ordem(b)-ordem(a); })[0];
+}
 function _localAtualHTML(p){
   if(!p) return '';
-  var origem=p.foro||p.orgao||'';
-  var atual=p.orgao_atual||'';
-  if(!atual || _mesmoOrgao(atual,origem)) return '';
   var tr=Array.isArray(p.tramitacoes)?p.tramitacoes:[];
-  var g=_grauCurto(p.grau_atual||(tr.length?tr[tr.length-1].grau:''));
-  var html='<div style="margin-top:4px">'
-    +'<span class="note" style="font-size:11px;text-transform:uppercase;letter-spacing:.04em">Local atual</span> '
-    +'<span style="font-weight:600;color:#8a4b00">'+esc(atual)+'</span>'
-    +(g?(' <span style="display:inline-block;border-radius:20px;padding:1px 8px;font-size:11px;font-weight:600;background:#fdf1e0;color:#8a4b00">'+esc(g)+'</span>'):'');
-  if(tr.length>1){
-    var passos=tr.map(function(t){
-      return esc(t.orgao||'—')+(t.desde?(' <span class="note" style="font-size:11px">('+esc(String(t.desde).split('-').reverse().join('/'))+')</span>'):'');
-    }).join(' <span style="color:var(--line)">→</span> ');
-    html+='<div style="margin-top:3px"><span class="note" style="font-size:11px;text-transform:uppercase;letter-spacing:.04em">Passou por</span> <span style="font-size:12px">'+passos+'</span></div>';
-  }
-  return html+'</div>';
+  var origem=p.foro||p.orgao||'';
+  var agora=_ondeEstaAgora(tr);
+  var fora=!!(agora&&agora.orgao&&!_mesmoOrgao(agora.orgao,origem));
+  if(tr.length<2&&!fora) return '';
+  var onde=fora?((agora.tribunal?String(agora.tribunal)+' · ':'')+(_grauCurto(agora.grau)||'')).replace(/ · $/,''):'';
+  return ' <button class="btn sm ghost" style="font-size:11px;padding:1px 8px;vertical-align:baseline" onclick="abrirCaminhoProcesso()" '
+    +'title="Por onde o processo passou e onde ele está agora">&#129517; caminho'
+    +(onde?(' <span style="color:#8a4b00;font-weight:700">· '+esc(onde)+'</span>'):'')+'</button>';
+}
+/* o painel do caminho — abre pelo botão, some quando não interessa */
+function abrirCaminhoProcesso(){
+  if(typeof atual==='undefined'||!atual) return;
+  var tr=Array.isArray(atual.tramitacoes)?atual.tramitacoes:[];
+  var agora=_ondeEstaAgora(tr);
+  var ov=document.getElementById('cam-ov'); if(ov) ov.remove();
+  ov=document.createElement('div'); ov.id='cam-ov';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(20,28,40,.5);z-index:10002;display:flex;align-items:center;justify-content:center;padding:16px';
+  var linhas=tr.length?tr.map(function(t,i){
+    var eu=(agora&&t===agora);
+    var quando=t.desde?String(t.desde).slice(0,10).split('-').reverse().join('/'):'';
+    return '<div style="display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-bottom:1px solid #eef1f5">'
+      +'<span style="flex:none;width:22px;text-align:center;color:'+(eu?'#8a4b00':'#c3c9d4')+';font-weight:800">'+(eu?'&#9679;':(i+1))+'</span>'
+      +'<div style="flex:1;min-width:0">'
+        +'<div style="font-weight:'+(eu?'700':'600')+';color:'+(eu?'#8a4b00':'var(--navy)')+';font-size:13px">'+esc(t.orgao||'—')+'</div>'
+        +'<div class="note" style="margin:1px 0 0">'+esc([t.tribunal||'',_grauCurto(t.grau)||'',quando?('desde '+quando):''].filter(Boolean).join(' · '))+'</div>'
+      +'</div>'
+      +(eu?'<span style="flex:none;font-size:10px;font-weight:800;letter-spacing:.04em;color:#8a4b00;border:1px solid #8a4b0044;border-radius:9px;padding:1px 7px;margin-top:2px">AQUI AGORA</span>':'')
+    +'</div>';
+  }).join(''):'<div class="note">O jus.br não devolveu a trilha deste processo.</div>';
+  ov.innerHTML='<div style="background:#fff;border-radius:12px;max-width:620px;width:100%;max-height:85vh;overflow:auto;padding:18px 20px">'
+    +'<h3 style="margin:0 0 2px;color:var(--navy)">&#129517; Caminho do processo</h3>'
+    +'<p class="note" style="margin:0 0 12px">'+esc(fmtCNJ(atual.numero||''))+'</p>'
+    +linhas
+    +(tr.length&&!tr.some(function(t){return t.desde;})?'<div class="note" style="margin-top:10px">O jus.br não informou as datas de cada remessa — a ordem acima é a que ele devolveu, e "aqui agora" foi deduzido pelo grau mais alto.</div>':'')
+    +'<div style="margin-top:14px;text-align:right"><button class="btn sm ghost" onclick="document.getElementById(\'cam-ov\').remove()">Fechar</button></div></div>';
+  ov.onmousedown=function(e){ ov.__bd=(e.target===ov); };
+  ov.onclick=function(e){ if(e.target===ov&&ov.__bd) ov.remove(); };
+  document.body.appendChild(ov);
 }
 
 /* ✎ da linha "Vara de origem": define/atualiza a vara/local do processo.

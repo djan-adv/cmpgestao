@@ -300,6 +300,20 @@ export function movimentosDoProcesso(procOuLista) {
   }
 }
 
+/* Onde o processo está AGORA.
+   Com data em todas as tramitações, a última é a atual. Sem data, a posição na
+   lista não é cronologia — o PDPJ devolve na ordem dele. Foi assim que um
+   processo parado no STJ apareceu como "2º grau, gabinete do desembargador"
+   (02/09/2026): a lista vinha 1º grau, STJ, 2º grau, e pegávamos a última.
+   Processo só sobe por recurso, então sem data o de MAIOR grau é onde ele está. */
+export function ondeEstaAgora(trilha) {
+  const tr = Array.isArray(trilha) ? trilha : []
+  if (!tr.length) return null
+  if (tr.every(t => t.desde)) return tr[tr.length - 1]
+  const grauNum = (t) => { const m = String((t && t.grau) || '').match(/(\d)/); return m ? +m[1] : 0 }
+  return tr.slice().sort((a, b) => grauNum(b) - grauNum(a))[0]
+}
+
 // Atualiza classe/assunto/vara/distribuição na ficha. Nunca bloqueia a
 // importação dos movimentos — é enfeite, o histórico é o que importa.
 export async function aplicarMeta(sb, numero, procs) {
@@ -307,7 +321,7 @@ export async function aplicarMeta(sb, numero, procs) {
   const meta = extraiMeta(lista[0])
   const trilha = tramitacoesDoProcesso(lista)
   const origem = trilha[0] || null
-  const atual = trilha[trilha.length - 1] || null
+  const atual = ondeEstaAgora(trilha)
   try {
     const patch = {}
     if (meta.classe) patch.classe = String(meta.classe).slice(0, 200)
