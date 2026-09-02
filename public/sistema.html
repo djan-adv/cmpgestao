@@ -2700,9 +2700,15 @@ function abrir(i){
   html+='<div class="card" style="position:relative;display:flow-root">'+honQuadroHTML(p)
     +(_semBanco?'<div style="margin:0 0 10px;background:#fdecea;border:1px solid #f2b8b3;border-radius:8px;padding:7px 10px;font-size:12.5px;color:#b3261e"><b>⚠ Este cadastro ainda não está gravado no banco</b> — documentos, boletos e robôs não funcionam até salvar. <button class="btn sm" style="margin-left:8px;font-size:11px;background:#b3261e;color:#fff;border:1px solid #b3261e" onclick="salvarFichaNoBanco()">Salvar agora</button></div>':'')
     +_partesTopoHTML(p)+
-    '<div class="subhead" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">'+_numFichaHTML(p)+
-    (typeof JALINE!=='undefined'&&JALINE[String(p.numero||'').replace(/\D/g,'')]?'<span class="pill" style="background:var(--gold);color:#fff" title="Pasta de Jaline — honorários exclusivos Djan e Jaline">Jaline</span>':'')+
-    '<span id="proc-vinculados" style="display:inline-flex;gap:6px;flex-wrap:wrap;align-items:center"></span></div>'+
+    /* Com CNJ, número e vinculados vivem na barra de cima (ver _tbProcTopo) e
+       repeti-los aqui era a mesma informação duas vezes na mesma tela. Sem CNJ,
+       esta linha continua: é o formulário que informa o número e transforma o
+       caso em processo. */
+    ((String(p.numero||'').replace(/\D/g,'').length===20)
+      ? ((typeof JALINE!=='undefined'&&JALINE[String(p.numero||'').replace(/\D/g,'')])
+          ? '<div class="subhead"><span class="pill" style="background:var(--gold);color:#fff" title="Pasta de Jaline — honorários exclusivos Djan e Jaline">Jaline</span></div>' : '')
+      : ('<div class="subhead" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">'+_numFichaHTML(p)+
+         '<span id="proc-vinculados" style="display:inline-flex;gap:6px;flex-wrap:wrap;align-items:center"></span></div>'))+
     '<div id="ctl-chips" style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center"></div>'+
     /* Kit do cliente novo: o momento mais tenso do trabalho — procuração, contrato e
        boleto prontos em 3 cliques, tudo pré-preenchido com o que a ficha já sabe */
@@ -11634,12 +11640,14 @@ function _tbProcTopo(dentro){
   if(dig.length>=16) html+='<a href="https://portaldeservicos.pdpj.jus.br/consulta/autosdigitais?numeroProcesso='+dig+'" target="_blank" rel="noopener" title="Abrir no jus.br" style="color:#185FA5;font-size:11.5px">↗ jus.br</a>';
   var vinc=[];
   try{ vinc=(typeof procVincList==='function')?procVincList(p):[]; }catch(e){}
-  if(vinc.length){
-    html+='<span style="color:var(--line)">|</span><span class="note" style="margin:0">vinculados:</span>';
-    vinc.forEach(function(n){
-      html+='<span class="quick-link" onclick="irParaCaso(\''+String(n).replace(/'/g,'')+'\')" title="Abrir processo vinculado">↗ '+esc(n)+'</span>';
-    });
-  }
+  html+='<span style="color:var(--line)">|</span><span class="note" style="margin:0">vinculados:</span>';
+  vinc.forEach(function(n){
+    var seg=String(n).replace(/'/g,'');
+    html+='<span class="quick-link" onclick="irParaCaso(\''+seg+'\')" title="Abrir processo vinculado">↗ '+esc(n)+'</span>'
+      +'<span class="quick-link del" onclick="removerProcVinculado(\''+seg+'\')" title="Desvincular">×</span>';
+  });
+  if(!vinc.length) html+='<span class="note" style="margin:0">—</span>';
+  if(vinc.length<3) html+='<span class="quick-link" onclick="adicionarProcVinculado()">+ vincular</span>';
   box.innerHTML=html;
   box.style.display='inline-flex';
   if(busca) busca.style.display='none';
