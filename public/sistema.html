@@ -11636,18 +11636,21 @@ function _tbProcTopo(dentro){
   var num=String(p.numero||'');
   var dig=num.replace(/\D/g,'');
   /* sem rótulo "Processo": o título da tela ao lado já diz isso */
-  var html='<b onclick="copiarNumero(this,\''+esc(num).replace(/'/g,'')+'\')" title="Clique para copiar o número" style="cursor:pointer;color:var(--navy);border-bottom:1px dotted var(--line)">'+esc(num)+'</b>';
+  var html='<span class="tb-num" onclick="copiarNumero(this,\''+esc(num).replace(/'/g,'')+'\')" title="Clique para copiar o número">'+esc(num)+'</span>';
   if(dig.length>=16) html+='<a href="https://portaldeservicos.pdpj.jus.br/consulta/autosdigitais?numeroProcesso='+dig+'" target="_blank" rel="noopener" title="Abrir no jus.br" style="color:#185FA5;font-size:11.5px">↗ jus.br</a>';
   var vinc=[];
   try{ vinc=(typeof procVincList==='function')?procVincList(p):[]; }catch(e){}
   html+='<span style="color:var(--line)">|</span><span class="note" style="margin:0">vinculados:</span>';
   vinc.forEach(function(n){
     var seg=String(n).replace(/'/g,'');
-    html+='<span class="quick-link" onclick="irParaCaso(\''+seg+'\')" title="Abrir processo vinculado">↗ '+esc(n)+'</span>'
-      +'<span class="quick-link del" onclick="removerProcVinculado(\''+seg+'\')" title="Desvincular">×</span>';
+    /* número e × no mesmo par: nunca se separam na quebra de linha */
+    html+='<span class="tb-par">'
+      +'<span class="quick-link" onclick="irParaCaso(\''+seg+'\')" title="Abrir processo vinculado">↗ '+esc(n)+'</span>'
+      +'<span class="quick-link del" onclick="removerProcVinculado(\''+seg+'\')" title="Desvincular">×</span>'
+    +'</span>';
   });
   if(!vinc.length) html+='<span class="note" style="margin:0">—</span>';
-  if(vinc.length<3) html+='<span class="quick-link" onclick="adicionarProcVinculado()">+ vincular</span>';
+  if(vinc.length<3) html+='<span class="quick-link tb-mais" onclick="adicionarProcVinculado()" title="Vincular outro processo a este"><b>+</b> vincular</span>';
   box.innerHTML=html;
   box.style.display='inline-flex';
   if(busca) busca.style.display='none';
@@ -18706,9 +18709,16 @@ function setDilView(v){
   .kpi.v2:hover{transform:translateY(-2px);box-shadow:0 6px 16px rgba(46,58,75,.10)}
   .kpi.v2.gold{border-top-color:var(--gold)} .kpi.v2.warn{border-top-color:#d9a441}
   #tb-tools{display:flex;align-items:center;gap:14px;flex:1;justify-content:flex-end;margin-right:14px}
-  /* dentro da ficha, o número do processo ocupa o lugar da busca */
-  #tb-proc{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  #tb-proc .quick-link{font-size:11.5px}
+  /* dentro da ficha, o número do processo ocupa o lugar da busca.
+     Cada número anda colado no seu × (par indivisível) e a linha só quebra
+     quando o quarto número não couber — até três, tudo numa linha só. */
+  #tb-proc{flex:1 1 auto;min-width:0;display:flex;flex-wrap:wrap;align-items:center;column-gap:9px;row-gap:3px}
+  #tb-proc .tb-num{font-size:17px;font-weight:700;color:var(--navy);cursor:pointer;border-bottom:1px dotted var(--line);white-space:nowrap}
+  #tb-proc .tb-par{display:inline-flex;align-items:center;gap:1px;white-space:nowrap}
+  #tb-proc .quick-link{font-size:11.5px;margin:0}
+  #tb-proc .quick-link.del{padding:4px 7px}
+  #tb-proc .tb-mais{font-size:11.5px;margin:0}
+  #tb-proc .tb-mais b{font-size:2em;line-height:0;position:relative;top:2px;margin-right:3px;font-weight:700}
   #gbusca-wrap{position:relative;max-width:440px;flex:1}
   #gbusca{width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:8px 12px;font-size:13px}
   #gbusca-drop{position:absolute;top:calc(100% + 4px);left:0;right:0;background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:0 12px 30px rgba(30,42,59,.16);max-height:60vh;overflow:auto;z-index:200;display:none}
