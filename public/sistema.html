@@ -18172,28 +18172,44 @@ function _grauCurto(g){
   if(/(^|[^0-9])1|primeiro|g1/i.test(t)) return '1º grau';
   return t.slice(0,24);
 }
-/* Mesmo órgão escrito de dois jeitos. O jus.br devolve "9º JUIZADO ESPECIAL
-   CÍVEL DE JOÃO PESSOA E DE CABEDELO" e a ficha guarda "9ª Juizado Especial
-   Cível da Capital e de Cabedelo João Pess" (truncado): comparação literal dizia
-   que eram lugares diferentes e a ficha repetia a vara como se o processo
-   tivesse ido a outro lugar. Compara pelas palavras que importam, aceitando
-   palavra cortada — mas o NÚMERO tem que bater, senão a 1ª e a 2ª Vara Cível
-   virariam a mesma coisa. */
+/* Mesmo órgão escrito de dois jeitos. Os tribunais e a nossa própria ficha
+   escrevem a mesma vara de formas diferentes — "5ª JUIZADO ESPECIAL CIVIL JOÃO
+   PESSOA" e "5º Juizado Especial Cível da Capital" são a mesma; "9ª ... da
+   Capital e de Cabedelo João Pess" (truncado) e "9º ... DE JOÃO PESSOA E DE
+   CABEDELO" também. Comparar letra a letra dizia que eram lugares distintos e a
+   ficha repetia o nome como se o processo tivesse ido a outro lugar.
+   O que identifica um órgão é o NÚMERO e o TIPO (juizado especial cível, vara de
+   família, gabinete...). "Capital", "comarca", "região metropolitana" e as
+   preposições são enfeite e saem. O nome da cidade fica: serve de desempate
+   quando os dois lados o trazem — 5º Juizado de João Pessoa não é o 5º de
+   Campina Grande. */
+var _ORG_FILLER=/^(de|da|do|das|dos|e|em|a|o|as|os|no|na|capital|comarca|regiao|metropolitana|foro|judicial|unidade|jurisdicional|processamento)$/;
+var _ORG_TIPO=/^(juizado|vara|gabinete|camara|turma|secao|especial|especializada|civel|criminal|fazenda|publica|familia|infancia|juventude|trabalho|execucao|execucoes|cumprimento|cumprimentos|sentenca|extrajudiciais|regional|desembargador|ministro|relator|empresarial|sucessoes|orfaos|violencia|domestica|tributaria)$/;
 function _orgaoTokens(v){
   return String(v||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')
     .replace(/[ºª°]/g,' ').replace(/[^a-z0-9]+/g,' ').trim().split(/\s+/)
-    .filter(function(t){ return t && !/^(de|da|do|das|dos|e|em|a|o|as|os|no|na)$/.test(t); });
+    .filter(Boolean)
+    .map(function(t){ return t==='civil'?'civel':t; })   /* CIVIL e CÍVEL são a mesma vara */
+    .filter(function(t){ return !_ORG_FILLER.test(t); });
 }
 function _mesmoOrgao(a,b){
   var A=_orgaoTokens(a), B=_orgaoTokens(b);
   if(!A.length||!B.length) return false;
-  var num=function(L){ return L.filter(function(t){ return /^\d+$/.test(t); }).sort().join(','); };
-  if(num(A)!==num(B)) return false;              /* 1ª Vara não é 2ª Vara */
+  var so=function(L,re){ return L.filter(function(t){ return re.test(t); }); };
+  var num=function(L){ return so(L,/^\d+$/).sort().join(','); };
+  if(num(A)!==num(B)) return false;                       /* 1ª Vara não é 2ª Vara */
   var casa=function(t,L){ return L.some(function(u){
     return u===t || (t.length>=4&&u.indexOf(t)===0) || (u.length>=4&&t.indexOf(u)===0); }); };
-  var menor=(A.length<=B.length)?A:B, maior=(menor===A)?B:A;
-  var iguais=menor.filter(function(t){ return casa(t,maior); }).length;
-  return (iguais/menor.length)>=0.7;
+  /* o tipo do órgão tem que bater inteiro, pelo lado que diz menos */
+  var tA=so(A,_ORG_TIPO), tB=so(B,_ORG_TIPO);
+  if(!tA.length||!tB.length) return false;
+  var menorT=(tA.length<=tB.length)?tA:tB, maiorT=(menorT===tA)?tB:tA;
+  if(!menorT.every(function(t){ return casa(t,maiorT); })) return false;
+  /* sobrou nome de cidade nos dois lados? então tem que ser a mesma cidade */
+  var resto=function(L){ return L.filter(function(t){ return !/^\d+$/.test(t)&&!_ORG_TIPO.test(t); }); };
+  var rA=resto(A), rB=resto(B);
+  if(rA.length&&rB.length&&!rA.some(function(t){ return casa(t,rB); })) return false;
+  return true;
 }
 /* O caminho do processo cabe num botão.
    A ficha trazia "Vara de origem", depois "LOCAL ATUAL", depois "PASSOU POR" e
