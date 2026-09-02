@@ -4166,7 +4166,11 @@ function _kanQuandoBR(iso){
   }catch(e){ return ''; }
 }
 function _kanQuemSou(){
-  try{ var u=usuarioVisualAtual(); return (u&&u.nome)||''; }catch(e){ return ''; }
+  try{ var u=usuarioVisualAtual(); if(u&&u.nome) return u.nome; }catch(e){}
+  /* sem assento visual definido, vale o nome que está na barra "Logado:" —
+     melhor o nome certo do que "não registrado" */
+  try{ var n=((document.getElementById('who-name')||{}).textContent||'').trim(); if(n) return n; }catch(e){}
+  return '';
 }
 /* Mantém o par concluidoPor/concluidoEm coerente com a coluna: entrou em
    'finalizado' sem carimbo → carimba agora; saiu de 'finalizado' → limpa. */
@@ -4248,6 +4252,16 @@ function persisteKanban(a){
     }catch(eT){}
   }
   _kanSalvarLocal(a);
+  /* Autoria carimbada AGORA, no objeto que está na tela.
+     Antes isso só acontecia lá dentro da cadeia assíncrona do insert (depois de
+     getUser + select de escritório), e a tela repintava antes de a promessa
+     resolver: a tarefa recém-criada aparecia como "criada por não registrado" e
+     só virava "Djan" depois de um F5 — embora o banco já tivesse o nome certo. */
+  if(a&&!a.dbid){
+    if(!a.criadoPor) a.criadoPor=_kanQuemSou();
+    if(!a.criadoEm) a.criadoEm=new Date().toISOString();
+    if(!a.origem&&!a.org) a.origem='sistema';
+  }
   try{
     var sb=window.__sb; if(!sb||!a) return;
     if(a.dbid){ /* já existe no banco: atualiza */
@@ -4263,7 +4277,7 @@ function persisteKanban(a){
       a.__insertP=sb.auth.getUser().then(function(ug){ return sb.from('usuarios').select('escritorio_id').eq('id',ug.data.user.id).single(); }).then(function(pf){
         var esc=pf&&pf.data&&pf.data.escritorio_id; if(!esc) return;
         if(!a.criadoPor) a.criadoPor=_kanQuemSou();
-        return sb.from('kanban_tarefas').insert({escritorio_id:esc,titulo:a.titulo,cliente:a.cliente,numero:a.numero,coluna:a.col,resp:(a.resp||null),data:(a.data||null),prazo:(a.prazo||null),tipo:(a.tipoForm||null),descricao:(a.descricao||null),local:(a.local||null),origem:(a.origem||'sistema'),criado_por:(a.criadoPor||null),concluido_por:(a.concluidoPor||null),concluido_em:(a.concluidoEm||null),arquivada:(a.arq===true),cancelada:(a.canc===true),cancelada_em:(a.canceladaEm||null),cancelada_por:(a.canceladaPor||null),cancelada_motivo:(a.canceladaMotivo||null)}).select('id').single();
+        return sb.from('kanban_tarefas').insert({escritorio_id:esc,titulo:a.titulo,cliente:a.cliente,numero:a.numero,coluna:a.col,resp:(a.resp||null),data:(a.data||null),prazo:(a.prazo||null),tipo:(a.tipoForm||null),descricao:(a.descricao||null),local:(a.local||null),origem:(a.origem||'sistema'),criado_por:(a.criadoPor||null),criado_em:(a.criadoEm||null),concluido_por:(a.concluidoPor||null),concluido_em:(a.concluidoEm||null),arquivada:(a.arq===true),cancelada:(a.canc===true),cancelada_em:(a.canceladaEm||null),cancelada_por:(a.canceladaPor||null),cancelada_motivo:(a.canceladaMotivo||null)}).select('id').single();
       }).then(function(r){ if(r&&r.data&&r.data.id) a.dbid=r.data.id; }).catch(function(e){ console.warn('kanban insert:',e&&e.message||e); });
     }
   }catch(e){ console.warn('persisteKanban:',e); }
@@ -4894,6 +4908,11 @@ var _ORIGEM_AUTOR={
   'auto-sistema':'sistema (agenda automática)',
   'captura':'sistema (captura pelo celular)',
   'crm_lead':'sistema (captação)',
+  'estagiario':'sistema (Estagiário Virtual)',
+  'djen':'sistema (publicação do DJEN)',
+  'assinatura':'sistema (procuração assinada)',
+  'portal':'sistema (app do cliente)',
+  'agenda':'sistema (agenda)',
   'sistema':'sistema'
 };
 function _kanAutor(a){
