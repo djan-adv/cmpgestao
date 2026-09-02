@@ -17883,7 +17883,11 @@ function contatoBlocoHTML(p){
   h+='<span style="white-space:nowrap"><b>Balcão virtual</b> ('+trib+'): <a href="'+bl.url+'" target="_blank" rel="noopener" style="color:#185FA5">abrir</a>'+(bl.verificado?'':' <span style="color:#888;font-size:11px">(via busca)</span>')+'</span>';
   if(c){
     var ne=encodeURIComponent(p.numero);
-    h+='<span>'+(c.orgao?('<b>'+esc(c.orgao)+'</b>'):'<b>Vara</b>')+':</span>';
+    /* o nome da vara já está em "Vara de origem", logo acima — repetir aqui é a
+       terceira vez na mesma tela. Só aparece quando o contato é de OUTRO órgão
+       (contato salvo para o gabinete, para o 2º grau), que é quando importa. */
+    var mesmaVara=(typeof _mesmoOrgao==='function') && _mesmoOrgao(c.orgao, p.foro||p.orgao||'');
+    h+='<span><b>'+((c.orgao&&!mesmaVara)?esc(c.orgao):'Contato da vara')+'</b>:</span>';
     /* contatos expostos (clique copia); × remove com motivo (só os salvos no banco) */
     function chip(icone,val,cor,corb,campo){
       var x=(c.id?(' <a onclick="removerContatoVara(\''+c.id+'\',\''+campo+'\',\''+encodeURIComponent(val)+'\')" title="Remover este contato da vara (pergunta o motivo)" style="cursor:pointer;color:#b5342b;font-weight:700">×</a>'):'');
