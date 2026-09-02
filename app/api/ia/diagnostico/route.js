@@ -26,7 +26,7 @@ import { coletarPecas, ordenarPecas, pdfUnico, salvarNaPasta } from '../../jusbr
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
-export const maxDuration = 300
+export const maxDuration = 900
 
 const MAX_B64 = 22 * 1024 * 1024   // teto medido em base64: a API recusa acima de 32 MB de requisição
 const b64de = (n) => Math.ceil(Number(n || 0) / 3) * 4
@@ -198,6 +198,14 @@ export async function GET(request) {
     return Response.json({ ok: true, diag: data })
   }
   if (searchParams.get('pendentes') != null) {
+    /* Um diagnóstico que o servidor perdeu no meio (reinício, timeout) ficava
+       "rodando" para sempre na ficha. Passou de 20 min, está morto: fecha. */
+    try {
+      await sb.from('ia_diagnosticos')
+        .update({ status: 'erro', erro: 'interrompido antes de terminar (servidor reiniciou ou a chamada estourou o tempo)', concluido_em: new Date().toISOString() })
+        .eq('escritorio_id', ESCRITORIO_CMP).eq('status', 'rodando')
+        .lt('criado_em', new Date(Date.now() - 20 * 60000).toISOString())
+    } catch (e) {}
     const { data } = await sb.from('ia_diagnosticos')
       .select('id,processo_numero,status,erro,concluido_em,criado_em,com_peca')
       .eq('escritorio_id', ESCRITORIO_CMP).is('visto_em', null)

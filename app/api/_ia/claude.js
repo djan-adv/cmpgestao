@@ -31,6 +31,59 @@ export function custoUsd(modelo, usage) {
   return Math.round(total * 1e6) / 1e6
 }
 
+/* Teto de tempo de uma chamada. Alto de propósito: um diagnóstico lê a íntegra
+   inteira dos autos. Em streaming o servidor manda evento o tempo todo, então
+   este relógio só dispara se a Anthropic realmente parar de responder. */
+const TIMEOUT_MS = 900000
+
+/* Remonta a resposta a partir do SSE, no MESMO formato do modo não-streaming
+   (content[], usage, stop_reason) — assim nada mais no sistema muda. */
+async function montarDoStream(r) {
+  const out = { content: [], usage: {}, stop_reason: null }
+  const parciais = {}          // índice → json cru do tool_use
+  const dec = new TextDecoder()
+  let buf = ''
+  const reader = r.body.getReader()
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buf += dec.decode(value, { stream: true })
+    let corte
+    while ((corte = buf.indexOf('\n\n')) > -1) {
+      const bloco = buf.slice(0, corte); buf = buf.slice(corte + 2)
+      for (const linha of bloco.split('\n')) {
+        if (!linha.startsWith('data:')) continue
+        const cru = linha.slice(5).trim()
+        if (!cru || cru === '[DONE]') continue
+        let ev
+        try { ev = JSON.parse(cru) } catch (e) { continue }
+        if (ev.type === 'message_start' && ev.message) {
+          out.usage = Object.assign({}, ev.message.usage || {})
+        } else if (ev.type === 'content_block_start') {
+          const b = ev.content_block || {}
+          if (b.type === 'tool_use') { out.content[ev.index] = { type: 'tool_use', id: b.id, name: b.name, input: {} }; parciais[ev.index] = '' }
+          else out.content[ev.index] = { type: b.type || 'text', text: '' }
+        } else if (ev.type === 'content_block_delta') {
+          const d = ev.delta || {}
+          if (d.type === 'text_delta') { const c = out.content[ev.index] || (out.content[ev.index] = { type: 'text', text: '' }); c.text = (c.text || '') + (d.text || '') }
+          else if (d.type === 'input_json_delta') parciais[ev.index] = (parciais[ev.index] || '') + (d.partial_json || '')
+        } else if (ev.type === 'content_block_stop') {
+          if (parciais[ev.index] != null && out.content[ev.index]) {
+            try { out.content[ev.index].input = JSON.parse(parciais[ev.index] || '{}') } catch (e) { out.content[ev.index].input = {} }
+          }
+        } else if (ev.type === 'message_delta') {
+          if (ev.delta && ev.delta.stop_reason) out.stop_reason = ev.delta.stop_reason
+          if (ev.usage) out.usage = Object.assign({}, out.usage, ev.usage)
+        } else if (ev.type === 'error') {
+          out.erroStream = (ev.error && ev.error.message) || 'erro no streaming'
+        }
+      }
+    }
+  }
+  out.content = out.content.filter(Boolean)
+  return out
+}
+
 // Chamada padrão. `sistemaFixo` é o prefixo byte a byte idêntico entre chamadas
 // (persona + manual + formato de saída) — é ele que leva o cache_control.
 // `conteudo` é o bloco variável (dados do processo, PDFs, pedido): vem depois.
@@ -65,19 +118,32 @@ export async function chamarClaude({
   }
   if (sistemaFixo) corpo.system = [{ type: 'text', text: sistemaFixo, cache_control: { type: 'ephemeral' } }]
 
+  /* SEMPRE em streaming. Sem isso, um pedido grande (a íntegra dos autos inteira
+     + 16k de saída) fica minutos sem devolver byte nenhum e a conexão morre —
+     foi o "IA indisponível: The operation was aborted due to timeout" de
+     02/09/2026, com a peça já paga e perdida. Em streaming os eventos chegam o
+     tempo todo, então o relógio nunca zera. A resposta é remontada aqui e o
+     resto do sistema continua recebendo o mesmo objeto de antes. */
+  corpo.stream = true
+
   let r, data
   try {
     r = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
       body: JSON.stringify(corpo),
-      signal: AbortSignal.timeout(180000),
+      signal: AbortSignal.timeout(TIMEOUT_MS),
     })
-    data = await r.json()
+    if (!r.ok) {
+      let err = null
+      try { err = await r.json() } catch (e) {}
+      return { erro: 'IA: ' + ((err && err.error && err.error.message) || r.status), status: 502 }
+    }
+    data = await montarDoStream(r)
   } catch (e) {
     return { erro: 'IA indisponível: ' + ((e && e.message) || e), status: 502 }
   }
-  if (!r.ok) return { erro: 'IA: ' + ((data && data.error && data.error.message) || r.status), status: 502 }
+  if (data && data.erroStream) return { erro: 'IA: ' + data.erroStream, status: 502 }
 
   const usage = data.usage || {}
   const custo = custoUsd(modelo, usage)

@@ -20845,30 +20845,70 @@ async function renderDiagCard(){
   if(typeof atual==='undefined'||!atual){ box.innerHTML=''; return; }
   var num=atual.numero;
   try{
-    var r=await window.__sb.from('ia_diagnosticos')
-      .select('id,status,erro,com_peca,com_integra,custo_usd,criado_em,concluido_em,pedido_por,peca')
+    var cols='id,status,erro,com_peca,com_integra,custo_usd,criado_em,concluido_em,pedido_por,peca,resultado';
+    var r=await window.__sb.from('ia_diagnosticos').select(cols)
       .eq('processo_numero',num).order('criado_em',{ascending:false}).limit(12);
     var itens=(r&&r.data)||[];
+    /* processo cadastrado com o número em outro formato: tenta pelo id */
+    if(!itens.length&&atual.id){
+      var r2=await window.__sb.from('ia_diagnosticos').select(cols)
+        .eq('processo_id',atual.id).order('criado_em',{ascending:false}).limit(12);
+      itens=(r2&&r2.data)||[];
+    }
     if(!itens.length){ box.innerHTML='<div class="note">Nenhum diagnóstico rodado neste processo ainda.</div>'; return; }
     var total=itens.reduce(function(a,x){ return a+(Number(x.custo_usd)||0); },0);
-    box.innerHTML=itens.map(function(d){
-      var quando=String(d.criado_em||'').slice(0,16).replace('T',' ');
-      var cor=d.status==='pronto'?'#0F6E56':(d.status==='erro'?'#b5342b':'#8a5a00');
-      var rot=d.status==='pronto'?'pronto':(d.status==='erro'?'falhou':'rodando…');
-      var custo=Number(d.custo_usd)||0;
-      return '<div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;border-bottom:1px solid #eef1f5;padding:6px 0">'
-        +'<span style="font-size:10px;font-weight:800;letter-spacing:.04em;color:'+cor+';border:1px solid '+cor+'44;border-radius:9px;padding:1px 7px">'+rot.toUpperCase()+'</span>'
-        +'<span style="font-size:12.5px">'+esc(quando)+'</span>'
-        +(d.com_peca?'<span class="note" style="margin:0">com peça</span>':'')
-        +(d.pedido_por?'<span class="note" style="margin:0">· '+esc(d.pedido_por)+'</span>':'')
-        +(custo?'<span class="note" style="margin:0">· US$ '+custo.toFixed(4)+'</span>':'')
-        +(d.status==='erro'&&d.erro?'<span class="note" style="margin:0;color:#b5342b">· '+esc(String(d.erro).slice(0,90))+'</span>':'')
-        +'<span style="margin-left:auto">'
-          +(d.status==='pronto'?'<button class="btn sm ghost" style="font-size:11px" onclick="_dgAbrirSalvo(\''+d.id+'\')">ver</button>':'')
-        +'</span></div>';
-    }).join('')
+    var ultimo=itens.filter(function(x){ return x.status==='pronto'&&x.resultado&&x.resultado.diagnostico; })[0];
+    box.innerHTML=(ultimo?_dgFichaTexto(ultimo):'')
+      +'<div class="sectlabel" style="margin:'+(ultimo?'16px':'0')+' 0 6px">Rodadas neste processo</div>'
+      +itens.map(function(d){
+        var cor=d.status==='pronto'?'#0F6E56':(d.status==='erro'?'#b5342b':'#8a5a00');
+        var rot=d.status==='pronto'?'pronto':(d.status==='erro'?'falhou':'rodando…');
+        var custo=Number(d.custo_usd)||0;
+        return '<div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;border-bottom:1px solid #eef1f5;padding:6px 0">'
+          +'<span style="font-size:10px;font-weight:800;letter-spacing:.04em;color:'+cor+';border:1px solid '+cor+'44;border-radius:9px;padding:1px 7px">'+rot.toUpperCase()+'</span>'
+          +'<span style="font-size:12.5px">'+esc(_dgQuando(d.criado_em))+'</span>'
+          +(d.com_peca?'<span class="note" style="margin:0">com peça</span>':'')
+          +(d.pedido_por?'<span class="note" style="margin:0">· '+esc(d.pedido_por)+'</span>':'')
+          +(custo?'<span class="note" style="margin:0">· US$ '+custo.toFixed(4)+'</span>':'')
+          +(d.status==='erro'&&d.erro?'<span class="note" style="margin:0;color:#b5342b">· '+esc(String(d.erro).slice(0,90))+'</span>':'')
+          +'<span style="margin-left:auto">'
+            +(d.status==='pronto'?'<button class="btn sm ghost" style="font-size:11px" onclick="_dgAbrirSalvo(\''+d.id+'\')">ver completo</button>':'')
+          +'</span></div>';
+      }).join('')
       +'<div class="note" style="margin-top:8px">Total gasto em diagnósticos deste processo: <b>US$ '+total.toFixed(4)+'</b>.</div>';
   }catch(e){ box.innerHTML='<div class="note" style="color:#b5342b">Não consegui listar: '+esc((e&&e.message)||e)+'</div>'; }
+}
+function _dgQuando(iso){
+  var t=String(iso||''); if(!t) return '';
+  var d=t.slice(0,10).split('-'); return (d[2]||'')+'/'+(d[1]||'')+'/'+(d[0]||'')+' '+t.slice(11,16);
+}
+/* O texto do último diagnóstico fica gravado AQUI, com a data — pedido em
+   02/09/2026. Sem clicar em nada: quem abre o processo lê o que a IA disse. */
+function _dgFichaTexto(d){
+  var g=(d.resultado&&d.resultado.diagnostico)||{};
+  var provs=(g.providencias||[]).map(function(p,i){
+    var cor=(typeof _DGCOR!=='undefined'&&_DGCOR[p.urgencia])||'#5f6b7a';
+    return '<div style="border-left:3px solid '+cor+';padding:1px 0 1px 10px;margin-bottom:9px">'
+      +'<div style="font-size:13.5px"><b style="color:var(--navy)">'+(i+1)+'. '+esc(p.titulo||'')+'</b>'
+      +' <span style="font-size:9.5px;font-weight:800;letter-spacing:.04em;color:'+cor+';border:1px solid '+cor+'44;border-radius:9px;padding:1px 6px">'
+      +esc(String((typeof _DGTIPO!=='undefined'&&_DGTIPO[p.tipo])||p.tipo||'').toUpperCase())+' · '+esc(String(p.urgencia||'').toUpperCase())+'</span></div>'
+      +(p.porque?'<div style="font-size:12.5px;margin-top:3px">'+esc(p.porque)+'</div>':'')
+      +(p.prazo?'<div style="font-size:12px;margin-top:3px;color:'+cor+'"><b>Prazo:</b> '+esc(p.prazo)+'</div>':'')
+      +'</div>';
+  }).join('');
+  var pc=d.peca||null;
+  return '<div style="background:#f4f7fb;border:1px solid #dbe6f2;border-radius:9px;padding:12px 14px">'
+    +'<div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:baseline">'
+      +'<b style="color:var(--navy);font-size:13.5px">Diagnóstico de '+esc(_dgQuando(d.criado_em))+'</b>'
+      +'<span class="note" style="margin:0">'+(d.pedido_por?('pedido por '+esc(d.pedido_por)+' · '):'')
+        +(Number(d.custo_usd)?('custo US$ '+Number(d.custo_usd).toFixed(4)):'')+'</span></div>'
+    +'<div style="font-size:13.5px;line-height:1.6;margin-top:6px">'+esc(g.situacao||'')+'</div>'
+    +(g.travado_por?'<div style="font-size:13px;margin-top:8px"><b style="color:var(--navy)">O que trava:</b> '+esc(g.travado_por)+'</div>':'')
+    +(provs?'<div style="margin-top:12px"><div class="sectlabel" style="margin:0 0 7px">O que fazer</div>'+provs+'</div>':'')
+    +(pc&&pc.arquivo_word?('<div class="note" style="margin-top:6px">&#128196; Peça redigida: <b>'+esc(pc.arquivo_word)+'</b>'
+        +(pc.arquivo_pdf?(' · PDF <b>'+esc(pc.arquivo_pdf)+'</b> na pasta Protocolo'):'')+' — rascunho, confira antes de protocolar.</div>'):'')
+    +'<div style="margin-top:10px;text-align:right"><button class="btn sm ghost" style="font-size:11px" onclick="_dgAbrirSalvo(\''+d.id+'\')">ver completo (riscos, o que falta, instrução da peça)</button></div>'
+  +'</div>';
 }
 function _dgPinta(html){ var cx=document.getElementById('dg-cx'); if(cx) cx.innerHTML=html; }
 async function _dgRodar(){
