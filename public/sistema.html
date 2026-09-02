@@ -737,6 +737,14 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
         <div id="robos-body"><div class="note">Carregando…</div></div>
       </div>
       <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+          <p class="sectlabel" style="margin:0">💳 Conta da API — Anthropic</p>
+          <span style="display:inline-flex;gap:6px"><button class="btn sm ghost" onclick="renderContaIABox()">↻ atualizar</button><button class="btn sm" onclick="abrirContaIA()" title="Detalhe por rotina, conferência com a fatura e link para ver o saldo e recarregar">abrir conta / créditos</button></span>
+        </div>
+        <p class="note" style="margin:6px 0 10px">Tudo que o sistema gasta de IA (estagiário, minutas, diagnóstico, resumos) sai desta conta. O <b>saldo de crédito</b> só existe no Console da Anthropic — o botão acima leva até lá.</p>
+        <div id="conta-ia-box"><div class="note">Carregando…</div></div>
+      </div>
+      <div class="card">
         <p class="sectlabel">🎓 Estagiário Virtual</p>
         <p class="note" style="margin:6px 0 0">A fila de peças agora tem tela própria: <a onclick="go('movimentar')" style="cursor:pointer;color:var(--navy);text-decoration:underline;font-weight:600">Movimentar</a>, no menu à esquerda, logo abaixo de Publicações.</p>
       </div>
@@ -20388,6 +20396,7 @@ async function editarPrdPeso(tipo){
 /* ===== Painel Robôs — status + rodar agora (sem terminal) ===== */
 var _ROBOS_LABELS={};
 async function renderRobos(){
+  try{ renderContaIABox(); }catch(e){}
   var el=document.getElementById('robos-body'); if(!el) return;
   el.innerHTML='<div class="note">Carregando…</div>';
   _renderJusbrStatus();
@@ -20653,6 +20662,32 @@ async function _descSalvar(){
    Saldo de crédito NÃO existe em API (a Anthropic só mostra no Console), então
    aqui aparecem os dois números que dá para ter: o nosso (tempo real, chamada a
    chamada) e o oficial da fatura (se houver Admin API key configurada). */
+/* O gasto do mês direto na tela Robôs. O botão estava só na tela Movimentar e
+   ninguém achava ("não aparece a conta da api nos robôs", 02/09/2026). */
+async function renderContaIABox(){
+  var box=document.getElementById('conta-ia-box'); if(!box) return;
+  box.innerHTML='<div class="note">Carregando…</div>';
+  try{
+    var jwt=(typeof finToken==='function')?await finToken():null;
+    var r=await fetch('/api/ia/conta',{headers:jwt?{Authorization:'Bearer '+jwt}:{}});
+    var j=await r.json();
+    if(!j||!j.ok){ box.innerHTML='<div class="note" style="color:#b5342b">Não consegui ler a conta: '+esc((j&&j.erro)||'erro')+'</div>'; return; }
+    var n=j.nosso||{}, o=j.oficial||{};
+    var pct=n.teto_brl?Math.min(100,Math.round((n.mes_brl||0)/n.teto_brl*100)):0;
+    box.innerHTML='<div style="display:flex;gap:18px;flex-wrap:wrap;align-items:flex-end">'
+      +'<div style="min-width:230px;flex:1">'
+        +'<div class="note" style="margin:0">Gasto do mês (nosso registro, tempo real)</div>'
+        +'<div style="font-size:22px;font-weight:700;color:#0F2A4A">R$ '+(n.mes_brl||0).toFixed(2)
+          +' <span style="font-size:13px;font-weight:400;color:#697180">de R$ '+(n.teto_brl||0).toFixed(2)+' ('+pct+'%)</span></div>'
+        +'<div style="height:6px;background:#eef1f5;border-radius:4px;margin-top:6px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+(n.estourou?'#b5342b':'#127a53')+'"></div></div>'
+      +'</div>'
+      +'<div style="min-width:200px">'
+        +'<div class="note" style="margin:0">Conferência com a fatura</div>'
+        +'<div style="font-size:14px;font-weight:600">'+(o.disponivel?('US$ '+(o.mes_usd||0).toFixed(2)):('<span class="note" style="font-weight:400">'+esc(o.erro||o.dica||'indisponível')+'</span>'))+'</div>'
+      +'</div></div>'
+      +(n.estourou?'<div class="note" style="margin-top:8px;color:#b5342b"><b>O teto do mês foi atingido</b> — os robôs de IA param até você ajustar o teto ou virar o mês.</div>':'');
+  }catch(e){ box.innerHTML='<div class="note" style="color:#b5342b">Erro: '+esc((e&&e.message)||e)+'</div>'; }
+}
 async function abrirContaIA(){
   var id='conta-ia'; var old=document.getElementById(id); if(old) old.remove();
   var ov=document.createElement('div'); ov.id=id;
