@@ -741,7 +741,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
           <p class="sectlabel" style="margin:0">💳 Conta da API — Anthropic</p>
           <span style="display:inline-flex;gap:6px"><button class="btn sm ghost" onclick="renderContaIABox()">↻ atualizar</button><button class="btn sm" onclick="abrirContaIA()" title="Detalhe por rotina, conferência com a fatura e link para ver o saldo e recarregar">abrir conta / créditos</button></span>
         </div>
-        <p class="note" style="margin:6px 0 10px">Tudo que o sistema gasta de IA (estagiário, minutas, diagnóstico, resumos) sai desta conta. O <b>saldo de crédito</b> só existe no Console da Anthropic — o botão acima leva até lá.</p>
+        <p class="note" style="margin:6px 0 10px">Tudo que o sistema gasta de IA (estagiário, minutas, diagnóstico, resumos) sai desta conta. O que aparece abaixo é <b>quanto já gastamos no mês</b> contra o teto que você definiu — <b>não é o saldo</b>. Saldo de crédito a Anthropic só mostra no Console dela.</p>
         <div id="conta-ia-box"><div class="note">Carregando…</div></div>
       </div>
       <div class="card">
@@ -20680,6 +20680,11 @@ async function renderContaIABox(){
         +'<div style="font-size:22px;font-weight:700;color:#0F2A4A">R$ '+(n.mes_brl||0).toFixed(2)
           +' <span style="font-size:13px;font-weight:400;color:#697180">de R$ '+(n.teto_brl||0).toFixed(2)+' ('+pct+'%)</span></div>'
         +'<div style="height:6px;background:#eef1f5;border-radius:4px;margin-top:6px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+(n.estourou?'#b5342b':'#127a53')+'"></div></div>'
+      +'</div>'
+      +'<div style="min-width:200px">'
+        +'<div class="note" style="margin:0">Saldo de créditos</div>'
+        +'<div style="font-size:14px;font-weight:600"><a target="_blank" rel="noopener" style="color:#185FA5;text-decoration:none" href="'+esc(j.console_url||'https://platform.claude.com/settings/billing')+'">ver no Console &#8599;</a></div>'
+        +'<div class="note" style="margin:2px 0 0;font-size:11px">A Anthropic não expõe saldo por API — só o gasto. O número ao lado é <b>o que gastamos</b>, não o que resta.</div>'
       +'</div>'
       +'<div style="min-width:200px">'
         +'<div class="note" style="margin:0">Conferência com a fatura</div>'
