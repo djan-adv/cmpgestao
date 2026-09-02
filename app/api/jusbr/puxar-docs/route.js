@@ -11,6 +11,7 @@
 import { jusbrAdmin, getFreshToken, tipoRealDoArquivo, ESCRITORIO_CMP } from '../lib.js'
 import { camposConteudo } from '../guardar.js'
 import { ehOficial, copiarParaAppCliente } from '../../../../lib/appCliente.js'
+import { docsDoPayload } from '../integra/core.js'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -59,9 +60,9 @@ async function listarDocs(token, numero) {
   } catch (e) { return { erro: 'rede: ' + String((e && e.message) || e) } }
   if (resp.status === 401) return { erro: 'expirado' }
   if (!resp.ok) return { erro: 'HTTP ' + resp.status }
-  const proc = Array.isArray(data && data.content) ? data.content[0] : (Array.isArray(data) ? data[0] : data)
-  const cand = (proc && (proc.documentos || (proc.tramitacaoAtual && proc.tramitacaoAtual.documentos))) || (data && data.documentos) || []
-  const docs = (Array.isArray(cand) ? cand : []).map(normDoc).filter(d => d.uuid || d.href)
+  /* uma entrada por grau, cada uma com a SUA lista — ver docsDoPayload. Ficou de
+     fora da correção de hoje e a varredura continuava cega às peças do 2º grau. */
+  const docs = docsDoPayload(data).map(normDoc).filter(d => d.uuid || d.href)
   return { docs }
 }
 
