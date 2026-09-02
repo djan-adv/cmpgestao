@@ -11635,8 +11635,8 @@ function _tbProcTopo(dentro){
   }
   var num=String(p.numero||'');
   var dig=num.replace(/\D/g,'');
-  var html='<span style="color:var(--muted)">Processo</span>'
-    +'<b onclick="copiarNumero(this,\''+esc(num).replace(/'/g,'')+'\')" title="Clique para copiar o número" style="cursor:pointer;color:var(--navy);border-bottom:1px dotted var(--line)">'+esc(num)+'</b>';
+  /* sem rótulo "Processo": o título da tela ao lado já diz isso */
+  var html='<b onclick="copiarNumero(this,\''+esc(num).replace(/'/g,'')+'\')" title="Clique para copiar o número" style="cursor:pointer;color:var(--navy);border-bottom:1px dotted var(--line)">'+esc(num)+'</b>';
   if(dig.length>=16) html+='<a href="https://portaldeservicos.pdpj.jus.br/consulta/autosdigitais?numeroProcesso='+dig+'" target="_blank" rel="noopener" title="Abrir no jus.br" style="color:#185FA5;font-size:11.5px">↗ jus.br</a>';
   var vinc=[];
   try{ vinc=(typeof procVincList==='function')?procVincList(p):[]; }catch(e){}
