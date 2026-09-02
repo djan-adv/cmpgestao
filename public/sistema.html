@@ -2798,6 +2798,7 @@ function abrir(i){
       '<button class="btn sm" style="background:#e8f4f0;color:#0F6E56;border:1px solid #bfe0d4;font-weight:700;font-size:11px;padding:3px 8px" onclick="criarSalaReuniao(\''+p.numero+'\')" title="Sala do próprio escritório: o cliente entra pelo navegador, sem instalar nada, e a conversa é transcrita para o histórico. Não guarda gravação.">&#127909; Sala de vídeo (nossa)</button>'+
       '<button class="btn sm" style="background:#eef3fa;color:#185FA5;border:1px solid #cfe0f2;font-weight:700;font-size:11px;padding:3px 8px" onclick="criarMeetExterno(\''+p.numero+'\')" title="Cria uma reunião no Google Meet e põe no calendário — para quando o cliente já usa Meet ou a reunião tem mais de duas pessoas">&#128197; Meet (externo)</button>'+
       '<button class="btn sm" style="background:#eef3fa;color:#185FA5;border:1px solid #cfe0f2;font-weight:700;font-size:11px;padding:3px 8px" onclick="abrirGerarContrato(\''+p.numero+'\')" title="Gera o contrato de honorários pronto (Word + PDF, padrão CMP) — pergunta objeto, honorários iniciais/parcelamento e percentual de êxito">&#128220; Gerar contrato</button>'+
+      '<button class="btn sm" style="background:#2E3A4B;color:#fff;border:1px solid #2E3A4B;font-weight:700;font-size:11px;padding:3px 8px" onclick="abrirDiagnostico(\''+p.numero+'\')" title="Lê a íntegra dos autos e o histórico e diz o que fazer para o processo andar — e redige a peça, se você mandar.">&#129517; Diagnóstico do processo</button>'+
       '<button class="btn sm" style="background:#0F6E56;color:#fff;border:1px solid #0F6E56;font-weight:700;font-size:11px;padding:3px 8px;margin-left:4px" onclick="abrirProtocolarJusbr(\''+p.numero+'\')" title="Protocola de verdade no jus.br, daqui: sobe o PDF, envia ao tribunal e guarda o recibo do CNJ na pasta.">&#9878; Protocolar no jus.br</button>'+
     '</div>'+
     '<div class="card" id="doc-card"><p class="sectlabel">Documentos do processo'+
@@ -20756,6 +20757,116 @@ async function renderEstagiario(){
     }).join('')+'</div>';
   }catch(e){ el.innerHTML='<div class="note">Erro: '+finEsc(String(e&&e.message||e))+'</div>'; }
 }
+/* ===== Diagnóstico do processo =====
+   O botão que lê os autos e responde "e agora?". Baixa a íntegra (a mesma do
+   Estagiário Virtual), lê com as skills do escritório e devolve situação,
+   providências em ordem de urgência, riscos e o que falta nos autos. Se o
+   advogado mandar, redige a peça e grava .doc para editar e .pdf na pasta
+   Protocolo, de onde o botão de protocolar já tira o arquivo.
+   Nunca protocola sozinho: a peça sai como rascunho para conferência. */
+var _DGCOR={imediata:'#b5342b',alta:'#8a5a00',media:'#185FA5',baixa:'#5f6b7a'};
+var _DGTIPO={recurso:'recurso',impugnacao:'impugnação',peticao:'petição',diligencia:'diligência',prova:'prova',acordo:'acordo',outro:'providência'};
+async function abrirDiagnostico(numero){
+  var ov=document.getElementById('dg-ov'); if(ov) ov.remove();
+  ov=document.createElement('div'); ov.id='dg-ov';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(20,28,40,.55);z-index:10002;display:flex;align-items:center;justify-content:center;padding:16px';
+  ov.innerHTML='<div id="dg-cx" style="background:#fff;border-radius:12px;max-width:820px;width:100%;max-height:90vh;overflow:auto;padding:20px 22px"></div>';
+  ov.onmousedown=function(e){ ov.__bd=(e.target===ov); };
+  ov.onclick=function(e){ if(e.target===ov&&ov.__bd) ov.remove(); };
+  document.body.appendChild(ov);
+  window.__dgNum=numero;
+  _dgPinta('<h3 style="margin:0 0 4px;color:var(--navy)">&#129517; Diagnóstico do processo</h3>'
+    +'<p class="note" style="margin:0 0 14px">'+esc(fmtCNJ(numero))+'</p>'
+    +'<label style="display:flex;gap:8px;align-items:flex-start;background:#f4f7fb;border:1px solid #dbe6f2;border-radius:9px;padding:10px;cursor:pointer;margin-bottom:8px">'
+      +'<input type="checkbox" id="dg-integra" checked><span style="font-size:13px">Baixar a <b>íntegra dos autos</b> antes de analisar<div class="note" style="margin:0">Se já estiver na pasta, reaproveita. Em processo grande passa de 100 MB e demora alguns minutos.</div></span></label>'
+    +'<label style="display:flex;gap:8px;align-items:flex-start;background:#f4f7fb;border:1px solid #dbe6f2;border-radius:9px;padding:10px;cursor:pointer">'
+      +'<input type="checkbox" id="dg-peca"><span style="font-size:13px">Redigir também a <b>peça</b> recomendada<div class="note" style="margin:0">Sai em Word (para editar) e em PDF na pasta Protocolo. É rascunho: confira e assine antes de protocolar.</div></span></label>'
+    +'<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">'
+      +'<button class="btn sm ghost" onclick="document.getElementById(\'dg-ov\').remove()">Cancelar</button>'
+      +'<button class="btn sm" id="dg-ok" style="background:#2E3A4B;border-color:#2E3A4B" onclick="_dgRodar()">Analisar os autos</button></div>');
+}
+function _dgPinta(html){ var cx=document.getElementById('dg-cx'); if(cx) cx.innerHTML=html; }
+async function _dgRodar(){
+  var numero=window.__dgNum;
+  var comIntegra=!!(document.getElementById('dg-integra')||{}).checked;
+  var comPeca=!!(document.getElementById('dg-peca')||{}).checked;
+  _dgPinta('<h3 style="margin:0 0 6px;color:var(--navy)">&#129517; Lendo os autos…</h3>'
+    +'<p class="note" style="margin:0">'+(comIntegra?'Baixando a íntegra e lendo':'Lendo o histórico e os documentos da pasta')
+    +(comPeca?', depois redigindo a peça':'')+'. Em processo grande isso leva alguns minutos — pode deixar aberto.</p>'
+    +'<div style="margin-top:14px;height:3px;background:#eef1f5;border-radius:2px;overflow:hidden"><div style="height:100%;width:38%;background:#2E3A4B;animation:dgvai 1.4s ease-in-out infinite"></div></div>'
+    +'<style>@keyframes dgvai{0%{margin-left:-38%}100%{margin-left:100%}}</style>');
+  try{
+    var jwt=(typeof finToken==='function')?await finToken():await docToken();
+    var quem=((document.getElementById('who-name')||{}).textContent||'').trim();
+    var r=await fetch('/api/ia/diagnostico',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+jwt},
+      body:JSON.stringify({numero:numero, integra:comIntegra, peca:comPeca, quem:quem})});
+    var j=await r.json().catch(function(){ return {}; });
+    if(!r.ok||!j.ok){
+      _dgPinta('<h3 style="margin:0 0 6px;color:#b5342b">Não consegui diagnosticar</h3>'
+        +'<div style="font-size:13px">'+esc((j&&j.erro)||('HTTP '+r.status))+'</div>'
+        +'<div style="margin-top:14px;text-align:right"><button class="btn sm ghost" onclick="document.getElementById(\'dg-ov\').remove()">Fechar</button></div>');
+      return;
+    }
+    _dgResultado(j);
+    try{ if(typeof atualizarHistorico!=='function' && typeof renderHistorico==='function') renderHistorico(); }catch(e){}
+  }catch(e){
+    _dgPinta('<h3 style="margin:0 0 6px;color:#b5342b">Falha</h3><div style="font-size:13px">'+esc((e&&e.message)||e)+'</div>'
+      +'<div style="margin-top:14px;text-align:right"><button class="btn sm ghost" onclick="document.getElementById(\'dg-ov\').remove()">Fechar</button></div>');
+  }
+}
+function _dgResultado(j){
+  var d=j.diagnostico||{};
+  var provs=(d.providencias||[]).map(function(p,i){
+    var cor=_DGCOR[p.urgencia]||'#5f6b7a';
+    return '<div style="border-left:3px solid '+cor+';padding:2px 0 2px 12px;margin-bottom:14px">'
+      +'<div style="display:flex;gap:8px;align-items:baseline;flex-wrap:wrap">'
+        +'<b style="color:var(--navy);font-size:14.5px">'+(i+1)+'. '+esc(p.titulo||'')+'</b>'
+        +'<span style="font-size:10px;font-weight:800;letter-spacing:.04em;color:'+cor+';border:1px solid '+cor+'44;border-radius:9px;padding:1px 7px">'+esc((_DGTIPO[p.tipo]||p.tipo||'').toUpperCase())+' · '+esc(String(p.urgencia||'').toUpperCase())+'</span></div>'
+      +(p.porque?'<div style="font-size:13px;margin-top:5px">'+esc(p.porque)+'</div>':'')
+      +(p.fundamento?'<div style="font-size:12.5px;margin-top:4px;color:var(--muted)"><b>Fundamento:</b> '+esc(p.fundamento)+'</div>':'')
+      +(p.o_que_pedir?'<div style="font-size:12.5px;margin-top:4px"><b>Pedir:</b> '+esc(p.o_que_pedir)+'</div>':'')
+      +(p.prazo?'<div style="font-size:12.5px;margin-top:4px;color:'+cor+'"><b>Prazo:</b> '+esc(p.prazo)+'</div>':'')
+      +'</div>';
+  }).join('');
+  var lista=function(t,arr,cor){
+    if(!arr||!arr.length) return '';
+    return '<div style="margin-top:14px"><div class="sectlabel" style="margin:0 0 5px;color:'+cor+'">'+t+'</div>'
+      +'<ul style="margin:0;padding-left:19px;font-size:13px;display:grid;gap:5px">'+arr.map(function(x){ return '<li>'+esc(x)+'</li>'; }).join('')+'</ul></div>';
+  };
+  var pc=j.peca||null;
+  _dgPinta('<h3 style="margin:0 0 2px;color:var(--navy)">&#129517; Diagnóstico do processo</h3>'
+    +'<p class="note" style="margin:0 0 12px">'+esc(fmtCNJ((j.processo&&j.processo.numero)||''))+' · '+esc((j.processo&&j.processo.cliente)||'')+'</p>'
+    +'<div style="background:#f4f7fb;border:1px solid #dbe6f2;border-radius:9px;padding:12px 14px;font-size:13.5px;line-height:1.6">'
+      +'<b style="color:var(--navy)">Onde o processo está</b><div style="margin-top:4px">'+esc(d.situacao||'')+'</div>'
+      +(d.travado_por?'<div style="margin-top:9px"><b style="color:var(--navy)">O que trava</b><div style="margin-top:4px">'+esc(d.travado_por)+'</div></div>':'')
+    +'</div>'
+    +(provs?'<div style="margin-top:16px"><div class="sectlabel" style="margin:0 0 9px">O que fazer</div>'+provs+'</div>':'')
+    +lista('Riscos',d.riscos,'#b5342b')
+    +lista('O que falta nos autos',d.falta_nos_autos,'#8a5a00')
+    +(pc?('<div style="margin-top:16px;background:'+(pc.erro?'#fdecec':'#e9f5f0')+';border:1px solid '+(pc.erro?'#f3c2c2':'#bfe3d2')+';border-radius:9px;padding:12px 14px;font-size:13px">'
+        +(pc.erro?('<b style="color:#b5342b">A peça não saiu:</b> '+esc(pc.erro))
+          :('<b style="color:#0F6E56">Peça redigida</b><div style="margin-top:5px">'
+            +'&#128196; <b>'+esc(pc.arquivo_word||'')+'</b> <span class="note">— na pasta do processo, para editar</span>'
+            +(pc.arquivo_pdf?('<br>&#128209; <b>'+esc(pc.arquivo_pdf)+'</b> <span class="note">— na pasta Protocolo, pronta para conferir e protocolar</span>'):'')
+            +(pc.erro_pdf?('<br><span class="note" style="color:#8a5a00">O PDF não foi gerado: '+esc(pc.erro_pdf)+'</span>'):'')
+            +'<div class="note" style="margin-top:7px">É rascunho. Confira e assine antes de protocolar.</div></div>'))
+        +'</div>'):'')
+    +'<div class="note" style="margin-top:14px;font-size:11.5px">'
+      +(j.docs_lidos&&j.docs_lidos.length?('Leu: '+esc(j.docs_lidos.join(' · '))):'Nenhum PDF dos autos foi lido — o diagnóstico saiu só do histórico.')
+      +((j.integra&&j.integra.erro)?(' · <span style="color:#8a5a00">íntegra: '+esc(j.integra.erro)+'</span>'):'')
+      +'</div>'
+    +'<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;flex-wrap:wrap">'
+      +(d.instrucao_para_redigir?'<button class="btn sm ghost" onclick="_dgCopiar()" title="Copia a instrução completa para você colar em qualquer IA">&#128203; copiar instrução da peça</button>':'')
+      +(pc&&pc.arquivo_pdf?'<button class="btn sm" style="background:#0F6E56;border-color:#0F6E56" onclick="document.getElementById(\'dg-ov\').remove();abrirProtocolarJusbr(\''+esc((j.processo&&j.processo.numero)||'')+'\')">&#9878; ir protocolar</button>':'')
+      +'<button class="btn sm ghost" onclick="document.getElementById(\'dg-ov\').remove()">Fechar</button></div>');
+  window.__dgInstrucao=d.instrucao_para_redigir||'';
+}
+function _dgCopiar(){
+  var t=window.__dgInstrucao||''; if(!t) return;
+  try{ navigator.clipboard.writeText(t); alert('Instrução copiada — cole na IA que vai redigir.'); }
+  catch(e){ window.prompt('Copie a instrução:', t); }
+}
+
 /* ===== Protocolar no jus.br, daqui =====
    A receita saiu de três protocolos que o dono fez pelo portal com a extensão
    ligada (TJBA, TRT5, TJPB): pedir o endereço de upload, subir o PDF, protocolar,

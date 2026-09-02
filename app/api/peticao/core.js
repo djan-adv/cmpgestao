@@ -63,10 +63,37 @@ export function prazoUteis(dias) {
   return d.toISOString().slice(0, 10)
 }
 
+/* Cabeçalho da peça, no padrão do escritório (02/09/2026): endereçamento, TRÊS
+   linhas em branco, identificação em espaçamento simples, SETE linhas em branco
+   antes do corpo. O mesmo que lib/peca-pdf.js aplica no PDF — Word e PDF têm de
+   sair iguais. */
+const RE_ENDERECAMENTO = /^(a[o]?\s+(ju[íi]z|ex|meritíssim|dr)|excelent[íi]ssim|exm[oa]|mm\.|meritíssim|ilustr[íi]ssim|ao\s+ju[íi]zo|à\s+vara|ao\s+tribunal|colenda|egr[ée]gi)/i
+const RE_IDENTIFICACAO = /^(processo|autos|refer[êe]ncia|ref\.|autor|r[ée]u|r[ée]|exequente|executad|requerente|requerid|reclamante|reclamad|embargante|embargad|agravante|agravad|apelante|apelad|impugnante|impugnad|recorrente|recorrid|suscitante|suscitad|impetrante|impetrad|credor|devedor|inventariante|espólio)\b[\s:ºn°]/i
+
 export function minutaDoc(proc, texto) {
-  const blocks = String(texto || '').split(/\n{2,}/)
-  const corpo = blocks.map(function (b) {
-    const t = b.trim(); if (!t) return ''
+  const blocks = String(texto || '').split(/\n{2,}/).map(b => b.trim()).filter(Boolean)
+  const papel = (t) => {
+    const l0 = t.split('\n')[0].trim()
+    if (RE_ENDERECAMENTO.test(l0)) return 'enderecamento'
+    if (RE_IDENTIFICACAO.test(l0)) return 'identificacao'
+    return 'corpo'
+  }
+  const papeis = blocks.map(papel)
+  let fimCab = 0
+  while (fimCab < papeis.length && papeis[fimCab] === 'enderecamento') fimCab++
+  while (fimCab < papeis.length && papeis[fimCab] === 'identificacao') fimCab++
+
+  const corpo = blocks.map(function (b, i) {
+    const t = b
+    const pp = i < fimCab ? papeis[i] : 'corpo'
+    if (pp === 'enderecamento') {
+      const depois = (papeis[i + 1] !== 'enderecamento') ? 'margin:0 0 54pt' : 'margin:0'   // 3 linhas
+      return '<p style="font-weight:bold;text-align:justify;' + depois + '">' + escHtml(t).replace(/\n/g, '<br>') + '</p>'
+    }
+    if (pp === 'identificacao') {
+      const ultimo = (i + 1) >= fimCab
+      return '<p style="line-height:1.15;margin:0 0 ' + (ultimo ? '126pt' : '0') + '">' + escHtml(t).replace(/\n/g, '<br>') + '</p>'   // 7 linhas
+    }
     const umaLinha = t.indexOf('\n') < 0
     const ehTitulo = umaLinha && t.length < 90 && (/^[IVX]+\s*[–-]/.test(t) || (t === t.toUpperCase() && /[A-ZÀ-Ú]/.test(t)))
     if (ehTitulo) return '<p style="text-align:center;font-weight:bold;margin:14pt 0 8pt">' + escHtml(t) + '</p>'
