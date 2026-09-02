@@ -23,6 +23,7 @@ import { pecaEmPdf } from '../../../../lib/peca-pdf.js'
 import { getFreshToken } from '../../jusbr/lib.js'
 import { buscarProcesso, movimentosDoProcesso, aplicarMeta, gravarMovimentos } from '../../jusbr/movimentos/core.js'
 import { coletarPecas, ordenarPecas, pdfUnico, salvarNaPasta } from '../../jusbr/integra/core.js'
+import { orcarChamada } from '../../_ia/claude.js'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -183,6 +184,45 @@ async function garantirIntegra(sb, dig, quem, ultimoAndamento) {
   } catch (e) { return { erro: String((e && e.message) || e), arquivo: atual && atual.arquivo, ja_existia: !!atual } }
 }
 
+/* Os autos, do jeito mais barato que não perde prova.
+   O PDF viaja como texto E como imagem da página — e a imagem custa ~1.700
+   tokens por página. Numa íntegra comum, 80-90% das páginas são petição,
+   decisão e despacho: texto corrido, em que a imagem não acrescenta nada e
+   custa tudo. Mas comprovante, cartão de embarque, foto, laudo com tabela e
+   documento digitalizado SÃO a imagem — ali ela não pode sair.
+   Por isso a separação é peça a peça, com o critério vindo do próprio tribunal:
+   se o PDPJ tem a versão em texto da peça e ela é substanciosa, a peça vai como
+   texto; se não tem (ou o texto é vazio, que é o que acontece com scan), vai a
+   página como está. Nada fica de fora — só sai o retrato de folha de texto. */
+async function autosParaIA(sb, dig, orcamentoB64) {
+  const col = await coletarPecas(sb, dig, { preferirTexto: true })
+  if (col.erro) return { erro: col.erro, sem_sessao: col.motivo === 'expirado' || col.motivo === 'sem_token' }
+  ordenarPecas(col.files, { ordem: 'asc' })
+  const blocos = []
+  const comoTexto = []
+  const comoImagem = []
+  const foraPorTamanho = []
+  let b64 = 0
+  for (const f of col.files) {
+    if (f.texto) {
+      blocos.push({ type: 'text', text: '===== ' + f.name + ' =====\n' + f.texto })
+      comoTexto.push(f.name)
+      continue
+    }
+    const custo = b64de(f.data.length)
+    if (b64 + custo > orcamentoB64) { foraPorTamanho.push(f.name); continue }
+    const ehPdf = f.data.slice(0, 5).toString('latin1').toLowerCase().startsWith('%pdf')
+    if (!ehPdf) {   // HTML sem hrefTexto: já é texto, aproveita
+      const t = f.data.toString('utf8').replace(/<(script|style)[\s\S]*?<\/\1>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/[ \t\u00a0]+/g, ' ').trim()
+      if (t.replace(/\s/g, '').length > 80) { blocos.push({ type: 'text', text: '===== ' + f.name + ' =====\n' + t }); comoTexto.push(f.name) }
+      continue
+    }
+    blocos.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: f.data.toString('base64') } })
+    comoImagem.push(f.name); b64 += custo
+  }
+  return { blocos, comoTexto, comoImagem, foraPorTamanho, pecas: col.files.length }
+}
+
 /* GET ?id= — em que pé está um diagnóstico pedido antes.
    GET ?pendentes=1 — o que terminou e ainda não foi visto (é o que faz o aviso
    aparecer mesmo depois de trocar de processo ou recarregar a página). */
@@ -225,6 +265,9 @@ export async function POST(request) {
   const dig = String(b.numero || '').replace(/\D/g, '')
   const querIntegra = b.integra !== false
   const querPeca = b.peca === true
+  const economico = b.leitura !== 'completa'      // padrão: barato e sem perder prova
+  const confirmado = b.confirmado === true
+  const leitura = { modo: economico ? 'economica' : 'completa' }
   const quem = String(b.quem || '').slice(0, 80)
   if (dig.length < 8) return Response.json({ erro: 'número de processo inválido' }, { status: 400 })
 
@@ -267,30 +310,47 @@ export async function POST(request) {
 
   // ——— íntegra dos autos (remontada se ficou para trás do último andamento) ———
   let integra = null
-  if (querIntegra) integra = await garantirIntegra(sb, dig, quem, (oficiais[0] && oficiais[0].data) || null)
+  if (querIntegra && !economico) integra = await garantirIntegra(sb, dig, quem, (oficiais[0] && oficiais[0].data) || null)
 
   // ——— o que já protocolamos e o que está aberto ———
   const { data: tarefas } = await sb.from('kanban_tarefas')
     .select('titulo,prazo,coluna').eq('numero', proc.numero).neq('coluna', 'finalizado').limit(12)
 
-  // ——— documentos: a íntegra primeiro; sem ela, os PDFs mais recentes ———
+  // ——— os autos, no modo de leitura escolhido ———
   const conteudo = []
   const nomesPdf = []
-  const foraPorTamanho = []
-  let b64 = 0
-  try {
-    const pasta = path.join(ROOT, dig)
-    const arqs = fs.readdirSync(pasta).filter(n => /\.pdf$/i.test(n))
-      .map(n => { const st = fs.statSync(path.join(pasta, n)); return { nome: n, full: path.join(pasta, n), size: st.size, mtime: st.mtimeMs } })
-      .sort((x, y) => (y.nome.startsWith(INTEGRA_PREFIXO) - x.nome.startsWith(INTEGRA_PREFIXO)) || (y.mtime - x.mtime))
-    for (const f of arqs) {
-      if (nomesPdf.length >= 4) break
-      if (b64 + b64de(f.size) > MAX_B64) { foraPorTamanho.push(f.nome); continue }
-      conteudo.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: fs.readFileSync(f.full).toString('base64') } })
-      nomesPdf.push(f.nome); b64 += b64de(f.size)
-      if (f.nome.startsWith(INTEGRA_PREFIXO)) break   // a íntegra já é tudo
+  let foraPorTamanho = []
+  let comoTexto = [], comoImagem = []
+  if (economico) {
+    const a = await autosParaIA(sb, dig, MAX_B64)
+    if (a.erro) { leitura.erro = a.erro; leitura.sem_sessao = !!a.sem_sessao }
+    else {
+      conteudo.push(...a.blocos)
+      comoTexto = a.comoTexto; comoImagem = a.comoImagem; foraPorTamanho = a.foraPorTamanho
+      nomesPdf.push(...a.comoTexto, ...a.comoImagem)
+      leitura.pecas = a.pecas
     }
-  } catch (e) {}
+  }
+  /* leitura completa (ou o modo econômico não conseguiu falar com o tribunal):
+     a íntegra da pasta, tudo como imagem — é a leitura mais fiel e a mais cara */
+  if (!conteudo.length) {
+    let b64 = 0
+    try {
+      const pasta = path.join(ROOT, dig)
+      const arqs = fs.readdirSync(pasta).filter(n => /\.pdf$/i.test(n))
+        .map(n => { const st = fs.statSync(path.join(pasta, n)); return { nome: n, full: path.join(pasta, n), size: st.size, mtime: st.mtimeMs } })
+        .sort((x, y) => (y.nome.startsWith(INTEGRA_PREFIXO) - x.nome.startsWith(INTEGRA_PREFIXO)) || (y.mtime - x.mtime))
+      for (const f of arqs) {
+        if (nomesPdf.length >= 4) break
+        if (b64 + b64de(f.size) > MAX_B64) { foraPorTamanho.push(f.nome); continue }
+        conteudo.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: fs.readFileSync(f.full).toString('base64') } })
+        nomesPdf.push(f.nome); b64 += b64de(f.size); comoImagem.push(f.nome)
+        if (f.nome.startsWith(INTEGRA_PREFIXO)) break   // a íntegra já é tudo
+      }
+    } catch (e) {}
+  }
+  leitura.como_texto = comoTexto
+  leitura.como_imagem = comoImagem
 
   conteudo.push({
     type: 'text',
@@ -305,6 +365,30 @@ export async function POST(request) {
       ((tarefas && tarefas.length) ? ('TAREFAS ABERTAS NO ESCRITÓRIO:\n' + tarefas.map(t => '- ' + t.titulo + (t.prazo ? (' (prazo ' + String(t.prazo).split('-').reverse().join('/') + ')') : '')).join('\n') + '\n\n') : '') +
       'Diagnostique este processo e chame a ferramenta "diagnostico".',
   })
+
+  /* Quanto vai custar, ANTES de gastar. A contagem é a oficial da Anthropic
+     (count_tokens, de graça); só a saída é estimativa. Passando do limite, a
+     rodada para aqui e devolve o número para a tela confirmar — pedido em
+     02/09/2026, depois de um diagnóstico de R$ 3,74 que ninguém viu chegar. */
+  const orcado = await orcarChamada({
+    modelo: 'claude-opus-5', sistemaFixo: sistemaFixo(), conteudo,
+    ferramentas: [FERRAMENTA], saidaEstimada: 5500,
+  })
+  if (!orcado.erro) {
+    leitura.custo_estimado_usd = orcado.custoUsd
+    leitura.custo_estimado_brl = brl(orcado.custoUsd)
+    leitura.tokens_entrada = orcado.entrada
+    const tetoAviso = Number(orc.avisoDiagnosticoBrl) || 2
+    if (!confirmado && leitura.custo_estimado_brl > tetoAviso) {
+      await encerra({ status: 'erro', erro: 'aguardando confirmação de custo' })
+      return Response.json({
+        precisa_confirmar: true, id: regId, leitura,
+        processo: { numero: proc.numero, cliente: proc.cliente_nome },
+        erro: 'este diagnóstico deve custar cerca de R$ ' + leitura.custo_estimado_brl.toFixed(2).replace('.', ',') +
+          ' — confirme para continuar',
+      }, { status: 409 })
+    }
+  }
 
   const r = await chamarClaude({
     rotina: 'diagnostico', sb, ref: proc.numero, escritorioId: ESCRITORIO_CMP,
@@ -321,7 +405,7 @@ export async function POST(request) {
   const saida = {
     ok: true, id: regId, processo: { numero: proc.numero, cliente: proc.cliente_nome, oponente: proc.oponente },
     diagnostico: diag, integra, docs_lidos: nomesPdf, custo_usd: r.custoUsd,
-    atualizacao, docs_fora_por_tamanho: foraPorTamanho,
+    atualizacao, docs_fora_por_tamanho: foraPorTamanho, leitura,
     custo_brl: brl(r.custoUsd), cambio: orc.cambio,
   }
 
@@ -392,7 +476,7 @@ export async function POST(request) {
 
   await encerra({
     status: 'pronto', resultado: { diagnostico: diag, integra, docs_lidos: nomesPdf, processo: saida.processo,
-      atualizacao, docs_fora_por_tamanho: foraPorTamanho,
+      atualizacao, docs_fora_por_tamanho: foraPorTamanho, leitura,
       custo_usd: r.custoUsd, custo_peca_usd: custoPeca || null, custo_total_usd: custoTotal, custo_total_brl: saida.custo_total_brl },
     peca: saida.peca || null, custo_usd: custoTotal,
   })

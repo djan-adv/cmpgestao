@@ -82,7 +82,12 @@ export function decodeEntidadesHtml(s) {
 }
 
 // Baixa as peças. Devolve { files, pulados } ou { erro, status }.
-export async function coletarPecas(sb, numero, { uuidsSel = [] } = {}) {
+/* Uma peça vale a pena como TEXTO quando o tribunal tem texto dela e esse texto
+   é de verdade. Abaixo disso é digitalização (scan, foto, comprovante, laudo com
+   tabela) — e aí a imagem É a prova, tem que ir como PDF. */
+const MIN_TEXTO_UTIL = 400   // caracteres, depois de limpar as tags
+
+export async function coletarPecas(sb, numero, { uuidsSel = [], preferirTexto = false } = {}) {
   const sess = await getFreshToken(sb)
   if (sess.erro) return { erro: 'jus.br: ' + sess.erro + ' — sincronize a sessão', motivo: sess.erro, status: 409 }
   const token = sess.token
@@ -115,6 +120,24 @@ export async function coletarPecas(sb, numero, { uuidsSel = [] } = {}) {
     if (!rb.ok) { pulados++; continue }
     const buf = Buffer.from(await rb.arrayBuffer())
     if (!buf.length) { pulados++; continue }
+    /* Modo econômico: se o tribunal tem a versão em texto desta peça e ela é
+       substanciosa, guarda o texto junto — quem for ler decide o que usar. A
+       peça em PDF continua aqui do lado, intacta. */
+    if (preferirTexto) {
+      const ht = abs(d.hrefTexto || arq.hrefTexto)
+      if (ht) {
+        try {
+          const rt = await fetch(ht, { headers: { ...PDPJ_HEADERS, Accept: 'text/html,text/plain;q=0.9,*/*;q=0.5', Authorization: 'Bearer ' + token }, signal: AbortSignal.timeout(30000) })
+          if (rt.ok) {
+            const bt = Buffer.from(await rt.arrayBuffer())
+            if (bt.length && !ehShell(bt)) {
+              const txt = decodeEntidadesHtml(bt.toString('utf8').replace(/<(script|style)[\s\S]*?<\/\1>/gi, ' ').replace(/<[^>]+>/g, ' ')).replace(/[ \t\u00a0]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim()
+              if (txt.replace(/\s/g, '').length >= MIN_TEXTO_UTIL) d.__texto = txt
+            }
+          }
+        } catch (e) { /* sem texto: segue com o PDF, que é o que importa */ }
+      }
+    }
     const ct = String(rb.headers.get('content-type') || '').split(';')[0].toLowerCase()
     const head = buf.slice(0, 64).toString('utf8').toLowerCase().trim()
     if (/json/.test(ct) || head.startsWith('{') || ehShell(buf)) { pulados++; continue }
@@ -124,7 +147,7 @@ export async function coletarPecas(sb, numero, { uuidsSel = [] } = {}) {
     let name = seq + ' - ' + base
     if (usados[name]) { name = seq + '-' + (usados[name]++) + ' - ' + base } else usados[name] = 1
     const duuid = ((String(hb || '').match(/documentos\/([^/]+)\//) || [])[1]) || ''
-    files.push({ name, data: buf, uuid: duuid, dt: String(d.dataHoraJuntada || d.data || '') })
+    files.push({ name, data: buf, uuid: duuid, dt: String(d.dataHoraJuntada || d.data || ''), texto: d.__texto || null })
     total += buf.length
   }
   if (!files.length) return { erro: 'não foi possível baixar nenhuma peça', status: 502 }

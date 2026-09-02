@@ -192,23 +192,53 @@ export async function chamarClaude({
   return { texto, ferramenta: ferramentaUsada, usage, custoUsd: custo, modelo, stopReason: data.stop_reason || null, bruto: data }
 }
 
+/* Quanto ESTA chamada vai custar, antes de fazê-la. A contagem é a oficial da
+   Anthropic (POST /v1/messages/count_tokens, de graça e no tokenizador do
+   próprio modelo) — estimativa por caractere erra feio com PDF. A saída ninguém
+   sabe de antemão, então entra como estimativa declarada. */
+export async function orcarChamada({ modelo = 'claude-sonnet-5', sistemaFixo, conteudo, ferramentas = null, saidaEstimada = 5000 }) {
+  const key = process.env.ANTHROPIC_API_KEY
+  if (!key) return { erro: 'IA não configurada no servidor (falta ANTHROPIC_API_KEY).' }
+  const corpo = { model: modelo, messages: [{ role: 'user', content: Array.isArray(conteudo) ? conteudo : [{ type: 'text', text: String(conteudo || '') }] }] }
+  if (ferramentas && ferramentas.length) corpo.tools = ferramentas
+  if (sistemaFixo) corpo.system = [{ type: 'text', text: sistemaFixo }]
+  let data
+  try {
+    const r = await fetch('https://api.anthropic.com/v1/messages/count_tokens', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify(corpo),
+      signal: AbortSignal.timeout(120000),
+    })
+    data = await r.json().catch(() => null)
+    if (!r.ok) return { erro: emPortugues((data && data.error && data.error.message) || String(r.status)) }
+  } catch (e) { return { erro: 'não consegui estimar o custo: ' + ((e && e.message) || e) } }
+  const entrada = (data && data.input_tokens) || 0
+  const p = PRECOS[modelo] || PRECOS['claude-sonnet-5']
+  return {
+    entrada, saidaEstimada,
+    custoUsd: Math.round(((entrada * p.entrada + saidaEstimada * p.saida) / 1e6) * 1e6) / 1e6,
+  }
+}
+
 // ————— teto mensal —————
 // Devolve o orçamento em USD e quanto já foi gasto no mês (fuso de Brasília).
 export async function orcamento(sb) {
-  let teto = 100, cambio = 5.4, ativo = true
+  let teto = 100, cambio = 5.4, ativo = true, avisoBrl = 2
   try {
-    const { data } = await sb.from('ia_config').select('teto_mensal_brl,cambio_usd_brl,robo_minutas_ativo').eq('id', 1).maybeSingle()
+    const { data } = await sb.from('ia_config').select('teto_mensal_brl,cambio_usd_brl,robo_minutas_ativo,aviso_custo_brl').eq('id', 1).maybeSingle()
     if (data) {
       teto = Number(data.teto_mensal_brl) || 100
       cambio = Number(data.cambio_usd_brl) || 5.4
       ativo = data.robo_minutas_ativo !== false
+      if (data.aviso_custo_brl != null) avisoBrl = Number(data.aviso_custo_brl)
     }
   } catch (e) {}
   let gastoUsd = 0
   try { const { data } = await sb.rpc('ia_gasto_mes'); gastoUsd = Number(data) || 0 } catch (e) {}
   const tetoUsd = teto / cambio
   return {
-    ativo, cambio,
+    ativo, cambio, avisoDiagnosticoBrl: avisoBrl,
     tetoBrl: teto, tetoUsd,
     gastoUsd, gastoBrl: gastoUsd * cambio,
     restanteUsd: Math.max(0, tetoUsd - gastoUsd),
