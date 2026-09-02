@@ -123,6 +123,31 @@ async function garantirIntegra(sb, dig, quem, base) {
   } catch (e) { return { erro: String((e && e.message) || e) } }
 }
 
+/* GET ?id= — em que pé está um diagnóstico pedido antes.
+   GET ?pendentes=1 — o que terminou e ainda não foi visto (é o que faz o aviso
+   aparecer mesmo depois de trocar de processo ou recarregar a página). */
+export async function GET(request) {
+  const u = await usuario(request)
+  if (!u) return Response.json({ erro: 'não autenticado' }, { status: 401 })
+  const { searchParams } = new URL(request.url)
+  const sb = admin()
+  const id = searchParams.get('id')
+  if (id) {
+    const { data } = await sb.from('ia_diagnosticos').select('*').eq('id', id).maybeSingle()
+    if (!data) return Response.json({ erro: 'diagnóstico não encontrado' }, { status: 404 })
+    return Response.json({ ok: true, diag: data })
+  }
+  if (searchParams.get('pendentes') != null) {
+    const { data } = await sb.from('ia_diagnosticos')
+      .select('id,processo_numero,status,erro,concluido_em,criado_em,com_peca')
+      .eq('escritorio_id', ESCRITORIO_CMP).is('visto_em', null)
+      .gte('criado_em', new Date(Date.now() - 24 * 3600000).toISOString())
+      .order('criado_em', { ascending: false }).limit(20)
+    return Response.json({ ok: true, itens: data || [] })
+  }
+  return Response.json({ erro: 'informe ?id= ou ?pendentes=1' }, { status: 400 })
+}
+
 export async function POST(request) {
   const u = await usuario(request)
   if (!u) return Response.json({ erro: 'não autenticado' }, { status: 401 })
@@ -143,6 +168,21 @@ export async function POST(request) {
     .select('id,numero,cliente_nome,oponente,classe,assunto,orgao,orgao_atual,foro,valor_causa,distribuido_em,fase,status')
     .eq('escritorio_id', ESCRITORIO_CMP).eq('numero_digitos', dig).maybeSingle()
   if (!proc) return Response.json({ erro: 'processo não encontrado no sistema' }, { status: 404 })
+
+  /* A linha nasce AQUI, antes do trabalho: o pedido leva minutos e o advogado vai
+     trocar de processo no meio. Sem isto, o resultado morria com o modal. */
+  let regId = null
+  try {
+    const ins = await sb.from('ia_diagnosticos').insert({
+      escritorio_id: ESCRITORIO_CMP, processo_numero: proc.numero, processo_id: proc.id,
+      pedido_por: quem || null, status: 'rodando', com_integra: querIntegra, com_peca: querPeca,
+    }).select('id').single()
+    regId = ins.data && ins.data.id
+  } catch (e) {}
+  const encerra = async (campos) => {
+    if (!regId) return
+    try { await sb.from('ia_diagnosticos').update({ ...campos, concluido_em: new Date().toISOString() }).eq('id', regId) } catch (e) {}
+  }
 
   // ——— íntegra dos autos ———
   const base = (process.env.PUBLIC_URL || 'https://gestao.cmpadvogados.com.br').replace(/\/+$/, '')
@@ -199,9 +239,9 @@ export async function POST(request) {
     sistemaFixo: sistemaFixo(), conteudo,
     ferramentas: [FERRAMENTA], toolChoice: { type: 'tool', name: 'diagnostico' },
   })
-  if (r.erro) return Response.json({ erro: r.erro }, { status: r.status || 502 })
+  if (r.erro) { await encerra({ status: 'erro', erro: String(r.erro).slice(0, 400) }); return Response.json({ erro: r.erro, id: regId }, { status: r.status || 502 }) }
   const diag = (r.ferramenta && r.ferramenta.input) || null
-  if (!diag) return Response.json({ erro: 'a IA não devolveu o diagnóstico no formato esperado' }, { status: 502 })
+  if (!diag) { await encerra({ status: 'erro', erro: 'formato inesperado' }); return Response.json({ erro: 'a IA não devolveu o diagnóstico no formato esperado', id: regId }, { status: 502 }) }
 
   // ——— registra no histórico: diagnóstico é trabalho, e trabalho fica gravado ———
   const hoje = new Date().toISOString().slice(0, 10)
@@ -215,7 +255,7 @@ export async function POST(request) {
   } catch (e) {}
 
   const saida = {
-    ok: true, processo: { numero: proc.numero, cliente: proc.cliente_nome, oponente: proc.oponente },
+    ok: true, id: regId, processo: { numero: proc.numero, cliente: proc.cliente_nome, oponente: proc.oponente },
     diagnostico: diag, integra, docs_lidos: nomesPdf, custo_usd: r.custoUsd,
   }
 
@@ -248,6 +288,10 @@ export async function POST(request) {
     }
   }
 
+  await encerra({
+    status: 'pronto', resultado: { diagnostico: diag, integra, docs_lidos: nomesPdf, processo: saida.processo },
+    peca: saida.peca || null, custo_usd: r.custoUsd,
+  })
   return Response.json(saida)
 }
 
