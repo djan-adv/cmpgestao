@@ -6,6 +6,7 @@
 
 import { createClient } from '@supabase/supabase-js'
 import { getFreshToken, ehFaltaDeAcessoAoProcesso } from '../lib.js'
+import { docsDoPayload } from '../integra/core.js'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -91,16 +92,16 @@ export async function POST(request) {
   }
   if (!resp.ok) return Response.json({ erro: 'PDPJ recusou (HTTP ' + resp.status + ')' }, { status: 502 })
 
-  // o processo pode vir como objeto único ou dentro de um array/tramitacoes
+  // o processo pode vir como objeto único, como lista, ou com uma entrada por
+  // grau — e cada grau traz a SUA lista de documentos. Ver docsDoPayload.
   const proc = Array.isArray(data && data.content) ? data.content[0] : (Array.isArray(data) ? data[0] : data)
-  let docs = []
-  const cand = (proc && (proc.documentos || (proc.tramitacaoAtual && proc.tramitacaoAtual.documentos))) || (data && data.documentos) || []
-  docs = (Array.isArray(cand) ? cand : []).map(normDoc).filter(d => d.uuid || d.href)
+  const cand = docsDoPayload(data)
+  const docs = cand.map(normDoc).filter(d => d.uuid || d.href)
 
   // diagnóstico: mostra os campos CRUS dos primeiros documentos (para achar o
   // campo certo de id/hrefBinario do PDPJ)
   if (body.debug) {
-    const cru = (Array.isArray(cand) ? cand : []).slice(0, 3)
+    const cru = cand.slice(0, 3)
     const procKeys = (proc && typeof proc === 'object') ? Object.keys(proc) : []
     const procHrefs = {}
     if (proc) for (const k of procKeys) { if (/href|integra|íntegra|download|autos|url|link|pdf|zip/i.test(k)) { try { procHrefs[k] = typeof proc[k] === 'object' ? JSON.stringify(proc[k]).slice(0, 200) : proc[k] } catch (e) {} } }

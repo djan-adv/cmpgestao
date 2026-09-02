@@ -87,6 +87,42 @@ export function decodeEntidadesHtml(s) {
    tabela) — e aí a imagem É a prova, tem que ir como PDF. */
 const MIN_TEXTO_UTIL = 400   // caracteres, depois de limpar as tags
 
+/* TODOS os documentos do processo, de todas as tramitações.
+   O PDPJ devolve uma entrada por grau em `content`, cada uma com a sua lista de
+   documentos — e nós líamos só a primeira. Num processo que subiu ao 2º grau ou
+   ao STJ, as peças do grau que não fosse o primeiro simplesmente não apareciam
+   ("vários documentos estão sumindo", 02/09/2026). O mesmo erro que a leitura
+   de movimentos já tinha corrigido. Deduplica pelo uuid do binário, porque a
+   mesma peça pode constar em mais de uma tramitação. */
+export function docsDoPayload(data) {
+  const raizes = Array.isArray(data && data.content) ? data.content : (Array.isArray(data) ? data : [data])
+  const listas = []
+  const empilha = (v) => { if (Array.isArray(v) && v.length) listas.push(v) }
+  for (const p of raizes) {
+    if (!p || typeof p !== 'object') continue
+    empilha(p.documentos)
+    if (p.tramitacaoAtual) empilha(p.tramitacaoAtual.documentos)
+    if (Array.isArray(p.tramitacoes)) for (const t of p.tramitacoes) if (t) empilha(t.documentos)
+  }
+  if (!listas.length) empilha(data && data.documentos)
+  const out = []
+  const vistos = new Set()
+  for (const lista of listas) {
+    for (const d of lista) {
+      if (!d || typeof d !== 'object') continue
+      const arq = d.arquivo || {}
+      const hb = d.hrefBinario || arq.hrefBinario || ''
+      const chave = ((String(hb).match(/documentos\/([^/]+)\//) || [])[1]) ||
+        String(d.idOrigem || d.id || d.idCodex || '') ||
+        (String(d.sequencia || '') + '|' + String(d.nome || arq.nome || ''))
+      if (!chave || vistos.has(chave)) continue
+      vistos.add(chave)
+      out.push(d)
+    }
+  }
+  return out
+}
+
 export async function coletarPecas(sb, numero, { uuidsSel = [], preferirTexto = false } = {}) {
   const sess = await getFreshToken(sb)
   if (sess.erro) return { erro: 'jus.br: ' + sess.erro + ' — sincronize a sessão', motivo: sess.erro, status: 409 }
@@ -100,9 +136,7 @@ export async function coletarPecas(sb, numero, { uuidsSel = [], preferirTexto = 
     data = await r.json().catch(() => null)
   } catch (e) { return { erro: 'falha na lista: ' + String((e && e.message) || e), status: 502 } }
 
-  const proc = Array.isArray(data && data.content) ? data.content[0] : (Array.isArray(data) ? data[0] : data)
-  const docsRaw = (proc && (proc.documentos || (proc.tramitacaoAtual && proc.tramitacaoAtual.documentos))) || (data && data.documentos) || []
-  const docs = (Array.isArray(docsRaw) ? docsRaw : [])
+  const docs = docsDoPayload(data)
   if (!docs.length) return { erro: 'nenhuma peça retornada pelo jus.br', status: 404 }
 
   const files = []; let total = 0; let pulados = 0
