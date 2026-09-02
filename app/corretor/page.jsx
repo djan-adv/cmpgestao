@@ -71,6 +71,7 @@ export default async function PaginaInicial() {
             { titulo: 'Imóveis próprios', desc: 'Imóveis à venda e para locação, com atendimento direto.', href: '/corretor/imoveis' },
             { titulo: 'Parcerias', desc: 'Divulgação em conjunto com outros corretores e imobiliárias.', href: '/corretor/parcerias' },
             { titulo: 'Avaliação de imóveis', desc: 'Avaliação técnica por corretor avaliador (CNAI ' + perfil.cnai + ').', href: '/corretor/avaliacao' },
+            { titulo: 'Certidão do imóvel', desc: 'Solicite a certidão do imóvel por R$ 360.', href: '/corretor/certidao' },
           ].map(c => (
             <Link key={c.href} href={c.href} style={{ textDecoration: 'none', color: 'inherit' }}>
               <div style={{ background: COR.branco, border: `1px solid ${COR.borda}`, borderRadius: 12, padding: 20, height: '100%' }}>

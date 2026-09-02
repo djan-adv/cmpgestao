@@ -30,13 +30,16 @@ create table if not exists imoveis.perfil (
 );
 insert into imoveis.perfil (id) values (1) on conflict (id) do nothing;
 
--- ---------- anunciantes (donos de imóvel — portal tipo OLX, autoatendimento) ----------
+-- ---------- anunciantes (dono do imóvel OU corretor de outra imobiliária —
+-- portal tipo OLX, autoatendimento; `papel` decide se o anúncio publicado vira
+-- tipo='terceiro' ou tipo='parceria', ver app/api/imoveis/route.js) ----------
 create table if not exists imoveis.anunciantes (
   id         uuid primary key default gen_random_uuid(),
   nome       text not null,
   telefone   text,
   email      text not null unique,
   senha_hash text not null,
+  papel      text not null default 'proprietario' check (papel in ('proprietario','corretor')),
   ativo      boolean not null default true,
   criado_em  timestamptz not null default now()
 );
@@ -68,6 +71,7 @@ create table if not exists imoveis.imoveis (
   area_util     numeric(10,2),
   area_total    numeric(10,2),
   fotos         jsonb not null default '[]'::jsonb, -- array de URLs
+  video_url     text, -- link do YouTube ou outro
   destaque      boolean not null default false,
   destaque_ate  date, -- lembrete de renovação do impulsionamento (R$ 50/mês, cobrado por fora)
   status        text not null default 'ativo'
@@ -116,10 +120,11 @@ create table if not exists imoveis.anuncios (
   criado_em          timestamptz not null default now()
 );
 
--- ---------- leads (avaliação, interesse em imóvel, parceria, contato geral) ----------
+-- ---------- leads (avaliação, interesse em imóvel, parceria, contato geral,
+-- certidão do imóvel — R$ 360, cobrança combinada por fora) ----------
 create table if not exists imoveis.leads (
   id              uuid primary key default gen_random_uuid(),
-  tipo            text not null check (tipo in ('avaliacao','imovel','parceria','contato')),
+  tipo            text not null check (tipo in ('avaliacao','imovel','parceria','contato','certidao')),
   nome            text not null,
   telefone        text,
   email           text,

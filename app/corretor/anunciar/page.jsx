@@ -110,6 +110,7 @@ function FormCadastro({ aoEntrar }) {
   const [telefone, setTelefone] = useState('')
   const [email, setEmail] = useState('')
   const [senha, setSenha] = useState('')
+  const [papel, setPapel] = useState('proprietario')
   const [erro, setErro] = useState('')
   const [carregando, setCarregando] = useState(false)
 
@@ -117,7 +118,7 @@ function FormCadastro({ aoEntrar }) {
     e.preventDefault()
     setErro(''); setCarregando(true)
     try {
-      const d = await chamar('anunciante_cadastro', { nome, telefone, email, senha })
+      const d = await chamar('anunciante_cadastro', { nome, telefone, email, senha, papel })
       aoEntrar(d.token)
     } catch (e) {
       setErro(e.message)
@@ -128,6 +129,11 @@ function FormCadastro({ aoEntrar }) {
 
   return (
     <form onSubmit={enviar}>
+      <label style={rotulo}>Você é...</label>
+      <select style={campo} value={papel} onChange={e => setPapel(e.target.value)}>
+        <option value="proprietario">Proprietário do imóvel</option>
+        <option value="corretor">Corretor(a) de outra imobiliária</option>
+      </select>
       <label style={rotulo}>Nome</label>
       <input style={campo} value={nome} onChange={e => setNome(e.target.value)} required />
       <label style={rotulo}>Telefone / WhatsApp</label>
@@ -147,7 +153,7 @@ function FormCadastro({ aoEntrar }) {
 const IMOVEL_VAZIO = {
   finalidade: 'venda', titulo: '', descricao: '', categoria: '', preco: '',
   endereco: '', bairro: '', cidade: '', uf: '',
-  quartos: '', banheiros: '', vagas: '', area_util: '', area_total: '',
+  quartos: '', banheiros: '', vagas: '', area_util: '', area_total: '', video_url: '',
 }
 
 function PainelAnunciante({ token, sair }) {
@@ -239,6 +245,9 @@ function PainelAnunciante({ token, sair }) {
 
           <label style={rotulo}>Fotos (uma URL por linha — a primeira é a capa)</label>
           <textarea style={{ ...campo, minHeight: 70 }} value={fotosTexto} onChange={e => setFotosTexto(e.target.value)} placeholder="https://..." />
+
+          <label style={rotulo}>Vídeo (link do YouTube, opcional)</label>
+          <input style={campo} value={c.video_url || ''} onChange={e => upd('video_url', e.target.value)} placeholder="https://youtube.com/watch?v=..." />
 
           {!c.id && (
             <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 13, marginTop: 14, color: COR.texto }}>

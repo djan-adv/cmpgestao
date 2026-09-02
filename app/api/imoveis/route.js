@@ -12,7 +12,9 @@
 //   GET  /api/imoveis?secao=anuncios
 //   GET  /api/imoveis?secao=termo                 -> termo de autorização vigente
 //   POST {acao:'lead', tipo, nome, telefone, email, imovel_id?, endereco_imovel?, mensagem?}
-//   POST {acao:'anunciante_cadastro', nome, telefone, email, senha}   -> { ok, token }
+//     tipo: avaliacao | imovel | parceria | contato | certidao (certidão do imóvel, R$ 360, cobrança manual)
+//   POST {acao:'anunciante_cadastro', nome, telefone, email, senha, papel?}  -> { ok, token }
+//     papel: 'proprietario' (padrão, publica tipo='terceiro') | 'corretor' (publica tipo='parceria')
 //   POST {acao:'anunciante_login', email, senha}                     -> { ok, token }
 //   POST {acao:'anunciante_sair'}                                    (Bearer anunciante)
 //   POST {acao:'anunciante_meus_anuncios'}                           (Bearer anunciante)
@@ -39,7 +41,7 @@ export const dynamic = 'force-dynamic'
 
 const RE_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const RE_EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
-const TIPOS_LEAD = ['avaliacao', 'imovel', 'parceria', 'contato']
+const TIPOS_LEAD = ['avaliacao', 'imovel', 'parceria', 'contato', 'certidao']
 
 async function exigeAdmin(request) {
   const token = tokenDo(request)
@@ -124,11 +126,12 @@ export async function POST(request) {
     return Response.json({ ok: true })
   }
 
-  /* ---------- cadastro e login do anunciante (dono do imóvel) ---------- */
+  /* ---------- cadastro e login do anunciante (dono do imóvel ou corretor parceiro) ---------- */
   if (acao === 'anunciante_cadastro') {
     const nome = String(body.nome || '').trim()
     const email = String(body.email || '').trim().toLowerCase()
     const senha = String(body.senha || '')
+    const papel = ['proprietario', 'corretor'].includes(body.papel) ? body.papel : 'proprietario'
     if (!nome) return erro('Informe seu nome.')
     if (!RE_EMAIL.test(email)) return erro('Informe um e-mail válido.')
     if (senha.length < 6) return erro('A senha precisa ter pelo menos 6 caracteres.')
@@ -137,9 +140,9 @@ export async function POST(request) {
     if (existe) return erro('Já existe um cadastro com este e-mail. Faça login.', 409)
 
     const a = await q1(
-      `insert into imoveis.anunciantes (nome, telefone, email, senha_hash)
-       values ($1,$2,$3,$4) returning id, nome, email`,
-      [nome, String(body.telefone || '').trim() || null, email, hashSenha(senha)])
+      `insert into imoveis.anunciantes (nome, telefone, email, senha_hash, papel)
+       values ($1,$2,$3,$4,$5) returning id, nome, email`,
+      [nome, String(body.telefone || '').trim() || null, email, hashSenha(senha), papel])
 
     const token = crypto.randomBytes(24).toString('hex')
     await q(
@@ -208,6 +211,7 @@ export async function POST(request) {
       area_util: body.area_util !== undefined && body.area_util !== '' ? Number(body.area_util) : null,
       area_total: body.area_total !== undefined && body.area_total !== '' ? Number(body.area_total) : null,
       fotos: JSON.stringify(Array.isArray(body.fotos) ? body.fotos : []),
+      video_url: String(body.video_url || '').trim() || null,
     }
 
     if (body.id && RE_UUID.test(String(body.id))) {
@@ -227,12 +231,17 @@ export async function POST(request) {
     const termo = await q1('select versao from imoveis.termo where id = 1')
     const versao = termo?.versao || 'v1'
 
-    campos.tipo = 'terceiro'
+    // corretor de outra imobiliária publicando = parceria; dono do imóvel = terceiro
+    campos.tipo = anunciante.papel === 'corretor' ? 'parceria' : 'terceiro'
     campos.anunciante_id = anunciante.id
     campos.status = 'pendente'
     campos.destaque = false
     campos.termo_versao = versao
     campos.termo_aceito_em = new Date().toISOString()
+    if (anunciante.papel === 'corretor') {
+      campos.parceiro_nome = anunciante.nome
+      campos.parceiro_contato = anunciante.telefone || anunciante.email
+    }
 
     const nomes = Object.keys(campos)
     const params = nomes.map(n => campos[n])
@@ -324,6 +333,7 @@ export async function POST(request) {
       area_util: body.area_util !== undefined && body.area_util !== '' ? Number(body.area_util) : null,
       area_total: body.area_total !== undefined && body.area_total !== '' ? Number(body.area_total) : null,
       fotos: JSON.stringify(Array.isArray(body.fotos) ? body.fotos : []),
+      video_url: String(body.video_url || '').trim() || null,
       destaque: !!body.destaque,
       destaque_ate: body.destaque_ate || null,
       status: ['pendente', 'ativo', 'inativo', 'rejeitado', 'vendido', 'alugado'].includes(body.status) ? body.status : 'ativo',

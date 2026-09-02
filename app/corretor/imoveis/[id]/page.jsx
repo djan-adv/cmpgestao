@@ -10,6 +10,12 @@ function precoFmt(v) {
   return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })
 }
 
+function embedYoutube(url) {
+  if (!url) return null
+  const m = String(url).match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/))([\w-]{6,})/)
+  return m ? `https://www.youtube.com/embed/${m[1]}` : null
+}
+
 const FICHA = [
   ['quartos', 'Quartos'],
   ['banheiros', 'Banheiros'],
@@ -24,6 +30,7 @@ export default async function PaginaImovel({ params }) {
 
   const fotos = Array.isArray(imovel.fotos) ? imovel.fotos : []
   const preco = precoFmt(imovel.preco)
+  const videoEmbed = embedYoutube(imovel.video_url)
   const local = [imovel.endereco, imovel.bairro, imovel.cidade, imovel.uf].filter(Boolean).join(', ')
 
   return (
@@ -65,6 +72,20 @@ export default async function PaginaImovel({ params }) {
 
         {imovel.descricao && <p style={{ fontSize: 15, lineHeight: 1.7, color: COR.texto, whiteSpace: 'pre-wrap' }}>{imovel.descricao}</p>}
 
+        {imovel.video_url && (
+          <div style={{ marginTop: 18 }}>
+            {videoEmbed ? (
+              <div style={{ aspectRatio: '16 / 9', borderRadius: 12, overflow: 'hidden' }}>
+                <iframe src={videoEmbed} title="Vídeo do imóvel" allowFullScreen style={{ width: '100%', height: '100%', border: 0 }} />
+              </div>
+            ) : (
+              <a href={imovel.video_url} target="_blank" rel="noreferrer" style={{ color: COR.destaque, fontWeight: 700, fontSize: 14 }}>
+                ▶ Assistir vídeo do imóvel
+              </a>
+            )}
+          </div>
+        )}
+
         {imovel.tipo === 'parceria' && imovel.parceiro_nome && (
           <div style={{ marginTop: 18, fontSize: 13.5, color: COR.textoSuave }}>
             Imóvel em parceria com {imovel.parceiro_nome}
@@ -79,6 +100,14 @@ export default async function PaginaImovel({ params }) {
           <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 10 }}>Tenho interesse neste imóvel</div>
           <LeadForm tipo="imovel" imovelId={imovel.id} tituloBotao="Quero saber mais" mensagemPlaceholder="Gostaria de mais informações sobre este imóvel." />
         </div>
+
+        <a href="/corretor/certidao" style={{
+          display: 'block', textAlign: 'center', marginTop: 12, padding: '11px 16px',
+          border: `1px solid ${COR.borda}`, borderRadius: 10, textDecoration: 'none',
+          color: COR.escuro, fontSize: 13.5, fontWeight: 700, background: COR.branco,
+        }}>
+          Solicitar certidão do imóvel (R$ 360)
+        </a>
       </aside>
     </div>
   )

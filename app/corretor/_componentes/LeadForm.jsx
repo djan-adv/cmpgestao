@@ -60,9 +60,9 @@ export default function LeadForm({ tipo, imovelId, tituloEnderecoImovel, tituloB
           <input style={campo} type="email" value={email} onChange={e => setEmail(e.target.value)} />
         </div>
       </div>
-      {tipo === 'avaliacao' && (
+      {(tipo === 'avaliacao' || tipo === 'certidao') && (
         <div>
-          <label style={rotulo}>{tituloEnderecoImovel || 'Endereço do imóvel a avaliar'}</label>
+          <label style={rotulo}>{tituloEnderecoImovel || 'Endereço do imóvel'}</label>
           <input style={campo} value={enderecoImovel} onChange={e => setEnderecoImovel(e.target.value)} />
         </div>
       )}

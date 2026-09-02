@@ -237,7 +237,7 @@ const IMOVEL_VAZIO = {
   tipo: 'proprio', finalidade: 'venda', titulo: '', descricao: '', categoria: '',
   preco: '', endereco: '', bairro: '', cidade: '', uf: '',
   quartos: '', banheiros: '', vagas: '', area_util: '', area_total: '',
-  fotos: [], destaque: false, status: 'ativo', parceiro_nome: '', parceiro_contato: '',
+  fotos: [], video_url: '', destaque: false, status: 'ativo', parceiro_nome: '', parceiro_contato: '',
 }
 
 function AbaImoveis({ token }) {
@@ -337,6 +337,9 @@ function AbaImoveis({ token }) {
 
         <label style={rotulo}>Fotos (uma URL por linha — a primeira é a capa)</label>
         <textarea style={{ ...campo, minHeight: 70 }} value={fotosTexto} onChange={e => setFotosTexto(e.target.value)} placeholder="https://..." />
+
+        <label style={rotulo}>Vídeo (link do YouTube ou outro)</label>
+        <input style={campo} value={c.video_url || ''} onChange={e => upd('video_url', e.target.value)} placeholder="https://youtube.com/watch?v=..." />
 
         {c.tipo === 'parceria' && (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
