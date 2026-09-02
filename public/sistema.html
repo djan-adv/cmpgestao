@@ -20864,8 +20864,9 @@ async function abrirDiagnostico(numero){
       +'<input type="checkbox" id="dg-peca"><span style="font-size:13px">Redigir também a <b>peça</b> recomendada<div class="note" style="margin:0">Sai em Word (para editar) e em PDF na pasta Protocolo. É rascunho: confira e assine antes de protocolar.</div></span></label>'
     +'<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">'
       +'<button class="btn sm ghost" onclick="document.getElementById(\'dg-ov\').remove()">Cancelar</button>'
-      +'<button class="btn sm" id="dg-ok" style="background:#2E3A4B;border-color:#2E3A4B" onclick="_dgRodar()">Analisar os autos</button></div>');
+      +'<button class="btn sm" id="dg-ok" style="background:#2E3A4B;border-color:#2E3A4B" onclick="this.disabled=true;this.textContent=\'iniciando…\';_dgRodar()">Analisar os autos</button></div>');
 }
+var _DGORIGEM={botao_ficha:'pelo botão da ficha', confirmacao_custo:'confirmado após o aviso de custo', api:'por chamada direta'};
 /* A lista da ficha: cada diagnóstico já rodado neste processo, com o que custou.
    Clicar reabre o resultado inteiro (o mesmo do modal). */
 async function renderDiagCard(){
@@ -20873,7 +20874,7 @@ async function renderDiagCard(){
   if(typeof atual==='undefined'||!atual){ box.innerHTML=''; return; }
   var num=atual.numero;
   try{
-    var cols='id,status,erro,com_peca,com_integra,custo_usd,criado_em,concluido_em,pedido_por,peca,resultado';
+    var cols='id,status,erro,com_peca,com_integra,custo_usd,criado_em,concluido_em,pedido_por,origem,pedido_de,peca,resultado';
     var r=await window.__sb.from('ia_diagnosticos').select(cols)
       .eq('processo_numero',num).order('criado_em',{ascending:false}).limit(12);
     var itens=(r&&r.data)||[];
@@ -20897,6 +20898,7 @@ async function renderDiagCard(){
           +'<span style="font-size:12.5px">'+esc(_dgQuando(d.criado_em))+'</span>'
           +(d.com_peca?'<span class="note" style="margin:0">com peça</span>':'')
           +(d.pedido_por?'<span class="note" style="margin:0">· '+esc(d.pedido_por)+'</span>':'')
+          +(d.origem?'<span class="note" style="margin:0" title="'+esc(d.pedido_de||'')+'">· '+esc(_DGORIGEM[d.origem]||d.origem)+'</span>':'')
           +(custo?'<span class="note" style="margin:0">· US$ '+custo.toFixed(4)+'</span>':'')
           +(d.status==='erro'&&d.erro?'<span class="note" style="margin:0;color:#b5342b">· '+esc(String(d.erro).slice(0,90))+'</span>':'')
           +'<span style="margin-left:auto">'
@@ -20983,7 +20985,8 @@ async function _dgRodar(confirmado){
   window.__dgRodando=(window.__dgRodando||0)+1;
   _dgPintaBadge();
   fetch('/api/ia/diagnostico',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+jwt},
-      body:JSON.stringify({numero:numero, integra:comIntegra, peca:comPeca, quem:quem, leitura:leitura, confirmado:!!confirmado})})
+      body:JSON.stringify({numero:numero, integra:comIntegra, peca:comPeca, quem:quem, leitura:leitura, confirmado:!!confirmado,
+        origem:(confirmado?'confirmacao_custo':'botao_ficha')})})
     .then(function(r){ return r.json().catch(function(){ return {}; }).then(function(j){ return {ok:r.ok,status:r.status,j:j}; }); })
     .then(function(res){
       window.__dgRodando=Math.max(0,(window.__dgRodando||1)-1); _dgPintaBadge();
@@ -20999,7 +21002,7 @@ async function _dgRodar(confirmado){
           +(leitura==='completa'?'<div class="note" style="margin-top:8px">Você escolheu a leitura <b>completa</b> — a econômica costuma custar bem menos e não perde prova.</div>':'')
           +'<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;flex-wrap:wrap">'
             +'<button class="btn sm ghost" onclick="abrirDiagnostico(\''+esc(numero)+'\')">voltar e trocar o modo</button>'
-            +'<button class="btn sm" style="background:#2E3A4B;border-color:#2E3A4B" onclick="_dgRodar(true)">Confirmar e rodar</button></div>';
+            +'<button class="btn sm" style="background:#2E3A4B;border-color:#2E3A4B" onclick="this.disabled=true;this.textContent=\'iniciando…\';_dgRodar(true)">Confirmar e rodar</button></div>';
         if(document.getElementById('dg-ov')) _dgPinta(corpo);
         else { abrirDiagnostico(numero); setTimeout(function(){ _dgPinta(corpo); },30); }
         return;

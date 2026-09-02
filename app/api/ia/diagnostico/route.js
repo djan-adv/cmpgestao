@@ -283,11 +283,37 @@ export async function POST(request) {
 
   /* A linha nasce AQUI, antes do trabalho: o pedido leva minutos e o advogado vai
      trocar de processo no meio. Sem isto, o resultado morria com o modal. */
+  /* Duas rodadas ao mesmo tempo no mesmo processo é sempre engano — clique duplo,
+     aba esquecida, um "confirmar" repetido. Custa dinheiro e ninguém quer duas.
+     A segunda para aqui e devolve a que já está correndo. */
+  try {
+    const { data: jaRodando } = await sb.from('ia_diagnosticos')
+      .select('id,criado_em').eq('escritorio_id', ESCRITORIO_CMP).eq('processo_numero', proc.numero)
+      .eq('status', 'rodando').gte('criado_em', new Date(Date.now() - 20 * 60000).toISOString())
+      .order('criado_em', { ascending: false }).limit(1)
+    if (jaRodando && jaRodando.length) {
+      return Response.json({
+        erro: 'já existe um diagnóstico rodando neste processo — espere ele terminar',
+        id: jaRodando[0].id, ja_rodando: true,
+      }, { status: 409 })
+    }
+  } catch (e) {}
+
+  /* Quem pediu, de onde e por qual caminho. O nome vem da tela e pode estar
+     errado; o id do usuário e o endereço, não. Em 02/09/2026 apareceu um
+     diagnóstico que o dono não reconheceu ter pedido e não havia como saber de
+     onde partiu — só o nome digitado na tela. Agora há. */
   let regId = null
   try {
     const ins = await sb.from('ia_diagnosticos').insert({
       escritorio_id: ESCRITORIO_CMP, processo_numero: proc.numero, processo_id: proc.id,
       pedido_por: quem || null, status: 'rodando', com_integra: querIntegra, com_peca: querPeca,
+      pedido_por_id: u.id || null,
+      origem: String(b.origem || '').slice(0, 40) || (confirmado ? 'confirmacao_custo' : 'api'),
+      pedido_de: [
+        (request.headers.get('x-forwarded-for') || '').split(',')[0].trim(),
+        String(request.headers.get('user-agent') || '').slice(0, 120),
+      ].filter(Boolean).join(' · ').slice(0, 200) || null,
     }).select('id').single()
     regId = ins.data && ins.data.id
   } catch (e) {}
