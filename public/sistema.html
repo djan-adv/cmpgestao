@@ -12085,9 +12085,16 @@ function renderNavLotes(){
      pasta duas vezes no menu, com contagens diferentes (aqui só o lote, lá o
      lote + os casos do Comercial). O lote continua existindo e é justamente ele
      que o "enviar para pasta…" da ficha usa para mandar processo para lá. */
+  /* A-Z, com Precatórios sempre no fim (03/09/2026): a lista vinha na ordem em
+     que as pastas foram criadas, o que não ajuda ninguém a achar nada. */
+  var _ordAZ=function(a,b){
+    var pa=/precat[óo]ri/i.test(String(a.nome||''))?1:0, pb=/precat[óo]ri/i.test(String(b.nome||''))?1:0;
+    if(pa!==pb) return pa-pb;
+    return String(a.nome||'').localeCompare(String(b.nome||''),'pt-BR',{sensitivity:'base',numeric:true});
+  };
   host.innerHTML=(window.__LOTES||[]).filter(function(l){
     return !/^sem contrato$/i.test(String(l.nome||'').trim());
-  }).map(function(l){
+  }).slice().sort(_ordAZ).map(function(l){
     /* o badge tem de contar o que a pasta MOSTRA: encerrado mora em "Processos
        encerrados" e some da lista do lote — mas continuava somando aqui.
        Assessorias aparecia 9 tendo 5 (4 encerrados dentro). */
