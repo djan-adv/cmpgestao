@@ -5,6 +5,7 @@
 
 import { createClient } from '@supabase/supabase-js'
 import { getFreshToken, ehFaltaDeAcessoAoProcesso, tipoRealDoArquivo } from '../lib.js'
+import { escritorioDoUsuario, semEscritorio } from '../../_lib/inquilino.js'
 import { camposConteudo } from '../guardar.js'
 import { ehOficial, copiarParaAppCliente } from '../../../../lib/appCliente.js'
 
@@ -13,7 +14,6 @@ export const fetchCache = 'force-no-store'
 export const revalidate = 0
 export const maxDuration = 45
 
-const ESCRITORIO_CMP = '908f77fc-19f5-4d86-9576-f5590af09e0a'
 const PDPJ = 'https://portaldeservicos.pdpj.jus.br'
 const MAX_BYTES = 25 * 1024 * 1024 // trava de segurança: 25 MB por arquivo
 // headers de navegador — o WAF do PDPJ recusa (403 HTML) requisições sem eles. NÃO remover.
@@ -50,16 +50,19 @@ export async function POST(request) {
   if (numero.length < 16 || !uuid) return Response.json({ erro: 'informe número do processo e uuid do documento' }, { status: 400 })
 
   const sb = admin()
+  // o documento é baixado com a sessão do jus.br DO ESCRITÓRIO de quem pediu
+  const esc = await escritorioDoUsuario(user.id, sb)
+  if (!esc) return semEscritorio()
   sb.rpc('jusbr_limpar_expirados').then(() => {}, () => {}) // limpeza oportunista (30 dias)
 
   // já baixado?
-  const { data: existente } = await sb.from('jusbr_arquivos').select('id,doc_nome,doc_tipo,tamanho,baixado_em').eq('escritorio_id', ESCRITORIO_CMP).eq('processo_numero', numero).eq('doc_uuid', uuid).maybeSingle()
+  const { data: existente } = await sb.from('jusbr_arquivos').select('id,doc_nome,doc_tipo,tamanho,baixado_em').eq('escritorio_id', esc).eq('processo_numero', numero).eq('doc_uuid', uuid).maybeSingle()
   if (existente) return Response.json({ ok: true, id: existente.id, nome: existente.doc_nome, tipo: existente.doc_tipo, tamanho: existente.tamanho, ja_tinha: true })
 
   // token (com renovação automática via refresh_token — ver ../lib.js)
   const encKey = process.env.JUSBR_ENC_KEY
   if (!encKey) return Response.json({ erro: 'servidor sem JUSBR_ENC_KEY (chave de cifragem)' }, { status: 500 })
-  const sess = await getFreshToken(sb)
+  const sess = await getFreshToken(sb, null, esc)
   if (sess.erro === 'sem_token' || sess.erro === 'sem_chave') return Response.json({ erro: 'jus.br: sem token — sincronize a sessão', motivo: 'sem_token' }, { status: 409 })
   if (sess.erro) return Response.json({ erro: 'jus.br: token expirado — sincronize novamente', motivo: 'expirado' }, { status: 409 })
 
@@ -142,7 +145,7 @@ export async function POST(request) {
   // procuração e petição inicial são leves e sempre úteis: guardamos PERMANENTE
   const ehLeve = /procura[çc][aã]o|peti[çc][aã]o\s+inicial|\binicial\b/i.test(String(nome || ''))
   const linhaArq = {
-    escritorio_id: ESCRITORIO_CMP, processo_numero: numero, doc_uuid: uuid,
+    escritorio_id: esc, processo_numero: numero, doc_uuid: uuid,
     doc_nome: nome, doc_tipo: tipoFinal, tamanho: buf.length,
     baixado_por: String(user.email || ''),
     // conteúdo vai para o disco do VPS; o banco fica só com o caminho

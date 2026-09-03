@@ -5,12 +5,12 @@
 // Sempre logado (JWT do Supabase) — sem chave pública, diferente de /api/captura.
 
 import { createClient } from '@supabase/supabase-js'
+import { escritorioDoUsuario, semEscritorio } from '../_lib/inquilino.js'
 import crypto from 'crypto'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
 
-const ESCRITORIO_CMP = '908f77fc-19f5-4d86-9576-f5590af09e0a'
 const MAX_FILES = 6
 const MAX_BYTES = 15 * 1024 * 1024
 
@@ -41,14 +41,20 @@ export async function POST(request) {
   if (!arquivosIn.length) return Response.json({ erro: 'anexe ao menos um arquivo' }, { status: 400 })
 
   const sb = admin()
+  const esc = await escritorioDoUsuario(user.id, sb)
+  if (!esc) return semEscritorio()
 
   // confere que o andamento existe e pega o número do processo (para o path e a coluna processo_numero)
   const { data: and } = await sb.from('andamentos').select('id,processo_id').eq('id', andamentoId).maybeSingle()
   if (!and) return Response.json({ erro: 'andamento não encontrado' }, { status: 404 })
+  // ...e que o processo dele é DESTE escritório: o id do andamento vem do
+  // navegador, e sem esta conferência dava para pendurar arquivo no processo
+  // de outro escritório mandando um id qualquer.
   let numeroProc = numero
-  if (!numeroProc && and.processo_id) {
-    const { data: proc } = await sb.from('processos').select('numero').eq('id', and.processo_id).maybeSingle()
-    numeroProc = (proc && proc.numero) || ''
+  if (and.processo_id) {
+    const { data: proc } = await sb.from('processos').select('numero,escritorio_id').eq('id', and.processo_id).maybeSingle()
+    if (!proc || proc.escritorio_id !== esc) return Response.json({ erro: 'andamento não encontrado' }, { status: 404 })
+    if (!numeroProc) numeroProc = proc.numero || ''
   }
 
   let salvos = 0, falhas = 0
@@ -60,11 +66,11 @@ export async function POST(request) {
       const buf = Buffer.from(b64, 'base64')
       if (!buf.length || buf.length > MAX_BYTES) { falhas++; continue }
       const tipo = String(f.tipo || 'application/octet-stream')
-      const path = ESCRITORIO_CMP + '/' + numeroProc.replace(/\D/g, '') + '/' + crypto.randomUUID() + '_' + nome.replace(/[^\w.\-]+/g, '_')
+      const path = esc + '/' + numeroProc.replace(/\D/g, '') + '/' + crypto.randomUUID() + '_' + nome.replace(/[^\w.\-]+/g, '_')
       const up = await sb.storage.from('capturas').upload(path, buf, { contentType: tipo, upsert: false })
       if (up.error) { falhas++; continue }
       const insA = await sb.from('anexos').insert({
-        escritorio_id: ESCRITORIO_CMP, processo_numero: numeroProc || null,
+        escritorio_id: esc, processo_numero: numeroProc || null,
         andamento_id: andamentoId, origem: 'manual', nome, tipo, tamanho: buf.length,
         path, criado_por: String(user.email || 'user'),
       })

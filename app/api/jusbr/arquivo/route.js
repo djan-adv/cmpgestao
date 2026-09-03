@@ -6,11 +6,10 @@
 import fs from 'fs'
 import { createClient } from '@supabase/supabase-js'
 import { tipoRealDoArquivo, pdfDeTexto } from '../lib.js'
+import { escritorioDoUsuario, semEscritorio } from '../../_lib/inquilino.js'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 20
-
-const ESCRITORIO_CMP = '908f77fc-19f5-4d86-9576-f5590af09e0a'
 
 function admin() {
   return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } })
@@ -29,7 +28,12 @@ export async function GET(request) {
   if (!(u && u.data && u.data.user)) return Response.json({ erro: 'não autenticado' }, { status: 401 })
 
   const sb = admin()
-  const { data } = await sb.from('jusbr_arquivos').select('doc_nome,doc_tipo,conteudo_b64,caminho_disco').eq('escritorio_id', ESCRITORIO_CMP).eq('id', id).maybeSingle()
+  // O arquivo é entregue pelo id. Sem amarrar ao escritório de quem pede, um
+  // usuário logado de OUTRO escritório baixaria peça de processo alheio só
+  // adivinhando o id — por isso o escritório entra no filtro, não como enfeite.
+  const esc = await escritorioDoUsuario(u.data.user.id, sb)
+  if (!esc) return semEscritorio()
+  const { data } = await sb.from('jusbr_arquivos').select('doc_nome,doc_tipo,conteudo_b64,caminho_disco').eq('escritorio_id', esc).eq('id', id).maybeSingle()
   if (!data) return Response.json({ erro: 'arquivo não encontrado (pode ter expirado)' }, { status: 404 })
 
   // depois da faxina o conteúdo mora no disco do VPS e o banco guarda só o

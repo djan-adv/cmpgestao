@@ -11,7 +11,14 @@
 
 import { createClient } from '@supabase/supabase-js'
 
-export const ESCRITORIO_CMP = '908f77fc-19f5-4d86-9576-f5590af09e0a'
+// O escritório deixou de ser fixo: cada inquilino tem a SUA sessão do jus.br,
+// com o certificado digital de quem é dele. As funções abaixo recebem o
+// escritório; quando ninguém informa (robô, cron), vale a raiz — e isso é
+// escolha explícita, não descuido.
+import { ESCRITORIO_RAIZ } from '../_lib/inquilino.js'
+export { ESCRITORIO_RAIZ }
+// nome antigo, mantido para as rotas ainda não migradas
+export const ESCRITORIO_CMP = ESCRITORIO_RAIZ
 
 // endpoint padrão de token do PDPJ (gov.br SSO). Pode ser sobrescrito pelo que o
 // userscript capturar (campo oidc.token_url), caso o provedor mude.
@@ -168,10 +175,10 @@ export function expDoJwt(t) {
 }
 
 // lê a sessão decifrada
-export async function lerSessao(sb) {
+export async function lerSessao(sb, esc) {
   const encKey = process.env.JUSBR_ENC_KEY
   if (!encKey) return { erro: 'sem_chave' }
-  const { data, error } = await sb.rpc('jusbr_get_sessao', { p_esc: ESCRITORIO_CMP, p_key: encKey })
+  const { data, error } = await sb.rpc('jusbr_get_sessao', { p_esc: esc || ESCRITORIO_RAIZ, p_key: encKey })
   if (error) return { erro: error.message }
   const row = Array.isArray(data) ? data[0] : data
   if (!row || !row.token) return { erro: 'sem_token' }
@@ -185,7 +192,7 @@ function expiraEmMs(expira) {
 
 // renova o access token usando o refresh_token guardado. Devolve o novo token
 // ou { erro }. Atualiza o banco em caso de sucesso.
-export async function renovar(sb, sess) {
+export async function renovar(sb, sess, esc) {
   const encKey = process.env.JUSBR_ENC_KEY
   if (!encKey) return { erro: 'sem_chave' }
   if (!sess || !sess.refresh) return { erro: 'sem_refresh' }
@@ -215,19 +222,19 @@ export async function renovar(sb, sess) {
   const novoToken = j.access_token
   const novoRefresh = j.refresh_token || null
   const expira = expDoJwt(novoToken) || new Date(Date.now() + (parseInt(j.expires_in, 10) || 3600) * 1000).toISOString()
-  await sb.rpc('jusbr_apos_refresh', { p_esc: ESCRITORIO_CMP, p_token: novoToken, p_refresh: novoRefresh, p_key: encKey, p_expira: expira })
+  await sb.rpc('jusbr_apos_refresh', { p_esc: esc || ESCRITORIO_RAIZ, p_token: novoToken, p_refresh: novoRefresh, p_key: encKey, p_expira: expira })
   return { token: novoToken, expira }
 }
 
 // devolve SEMPRE um access token válido: renova sob demanda se estiver expirado
 // ou faltando pouco (margem de 5 min). Se não der pra renovar, informa o motivo.
-export async function getFreshToken(sb, margemMin) {
+export async function getFreshToken(sb, margemMin, esc) {
   const margem = (margemMin == null ? 5 : margemMin) * 60000
-  const sess = await lerSessao(sb)
+  const sess = await lerSessao(sb, esc)
   if (sess.erro) return sess
   if (expiraEmMs(sess.expira) > margem) return { token: sess.token, expira: sess.expira }
   // perto de expirar / expirado → tenta renovar
-  const nov = await renovar(sb, sess)
+  const nov = await renovar(sb, sess, esc)
   if (nov.token) return nov
   // não renovou: se o token ainda não expirou de fato, entrega assim mesmo
   if (expiraEmMs(sess.expira) > 0) return { token: sess.token, expira: sess.expira, aviso: nov.erro }

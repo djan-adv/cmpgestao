@@ -2,11 +2,11 @@
 //   GET /api/anexo?id=<uuid>[&dl=1]   (Authorization: Bearer <jwt> | ?jwt= | ?k=<chave>)
 
 import { createClient } from '@supabase/supabase-js'
+import { escritorioDoUsuario, semEscritorio, ESCRITORIO_RAIZ } from '../_lib/inquilino.js'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 20
 
-const ESCRITORIO_CMP = '908f77fc-19f5-4d86-9576-f5590af09e0a'
 function admin() {
   return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } })
 }
@@ -20,19 +20,25 @@ export async function GET(request) {
   if (!id) return Response.json({ erro: 'id ausente' }, { status: 400 })
 
   let ok = false
+  // escritório de quem pede: o anexo só sai se for do escritório dele. A chave
+  // de captura (k) é do robô do próprio servidor e não tem usuário — essa
+  // continua na raiz, e está anotada como dívida da fase dos robôs.
+  let escDoPedido = null
   const secret = process.env.CAPTURA_SECRET || ''
-  if (secret && k && k === secret) ok = true
+  if (secret && k && k === secret) { ok = true; escDoPedido = ESCRITORIO_RAIZ }
   else if (jwt) {
     try {
       const auth = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
       const u = await auth.auth.getUser(jwt)
       ok = !!(u && u.data && u.data.user)
+      if (ok) escDoPedido = await escritorioDoUsuario(u.data.user.id)
     } catch (e) {}
   }
   if (!ok) return Response.json({ erro: 'não autorizado' }, { status: 401 })
 
+  if (!escDoPedido) return semEscritorio()
   const sb = admin()
-  const { data: meta } = await sb.from('anexos').select('nome,tipo,path').eq('escritorio_id', ESCRITORIO_CMP).eq('id', id).maybeSingle()
+  const { data: meta } = await sb.from('anexos').select('nome,tipo,path').eq('escritorio_id', escDoPedido).eq('id', id).maybeSingle()
   if (!meta || !meta.path) return Response.json({ erro: 'anexo não encontrado' }, { status: 404 })
 
   const dlRes = await sb.storage.from('capturas').download(meta.path)

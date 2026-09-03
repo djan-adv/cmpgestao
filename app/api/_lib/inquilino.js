@@ -1,0 +1,83 @@
+// Quem é o escritório desta requisição.
+//
+// O sistema nasceu para um escritório só, e o id da CMP ficou escrito à mão em
+// 26 arquivos (`const ESCRITORIO_CMP = '908f77fc-...'`). Enquanto havia um
+// inquilino só isso era inofensivo. Com um segundo escritório dentro do mesmo
+// banco vira vazamento: o cliente novo faz login, pede um documento, e a rota
+// procura no escritório da CMP — usando, no caso do jus.br, a sessão e o
+// certificado da CMP.
+//
+// A regra passa a ser: quem tem usuário logado descobre o escritório PELO
+// USUÁRIO. Robô e cron não têm usuário; esses continuam na raiz enquanto a
+// fase 2 (robôs por inquilino) não chega, e isso está marcado caso a caso.
+
+import { createClient } from '@supabase/supabase-js'
+
+// A raiz é o escritório do dono do sistema (a CMP). Fica em variável de
+// ambiente para que uma instalação nova não herde o id da CMP; o valor de
+// fábrica mantém a instalação atual funcionando sem mexer no .env.local.
+export const ESCRITORIO_RAIZ =
+  process.env.ESCRITORIO_RAIZ_ID || '908f77fc-19f5-4d86-9576-f5590af09e0a'
+
+function admin() {
+  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { persistSession: false },
+  })
+}
+
+// usuário logado a partir do "Authorization: Bearer <jwt>" — null se não houver
+export async function usuarioDoRequest(request) {
+  const auth = (request && request.headers && request.headers.get('authorization')) || ''
+  const jwt = auth.replace(/^Bearer\s+/i, '').trim()
+  if (!jwt) return null
+  try {
+    const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
+    const { data } = await sb.auth.getUser(jwt)
+    return (data && data.user) || null
+  } catch (e) { return null }
+}
+
+// escritório de um usuário já identificado
+export async function escritorioDoUsuario(userId, sb) {
+  if (!userId) return null
+  const cli = sb || admin()
+  try {
+    const { data } = await cli.from('usuarios').select('escritorio_id').eq('id', userId).maybeSingle()
+    return (data && data.escritorio_id) || null
+  } catch (e) { return null }
+}
+
+// O caminho normal das rotas que atendem alguém logado.
+// Devolve { user, escritorio } — escritorio é null quando não há login válido.
+// Nunca cai na raiz por conta própria: cair na raiz calado é exatamente o bug
+// que esta função existe para impedir. Quem quiser esse comportamento pede.
+export async function inquilinoDoRequest(request) {
+  const user = await usuarioDoRequest(request)
+  if (!user) return { user: null, escritorio: null }
+  const escritorio = await escritorioDoUsuario(user.id)
+  return { user, escritorio }
+}
+
+// resposta padrão quando a rota precisa de um escritório e não achou nenhum
+export function semEscritorio() {
+  return Response.json(
+    { erro: 'Sem escritório: faça login novamente. Se persistir, o seu usuário está sem escritório vinculado.' },
+    { status: 403 },
+  )
+}
+
+// Onde ficam os documentos deste escritório no disco do VPS.
+//
+// O acervo do dono está em /opt/cmpdocs desde o começo, com dezenas de GB — não
+// vale mover isso para ganhar um nível de pasta. A raiz continua onde está e
+// cada inquilino novo ganha uma árvore IRMÃ, nunca uma subpasta: a tela de
+// documentos lista o conteúdo da raiz, então uma pasta de inquilino embaixo
+// dela apareceria para o dono como se fosse acervo dele. É o mesmo arranjo que
+// a Inove já usa (/opt/cmpdocs-inove).
+// Sem separar, dois escritórios com o mesmo número de processo (e número se
+// repete entre tribunais) escreveriam na mesma pasta.
+export function raizDocs(esc) {
+  const base = process.env.DOCS_ROOT || '/opt/cmpdocs'
+  if (!esc || esc === ESCRITORIO_RAIZ) return base
+  return base + '-inq/' + esc
+}

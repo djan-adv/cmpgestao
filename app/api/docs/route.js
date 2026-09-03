@@ -9,15 +9,14 @@ import crypto from 'crypto'
 import fs from 'fs'
 import path from 'path'
 import { contaDemo, respostaDemo } from '../../../lib/demo.js'
+import { escritorioDoUsuario, semEscritorio, raizDocs } from '../_lib/inquilino.js'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
-const ROOT = '/opt/cmpdocs'
 const TRASH = 'Lixeira'
 const ORDEM = '.ordem.json'
 const DIAS_LIXEIRA = 30
-const ESCRITORIO_CMP = '908f77fc-19f5-4d86-9576-f5590af09e0a'
 
 // cliente com service role — só para copiar um documento para o histórico (Storage + tabela anexos)
 function admin() {
@@ -89,6 +88,12 @@ function censoProc(dir, prof) {
 export async function GET(request) {
   const user = await usuario(request)
   if (!user) return Response.json({ erro: 'não autenticado' }, { status: 401 })
+  // Cada escritório tem a sua árvore de documentos. Antes a raiz era fixa, e
+  // como a pasta é o NÚMERO do processo, um escritório novo que abrisse um
+  // número já existente cairia dentro do acervo do outro.
+  const esc = await escritorioDoUsuario(user.id)
+  if (!esc) return semEscritorio()
+  const ROOT = raizDocs(esc)
   const { searchParams } = new URL(request.url)
 
   // censo: ?censo=<digitos,digitos,...> -> { counts: { digitos: qtdArquivos } }
@@ -189,6 +194,9 @@ export async function POST(request) {
   const user = await usuario(request)
   if (!user) return Response.json({ erro: 'não autenticado' }, { status: 401 })
   if (await contaDemo(user)) return respostaDemo('alterar documentos')
+  const esc = await escritorioDoUsuario(user.id)
+  if (!esc) return semEscritorio()
+  const ROOT = raizDocs(esc)
   const b = await request.json()
 
   // Trocar a CHAVE da pasta do processo (ex.: caso vira processo judicial).
@@ -333,11 +341,11 @@ export async function POST(request) {
     let buf
     try { buf = fs.readFileSync(full) } catch (e) { return Response.json({ erro: 'falha ao ler o arquivo' }, { status: 500 }) }
     const sb = admin()
-    const key = ESCRITORIO_CMP + '/' + procNum.replace(/\D/g, '') + '/' + crypto.randomUUID() + '_' + nome.replace(/[^\w.\-]+/g, '_')
+    const key = esc + '/' + procNum.replace(/\D/g, '') + '/' + crypto.randomUUID() + '_' + nome.replace(/[^\w.\-]+/g, '_')
     const up = await sb.storage.from('capturas').upload(key, buf, { contentType: tipo, upsert: false })
     if (up.error) return Response.json({ erro: 'falha ao enviar ao histórico: ' + up.error.message }, { status: 502 })
     const insA = await sb.from('anexos').insert({
-      escritorio_id: ESCRITORIO_CMP, processo_numero: procNum, andamento_id: andamentoId,
+      escritorio_id: esc, processo_numero: procNum, andamento_id: andamentoId,
       origem: 'documento', nome, tipo, tamanho: buf.length, path: key, criado_por: (user && user.email) || null,
     }).select('id').single()
     if (insA.error) return Response.json({ erro: 'falha ao registrar o anexo: ' + insA.error.message }, { status: 502 })

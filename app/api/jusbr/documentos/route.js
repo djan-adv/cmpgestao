@@ -6,6 +6,7 @@
 
 import { createClient } from '@supabase/supabase-js'
 import { getFreshToken, ehFaltaDeAcessoAoProcesso } from '../lib.js'
+import { escritorioDoUsuario, semEscritorio } from '../../_lib/inquilino.js'
 import { docsDoPayload } from '../integra/core.js'
 
 export const dynamic = 'force-dynamic'
@@ -13,7 +14,6 @@ export const fetchCache = 'force-no-store'
 export const revalidate = 0
 export const maxDuration = 30
 
-const ESCRITORIO_CMP = '908f77fc-19f5-4d86-9576-f5590af09e0a'
 const PDPJ = 'https://portaldeservicos.pdpj.jus.br'
 // headers de navegador — o WAF do PDPJ recusa (403 HTML) requisições sem eles. NÃO remover.
 const PDPJ_HEADERS = {
@@ -37,8 +37,10 @@ function admin() {
     global: { fetch: (input, init) => fetch(input, { ...(init || {}), cache: 'no-store' }) },
   })
 }
-// usa a sessão com renovação automática (refresh_token) — ver ../lib.js
-async function tokenValido(sb) { return await getFreshToken(sb) }
+// usa a sessão com renovação automática (refresh_token) — ver ../lib.js.
+// O escritório vem de quem está logado: cada inquilino tem a própria sessão do
+// jus.br, e sem isso um escritório baixaria documento com o certificado de outro.
+async function tokenValido(sb, esc) { return await getFreshToken(sb, null, esc) }
 // normaliza um documento do JSON do PDPJ para o formato do app
 function normDoc(d) {
   const arq = d.arquivo || {}
@@ -66,7 +68,9 @@ export async function POST(request) {
   if (numero.length < 16) return Response.json({ erro: 'número de processo inválido' }, { status: 400 })
 
   const sb = admin()
-  const tk = await tokenValido(sb)
+  const esc = await escritorioDoUsuario(user.id, sb)
+  if (!esc) return semEscritorio()
+  const tk = await tokenValido(sb, esc)
   if (tk.erro === 'sem_chave') return Response.json({ erro: 'servidor sem JUSBR_ENC_KEY (chave de cifragem)' }, { status: 500 })
   if (tk.erro) return Response.json({ erro: 'jus.br: ' + (tk.erro === 'expirado' ? 'token expirado — sincronize novamente' : 'sem token — sincronize a sessão do jus.br'), motivo: tk.erro }, { status: 409 })
 
@@ -109,7 +113,7 @@ export async function POST(request) {
   }
 
   // marca os que já estão baixados no sistema
-  const { data: jaTem } = await sb.from('jusbr_arquivos').select('doc_uuid,id').eq('escritorio_id', ESCRITORIO_CMP).eq('processo_numero', numero)
+  const { data: jaTem } = await sb.from('jusbr_arquivos').select('doc_uuid,id').eq('escritorio_id', esc).eq('processo_numero', numero)
   const baixados = {}
   ;(jaTem || []).forEach(r => { baixados[r.doc_uuid] = r.id })
   docs.forEach(d => { d.baixado_id = (d.uuid && baixados[d.uuid]) || null })
