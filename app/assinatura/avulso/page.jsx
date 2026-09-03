@@ -138,6 +138,19 @@ export default function DocumentoAvulso() {
   }
 
   // Monta o PDF final (original + página de assinaturas) e salva no Storage
+  /* "um botão pra cancelar" (03/09/2026): apaga o documento e os arquivos no
+     assinador — o link que o cliente recebeu deixa de funcionar na hora. Só
+     enquanto ninguém assinou: documento assinado é instrumento, não se apaga
+     por aqui. */
+  async function cancelar(d) {
+    const quem = (d.signatarios || []).map(s => s.nome || s.email).filter(Boolean).join(', ')
+    if (!window.confirm('Cancelar "' + (d.titulo || 'documento') + '"?\n\nO link enviado' + (quem ? ' para ' + quem : '') + ' para de funcionar e o registro é removido. Não tem volta.')) return
+    setMfMsg(m => ({ ...m, [d.id]: 'Cancelando…' }))
+    const r = await apiAssinatura({ acao: 'excluir', doc_id: d.id })
+    if (!r.ok) { setMfMsg(m => ({ ...m, [d.id]: 'Não cancelou: ' + (r.erro || 'falha') })); return }
+    setMfMsg(m => ({ ...m, [d.id]: '' }))
+    carregarLista()
+  }
   async function montarFinal(d) {
     setMfMsg(m => ({ ...m, [d.id]: 'Montando…' }))
     try {
@@ -269,6 +282,7 @@ export default function DocumentoAvulso() {
                 <button style={{ ...btnMini, background: '#e6e9ee', color: '#1c2733' }} onClick={() => montarFinal(d)}>Montar PDF final</button>
                 <JuntarExterno doc={d} signatarios={d.signatarios || []} aoConcluir={carregarLista} />
                 <HistoricoDoc doc={d} />
+                {d.status !== 'assinado' && <button style={{ ...btnMini, background: '#fbeceb', color: '#b5342b', marginLeft: 6 }} onClick={() => cancelar(d)} title="Apaga o documento e desativa o link enviado. Só enquanto ninguém assinou.">✕ cancelar</button>}
               </div>
               {mfMsg[d.id] && <div style={{ color: '#5b6673', fontSize: 12, marginTop: 4 }}>{mfMsg[d.id]}</div>}
             </div>
