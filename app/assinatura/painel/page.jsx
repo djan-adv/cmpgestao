@@ -5,7 +5,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { signSb } from '../../../lib/supabaseAssinatura'
 import { apiAssinatura, enviarLinkAssinatura } from '../../../lib/assinaturaApi'
-import JuntarExterno from '../JuntarExterno'
+import JuntarExterno, { LeituraSignatarios } from '../JuntarExterno'
 
 const NAVY = '#2E3A4B'
 const CORES = {
@@ -250,8 +250,7 @@ export default function PainelAssinaturas() {
                           {d.total > 1
                             ? <div style={{ fontSize: 12, color: '#1f7a44', marginTop: 2 }}>{d.assinados} de {d.total} assinaram{d.assinantes ? ': ' + d.assinantes : ''}</div>
                             : (d.assinantes ? <div style={{ fontSize: 12, color: '#1f7a44', marginTop: 2 }}>✓ {d.assinantes} assinou</div> : null)}
-                          {d.leram ? <div style={{ fontSize: 12, color: '#8a5a00', marginTop: 2 }}>👁 abriu e ainda não assinou: {d.leram}</div> : null}
-                          {d.naoAbriram && d.status !== 'assinado' ? <div style={{ fontSize: 12, color: '#5b6673', marginTop: 2 }}>✉ ainda não abriu o link: {d.naoAbriram}</div> : null}
+                          <LeituraSignatarios signatarios={d.sigs || []} />
                         </td>
                         <td style={{ padding: 10, borderBottom: '1px solid #eef0f3' }}><Badge st={d.status} /></td>
                         <td style={{ padding: 10, borderBottom: '1px solid #eef0f3' }}>{d.sig1?.assinado_em ? fmtDataCurta(d.sig1.assinado_em) : <span style={{ color: '#5b6673' }}>—</span>}</td>

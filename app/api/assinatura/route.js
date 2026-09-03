@@ -90,6 +90,42 @@ async function usuarioCMP(request) {
   return (u && u.data && u.data.user) || null
 }
 
+/* ---------- quem abriu, quando e quantas vezes ----------
+   "Coloque a data/hora que abriu o documento e quantas vezes abriu e a hora que
+   assinou" (03/09/2026). O assinador registra a abertura em eventos_auditoria e
+   marca o signatário como "visto"; o que faltava era juntar as duas coisas por
+   pessoa. Cada abertura vira uma contagem, com a primeira e a última hora.
+   Quando o evento não diz de quem é (registro antigo, sem signatario_id), casa
+   pelo e-mail ou pelo nome citado no detalhe — e, havendo um único signatário,
+   o evento é dele. */
+const RE_ABERTURA = /visto|abert|abriu|acess|visualiz|open/i
+const RE_ASSINOU = /assinad|assinou|assinatura/i
+function eventoDoSignatario(ev, sig, unico) {
+  if (ev.signatario_id) return ev.signatario_id === sig.id
+  const t = String(ev.detalhe || '') + ' ' + String(ev.email || '')
+  if (sig.email && t.toLowerCase().includes(String(sig.email).toLowerCase())) return true
+  if (sig.nome && t.toLowerCase().includes(String(sig.nome).toLowerCase())) return true
+  return unico
+}
+function anexarLeitura(sigs, eventos) {
+  const lista = Array.isArray(sigs) ? sigs : []
+  const evs = Array.isArray(eventos) ? eventos : []
+  const unico = lista.length === 1
+  for (const s of lista) {
+    const meus = evs.filter(e => eventoDoSignatario(e, s, unico))
+    const ab = meus.filter(e => RE_ABERTURA.test(String(e.tipo || '')) || RE_ABERTURA.test(String(e.detalhe || '')))
+      .map(e => e.criado_em).filter(Boolean).sort()
+    const as = meus.filter(e => RE_ASSINOU.test(String(e.tipo || ''))).map(e => e.criado_em).filter(Boolean).sort()
+    s.leitura = {
+      aberturas: ab.length,
+      primeira: ab[0] || null,
+      ultima: ab.length ? ab[ab.length - 1] : null,
+      assinado_em: s.assinado_em || as[as.length - 1] || null,
+    }
+  }
+  return lista
+}
+
 export async function POST(request) {
   let body
   try { body = await request.json() } catch { return Response.json({ erro: 'corpo inválido' }, { status: 400 }) }
@@ -107,7 +143,19 @@ export async function POST(request) {
         .select('*, signatarios(*)')
         .order('criado_em', { ascending: false })
       if (error) throw new Error(error.message)
-      return Response.json({ ok: true, documentos: data || [] })
+      const docs = data || []
+      /* a trilha de auditoria dos documentos listados, numa consulta só — é dela
+         que sai "abriu 3 vezes, a primeira às 09:12" */
+      try {
+        const ids = docs.map(d => d.id).slice(0, 200)
+        if (ids.length) {
+          const ev = await sb.from('eventos_auditoria').select('*').in('documento_id', ids)
+          const porDoc = {}
+          for (const e of (ev.data || [])) (porDoc[e.documento_id] = porDoc[e.documento_id] || []).push(e)
+          for (const d of docs) anexarLeitura(d.signatarios, porDoc[d.id] || [])
+        }
+      } catch (e) { /* sem auditoria: a tela cai no status do signatário */ }
+      return Response.json({ ok: true, documentos: docs })
     }
 
     if (acao === 'detalhe') {
@@ -116,6 +164,7 @@ export async function POST(request) {
       if (d.error) throw new Error(d.error.message)
       const s = await sb.from('signatarios').select('*').eq('documento_id', body.doc_id).order('ordem', { ascending: true })
       const e = await sb.from('eventos_auditoria').select('*').eq('documento_id', body.doc_id).order('criado_em', { ascending: true })
+      anexarLeitura(s.data, e.data || [])
       return Response.json({ ok: true, documento: d.data, signatarios: s.data || [], eventos: e.data || [] })
     }
 

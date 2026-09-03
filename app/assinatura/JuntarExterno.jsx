@@ -13,12 +13,30 @@ export function fmtQuando(iso) {
   if (!iso) return ''
   try { return new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) } catch { return '' }
 }
+export function fmtHora(iso) {
+  if (!iso) return ''
+  try { return new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) } catch { return '' }
+}
+/* uma linha por pessoa: quantas vezes abriu, quando abriu a primeira e a última
+   vez, e a hora em que assinou. As contagens vêm da trilha de auditoria
+   (ver anexarLeitura em /api/assinatura); quando ela não tem o registro, a
+   linha diz o que sabe em vez de inventar hora. */
 export function statusLeitura(s) {
   const st = String(s.status || '')
-  const vistoEm = s.visto_em || s.aberto_em || s.lido_em || null
-  if (st === 'assinado') return { icone: '✅', texto: 'assinou' + (s.assinado_em ? ' em ' + fmtQuando(s.assinado_em) : ''), cor: '#0F6E56' }
-  if (st === 'visto') return { icone: '👁', texto: 'abriu o documento' + (vistoEm ? ' em ' + fmtQuando(vistoEm) : '') + ' — ainda não assinou', cor: '#8a5a00' }
-  return { icone: '✉', texto: 'ainda não abriu o link', cor: '#5b6673' }
+  const L = s.leitura || {}
+  const n = L.aberturas || 0
+  const vezes = n === 1 ? '1 vez' : n + ' vezes'
+  const quando = n
+    ? (n === 1 ? ' em ' + fmtHora(L.primeira)
+               : ' · 1ª em ' + fmtHora(L.primeira) + ' · última em ' + fmtHora(L.ultima))
+    : ''
+  const abriu = n ? ('abriu ' + vezes + quando) : 'abriu o documento (sem hora registrada)'
+  if (st === 'assinado') {
+    const h = L.assinado_em || s.assinado_em
+    return { icone: '✅', cor: '#0F6E56', texto: 'assinou' + (h ? ' em ' + fmtHora(h) : '') + (n ? ' · ' + abriu : '') }
+  }
+  if (st === 'visto' || n) return { icone: '👁', cor: '#8a5a00', texto: abriu + ' — ainda não assinou' }
+  return { icone: '✉', cor: '#5b6673', texto: 'ainda não abriu o link' }
 }
 export function LeituraSignatarios({ signatarios }) {
   const sigs = (signatarios || []).slice().sort((a, b) => (a.ordem || 0) - (b.ordem || 0))
