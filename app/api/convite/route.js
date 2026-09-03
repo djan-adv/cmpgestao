@@ -16,6 +16,7 @@
 // o token é um UUID não adivinhável e expira em 7 dias ou no primeiro uso.
 
 import { createClient } from '@supabase/supabase-js'
+import { ESCRITORIO_PADRAO } from '../../../lib/escritorio.js'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -49,8 +50,12 @@ async function ehCoordenador(user) {
   if (ACESSOS_ALLOW.map(e => e.toLowerCase()).includes(email)) return true
   try {
     const sbA = createClient(SB_URL, SERVICE, { auth: { persistSession: false } })
-    const { data } = await sbA.from('usuarios').select('nome,papel').eq('id', user.id).maybeSingle()
+    const { data } = await sbA.from('usuarios').select('nome,papel,escritorio_id').eq('id', user.id).maybeSingle()
     if (!data || data.papel !== 'socio') return false
+    // Escritório convidado (não é o da instalação): o sócio DELE administra os
+    // próprios acessos. Sem isto, um escritório em teste dependeria de alguém da
+    // CMP para cada pessoa que quisesse cadastrar — e não seria autônomo.
+    if (data.escritorio_id && String(data.escritorio_id) !== ESCRITORIO_PADRAO) return true
     return COORD_NOMES.some(rx => rx.test(String(data.nome || '')))
   } catch (e) { return false }
 }

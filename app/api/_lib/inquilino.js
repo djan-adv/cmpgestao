@@ -16,8 +16,13 @@ import { createClient } from '@supabase/supabase-js'
 // A raiz é o escritório do dono do sistema (a CMP). Fica em variável de
 // ambiente para que uma instalação nova não herde o id da CMP; o valor de
 // fábrica mantém a instalação atual funcionando sem mexer no .env.local.
-export const ESCRITORIO_RAIZ =
-  process.env.ESCRITORIO_RAIZ_ID || '908f77fc-19f5-4d86-9576-f5590af09e0a'
+// Aceita os dois nomes de variável: ESCRITORIO_ID nasceu numa primeira versão
+// desta mesma mudança, feita em paralelo, e pode já estar configurada no
+// servidor. Trocar o nome sem aviso derrubaria a instalação que a usa.
+export const ESCRITORIO_RAIZ = String(
+  process.env.ESCRITORIO_RAIZ_ID || process.env.ESCRITORIO_ID ||
+  '908f77fc-19f5-4d86-9576-f5590af09e0a',
+).trim()
 
 function admin() {
   return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {

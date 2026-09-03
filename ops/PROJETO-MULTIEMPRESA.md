@@ -135,6 +135,17 @@ primeiro inquilino que nos obriga a construir esse encanamento do jeito certo.
 ---
 
 ## 7. Ordem de construção (fases)
+
+> **Andamento (03/09/2026) — primeira versão autônoma para testes.** Feita a base da
+> fase 2: o uuid do escritório, que estava chumbado em 25 arquivos, virou **uma fonte
+> só** (`lib/escritorio.js`, com `ESCRITORIO_ID` do ambiente); `/api/docs`,
+> `/api/anexo` e `/api/historico-anexo` passaram a resolver o escritório **de quem
+> pede**; documentos de escritório convidado ficam em `/opt/cmpdocs/_esc/<id>`; o
+> sócio de um escritório convidado administra os próprios acessos; e
+> `scripts/novo-escritorio.mjs` cria escritório + primeiro acesso pela linha de
+> comando. Falta o miolo caro: IA, jus.br e envios ainda são do escritório da
+> instalação. Detalhes e limites em `ops/VERSAO-AUTONOMA.md`.
+
 1. **Fundação + Inove como 1º inquilino:** coluna/isolamento por inquilino, perfil
    restrito, RLS, link de convite com auto-cadastro e limite de assentos, envio de
    e-mail desligado para o perfil restrito.

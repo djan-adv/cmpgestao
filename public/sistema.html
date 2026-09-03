@@ -1281,7 +1281,11 @@ var COORD_IDS=['djan','jader','eduarda'];
 var MOVE_AGENDA_IDS=['djan','jader'];
 function podeMoverAgenda(){ return MOVE_AGENDA_IDS.indexOf(USUARIO_ATUAL_VISUAL)>-1; }
 function _avisoMover(){ alert('Apenas Djan e Jader podem mover tarefas e prazos na agenda.\n\nSe precisar remarcar, peça a um deles.'); }
-function souCoordenador(){ return COORD_IDS.indexOf(USUARIO_ATUAL_VISUAL)>-1; }
+/* Coordenador por NOME só vale na casa que criou o sistema. Num escritório
+   cliente, quem manda é o contratante (ou sócio) dele — senão o cliente
+   dependeria de alguém daqui para cadastrar cada pessoa da equipe dele. */
+var SOU_DONO_DO_ESCRITORIO=false;
+function souCoordenador(){ return SOU_DONO_DO_ESCRITORIO||COORD_IDS.indexOf(USUARIO_ATUAL_VISUAL)>-1; }
 function souEstagiario(){ var u=usuarioVisualAtual(); return !!(u&&u.perfil==='est'); }
 function _aplicaPapelNaTela(){
   try{
@@ -1336,6 +1340,7 @@ async function identificarUsuarioLogado(){
       window.__esc=(pf&&pf.data&&pf.data.escritorio_id)||null;
       if(e && e.raiz!==true){
         document.documentElement.setAttribute('data-perfil','cliente');
+        SOU_DONO_DO_ESCRITORIO=(papelBanco==='contratante'||papelBanco==='socio');
         var bn=document.querySelector('.brand-neutral');
         if(bn) bn.textContent=((e.marca&&e.marca.sistema)||e.nome||'Gestão');
         try{ document.title=((e.marca&&e.marca.sistema)||e.nome||'Gestão'); }catch(eT){}
