@@ -177,6 +177,20 @@
 .side .userft{position:static!important;flex:0 0 auto}
 .side>.brand-neutral{flex:0 0 auto}
 /* Perfil neutro "Inove/Perito": esconde marcas e ferramentas exclusivas da CMP */
+/* Escritório CLIENTE (quem comprou o sistema). Reaproveita a marca neutra que
+   já existia para o perfil do perito, mas SEM esconder as ferramentas: o
+   cliente recebe o sistema inteiro. Some só o que é da casa que vendeu —
+   a marca, as pastas internas, os robôs e os canais que usam conta do
+   fornecedor (e-mail, financeiro). Ligar esses canais é cadastro, não código. */
+html[data-perfil="cliente"] .brand{display:none!important}
+html[data-perfil="cliente"] .brand-neutral{display:block!important}
+html[data-perfil="cliente"] .cmp-only{display:none!important}
+html[data-perfil="cliente"] #nav a[data-s="emails"],
+html[data-perfil="cliente"] #nav a[data-s="financeiro"],
+html[data-perfil="cliente"] #nav a[data-s="inove"],
+html[data-perfil="cliente"] #nav a[data-s="james"],
+html[data-perfil="cliente"] #nav a[data-s="encerrados"],
+html[data-perfil="cliente"] #nav a[data-s="sugestoes"]{display:none!important}
 html[data-perfil="inove"] .brand{display:none!important}
 html[data-perfil="inove"] .brand-neutral{display:block!important}
 html[data-perfil="inove"] .cmp-only{display:none!important}
@@ -1297,8 +1311,8 @@ async function identificarUsuarioLogado(){
     var email=String(user.email||'').toLowerCase();
     var nomeBanco='', papelBanco='';
     try{
-      var pf=await sb.from('usuarios').select('nome,papel,demo').eq('id',user.id).maybeSingle();
-      if(pf&&pf.error){ pf=await sb.from('usuarios').select('nome,papel').eq('id',user.id).maybeSingle(); }
+      var pf=await sb.from('usuarios').select('nome,papel,demo,escritorio_id').eq('id',user.id).maybeSingle();
+      if(pf&&pf.error){ pf=await sb.from('usuarios').select('nome,papel,escritorio_id').eq('id',user.id).maybeSingle(); }
       if(pf&&pf.data){ nomeBanco=pf.data.nome||''; papelBanco=pf.data.papel||''; }
       if((pf&&pf.data&&pf.data.demo===true)||DEMO_EMAILS.indexOf(email)>-1) _demoLigar();
     }catch(e){}
@@ -1311,6 +1325,22 @@ async function identificarUsuarioLogado(){
       var novo={id:'auto_'+(email.split('@')[0]||'user'),nome:nomeBanco||email,perfil:(papelBanco==='socio'?'socio':(/estagi/i.test(papelBanco)?'est':'adv')),email:email,senha:'definida',ativo:true};
       USUARIOS_VISUAIS.push(novo); USUARIO_ATUAL_VISUAL=novo.id; seat=novo;
     }
+    /* De quem é este sistema? O escritório dono (a raiz) continua com a marca
+       da casa; um escritório CLIENTE vê o nome dele, e nunca a marca de quem
+       vendeu — o cliente não pode abrir o sistema e ler o nome de outro
+       escritório de advocacia no alto da tela. */
+    try{
+      var esc=await sb.from('escritorios').select('nome,raiz,marca').eq('id', (pf&&pf.data&&pf.data.escritorio_id)||undefined).maybeSingle();
+      if(esc&&esc.error){ esc=await sb.from('escritorios').select('nome,raiz,marca').limit(1).maybeSingle(); }
+      var e=esc&&esc.data;
+      window.__esc=(pf&&pf.data&&pf.data.escritorio_id)||null;
+      if(e && e.raiz!==true){
+        document.documentElement.setAttribute('data-perfil','cliente');
+        var bn=document.querySelector('.brand-neutral');
+        if(bn) bn.textContent=((e.marca&&e.marca.sistema)||e.nome||'Gestão');
+        try{ document.title=((e.marca&&e.marca.sistema)||e.nome||'Gestão'); }catch(eT){}
+      }
+    }catch(e){}
     var pf2=perfis[seat.perfil]||perfis.adv;
     var el=document.getElementById('who-name'); if(el) el.textContent=nomeBanco||seat.nome;
     var pill=document.getElementById('who-pill'); if(pill){ pill.className='pill '+pf2.pill; pill.textContent=pf2.label; }
@@ -14839,8 +14869,12 @@ async function _googleEnfileiraExclusao(ev){
   try{
     var gid=(ev&&ev.gid)||''; if(!gid) return;
     var sb=window.__sb; if(!sb) return;
+    /* o escritório é o de quem está logado — antes era o id da CMP escrito à
+       mão aqui, o que faria a exclusão de um cliente cair na fila do outro
+       (e, com a RLS ligada, simplesmente falhar) */
+    if(!window.__esc) return;
     await sb.from('agenda_google_lixeira').upsert({
-      escritorio_id:'908f77fc-19f5-4d86-9576-f5590af09e0a',
+      escritorio_id:window.__esc,
       google_event_id:gid,
       rotulo:String((ev&&ev.tt)||'').slice(0,120),
     },{onConflict:'google_event_id'});

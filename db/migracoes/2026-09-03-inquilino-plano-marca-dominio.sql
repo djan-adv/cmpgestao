@@ -78,3 +78,21 @@ revoke execute on function public.sou_contratante() from public;
 grant execute on function public.sou_contratante() to authenticated, service_role;
 
 commit;
+
+-- ============================================================================
+-- Parte 3 — o cadastro do escritório é SÓ DE LEITURA para o navegador.
+--
+-- A política que existia era `for all` (id = meu_escritorio()): o usuário lia e
+-- TAMBÉM escrevia a própria linha. Num sistema de um escritório só isso não
+-- fazia diferença. Vendendo, faz toda: o contratante abriria o console do
+-- navegador e daria a si mesmo assentos ilimitados, ou ligaria o canal de
+-- e-mail — que usa a caixa do fornecedor — e passaria a mandar mensagem em
+-- nome de outra pessoa. Plano e limites passam a mudar só pela chave de
+-- serviço, em /api/escritorios.
+-- ============================================================================
+
+drop policy if exists esc_self on public.escritorios;
+
+create policy esc_self_leitura
+  on public.escritorios for select to authenticated
+  using (id = public.meu_escritorio());
