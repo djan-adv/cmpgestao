@@ -756,7 +756,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
       </div>
       <div class="card">
         <p class="sectlabel">🧩 jus.br — extensão do Chrome ou Edge <span style="font-size:10px;background:#eaf7f1;color:#0F6E56;border-radius:10px;padding:1px 7px;font-weight:700;text-transform:none">novo</span></p>
-        <p class="note" style="margin:6px 0 10px">Faz o mesmo que o userscript, sem Tampermonkey — e resolve o limite dele: o portal do jus.br bloqueia envios saindo das páginas dele, então o userscript precisa guardar o token e esperar a aba do sistema aberta. A extensão manda na hora, com o sistema fechado. O download já vem pareado com este escritório: não há nada para colar.</p>
+        <p class="note" style="margin:6px 0 10px">É ela que mantém a sessão do jus.br viva no sistema: quando você entra no portal com o certificado, o token chega aqui na hora, mesmo com o Gestão fechado. O download já vem pareado com este escritório: não há nada para colar.</p>
         <button class="btn sm" onclick="baixarExtensaoJusbr(this)">⬇ Baixar a extensão (.zip)</button>
         <ol class="note" style="margin:10px 0 0;padding-left:18px;line-height:1.7">
           <li>Descompacte o arquivo (vai virar a pasta <b>cmpgestao-jusbr</b>).</li>
@@ -764,17 +764,24 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
           <li>Clique em <b>Carregar sem compactação</b> (no Edge: <b>Carregar descompactado</b>) e escolha a pasta.</li>
           <li>Entre no <b>portaldeservicos.pdpj.jus.br</b> com o seu certificado. O ícone da extensão fica com o selo <b>ok</b> verde quando o token chega.</li>
         </ol>
-      </div>
-      <div class="card">
-        <p class="sectlabel">🔐 jus.br — meu userscript (Tampermonkey)</p>
-        <p class="note" style="margin:6px 0 10px">Gera o script já com o segredo embutido — é só copiar e colar no Tampermonkey. Não precisa digitar nada. Depois, faça login no jus.br uma vez.</p>
-        <div id="robos-jusbr-status" class="note" style="margin-bottom:8px"></div>
-        <button class="btn sm" onclick="gerarUserscriptJusbr()">📄 Gerar meu userscript</button>
-        <button class="btn sm ghost" style="color:#b5342b;border-color:#e8c4bf" onclick="desconectarJusbr(this)" title="Apaga o token que o SERVIDOR guarda. Sair do portal no navegador não faz isso — o sistema tem a própria cópia, é o que faz os robôs rodarem de madrugada.">🧹 desconectar o jus.br do sistema</button>
-        <div id="robos-userscript" style="display:none;margin-top:10px">
-          <textarea id="robos-userscript-txt" readonly style="width:100%;height:180px;font-family:monospace;font-size:11px;border:1px solid var(--line);border-radius:8px;padding:8px"></textarea>
-          <div style="margin-top:6px"><button class="btn sm" onclick="copiarUserscriptJusbr()">📋 Copiar</button> <span class="note">Cole no Tampermonkey (novo script) e salve.</span></div>
+        <!-- A sessão e o "desconectar" moravam no cartão do userscript, que era o
+             caminho antigo. Vieram para cá: é a extensão que alimenta a sessão
+             desde 31/08/2026. O userscript continua disponível, dobrado, para
+             quem ainda o usa — mas deixou de ser um cartão próprio (03/09/2026). -->
+        <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--line)">
+          <div id="robos-jusbr-status" class="note" style="margin-bottom:8px"></div>
+          <button class="btn sm ghost" style="color:#b5342b;border-color:#e8c4bf" onclick="desconectarJusbr(this)" title="Apaga o token que o SERVIDOR guarda. Sair do portal no navegador não faz isso — o sistema tem a própria cópia, é o que faz os robôs rodarem de madrugada.">🧹 desconectar o jus.br do sistema</button>
         </div>
+        <details style="margin-top:10px">
+          <summary class="note" style="cursor:pointer;margin:0">Ainda usa o Tampermonkey? O userscript antigo continua aqui.</summary>
+          <div style="margin-top:8px">
+            <button class="btn sm ghost" onclick="gerarUserscriptJusbr()">📄 Gerar meu userscript</button>
+            <div id="robos-userscript" style="display:none;margin-top:10px">
+              <textarea id="robos-userscript-txt" readonly style="width:100%;height:180px;font-family:monospace;font-size:11px;border:1px solid var(--line);border-radius:8px;padding:8px"></textarea>
+              <div style="margin-top:6px"><button class="btn sm" onclick="copiarUserscriptJusbr()">📋 Copiar</button> <span class="note">Cole no Tampermonkey (novo script) e salve.</span></div>
+            </div>
+          </div>
+        </details>
       </div>
     </section>
 
