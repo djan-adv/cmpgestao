@@ -142,6 +142,32 @@ export default function DocumentoAvulso() {
      assinador — o link que o cliente recebeu deixa de funcionar na hora. Só
      enquanto ninguém assinou: documento assinado é instrumento, não se apaga
      por aqui. */
+  /* Reenviar o link a quem ainda não assinou. Estava só no Painel; aqui, ao lado
+     da linha que diz quem não abriu, é onde a decisão é tomada (03/09/2026).
+     Vai pelo SMTP do escritório (contato@) — a edge function do assinador
+     vivia dando 500. O link é o mesmo de sempre: o token do signatário não
+     muda, então reenviar não invalida o que já foi mandado. */
+  async function reenviarLink(d) {
+    const pend = (d.signatarios || []).filter(s => s.status !== 'assinado' && s.email)
+    if (!pend.length) {
+      const semEmail = (d.signatarios || []).filter(s => s.status !== 'assinado' && !s.email)
+      alert(semEmail.length
+        ? 'Quem falta assinar está sem e-mail cadastrado. Corrija o e-mail no Painel de assinaturas ou mande o link por WhatsApp.'
+        : 'Todos já assinaram — não há para quem reenviar.')
+      return
+    }
+    const quem = pend.map(s => (s.nome || s.email)).join(', ')
+    if (!window.confirm('Reenviar o link de assinatura para ' + quem + '?')) return
+    setMfMsg(m => ({ ...m, [d.id]: 'Enviando…' }))
+    let ok = 0
+    for (const sg of pend) {
+      const link = window.location.origin + '/assinar-doc?d=' + d.id + '&s=' + sg.token
+      if (await enviarLinkAssinatura({ to: sg.email, nome: sg.nome || '', titulo: d.titulo || 'documento', link })) ok++
+    }
+    setMfMsg(m => ({ ...m, [d.id]: ok === pend.length
+      ? ('✓ Link reenviado para ' + ok + ' pessoa(s).')
+      : ('Reenviado para ' + ok + ' de ' + pend.length + ' — o restante falhou. Confira o e-mail cadastrado ou mande por WhatsApp.') }))
+  }
   async function cancelar(d) {
     const quem = (d.signatarios || []).map(s => s.nome || s.email).filter(Boolean).join(', ')
     if (!window.confirm('Cancelar "' + (d.titulo || 'documento') + '"?\n\nO link enviado' + (quem ? ' para ' + quem : '') + ' para de funcionar e o registro é removido. Não tem volta.')) return
@@ -280,6 +306,7 @@ export default function DocumentoAvulso() {
               <LeituraSignatarios signatarios={d.signatarios || []} />
               <div style={{ marginTop: 6 }}>
                 <button style={{ ...btnMini, background: '#e6e9ee', color: '#1c2733' }} onClick={() => montarFinal(d)}>Montar PDF final</button>
+                {d.status !== 'assinado' && <button style={{ ...btnMini, background: '#eef3fa', color: '#185FA5', marginLeft: 6 }} onClick={() => reenviarLink(d)} title="Manda de novo o link de assinatura para quem ainda não assinou. O link é o mesmo — reenviar não invalida o anterior.">✉ reenviar link</button>}
                 <JuntarExterno doc={d} signatarios={d.signatarios || []} aoConcluir={carregarLista} />
                 <HistoricoDoc doc={d} />
                 {d.status !== 'assinado' && <button style={{ ...btnMini, background: '#fbeceb', color: '#b5342b', marginLeft: 6 }} onClick={() => cancelar(d)} title="Apaga o documento e desativa o link enviado. Só enquanto ninguém assinou.">✕ cancelar</button>}
