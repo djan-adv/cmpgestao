@@ -1,7 +1,8 @@
 {
-  "crons": [
-    { "path": "/api/cron/djen", "schedule": "0 8 * * *" },
-    { "path": "/api/cron/djen", "schedule": "0 13 * * *" }
-  ],
-  "regions": ["gru1"]
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "git": {
+    "deploymentEnabled": {
+      "main": false
+    }
+  }
 }
