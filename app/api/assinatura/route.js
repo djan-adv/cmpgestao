@@ -28,6 +28,8 @@
 import { createClient } from '@supabase/supabase-js'
 import { randomUUID } from 'crypto'
 import { contaDemo, respostaDemo } from '../../../lib/demo.js'
+import { montarFinalExterno } from '../../../lib/assinatura-externa.js'
+import { enviarEmailCore } from '../enviar-email/enviar.js'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -188,6 +190,65 @@ export async function POST(request) {
       const { data, error } = await sb.storage.from(body.bucket).createSignedUrl(String(body.path), 600)
       if (error) return Response.json({ erro: error.message }, { status: 404 })
       return Response.json({ ok: true, url: data.signedUrl })
+    }
+
+    /* ---------- assinatura recebida POR FORA do link ----------
+       O cliente assinou à mão no celular e mandou o PDF por WhatsApp (03/09/2026).
+       O escritório sobe esse arquivo aqui: o sistema recolore a caneta para azul,
+       anexa a página de assinaturas com identificador e hashes, guarda o final,
+       marca o signatário como assinado e manda o PDF ao escritório por e-mail. */
+    if (acao === 'juntar_externo') {
+      if (!body.doc_id || !body.sig_id || !body.pdf_b64) return Response.json({ erro: 'Faltou o documento, o signatário ou o arquivo.' }, { status: 400 })
+      let bytesAssinado
+      try { bytesAssinado = Buffer.from(String(body.pdf_b64), 'base64') } catch { return Response.json({ erro: 'Arquivo inválido.' }, { status: 400 }) }
+      if (bytesAssinado.length < 100 || bytesAssinado.slice(0, 5).toString('latin1') !== '%PDF-') return Response.json({ erro: 'O arquivo precisa ser um PDF.' }, { status: 400 })
+      if (bytesAssinado.length > 12 * 1024 * 1024) return Response.json({ erro: 'PDF acima de 12 MB.' }, { status: 400 })
+      const d = await sb.from('documentos').select('*').eq('id', body.doc_id).single()
+      if (d.error || !d.data) return Response.json({ erro: 'Documento não encontrado.' }, { status: 404 })
+      const sg = await sb.from('signatarios').select('*').eq('id', body.sig_id).eq('documento_id', body.doc_id).single()
+      if (sg.error || !sg.data) return Response.json({ erro: 'Signatário não encontrado.' }, { status: 404 })
+      const doc = d.data, sig = sg.data
+      let bytesOriginal = null
+      if (doc.arquivo_path) {
+        try { const o = await sb.storage.from('documentos').download(doc.arquivo_path); if (o.data) bytesOriginal = Buffer.from(await o.data.arrayBuffer()) } catch {}
+      }
+      const via = ['WhatsApp', 'e-mail', 'em mãos'].includes(String(body.via || '')) ? String(body.via) : 'WhatsApp'
+      const dataRecebida = String(body.data_recebida || '').trim().slice(0, 10) || new Date().toLocaleDateString('pt-BR')
+      let fin
+      try {
+        fin = await montarFinalExterno({
+          bytesAssinado, bytesOriginal, titulo: doc.titulo,
+          signatario: { nome: sig.nome, email: sig.email, cpf: sig.cpf },
+          via, dataRecebida, identificador: sig.id, quem: user.email || '',
+        })
+      } catch (e) { return Response.json({ erro: 'Não consegui montar o PDF final: ' + (e && e.message || e) }, { status: 500 }) }
+      const path = doc.id + '/assinado.pdf'
+      const up = await sb.storage.from('documentos').upload(path, fin.bytes, { contentType: 'application/pdf', upsert: true })
+      if (up.error) return Response.json({ erro: 'Não consegui guardar o PDF final: ' + up.error.message }, { status: 500 })
+      const agora = new Date().toISOString()
+      const u1 = await sb.from('signatarios').update({ status: 'assinado', assinado_em: agora }).eq('id', sig.id)
+      if (u1.error) return Response.json({ erro: 'PDF guardado, mas não consegui marcar o signatário: ' + u1.error.message }, { status: 500 })
+      const todos = await sb.from('signatarios').select('status').eq('documento_id', doc.id)
+      const completo = (todos.data || []).every(x => x.status === 'assinado')
+      await sb.from('documentos').update({ status: completo ? 'assinado' : 'parcial' }).eq('id', doc.id)
+      const detalhe = 'Assinatura manuscrita recebida por ' + via + ' em ' + dataRecebida + ' e juntada pelo escritório (' + (user.email || 'usuário') + '). ' +
+        'SHA-256 do arquivo recebido: ' + fin.shaAssinado + (fin.shaOriginal ? (' · SHA-256 do original: ' + fin.shaOriginal) : '') +
+        (fin.trocas ? (' · traço recolorido de vermelho para azul (' + fin.trocas + ' segmentos).') : '.')
+      try { await sb.from('eventos_auditoria').insert({ documento_id: doc.id, tipo: 'assinado_externo', detalhe }) } catch {}
+      /* o e-mail que o escritório esperava e não veio: agora vem, com o PDF */
+      let email = null
+      try {
+        const nomeArq = String(doc.titulo || 'documento').replace(/[^\w\-]+/g, '_') + '_assinado.pdf'
+        const r = await enviarEmailCore({
+          para: user.email, assunto: 'Assinado: ' + (doc.titulo || 'documento') + ' — ' + (sig.nome || sig.email || ''),
+          corpo: 'O documento "' + (doc.titulo || '') + '" foi assinado por ' + (sig.nome || sig.email || '') + ' (assinatura manuscrita recebida por ' + via + ' em ' + dataRecebida + ') e o PDF final segue em anexo.\n\n' +
+            (completo ? 'Todos os signatários assinaram.' : 'Ainda há signatário pendente neste documento.') + '\n\nCrispim, Mendonça e Pinheiro — Advogados',
+          anexos: [{ filename: nomeArq, content_base64: fin.bytes.toString('base64') }], dedup: false, convidarApp: false,
+        })
+        email = r && !r.erro ? 'enviado para ' + user.email : ('não enviado: ' + (r && r.erro || '?'))
+      } catch (e) { email = 'não enviado: ' + (e && e.message || e) }
+      const url = await sb.storage.from('documentos').createSignedUrl(path, 600)
+      return Response.json({ ok: true, path, url: url.data && url.data.signedUrl || null, completo, trocas: fin.trocas, email })
     }
 
     if (acao === 'apagar_arquivo') {

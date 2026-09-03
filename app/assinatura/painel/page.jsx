@@ -5,6 +5,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { signSb } from '../../../lib/supabaseAssinatura'
 import { apiAssinatura, enviarLinkAssinatura } from '../../../lib/assinaturaApi'
+import JuntarExterno from '../JuntarExterno'
 
 const NAVY = '#2E3A4B'
 const CORES = {
@@ -144,6 +145,13 @@ export default function PainelAssinaturas() {
       if (!det.ok) throw new Error(det.erro || 'falha ao carregar')
       const doc = det.documento, sigs = det.signatarios || []
       if (!doc.arquivo_path) throw new Error('Documento sem arquivo original.')
+      /* aviso que faltava aqui: sem ele o PDF saía com "Status: visto" e linha em
+         branco, e parecia que o sistema tinha perdido a assinatura (03/09/2026) */
+      const pendentes = sigs.filter(s => s.status !== 'assinado')
+      if (pendentes.length) {
+        const quem = pendentes.map(s => s.nome || s.email).filter(Boolean).join(', ')
+        if (!window.confirm('Ainda falta(m) assinar: ' + quem + '.\n\nO PDF vai sair PARCIAL, sem a assinatura de quem falta.\nSe o cliente assinou à mão e mandou por WhatsApp, use "juntar assinatura recebida por fora".\n\nMontar mesmo assim?')) { if (btn) { btn.disabled = false; btn.textContent = orig }; return }
+      }
       const orl = await apiAssinatura({ acao: 'signed', bucket: 'documentos', path: doc.arquivo_path })
       if (!orl.ok) throw new Error(orl.erro || 'arquivo original indisponível')
       const origBytes = await (await fetch(orl.url)).arrayBuffer()
@@ -245,6 +253,7 @@ export default function PainelAssinaturas() {
                         <td style={{ padding: 10, borderBottom: '1px solid #eef0f3', color: '#5b6673' }}>{fmtDataCurta(d.criado_em)}</td>
                         <td style={{ padding: 10, borderBottom: '1px solid #eef0f3', whiteSpace: 'nowrap', textAlign: 'right' }} onClick={e => e.stopPropagation()}>
                           {d.tipo === 'upload' && <button title="Baixar PDF no estado atual (parcial)" style={btnAcao('#eaf6ef', '#1f7a44')} onClick={e => baixarParcial(d, e.currentTarget)}>⤓</button>}
+                          {d.tipo === 'upload' && <JuntarExterno doc={d} signatarios={d.signatarios || []} />}
                           {pend && <>
                             <button title="Corrigir e-mail de quem não assinou" style={btnAcao('#fff6d8', '#8a6d00')} onClick={() => corrigirEmail(d)}>✎</button>
                             <button title="Reenviar e-mail para quem não assinou" style={btnAcao('#eef3fa', NAVY)} onClick={e => reenviar(d, e.currentTarget)}>↻</button>
