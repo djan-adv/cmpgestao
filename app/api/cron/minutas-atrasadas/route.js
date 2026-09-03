@@ -16,7 +16,7 @@ import webpush from 'web-push'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
 
-const ESCRITORIO_CMP = '908f77fc-19f5-4d86-9576-f5590af09e0a'
+import { ESCRITORIO_PADRAO as ESCRITORIO_CMP } from '../../../../lib/escritorio.js'
 const ALVOS = [/djan\.adv@gmail\.com/i, /mariaritahenriq@gmail\.com/i, /jadergabrielpinheiro\.adv@gmail\.com/i, /jaderpinheiroadv@gmail\.com/i]
 
 function admin() {

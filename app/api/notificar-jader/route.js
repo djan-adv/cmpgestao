@@ -21,7 +21,7 @@ export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
 const JADER = ['jadergabrielpinheiro.adv@gmail.com', 'jaderpinheiroadv@gmail.com', 'djan.adv@gmail.com']
-const ESCRITORIO_CMP = '908f77fc-19f5-4d86-9576-f5590af09e0a'
+import { ESCRITORIO_PADRAO as ESCRITORIO_CMP } from '../../../lib/escritorio.js'
 const REMIND_MS = 29 * 60 * 1000   // reenvia lembrete de lead a cada ~30 min
 const OFF_BR = -3                  // Brasília = UTC-3 (sem horário de verão hoje)
 // e-mails de quem tem que ser avisado NO CELULAR (push do /chat), além do

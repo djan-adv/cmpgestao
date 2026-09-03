@@ -11,7 +11,8 @@ import { chamarClaude, orcamento } from '../_ia/claude.js'
 import { lerPlanilhaTexto } from '../../../lib/planilha.js'
 
 export const ROOT = '/opt/cmpdocs'
-export const ESCRITORIO_CMP = '908f77fc-19f5-4d86-9576-f5590af09e0a'
+import { ESCRITORIO_PADRAO } from '../../../lib/escritorio.js'
+export const ESCRITORIO_CMP = ESCRITORIO_PADRAO
 /* Orçamento de PDFs enviados à IA. A conta que importa NÃO é a do arquivo no
    disco: o PDF viaja em base64, que cresce 4/3, e a API recusa a requisição
    inteira acima de 32 MB ("Request exceeds the maximum size" — 02/09/2026, um

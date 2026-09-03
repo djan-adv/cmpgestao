@@ -82,7 +82,7 @@ function montarConteudoChat(lead, historico, mensagem) {
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
-const ESCRITORIO_CMP = '908f77fc-19f5-4d86-9576-f5590af09e0a'
+import { ESCRITORIO_PADRAO as ESCRITORIO_CMP } from '../../../lib/escritorio.js'
 const MAX_TEXTO = 4000
 const MAX_TURNOS_IA = 40   // trava de custo: acima disso, resposta fixa sem chamar a IA
 const HUMANO_JANELA_MIN = 15   // minutos após a última resposta do staff em que a IA fica calada

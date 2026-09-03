@@ -1262,12 +1262,18 @@ var USUARIO_ATUAL_VISUAL='djan';
    Coordenadores (engrenagens, acessos e publicação): Djan, Jader e Maria Eduarda.
    Estagiários: só consultam — nada de configurar, publicar ou gerir acessos. */
 var COORD_IDS=['djan','jader','eduarda'];
+/* O escritório DESTA instalação. Quem entra por um escritório diferente é
+   escritório convidado: roda na mesma raiz, enxerga só os próprios dados (RLS)
+   e, sendo sócio lá, administra os próprios acessos — senão um escritório em
+   teste dependeria de alguém da CMP para cadastrar cada pessoa. */
+var ESC_INSTALACAO='908f77fc-19f5-4d86-9576-f5590af09e0a';
+var SOU_SOCIO_CONVIDADO=false;
 /* Mover tarefas/prazos na agenda (Kanban e calendário) é restrito a Djan e
    Jader — remarcar prazo é decisão de sócio responsável, não operacional. */
 var MOVE_AGENDA_IDS=['djan','jader'];
 function podeMoverAgenda(){ return MOVE_AGENDA_IDS.indexOf(USUARIO_ATUAL_VISUAL)>-1; }
 function _avisoMover(){ alert('Apenas Djan e Jader podem mover tarefas e prazos na agenda.\n\nSe precisar remarcar, peça a um deles.'); }
-function souCoordenador(){ return COORD_IDS.indexOf(USUARIO_ATUAL_VISUAL)>-1; }
+function souCoordenador(){ return SOU_SOCIO_CONVIDADO||COORD_IDS.indexOf(USUARIO_ATUAL_VISUAL)>-1; }
 function souEstagiario(){ var u=usuarioVisualAtual(); return !!(u&&u.perfil==='est'); }
 function _aplicaPapelNaTela(){
   try{
@@ -1297,9 +1303,13 @@ async function identificarUsuarioLogado(){
     var email=String(user.email||'').toLowerCase();
     var nomeBanco='', papelBanco='';
     try{
-      var pf=await sb.from('usuarios').select('nome,papel,demo').eq('id',user.id).maybeSingle();
-      if(pf&&pf.error){ pf=await sb.from('usuarios').select('nome,papel').eq('id',user.id).maybeSingle(); }
+      var pf=await sb.from('usuarios').select('nome,papel,demo,escritorio_id').eq('id',user.id).maybeSingle();
+      if(pf&&pf.error){ pf=await sb.from('usuarios').select('nome,papel,escritorio_id').eq('id',user.id).maybeSingle(); }
       if(pf&&pf.data){ nomeBanco=pf.data.nome||''; papelBanco=pf.data.papel||''; }
+      if(pf&&pf.data&&pf.data.escritorio_id&&pf.data.escritorio_id!==ESC_INSTALACAO){
+        window.__escId=pf.data.escritorio_id;
+        SOU_SOCIO_CONVIDADO=(papelBanco==='socio');
+      }
       if((pf&&pf.data&&pf.data.demo===true)||DEMO_EMAILS.indexOf(email)>-1) _demoLigar();
     }catch(e){}
     /* acha o assento correspondente: por e-mail e, se não achar, por nome */
@@ -14839,8 +14849,10 @@ async function _googleEnfileiraExclusao(ev){
   try{
     var gid=(ev&&ev.gid)||''; if(!gid) return;
     var sb=window.__sb; if(!sb) return;
+    /* o escritório de quem está apagando — não o da instalação chumbado */
+    var escG=await escId(); if(!escG) return;
     await sb.from('agenda_google_lixeira').upsert({
-      escritorio_id:'908f77fc-19f5-4d86-9576-f5590af09e0a',
+      escritorio_id:escG,
       google_event_id:gid,
       rotulo:String((ev&&ev.tt)||'').slice(0,120),
     },{onConflict:'google_event_id'});

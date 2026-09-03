@@ -2,7 +2,7 @@
 // rota pública de atualização automática do Tampermonkey.
 import crypto from 'crypto'
 
-const ESCRITORIO_CMP = '908f77fc-19f5-4d86-9576-f5590af09e0a'
+import { ESCRITORIO_PADRAO as ESCRITORIO_CMP } from '../../../../lib/escritorio.js'
 
 function basePublica(request) {
   const proto = (request.headers.get('x-forwarded-proto') || 'https').split(',')[0].trim()

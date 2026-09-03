@@ -15,7 +15,7 @@ import crypto from 'crypto'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
 
-const ESCRITORIO_CMP = '908f77fc-19f5-4d86-9576-f5590af09e0a'
+import { ESCRITORIO_PADRAO as ESCRITORIO_CMP } from '../../../../lib/escritorio.js'
 
 function admin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL

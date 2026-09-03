@@ -10,7 +10,8 @@
 
 import crypto from 'crypto'
 
-export const ESCRITORIO_CMP = '908f77fc-19f5-4d86-9576-f5590af09e0a'
+import { ESCRITORIO_PADRAO } from '../../../lib/escritorio.js'
+export const ESCRITORIO_CMP = ESCRITORIO_PADRAO
 export const GOOGLE_SCOPE = 'https://www.googleapis.com/auth/calendar'
 export const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth'
 export const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token'

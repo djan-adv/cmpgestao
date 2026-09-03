@@ -10,7 +10,7 @@ import crypto from 'crypto'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
 
-const ESCRITORIO_CMP = '908f77fc-19f5-4d86-9576-f5590af09e0a'
+import { escritorioDoUsuario } from '../../../lib/escritorio.js'
 const MAX_FILES = 6
 const MAX_BYTES = 15 * 1024 * 1024
 
@@ -41,6 +41,8 @@ export async function POST(request) {
   if (!arquivosIn.length) return Response.json({ erro: 'anexe ao menos um arquivo' }, { status: 400 })
 
   const sb = admin()
+  // grava no escritório de quem está enviando, não no da instalação
+  const esc = await escritorioDoUsuario(user)
 
   // confere que o andamento existe e pega o número do processo (para o path e a coluna processo_numero)
   const { data: and } = await sb.from('andamentos').select('id,processo_id').eq('id', andamentoId).maybeSingle()
@@ -60,11 +62,11 @@ export async function POST(request) {
       const buf = Buffer.from(b64, 'base64')
       if (!buf.length || buf.length > MAX_BYTES) { falhas++; continue }
       const tipo = String(f.tipo || 'application/octet-stream')
-      const path = ESCRITORIO_CMP + '/' + numeroProc.replace(/\D/g, '') + '/' + crypto.randomUUID() + '_' + nome.replace(/[^\w.\-]+/g, '_')
+      const path = esc + '/' + numeroProc.replace(/\D/g, '') + '/' + crypto.randomUUID() + '_' + nome.replace(/[^\w.\-]+/g, '_')
       const up = await sb.storage.from('capturas').upload(path, buf, { contentType: tipo, upsert: false })
       if (up.error) { falhas++; continue }
       const insA = await sb.from('anexos').insert({
-        escritorio_id: ESCRITORIO_CMP, processo_numero: numeroProc || null,
+        escritorio_id: esc, processo_numero: numeroProc || null,
         andamento_id: andamentoId, origem: 'manual', nome, tipo, tamanho: buf.length,
         path, criado_por: String(user.email || 'user'),
       })

@@ -18,7 +18,7 @@ import { contaDemo, respostaDemo } from '../../../../lib/demo.js'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
 
-const ESCRITORIO_CMP = '908f77fc-19f5-4d86-9576-f5590af09e0a'
+import { ESCRITORIO_PADRAO as ESCRITORIO_CMP } from '../../../../lib/escritorio.js'
 
 async function usuario(request) {
   const auth = request.headers.get('authorization') || ''

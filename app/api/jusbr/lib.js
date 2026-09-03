@@ -11,7 +11,8 @@
 
 import { createClient } from '@supabase/supabase-js'
 
-export const ESCRITORIO_CMP = '908f77fc-19f5-4d86-9576-f5590af09e0a'
+import { ESCRITORIO_PADRAO } from '../../../lib/escritorio.js'
+export const ESCRITORIO_CMP = ESCRITORIO_PADRAO
 
 // endpoint padrão de token do PDPJ (gov.br SSO). Pode ser sobrescrito pelo que o
 // userscript capturar (campo oidc.token_url), caso o provedor mude.

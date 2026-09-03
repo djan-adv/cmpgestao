@@ -23,7 +23,7 @@ import { gravarNoDisco } from '../guardar.js'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
 
-const ESCRITORIO_CMP = '908f77fc-19f5-4d86-9576-f5590af09e0a'
+import { ESCRITORIO_PADRAO as ESCRITORIO_CMP } from '../../../../lib/escritorio.js'
 const LOTE_PADRAO = 40
 
 // IMPORTANTE: cache: 'no-store'. Sem isto o Next.js guarda a resposta da LISTA e

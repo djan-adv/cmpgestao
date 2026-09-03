@@ -6,7 +6,7 @@ import { createClient } from '@supabase/supabase-js'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 20
 
-const ESCRITORIO_CMP = '908f77fc-19f5-4d86-9576-f5590af09e0a'
+import { ESCRITORIO_PADRAO, escritorioDoUsuario } from '../../../lib/escritorio.js'
 function admin() {
   return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } })
 }
@@ -20,19 +20,24 @@ export async function GET(request) {
   if (!id) return Response.json({ erro: 'id ausente' }, { status: 400 })
 
   let ok = false
+  // O anexo é do escritório de QUEM PEDE — não do escritório da instalação. Sem
+  // isto, um segundo escritório na mesma raiz abriria anexo alheio pelo id.
+  let esc = ESCRITORIO_PADRAO
   const secret = process.env.CAPTURA_SECRET || ''
   if (secret && k && k === secret) ok = true
   else if (jwt) {
     try {
       const auth = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
       const u = await auth.auth.getUser(jwt)
-      ok = !!(u && u.data && u.data.user)
+      const user = (u && u.data && u.data.user) || null
+      ok = !!user
+      if (user) esc = await escritorioDoUsuario(user)
     } catch (e) {}
   }
   if (!ok) return Response.json({ erro: 'não autorizado' }, { status: 401 })
 
   const sb = admin()
-  const { data: meta } = await sb.from('anexos').select('nome,tipo,path').eq('escritorio_id', ESCRITORIO_CMP).eq('id', id).maybeSingle()
+  const { data: meta } = await sb.from('anexos').select('nome,tipo,path').eq('escritorio_id', esc).eq('id', id).maybeSingle()
   if (!meta || !meta.path) return Response.json({ erro: 'anexo não encontrado' }, { status: 404 })
 
   const dlRes = await sb.storage.from('capturas').download(meta.path)
