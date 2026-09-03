@@ -5,6 +5,59 @@
 import { useState } from 'react'
 import { apiAssinatura } from '../../lib/assinaturaApi'
 
+/* "Consegue mostrar se a pessoa leu o documento?" (03/09/2026). O assinador marca
+   o signatário como "visto" quando ele abre o link (RPC marcar_visto). Aqui isso
+   vira uma linha por pessoa: não abriu / abriu e não assinou / assinou — com a
+   hora quando o banco a tiver. */
+export function fmtQuando(iso) {
+  if (!iso) return ''
+  try { return new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) } catch { return '' }
+}
+export function statusLeitura(s) {
+  const st = String(s.status || '')
+  const vistoEm = s.visto_em || s.aberto_em || s.lido_em || null
+  if (st === 'assinado') return { icone: '✅', texto: 'assinou' + (s.assinado_em ? ' em ' + fmtQuando(s.assinado_em) : ''), cor: '#0F6E56' }
+  if (st === 'visto') return { icone: '👁', texto: 'abriu o documento' + (vistoEm ? ' em ' + fmtQuando(vistoEm) : '') + ' — ainda não assinou', cor: '#8a5a00' }
+  return { icone: '✉', texto: 'ainda não abriu o link', cor: '#5b6673' }
+}
+export function LeituraSignatarios({ signatarios }) {
+  const sigs = (signatarios || []).slice().sort((a, b) => (a.ordem || 0) - (b.ordem || 0))
+  if (!sigs.length) return null
+  return (
+    <div style={{ marginTop: 4, display: 'grid', gap: 2 }}>
+      {sigs.map(s => { const l = statusLeitura(s); return (
+        <div key={s.id} style={{ fontSize: 12, color: l.cor }}>{l.icone} <b style={{ color: '#1c2733' }}>{s.nome || s.email || '—'}</b> · {l.texto}</div>
+      ) })}
+    </div>
+  )
+}
+export function HistoricoDoc({ doc }) {
+  const [ev, setEv] = useState(null)
+  const [aberto, setAberto] = useState(false)
+  async function abrir() {
+    setAberto(a => !a)
+    if (ev) return
+    const r = await apiAssinatura({ acao: 'detalhe', doc_id: doc.id })
+    setEv(r.ok ? (r.eventos || []) : [])
+  }
+  return (
+    <span style={{ display: 'inline-block', verticalAlign: 'top' }}>
+      <button onClick={abrir} style={{ padding: '6px 10px', border: 0, borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: '#eef1f5', color: '#1c2733', marginLeft: 6 }} title="Tudo que aconteceu com este documento: criado, aberto, assinado, e-mails">📜 histórico</button>
+      {aberto && (
+        <div style={{ marginTop: 8, padding: 10, background: '#fff', border: '1px solid #d9dde3', borderRadius: 8, fontSize: 12, maxWidth: 560 }}>
+          {ev === null && <div style={{ color: '#5b6673' }}>Carregando…</div>}
+          {ev && !ev.length && <div style={{ color: '#5b6673' }}>Sem eventos registrados.</div>}
+          {ev && ev.map(e => (
+            <div key={e.id} style={{ padding: '4px 0', borderBottom: '1px dashed #e3e6ea' }}>
+              <span style={{ color: '#5b6673' }}>{fmtQuando(e.criado_em)}</span> — <b>{e.tipo}</b>{e.detalhe ? ' · ' + e.detalhe : ''}{e.ip ? ' · IP ' + e.ip : ''}
+            </div>
+          ))}
+        </div>
+      )}
+    </span>
+  )
+}
+
 export default function JuntarExterno({ doc, signatarios, aoConcluir }) {
   const [aberto, setAberto] = useState(false)
   const [sigId, setSigId] = useState((signatarios && signatarios[0] && signatarios[0].id) || '')

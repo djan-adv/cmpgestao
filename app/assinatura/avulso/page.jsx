@@ -5,7 +5,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { signSb } from '../../../lib/supabaseAssinatura'
 import { apiAssinatura, enviarLinkAssinatura } from '../../../lib/assinaturaApi'
-import JuntarExterno from '../JuntarExterno'
+import JuntarExterno, { LeituraSignatarios, HistoricoDoc } from '../JuntarExterno'
 
 const NAVY = '#2E3A4B'
 const estCampo = { width: '100%', padding: 10, border: '1px solid #d9dde3', borderRadius: 8, fontSize: 14, boxSizing: 'border-box' }
@@ -264,9 +264,11 @@ export default function DocumentoAvulso() {
               <b>{d.titulo || '—'}</b> <span style={{ color: '#5b6673', fontSize: 12 }}>
                 {d.status === 'assinado' ? '✅ assinado' : d.status === 'parcial' ? '⏳ parcial' : '• enviado'} · {new Date(d.criado_em).toLocaleDateString('pt-BR')}
               </span>
+              <LeituraSignatarios signatarios={d.signatarios || []} />
               <div style={{ marginTop: 6 }}>
                 <button style={{ ...btnMini, background: '#e6e9ee', color: '#1c2733' }} onClick={() => montarFinal(d)}>Montar PDF final</button>
                 <JuntarExterno doc={d} signatarios={d.signatarios || []} aoConcluir={carregarLista} />
+                <HistoricoDoc doc={d} />
               </div>
               {mfMsg[d.id] && <div style={{ color: '#5b6673', fontSize: 12, marginTop: 4 }}>{mfMsg[d.id]}</div>}
             </div>

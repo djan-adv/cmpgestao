@@ -60,6 +60,9 @@ export default function PainelAssinaturas() {
         total: sigs.length,
         assinados: assinados.length,
         assinantes: assinados.map(s => s.nome || s.email).join(', '),
+        /* quem abriu o link e ainda não assinou — "consegue mostrar se a pessoa leu?" (03/09/2026) */
+        leram: sigs.filter(s => s.status === 'visto').map(s => s.nome || s.email).join(', '),
+        naoAbriram: sigs.filter(s => s.status !== 'assinado' && s.status !== 'visto').map(s => s.nome || s.email).join(', '),
       }
     }))
     setCarregando(false)
@@ -247,6 +250,8 @@ export default function PainelAssinaturas() {
                           {d.total > 1
                             ? <div style={{ fontSize: 12, color: '#1f7a44', marginTop: 2 }}>{d.assinados} de {d.total} assinaram{d.assinantes ? ': ' + d.assinantes : ''}</div>
                             : (d.assinantes ? <div style={{ fontSize: 12, color: '#1f7a44', marginTop: 2 }}>✓ {d.assinantes} assinou</div> : null)}
+                          {d.leram ? <div style={{ fontSize: 12, color: '#8a5a00', marginTop: 2 }}>👁 abriu e ainda não assinou: {d.leram}</div> : null}
+                          {d.naoAbriram && d.status !== 'assinado' ? <div style={{ fontSize: 12, color: '#5b6673', marginTop: 2 }}>✉ ainda não abriu o link: {d.naoAbriram}</div> : null}
                         </td>
                         <td style={{ padding: 10, borderBottom: '1px solid #eef0f3' }}><Badge st={d.status} /></td>
                         <td style={{ padding: 10, borderBottom: '1px solid #eef0f3' }}>{d.sig1?.assinado_em ? fmtDataCurta(d.sig1.assinado_em) : <span style={{ color: '#5b6673' }}>—</span>}</td>
