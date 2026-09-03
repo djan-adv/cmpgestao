@@ -10,12 +10,15 @@
 //   NEXT_PUBLIC_SUPABASE_URL
 
 import { createClient } from '@supabase/supabase-js'
+import { ESCRITORIO_RAIZ } from '../../_lib/inquilino.js'
 import crypto from 'crypto'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
 
-const ESCRITORIO_CMP = '908f77fc-19f5-4d86-9576-f5590af09e0a'
+// Ainda de um escritorio so, de proposito: Webhook do numero de WhatsApp do dono.
+// (fase dos robos por inquilino: este nao entra ate ter credencial propria)
+const ESCRITORIO_CMP = ESCRITORIO_RAIZ
 
 function admin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL

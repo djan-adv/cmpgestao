@@ -12,6 +12,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { getFreshToken } from '../lib.js'
 import { buscarProcesso, movimentosDoProcesso, aplicarMeta, gravarMovimentos } from './core.js'
+import { escritorioDoUsuario, semEscritorio } from '../../_lib/inquilino.js'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -37,8 +38,11 @@ export async function POST(request) {
   if (numero.length < 16) return Response.json({ erro: 'número de processo inválido' }, { status: 400 })
 
   const sb = admin()
+  // a sessão do jus.br é a DO ESCRITÓRIO de quem pediu, não a da casa
+  const esc = await escritorioDoUsuario(user.id, sb)
+  if (!esc) return semEscritorio()
   // usa a sessão com renovação automática (refresh_token) — ver ../lib.js
-  const tk = await getFreshToken(sb)
+  const tk = await getFreshToken(sb, null, esc)
   if (tk.erro === 'sem_chave') return Response.json({ erro: 'servidor sem JUSBR_ENC_KEY (chave de cifragem)' }, { status: 500 })
   if (tk.erro) return Response.json({ erro: 'jus.br: ' + (tk.erro === 'expirado' ? 'token expirado — sincronize novamente' : 'sem token — sincronize a sessão do jus.br'), motivo: tk.erro }, { status: 409 })
 
@@ -54,7 +58,7 @@ export async function POST(request) {
   // atualiza os dados da ficha (classe/assunto/vara/distribuição) — faz o selo virar "vinculado"
   const { meta, trilha, origem, atual, atualizada } = await aplicarMeta(sb, numero, busca.procs)
 
-  const g = await gravarMovimentos(sb, numero, movs, 'jusbr')
+  const g = await gravarMovimentos(sb, numero, movs, 'jusbr', esc)
 
   // carimba a rodada para o robô não repetir este processo tão cedo
   try { await sb.from('processos').update({ jusbr_mov_em: new Date().toISOString() }).eq('numero_digitos', numero) } catch (e) {}

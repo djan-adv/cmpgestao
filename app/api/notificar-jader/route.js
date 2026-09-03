@@ -14,6 +14,7 @@
 // a cadência de 30 min pelo campo notif_ultimo. Sem custo (SMTP próprio).
 
 import { createClient } from '@supabase/supabase-js'
+import { ESCRITORIO_RAIZ } from '../_lib/inquilino.js'
 import nodemailer from 'nodemailer'
 import webpush from 'web-push'
 
@@ -21,7 +22,9 @@ export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
 const JADER = ['jadergabrielpinheiro.adv@gmail.com', 'jaderpinheiroadv@gmail.com', 'djan.adv@gmail.com']
-const ESCRITORIO_CMP = '908f77fc-19f5-4d86-9576-f5590af09e0a'
+// Ainda de um escritorio so, de proposito: Fila de avisos para uma pessoa especifica da equipe do dono.
+// (fase dos robos por inquilino: este nao entra ate ter credencial propria)
+const ESCRITORIO_CMP = ESCRITORIO_RAIZ
 const REMIND_MS = 29 * 60 * 1000   // reenvia lembrete de lead a cada ~30 min
 const OFF_BR = -3                  // Brasília = UTC-3 (sem horário de verão hoje)
 // e-mails de quem tem que ser avisado NO CELULAR (push do /chat), além do

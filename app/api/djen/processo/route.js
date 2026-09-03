@@ -5,6 +5,7 @@
 // Grava via robot_add_andamento (SECURITY DEFINER) — mesma função do robô diário.
 
 import { createClient } from '@supabase/supabase-js'
+import { escritorioDoUsuario, semEscritorio } from '../../_lib/inquilino.js'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 45
@@ -50,9 +51,15 @@ export async function POST(request) {
   if (dig.length < 16) return Response.json({ erro: 'número de processo inválido' }, { status: 400 })
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  if (!url || !anon) return Response.json({ erro: 'faltam variáveis do Supabase' }, { status: 500 })
-  const sb = createClient(url, anon, { auth: { persistSession: false } })
+  // Grava pela chave de serviço: a função de gravar andamento deixou de ser
+  // chamável com a chave pública, que ia no navegador de qualquer visitante.
+  const svcKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !svcKey) return Response.json({ erro: 'faltam variáveis do Supabase (URL/chave de serviço)' }, { status: 500 })
+  const sb = createClient(url, svcKey, { auth: { persistSession: false } })
+  // e dentro do escritório de quem pediu — o número do processo vem do
+  // navegador e se repete entre tribunais
+  const esc = await escritorioDoUsuario(user.id, sb)
+  if (!esc) return semEscritorio()
 
   const pubs = await consultaDjenNumero(dig, dias)
   let inseridos = 0, jaTinha = 0, erros = 0
@@ -60,7 +67,9 @@ export async function POST(request) {
     const texto = String(p.texto || p.teor || '').replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '').replace(/[ \t]+\n/g, '\n').trim()
     const data = String(p.dataDisponibilizacao || p.data_disponibilizacao || '').slice(0, 10) || null
     if (!texto) continue
-    const { data: res, error } = await sb.rpc('robot_add_andamento', { p_num: dig, p_data: data, p_texto: texto })
+    const { data: res, error } = await sb.rpc('robot_add_andamento_esc', {
+      p_esc: esc, p_num: dig, p_data: data, p_texto: texto, p_fonte: 'djen', p_tipo: 'publicacao',
+    })
     if (error) { erros++; continue }
     if (res === 'inserido') inseridos++
     else if (res === 'existe') jaTinha++

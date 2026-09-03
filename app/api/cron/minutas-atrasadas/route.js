@@ -10,13 +10,16 @@
 // mesmo dia pela mesma tarefa.
 
 import { createClient } from '@supabase/supabase-js'
+import { ESCRITORIO_RAIZ } from '../../_lib/inquilino.js'
 import nodemailer from 'nodemailer'
 import webpush from 'web-push'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
 
-const ESCRITORIO_CMP = '908f77fc-19f5-4d86-9576-f5590af09e0a'
+// Ainda de um escritorio so, de proposito: Aviso interno da equipe do dono, com a lista de e-mails dele.
+// (fase dos robos por inquilino: este nao entra ate ter credencial propria)
+const ESCRITORIO_CMP = ESCRITORIO_RAIZ
 const ALVOS = [/djan\.adv@gmail\.com/i, /mariaritahenriq@gmail\.com/i, /jadergabrielpinheiro\.adv@gmail\.com/i, /jaderpinheiroadv@gmail\.com/i]
 
 function admin() {

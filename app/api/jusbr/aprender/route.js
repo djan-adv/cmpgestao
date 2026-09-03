@@ -7,13 +7,16 @@
 //   POST /api/jusbr/aprender   (header x-jusbr-relay: <segredo>)
 
 import { createClient } from '@supabase/supabase-js'
+import { ESCRITORIO_RAIZ } from '../../_lib/inquilino.js'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
 export const revalidate = 0
 export const maxDuration = 20
 
-const ESCRITORIO_CMP = '908f77fc-19f5-4d86-9576-f5590af09e0a'
+// Ainda de um escritorio so, de proposito: Aprendizado do protocolo: base tecnica compartilhada, nao dado de cliente.
+// (fase dos robos por inquilino: este nao entra ate ter credencial propria)
+const ESCRITORIO_CMP = ESCRITORIO_RAIZ
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',

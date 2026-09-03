@@ -5,6 +5,7 @@
 //   GET /api/jusbr/userscript/pub?k=<chave>
 
 import crypto from 'crypto'
+import { ESCRITORIO_RAIZ } from '../../../_lib/inquilino.js'
 import { createClient } from '@supabase/supabase-js'
 import { montarScript, basePublica } from '../gerar.js'
 
@@ -13,7 +14,9 @@ export const fetchCache = 'force-no-store'
 export const revalidate = 0
 export const maxDuration = 15
 
-const ESCRITORIO_CMP = '908f77fc-19f5-4d86-9576-f5590af09e0a'
+// Ainda de um escritorio so, de proposito: Publica o userscript do dono.
+// (fase dos robos por inquilino: este nao entra ate ter credencial propria)
+const ESCRITORIO_CMP = ESCRITORIO_RAIZ
 function admin() { return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } }) }
 
 // chave de distribuição (cria na primeira vez)

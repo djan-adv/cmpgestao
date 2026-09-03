@@ -12,13 +12,16 @@
 // Sem dependência nova: unzip próprio via zlib.inflateRawSync.
 
 import zlib from 'zlib'
+import { ESCRITORIO_RAIZ } from '../../_lib/inquilino.js'
 import nodemailer from 'nodemailer'
 import { createClient } from '@supabase/supabase-js'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
-const ESCRITORIO_CMP = '908f77fc-19f5-4d86-9576-f5590af09e0a'
+// Ainda de um escritorio so, de proposito: Monitor de marcas da RPI: produto de captacao do dono.
+// (fase dos robos por inquilino: este nao entra ate ter credencial propria)
+const ESCRITORIO_CMP = ESCRITORIO_RAIZ
 const RPI = 'https://revistas.inpi.gov.br'
 const TIPO_MARCAS = 5
 const UA = 'Mozilla/5.0 (compatible; CMPGestao/1.0)'

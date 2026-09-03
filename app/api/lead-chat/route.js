@@ -29,6 +29,7 @@
 // staff por um tempo, a IA retoma sozinha.
 
 import { createClient } from '@supabase/supabase-js'
+import { ESCRITORIO_RAIZ } from '../_lib/inquilino.js'
 import fs from 'fs'
 import path from 'path'
 import { enviarEmailCore } from '../enviar-email/enviar.js'
@@ -82,7 +83,9 @@ function montarConteudoChat(lead, historico, mensagem) {
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
-const ESCRITORIO_CMP = '908f77fc-19f5-4d86-9576-f5590af09e0a'
+// Ainda de um escritorio so, de proposito: Chat do site publico do dono (captacao).
+// (fase dos robos por inquilino: este nao entra ate ter credencial propria)
+const ESCRITORIO_CMP = ESCRITORIO_RAIZ
 const MAX_TEXTO = 4000
 const MAX_TURNOS_IA = 40   // trava de custo: acima disso, resposta fixa sem chamar a IA
 const HUMANO_JANELA_MIN = 15   // minutos após a última resposta do staff em que a IA fica calada

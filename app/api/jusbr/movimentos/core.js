@@ -355,14 +355,21 @@ export async function aplicarMeta(sb, numero, procs) {
   return { meta, trilha, origem, atual, atualizada: false }
 }
 
-// Grava os movimentos via robot_add_andamento_fonte — dedup por (data, texto).
-// A RPC antiga (robot_add_andamento) deduplica SÓ por texto e engolia o segundo
+// Grava os movimentos — dedup por (data, texto). A RPC antiga
+// (robot_add_andamento) deduplica SÓ por texto e engolia o segundo
 // "Conclusos para despacho" do processo, mesmo em data diferente.
-export async function gravarMovimentos(sb, numero, movs, fonte) {
+//
+// O escritório é OBRIGATÓRIO. A função do banco procurava o processo apenas
+// pelo número, com limit 1, no banco inteiro: número de processo se repete
+// entre tribunais, então com dois inquilinos o movimento de um entraria no
+// processo do outro. Sem escritório aqui, não se grava nada.
+export async function gravarMovimentos(sb, numero, movs, fonte, esc) {
   const r = { inseridos: 0, jaTinha: 0, semProcesso: 0, erros: 0 }
+  if (!esc) { r.erros = movs.length; return r }
   for (const mv of movs) {
-    const { data: res, error } = await sb.rpc('robot_add_andamento_fonte', {
-      p_num: numero, p_data: mv.data, p_texto: mv.texto, p_fonte: fonte || 'jusbr',
+    const { data: res, error } = await sb.rpc('robot_add_andamento_esc', {
+      p_esc: esc, p_num: numero, p_data: mv.data, p_texto: mv.texto,
+      p_fonte: fonte || 'jusbr', p_tipo: 'movimento',
     })
     if (error) { r.erros++; continue }
     if (res === 'inserido') r.inseridos++

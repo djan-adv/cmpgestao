@@ -5,8 +5,14 @@ export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
 import { createClient } from '@supabase/supabase-js'
+import { escritoriosAtivos } from '../../_lib/inquilino.js'
 
-const OABS = [
+// As OAB saíram daqui para o cadastro do escritório (escritorios.oabs). Ficar
+// no código significava, com um cliente dentro, o robô dele procurar as
+// publicações do fornecedor: o cliente não receberia nada e ainda pagaria pela
+// varredura alheia. Esta lista continua existindo só como último recurso, se o
+// escritório raiz estiver sem OAB cadastrada.
+const OABS_PADRAO_RAIZ = [
   { numero: '5219', uf: 'SE' },
   { numero: '5219', uf: 'PB' },
   { numero: '46268', uf: 'CE' },
@@ -61,7 +67,7 @@ export async function GET(request) {
   const dias = parseInt(searchParams.get('dias') || '4', 10) || 4
 
   if (searchParams.get('debug')) {
-    const o = OABS[1]
+    const o = OABS_PADRAO_RAIZ[1]
     const fim = new Date(), ini = new Date(Date.now() - dias * 86400000)
     const u = `${DJEN}?numeroOab=${o.numero}&ufOab=${o.uf}&dataDisponibilizacaoInicio=${iso(ini)}&dataDisponibilizacaoFim=${iso(fim)}&meio=D&pagina=1&itensPorPagina=5`
     let status = null, body = '', err = null
@@ -70,55 +76,82 @@ export async function GET(request) {
   }
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  if (!url || !anon) return Response.json({ erro: 'faltam variáveis do Supabase' }, { status: 500 })
-  const sb = createClient(url, anon, { auth: { persistSession: false } })
+  // Gravava com a chave PÚBLICA (anon), porque robot_add_andamento é
+  // SECURITY DEFINER e estava aberta a qualquer um. Aberta assim, qualquer
+  // pessoa com a chave do navegador inseria andamento em qualquer processo —
+  // por isso a função foi fechada. O robô roda no servidor e usa a chave de
+  // serviço, que é onde ela sempre deveria ter estado.
+  const svcKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !svcKey) return Response.json({ erro: 'faltam variáveis do Supabase (URL/chave de serviço)' }, { status: 500 })
+  const sb = createClient(url, svcKey, { auth: { persistSession: false } })
 
+  // Uma varredura por escritório: cada um procura as PRÓPRIAS inscrições.
+  const escs = await escritoriosAtivos()
+  const relPorEscritorio = []
+  let totalPubs = 0, totalInseridos = 0, totalJaTinha = 0, totalSemProcesso = 0, totalErros = 0
   const falhas = []
-  let pubs = []
-  const porOab = {}
-  for (const o of OABS) {
-    const it = await consultaDjen(o.numero, o.uf, dias, falhas)
-    porOab[`${o.numero}/${o.uf}`] = it.length
-    pubs = pubs.concat(it)
-  }
 
-  // Processos da Inove: consulta por NÚMERO (cada um tem advogado diferente).
-  // Lê a lista dos números com a chave de serviço (se disponível) e junta às publicações.
-  let inoveNums = 0
-  const svc = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (svc) {
-    try {
-      const sbAdmin = createClient(url, svc, { auth: { persistSession: false } })
-      const { data: rows } = await sbAdmin.from('processos').select('numero').eq('inove', true).is('fora_inove', false)
-      const nums = [...new Set((rows || []).map(r => String(r.numero || '').replace(/\D/g, '')).filter(n => n.length >= 16))]
-      inoveNums = nums.length
-      for (const dig of nums) {
-        const it = await consultaDjenNumero(dig, dias, falhas)
-        pubs = pubs.concat(it)
-      }
-    } catch (e) { falhas.push({ alvo: 'lista Inove', erro: String((e && e.message) || e) }) }
-  }
+  for (const esc of escs) {
+    let oabs = Array.isArray(esc.oabs) ? esc.oabs : []
+    if (!oabs.length && esc.raiz) oabs = OABS_PADRAO_RAIZ
+    let pubs = []
+    const porOab = {}
+    for (const o of oabs) {
+      const it = await consultaDjen(o.numero, o.uf, dias, falhas)
+      porOab[`${o.numero}/${o.uf}`] = it.length
+      pubs = pubs.concat(it)
+    }
 
-  let inseridos = 0, jaTinha = 0, semProcesso = 0, erros = 0
-  for (const p of pubs) {
-    const dig = String(p.numeroProcesso || p.numero_processo || '').replace(/\D/g, '')
-    if (dig.length < 16) { semProcesso++; continue }
-    const texto = String(p.texto || p.teor || '').replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '').replace(/[ \t]+\n/g, '\n').trim()
-    const data = String(p.dataDisponibilizacao || p.data_disponibilizacao || '').slice(0, 10) || null
-    const { data: res, error } = await sb.rpc('robot_add_andamento', { p_num: dig, p_data: data, p_texto: texto })
-    if (error) { erros++; continue }
-    if (res === 'inserido') inseridos++
-    else if (res === 'existe') jaTinha++
-    else semProcesso++
+    // Processos da Inove: consulta por NÚMERO (cada um tem advogado diferente).
+    // Só cabe no escritório raiz, que é onde a pasta da Inove vive.
+    let inoveNums = 0
+    if (esc.raiz) {
+      try {
+        const { data: rows } = await sb.from('processos').select('numero')
+          .eq('escritorio_id', esc.id).eq('inove', true).is('fora_inove', false)
+        const nums = [...new Set((rows || []).map(r => String(r.numero || '').replace(/\D/g, '')).filter(n => n.length >= 16))]
+        inoveNums = nums.length
+        for (const dig of nums) {
+          const it = await consultaDjenNumero(dig, dias, falhas)
+          pubs = pubs.concat(it)
+        }
+      } catch (e) { falhas.push({ alvo: 'lista Inove', erro: String((e && e.message) || e) }) }
+    }
+
+    let inseridos = 0, jaTinha = 0, semProcesso = 0, erros = 0
+    for (const p of pubs) {
+      const dig = String(p.numeroProcesso || p.numero_processo || '').replace(/\D/g, '')
+      if (dig.length < 16) { semProcesso++; continue }
+      const texto = String(p.texto || p.teor || '').replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '').replace(/[ \t]+\n/g, '\n').trim()
+      const data = String(p.dataDisponibilizacao || p.data_disponibilizacao || '').slice(0, 10) || null
+      // grava DENTRO do escritório: o número de processo se repete entre
+      // tribunais, e sem isto a publicação de um cliente entraria na ficha
+      // de outro
+      const { data: res, error } = await sb.rpc('robot_add_andamento_esc', {
+        p_esc: esc.id, p_num: dig, p_data: data, p_texto: texto, p_fonte: 'djen', p_tipo: 'publicacao',
+      })
+      if (error) { erros++; continue }
+      if (res === 'inserido') inseridos++
+      else if (res === 'existe') jaTinha++
+      else semProcesso++
+    }
+
+    totalPubs += pubs.length; totalInseridos += inseridos; totalJaTinha += jaTinha
+    totalSemProcesso += semProcesso; totalErros += erros
+    relPorEscritorio.push({
+      escritorio: esc.nome, oabs: oabs.length, porOab, inoveNums,
+      publicacoes: pubs.length, inseridos, jaTinha, semProcesso, erros,
+    })
   }
   // Se NENHUMA consulta trouxe nada e houve falha, isso não é "dia sem publicação":
   // é o robô cego. Sai com ok:false para aparecer vermelho no painel de Robôs.
-  const cego = pubs.length === 0 && falhas.length > 0
+  const cego = totalPubs === 0 && falhas.length > 0
   return Response.json({
     ok: !cego, ...(cego ? { alerta: 'nenhuma publicação lida E houve falha de consulta — verificar a API do CNJ' } : {}),
-    oabs: OABS.length, porOab, inoveNums, publicacoes: pubs.length,
-    inseridos, jaTinha, semProcesso, erros, dias,
+    escritorios: relPorEscritorio.length,
+    publicacoes: totalPubs, inseridos: totalInseridos, jaTinha: totalJaTinha,
+    semProcesso: totalSemProcesso, erros: totalErros, dias,
+    por_escritorio: relPorEscritorio,
     falhas: falhas.slice(0, 12), n_falhas: falhas.length,
   })
 }

@@ -17,13 +17,16 @@
 // próxima rodada. Nada é apagado sem cópia conferida no disco.
 
 import fs from 'fs'
+import { ESCRITORIO_RAIZ } from '../../_lib/inquilino.js'
 import { createClient } from '@supabase/supabase-js'
 import { gravarNoDisco } from '../guardar.js'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
 
-const ESCRITORIO_CMP = '908f77fc-19f5-4d86-9576-f5590af09e0a'
+// Ainda de um escritorio so, de proposito: Faxina do cache de arquivos do jus.br no banco do dono.
+// (fase dos robos por inquilino: este nao entra ate ter credencial propria)
+const ESCRITORIO_CMP = ESCRITORIO_RAIZ
 const LOTE_PADRAO = 40
 
 // IMPORTANTE: cache: 'no-store'. Sem isto o Next.js guarda a resposta da LISTA e

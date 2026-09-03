@@ -12,13 +12,16 @@
 // transcritos (OCR) e o texto entra no histórico/lead, com ênfase no telefone.
 
 import { createClient } from '@supabase/supabase-js'
+import { ESCRITORIO_RAIZ } from '../_lib/inquilino.js'
 import crypto from 'crypto'
 import { ehPlanilha, lerPlanilhaTexto } from '../../../lib/planilha.js'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
-const ESCRITORIO_CMP = '908f77fc-19f5-4d86-9576-f5590af09e0a'
+// Ainda de um escritorio so, de proposito: Captura por e-mail/extensão: a caixa e o segredo de captura sao do dono do sistema.
+// (fase dos robos por inquilino: este nao entra ate ter credencial propria)
+const ESCRITORIO_CMP = ESCRITORIO_RAIZ
 const MAX_FILES = 12
 const MAX_BYTES = 15 * 1024 * 1024
 

@@ -6,6 +6,7 @@
 // processos dele. Fica em tabela com RLS (jusbr_sessao) — lido apenas pelo servidor.
 
 import { createClient } from '@supabase/supabase-js'
+import { ESCRITORIO_RAIZ } from '../../_lib/inquilino.js'
 import { provarToken, resumoClaims, ehEmissorPdpj } from '../lib.js'
 
 export const dynamic = 'force-dynamic'
@@ -13,7 +14,9 @@ export const fetchCache = 'force-no-store'
 export const revalidate = 0
 export const maxDuration = 15
 
-const ESCRITORIO_CMP = '908f77fc-19f5-4d86-9576-f5590af09e0a'
+// Ainda de um escritorio so, de proposito: Recebe o token do userscript do dono.
+// (fase dos robos por inquilino: este nao entra ate ter credencial propria)
+const ESCRITORIO_CMP = ESCRITORIO_RAIZ
 
 async function usuario(request) {
   const auth = request.headers.get('authorization') || ''

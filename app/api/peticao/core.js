@@ -5,13 +5,16 @@
 // É SEMPRE rascunho para revisão — nunca protocola.
 
 import crypto from 'crypto'
+import { ESCRITORIO_RAIZ } from '../_lib/inquilino.js'
 import fs from 'fs'
 import path from 'path'
 import { chamarClaude, orcamento } from '../_ia/claude.js'
 import { lerPlanilhaTexto } from '../../../lib/planilha.js'
 
 export const ROOT = '/opt/cmpdocs'
-export const ESCRITORIO_CMP = '908f77fc-19f5-4d86-9576-f5590af09e0a'
+// Ainda de um escritorio so, de proposito: Minuta: le a arvore de documentos e o modelo do dono.
+// (fase dos robos por inquilino: este nao entra ate ter credencial propria)
+export const ESCRITORIO_CMP = ESCRITORIO_RAIZ
 /* Orçamento de PDFs enviados à IA. A conta que importa NÃO é a do arquivo no
    disco: o PDF viaja em base64, que cresce 4/3, e a API recusa a requisição
    inteira acima de 32 MB ("Request exceeds the maximum size" — 02/09/2026, um

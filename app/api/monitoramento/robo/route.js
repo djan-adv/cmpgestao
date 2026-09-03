@@ -7,6 +7,7 @@
 //        processos no nome de cada assinante ATIVO e avisa por e-mail só os NOVOS.
 
 import crypto from 'crypto'
+import { ESCRITORIO_RAIZ } from '../../_lib/inquilino.js'
 import nodemailer from 'nodemailer'
 import { createClient } from '@supabase/supabase-js'
 import { coraConfigurado, coraApi } from '../../cora/lib.js'
@@ -14,7 +15,9 @@ import { coraConfigurado, coraApi } from '../../cora/lib.js'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
-const ESCRITORIO_CMP = '908f77fc-19f5-4d86-9576-f5590af09e0a'
+// Ainda de um escritorio so, de proposito: Monitoramento processual publico: produto de captacao do dono.
+// (fase dos robos por inquilino: este nao entra ate ter credencial propria)
+const ESCRITORIO_CMP = ESCRITORIO_RAIZ
 const DJEN = 'https://comunicaapi.pje.jus.br/api/v1/comunicacao'
 const UA = 'Mozilla/5.0 (compatible; CMPGestao/1.0)'
 const iso = (d) => d.toISOString().slice(0, 10)

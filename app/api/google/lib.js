@@ -9,8 +9,11 @@
 // gravar. GOOGLE_ENC_KEY é obrigatória — sem ela nada aqui funciona.
 
 import crypto from 'crypto'
+import { ESCRITORIO_RAIZ } from '../_lib/inquilino.js'
 
-export const ESCRITORIO_CMP = '908f77fc-19f5-4d86-9576-f5590af09e0a'
+// Ainda de um escritorio so, de proposito: Agenda Google: a credencial OAuth e a conta do dono. Por inquilino exige app proprio.
+// (fase dos robos por inquilino: este nao entra ate ter credencial propria)
+export const ESCRITORIO_CMP = ESCRITORIO_RAIZ
 export const GOOGLE_SCOPE = 'https://www.googleapis.com/auth/calendar'
 export const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth'
 export const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token'

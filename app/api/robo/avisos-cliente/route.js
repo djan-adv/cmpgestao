@@ -130,11 +130,13 @@ async function processaUm(sb, a, proc) {
   // trilha no histórico do processo, para quem olhar a linha do tempo saber que
   // o aviso saiu sozinho (mesmo padrão do "[App] Aviso de audiência..." do robô de audiências)
   try {
-    await sb.rpc('robot_add_andamento_fonte', {
+    // idem: escritório explícito, porque aqui não há usuário logado
+    await sb.rpc('robot_add_andamento_esc', {
+      p_esc: proc.escritorio_id || ESCRITORIO_CMP,
       p_num: String(proc.numero || '').replace(/\D/g, ''),
       p_data: new Date().toISOString().slice(0, 10),
       p_texto: '[App] Aviso automático de ' + (t.resultado === 'favoravel' ? 'decisão favorável' : (t.resultado === 'parcial' ? 'decisão parcial' : 'decisão')) + ' enviado ao cliente pelo chat.',
-      p_fonte: 'app',
+      p_fonte: 'app', p_tipo: 'movimento',
     })
   } catch (e) {}
 

@@ -1,8 +1,11 @@
 // Gerador do userscript — compartilhado entre a rota autenticada (painel) e a
 // rota pública de atualização automática do Tampermonkey.
 import crypto from 'crypto'
+import { ESCRITORIO_RAIZ } from '../../_lib/inquilino.js'
 
-const ESCRITORIO_CMP = '908f77fc-19f5-4d86-9576-f5590af09e0a'
+// Ainda de um escritorio so, de proposito: Gera o userscript do dono.
+// (fase dos robos por inquilino: este nao entra ate ter credencial propria)
+const ESCRITORIO_CMP = ESCRITORIO_RAIZ
 
 function basePublica(request) {
   const proto = (request.headers.get('x-forwarded-proto') || 'https').split(',')[0].trim()

@@ -17,8 +17,9 @@
 // carimba ao final. Rodando de 15 em 15 min, o parque inteiro é coberto
 // várias vezes ao dia.
 
-import { jusbrAdmin, getFreshToken, ESCRITORIO_CMP } from '../../lib.js'
+import { jusbrAdmin, getFreshToken } from '../../lib.js'
 import { buscarProcesso, movimentosDoProcesso, aplicarMeta, gravarMovimentos } from '../core.js'
+import { escritoriosAtivos } from '../../../_lib/inquilino.js'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -29,17 +30,18 @@ const LOTE_PADRAO = 20
 const soDig = (s) => String(s || '').replace(/\D/g, '')
 const ENCERRADO = /encerrad|arquivad|baixad/i
 
-export async function GET(request) {
-  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) return Response.json({ erro: 'falta service key' }, { status: 500 })
-  if (!process.env.JUSBR_ENC_KEY) return Response.json({ erro: 'falta JUSBR_ENC_KEY' }, { status: 500 })
-  const { searchParams } = new URL(request.url)
-  const debug = searchParams.get('debug') != null
-  const soNumero = soDig(searchParams.get('numero') || '')
-  const lote = Math.min(parseInt(searchParams.get('lote') || String(LOTE_PADRAO), 10) || LOTE_PADRAO, 100)
+// Uma rodada para UM escritório. O robô não tem usuário logado, então o
+// escritório não vem de um login: vem do laço em GET, que percorre os
+// escritórios ativos que têm sessão do jus.br própria. Antes isto rodava
+// sempre com o id do escritório dono escrito no código — o que, com um cliente
+// dentro, seria o robô dele varrendo o acervo do fornecedor com o certificado
+// do fornecedor.
+async function rodarPara(esc, opcoes) {
+  const { debug, soNumero, lote } = opcoes
   const sb = jusbrAdmin()
 
-  const tk = await getFreshToken(sb)
-  if (tk.erro) return Response.json({ ok: false, erro: 'jus.br: ' + tk.erro + ' — sincronize a sessão do jus.br', motivo: tk.erro })
+  const tk = await getFreshToken(sb, null, esc.id)
+  if (tk.erro) return { ok: false, escritorio: esc.nome, erro: 'jus.br: ' + tk.erro + ' — sincronize a sessão do jus.br', motivo: tk.erro }
   const token = tk.token
 
   // ——— escolhe os alvos ———
@@ -48,21 +50,21 @@ export async function GET(request) {
   if (soNumero) {
     const { data } = await sb.from('processos')
       .select('id,numero,numero_digitos')
-      .eq('escritorio_id', ESCRITORIO_CMP).eq('numero_digitos', soNumero).limit(1)
+      .eq('escritorio_id', esc.id).eq('numero_digitos', soNumero).limit(1)
     alvos = data || []
   } else {
     // Puxa mais que o lote porque o filtro de encerrado/arquivado é feito aqui
     // (status é texto livre e não dá para expressar bem no filtro do PostgREST).
     const { data, error } = await sb.from('processos')
       .select('id,numero,numero_digitos,status,suspenso,jusbr_mov_em')
-      .eq('escritorio_id', ESCRITORIO_CMP)
+      .eq('escritorio_id', esc.id)
       .or('suspenso.is.null,suspenso.eq.false')
       .order('jusbr_mov_em', { ascending: true, nullsFirst: true })
       // janela folgada: se muitos descartáveis vierem seguidos, ainda sobra
       // processo ativo para varrer na MESMA rodada, em vez de gastá-la só
       // carimbando (ver "TRAVA DA FILA" abaixo)
       .limit(lote * 12)
-    if (error) return Response.json({ ok: false, erro: error.message }, { status: 500 })
+    if (error) return { ok: false, escritorio: esc.nome, erro: error.message }
     // processo com audiência HOJE ou AMANHÃ fura a fila do rodízio: é quando o
     // cliente está olhando o app e a linha do tempo não pode estar atrasada
     // (pedido do dono, 18/08/2026 — a audiência do dia aparecia com movimentação
@@ -79,7 +81,7 @@ export async function GET(request) {
       if (digs.length) {
         const { data: pri } = await sb.from('processos')
           .select('id,numero,numero_digitos,status,suspenso,jusbr_mov_em')
-          .eq('escritorio_id', ESCRITORIO_CMP).in('numero_digitos', digs).limit(50)
+          .eq('escritorio_id', esc.id).in('numero_digitos', digs).limit(50)
         prioritarios = (pri || [])
           .filter(p => !ENCERRADO.test(p.status || '') && p.suspenso !== true)
           // já atualizado na última hora não fura de novo — senão monopoliza o lote
@@ -146,7 +148,7 @@ export async function GET(request) {
 
     const { movs } = movimentosDoProcesso(busca.procs)
     await aplicarMeta(sb, numero, busca.procs)
-    const g = await gravarMovimentos(sb, numero, movs, 'jusbr')
+    const g = await gravarMovimentos(sb, numero, movs, 'jusbr', esc.id)
 
     rel.novos += g.inseridos
     rel.jaTinha += g.jaTinha
@@ -155,5 +157,38 @@ export async function GET(request) {
     if (debug || g.inseridos) rel.detalhe.push({ numero, movimentos: movs.length, novos: g.inseridos })
   }
 
-  return Response.json(rel)
+  return { ...rel, escritorio: esc.nome }
+}
+
+export async function GET(request) {
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) return Response.json({ erro: 'falta service key' }, { status: 500 })
+  if (!process.env.JUSBR_ENC_KEY) return Response.json({ erro: 'falta JUSBR_ENC_KEY' }, { status: 500 })
+  const { searchParams } = new URL(request.url)
+  const opcoes = {
+    debug: searchParams.get('debug') != null,
+    soNumero: soDig(searchParams.get('numero') || ''),
+    lote: Math.min(parseInt(searchParams.get('lote') || String(LOTE_PADRAO), 10) || LOTE_PADRAO, 100),
+  }
+
+  // Só escritórios com sessão própria do jus.br entram na fila: sem
+  // certificado sincronizado não há o que consultar, e tentar seria usar a
+  // credencial de outro.
+  const escs = await escritoriosAtivos('jusbr')
+  if (!escs.length) return Response.json({ ok: true, nada: true, motivo: 'nenhum escritório com sessão do jus.br' })
+
+  const porEscritorio = []
+  for (const esc of escs) {
+    try { porEscritorio.push(await rodarPara(esc, opcoes)) }
+    catch (e) { porEscritorio.push({ ok: false, escritorio: esc.nome, erro: String((e && e.message) || e) }) }
+  }
+  // O relatório soma tudo, mas mantém a linha de cada escritório: um cliente
+  // com a sessão vencida não pode fazer o robô inteiro parecer quebrado.
+  const soma = (campo) => porEscritorio.reduce((t, r) => t + (Number(r[campo]) || 0), 0)
+  return Response.json({
+    ok: porEscritorio.some(r => r.ok !== false),
+    escritorios: porEscritorio.length,
+    novos: soma('novos'), jaTinha: soma('jaTinha'), erros: soma('erros'),
+    processos: soma('processos'), sem_acesso: soma('sem_acesso'),
+    por_escritorio: porEscritorio,
+  })
 }

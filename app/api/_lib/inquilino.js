@@ -117,3 +117,31 @@ export async function canalLiberado(esc, canal) {
 export function bloqueioDeCanal(res) {
   return Response.json({ erro: res.erro, canal_bloqueado: true }, { status: 403 })
 }
+
+// ---------------------------------------------------------------------------
+// Robôs e cron não têm usuário logado — não existe "escritório de quem pediu".
+// Antes disso, todos rodavam com o id do escritório dono escrito no código, o
+// que num sistema vendido significa: o robô do cliente varre o acervo do
+// fornecedor, e o cliente paga por uma varredura que não é dele.
+//
+// A regra passa a ser: o robô roda UMA VEZ POR ESCRITÓRIO ATIVO. Alguns robôs
+// não têm sentido por inquilino (os que usam conta bancária, número de
+// WhatsApp ou produto de captação do dono) — esses seguem só na raiz, e isso
+// está dito em cada um deles, não subentendido.
+export async function escritoriosAtivos(filtro) {
+  const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { persistSession: false },
+  })
+  const { data } = await sb.from('escritorios').select('id,nome,raiz,oabs,modulos').eq('ativo', true)
+  let lista = data || []
+  // com sessão do jus.br: só faz sentido varrer tribunal para quem tem
+  // certificado sincronizado. Os demais nem entram na fila.
+  if (filtro === 'jusbr') {
+    const { data: ses } = await sb.from('jusbr_sessao').select('escritorio_id')
+    const comSessao = new Set((ses || []).map(r => r.escritorio_id))
+    lista = lista.filter(e => comSessao.has(e.id))
+  }
+  // varredura do diário: só quem cadastrou OAB
+  if (filtro === 'oab') lista = lista.filter(e => Array.isArray(e.oabs) && e.oabs.length > 0)
+  return lista
+}

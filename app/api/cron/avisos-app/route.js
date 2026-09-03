@@ -134,11 +134,14 @@ export async function GET(request) {
       // poluir a lista de movimentações que o cliente vê.
       try {
         const rotulo = it.etapa === 'vespera' ? 'véspera (1 dia antes)' : (it.etapa === 't30' ? '30 minutos antes' : '10 minutos antes')
-        await sb.rpc('robot_add_andamento_fonte', {
+        // com escritório explícito: a versão sem escritório resolve pelo
+        // usuário logado, e robô não tem usuário
+        await sb.rpc('robot_add_andamento_esc', {
+          p_esc: it.escritorio_id,
           p_num: String(it.processo_numero || '').replace(/\D/g, ''),
           p_data: new Date().toISOString().slice(0, 10),
           p_texto: '[App] Aviso de audiência enviado ao cliente — ' + rotulo + ' (' + String(it.data_audiencia).split('-').reverse().join('/') + ') · ' + ok + ' aparelho(s)',
-          p_fonte: 'app',
+          p_fonte: 'app', p_tipo: 'movimento',
         })
       } catch (e) { /* o comprovante é acessório: nunca desfaz um aviso já entregue */ }
     } catch (e) {
