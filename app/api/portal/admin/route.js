@@ -17,6 +17,7 @@ import { createClient } from '@supabase/supabase-js'
 import webpush from 'web-push'
 import { URL_PUBLICA } from '../../enviar-email/enviar.js'
 import { svc, hashSenha, gerarSenha, digitos, emailCredenciais } from '../lib.js'
+import { DEMO_EMAILS } from '../../../../lib/demo.js'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -35,8 +36,10 @@ async function usuarioEscritorio(request) {
   const u = await anon.auth.getUser(jwt)
   const user = (u && u.data && u.data.user) || null
   if (!user) return null
-  const { data } = await svc().from('usuarios').select('id,nome,email,escritorio_id,papel').eq('id', user.id).maybeSingle()
+  const { data } = await svc().from('usuarios').select('id,nome,email,escritorio_id,papel,demo').eq('id', user.id).maybeSingle()
   if (!data || !data.escritorio_id) return null
+  /* conta de apresentação não cria, convida nem altera acesso de cliente */
+  if (data.demo === true || DEMO_EMAILS.includes(String(data.email || '').toLowerCase())) return null
   return data
 }
 

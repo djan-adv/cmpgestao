@@ -8,6 +8,7 @@ import { createClient } from '@supabase/supabase-js'
 import crypto from 'crypto'
 import fs from 'fs'
 import path from 'path'
+import { contaDemo, respostaDemo } from '../../../lib/demo.js'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -187,6 +188,7 @@ export async function GET(request) {
 export async function POST(request) {
   const user = await usuario(request)
   if (!user) return Response.json({ erro: 'não autenticado' }, { status: 401 })
+  if (await contaDemo(user)) return respostaDemo('alterar documentos')
   const b = await request.json()
 
   // Trocar a CHAVE da pasta do processo (ex.: caso vira processo judicial).

@@ -10,6 +10,7 @@
 
 import webpush from 'web-push'
 import { createClient } from '@supabase/supabase-js'
+import { contaDemo, respostaDemo } from '../../../../lib/demo.js'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -116,6 +117,7 @@ export async function GET() {
 export async function POST(request) {
   const user = await usuario(request)
   if (!user) return Response.json({ erro: 'Faça login.' }, { status: 401 })
+  if (await contaDemo(user)) return respostaDemo('enviar mensagem')
   let body = {}
   try { body = await request.json() } catch (e) {}
 

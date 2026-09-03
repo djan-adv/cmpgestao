@@ -13,6 +13,7 @@
 //   NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY / SUPABASE_SERVICE_ROLE_KEY
 
 import { createClient } from '@supabase/supabase-js'
+import { contaDemo, respostaDemo } from '../../../../lib/demo.js'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -35,6 +36,7 @@ function admin() {
 export async function POST(request) {
   const user = await usuario(request)
   if (!user) return Response.json({ erro: 'não autenticado' }, { status: 401 })
+  if (await contaDemo(user)) return respostaDemo('enviar WhatsApp')
 
   const token = process.env.WHATSAPP_TOKEN
   const phoneId = process.env.WHATSAPP_PHONE_NUMBER_ID

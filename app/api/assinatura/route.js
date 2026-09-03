@@ -27,6 +27,7 @@
 
 import { createClient } from '@supabase/supabase-js'
 import { randomUUID } from 'crypto'
+import { contaDemo, respostaDemo } from '../../../lib/demo.js'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -93,6 +94,7 @@ export async function POST(request) {
 
   const user = await usuarioCMP(request)
   if (!user) return Response.json({ erro: 'Faça login no CMPGestão para usar o módulo de assinaturas.' }, { status: 401 })
+  if (await contaDemo(user)) return respostaDemo('gerar link de assinatura')
 
   const acao = body.acao
 

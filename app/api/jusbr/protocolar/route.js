@@ -23,6 +23,7 @@ import crypto from 'crypto'
 import { createClient } from '@supabase/supabase-js'
 import { jusbrAdmin, getFreshToken, ESCRITORIO_CMP } from '../lib.js'
 import { ROOT } from '../../peticao/core.js'
+import { contaDemo, respostaDemo } from '../../../../lib/demo.js'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -500,6 +501,7 @@ export async function GET(request) {
 export async function POST(request) {
   const user = await usuario(request)
   if (!user) return Response.json({ erro: 'não autenticado' }, { status: 401 })
+  if (await contaDemo(user)) return respostaDemo('protocolar no jus.br')
   let b = {}
   try { b = await request.json() } catch (e) { return Response.json({ erro: 'corpo inválido' }, { status: 400 }) }
   const dig = soDig(b.numero)

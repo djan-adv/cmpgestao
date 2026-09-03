@@ -1277,6 +1277,18 @@ function _aplicaPapelNaTela(){
 }
 /* descobre QUEM está logado de verdade (Supabase) e ajusta nome, papel e permissões.
    Antes o sistema mostrava sempre "Djan" para qualquer pessoa que entrasse. */
+function _demoLigar(){
+  window.__demo=true;
+  document.body.classList.add('demo');
+  try{ _demoCompila(); }catch(e){}
+  /* os dados chegam depois do login: recompila a lista de nomes conforme entram */
+  var n=0; var t=setInterval(function(){ try{ _demoCompila(); }catch(e){} if(++n>=12) clearInterval(t); }, 2500);
+  if(!document.getElementById('demo-faixa')){
+    var f=document.createElement('div'); f.id='demo-faixa';
+    f.innerHTML='&#127916; <b>MODO APRESENTAÇÃO</b> — dados reais com nomes e números mascarados · nada é enviado a cliente, tribunal ou portal';
+    document.body.appendChild(f);
+  }
+}
 async function identificarUsuarioLogado(){
   var sb=window.__sb; if(!sb) return;
   try{
@@ -1285,8 +1297,10 @@ async function identificarUsuarioLogado(){
     var email=String(user.email||'').toLowerCase();
     var nomeBanco='', papelBanco='';
     try{
-      var pf=await sb.from('usuarios').select('nome,papel').eq('id',user.id).maybeSingle();
+      var pf=await sb.from('usuarios').select('nome,papel,demo').eq('id',user.id).maybeSingle();
+      if(pf&&pf.error){ pf=await sb.from('usuarios').select('nome,papel').eq('id',user.id).maybeSingle(); }
       if(pf&&pf.data){ nomeBanco=pf.data.nome||''; papelBanco=pf.data.papel||''; }
+      if((pf&&pf.data&&pf.data.demo===true)||DEMO_EMAILS.indexOf(email)>-1) _demoLigar();
     }catch(e){}
     /* acha o assento correspondente: por e-mail e, se não achar, por nome */
     var seat=(USUARIOS_VISUAIS||[]).find(function(u){ return u.email && String(u.email).toLowerCase()===email; });
@@ -2617,7 +2631,59 @@ function renderAudSemana(){
   html+='<div style="margin-top:10px"><button class="btn sm ghost" onclick="go(\'agenda\')">abrir agenda &rarr;</button></div>';
   el.innerHTML=html;
 }
-function esc(s){return (s||"").replace(/</g,"&lt;")}
+/* ===== Conta de APRESENTAÇÃO (03/09/2026) =====
+   "Um login onde todos os nomes das partes e processos sejam borrados, pra que eu
+   faça apresentação completa real." O sistema é o de verdade, com os dados de
+   verdade — só que tudo que identifica alguém passa por uma máscara antes de ir
+   para a tela. A máscara mora em UM lugar: esc() e fmtCNJ(), por onde passa
+   praticamente todo texto que o sistema pinta. Nome de parte vira um nome
+   inventado (sempre o mesmo para a mesma pessoa, para a tela ficar coerente);
+   número de processo mantém ano e tribunal e troca o resto; CPF/CNPJ some.
+   Texto corrido que não dá para mascarar palavra a palavra (teor de decisão,
+   nome de arquivo, chat, e-mail) fica borrado por CSS (body.demo). E o servidor
+   recusa qualquer envio para fora vindo desta conta (lib/demo.js). */
+var DEMO_EMAILS=['djanhenrique@gmail.com'];
+window.__demo=false;
+var _DEMO_NOMES=['Ana','Bruno','Carla','Diego','Elisa','Fábio','Gabriela','Heitor','Isabela','João','Karina','Lucas','Marina','Nelson','Olívia','Paulo','Renata','Sérgio','Tatiana','Vítor'];
+var _DEMO_SOBRE=['Almeida','Barbosa','Cardoso','Duarte','Esteves','Ferreira','Gomes','Holanda','Lacerda','Medeiros','Nogueira','Oliveira','Pereira','Queiroz','Ribeiro','Santana','Teixeira','Vasconcelos'];
+var _DEMO_EMP=['Alfa Comércio Ltda','Beta Serviços S.A.','Delta Incorporadora Ltda','Ômega Transportes Ltda','Sigma Construções S.A.','Vértice Empreendimentos Ltda'];
+var _demoRe=null, _demoMapa={};
+function _demoHash(t){ var h=2166136261; t=String(t||'').toLowerCase(); for(var i=0;i<t.length;i++){ h^=t.charCodeAt(i); h=(h*16777619)>>>0; } return h; }
+/* o pseudônimo de UM nome — estável, e com a mesma cara do original (caixa alta
+   continua caixa alta; empresa continua empresa) */
+function _demoNomeFalso(orig){
+  var k=orig.toLowerCase().replace(/\s+/g,' ').trim();
+  if(_demoMapa[k]) return _demoMapa[k];
+  var h=_demoHash(k), r;
+  if((typeof _RE_EMPRESA!=='undefined'&&_RE_EMPRESA.test(orig))) r=_DEMO_EMP[h%_DEMO_EMP.length];
+  else r=_DEMO_NOMES[h%_DEMO_NOMES.length]+' '+_DEMO_SOBRE[(h>>>5)%_DEMO_SOBRE.length]+' '+_DEMO_SOBRE[(h>>>11)%_DEMO_SOBRE.length];
+  if(orig===orig.toUpperCase()) r=r.toUpperCase();
+  _demoMapa[k]=r; return r;
+}
+/* monta a lista de nomes a mascarar a partir do que já está carregado */
+function _demoCompila(){
+  var nomes={};
+  var add=function(n){ n=String(n||'').replace(/\s+/g,' ').trim(); if(n.length>=4&&!/^\d+$/.test(n)&&n!=='—') nomes[n]=1; };
+  try{ (DADOS.processos||[]).forEach(function(p){ (_partesSplit(p.cliente)).forEach(add); (_partesSplit(p.oponente)).forEach(add); add(p.cliente); add(p.oponente); }); }catch(e){}
+  try{ (CONTATOS||[]).forEach(function(c){ add(c.nome); }); }catch(e){}
+  try{ (LEADS||[]).forEach(function(l){ add(l.nome); }); }catch(e){}
+  try{ (KAN||[]).forEach(function(a){ add(a.cliente); }); }catch(e){}
+  var lista=Object.keys(nomes).sort(function(a,b){ return b.length-a.length; });
+  if(!lista.length){ _demoRe=null; return; }
+  var esc_=function(t){ return t.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'); };
+  _demoRe=new RegExp(lista.map(esc_).join('|'),'gi');
+}
+function _demoMask(s){
+  s=String(s==null?'':s); if(!s) return s;
+  if(_demoRe) s=s.replace(_demoRe, function(m){ return _demoNomeFalso(m); });
+  /* número CNJ com máscara: guarda ano e tribunal, troca o resto pelo hash */
+  s=s.replace(/\b(\d{7})-(\d{2})\.(\d{4})\.(\d)\.(\d{2})\.(\d{4})\b/g, function(m,a,b,c,d,e,f){ var h=String(_demoHash(m)); return (h+'0000000').slice(0,7)+'-'+b+'.'+c+'.'+d+'.'+e+'.'+f; });
+  /* CNJ sem máscara (20 dígitos), CPF e CNPJ */
+  s=s.replace(/\b\d{20}\b/g, function(m){ var h=String(_demoHash(m)); return (h+'0000000').slice(0,7)+m.slice(7); });
+  s=s.replace(/\b\d{3}\.\d{3}\.\d{3}-\d{2}\b/g,'***.***.***-**').replace(/\b\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}\b/g,'**.***.***/****-**');
+  return s;
+}
+function esc(s){ if(window.__demo) s=_demoMask(s); return (s||"").replace(/</g,"&lt;")}
 /* Local do processo = vara de ORIGEM (foro/orgao). Não uso orgao_atual aqui de
    propósito: agrupar por "onde está agora" espalharia o mesmo processo conforme
    ele sobe e desce de instância, e o que se quer ver junto é o acervo de cada
@@ -2662,7 +2728,7 @@ function renderProc(){
   });
 }
 function stCls(s){return /2º|superior/i.test(s||"")?"warn":"ok"}
-function fmtCNJ(n){var d=String(n==null?'':n).replace(/\D/g,'');if(d.length!==20)return n==null?'':String(n);return d.slice(0,7)+'-'+d.slice(7,9)+'.'+d.slice(9,13)+'.'+d.slice(13,14)+'.'+d.slice(14,16)+'.'+d.slice(16);}
+function fmtCNJ(n){var d=String(n==null?'':n).replace(/\D/g,'');if(d.length!==20)return n==null?'':(window.__demo?_demoMask(String(n)):String(n));var f=d.slice(0,7)+'-'+d.slice(7,9)+'.'+d.slice(9,13)+'.'+d.slice(13,14)+'.'+d.slice(14,16)+'.'+d.slice(16);return window.__demo?_demoMask(f):f;}
 function kv(k,v){return '<div class="kv"><div class="k">'+k+'</div><div class="v">'+(v||'—')+'</div></div>';}
 /* o "← voltar" da ficha volta para a tela de ORIGEM (publicações, painel, agenda…) */
 function voltarDoProcesso(){ go(window.__voltarPara||'processos'); }
@@ -18735,6 +18801,12 @@ function setDilView(v){
   .kpi.v2:hover{transform:translateY(-2px);box-shadow:0 6px 16px rgba(46,58,75,.10)}
   .kpi.v2.gold{border-top-color:var(--gold)} .kpi.v2.warn{border-top-color:#d9a441}
   #tb-tools{display:flex;align-items:center;gap:14px;flex:1;justify-content:flex-end;margin-right:14px}
+  /* conta de apresentação: faixa fixa e borrão no que não dá para mascarar palavra a palavra */
+  #demo-faixa{position:fixed;left:0;right:0;top:0;z-index:100000;background:#6d28a8;color:#fff;font:12.5px system-ui;padding:5px 12px;text-align:center;letter-spacing:.02em}
+  body.demo{padding-top:26px}
+  body.demo .hist-det, body.demo #doc-panel, body.demo #docop-panel, body.demo #jusbr-lista, body.demo #em-lista,
+  body.demo #wa-lista, body.demo #wa-msgs, body.demo #wa-convs, body.demo #wa-cab, body.demo pre, body.demo textarea,
+  body.demo #doc-preview-corpo, body.demo .parte-doc-slot, body.demo #ctl-chips{filter:blur(5px);user-select:none;pointer-events:none}
   /* dentro da ficha, o número do processo ocupa o lugar da busca.
      Cada número anda colado no seu × (par indivisível) e TUDO fica numa linha
      só: passando da largura, a faixa rola para o lado em vez de quebrar. */

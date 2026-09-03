@@ -16,6 +16,7 @@
 
 import { createClient } from '@supabase/supabase-js'
 import { enviarEmailCore, emailValido } from './enviar.js'
+import { contaDemo, respostaDemo } from '../../../lib/demo.js'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -68,6 +69,7 @@ async function agendar(sess, body, quando) {
 export async function POST(request) {
   const sess = await usuario(request)
   if (!sess) return Response.json({ erro: 'não autenticado' }, { status: 401 })
+  if (await contaDemo(sess)) return respostaDemo('enviar e-mail')
 
   let body
   try { body = await request.json() } catch (e) { return Response.json({ erro: 'json inválido' }, { status: 400 }) }
