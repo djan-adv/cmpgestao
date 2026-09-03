@@ -17,6 +17,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { enviarEmailCore, emailValido } from './enviar.js'
 import { contaDemo, respostaDemo } from '../../../lib/demo.js'
+import { escritorioDoUsuario, semEscritorio, canalLiberado, bloqueioDeCanal } from '../_lib/inquilino.js'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -70,6 +71,15 @@ export async function POST(request) {
   const sess = await usuario(request)
   if (!sess) return Response.json({ erro: 'não autenticado' }, { status: 401 })
   if (await contaDemo(sess)) return respostaDemo('enviar e-mail')
+
+  // Todo e-mail sai da MESMA caixa (contato@cmpadvogados.com.br). Para o
+  // escritório dono do sistema isso é o esperado; para um escritório cliente
+  // seria um e-mail saindo do endereço do fornecedor, em nome dele, para o
+  // cliente ou a vara dele. O canal só abre com conta de envio própria.
+  const escRemetente = await escritorioDoUsuario(sess.user.id)
+  if (!escRemetente) return semEscritorio()
+  const liberado = await canalLiberado(escRemetente, 'email')
+  if (!liberado.ok) return bloqueioDeCanal(liberado)
 
   let body
   try { body = await request.json() } catch (e) { return Response.json({ erro: 'json inválido' }, { status: 400 }) }

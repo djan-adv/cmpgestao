@@ -14,11 +14,11 @@
 
 import { createClient } from '@supabase/supabase-js'
 import { contaDemo, respostaDemo } from '../../../../lib/demo.js'
+import { escritorioDoUsuario, semEscritorio, canalLiberado, bloqueioDeCanal } from '../../_lib/inquilino.js'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
 
-const ESCRITORIO_CMP = '908f77fc-19f5-4d86-9576-f5590af09e0a'
 
 async function usuario(request) {
   const auth = request.headers.get('authorization') || ''
@@ -38,6 +38,13 @@ export async function POST(request) {
   if (!user) return Response.json({ erro: 'não autenticado' }, { status: 401 })
   if (await contaDemo(user)) return respostaDemo('enviar WhatsApp')
 
+  // O número de WhatsApp é um só, do dono do sistema. Mensagem de escritório
+  // cliente sairia com a identidade do fornecedor — mesmo motivo do e-mail.
+  const escRemetente = await escritorioDoUsuario(user.id)
+  if (!escRemetente) return semEscritorio()
+  const liberado = await canalLiberado(escRemetente, 'whatsapp')
+  if (!liberado.ok) return bloqueioDeCanal(liberado)
+
   const token = process.env.WHATSAPP_TOKEN
   const phoneId = process.env.WHATSAPP_PHONE_NUMBER_ID
   const ver = process.env.WHATSAPP_API_VERSION || 'v21.0'
@@ -54,7 +61,7 @@ export async function POST(request) {
   // janela de 24h da conversa
   let dentroJanela = false
   try {
-    const { data: conv } = await sb.from('wa_conversas').select('id,janela_ate').eq('escritorio_id', ESCRITORIO_CMP).eq('wa_id', para).maybeSingle()
+    const { data: conv } = await sb.from('wa_conversas').select('id,janela_ate').eq('escritorio_id', escRemetente).eq('wa_id', para).maybeSingle()
     dentroJanela = !!(conv && conv.janela_ate && new Date(conv.janela_ate).getTime() > Date.now())
   } catch (e) {}
 
@@ -106,11 +113,11 @@ export async function POST(request) {
   // grava a mensagem enviada + atualiza a conversa
   try {
     const { data: conv } = await sb.from('wa_conversas').upsert({
-      escritorio_id: ESCRITORIO_CMP, wa_id: para,
+      escritorio_id: escRemetente, wa_id: para,
       ultimo_texto: textoReg, ultima_direcao: 'out', ultima_em: agora, nao_lidas: 0,
     }, { onConflict: 'escritorio_id,wa_id' }).select('id').single()
     await sb.from('wa_mensagens').insert({
-      escritorio_id: ESCRITORIO_CMP, conversa_id: (conv && conv.id) || null, wa_id: para,
+      escritorio_id: escRemetente, conversa_id: (conv && conv.id) || null, wa_id: para,
       direcao: 'out', tipo: tipoReg, texto: textoReg, wam_id: wamId, status: 'sent', ts: agora,
     })
   } catch (e) {}

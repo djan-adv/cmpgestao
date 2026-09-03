@@ -16,16 +16,31 @@
 //
 // Segurança:
 //  - exige usuário autenticado (JWT do Supabase);
-//  - exige que o e-mail do solicitante seja de um coordenador (ACESSOS_ALLOW);
+//  - exige que o solicitante seja CONTRATANTE (ou sócio) do próprio escritório;
 //  - a chave secreta (SUPABASE_SERVICE_ROLE_KEY) fica só no servidor, no .env.local.
+//
+// Mudou em 03/09/2026 (versão de venda): quem manda nos acessos era uma lista de
+// e-mails escrita no código (o do dono do sistema). Isso servia para um
+// escritório só; com escritórios que compram o sistema, cada um precisa
+// cadastrar a própria equipe sem depender do fornecedor. Agora vale o PAPEL:
+// contratante manda no escritório dele, e em nenhum outro.
+//
+// Níveis: contratante (assinou o contrato) > socio > adv (advogado) >
+// colaborador > est (estagiário). A senha sai provisória: quem cria não fica
+// sabendo dela depois que a pessoa entra e troca.
 
 import { createClient } from '@supabase/supabase-js'
+import crypto from 'crypto'
+import { enviarEmailConta } from '../_lib/email-conta.js'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
 
-// e-mails autorizados a gerenciar acessos (coordenador).
-const ACESSOS_ALLOW = ['djan.adv@gmail.com']
+// Papéis que podem gerir acessos DO PRÓPRIO escritório.
+const PAPEIS_QUE_MANDAM = ['contratante', 'socio']
+// Papéis que um contratante pode criar. 'contratante' fica de fora de propósito:
+// é um por escritório, criado junto com o escritório no painel-mãe.
+const PAPEIS_QUE_PODE_CRIAR = ['socio', 'adv', 'colaborador', 'est', 'membro']
 
 const SB_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
 const ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -48,18 +63,23 @@ async function coordenador(request) {
   return user
 }
 
-// Coordenadores: Djan, Jader e Maria Eduarda. Além do e-mail fixo do Djan,
-// aceitamos quem estiver como sócio na tabela usuarios COM um desses nomes —
-// assim Jader e Maria Eduarda passam a gerir acessos assim que se cadastrarem.
-const COORD_NOMES = [/djan/i, /jader/i, /eduarda/i]
+// senha provisória legível ao telefone (sem 0/O e 1/l, que confundem ao ditar)
+function senhaProvisoria() {
+  const alfabeto = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789'
+  const bytes = crypto.randomBytes(10)
+  let s = ''
+  for (let i = 0; i < 10; i++) s += alfabeto[bytes[i] % alfabeto.length]
+  return s
+}
+
+// Manda nos acessos quem é contratante ou sócio — do próprio escritório.
+// Antes isto era uma lista de nomes por expressão regular (/djan/, /jader/,
+// /eduarda/): funcionava numa casa só e reprovava qualquer cliente novo.
 async function ehCoordenador(user) {
-  const email = String((user && user.email) || '').toLowerCase()
-  if (ACESSOS_ALLOW.map(e => e.toLowerCase()).includes(email)) return true
   try {
     const sbA = createClient(SB_URL, SERVICE, { auth: { persistSession: false } })
-    const { data } = await sbA.from('usuarios').select('nome,papel').eq('id', user.id).maybeSingle()
-    if (!data || data.papel !== 'socio') return false
-    return COORD_NOMES.some(rx => rx.test(String(data.nome || '')))
+    const { data } = await sbA.from('usuarios').select('papel').eq('id', user.id).maybeSingle()
+    return !!(data && PAPEIS_QUE_MANDAM.includes(String(data.papel || '')))
   } catch (e) { return false }
 }
 
@@ -125,12 +145,45 @@ export async function POST(request) {
     }
 
     if (acao === 'salvar') {
-      const senha = String(body.senha || '')
       const nome = String(body.nome || '').trim() || null
-      const papel = String(body.papel || 'membro').trim() || 'membro'
-      if (senha.length < 6) return Response.json({ erro: 'A senha precisa de pelo menos 6 caracteres.' }, { status: 400 })
+      const papel = String(body.papel || 'colaborador').trim() || 'colaborador'
+      if (!PAPEIS_QUE_PODE_CRIAR.includes(papel)) {
+        return Response.json({ erro: 'Nível de acesso inválido: ' + papel }, { status: 400 })
+      }
 
       const existente = await acharPorEmail(sb, email)
+
+      // Uma pessoa pertence a UM escritório. Sem esta conferência, cadastrar um
+      // e-mail que já existe em outro escritório mudaria o vínculo dele — e a
+      // pessoa passaria a enxergar o acervo de quem a cadastrou por último.
+      if (existente) {
+        const { data: vinc } = await sb.from('usuarios').select('escritorio_id').eq('id', existente.id).maybeSingle()
+        if (vinc && vinc.escritorio_id && vinc.escritorio_id !== esc) {
+          return Response.json({ erro: 'Este e-mail já tem acesso em outro escritório.' }, { status: 409 })
+        }
+      }
+
+      // Limite de assentos do plano. Conta só quem ainda não existe: renovar a
+      // senha de quem já está dentro não consome assento novo.
+      if (!existente) {
+        const { data: plano } = await sb.from('escritorios').select('limite_acessos,nome').eq('id', esc).maybeSingle()
+        const limite = plano && plano.limite_acessos
+        if (limite != null) {
+          const { count } = await sb.from('usuarios').select('id', { count: 'exact', head: true }).eq('escritorio_id', esc)
+          if ((count || 0) >= limite) {
+            return Response.json({
+              erro: 'Seu plano tem ' + limite + ' acessos e todos estão em uso. Para incluir mais alguém, libere um acesso ou contrate acessos adicionais.',
+              limite_atingido: true, limite, em_uso: count || 0,
+            }, { status: 409 })
+          }
+        }
+      }
+
+      // Senha SEMPRE provisória e gerada aqui. Quem cadastra não escolhe (e não
+      // fica sabendo) a senha definitiva de ninguém: no primeiro acesso o
+      // sistema obriga a trocar. Era o contrário antes — o coordenador digitava
+      // a senha da pessoa e ficava com ela.
+      const senha = senhaProvisoria()
       let uid, criado
       if (existente) {
         const { error } = await sb.auth.admin.updateUserById(existente.id, { password: senha, email_confirm: true })
@@ -141,21 +194,47 @@ export async function POST(request) {
         if (error) throw new Error(error.message)
         uid = data.user.id; criado = true
       }
-      // vincula/atualiza no escritório
-      const { error: eU } = await sb.from('usuarios').upsert({ id: uid, escritorio_id: esc, nome, email, papel }, { onConflict: 'id' })
+      const { error: eU } = await sb.from('usuarios').upsert(
+        { id: uid, escritorio_id: esc, nome, email, papel, trocar_senha: true, ativo: true, criado_por: coord.id },
+        { onConflict: 'id' })
       if (eU) throw new Error(eU.message)
-      return Response.json({ ok: true, criado, id: uid })
+
+      const envio = await enviarEmailConta({
+        para: email,
+        assunto: criado ? 'Seu acesso ao sistema' : 'Sua nova senha de acesso',
+        titulo: criado ? 'Seu acesso está pronto' : 'Sua senha foi redefinida',
+        linhas: [
+          'Entre com o e-mail <b>' + email + '</b> e a senha provisória abaixo:',
+          '<b style="font-size:22px;letter-spacing:2px">' + senha + '</b>',
+          'No primeiro acesso o sistema pede uma senha nova, só sua.',
+        ],
+      })
+
+      return Response.json({
+        ok: true, criado, id: uid,
+        // volta na tela porque o e-mail pode não sair e a pessoa estar do lado
+        senha_provisoria: senha,
+        email_enviado: !!envio.ok, email_erro: envio.erro || null,
+      })
     }
 
     if (acao === 'desativar' || acao === 'ativar') {
       const u = await acharPorEmail(sb, email)
       if (!u) return Response.json({ erro: 'Conta não encontrada.' }, { status: 404 })
-      if (ACESSOS_ALLOW.map(e => e.toLowerCase()).includes(email)) {
-        return Response.json({ erro: 'O acesso do coordenador não pode ser desativado.' }, { status: 400 })
+      // Ninguém desativa o contratante (o escritório ficaria sem quem manda) nem
+      // a si mesmo (o clássico trancar a chave dentro de casa).
+      const { data: alvo } = await sb.from('usuarios').select('papel,escritorio_id').eq('id', u.id).maybeSingle()
+      if (!alvo || alvo.escritorio_id !== esc) return Response.json({ erro: 'Conta não encontrada.' }, { status: 404 })
+      if (acao === 'desativar' && alvo.papel === 'contratante') {
+        return Response.json({ erro: 'O acesso do contratante não pode ser desativado.' }, { status: 400 })
+      }
+      if (acao === 'desativar' && u.id === coord.id) {
+        return Response.json({ erro: 'Você não pode desativar o seu próprio acesso.' }, { status: 400 })
       }
       const ban_duration = acao === 'desativar' ? '876000h' : 'none' // ~100 anos ou libera
       const { error } = await sb.auth.admin.updateUserById(u.id, { ban_duration })
       if (error) throw new Error(error.message)
+      await sb.from('usuarios').update({ ativo: acao === 'ativar' }).eq('id', u.id)
       return Response.json({ ok: true })
     }
 

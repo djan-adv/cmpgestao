@@ -81,3 +81,39 @@ export function raizDocs(esc) {
   if (!esc || esc === ESCRITORIO_RAIZ) return base
   return base + '-inq/' + esc
 }
+
+// ---------------------------------------------------------------------------
+// Canais que saem para FORA (e-mail, WhatsApp, protocolo, assinatura).
+//
+// As credenciais desses canais são do dono do sistema: o SMTP é a caixa dele, o
+// número de WhatsApp é o dele, o certificado do jus.br é o dele. Enquanto um
+// escritório cliente não tiver as PRÓPRIAS credenciais, um clique no botão
+// "enviar" faria sair, do endereço do fornecedor, um e-mail para o cliente ou
+// para a vara de outro escritório. Não é vazamento de dado — é pior: é um ato
+// praticado em nome de quem não autorizou.
+//
+// Por isso o canal externo é o único item que NÃO vem liberado de fábrica. Os
+// demais módulos ficam todos ligados (modulos nulo = tudo liberado); os canais
+// só abrem quando alguém liga explicitamente, depois de configurar credencial
+// própria. Mesma decisão que já valeu para a Inove: envio desligado.
+export async function canalLiberado(esc, canal) {
+  if (!esc) return { ok: false, erro: 'Sem escritório.' }
+  const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { persistSession: false },
+  })
+  const { data } = await sb.from('escritorios').select('raiz,ativo,modulos,nome').eq('id', esc).maybeSingle()
+  if (!data) return { ok: false, erro: 'Escritório não encontrado.' }
+  if (data.ativo === false) return { ok: false, erro: 'Este escritório está com o acesso suspenso.' }
+  if (data.raiz === true) return { ok: true }
+  const mod = data.modulos || {}
+  if (mod[canal] === true) return { ok: true }
+  return {
+    ok: false,
+    erro: 'O envio por ' + (canal === 'email' ? 'e-mail' : canal) + ' ainda não está configurado para este escritório. ' +
+          'Ele será liberado quando a conta de envio própria do escritório for cadastrada — até lá, nada sai daqui em nome de terceiros.',
+  }
+}
+
+export function bloqueioDeCanal(res) {
+  return Response.json({ erro: res.erro, canal_bloqueado: true }, { status: 403 })
+}
