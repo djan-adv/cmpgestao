@@ -8164,7 +8164,19 @@ async function iniciarHonLote(){
 
 /* ===== Documentos do jus.br (PDPJ) — puxar a peça escolhida sob demanda ===== */
 async function jusbrJwt(){ try{ var s=await window.__sb.auth.getSession(); return (s&&s.data&&s.data.session&&s.data.session.access_token)||''; }catch(e){ return ''; } }
-function jusbrMsgErro(d){ var m=(d&&d.erro)||'erro'; if(d&&(d.motivo==='sem_token'||d.motivo==='expirado')){ m+=' — abra o jus.br logado (o token sincroniza sozinho pelo Tampermonkey).'; } return esc(m); }
+/* A mensagem citava o Tampermonkey como se ainda fosse o caminho — e é a
+   extensão do Chrome/Edge que o escritório usa desde então, que manda o token na
+   hora e com o sistema fechado. Dizer o meio errado manda o advogado mexer no
+   lugar errado no meio de um prazo. */
+function jusbrMsgErro(d){
+  var m=(d&&d.erro)||'erro';
+  if(d&&(d.motivo==='sem_token'||d.motivo==='expirado')){
+    m+=' — entre no portaldeservicos.pdpj.jus.br com o seu certificado, na mesma janela.'
+      +' Com a extensão do Chrome/Edge instalada, o token chega aqui sozinho em segundos'
+      +' (o ícone dela fica com o selo "ok" verde quando chega).';
+  }
+  return esc(m);
+}
 function jusbrItemHtml(doc){
   var dt=doc.data?String(doc.data).slice(0,10).split('-').reverse().join('/'):'';
   var nomeJs=String(doc.nome||'documento').replace(/['"\\]/g,' ');
