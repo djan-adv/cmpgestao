@@ -1652,8 +1652,25 @@ function removerLogoEscritorio(){
   var a=document.getElementById('me-logo-arq'); if(a) a.value='';
   var m=document.getElementById('me-msg'); if(m) m.textContent='O logo sai quando você salvar.';
 }
+/* Erro de digitação no nome do servidor é caro porque não dá erro visível: o
+   envio simplesmente não sai, e a leitura da caixa também não — o IMAP é
+   derivado do SMTP trocando "smtp." por "imap.", e um "smpt." não casa com a
+   troca. "smpt" por "smtp" é a inversão mais comum; o sistema oferece a
+   correção em vez de deixar passar. */
+function _smtpSuspeito(h){
+  var t=String(h||'').trim().toLowerCase();
+  if(!t) return null;
+  if(/^smpt\./.test(t)) return t.replace(/^smpt\./,'smtp.');
+  if(/^stmp\./.test(t)) return t.replace(/^stmp\./,'smtp.');
+  return null;
+}
 async function salvarEmailEscritorio(){
   var est=document.getElementById('me-smtp-estado'); est.textContent='Salvando…';
+  var _hEl=document.getElementById('me-smtp-host');
+  var _corr=_smtpSuspeito(_hEl&&_hEl.value);
+  if(_corr){
+    if(confirm('O servidor está escrito "'+_hEl.value.trim()+'".\n\nO nome usual é "'+_corr+'" — as letras parecem trocadas.\n\nCorrigir para "'+_corr+'"?')) _hEl.value=_corr;
+  }
   try{
     await _meuEscApi('POST',{acao:'email_salvar',
       host:document.getElementById('me-smtp-host').value.trim(),
