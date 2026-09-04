@@ -40,8 +40,15 @@ export async function contaDeEnvio(esc, ehRaiz) {
   const { data, error } = await admin().rpc('smtp_get', { p_esc: esc, p_key: key })
   if (error) return { erro: 'Não consegui ler a conta de envio: ' + error.message }
   const c = Array.isArray(data) ? data[0] : data
-  if (!c || !c.host || !c.usuario || !c.senha) {
+  // Dizer "não cadastrou a conta" quando o que falta é só a SENHA manda o
+  // escritório conferir servidor e usuário, que estão certos, e não olhar o
+  // único campo que importa. O campo de senha vem em branco de propósito (para
+  // não devolver a senha ao navegador), e é fácil salvar sem preencher.
+  if (!c || !c.host || !c.usuario) {
     return { erro: 'Este escritório ainda não cadastrou a conta de e-mail. Abra o cadastro do escritório e informe servidor, usuário e senha.' }
+  }
+  if (!c.senha) {
+    return { erro: 'Falta a SENHA da caixa ' + c.usuario + '. O servidor e o usuário já estão salvos — digite a senha no cadastro do escritório e salve de novo (o campo vem em branco por segurança, e salvar sem preenchê-lo mantém a senha anterior, que aqui ainda não existe).' }
   }
   return { host: c.host, port: c.porta || 465, user: c.usuario, pass: c.senha, fromNome: c.remetente_nome || '' }
 }

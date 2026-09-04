@@ -1626,6 +1626,13 @@ async function abrirMeuEscritorio(){
     document.getElementById('me-imap-host').value=ec.imap_host||'';
     document.getElementById('me-imap-porta').value=ec.imap_porta||'';
     document.getElementById('me-smtp-senha').value='';
+    /* o "deixe em branco para manter a atual" só faz sentido quando existe uma
+       senha atual; sem ela, o campo em branco é o motivo de o teste falhar */
+    try{
+      var _sn=document.getElementById('me-smtp-senha');
+      if(_sn) _sn.placeholder = ec.tem_senha ? 'deixe em branco para manter a atual' : 'obrigatória — a senha da caixa de e-mail';
+      if(_sn) _sn.style.borderColor = ec.tem_senha ? '' : '#e0b64a';
+    }catch(eSn){}
     var est=document.getElementById('me-smtp-estado');
     est.innerHTML = ec.canal_liberado
       ? '<span style="color:#0F6E56;font-weight:700">Envio liberado.</span> Testado em '+esc(String(ec.testado_em||'').slice(0,16).replace('T',' '))+'.'
