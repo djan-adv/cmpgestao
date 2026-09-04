@@ -43,3 +43,22 @@ djan.app.br, www.djan.app.br {
 	}
 	reverse_proxy 127.0.0.1:3000
 }
+
+# DOMÍNIO DO PRÓPRIO ESCRITÓRIO (ex.: sistema.jaline.adv.br).
+#
+# É o passo seguinte ao subdomínio: o escritório aponta um subdomínio DELE para
+# este servidor e o sistema passa a atender ali, com o certificado emitido na
+# primeira visita. Este bloco casa qualquer nome que não tenha caído nos de
+# cima — e é seguro justamente por causa do `ask` lá no topo: o Caddy pergunta
+# ao sistema se o endereço está no cadastro de algum escritório antes de pedir
+# certificado. Nome que ninguém cadastrou não passa.
+#
+# O site e o e-mail do escritório continuam onde estão: aqui entra um
+# SUBDOMÍNIO (sistema., app.), então os registros MX e o site no apex não são
+# tocados.
+https:// {
+	tls {
+		on_demand
+	}
+	reverse_proxy 127.0.0.1:3000
+}
