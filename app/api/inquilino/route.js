@@ -35,9 +35,16 @@ export async function GET(request) {
     .contains('hosts', [host])
     .maybeSingle()
 
+  // Nada aqui pode ser guardado em cache. O cadastro do escritório muda no meio
+  // do dia — foi assim que uma procuração continuou dizendo "cadastro
+  // incompleto" horas depois de o escritório tê-lo preenchido: o navegador
+  // ainda servia a resposta antiga, que trazia o nome (já existia) e o cadastro
+  // vazio (ainda não existia).
+  const semCache = { headers: { 'Cache-Control': 'no-store, max-age=0' } }
+
   // Endereço desconhecido não é erro: é o caso de quem abre por um domínio
   // ainda não cadastrado. A tela cai na marca neutra e o login segue valendo.
-  if (!data) return Response.json({ ok: true, conhecido: false, host })
+  if (!data) return Response.json({ ok: true, conhecido: false, host }, semCache)
 
   const marca = data.marca || {}
   return Response.json({
@@ -57,5 +64,5 @@ export async function GET(request) {
     // cliente dele assina — e é dado profissional público (o que já vai escrito
     // na própria procuração), não dado sigiloso.
     dados: data.dados || null,
-  })
+  }, semCache)
 }

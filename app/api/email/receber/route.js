@@ -14,15 +14,24 @@
 // O que não casa NÃO vai para o histórico de ninguém: fica na caixa, para
 // classificar à mão. Melhor um e-mail sem processo do que no processo errado.
 //
-// Nunca lê a caixa inteira: guarda o último UID em email_imap_estado e só pega o
-// que veio depois. Se o servidor recriar a caixa (uidvalidity muda), recomeça.
+// Nunca lê a caixa inteira: guarda o último UID em email_imap_estado_esc e só
+// pega o que veio depois. Se o servidor recriar a caixa (uidvalidity muda),
+// recomeça.
+//
+// Roda UMA VEZ POR ESCRITÓRIO, cada um na própria caixa. Antes lia só a caixa do
+// dono do sistema e casava a mensagem contra TODOS os processos do banco: o
+// escritório cliente não recebia no histórico a resposta da vara dele, e um
+// e-mail da caixa do fornecedor podia encostar numa ficha que não era dele.
 
 import { createClient } from '@supabase/supabase-js'
+import { escritoriosAtivos } from '../../_lib/inquilino.js'
+import { contaDeLeitura } from '../../_lib/smtp.js'
+import { anotarRobo } from '../../_lib/robolog.js'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
 export const revalidate = 0
-export const maxDuration = 120
+export const maxDuration = 300
 
 const MAX_MSGS = 60                 // por rodada
 const MAX_CORPO = 60 * 1024         // guarda no máximo 60 KB de texto por e-mail
@@ -115,35 +124,18 @@ async function lerStream(st) {
   return Buffer.concat(pedacos).toString('utf8')
 }
 
-export async function GET(request) {
-  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) return Response.json({ erro: 'falta service key' }, { status: 500 })
-  const { searchParams } = new URL(request.url)
-  const dias = parseInt(searchParams.get('dias') || '0', 10)
+// Lê a caixa de UM escritório. Devolve o relatório; nunca lança.
+async function lerCaixa(sb, ImapFlow, escritorioId, conta, dias) {
+  const { host, port, user, pass } = conta
 
-  const host = process.env.IMAP_HOST || (process.env.SMTP_HOST || '').replace(/^smtp\./i, 'imap.') || 'imap.hostinger.com'
-  const port = parseInt(process.env.IMAP_PORT || '993', 10)
-  const user = process.env.SMTP_USER, pass = process.env.SMTP_PASS
-  if (!host || !user || !pass) return Response.json({ erro: 'IMAP não configurado (SMTP_USER/SMTP_PASS)' }, { status: 500 })
-
-  let ImapFlow
-  try { ({ ImapFlow } = await import('imapflow')) }
-  catch (e) { return Response.json({ erro: 'imapflow ausente no servidor — rode "npm install" no VPS' }, { status: 500 }) }
-
-  const sb = admin()
-
-  // escritório: a caixa é uma só, do escritório do sistema
-  const esc = await sb.from('escritorios').select('id').order('criado_em', { ascending: true }).limit(1).single()
-  if (esc.error || !esc.data) return Response.json({ erro: 'escritório não encontrado' }, { status: 500 })
-  const escritorioId = esc.data.id
-
-  const est = await sb.from('email_imap_estado').select('*').eq('id', 1).single()
+  const est = await sb.from('email_imap_estado_esc').select('*').eq('escritorio_id', escritorioId).maybeSingle()
   let ultimaUid = (est.data && est.data.ultima_uid) || 0
   const uidvAnterior = (est.data && est.data.uidvalidity) || null
 
   // processos e contatos, para casar as respostas
   const [procs, contatos] = await Promise.all([
-    sb.from('processos').select('id,numero,numero_digitos,status').limit(5000),
-    sb.from('contatos_orgao').select('email').limit(2000),
+    sb.from('processos').select('id,numero,numero_digitos,status').eq('escritorio_id', escritorioId).limit(5000),
+    sb.from('contatos_orgao').select('email').eq('escritorio_id', escritorioId).limit(2000),
   ])
   const porNumero = {}
   ;(procs.data || []).forEach(p => { const d = p.numero_digitos || soDig(p.numero); if (d) porNumero[d] = p })
@@ -271,24 +263,85 @@ export async function GET(request) {
         importados.push({ de, assunto: env.subject, numero, casou_por: casouPor })
       }
     }
-    await sb.from('email_imap_estado').upsert({
-      id: 1, uidvalidity: uidv, ultima_uid: ultimaUid, ultima_checagem: new Date().toISOString(),
+    await sb.from('email_imap_estado_esc').upsert({
+      escritorio_id: escritorioId, uidvalidity: uidv, ultima_uid: ultimaUid, ultima_checagem: new Date().toISOString(),
       ultimo_resultado: importados.length + ' importado(s) de ' + vistos + ' visto(s)'
       + (telefonesAnotados.length ? (' — ' + telefonesAnotados.length + ' telefone(s) anotado(s) na ficha') : ''),
-    }, { onConflict: 'id' })
+    }, { onConflict: 'escritorio_id' })
   } catch (e) {
-    try { await sb.from('email_imap_estado').update({ ultima_checagem: new Date().toISOString(), ultimo_resultado: 'erro: ' + String((e && e.message) || e).slice(0, 300) }).eq('id', 1) } catch (_) {}
-    return Response.json({ erro: 'IMAP ' + host + ':' + port + ' — ' + ((e && e.message) || String(e)) }, { status: 502 })
+    const msg = 'IMAP ' + host + ':' + port + ' — ' + ((e && e.message) || String(e))
+    try {
+      await sb.from('email_imap_estado_esc').upsert({
+        escritorio_id: escritorioId, ultima_checagem: new Date().toISOString(),
+        ultimo_resultado: 'erro: ' + msg.slice(0, 300),
+      }, { onConflict: 'escritorio_id' })
+    } catch (_) {}
+    return { erro: msg }
   } finally {
     try { if (lock) lock.release() } catch (e) {}
     try { await client.logout() } catch (e) {}
   }
 
-  return Response.json({
+  return {
     ok: true, vistos, pulados, importados: importados.length,
     no_historico: importados.filter(x => x.numero).length,
     sem_processo: importados.filter(x => !x.numero).length,
     telefones_anotados: telefonesAnotados,
     itens: importados.slice(0, 20),
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Uma passada por escritório. Escritório sem conta de e-mail própria não é erro:
+// é o estado normal de quem acabou de contratar e ainda não cadastrou a caixa.
+// Ele é PULADO com o motivo dito, não tratado como falha do robô.
+export async function GET(request) {
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) return Response.json({ erro: 'falta service key' }, { status: 500 })
+  const { searchParams } = new URL(request.url)
+  const dias = parseInt(searchParams.get('dias') || '0', 10)
+  const soEste = searchParams.get('esc') || ''
+
+  let ImapFlow
+  try { ({ ImapFlow } = await import('imapflow')) }
+  catch (e) { return Response.json({ erro: 'imapflow ausente no servidor — rode "npm install" no VPS' }, { status: 500 }) }
+
+  const sb = admin()
+  let escs = await escritoriosAtivos()
+  if (soEste) escs = escs.filter(e => e.id === soEste)
+
+  const relatorio = []
+  let totalImportados = 0, totalVistos = 0, comErro = 0
+  for (const e of escs) {
+    const ehRaiz = e.raiz === true
+    // canal de e-mail: a raiz usa a conta do servidor; o cliente, a dele — e só
+    // depois de o teste de envio passar, que é quando a conta está provada
+    const mod = e.modulos || {}
+    if (!ehRaiz && mod.email !== true) {
+      relatorio.push({ escritorio: e.nome, pulado: 'conta de e-mail ainda não cadastrada/testada' })
+      continue
+    }
+    const conta = await contaDeLeitura(e.id, ehRaiz)
+    if (conta.erro) {
+      relatorio.push({ escritorio: e.nome, pulado: conta.erro })
+      continue
+    }
+    const r = await lerCaixa(sb, ImapFlow, e.id, conta, dias)
+    if (r.erro) {
+      comErro++
+      relatorio.push({ escritorio: e.nome, erro: r.erro })
+      await anotarRobo(e.id, 'email_receber', false, r.erro)
+      continue
+    }
+    totalImportados += r.importados; totalVistos += r.vistos
+    relatorio.push({ escritorio: e.nome, ...r })
+    await anotarRobo(e.id, 'email_receber', true,
+      r.importados + ' e-mail(s) importado(s) de ' + r.vistos + ' visto(s); ' + r.no_historico + ' foram para a ficha do processo')
+  }
+
+  return Response.json({
+    ok: comErro === 0,
+    escritorios: relatorio.length, com_erro: comErro,
+    importados: totalImportados, vistos: totalVistos,
+    por_escritorio: relatorio,
   })
 }

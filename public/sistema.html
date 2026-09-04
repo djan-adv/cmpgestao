@@ -355,6 +355,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
       <a data-s="produtividade" class="cmp-only" onclick="go('produtividade')" title="Métricas de volume e esforço por pessoa, derivadas do log de eventos do sistema (sem vigilância de tela)"><span class="ic">📈</span> Produtividade</a>
       <a data-s="monitoramento" class="cmp-only" onclick="go('monitoramento')" title="Pedidos de acompanhamento processual feitos pelo portal público (produto de captação)"><span class="ic">🛰</span> Monitoramento <span id="nav-n-monit" style="margin-left:auto;font-size:10.5px;background:var(--navy2);border-radius:10px;padding:1px 7px"></span></a>
       <a data-s="robos" class="cmp-only" onclick="go('robos')" title="Robôs do sistema: status e execução manual (sem terminal)"><span class="ic">🤖</span> Robôs</a>
+      <a data-s="diarios" class="inq-only" style="display:none" onclick="go('diarios')" title="Buscar no Diário de Justiça na hora e ver os robôs que leem para o seu escritório"><span class="ic">📰</span> Diários e robôs</a>
       <a data-s="sugestoes" onclick="go('sugestoes')" style="margin-top:12px;color:#ffd98a"><span class="ic">💡</span> Sugestões / Melhorias</a>
       <a data-s="encerrados" onclick="go('encerrados')"><span class="ic">▤</span> Encerrados <span id="nav-n-enc" style="margin-left:auto;font-size:10.5px;background:var(--navy2);border-radius:10px;padding:1px 7px"></span></a>
     </nav>
@@ -792,6 +793,46 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
       </div>
     </section>
 
+<section id="s-diarios" class="hidden">
+      <div class="card">
+        <p class="sectlabel">🔎 Buscar no Diário de Justiça</p>
+        <p class="note" style="margin:6px 0 10px">O robô já varre sozinho, de duas em duas horas, as OAB cadastradas do escritório. Aqui é a busca na hora — para procurar mais para trás, pelo nome de uma parte, por um processo que ainda não está cadastrado, ou pela OAB de alguém que acabou de entrar na equipe. <b>Nada entra no acervo sem você marcar.</b></p>
+        <div class="row3">
+          <div><label>Procurar por</label>
+            <select id="di-alvo" onchange="_diAlvo()">
+              <option value="oab">OAB do escritório (todas as cadastradas)</option>
+              <option value="oab1">Uma OAB específica</option>
+              <option value="nome">Nome da parte</option>
+              <option value="processo">Número do processo</option>
+            </select></div>
+          <div id="di-c-num" style="display:none"><label id="di-l-num">Número</label><input id="di-num" placeholder=""></div>
+          <div id="di-c-uf" style="display:none"><label>UF</label><input id="di-uf" maxlength="2" placeholder="PB"></div>
+        </div>
+        <div id="di-c-nome" style="display:none;margin-top:8px"><label>Nome completo da parte</label><input id="di-nome" placeholder="como está escrito no processo">
+          <div class="note" style="margin-top:3px">O CNJ não aceita busca por CPF/CNPJ no diário — só por nome.</div></div>
+        <div class="row3" style="margin-top:8px">
+          <div><label>Período</label>
+            <select id="di-dias">
+              <option value="7">últimos 7 dias</option>
+              <option value="15" selected>últimos 15 dias</option>
+              <option value="30">últimos 30 dias</option>
+              <option value="90">últimos 90 dias</option>
+              <option value="180">últimos 180 dias</option>
+            </select></div>
+          <div style="align-self:end"><button class="btn" onclick="buscarDiarios()">Buscar no diário</button></div>
+        </div>
+        <div id="di-msg" class="note" style="margin-top:8px"></div>
+        <div id="di-res" style="margin-top:8px"></div>
+      </div>
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+          <p class="sectlabel" style="margin:0">🤖 Robôs de leitura do seu escritório</p>
+          <button class="btn sm ghost" onclick="renderRobosLeitura()">↻ atualizar</button>
+        </div>
+        <p class="note" style="margin:6px 0 10px">Rodam sozinhos no servidor, com o computador desligado. Aqui você vê a última rodada <b>do seu escritório</b> e pode mandar rodar na hora.</p>
+        <div id="rl-body"><div class="note">Carregando…</div></div>
+      </div>
+    </section>
 <section id="s-sugestoes" class="hidden">
   <div class="card">
     <h3 style="margin-top:0">💡 Sugestões e melhorias</h3>
@@ -1320,6 +1361,9 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
         <div><label>Usuário (e-mail completo)</label><input id="me-smtp-usuario" placeholder="contato@seuescritorio.com.br"></div>
         <div><label>Senha</label><input id="me-smtp-senha" type="password" placeholder="deixe em branco para manter a atual"></div>
         <div style="grid-column:1/-1"><label>Nome que aparece como remetente</label><input id="me-smtp-nome" placeholder="Seu Escritório — Avisos"></div>
+        <div><label>Servidor de leitura — IMAP <span class="note" style="display:inline">(opcional)</span></label><input id="me-imap-host" placeholder="deixe vazio: usamos o mesmo servidor com imap. no lugar de smtp."></div>
+        <div><label>Porta do IMAP</label><input id="me-imap-porta" placeholder="993"></div>
+        <div style="grid-column:1/-1"><p class="note" style="margin:0">Com a conta cadastrada e testada, o sistema também <b>lê</b> a sua caixa e leva cada resposta de vara ou de cliente para o histórico do processo certo. O que não casar com nenhum processo fica na caixa, para classificar à mão.</p></div>
       </div>
       <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
         <button type="button" class="btn sm" onclick="salvarEmailEscritorio()">Salvar conta</button>
@@ -1551,6 +1595,8 @@ async function abrirMeuEscritorio(){
     document.getElementById('me-smtp-porta').value=ec.porta||'';
     document.getElementById('me-smtp-usuario').value=ec.usuario||'';
     document.getElementById('me-smtp-nome').value=ec.remetente_nome||'';
+    document.getElementById('me-imap-host').value=ec.imap_host||'';
+    document.getElementById('me-imap-porta').value=ec.imap_porta||'';
     document.getElementById('me-smtp-senha').value='';
     var est=document.getElementById('me-smtp-estado');
     est.innerHTML = ec.canal_liberado
@@ -1586,7 +1632,9 @@ async function salvarEmailEscritorio(){
       porta:document.getElementById('me-smtp-porta').value.trim(),
       usuario:document.getElementById('me-smtp-usuario').value.trim(),
       senha:document.getElementById('me-smtp-senha').value,
-      remetente_nome:document.getElementById('me-smtp-nome').value.trim()});
+      remetente_nome:document.getElementById('me-smtp-nome').value.trim(),
+      imap_host:document.getElementById('me-imap-host').value.trim(),
+      imap_porta:document.getElementById('me-imap-porta').value.trim()});
     document.getElementById('me-smtp-senha').value='';
     est.innerHTML='<span style="color:#8a6d00;font-weight:700">Conta salva. O envio continua bloqueado até o teste passar.</span>';
   }catch(e){ est.textContent='Não consegui salvar: '+(e&&e.message||e); }
@@ -1675,6 +1723,7 @@ function aplicarPerfilDaTela(){
       var lnkS=document.querySelector('#nav a[data-s="sugestoes"]');
       if(lnkS) lnkS.innerHTML='<span class="ic">🧩</span> Solicitar funcionalidades';
     }catch(eL){}
+    try{ document.querySelectorAll('.inq-only').forEach(function(el){ el.style.display=''; }); }catch(eIQ){}
     var nome=((e.marca&&e.marca.sistema)||e.nome||'Gestão');
     var bn=document.querySelector('.brand-neutral'); if(bn) bn.textContent=nome;
     try{ document.title=nome; }catch(eT){}
@@ -12224,11 +12273,11 @@ function go(s){
   /* saiu da ficha: fecha a visita e grava o tempo */
   try{ if(s!=='proc-det' && typeof _visEncerrar==='function') _visEncerrar(); }catch(eVg){}
   var showId=(s==='contatos')?'crm':s;
-  ["painel","triagem","agenda","processos","proc-det","crm","financeiro","etiquetas","procedimentos","diligencias","relatorio","publicacoes","encerrados","inove","james","contratacao","cadastros","fases","sugestoes","lote","produtividade","monitoramento","robos","movimentar","emails","chats"].forEach(function(id){var e=document.getElementById("s-"+id);if(e)e.classList.add("hidden")});
+  ["painel","triagem","agenda","processos","proc-det","crm","financeiro","etiquetas","procedimentos","diligencias","relatorio","publicacoes","encerrados","inove","james","contratacao","cadastros","fases","sugestoes","lote","produtividade","monitoramento","robos","diarios","movimentar","emails","chats"].forEach(function(id){var e=document.getElementById("s-"+id);if(e)e.classList.add("hidden")});
   var sec=document.getElementById("s-"+showId); if(sec) sec.classList.remove("hidden");
   document.querySelectorAll("#nav a").forEach(function(a){a.classList.remove("active")});
   var link=document.querySelector('#nav a[data-s="'+s+'"]');if(link)link.classList.add("active");
-  var t={painel:"Painel",triagem:"Publicações",agenda:"Agenda — Kanban",processos:"Processos",crm:"Comercial",financeiro:"Financeiro — cobranças e recebimentos",contatos:"Contatos",procedimentos:"Procedimentos",etiquetas:"Etiquetas","proc-det":"Processo",diligencias:"Diligências",movimentar:"Movimentar — fila do Estagiário Virtual",emails:"E-mails — respostas recebidas",chats:"Chats — clientes e equipe",relatorio:"Relatório mensal para clientes",encerrados:"Processos encerrados",inove:"Processos Inove (terceiros)",james:"Processos contra James Laurence",contratacao:"Sem contrato — acompanhados sem contrato assinado",cadastros:"Cadastros — Tribunais de Justiça",inovesol:"Solicitar novas funcionalidades",fases:"Revisar fases dos processos",produtividade:"Produtividade e auditoria de logins"};
+  var t={painel:"Painel",triagem:"Publicações",agenda:"Agenda — Kanban",processos:"Processos",crm:"Comercial",financeiro:"Financeiro — cobranças e recebimentos",contatos:"Contatos",procedimentos:"Procedimentos",etiquetas:"Etiquetas","proc-det":"Processo",diligencias:"Diligências",movimentar:"Movimentar — fila do Estagiário Virtual",emails:"E-mails — respostas recebidas",chats:"Chats — clientes e equipe",relatorio:"Relatório mensal para clientes",encerrados:"Processos encerrados",inove:"Processos Inove (terceiros)",james:"Processos contra James Laurence",contratacao:"Sem contrato — acompanhados sem contrato assinado",cadastros:"Cadastros — Tribunais de Justiça",inovesol:"Solicitar novas funcionalidades",fases:"Revisar fases dos processos",produtividade:"Produtividade e auditoria de logins",diarios:"Diários e robôs de leitura"};
   /* sub-pastas de Processos (Inove/Encerrados/James/lotes personalizados): só
      aparecem dentro da área de Processos (inclusive ao abrir um lote específico) */
   try{
@@ -12260,6 +12309,7 @@ function go(s){
   if(s==="produtividade" && typeof renderProdutividade==='function')renderProdutividade();
   if(s==="monitoramento" && typeof renderMonitoramento==='function')renderMonitoramento();
   if(s==="robos" && typeof renderRobos==='function')renderRobos();
+  if(s==="diarios"){ try{ renderRobosLeitura(); _diAlvo(); }catch(e){} }
   if(s==="movimentar" && typeof renderEstagiario==='function')renderEstagiario();
   if(s==="emails" && typeof renderEmails==='function')renderEmails();
   if(s==="chats" && typeof waCarregar==='function')waCarregar(true);
@@ -16910,6 +16960,133 @@ function abrirAssinaturasDentro(query){ abrirModuloDentro('assinaturas','Assinat
    fica dentro do sistema pelo mesmo motivo das assinaturas — e porque é o
    primeiro dia do escritório aqui: mandar para fora seria mandar embora. */
 function abrirMigracao(){ abrirModuloDentro('migracao','Migrar acervo de outro sistema','/migracao',''); }
+/* ===== Diários e robôs de leitura — tela do escritório cliente =============
+   O robô do diário já roda sozinho. O que faltava era o outro lado: procurar
+   AGORA (mais para trás, por nome de parte, por processo ainda não cadastrado)
+   e enxergar se os robôs que leem para ESTE escritório estão trabalhando.
+   Nada do que a busca traz entra no acervo sozinho: o diário devolve homônimo e
+   processo de terceiro, e isso sujaria fichas alheias. O advogado marca. ===== */
+var _DI_ITENS=[];
+function _diAlvo(){
+  var a=(document.getElementById('di-alvo')||{}).value||'oab';
+  var cn=document.getElementById('di-c-num'), cu=document.getElementById('di-c-uf'), cno=document.getElementById('di-c-nome');
+  if(!cn) return;
+  cn.style.display=(a==='oab1'||a==='processo')?'':'none';
+  cu.style.display=(a==='oab1')?'':'none';
+  cno.style.display=(a==='nome')?'':'none';
+  var l=document.getElementById('di-l-num'), i=document.getElementById('di-num');
+  if(a==='oab1'){ l.textContent='Número da OAB'; i.placeholder='16593'; }
+  else if(a==='processo'){ l.textContent='Número do processo'; i.placeholder='0801234-55.2024.8.15.0001'; }
+}
+async function buscarDiarios(){
+  var msg=document.getElementById('di-msg'), res=document.getElementById('di-res');
+  var a=(document.getElementById('di-alvo')||{}).value||'oab';
+  var q=[];
+  if(a==='oab1'){
+    var n=(document.getElementById('di-num').value||'').replace(/\D/g,'');
+    var uf=(document.getElementById('di-uf').value||'').toUpperCase().replace(/[^A-Z]/g,'');
+    if(!n||uf.length!==2){ msg.textContent='Informe o número da OAB e a UF.'; return; }
+    q.push('alvo=oab','numero='+n,'uf='+uf);
+  } else if(a==='processo'){
+    q.push('alvo=processo','numero='+encodeURIComponent(document.getElementById('di-num').value||''));
+  } else if(a==='nome'){
+    q.push('alvo=nome','nome='+encodeURIComponent(document.getElementById('di-nome').value||''));
+  } else q.push('alvo=oab');
+  q.push('dias='+((document.getElementById('di-dias')||{}).value||'15'));
+
+  msg.textContent='Consultando o Diário de Justiça… isso pode levar alguns segundos.';
+  res.innerHTML='';
+  try{
+    var tok=await _diToken();
+    var r=await fetch('/api/diarios?'+q.join('&'),{headers:{Authorization:'Bearer '+tok},cache:'no-store'});
+    var d=await r.json();
+    if(!r.ok||d.erro){ msg.innerHTML='<span style="color:#b5342b">'+esc(d.erro||'Não consegui buscar.')+'</span>'; return; }
+    _DI_ITENS=d.itens||[];
+    msg.innerHTML=d.alerta
+      ? '<span style="color:#b5342b">'+esc(d.alerta)+'</span>'
+      : (d.total+' publicação(ões) em '+esc(d.busca)+', nos últimos '+d.dias+' dias — '+d.cadastrados+' em processo já cadastrado aqui.'
+         +(d.falhas&&d.falhas.length?(' <span style="color:#8a6d00">Parte das consultas falhou: '+esc(d.falhas.join(' · '))+'</span>'):''));
+    if(!_DI_ITENS.length){ res.innerHTML='<div class="note">Nada encontrado nesse período.</div>'; return; }
+    res.innerHTML=
+      '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px">'
+      +'<button class="btn sm ghost" onclick="_diMarcar(true)">marcar os cadastrados</button>'
+      +'<button class="btn sm ghost" onclick="_diMarcar(false)">desmarcar tudo</button>'
+      +'<button class="btn sm" style="margin-left:auto" onclick="levarDiarios()">Levar os marcados para as fichas</button></div>'
+      +'<div style="max-height:52vh;overflow:auto;border:1px solid var(--line);border-radius:10px">'
+      +_DI_ITENS.map(function(it,i){
+        return '<div style="padding:9px 11px;border-bottom:1px solid var(--line);display:flex;gap:9px;align-items:flex-start">'
+          +'<input type="checkbox" class="di-ck" data-i="'+i+'"'+(it.meu?' checked':'')+' style="margin-top:3px">'
+          +'<div style="min-width:0;flex:1">'
+          +'<div style="font-size:12px"><b>'+esc(it.numero||'(sem número)')+'</b>'
+          +(it.meu?' <span class="chip2" style="background:#e8f4ee;color:#0F6E56;font-size:10px">já é seu</span>':' <span class="chip2" style="background:#f3f5f8;color:#697180;font-size:10px">não cadastrado aqui</span>')
+          +' <span class="note" style="margin:0">'+esc([it.data,it.tribunal,it.orgao].filter(Boolean).join(' · '))+'</span></div>'
+          +'<div class="note" style="margin:2px 0 0;max-height:52px;overflow:auto;white-space:pre-wrap">'+esc(String(it.texto||'').slice(0,600))+'</div>'
+          +'</div></div>';
+      }).join('')+'</div>';
+  }catch(e){ msg.innerHTML='<span style="color:#b5342b">'+esc(String(e&&e.message||e))+'</span>'; }
+}
+function _diMarcar(soMeus){
+  document.querySelectorAll('.di-ck').forEach(function(c){
+    var it=_DI_ITENS[parseInt(c.getAttribute('data-i'),10)]||{};
+    c.checked = soMeus ? !!it.meu : false;
+  });
+}
+async function levarDiarios(){
+  var sel=[];
+  document.querySelectorAll('.di-ck').forEach(function(c){ if(c.checked){ var it=_DI_ITENS[parseInt(c.getAttribute('data-i'),10)]; if(it) sel.push(it); } });
+  if(!sel.length){ alert('Marque ao menos uma publicação.'); return; }
+  var fora=sel.filter(function(x){return !x.meu;}).length;
+  if(fora && !confirm(sel.length+' publicação(ões) marcada(s), sendo '+fora+' de processo que NÃO está cadastrado aqui — essas não têm ficha onde entrar e serão apenas contadas. Continuar?')) return;
+  var msg=document.getElementById('di-msg');
+  msg.textContent='Levando para as fichas…';
+  try{
+    var tok=await _diToken();
+    var r=await fetch('/api/diarios',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({itens:sel})});
+    var d=await r.json();
+    if(!r.ok||d.erro){ msg.innerHTML='<span style="color:#b5342b">'+esc(d.erro||'Falhou.')+'</span>'; return; }
+    msg.innerHTML='<b style="color:#0F6E56">'+d.novos+' publicação(ões) nova(s) no histórico.</b> '
+      +d.jaTinha+' já estavam lá'+(d.semProcesso?', '+d.semProcesso+' sem processo cadastrado aqui':'')+'.';
+  }catch(e){ msg.innerHTML='<span style="color:#b5342b">'+esc(String(e&&e.message||e))+'</span>'; }
+}
+async function _diToken(){
+  if(typeof finToken==='function') return await finToken();
+  var s=await sb.auth.getSession(); return (s.data.session&&s.data.session.access_token)||'';
+}
+async function renderRobosLeitura(){
+  var el=document.getElementById('rl-body'); if(!el) return;
+  el.innerHTML='<div class="note">Carregando…</div>';
+  try{
+    var tok=await _diToken();
+    var r=await fetch('/api/robos-leitura',{headers:{Authorization:'Bearer '+tok},cache:'no-store'});
+    var d=await r.json();
+    if(!r.ok||d.erro){ el.innerHTML='<div class="note" style="color:#b5342b">'+esc(d.erro||'Falhou.')+'</div>'; return; }
+    el.innerHTML='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px">'
+      +(d.robos||[]).map(function(b){
+        var quando=b.ultima_exec?new Date(b.ultima_exec).toLocaleString('pt-BR'):'ainda não rodou';
+        var cor=b.pendencia?'#8a6d00':(b.ultimo_ok===false?'#b5342b':(b.ultimo_ok===true?'#127a53':'#697180'));
+        return '<div style="border:1px solid var(--line);border-radius:12px;padding:12px">'
+          +'<b style="color:var(--navy);font-size:13px">'+esc(b.rotulo)+'</b>'
+          +'<div class="note" style="margin:3px 0 6px">'+esc(b.faz)+'</div>'
+          +(b.pendencia
+             ? '<div style="font-size:12px;color:#8a6d00;background:#fff8e8;border-radius:8px;padding:7px 9px">'+esc(b.pendencia)+'</div>'
+             : '<div style="font-size:12px;color:'+cor+'">Última rodada: '+esc(quando)+(b.ultimo_ok===false?' · falhou':'')+'</div>'
+               +(b.ultimo_resultado?'<div class="note" style="font-size:10.5px;margin-top:3px;max-height:46px;overflow:auto">'+esc(b.ultimo_resultado)+'</div>':'')
+               +'<div style="margin-top:8px"><button class="btn sm" style="font-size:11px" onclick="rodarRoboLeitura(\''+b.nome+'\',this)">▶ rodar agora</button></div>')
+          +'</div>';
+      }).join('')+'</div>';
+  }catch(e){ el.innerHTML='<div class="note" style="color:#b5342b">'+esc(String(e&&e.message||e))+'</div>'; }
+}
+async function rodarRoboLeitura(nome,btn){
+  var txt=btn.textContent; btn.disabled=true; btn.textContent='rodando…';
+  try{
+    var tok=await _diToken();
+    var r=await fetch('/api/robos-leitura',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({nome:nome})});
+    var d=await r.json();
+    if(!r.ok||d.erro) alert(d.erro||'Não consegui rodar.');
+  }catch(e){ alert(String(e&&e.message||e)); }
+  btn.disabled=false; btn.textContent=txt;
+  renderRobosLeitura();
+}
 /* ===== Módulo Assinaturas (/assinatura) — assinador de documentos do escritório ===== */
 /* Abre o assinador já com o cliente do processo no contexto (nome + nº do processo). */
 function abrirAssinatura(num){

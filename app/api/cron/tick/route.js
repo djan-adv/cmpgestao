@@ -62,7 +62,7 @@ const JOBS = [
   // De 5 em 5 min para o e-mail sair perto do minuto marcado, não meia hora depois.
   { nome: 'email_fila', rotulo: 'E-mails — fila com hora marcada', url: '/api/cron/email-fila', cada_min: 5 },
   // caixa de entrada: traz as respostas das varas e dos clientes para o histórico
-  { nome: 'email_receber', rotulo: 'E-mails — ler respostas (IMAP)', url: '/api/email/receber', cada_min: 10, timeout_ms: 115000 },
+  { nome: 'email_receber', rotulo: 'E-mails — ler respostas (IMAP)', url: '/api/email/receber', cada_min: 10, timeout_ms: 280000 },  // agora é uma caixa por escritório
   { nome: 'minuta_triagem', rotulo: 'Minutas — triar intimações', url: '/api/robo/minutas?fase=triagem', cada_min: 30 },
   // dossiê (.zip) DESLIGADO em 15/08/2026 a pedido do dono: ninguém baixava os zips.
   // A triagem continua lendo a intimação, sugerindo a peça e lançando o prazo, e a

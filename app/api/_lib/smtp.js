@@ -45,3 +45,35 @@ export async function contaDeEnvio(esc, ehRaiz) {
   }
   return { host: c.host, port: c.porta || 465, user: c.usuario, pass: c.senha, fromNome: c.remetente_nome || '' }
 }
+
+// A conta de LEITURA (IMAP) do escritório.
+//
+// Ler a caixa é o outro lado do envio, e faltava: o robô lia sempre a caixa do
+// dono do sistema. Num sistema vendido, isso é o escritório cliente nunca
+// receber no histórico a resposta da vara dele — e, pior, um e-mail da caixa do
+// fornecedor ter chance de encostar numa ficha que não é dele.
+//
+// O host de IMAP quase sempre é o do SMTP com "smtp." trocado por "imap.", e é
+// isso que assumimos quando o escritório não informa nada. Quem tem provedor
+// fora do padrão preenche o campo no cadastro.
+export function imapDoSmtp(host) {
+  return String(host || '').replace(/^smtp\./i, 'imap.')
+}
+
+export async function contaDeLeitura(esc, ehRaiz) {
+  if (ehRaiz) {
+    const host = process.env.IMAP_HOST || imapDoSmtp(process.env.SMTP_HOST || '') || 'imap.hostinger.com'
+    const port = parseInt(process.env.IMAP_PORT || '993', 10)
+    const user = process.env.SMTP_USER, pass = process.env.SMTP_PASS
+    if (!host || !user || !pass) return { erro: 'IMAP não configurado no servidor (SMTP_USER/SMTP_PASS).' }
+    return { host, port, user, pass }
+  }
+  const envio = await contaDeEnvio(esc, false)
+  if (envio.erro) return envio
+  const { data } = await admin().from('escritorio_smtp')
+    .select('imap_host,imap_porta').eq('escritorio_id', esc).maybeSingle()
+  const host = (data && data.imap_host) || imapDoSmtp(envio.host)
+  const port = (data && data.imap_porta) || 993
+  if (!host) return { erro: 'Sem servidor de leitura (IMAP) para este escritório.' }
+  return { host, port, user: envio.user, pass: envio.pass }
+}

@@ -56,7 +56,7 @@ export default function Migracao() {
 
   useEffect(() => {
     try { setEmbutido(new URLSearchParams(window.location.search).get('embed') === '1') } catch (e) {}
-    fetch('/api/inquilino').then(r => r.json()).then(d => setMarca(d && d.ok ? d : null)).catch(() => {})
+    fetch('/api/inquilino', { cache: 'no-store' }).then(r => r.json()).then(d => setMarca(d && d.ok ? d : null)).catch(() => {})
     carregar()
   }, [carregar])
 

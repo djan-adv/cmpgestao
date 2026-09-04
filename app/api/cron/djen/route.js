@@ -6,6 +6,7 @@ export const maxDuration = 60
 
 import { createClient } from '@supabase/supabase-js'
 import { escritoriosAtivos } from '../../_lib/inquilino.js'
+import { anotarRobo } from '../../_lib/robolog.js'
 
 // As OAB saíram daqui para o cadastro do escritório (escritorios.oabs). Ficar
 // no código significava, com um cliente dentro, o robô dele procurar as
@@ -26,7 +27,7 @@ const UA = 'Mozilla/5.0 (compatible; CMPGestao/1.0)'
 // Toda falha de rede/HTTP é REGISTRADA, nunca engolida: sem isso, "a API do CNJ
 // está fora" e "hoje não houve publicação" produziam exatamente o mesmo relatório
 // (publicacoes: 0), e o robô parecia saudável enquanto não capturava nada.
-async function consultaDjen(numero, uf, dias, falhas) {
+export async function consultaDjen(numero, uf, dias, falhas) {
   const fim = new Date(), ini = new Date(Date.now() - dias * 86400000)
   let itens = [], pagina = 1
   while (pagina <= 10) {
@@ -49,7 +50,7 @@ async function consultaDjen(numero, uf, dias, falhas) {
 
 // Consulta o DJEN por NÚMERO do processo (usado nos processos da Inove, onde cada
 // processo tem um advogado diferente — não dá para buscar por OAB).
-async function consultaDjenNumero(numeroDigits, dias, falhas) {
+export async function consultaDjenNumero(numeroDigits, dias, falhas) {
   const fim = new Date(), ini = new Date(Date.now() - dias * 86400000)
   const url = `${DJEN}?numeroProcesso=${numeroDigits}&dataDisponibilizacaoInicio=${iso(ini)}&dataDisponibilizacaoFim=${iso(fim)}&meio=D&pagina=1&itensPorPagina=100`
   try {
@@ -86,7 +87,10 @@ export async function GET(request) {
   const sb = createClient(url, svcKey, { auth: { persistSession: false } })
 
   // Uma varredura por escritório: cada um procura as PRÓPRIAS inscrições.
-  const escs = await escritoriosAtivos()
+  let escs = await escritoriosAtivos()
+  // o painel de robôs do escritório roda o robô DELE, não a rodada de todos
+  const soEste = searchParams.get('esc')
+  if (soEste) escs = escs.filter(e => e.id === soEste)
   const relPorEscritorio = []
   let totalPubs = 0, totalInseridos = 0, totalJaTinha = 0, totalSemProcesso = 0, totalErros = 0
   const falhas = []
@@ -135,6 +139,11 @@ export async function GET(request) {
       else if (res === 'existe') jaTinha++
       else semProcesso++
     }
+
+    await anotarRobo(esc.id, 'djen', true,
+      pubs.length + ' publicação(ões) lida(s) nas OABs do escritório; ' + inseridos + ' nova(s) no histórico'
+      + (semProcesso ? (', ' + semProcesso + ' sem processo cadastrado aqui') : '')
+      + (oabs.length ? '' : ' — nenhuma OAB cadastrada, o robô não tem o que procurar'))
 
     totalPubs += pubs.length; totalInseridos += inseridos; totalJaTinha += jaTinha
     totalSemProcesso += semProcesso; totalErros += erros

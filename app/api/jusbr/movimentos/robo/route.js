@@ -20,6 +20,7 @@
 import { jusbrAdmin, getFreshToken } from '../../lib.js'
 import { buscarProcesso, movimentosDoProcesso, aplicarMeta, gravarMovimentos } from '../core.js'
 import { escritoriosAtivos } from '../../../_lib/inquilino.js'
+import { anotarRobo } from '../../../_lib/robolog.js'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -173,13 +174,21 @@ export async function GET(request) {
   // Só escritórios com sessão própria do jus.br entram na fila: sem
   // certificado sincronizado não há o que consultar, e tentar seria usar a
   // credencial de outro.
-  const escs = await escritoriosAtivos('jusbr')
+  let escs = await escritoriosAtivos('jusbr')
+  // "rodar agora" do painel do escritório roda só o dele: sem este filtro, um
+  // clique do cliente dispararia a varredura de todos, o do fornecedor incluído.
+  const soEste = searchParams.get('esc')
+  if (soEste) escs = escs.filter(e => e.id === soEste)
   if (!escs.length) return Response.json({ ok: true, nada: true, motivo: 'nenhum escritório com sessão do jus.br' })
 
   const porEscritorio = []
   for (const esc of escs) {
-    try { porEscritorio.push(await rodarPara(esc, opcoes)) }
-    catch (e) { porEscritorio.push({ ok: false, escritorio: esc.nome, erro: String((e && e.message) || e) }) }
+    let r
+    try { r = await rodarPara(esc, opcoes) }
+    catch (e) { r = { ok: false, escritorio: esc.nome, erro: String((e && e.message) || e) } }
+    porEscritorio.push(r)
+    await anotarRobo(esc.id, 'jusbr_movimentos', r.ok !== false,
+      r.erro || ((r.novos || 0) + ' movimento(s) novo(s) em ' + (r.processos || 0) + ' processo(s)'))
   }
   // O relatório soma tudo, mas mantém a linha de cada escritório: um cliente
   // com a sessão vencida não pode fazer o robô inteiro parecer quebrado.

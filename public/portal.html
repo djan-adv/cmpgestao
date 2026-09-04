@@ -377,7 +377,7 @@
 var NOME_ESCRITORIO='Seu escritório';
 (function(){
   try{
-    fetch('/api/inquilino').then(function(r){return r.json();}).then(function(d){
+    fetch('/api/inquilino',{cache:'no-store'}).then(function(r){return r.json();}).then(function(d){
       if(!d||!d.ok||!d.conhecido) return;
       NOME_ESCRITORIO=(d.marca&&d.marca.sistema)||d.nome||NOME_ESCRITORIO;
       try{ document.title='Portal do cliente · '+NOME_ESCRITORIO; }catch(e){}

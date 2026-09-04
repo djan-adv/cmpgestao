@@ -124,6 +124,17 @@ function outorgadoDe(dados) {
   return texto
 }
 
+// O que exatamente impede a procuração de ser montada. Dizer só "cadastro
+// incompleto" fazia o escritório preencher tudo de novo sem descobrir o que
+// faltava — e, quando não faltava nada, sem descobrir que o problema era outro.
+function faltamNoCadastro(dados) {
+  if (!dados) return ['o cadastro inteiro (nada foi preenchido ainda)']
+  const f = []
+  if (!dados.socio_nome) f.push('o nome do advogado')
+  if (!dados.endereco) f.push('o endereço do escritório')
+  return f.length ? f : ['algum dado do escritório']
+}
+
 function tituloNome(s) { const min = new Set(['da', 'de', 'do', 'das', 'dos', 'e', 'di', 'du', 'del', 'van', 'von', 'y']); return (s || '').toLowerCase().trim().split(/\s+/).map((w, i) => (i > 0 && min.has(w)) ? w : (w.charAt(0).toUpperCase() + w.slice(1))).join(' ') }
 function cpfValido(cpf) { cpf = (cpf || '').replace(/\D/g, ''); if (cpf.length !== 11 || /^(\d)\1{10}$/.test(cpf)) return false; let s = 0; for (let i = 0; i < 9; i++) s += +cpf[i] * (10 - i); let d1 = (s * 10) % 11; if (d1 === 10) d1 = 0; if (d1 !== +cpf[9]) return false; s = 0; for (let i = 0; i < 10; i++) s += +cpf[i] * (11 - i); let d2 = (s * 10) % 11; if (d2 === 10) d2 = 0; return d2 === +cpf[10] }
 const mCPF = v => v.replace(/\D/g, '').slice(0, 11).replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d{1,2})$/, '$1-$2')
@@ -173,7 +184,7 @@ export default function AssinarProcuracao() {
   const desenhando = useRef(false)
 
   useEffect(() => {
-    fetch('/api/inquilino').then(r => r.json()).then(d => setCasa(d && d.ok ? d : { conhecido: false })).catch(() => setCasa({ conhecido: false }))
+    fetch('/api/inquilino', { cache: 'no-store' }).then(r => r.json()).then(d => setCasa(d && d.ok ? d : { conhecido: false })).catch(() => setCasa({ conhecido: false }))
   }, [])
 
   useEffect(() => {
@@ -481,9 +492,9 @@ export default function AssinarProcuracao() {
               {(!ehRaizCasa && !outorgado)
                 ? <div style={{ padding: 28, color: '#8a3b2b', lineHeight: 1.6 }}>
                     <b>Cadastro do escritório incompleto.</b><br />
-                    A procuração precisa do nome do advogado, da OAB e do endereço do escritório para
-                    ser gerada. Peça ao responsável para preencher o cadastro do escritório no sistema —
-                    até lá, este documento não é montado.
+                    Falta {faltamNoCadastro(casa && casa.dados).join(' e ')} no cadastro do escritório.
+                    Peça ao responsável para preencher (engrenagem ⚙ no sistema) e recarregue esta
+                    página — até lá, este documento não é montado.
                   </div>
                 : <div className="asn-doc-inner" dangerouslySetInnerHTML={{ __html: docHTML }} />}
               {assinado && (

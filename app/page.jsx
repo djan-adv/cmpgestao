@@ -45,7 +45,7 @@ export default function Login() {
 
   useEffect(() => {
     let vivo = true
-    fetch('/api/inquilino').then(r => r.json()).then(d => {
+    fetch('/api/inquilino', { cache: 'no-store' }).then(r => r.json()).then(d => {
       if (!vivo) return
       const m = d && d.ok ? d : { conhecido: false }
       setMarca(m)

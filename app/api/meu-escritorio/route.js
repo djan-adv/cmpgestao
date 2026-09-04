@@ -64,7 +64,7 @@ export async function GET(request) {
     // conta de envio: nunca devolve a senha, só se existe e se o teste passou
     email_conta: await (async () => {
       const { data: sm } = await sb.from('escritorio_smtp')
-        .select('host,porta,usuario,remetente_nome,testado_ok,testado_em,testado_erro')
+        .select('host,porta,usuario,remetente_nome,imap_host,imap_porta,testado_ok,testado_em,testado_erro')
         .eq('escritorio_id', esc).maybeSingle()
       const mod = data.modulos || {}
       return {
@@ -114,6 +114,12 @@ export async function POST(request) {
         p_nome: String(body.remetente_nome || '').slice(0, 80), p_key: key,
       })
       if (error) return Response.json({ erro: error.message }, { status: 500 })
+      // servidor de LEITURA: host e porta não são segredo, então vão direto —
+      // a senha continua sendo a mesma da conta, cifrada pela smtp_set acima
+      await sb.from('escritorio_smtp').update({
+        imap_host: String(body.imap_host || '').trim() || null,
+        imap_porta: parseInt(body.imap_porta, 10) || null,
+      }).eq('escritorio_id', esc)
       // guardar de novo derruba o canal até passar no teste outra vez: uma
       // troca de servidor com senha errada não pode continuar "liberada"
       const { data: e0 } = await sb.from('escritorios').select('modulos,raiz').eq('id', esc).maybeSingle()
