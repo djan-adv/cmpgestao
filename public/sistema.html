@@ -874,7 +874,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
         <button class="btn sm" onclick="relMes(1)">▶</button>
       </span>
     </div>
-    <p class="note" style="margin-top:6px">Tudo o que o servidor enviou no mês (atualização semanal automática e envios pelo contato@), por cliente/processo/destinatário. Quando o e-mail tem rastreio, mostra se o destinatário abriu.</p>
+    <p class="note" style="margin-top:6px">Tudo o que o servidor enviou no mês (atualização semanal automática e envios pela conta do escritório), por cliente/processo/destinatário. Quando o e-mail tem rastreio, mostra se o destinatário abriu.</p>
     <div id="rel-resumo" style="display:flex;gap:10px;flex-wrap:wrap;margin:10px 0"></div>
     <div id="rel-lista"><div class="note">Carregando…</div></div>
   </div>
@@ -2767,7 +2767,7 @@ async function cobrarDiligencia(num){
   var c=(typeof contatoDoProcesso==='function')?contatoDoProcesso(p):null;
   if(!c||!c.email){ alert('Sem e-mail da vara cadastrado para este processo.\nCadastre em "Balcão da vara" na ficha do processo e tente de novo.'); return; }
   var msg=bvMsg(num,'geral');
-  if(!confirm('Reenviar a cobrança de andamento para a vara ('+c.email+'), pelo contato@?')) return;
+  if(!confirm('Reenviar a cobrança de andamento para a vara ('+c.email+'), pela conta de e-mail do escritório?')) return;
   try{
     /* respeita o horário de envio da vara (08h comum/trabalhista, 10h federal) */
     var rv=await enviarEmailVara({para:c.email,assunto:'Processo nº '+num+' — reiteração de pedido de andamento'+(_casaNome()?(' — '+_casaNome()):''),corpo:msg,numero:num});
@@ -18116,11 +18116,11 @@ async function desativarAcompanhamento(){
   <div id="atz-anexos-box" style="margin-top:8px;font-size:13px">
     <label style="cursor:pointer;font-weight:600;color:#22405f">📎 Anexar arquivo(s) ao e-mail (opcional — ex.: a sentença, um comprovante)</label><br>
     <input type="file" id="atz-anexos" multiple style="margin-top:4px">
-    <div class="note" id="atz-anexos-info" style="font-size:11px;margin-top:2px">PDF, imagem ou Word — até 9 MB por arquivo (só no envio pelo "Enviar agora (contato@)").</div>
+    <div class="note" id="atz-anexos-info" style="font-size:11px;margin-top:2px">PDF, imagem ou Word — até 9 MB por arquivo (só no envio pelo "Enviar agora").</div>
   </div>
   <div id="atz-hvara" style="display:none;margin-top:10px;background:#f4f8fb;border:1px solid #cfe0ee;border-radius:10px;padding:12px 14px"></div>
   <div id="atz-envio-bar" style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
-    <button class="btn" style="background:#0F6E56;color:#fff" onclick="enviarAgoraAtualizacao()" title="Envia direto pela conta de e-mail do escritório (⚙ → Conta de e-mail, depois de passar no teste)">Enviar agora (contato@)</button>
+    <button class="btn" style="background:#0F6E56;color:#fff" onclick="enviarAgoraAtualizacao()" title="Envia direto pela conta de e-mail do escritório (⚙ → Conta de e-mail, depois de passar no teste)">Enviar agora (conta do escritório)</button>
     <button class="btn ghost" onclick="abrirNoGmail()">Abrir no Gmail</button>
     <button class="btn ghost" onclick="copiarAtualizacao()">Copiar texto</button>
     <button class="btn ghost" onclick="registrarEnvioAtualizacao()">Registrar envio no histórico</button>
@@ -18955,7 +18955,7 @@ async function enviarAgoraAtualizacao(){
   }catch(e){}
   var anexos;
   try{ anexos=await _atzLerAnexos(); }catch(e){ return; } /* arquivo grande demais já avisou — não segue */
-  if(!confirm('Enviar agora para '+email+(ccCli?('\ncom CÓPIA para o cliente: '+ccCli):'')+(anexos.length?('\ncom '+anexos.length+' anexo(s)'):'')+'\npelo contato@cmpadvogados.com.br?')) return;
+  if(!confirm('Enviar agora para '+email+(ccCli?('\ncom CÓPIA para o cliente: '+ccCli):'')+(anexos.length?('\ncom '+anexos.length+' anexo(s)'):'')+'\npela conta de e-mail do escritório'+(_casaEmail()?(' ('+_casaEmail()+')'):'')+'?')) return;
   try{
     var tok=await docToken();
     var numero=(window.__atzCtx&&window.__atzCtx.p&&window.__atzCtx.p.numero)||'';
@@ -19044,7 +19044,7 @@ async function alarmeClienteVara(p, andamentoId, oQue){
     if(!escId) return;
     var uid=null; try{ var s=await sb.auth.getSession(); uid=s&&s.data&&s.data.session&&s.data.session.user&&s.data.session.user.id; }catch(e3){}
     var ins=await sb.from('portal_chat').insert({escritorio_id:escId,processo_id:p._id,autor_tipo:'escritorio',autor_id:uid,
-      autor_nome:(typeof _quemAlterou==='function'?_quemAlterou():'CMP Advogados')||'CMP Advogados',
+      autor_nome:(typeof _quemAlterou==='function'?_quemAlterou():'')||_casaNome()||'Escritório',
       texto:texto,lida_escritorio:true,lida_cliente:false});
     if(ins&&ins.error) return;
     try{
@@ -19200,7 +19200,7 @@ function bvSend(canal,numEnc,el){
   else if(canal==='em'&&c.email){
     /* mesmo formulário do e-mail de cliente, com destinatário da vara e texto pronto.
        A diligência é registrada no envio/registro (não na abertura). */
-    abrirEmailVara(p, c.email, 'Processo nº '+num+' — solicitação de andamento — CMP Advogados', msg);
+    abrirEmailVara(p, c.email, 'Processo nº '+num+' — solicitação de andamento'+(_casaNome()?(' — '+_casaNome()):''), msg);
     return;
   }
   else if(canal==='vid'&&c.balcao_link){ window.open(c.balcao_link,'_blank'); enviado=true; canalLabel='sala_virtual'; }
