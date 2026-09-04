@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
+import Vendas from './_vendas/Vendas'
 
 // Porta única do sistema. O endereço decide a marca: quem abre pelo domínio do
 // próprio escritório vê o nome dele, não o de quem vendeu o sistema. Endereço
@@ -17,6 +18,12 @@ export default function Login() {
   const [trocar, setTrocar] = useState(false)   // senha provisória: precisa trocar antes de entrar
   const [nova, setNova] = useState('')
   const [nova2, setNova2] = useState('')
+  // Na porta comum, a primeira coisa que a pessoa vê é o que o sistema faz —
+  // não um formulário de login para uma conta que ela ainda não tem. No
+  // endereço de um escritório que já contratou, isso nunca aparece: quem já
+  // paga entra direto, e o cliente DELE não tem por que topar com a oferta de
+  // um sistema que não é assunto dele.
+  const [mostrarLogin, setMostrarLogin] = useState(false)
 
   // Depois do login: a pessoa é DESTE endereço? Precisa trocar a senha?
   const depoisDoLogin = useCallback(async (marcaAtual) => {
@@ -45,6 +52,11 @@ export default function Login() {
 
   useEffect(() => {
     let vivo = true
+    // Quem já entrou por esta porta antes não passa mais pela apresentação: o
+    // escritório sem endereço próprio usa a porta comum todo dia, e obrigá-lo a
+    // clicar em "Entrar" toda manhã seria cobrar dele o custo de uma vitrine
+    // que já cumpriu o papel. O link para a apresentação continua na tela.
+    try { if (localStorage.getItem('ja_entrou') === '1') setMostrarLogin(true) } catch (e) {}
     fetch('/api/inquilino', { cache: 'no-store' }).then(r => r.json()).then(d => {
       if (!vivo) return
       const m = d && d.ok ? d : { conhecido: false }
@@ -64,6 +76,7 @@ export default function Login() {
     const { error } = await supabase.auth.signInWithPassword({ email, password: senha })
     setCarregando(false)
     if (error) { setErro('E-mail ou senha inválidos.'); return }
+    try { localStorage.setItem('ja_entrou', '1') } catch (e) {}
     await depoisDoLogin(marca)
   }
 
@@ -91,6 +104,16 @@ export default function Login() {
   const nomeEscritorio = (marca && marca.conhecido && marca.nome) || ''
   const logo = (marca && marca.marca && marca.marca.logo) || (ehRaiz ? '/logo_cmp_full.png' : null)
   const cor = (marca && marca.marca && marca.marca.cor) || NAVY
+
+  // enquanto não sabemos de quem é o endereço, não decidimos nada: mostrar a
+  // página de vendas e trocar por login meio segundo depois seria pior do que
+  // esperar
+  if (marca === null) {
+    return <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: '#f3f5f8', color: '#697180' }}>Carregando…</div>
+  }
+  if (!marca.conhecido && !mostrarLogin && !trocar) {
+    return <Vendas aoEntrar={() => setMostrarLogin(true)} />
+  }
 
   return (
     <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: '#f3f5f8' }}>
@@ -142,6 +165,14 @@ export default function Login() {
         {!trocar && marca && marca.conhecido && (
           <div style={{ fontSize: 11.5, color: '#697180', marginTop: 14 }}>
             Cliente do escritório? Acompanhe seus processos no <a href="/portal.html" style={{ color: NAVY, fontWeight: 600 }}>Portal do Cliente</a>.
+          </div>
+        )}
+        {!trocar && marca && !marca.conhecido && (
+          <div style={{ fontSize: 11.5, color: '#697180', marginTop: 14 }}>
+            Ainda não é cliente? <button type="button" onClick={() => setMostrarLogin(false)}
+              style={{ background: 'none', border: 0, color: NAVY, fontWeight: 600, cursor: 'pointer', fontSize: 11.5, padding: 0, textDecoration: 'underline' }}>
+              Conheça o sistema
+            </button>.
           </div>
         )}
       </form>
