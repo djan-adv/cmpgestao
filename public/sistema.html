@@ -27268,5 +27268,109 @@ async function cadastrarOabUm(k,btn){
   catch(e){ msg.innerHTML='<span style="color:#b5342b">'+esc(String(e&&e.message||e))+'</span>'; btn.disabled=false; btn.textContent=t0; }
 }
 </script>
+
+<script>
+/* ===== Suporte: o robô que responde dúvida sobre o sistema =====
+   Fica no canto, acima do chat da equipe, em TODA tela. A dúvida sobre onde
+   clicar aparece no meio do trabalho, e é ali que ela precisa de resposta —
+   quem sai do sistema para procurar ajuda não volta.
+   O que sabe está em lib/manual-sistema.js (o manual do produto), e o que ele
+   NÃO sabe manda para gente de verdade em vez de inventar. */
+(function(){
+  var HIST=[], ABERTO=false, ESPERANDO=false;
+  function _tela(){
+    try{
+      var a=document.querySelector('#nav a.on'); if(a) return a.textContent.replace(/\s+/g,' ').trim().slice(0,40);
+    }catch(e){}
+    return '';
+  }
+  async function _tok(){ if(typeof finToken==='function') return await finToken(); var s=await window.__sb.auth.getSession(); return (s.data.session&&s.data.session.access_token)||''; }
+  function montar(){
+    if(document.getElementById('sup-bt')) return;
+    var b=document.createElement('button'); b.id='sup-bt';
+    b.title='Dúvida sobre o sistema? Pergunte aqui';
+    b.style.cssText='position:fixed;right:16px;bottom:52px;z-index:96;background:#2E3A4B;color:#fff;border:0;border-radius:22px;padding:9px 15px;font:600 13px inherit;box-shadow:0 3px 12px rgba(20,30,50,.22);cursor:pointer';
+    b.innerHTML='❓ Ajuda';
+    b.onclick=abrir;
+    document.body.appendChild(b);
+
+    var p=document.createElement('div'); p.id='sup-painel';
+    p.style.cssText='position:fixed;right:16px;bottom:52px;width:380px;max-width:94vw;max-height:74vh;z-index:97;display:none;flex-direction:column;background:#fff;border:1px solid var(--line);border-radius:14px;box-shadow:0 8px 28px rgba(20,30,50,.22);overflow:hidden';
+    p.innerHTML=
+      '<div style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:#2E3A4B;color:#fff">'
+        +'<b style="font-size:13.5px">❓ Ajuda do sistema</b>'
+        +'<span style="flex:1"></span>'
+        +'<button id="sup-fechar" style="background:transparent;border:0;color:#cfd6e0;font-size:16px;cursor:pointer;line-height:1">✕</button>'
+      +'</div>'
+      +'<div id="sup-msgs" style="flex:1;overflow:auto;padding:12px 14px;background:#f7f9fc;min-height:120px"></div>'
+      +'<div style="padding:10px 12px;border-top:1px solid var(--line);background:#fff">'
+        +'<div style="display:flex;gap:8px;align-items:flex-end">'
+          +'<textarea id="sup-txt" rows="2" placeholder="Ex.: como cadastro os processos pela OAB?" style="flex:1;resize:none;font:inherit;font-size:13px;padding:8px 10px;border:1px solid var(--line);border-radius:9px"></textarea>'
+          +'<button id="sup-env" class="btn sm" style="background:#0F6E56;color:#fff">enviar</button>'
+        +'</div>'
+        +'<div class="note" style="font-size:10.5px;margin-top:5px">Responde sobre o SISTEMA — não sobre o seu caso. O que ele não souber, mande para contato@djan.app.br.</div>'
+      +'</div>';
+    document.body.appendChild(p);
+    document.getElementById('sup-fechar').onclick=fechar;
+    document.getElementById('sup-env').onclick=enviar;
+    document.getElementById('sup-txt').addEventListener('keydown',function(e){
+      if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); enviar(); }
+    });
+    pintar();
+  }
+  function abrir(){
+    ABERTO=true;
+    document.getElementById('sup-bt').style.display='none';
+    document.getElementById('sup-painel').style.display='flex';
+    setTimeout(function(){ var t=document.getElementById('sup-txt'); if(t) t.focus(); },50);
+  }
+  function fechar(){
+    ABERTO=false;
+    document.getElementById('sup-painel').style.display='none';
+    document.getElementById('sup-bt').style.display='';
+  }
+  function pintar(){
+    var el=document.getElementById('sup-msgs'); if(!el) return;
+    if(!HIST.length){
+      el.innerHTML='<div class="note" style="line-height:1.6">Pergunte o que quiser sobre o sistema — onde fica um botão, como cadastrar processo pela OAB, por que um robô não rodou, como dar acesso ao app para o cliente.'
+        +'<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">'
+        +['Como cadastro processos pela OAB?','Por que o histórico está sem teor?','Como conecto o jus.br?','Como dou acesso do app ao cliente?']
+          .map(function(q){ return '<button class="btn sm ghost" style="font-size:11px" onclick="__supPergunta(\''+q.replace(/'/g,"\\'")+'\')">'+esc(q)+'</button>'; }).join('')
+        +'</div></div>';
+      return;
+    }
+    el.innerHTML=HIST.map(function(m){
+      var meu=(m.quem==='pessoa');
+      return '<div style="margin-bottom:10px;display:flex;'+(meu?'justify-content:flex-end':'')+'">'
+        +'<div style="max-width:86%;padding:8px 11px;border-radius:12px;font-size:13px;line-height:1.5;white-space:pre-wrap;'
+          +(meu?'background:#2E3A4B;color:#fff':'background:#fff;border:1px solid var(--line);color:var(--ink)')+'">'
+          +esc(m.texto)+'</div></div>';
+    }).join('')+(ESPERANDO?'<div class="note"><span class="gira">↻</span> pensando…</div>':'');
+    el.scrollTop=el.scrollHeight;
+  }
+  async function enviar(){
+    var t=document.getElementById('sup-txt'); if(!t) return;
+    var q=(t.value||'').trim(); if(!q||ESPERANDO) return;
+    t.value=''; HIST.push({quem:'pessoa',texto:q}); ESPERANDO=true; pintar();
+    try{
+      var tok=await _tok();
+      var r=await fetch('/api/suporte',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},
+        body:JSON.stringify({pergunta:q,tela:_tela(),historico:HIST.slice(-6)})});
+      var d=await r.json();
+      ESPERANDO=false;
+      if(!r.ok||d.erro) HIST.push({quem:'assistente',texto:(d.erro||('Não consegui responder (HTTP '+r.status+').'))});
+      else HIST.push({quem:'assistente',texto:d.resposta});
+    }catch(e){ ESPERANDO=false; HIST.push({quem:'assistente',texto:'Não consegui falar com o servidor agora: '+String(e&&e.message||e)}); }
+    pintar();
+  }
+  window.__supPergunta=function(q){ var t=document.getElementById('sup-txt'); if(t){ t.value=q; enviar(); } };
+  window.abrirSuporte=function(){ montar(); abrir(); };
+  /* nasce junto com o resto da tela, depois do login */
+  var iv=setInterval(function(){
+    if(!document.getElementById('app')||document.getElementById('app').classList.contains('hidden')) return;
+    clearInterval(iv); montar();
+  },800);
+})();
+</script>
 </body>
 </html>

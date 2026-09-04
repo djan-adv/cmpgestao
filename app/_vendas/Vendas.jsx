@@ -55,6 +55,7 @@ const DIA_A_DIA = [
   ['Documentos', 'Pasta por processo, com envio de arquivo ou de pasta inteira. Separado entre as suas peças e as da outra parte.'],
   ['Contatos de varas', 'E-mail, telefone e balcão virtual da vara, valendo para todos os processos dela — com o ofício ao cartório pronto para revisar e enviar.'],
   ['Produtividade da equipe', 'Ranking por pontos, meta por pessoa, tempo em cada processo e o dia hora a hora — a partir do registro do trabalho, sem vigiar tela.'],
+  ['Suporte dentro do sistema', 'Um botão de ajuda em qualquer tela responde na hora como cada função funciona, onde fica o botão e o que o robô faz. Conhece o sistema todo — não dá palpite sobre o seu caso.'],
   ['Migração do acervo', 'Traga os processos do sistema que você usa hoje por planilha. O sistema mostra o que entendeu, você corrige, confere quantos entram — e só então grava. Dá para desfazer.'],
 ]
 
