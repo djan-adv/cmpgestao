@@ -8,7 +8,7 @@ import { createClient } from '@supabase/supabase-js'
 import { estadoConvite, blocoConviteHtml, blocoConviteTexto, registrarConvite, svcOpcional } from '../portal/convite-lib.js'
 import nodemailer from 'nodemailer'
 import crypto from 'crypto'
-import { contaDeEnvio } from '../_lib/smtp.js'
+import { contaDeEnvio, contaDeLeitura } from '../_lib/smtp.js'
 import fs from 'fs'
 import path from 'path'
 
@@ -71,10 +71,15 @@ export function hashEmail(assunto, corpo) { return crypto.createHash('sha1').upd
 // Best-effort: se falhar, o envio já ocorreu — devolvemos o motivo para o painel.
 // imapflow é importado DINAMICAMENTE: se a lib faltar (npm install não rodou), o
 // e-mail ainda é enviado e o painel mostra o motivo, em vez de quebrar a rota.
-async function salvarEnviados(raw) {
-  const host = process.env.IMAP_HOST || (process.env.SMTP_HOST || '').replace(/^smtp\./i, 'imap.') || 'imap.hostinger.com'
-  const port = parseInt(process.env.IMAP_PORT || '993', 10)
-  const user = process.env.SMTP_USER, pass = process.env.SMTP_PASS
+async function salvarEnviados(raw, escritorioId) {
+  // A cópia vai para a caixa DE QUEM ENVIOU. Isto lia sempre a caixa do
+  // ambiente — a do dono do sistema —, então o e-mail que um escritório cliente
+  // mandava para a vara dele era arquivado na pasta "Enviados" do fornecedor:
+  // a correspondência de um escritório de advocacia aparecendo no webmail de
+  // outro. Não é vazamento de tela, é a peça no lugar errado.
+  const conta = await contaDeLeitura(escritorioId, !escritorioId)
+  if (conta.erro) return { ok: false, motivo: conta.erro }
+  const host = conta.host, port = conta.port, user = conta.user, pass = conta.pass
   if (!host || !user || !pass) return { ok: false, motivo: 'IMAP não configurado' }
   let ImapFlow
   try { ({ ImapFlow } = await import('imapflow')) }
@@ -291,7 +296,7 @@ export async function enviarEmailCore({ para, cc, assunto, corpo, numero, dedup 
     if (cc && cc.toLowerCase() !== para.toLowerCase()) destinos.push(cc)
     if (copiaPara && /@/.test(copiaPara) && !destinos.some(d => d.toLowerCase() === copiaPara.toLowerCase())) destinos.push(copiaPara)
     const info = await transporter.sendMail({ envelope: { from: smtpUser, to: destinos }, raw })
-    const copia = await salvarEnviados(raw)   // grava em "Enviados" (best-effort)
+    const copia = await salvarEnviados(raw, escritorioId)   // grava em "Enviados" DA CAIXA DE QUEM ENVIOU (best-effort)
     // saiu com o convite dentro: abre/atualiza a linha de cobrança do app
     if (convitePendente) { try { await registrarConvite(convitePendente.sb, convitePendente.est, para) } catch (e) {} }
     return { ok: true, de: smtpUser, id: (info && info.messageId) || messageId, copiado_enviados: copia.ok, copia_pasta: copia.pasta, copia_motivo: copia.ok ? undefined : copia.motivo }

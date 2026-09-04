@@ -51,7 +51,11 @@ async function ehCoordenador(user) {
   try {
     const sbA = createClient(SB_URL, SERVICE, { auth: { persistSession: false } })
     const { data } = await sbA.from('usuarios').select('nome,papel,escritorio_id').eq('id', user.id).maybeSingle()
-    if (!data || data.papel !== 'socio') return false
+    // O CONTRATANTE é quem assinou o contrato do escritório — é dele a
+    // responsabilidade de cadastrar a equipe, e era justamente ele que não
+    // passava daqui: só 'socio' era aceito. Num escritório cliente, isso deixa
+    // sem convidar ninguém exatamente a pessoa que contratou o sistema.
+    if (!data || !['socio', 'contratante'].includes(String(data.papel || ''))) return false
     // Escritório convidado (não é o da instalação): o sócio DELE administra os
     // próprios acessos. Sem isto, um escritório em teste dependeria de alguém da
     // CMP para cada pessoa que quisesse cadastrar — e não seria autônomo.
