@@ -53,6 +53,11 @@
      fica em UMA linha, com o subtítulo ao lado, e é a BARRA que quebra em duas
      fileiras quando não couber — que é o comportamento normal de barra. */
   #s-processos .searchbar{flex-wrap:wrap;align-items:center;row-gap:6px}
+  /* seta girando: enquanto o lote roda, é o único sinal de que o sistema não
+     travou. Sem ela a pessoa desiste no meio e fecha a janela — que é o pior
+     momento para fechar, porque o que já entrou fica pela metade. */
+  @keyframes gira{to{transform:rotate(360deg)}}
+  .gira{display:inline-block;animation:gira 1s linear infinite}
   #s-processos .searchbar .sb-btn{padding:5px 10px;font-size:12px;min-height:0;line-height:1.15;white-space:nowrap;display:inline-flex;align-items:center;gap:5px}
   #s-processos .searchbar .sb-btn span{font-size:10px;font-weight:400;opacity:.8;white-space:nowrap}
   /* o campo de busca não precisa da largura toda: com ele elástico, os botões
@@ -27028,9 +27033,9 @@ async function abrirCadastroOab(){
   }catch(er){}
 }
 async function buscarOab(btn){
-  var t0=btn.textContent; btn.disabled=true; btn.textContent='procurando…';
+  var t0=btn.textContent; btn.disabled=true; btn.innerHTML='<span class="gira">↻</span> procurando…';
   var msg=document.getElementById('oab-msg');
-  msg.textContent='Consultando o Diário de Justiça… em período longo isso leva alguns segundos.';
+  msg.innerHTML='<span class="gira">↻</span> Consultando o Diário de Justiça… em período longo isso leva alguns segundos.';
   try{
     var sel=(document.getElementById('oab-sel')||{}).value||'';
     var dias=(document.getElementById('oab-dias')||{}).value||'90';
@@ -27097,29 +27102,42 @@ function oabInverter(k){
   var i=OAB_ITENS.filter(function(x){ return x.digitos===k; })[0]; if(!i) return;
   var a=i.ativo; i.ativo=i.passivo; i.passivo=a; oabPintar();
 }
+/* O envio vai UM POR VEZ, de propósito.
+   Cada processo custa uma consulta ao DataJud (classe, assunto, órgão e
+   histórico), que leva alguns segundos — em lote de cinco, a tela ficava mais de
+   um minuto sem mudar nada e parecia travada. Um por vez o andamento anda a cada
+   processo, e o servidor nunca fica perto do tempo limite. */
 async function _oabEnviar(itens,aoAndar){
-  var feitos=[], fatia=5;
-  for(var i=0;i<itens.length;i+=fatia){
-    var parte=itens.slice(i,i+fatia);
+  var feitos=[];
+  for(var i=0;i<itens.length;i++){
+    if(aoAndar) aoAndar(i,itens.length,itens[i],null);
     var tok=await _oabToken();
-    var r=await fetch('/api/cadastro-oab',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({itens:parte})});
-    var d=await r.json();
-    if(!r.ok||d.erro){ throw new Error(d.erro||('HTTP '+r.status)); }
-    feitos=feitos.concat(d.itens||[]);
-    if(aoAndar) aoAndar(Math.min(i+fatia,itens.length),itens.length);
+    var r,d;
+    try{
+      r=await fetch('/api/cadastro-oab',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({itens:[itens[i]]}),signal:AbortSignal.timeout(180000)});
+    }catch(e){ throw new Error('o servidor não respondeu ('+(e&&e.message||e)+'). Os que já entraram estão salvos.'); }
+    var txt=await r.text();
+    try{ d=JSON.parse(txt); }catch(e){ throw new Error('resposta inesperada do servidor (HTTP '+r.status+'): '+txt.slice(0,120)); }
+    if(!r.ok||d.erro) throw new Error(d.erro||('HTTP '+r.status));
+    var lote=d.itens||[];
+    feitos=feitos.concat(lote);
+    if(aoAndar) aoAndar(i+1,itens.length,itens[i],lote[0]||null);
   }
   return feitos;
+}
+/* Marca a linha como cadastrada assim que ela entra — a lista encolhendo é o
+   sinal mais claro de que o lote está andando. */
+function _oabMarcarFeito(f){
+  if(!f||!f.ok) return;
+  var dig=String(f.numero||'').replace(/\D/g,'');
+  delete OAB_MARCADOS[dig];
+  var it=OAB_ITENS.filter(function(x){ return x.digitos===dig; })[0];
+  if(it) it.meu=true;
 }
 function _oabDepois(feitos,msg){
   var ok=feitos.filter(function(f){ return f.ok; }).length;
   var fora=feitos.filter(function(f){ return !f.ok; });
-  feitos.forEach(function(f){
-    if(!f.ok) return;
-    var dig=String(f.numero||'').replace(/\D/g,'');
-    delete OAB_MARCADOS[dig];
-    var it=OAB_ITENS.filter(function(x){ return x.digitos===dig; })[0];
-    if(it) it.meu=true;
-  });
+  feitos.forEach(_oabMarcarFeito);
   oabPintar();
   msg.innerHTML='<b style="color:#127a53">'+ok+' processo(s) cadastrado(s).</b>'
     +(fora.length?(' '+fora.length+' fora: '+esc(fora.slice(0,3).map(function(f){ return f.numero+' ('+f.motivo+')'; }).join('; '))+(fora.length>3?'…':'')):'')
@@ -27128,19 +27146,36 @@ function _oabDepois(feitos,msg){
 async function cadastrarOabLote(btn){
   var marcados=OAB_ITENS.filter(function(i){ return OAB_MARCADOS[i.digitos]; });
   if(!marcados.length) return;
-  if(!confirm('Cadastrar '+marcados.length+' processo(s) no acervo?')) return;
+  if(!confirm('Cadastrar '+marcados.length+' processo(s) no acervo?\n\nCada um leva alguns segundos: o sistema busca classe, assunto, órgão e o histórico na base do CNJ. Deixe esta janela aberta.')) return;
   var msg=document.getElementById('oab-msg'); var t0=btn.textContent;
   btn.disabled=true;
+  /* feedback IMEDIATO: antes disto, a primeira mudança na tela só vinha depois
+     do primeiro processo pronto, e a espera parecia travamento */
+  btn.innerHTML='<span class="gira">↻</span> cadastrando… 0 de '+marcados.length;
+  msg.innerHTML='<b><span class="gira">↻</span> Cadastrando…</b> <span id="oab-and">preparando</span>'
+    +'<div class="note" style="margin-top:2px">Cada processo leva alguns segundos (classe, assunto, órgão e histórico vêm da base do CNJ). Não feche esta janela — o que já entrou fica salvo.</div>';
+  var parciais=[];
   try{
-    var feitos=await _oabEnviar(marcados,function(feito,total){ btn.textContent='cadastrando… '+feito+' de '+total; });
+    var feitos=await _oabEnviar(marcados,function(feito,total,item,resultado){
+      btn.innerHTML='<span class="gira">↻</span> cadastrando… '+feito+' de '+total;
+      if(resultado){ parciais.push(resultado); _oabMarcarFeito(resultado); oabPintar(); }
+      var el=document.getElementById('oab-and');
+      if(el) el.innerHTML=feito+' de '+total+' — '+esc(fmtCNJ((item&&item.numero)||''))
+        +(resultado?'':' <span class="note">(buscando na base do CNJ…)</span>');
+    });
     _oabDepois(feitos,msg);
-  }catch(e){ msg.innerHTML='<span style="color:#b5342b">'+esc(String(e&&e.message||e))+'</span>'; }
+  }catch(e){
+    if(parciais.length) _oabDepois(parciais,msg);
+    var m=document.getElementById('oab-msg');
+    m.innerHTML=(parciais.length?(m.innerHTML+'<br>'):'')+'<span style="color:#b5342b">Parou em: '+esc(String(e&&e.message||e))+'</span>';
+  }
   btn.disabled=false; btn.textContent=t0;
+  oabPintar();
 }
 async function cadastrarOabUm(k,btn){
   var i=OAB_ITENS.filter(function(x){ return x.digitos===k; })[0]; if(!i) return;
   var msg=document.getElementById('oab-msg'); var t0=btn.textContent;
-  btn.disabled=true; btn.textContent='cadastrando…';
+  btn.disabled=true; btn.innerHTML='<span class="gira">↻</span> cadastrando…';
   try{ _oabDepois(await _oabEnviar([i]),msg); }
   catch(e){ msg.innerHTML='<span style="color:#b5342b">'+esc(String(e&&e.message||e))+'</span>'; btn.disabled=false; btn.textContent=t0; }
 }

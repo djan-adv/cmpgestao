@@ -195,8 +195,18 @@ export async function POST(request) {
     // classe, assunto, órgão e histórico pela base pública do CNJ. Processo
     // recém-distribuído ainda não aparece lá — entra assim mesmo, com o que
     // veio do Diário, porque o que o advogado quer é a ficha existindo.
+    // Teto de tempo por processo. O DataJud tenta duas vezes por índice, com 30s
+    // cada: um tribunal fora do ar segurava o lote inteiro até o servidor
+    // desistir, e a tela ficava parada sem dizer nada. Passando de 45s, o
+    // processo entra com o que veio do Diário — a ficha existindo é o que
+    // importa, e classe/assunto chegam na primeira atualização.
     let dj = {}
-    try { dj = await consultaDataJud(numero) } catch (er) { dj = { erro: String((er && er.message) || er) } }
+    try {
+      dj = await Promise.race([
+        consultaDataJud(numero),
+        new Promise(res => setTimeout(() => res({ erro: 'a base do CNJ demorou a responder' }), 45000)),
+      ])
+    } catch (er) { dj = { erro: String((er && er.message) || er) } }
     const ands = Array.isArray(dj.andamentos) ? dj.andamentos : []
     const ultmov = (ands[0] && ands[0].data) ? String(ands[0].data).slice(0, 10) : null
 
