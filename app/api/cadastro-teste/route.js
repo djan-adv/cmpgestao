@@ -25,6 +25,7 @@
 
 import { createClient } from '@supabase/supabase-js'
 import crypto from 'crypto'
+import dns from 'dns'
 import { enviarEmailConta } from '../_lib/email-conta.js'
 import { enviarEmailCore } from '../enviar-email/enviar.js'
 import { LIMITES_TESTE, DIAS_TESTE, fimDoTeste } from '../_lib/planos.js'
@@ -50,6 +51,44 @@ const RESERVADOS = new Set([
 const LIM = { escritorio: 120, nome: 120, email: 160, telefone: 40, subdominio: 40 }
 const corta = (v, max) => String(v == null ? '' : v).trim().slice(0, max)
 const emailValido = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(String(e || '').trim())
+
+// Telefone é obrigatório e precisa ser um número brasileiro plausível: DDD mais
+// oito ou nove dígitos. Não é conferência de linha existente — é o mínimo para
+// que exista um caminho de contato quando o e-mail falhar ou a conversa
+// precisar sair do formulário.
+function telefoneLimpo(v) {
+  let d = String(v || '').replace(/\D/g, '')
+  if (d.startsWith('55') && d.length > 11) d = d.slice(2)
+  return (d.length === 10 || d.length === 11) ? d : ''
+}
+
+// O domínio do e-mail recebe correio? É a diferença entre "parece um e-mail" e
+// "é um e-mail". Barra o domínio digitado errado e o inventado na hora, antes
+// de gastar um envio.
+//
+// Falha de DNS NÃO barra ninguém: rede instável do lado do servidor não pode
+// virar cadastro recusado para quem digitou certo.
+async function dominioRecebeEmail(email) {
+  const dominio = String(email).split('@')[1]
+  if (!dominio) return false
+  try {
+    const mx = await dns.promises.resolveMx(dominio)
+    return Array.isArray(mx) && mx.length > 0
+  } catch (e) {
+    // NXDOMAIN é resposta: o domínio não existe. Qualquer outro erro é dúvida.
+    if (e && (e.code === 'ENOTFOUND' || e.code === 'NXDOMAIN')) return false
+    return true
+  }
+}
+
+// Código de seis dígitos, guardado em hash. Curto porque vai ser digitado à
+// mão; o que segura a força bruta é o limite de tentativas, não o tamanho.
+function codigoNovo() {
+  return String(crypto.randomInt(0, 1000000)).padStart(6, '0')
+}
+function hashCodigo(email, codigo) {
+  return crypto.createHash('sha256').update(String(email) + '|' + String(codigo)).digest('hex')
+}
 
 function admin() {
   return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
@@ -100,48 +139,25 @@ export async function POST(request) {
   let body = {}
   try { body = await request.json() } catch (e) {}
 
-  const escritorio = corta(body.escritorio, LIM.escritorio)
-  const nome = corta(body.nome, LIM.nome)
-  const email = corta(body.email, LIM.email).toLowerCase()
-  const telefone = corta(body.telefone, LIM.telefone)
+  const ipReq = String(request.headers.get('x-forwarded-for') || '').split(',')[0].trim() || null
+  const uaReq = String(request.headers.get('user-agent') || '').slice(0, 300) || null
 
-  if (escritorio.length < 3) return Response.json({ erro: 'Informe o nome do escritório.' }, { status: 400 })
-  if (nome.length < 3) return Response.json({ erro: 'Informe o seu nome.' }, { status: 400 })
-  if (!emailValido(email)) return Response.json({ erro: 'Informe um e-mail válido.' }, { status: 400 })
+  // ETAPA 1 — pede o código. Nada é criado aqui: nem escritório, nem conta, nem
+  // endereço. É esta separação que faz a verificação valer alguma coisa; se o
+  // escritório nascesse antes, o código seria enfeite.
+  if (String(body.acao || '') === 'codigo') return pedirCodigo(body, ipReq, uaReq)
 
-  // Aceite do termo. Conferido no SERVIDOR, e não só pela caixa de marcar da
-  // tela: o que a tela obriga, uma requisição direta contorna — e um aceite que
-  // se contorna não prova nada. O escritório que entra aqui vai guardar dados
-  // de clientes de terceiros, sob sigilo profissional; sem instrumento, o
-  // fornecedor fica com a guarda e sem o contrato que a autoriza.
-  if (body.aceite !== true) {
-    return Response.json({ erro: 'É preciso aceitar o Termo de Uso e de Tratamento de Dados para começar.' }, { status: 400 })
-  }
-  // De onde veio o aceite. Atrás do Caddy, o endereço real está no cabeçalho —
-  // sem isto, todo aceite ficaria registrado como vindo de 127.0.0.1.
-  const ip = String(request.headers.get('x-forwarded-for') || '').split(',')[0].trim() || null
-  const navegador = String(request.headers.get('user-agent') || '').slice(0, 300) || null
+  // ETAPA 2 — confere o código e cria. Os dados vêm da linha guardada na etapa
+  // 1, não do que o navegador manda agora: aceitar dados novos aqui deixaria
+  // confirmar um e-mail e cadastrar outro.
+  const conf = await confirmarCodigo(body)
+  if (conf.erro) return Response.json({ erro: conf.erro, ...(conf.extra || {}) }, { status: conf.status || 400 })
 
+  const { escritorio, nome, email, telefone } = conf.dados
+
+  const ip = conf.ip || ipReq
+  const navegador = conf.navegador || uaReq
   const sb = admin()
-
-  // ---- quem já tem acesso não cria escritório novo ------------------------
-  // Sem esta conferência, quem já é cliente (ou funcionário de um) criaria um
-  // escritório paralelo e levaria consigo o próprio login.
-  const { data: jaUsuario } = await sb.from('usuarios').select('id').eq('email', email).maybeSingle()
-  if (jaUsuario) {
-    return Response.json({
-      erro: 'Este e-mail já tem acesso ao sistema. Entre com ele, ou use "esqueci a senha".',
-      ja_tem: true,
-    }, { status: 409 })
-  }
-
-  // ---- repetição: duplo clique ou robô ------------------------------------
-  try {
-    const desde = new Date(Date.now() - 60 * 60000).toISOString()
-    const { data: ja } = await sb.from('crm_leads')
-      .select('id').eq('email', email).eq('canal', 'auto-cadastro teste').gte('criado_em', desde).limit(1)
-    if (ja && ja.length) return Response.json({ ok: true, repetido: true })
-  } catch (e) {}
 
   // ---- tetos de volume ----------------------------------------------------
   // Estes números protegem disco, banco e orçamento de IA. Estourá-los não é
@@ -199,6 +215,10 @@ export async function POST(request) {
     raiz: false,
     ...LIMITES_TESTE,
     teste_ate,
+    // O telefone confirmado no cadastro já entra no cadastro do escritório: é
+    // o mesmo campo que depois aparece na procuração e no rodapé dos e-mails
+    // dele, e poupa o cliente de digitar duas vezes.
+    dados: { telefone, whatsapp: telefone },
     // Nulo = todos os módulos ligados. O teste é do sistema INTEIRO: quem testa
     // metade não compra. O que segura o custo é o teto, não o portão.
     modulos: null,
@@ -298,4 +318,129 @@ export async function POST(request) {
     teste_ate,
     email_enviado: !!(envio && envio.ok),
   })
+}
+
+// ————————————————————————————————————————————————————————————————
+// ETAPA 1 — conferir os dados e mandar o código.
+//
+// Tudo o que dá para recusar sem custo é recusado aqui: e-mail malformado,
+// domínio que não recebe correio, telefone que não é telefone, e-mail que já
+// tem acesso. Só depois disso se gasta um envio.
+async function pedirCodigo(body, ip, navegador) {
+  const escritorio = corta(body.escritorio, LIM.escritorio)
+  const nome = corta(body.nome, LIM.nome)
+  const email = corta(body.email, LIM.email).toLowerCase()
+  const telefone = telefoneLimpo(body.telefone)
+
+  if (escritorio.length < 3) return Response.json({ erro: 'Informe o nome do escritório.' }, { status: 400 })
+  if (nome.length < 3) return Response.json({ erro: 'Informe o seu nome.' }, { status: 400 })
+  if (!emailValido(email)) return Response.json({ erro: 'Informe um e-mail válido.' }, { status: 400 })
+  if (!telefone) {
+    return Response.json({ erro: 'Informe um telefone com WhatsApp, com DDD. É por onde falamos com você se o e-mail falhar.' }, { status: 400 })
+  }
+
+  // Aceite do termo. Conferido no SERVIDOR, e não só pela caixa de marcar da
+  // tela: o que a tela obriga, uma requisição direta contorna — e um aceite que
+  // se contorna não prova nada.
+  if (body.aceite !== true) {
+    return Response.json({ erro: 'É preciso aceitar o Termo de Uso e de Tratamento de Dados para começar.' }, { status: 400 })
+  }
+
+  if (!(await dominioRecebeEmail(email))) {
+    return Response.json({ erro: 'Esse endereço de e-mail não recebe mensagens. Confira o que foi digitado depois do @.' }, { status: 400 })
+  }
+
+  const sb = admin()
+
+  // Quem já tem acesso não cria escritório novo — senão quem já é cliente (ou
+  // trabalha em um) abriria um escritório paralelo levando o próprio login.
+  const { data: jaUsuario } = await sb.from('usuarios').select('id').eq('email', email).maybeSingle()
+  if (jaUsuario) {
+    return Response.json({
+      erro: 'Este e-mail já tem acesso ao sistema. Entre com ele, ou use "esqueci a senha".',
+      ja_tem: true,
+    }, { status: 409 })
+  }
+
+  // Um pedido de código por e-mail a cada 2 minutos. Sem isso o formulário vira
+  // ferramenta de incomodar caixa alheia: basta digitar o endereço de outra
+  // pessoa e apertar o botão em sequência.
+  try {
+    const desde = new Date(Date.now() - 2 * 60000).toISOString()
+    const { data: recente } = await sb.from('cadastro_verificacao')
+      .select('id').eq('email', email).gte('criado_em', desde).limit(1)
+    if (recente && recente.length) {
+      return Response.json({ ok: true, etapa: 'codigo', reenviado: false })
+    }
+  } catch (e) {}
+
+  const codigo = codigoNovo()
+  const { error } = await sb.from('cadastro_verificacao').insert({
+    email, telefone, escritorio, nome,
+    codigo_hash: hashCodigo(email, codigo),
+    ip, navegador,
+    expira_em: new Date(Date.now() + 30 * 60000).toISOString(),
+  })
+  if (error) return Response.json({ erro: 'Não consegui iniciar agora. Tente de novo em instantes.' }, { status: 500 })
+
+  const envio = await enviarEmailCore({
+    para: email,
+    assunto: 'Seu código de confirmação — ' + codigo,
+    corpo:
+      'Olá, ' + nome + '.\n\n' +
+      'Para abrir o teste de ' + DIAS_TESTE + ' dias do sistema para o escritório ' + escritorio + ', ' +
+      'informe este código na página:\n\n' +
+      '    ' + codigo + '\n\n' +
+      'Ele vale por 30 minutos.\n\n' +
+      'Se não foi você quem pediu, ignore esta mensagem: nada foi criado, e sem o código nada será.',
+    dedup: false, convidarApp: false, escritorioId: null,
+  })
+  if (!envio || envio.erro) {
+    return Response.json({ erro: 'Não consegui enviar o código para esse endereço. Confira o e-mail digitado.' }, { status: 502 })
+  }
+
+  return Response.json({ ok: true, etapa: 'codigo' })
+}
+
+// ————————————————————————————————————————————————————————————————
+// ETAPA 2 — conferir o código.
+//
+// Devolve os dados guardados na etapa 1. O navegador não manda nome, telefone
+// nem escritório aqui: se mandasse, daria para confirmar um e-mail e cadastrar
+// outro, e a verificação não verificaria nada.
+async function confirmarCodigo(body) {
+  const email = corta(body.email, LIM.email).toLowerCase()
+  const codigo = String(body.codigo || '').replace(/\D/g, '')
+  if (!emailValido(email) || codigo.length !== 6) {
+    return { erro: 'Informe o código de 6 dígitos que chegou no seu e-mail.', status: 400 }
+  }
+
+  const sb = admin()
+  const { data: linhas } = await sb.from('cadastro_verificacao')
+    .select('*').eq('email', email).is('usado_em', null)
+    .order('criado_em', { ascending: false }).limit(1)
+  const linha = (linhas || [])[0]
+  if (!linha) return { erro: 'Não encontrei um pedido para este e-mail. Comece de novo.', status: 404 }
+
+  if (new Date(linha.expira_em).getTime() < Date.now()) {
+    return { erro: 'Esse código expirou. Peça um novo.', status: 410 }
+  }
+  // Cinco tentativas. É o que separa quem errou de digitar de quem está
+  // tentando adivinhar seis dígitos.
+  if ((linha.tentativas || 0) >= 5) {
+    return { erro: 'Muitas tentativas para este código. Peça um novo.', status: 429 }
+  }
+
+  if (linha.codigo_hash !== hashCodigo(email, codigo)) {
+    try { await sb.from('cadastro_verificacao').update({ tentativas: (linha.tentativas || 0) + 1 }).eq('id', linha.id) } catch (e) {}
+    return { erro: 'Código incorreto.', status: 400, extra: { etapa: 'codigo' } }
+  }
+
+  // Queimado no momento do acerto: o mesmo código não abre dois escritórios.
+  try { await sb.from('cadastro_verificacao').update({ usado_em: new Date().toISOString() }).eq('id', linha.id) } catch (e) {}
+
+  return {
+    dados: { escritorio: linha.escritorio, nome: linha.nome, email: linha.email, telefone: linha.telefone },
+    ip: linha.ip, navegador: linha.navegador,
+  }
 }

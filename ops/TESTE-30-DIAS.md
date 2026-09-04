@@ -72,8 +72,22 @@ teste que vence no dia 10 não pode encurtar o prazo.
 ## Auto-cadastro (o cliente se cadastra sozinho)
 
 `POST /api/cadastro-teste` — rota **pública** ligada ao formulário da página de
-vendas (seção "Começar o teste de 30 dias"). O visitante preenche escritório,
-nome, e-mail e telefone; o sistema:
+vendas (seção "Começar o teste de 30 dias"). São **duas etapas**, e nada é criado
+na primeira:
+
+**Etapa 1 (`acao:'codigo'`)** — confere o que dá para conferir sem gastar envio:
+e-mail bem formado, **domínio que realmente recebe correio** (consulta de MX;
+falha de DNS não barra ninguém), **telefone brasileiro com DDD obrigatório**,
+aceite do termo, e-mail que ainda não tem acesso. Passando, guarda o pedido com
+o código em *hash* e manda os 6 dígitos por e-mail. Um pedido por e-mail a cada
+2 minutos — senão o formulário vira ferramenta de incomodar caixa alheia.
+
+**Etapa 2 (padrão)** — confere o código (30 minutos de validade, 5 tentativas,
+queimado no acerto) e só então cria. Os dados vêm da linha guardada na etapa 1,
+**nunca do que o navegador manda agora**: aceitar dados novos aqui deixaria
+confirmar um e-mail e cadastrar outro.
+
+Confirmado o código, o sistema:
 
 1. reserva um endereço livre a partir do nome (`silvaesouza.djan.app.br`;
    se ocupado, tenta com número — nunca devolve a porta de outro escritório);
@@ -101,8 +115,25 @@ que abrir mais um teste.
 Subdomínios reservados (`www`, `api`, `admin`, `sistema`, `suporte`…) não podem
 ser escolhidos por quem se cadastra.
 
-A senha provisória vai por e-mail e é obrigatória para entrar — isso já faz as
-vezes de confirmação de endereço, sem nenhuma tela a mais.
+O telefone confirmado entra no cadastro do escritório (`dados.telefone`), que é
+o mesmo campo que depois aparece na procuração e no rodapé dos e-mails dele.
+
+### Marca d'água no teste
+
+Durante o teste, **todo documento BAIXADO** sai com a marca ao fundo, com o nome
+de quem baixou — para todos os usuários, sem chave para desligar (`carimboDoPedido`
+em `lib/marcadagua.js`). Ao contratar, volta a ser opcional e por papel.
+
+Marca só o que sai: as rotas de leitura (`/api/docs` GET, `/api/anexo`,
+`/api/jusbr/arquivo`). **Não** marca o que o escritório sobe, o que o sistema
+gera (peça, procuração, contrato) nem o que vai a protocolo — essas rotas não
+chamam a marca, e não devem passar a chamar.
+
+O motivo é a porta aberta: qualquer pessoa abre um teste e digita a inscrição
+na OAB que quiser. O que se obtém assim é público (o Diário é público; os autos
+continuam exigindo o certificado digital), mas sai daqui reunido e pronto para
+levar. A marca não impede a cópia — tira o anonimato dela. Toda busca por OAB
+também fica registrada em `activity_events` (`oab_busca`).
 
 ### O que o cliente NÃO vê
 

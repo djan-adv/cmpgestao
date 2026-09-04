@@ -147,19 +147,40 @@ export default function Vendas({ aoEntrar }) {
   const [tEnviando, setTEnviando] = useState(false)
   const [tErro, setTErro] = useState('')
   const [criado, setCriado] = useState(null)
+  // 'dados' -> preencheu o formulário; 'codigo' -> recebeu o código por e-mail.
+  // Nada é criado antes do código conferir: é o que garante que o endereço
+  // existe e é de quem se cadastrou.
+  const [etapa, setEtapa] = useState('dados')
+  const [codigo, setCodigo] = useState('')
   const setT_ = (k) => (e) => setT({ ...t, [k]: e.target.value })
+
+  async function envia(corpo) {
+    const r = await fetch('/api/cadastro-teste', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corpo),
+    })
+    const d = await r.json().catch(() => ({}))
+    return { ok: r.ok && !d.erro, d }
+  }
 
   async function comecar(e) {
     e.preventDefault()
     setTErro(''); setTEnviando(true)
     try {
-      const r = await fetch('/api/cadastro-teste', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...t, aceite: t.aceite === true }),
-      })
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok || d.erro) { setTErro(d.erro || 'Não consegui criar agora.'); setTEnviando(false); return }
+      const { ok, d } = await envia({ acao: 'codigo', ...t, aceite: t.aceite === true })
+      if (!ok) { setTErro(d.erro || 'Não consegui enviar o código agora.'); setTEnviando(false); return }
+      setEtapa('codigo')
+    } catch (err) { setTErro('Não consegui enviar o código agora. Tente de novo em instantes.') }
+    setTEnviando(false)
+  }
+
+  async function confirmar(e) {
+    e.preventDefault()
+    setTErro(''); setTEnviando(true)
+    try {
+      const { ok, d } = await envia({ email: t.email, codigo })
+      if (!ok) { setTErro(d.erro || 'Não consegui confirmar agora.'); setTEnviando(false); return }
       setCriado(d)
-    } catch (err) { setTErro('Não consegui criar agora. Tente de novo em instantes.') }
+    } catch (err) { setTErro('Não consegui confirmar agora. Tente de novo em instantes.') }
     setTEnviando(false)
   }
 
@@ -520,13 +541,38 @@ export default function Vendas({ aoEntrar }) {
                     </>
                   )}
                 </div>
+              ) : etapa === 'codigo' ? (
+                /* Segunda etapa. O formulário some da tela para o campo do
+                   código ficar sozinho: quem chegou aqui tem uma tarefa só. */
+                <form onSubmit={confirmar}>
+                  <div style={{ fontWeight: 800, fontSize: 17, color: NAVY, marginBottom: 6 }}>
+                    Confirme o seu e-mail
+                  </div>
+                  <p style={{ color: '#46505e', fontSize: 14.5, margin: '0 0 14px' }}>
+                    Enviamos um código de 6 dígitos para <b>{t.email}</b>. Ele vale por 30 minutos —
+                    confira também a caixa de spam.
+                  </p>
+                  <label style={rotuloCampo}>Código</label>
+                  <input value={codigo} onChange={(ev) => setCodigo(ev.target.value.replace(/\D/g, '').slice(0, 6))}
+                    inputMode="numeric" autoComplete="one-time-code" required
+                    style={{ ...campo, fontSize: 26, letterSpacing: 8, textAlign: 'center', fontWeight: 700 }} />
+                  {tErro && <div style={{ color: '#b5342b', fontSize: 13.5, margin: '4px 0 8px' }}>{tErro}</div>}
+                  <button type="submit" disabled={tEnviando || codigo.length !== 6}
+                    style={{ ...botao, background: (tEnviando || codigo.length !== 6) ? '#9aa6b5' : VERDE, color: '#fff', width: '100%', padding: 14, fontSize: 16, marginTop: 6 }}>
+                    {tEnviando ? 'Criando o seu sistema…' : 'Confirmar e criar'}
+                  </button>
+                  <button type="button" onClick={() => { setEtapa('dados'); setTErro(''); setCodigo('') }}
+                    style={{ background: 'none', border: 0, color: '#697180', fontSize: 13, textDecoration: 'underline', cursor: 'pointer', display: 'block', margin: '10px auto 0' }}>
+                    corrigir os dados
+                  </button>
+                </form>
               ) : (
                 <form onSubmit={comecar}>
                   <Campo rot="Nome do escritório" req dica="é o nome que aparece no sistema e nas peças" v={t.escritorio} on={setT_('escritorio')} />
                   <Campo rot="Seu nome" req v={t.nome} on={setT_('nome')} />
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                    <Campo rot="E-mail" req tipo="email" dica="a senha vai para cá" v={t.email} on={setT_('email')} />
-                    <Campo rot="Telefone / WhatsApp" v={t.telefone} on={setT_('telefone')} />
+                    <Campo rot="E-mail" req tipo="email" dica="o código de confirmação vai para cá" v={t.email} on={setT_('email')} />
+                    <Campo rot="Telefone com WhatsApp" req dica="com DDD" v={t.telefone} on={setT_('telefone')} />
                   </div>
                   {/* O aceite é obrigatório e o texto fica a um clique, aberto
                       em outra aba para ninguém perder o que já digitou. */}
@@ -543,10 +589,10 @@ export default function Vendas({ aoEntrar }) {
                   {tErro && <div style={{ color: '#b5342b', fontSize: 13.5, margin: '4px 0 8px' }}>{tErro}</div>}
                   <button type="submit" disabled={tEnviando}
                     style={{ ...botao, background: tEnviando ? '#9aa6b5' : VERDE, color: '#fff', width: '100%', padding: 14, fontSize: 16, marginTop: 6 }}>
-                    {tEnviando ? 'Criando o seu sistema…' : 'Criar meu sistema agora'}
+                    {tEnviando ? 'Enviando o código…' : 'Criar meu sistema agora'}
                   </button>
                   <p style={{ color: '#697180', fontSize: 12.5, textAlign: 'center', margin: '10px 0 0' }}>
-                    Leva menos de um minuto. Não pedimos cartão.
+                    Enviamos um código para o seu e-mail antes de criar. Leva menos de um minuto, e não pedimos cartão.
                   </p>
                 </form>
               )}
