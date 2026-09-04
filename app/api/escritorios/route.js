@@ -20,6 +20,7 @@
 import { createClient } from '@supabase/supabase-js'
 import crypto from 'crypto'
 import { enviarEmailConta } from '../_lib/email-conta.js'
+import { PLANOS, limitesDoPlano } from '../_lib/planos.js'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -87,7 +88,7 @@ export async function POST(request) {
     if (acao === 'listar') {
       const { data, error } = await sb
         .from('escritorios')
-        .select('id,nome,subdominio,hosts,plano,ativo,raiz,limite_acessos,limite_processos,limite_gb,criado_em')
+        .select('id,nome,subdominio,hosts,plano,plano_codigo,ativo,raiz,limite_acessos,limite_processos,limite_gb,mensalidade,desconto,pausa_ate,suspenso_em,suspenso_motivo,observacoes,criado_em')
         .order('criado_em', { ascending: true })
       if (error) throw new Error(error.message)
       // quantos acessos e quantos processos cada um já usa (para mostrar o
@@ -99,7 +100,7 @@ export async function POST(request) {
         const p = await sb.from('processos').select('id', { count: 'exact', head: true }).eq('escritorio_id', id)
         uso[id] = { acessos: u.count || 0, processos: p.count || 0 }
       }
-      return Response.json({ ok: true, escritorios: (data || []).map(e => ({ ...e, uso: uso[e.id] })) })
+      return Response.json({ ok: true, planos: PLANOS, escritorios: (data || []).map(e => ({ ...e, uso: uso[e.id] })) })
     }
 
     if (acao === 'criar') {
@@ -127,6 +128,8 @@ export async function POST(request) {
         subdominio: sub,
         hosts: [host],
         plano: String(body.plano || 'teste'),
+        plano_codigo: body.plano_codigo || null,
+        mensalidade: body.mensalidade == null || body.mensalidade === '' ? null : Number(body.mensalidade),
         ativo: true,
         raiz: false,
         // Nulo = sem teto. Os primeiros clientes entram com o sistema inteiro
@@ -203,6 +206,123 @@ export async function POST(request) {
         patch.hosts = lista
       }
       const { error } = await sb.from('escritorios').update(patch).eq('id', id)
+      if (error) throw new Error(error.message)
+      return Response.json({ ok: true })
+    }
+
+    // Plano, valor, desconto e pausa. Tudo cadastro: mudar oferta ou preço não
+    // pode virar deploy, e quem já assinou mantém o que assinou.
+    if (acao === 'comercial') {
+      const id = String(body.id || '')
+      if (!id) return Response.json({ erro: 'id ausente' }, { status: 400 })
+      const patch = {}
+      if ('mensalidade' in body) patch.mensalidade = body.mensalidade === '' || body.mensalidade == null ? null : Number(body.mensalidade)
+      if ('desconto' in body) patch.desconto = body.desconto === '' || body.desconto == null ? null : Number(body.desconto)
+      if ('pausa_ate' in body) patch.pausa_ate = body.pausa_ate || null
+      if ('observacoes' in body) patch.observacoes = String(body.observacoes || '')
+      if (body.plano_codigo) {
+        const lim = limitesDoPlano(body.plano_codigo)
+        if (!lim) return Response.json({ erro: 'Plano desconhecido: ' + body.plano_codigo }, { status: 400 })
+        // os limites do degrau são COPIADOS agora; o plano pode mudar depois
+        // sem alterar quem já está dentro
+        Object.assign(patch, lim)
+      }
+      if (!Object.keys(patch).length) return Response.json({ erro: 'nada a alterar' }, { status: 400 })
+      const { error } = await sb.from('escritorios').update(patch).eq('id', id)
+      if (error) throw new Error(error.message)
+      return Response.json({ ok: true })
+    }
+
+    // Suspender é o oposto de excluir: o acervo fica intacto, o acesso para.
+    // Para escritório de advocacia, apagar é destruir processo com prazo
+    // correndo dentro — por isso a saída padrão é esta.
+    if (acao === 'suspender' || acao === 'reativar') {
+      const id = String(body.id || '')
+      if (!id) return Response.json({ erro: 'id ausente' }, { status: 400 })
+      const { data: alvo } = await sb.from('escritorios').select('raiz,nome').eq('id', id).maybeSingle()
+      if (!alvo) return Response.json({ erro: 'Escritório não encontrado.' }, { status: 404 })
+      if (alvo.raiz) return Response.json({ erro: 'O escritório que administra o sistema não pode ser suspenso.' }, { status: 400 })
+      const suspender = acao === 'suspender'
+      const { error } = await sb.from('escritorios').update({
+        ativo: !suspender,
+        suspenso_em: suspender ? new Date().toISOString() : null,
+        suspenso_motivo: suspender ? String(body.motivo || '') : null,
+      }).eq('id', id)
+      if (error) throw new Error(error.message)
+      return Response.json({ ok: true, escritorio: alvo.nome })
+    }
+
+    // Excluir só o que nunca foi usado. Um escritório com processo dentro não
+    // se apaga por clique: suspende. O engano aqui não tem desfazer.
+    if (acao === 'excluir') {
+      const id = String(body.id || '')
+      if (!id) return Response.json({ erro: 'id ausente' }, { status: 400 })
+      const { data: alvo } = await sb.from('escritorios').select('raiz,nome').eq('id', id).maybeSingle()
+      if (!alvo) return Response.json({ erro: 'Escritório não encontrado.' }, { status: 404 })
+      if (alvo.raiz) return Response.json({ erro: 'O escritório que administra o sistema não pode ser excluído.' }, { status: 400 })
+      const { count: procs } = await sb.from('processos').select('id', { count: 'exact', head: true }).eq('escritorio_id', id)
+      if (procs) {
+        return Response.json({
+          erro: 'Este escritório tem ' + procs + ' processo(s). Escritório com acervo não é excluído — use Suspender. ' +
+                'Apagar aqui levaria junto prazo e documento de processo em andamento.',
+          tem_acervo: true,
+        }, { status: 409 })
+      }
+      // as contas de acesso somem junto (usuarios cai em cascata pelo auth)
+      const { data: pessoas } = await sb.from('usuarios').select('id').eq('escritorio_id', id)
+      for (const u of pessoas || []) { try { await sb.auth.admin.deleteUser(u.id) } catch (e) {} }
+      const { error } = await sb.from('escritorios').delete().eq('id', id)
+      if (error) throw new Error(error.message)
+      return Response.json({ ok: true, excluido: alvo.nome })
+    }
+
+    // Faturas da mensalidade.
+    if (acao === 'faturas') {
+      const id = String(body.id || '')
+      if (!id) return Response.json({ erro: 'id ausente' }, { status: 400 })
+      const { data, error } = await sb.from('faturas').select('*').eq('escritorio_id', id).order('competencia', { ascending: false })
+      if (error) throw new Error(error.message)
+      return Response.json({ ok: true, faturas: data || [] })
+    }
+
+    if (acao === 'fatura_criar') {
+      const id = String(body.id || '')
+      const competencia = String(body.competencia || '').trim()   // '2026-09'
+      if (!id || !/^\d{4}-\d{2}$/.test(competencia)) {
+        return Response.json({ erro: 'Informe o escritório e a competência (AAAA-MM).' }, { status: 400 })
+      }
+      const { data: esc } = await sb.from('escritorios').select('mensalidade,desconto,pausa_ate,nome').eq('id', id).maybeSingle()
+      if (!esc) return Response.json({ erro: 'Escritório não encontrado.' }, { status: 404 })
+      // Pausa combinada não gera fatura: é o ponto de ter pausa. Sem esta
+      // conferência, a cobrança sairia assim mesmo e o cliente receberia
+      // boleto do mês que você isentou.
+      if (esc.pausa_ate && competencia <= String(esc.pausa_ate).slice(0, 7)) {
+        return Response.json({ erro: 'A cobrança deste escritório está pausada até ' + esc.pausa_ate + '.' }, { status: 409 })
+      }
+      const valorBase = body.valor == null || body.valor === '' ? esc.mensalidade : Number(body.valor)
+      if (valorBase == null) return Response.json({ erro: 'Defina a mensalidade do escritório antes de gerar fatura.' }, { status: 400 })
+      const valor = Math.max(0, Number(valorBase) - Number(esc.desconto || 0))
+      const vencimento = String(body.vencimento || '') || (competencia + '-10')
+      const { data, error } = await sb.from('faturas').insert({
+        escritorio_id: id, competencia, valor, vencimento,
+        status: 'aberta', observacao: String(body.observacao || '') || null,
+      }).select('*').single()
+      if (error) {
+        if (String(error.code) === '23505') return Response.json({ erro: 'Já existe fatura para ' + competencia + '.' }, { status: 409 })
+        throw new Error(error.message)
+      }
+      return Response.json({ ok: true, fatura: data })
+    }
+
+    if (acao === 'fatura_status') {
+      const fid = String(body.fatura_id || '')
+      const status = String(body.status || '')
+      if (!fid || !['aberta', 'paga', 'cancelada', 'isenta'].includes(status)) {
+        return Response.json({ erro: 'Informe a fatura e um status válido.' }, { status: 400 })
+      }
+      const { error } = await sb.from('faturas').update({
+        status, pago_em: status === 'paga' ? new Date().toISOString() : null,
+      }).eq('id', fid)
       if (error) throw new Error(error.message)
       return Response.json({ ok: true })
     }

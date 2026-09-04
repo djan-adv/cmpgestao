@@ -190,7 +190,14 @@ html[data-perfil="cliente"] #nav a[data-s="financeiro"],
 html[data-perfil="cliente"] #nav a[data-s="inove"],
 html[data-perfil="cliente"] #nav a[data-s="james"],
 html[data-perfil="cliente"] #nav a[data-s="encerrados"],
-html[data-perfil="cliente"] #nav a[data-s="sugestoes"]{display:none!important}
+/* Duas exceções ao .cmp-only, porque ele esconderia coisa boa:
+   - Produtividade não usa nenhuma conta da casa; é medição do próprio time do
+     cliente, e o cliente contratou o sistema inteiro.
+   - O canal de pedidos continua, com outro nome: para o cliente não é
+     "sugestão", é encomendar funcionalidade — e o dono do sistema responde com
+     orçamento. */
+html[data-perfil="cliente"] #nav a[data-s="produtividade"]{display:flex!important}
+html[data-perfil="cliente"] #nav a[data-s="sugestoes"]{display:flex!important;color:#ffd98a}
 html[data-perfil="inove"] .brand{display:none!important}
 html[data-perfil="inove"] .brand-neutral{display:block!important}
 html[data-perfil="inove"] .cmp-only{display:none!important}
@@ -1442,6 +1449,13 @@ function aplicarPerfilDaTela(){
   if(perfilSel==='inove'){ document.documentElement.setAttribute('data-perfil','inove'); return; }
   if(e && e.raiz!==true){
     document.documentElement.setAttribute('data-perfil','cliente');
+    /* "Sugestões / Melhorias" é a fila interna da casa. Para quem comprou o
+       sistema, o mesmo canal tem outro significado: encomendar funcionalidade,
+       que o dono responde com orçamento antes de fazer. */
+    try{
+      var lnkS=document.querySelector('#nav a[data-s="sugestoes"]');
+      if(lnkS) lnkS.innerHTML='<span class="ic">🧩</span> Solicitar funcionalidades';
+    }catch(eL){}
     var nome=((e.marca&&e.marca.sistema)||e.nome||'Gestão');
     var bn=document.querySelector('.brand-neutral'); if(bn) bn.textContent=nome;
     try{ document.title=nome; }catch(eT){}
