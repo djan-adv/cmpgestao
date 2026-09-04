@@ -16,7 +16,7 @@
 import { createClient } from '@supabase/supabase-js'
 import webpush from 'web-push'
 import { URL_PUBLICA } from '../../enviar-email/enviar.js'
-import { svc, hashSenha, gerarSenha, digitos, emailCredenciais } from '../lib.js'
+import { svc, hashSenha, gerarSenha, digitos, emailCredenciais, dadosDaCasa } from '../lib.js'
 import { DEMO_EMAILS } from '../../../../lib/demo.js'
 
 export const dynamic = 'force-dynamic'
@@ -371,7 +371,7 @@ export async function POST(request) {
       })
     }
 
-    const env = await emailCredenciais({ nome, email, senha, numero: digitos(p.numero), novoProcesso: !criado })
+    const env = await emailCredenciais({ nome, email, senha, numero: digitos(p.numero), novoProcesso: !criado, ...(await dadosDaCasa(sb, quem.escritorio_id)) })
     if (env && env.erro) {
       return Response.json({
         ok: true, aviso: 'Acesso criado, mas o e-mail NÃO saiu: ' + env.erro +
@@ -400,7 +400,7 @@ export async function POST(request) {
       const senha = gerarSenha()
       await sb.from('portal_acessos').update({ senha_hash: hashSenha(senha), senha_enviada_em: new Date().toISOString(), ativo: true }).eq('id', a.id)
       await sb.from('portal_sessoes').delete().eq('acesso_id', a.id)   // senha nova derruba sessão antiga
-      const env = await emailCredenciais({ nome: a.nome, email: a.email, senha, numero: '', novoProcesso: false })
+      const env = await emailCredenciais({ nome: a.nome, email: a.email, senha, numero: '', novoProcesso: false, ...(await dadosDaCasa(sb, a.escritorio_id)) })
       if (env && env.erro) return Response.json({ ok: true, aviso: 'Senha trocada, mas o e-mail NÃO saiu: ' + env.erro + ' — repasse ao cliente: ' + senha })
       return Response.json({ ok: true })
     }

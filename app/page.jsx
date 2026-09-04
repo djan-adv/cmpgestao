@@ -136,10 +136,10 @@ export default function Login() {
           {carregando ? 'Aguarde…' : (trocar ? 'Salvar e entrar' : 'Entrar')}
         </button>
 
-        {/* O Portal do Cliente é do escritório dono do sistema. Num endereço de
-            outro escritório essa porta não existe (ainda), e oferecer levaria o
-            cliente dele para o portal errado. */}
-        {!trocar && ehRaiz && (
+        {/* O portal atende o escritório DO ENDEREÇO: num domínio próprio, o
+            cliente dele entra no app dele. Na porta comum não aparece — ali não
+            há como saber de qual escritório é o cliente. */}
+        {!trocar && marca && marca.conhecido && (
           <div style={{ fontSize: 11.5, color: '#697180', marginTop: 14 }}>
             Cliente do escritório? Acompanhe seus processos no <a href="/portal.html" style={{ color: NAVY, fontWeight: 600 }}>Portal do Cliente</a>.
           </div>

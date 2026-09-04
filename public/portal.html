@@ -6,16 +6,16 @@
 <link rel="icon" type="image/png" sizes="64x64" href="/favicon-cmp.png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="manifest" href="/manifest.json">
-<meta name="apple-mobile-web-app-title" content="CMP Portal">
+<meta name="apple-mobile-web-app-title" content="Portal do cliente">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#2E3A4B">
 <meta name="robots" content="noindex">
-<title>Portal do cliente · CMP Advogados</title>
+<title>Portal do cliente</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-  /* Visual no modelo do app do TJ-PB (header azul, abas, cards), nas cores do CMP */
+  /* Visual no modelo do app do TJ-PB (header azul, abas, cards) */
   :root{--navy:#2E3A4B;--navy2:#3d4c60;--gold:#C9A227;--bg:#eef2f7;--panel:#fff;
         --line:#e2e7ee;--ink:#2b3442;--muted:#6b7484;--ok:#127a53;--danger:#b5342b;
         --chipbg:#e8edf4;}
@@ -225,7 +225,7 @@
 
     <!-- esqueci minha senha: manda o link pro e-mail cadastrado -->
     <div class="loginbox" id="box-esqueci" style="display:none">
-      <img src="/logo_cmp_full.png" alt="CMP Advogados">
+      <img class="marca-logo" src="/logo_cmp_full.png" alt="">
       <div class="sub">Redefinir senha</div>
       <label for="e-email">E-mail cadastrado</label>
       <input id="e-email" type="email" inputmode="email" placeholder="seu@email.com" onkeydown="if(event.key==='Enter')enviarEsqueci()">
@@ -238,7 +238,7 @@
 
     <!-- criar nova senha (chega pelo link do e-mail: ?reset=token) -->
     <div class="loginbox" id="box-novasenha" style="display:none">
-      <img src="/logo_cmp_full.png" alt="CMP Advogados">
+      <img class="marca-logo" src="/logo_cmp_full.png" alt="">
       <div class="sub">Criar nova senha</div>
       <label for="n-senha">Nova senha <span style="font-weight:400;color:#5b6673">(mínimo 6 caracteres)</span></label>
       <input id="n-senha" type="password" autocomplete="new-password" placeholder="Nova senha">
@@ -279,7 +279,7 @@
     <button class="ico" onclick="sair()" title="Sair" aria-label="Sair">⏻</button>
   </div>
   <div class="wrap">
-    <div class="ola"><img src="/logo_cmp_white.png" alt="CMP">
+    <div class="ola"><img class="marca-logo-branco" src="/logo_cmp_white.png" alt="">
       <div><h1 id="h-nome">Olá</h1><p>Toque num processo para ver movimentações, documentos e falar com o escritório.</p></div>
     </div>
     <div id="push-banner" class="hidden" style="background:#fdf3e7;border:1px solid #e8d9b0;border-radius:12px;padding:12px 14px;margin-bottom:12px;display:flex;align-items:center;gap:10px;justify-content:space-between;flex-wrap:wrap">
@@ -368,8 +368,32 @@
 
 <script>
 /* =====================================================================
-   Portal do Cliente CMP — modelo do app do TJ-PB, falando só com /api/portal
+   Portal do Cliente — modelo do app do TJ-PB, falando só com /api/portal
    ===================================================================== */
+/* O portal é do escritório dono do ENDEREÇO por onde o cliente entrou — quem
+   assina o app é o advogado dele, não quem vendeu o sistema. Sem isto, o
+   cliente de um escritório instalava no celular um aplicativo com o logo e o
+   nome de outra banca. */
+var NOME_ESCRITORIO='Seu escritório';
+(function(){
+  try{
+    fetch('/api/inquilino').then(function(r){return r.json();}).then(function(d){
+      if(!d||!d.ok||!d.conhecido) return;
+      NOME_ESCRITORIO=(d.marca&&d.marca.sistema)||d.nome||NOME_ESCRITORIO;
+      try{ document.title='Portal do cliente · '+NOME_ESCRITORIO; }catch(e){}
+      if(d.raiz===true) return;   /* a casa mantém a marca dela */
+      var lg=(d.marca&&d.marca.logo)||null;
+      Array.prototype.forEach.call(document.querySelectorAll('.marca-logo,.marca-logo-branco'),function(img){
+        if(lg){ img.src=lg; img.alt=NOME_ESCRITORIO; return; }
+        /* sem logo cadastrado, o nome escrito — nunca a marca de outro escritório */
+        var t=document.createElement('div');
+        t.textContent=NOME_ESCRITORIO;
+        t.style.cssText='font-weight:800;font-size:17px;color:'+(img.className.indexOf('branco')>-1?'#fff':'#2E3A4B');
+        img.parentNode.replaceChild(t,img);
+      });
+    }).catch(function(){});
+  }catch(e){}
+})();
 var TOKEN = localStorage.getItem('cmp_portal_token') || '';
 var NOME  = localStorage.getItem('cmp_portal_nome') || '';
 /* chegou pelo link de redefinição (?reset=token do e-mail): derruba a sessão
@@ -921,7 +945,7 @@ function puxarChat(primeira){
       $('chat-corpo').innerHTML =
         '<div class="aviso-dia">Conversa registrada no processo. O escritório responde em horário de expediente.</div>';
       if(!ms.length){
-        $('chat-corpo').innerHTML += '<div class="cmsg eles"><div class="bolha"><div class="quem">CMP Advogados</div>Olá'+(NOME?', '+esc(NOME.split(' ')[0]):'')+'! Este é o chat do seu processo. Escreva aqui sua dúvida ou informação que a equipe responde. 😊</div></div>';
+        $('chat-corpo').innerHTML += '<div class="cmsg eles"><div class="bolha"><div class="quem">'+esc(NOME_ESCRITORIO)+'</div>Olá'+(NOME?', '+esc(NOME.split(' ')[0]):'')+'! Este é o chat do seu processo. Escreva aqui sua dúvida ou informação que a equipe responde. 😊</div></div>';
       }
     }
     if(ms.length){
@@ -974,7 +998,7 @@ function desenhaMsg(m){
   var d=document.createElement('div'); d.className='cmsg '+(eu?'eu':'eles');
   d.setAttribute('data-mid', m.id);
   if(m.apagada){ d.innerHTML=bolhaApagada(m); $('chat-corpo').appendChild(d); return; }
-  d.innerHTML='<div class="bolha">'+(!eu?('<div class="quem">'+esc(m.autor_nome||'CMP Advogados')+'</div>'):'')+
+  d.innerHTML='<div class="bolha">'+(!eu?('<div class="quem">'+esc(m.autor_nome||NOME_ESCRITORIO)+'</div>'):'')+
     anexoHTML(m)+
     (m.texto?linkifica(m.texto):'')+'<div class="hora">'+brHora(m.criado_em)+'</div></div>';
   $('chat-corpo').appendChild(d);
@@ -1060,7 +1084,7 @@ function mostrarBotaoInstalar(){
 function instalar(){
   if(deferredPrompt){
     deferredPrompt.prompt();
-    deferredPrompt.userChoice.then(function(r){ if(r&&r.outcome==='accepted'){ toast('Aplicativo instalado! Procure o ícone CMP na tela de início.'); } deferredPrompt=null; });
+    deferredPrompt.userChoice.then(function(r){ if(r&&r.outcome==='accepted'){ toast('Aplicativo instalado! Procure o ícone na tela de início.'); } deferredPrompt=null; });
   } else {
     $('modal-ios').classList.remove('hidden');
     $('ios-passos').innerHTML = ehIos()

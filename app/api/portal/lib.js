@@ -79,7 +79,25 @@ export async function processosPermitidos(sb, acesso) {
    exportar os handlers HTTP — nada mais sai dele. Usado tanto pelo botão
    "Dar acesso ao app" (admin/route.js, ação 'conceder') quanto pela varredura
    em lote (cron/portal-varredura). */
-export async function emailCredenciais({ nome, email, senha, numero, novoProcesso }) {
+/* Nome, endereço e conta de envio do escritório que está convidando. Sem isto
+   o convite sai com o nome, o endereço e o e-mail de quem VENDEU o sistema —
+   e o cliente tenta entrar pela porta errada. */
+export async function dadosDaCasa(sb, escritorioId) {
+  try {
+    const { data } = await sb.from('escritorios')
+      .select('nome,raiz,marca,hosts').eq('id', escritorioId).maybeSingle()
+    if (!data) return {}
+    const host = (data.hosts || [])[0]
+    return {
+      escritorioId,
+      escritorioRaiz: data.raiz === true,
+      escritorioNome: (data.marca && data.marca.sistema) || data.nome || '',
+      endereco: (data.raiz === true || !host) ? null : ('https://' + host),
+    }
+  } catch (e) { return {} }
+}
+
+export async function emailCredenciais({ nome, email, senha, numero, novoProcesso, escritorioId, escritorioNome, escritorioRaiz, endereco }) {
   const linhaSenha = senha
     ? ('LOGIN (seu e-mail): ' + email + '\nSENHA: ' + senha + '\n')
     : ('LOGIN (seu e-mail): ' + email + '\nSENHA: a mesma que você já usa no portal (se esqueceu, peça ao escritório uma nova).\n')
@@ -89,7 +107,9 @@ export async function emailCredenciais({ nome, email, senha, numero, novoProcess
       ? 'Um novo processo foi liberado no seu acesso ao aplicativo do escritório.\n\n'
       : 'Seu acesso ao aplicativo do escritório está pronto!\n\n') +
     'Pelo aplicativo você acompanha seu processo em tempo real: as movimentações, os documentos oficiais (despachos, sentenças e acordos), as petições que protocolamos e o contato do cartório da Vara. E, se precisar falar com a gente sobre o processo, é só usar o chat de dentro do próprio processo.\n\n' +
-    'ENDEREÇO: ' + URL_PUBLICA + '/portal.html\n' +
+    /* o endereço é o do PRÓPRIO escritório: mandar o cliente dele para o
+       endereço de quem vendeu o sistema o faria tentar entrar na porta errada */
+    'ENDEREÇO: ' + (endereco || URL_PUBLICA) + '/portal.html\n' +
     linhaSenha + '\n' +
     'COMO COLOCAR NA TELA DO CELULAR (recomendado):\n' +
     '• Android: abra o endereço acima no Chrome e toque no botão "Instalar o aplicativo".\n' +
@@ -101,7 +121,11 @@ export async function emailCredenciais({ nome, email, senha, numero, novoProcess
     '• Qualquer dúvida, é só responder este e-mail.'
   return enviarEmailCore({
     para: email,
-    assunto: 'Seu acesso ao aplicativo do escritório — CMP Advogados',
+    // o assunto trazia o nome de um escritório só; agora é o de quem convida
+    assunto: 'Seu acesso ao aplicativo do escritório' + (escritorioNome ? ' — ' + escritorioNome : ''),
+    // sai pela conta de e-mail DO ESCRITÓRIO: o cliente dele não pode receber
+    // convite vindo do endereço de outra banca
+    escritorioId: escritorioRaiz ? null : (escritorioId || null),
     // convidarApp: false — este e-mail JÁ é o convite (leva login e senha);
     // o bloco automático repetiria a mesma conversa dentro dela mesma.
     corpo, numero: numero || '', dedup: false, convidarApp: false,

@@ -19,7 +19,7 @@
 //   GET /api/cron/portal-varredura?somente_contagem=1  → só conta, não envia nada
 
 import { createClient } from '@supabase/supabase-js'
-import { hashSenha, gerarSenha, emailCredenciais } from '../../portal/lib.js'
+import { hashSenha, gerarSenha, emailCredenciais, dadosDaCasa } from '../../portal/lib.js'
 import { enviarEmailCore } from '../../enviar-email/enviar.js'
 import { registrarConvite, URL_PORTAL } from '../../portal/convite-lib.js'
 
@@ -138,7 +138,7 @@ export async function GET(request) {
           senha_enviada_em: new Date().toISOString(),
         }).select('id').single()
         if (ins.error) throw new Error(ins.error.message)
-        env = await emailCredenciais({ nome: c.nome, email: mail, senha, numero: '', novoProcesso: false })
+        env = await emailCredenciais({ nome: c.nome, email: mail, senha, numero: '', novoProcesso: false, ...(await dadosDaCasa(sb, c.escritorio_id)) })
         if (!env.erro) {
           await registrarConvite(sb, {
             situacao: 'sem', falta_telefone: false, nome: c.nome,
