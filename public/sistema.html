@@ -332,7 +332,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
       <div id="proc-subnav" style="display:none">
         <a data-s="contratacao" onclick="go('contratacao')" title="Tudo que o escritório acompanha SEM contrato assinado: caso novo do Comercial (ainda sem número de processo) e processo que você mandou para cá pelo botão de pasta na ficha" style="padding-left:30px;opacity:.85;font-size:13px"><span class="ic">📝</span> Sem contrato <span id="nav-n-contrat" style="margin-left:auto;font-size:10.5px;background:var(--navy2);border-radius:10px;padding:1px 7px"></span></a>
         <a data-s="inove" onclick="go('inove')" style="padding-left:30px;opacity:.85;font-size:13px"><span class="ic">◈</span> Inove <span id="nav-n-inove" style="margin-left:auto;font-size:10.5px;background:var(--navy2);border-radius:10px;padding:1px 7px"></span></a>
-        <a data-s="james" onclick="go('james')" style="padding-left:30px;opacity:.8;font-size:13px"><span class="ic">⏸</span> James Laurence <span id="nav-n-james" style="margin-left:auto;font-size:10.5px;background:var(--navy2);border-radius:10px;padding:1px 7px"></span></a>
+        <a data-s="james" class="cmp-only" onclick="go('james')" style="padding-left:30px;opacity:.8;font-size:13px"><span class="ic">⏸</span> James Laurence <span id="nav-n-james" style="margin-left:auto;font-size:10.5px;background:var(--navy2);border-radius:10px;padding:1px 7px"></span></a>
       </div>
       <!-- lotes personalizados: só aparecem dentro da área de Processos (igual Inove/Encerrados/James) -->
       <div id="proc-subnav-lotes" style="display:none"></div>
@@ -10350,7 +10350,7 @@ function renderProc(){
   <p class="note" style="margin:2px 0 10px">Selecione a pasta (ex.: <b>Brisas</b>) que contém <b>uma subpasta por processo</b>. O sistema reconhece cada subpasta pelo nome do cliente e envia para o processo certo, <b>preservando as subpastas internas</b>. Nada é enviado até você conferir e clicar em Enviar. Para testar, selecione só a pasta de <b>Dimas Germano</b>.</p>
   <div style="background:#f7f9fc;border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-bottom:10px">
     <label style="font-size:12px;font-weight:600;color:var(--navy)">Réu em comum (âncora — deixa o reconhecimento mais preciso)</label>
-    <input type="text" id="sync-reu" value="James Laurence Developments Construções Incorporações e Imobiliária LTDA" style="width:100%;box-sizing:border-box;font-size:12px;padding:5px 7px;border:1px solid var(--line);border-radius:6px;margin-top:3px">
+    <input type="text" id="sync-reu" placeholder="nome do réu que se repete nos processos desta pasta (opcional)" style="width:100%;box-sizing:border-box;font-size:12px;padding:5px 7px;border:1px solid var(--line);border-radius:6px;margin-top:3px">
     <label style="display:flex;align-items:center;gap:6px;font-size:12px;margin-top:7px;cursor:pointer"><input type="checkbox" id="sync-fixnome" checked> Completar o nome do autor com o nome da pasta (útil para <b>casais</b> — facilita buscas futuras)</label>
     <div style="margin-top:7px;font-size:12px">
       <span style="font-weight:600;color:var(--navy)">A pasta que escolhi é:</span>
@@ -11339,13 +11339,19 @@ function _loteCtrlHTML(p){
      cadastrados e mesmo quando o oponente não bate com o regex de ehJames() —
      é o mesmo jeito de escolher "onde arquivar isto" que os lotes comuns, só
      que por baixo dos panos usa o campo suspenso (mesma pasta da tela James). */
-  var rotulo=susp?'☠ James Laurence':(atualL?('📁 '+esc(atualL.nome)):'📁 enviar para lote…');
-  var cor=susp?'#5b4a8a':(atualL?(esc(atualL.cor||'#185FA5')):'#fff');
+  /* "James Laurence" é a massa falida DESTA casa, não um conceito do sistema.
+     No escritório cliente ela aparecia como opção de pasta em toda ficha — o
+     nome de um devedor de outro escritório dentro do acervo dele. A mecânica por
+     baixo (campo `suspenso`) continua existindo para a raiz; o cliente usa os
+     lotes que ele mesmo criou. */
+  var _raizCasa=!!(window.__escInfo&&window.__escInfo.raiz===true);
+  var rotulo=(susp&&_raizCasa)?'☠ James Laurence':(atualL?('📁 '+esc(atualL.nome)):'📁 enviar para lote…');
+  var cor=(susp&&_raizCasa)?'#5b4a8a':(atualL?(esc(atualL.cor||'#185FA5')):'#fff');
   var opts='<option value="">'+rotulo+'</option>'
-    +'<option value="__james"'+(susp?' selected':'')+'>☠ James Laurence (massa falida)</option>'
+    +(_raizCasa?('<option value="__james"'+(susp?' selected':'')+'>☠ James Laurence (massa falida)</option>'):'')
     +lotes.map(function(l){ return '<option value="'+l.id+'"'+(String(p.lote_id||'')===String(l.id)?' selected':'')+'>'+esc(l.nome)+'</option>'; }).join('')
     +(atualL?'<option value="__out">— tirar do lote —</option>':'')
-    +(susp?'<option value="__tirar_james">— tirar do James Laurence —</option>':'');
+    +((susp&&_raizCasa)?'<option value="__tirar_james">— tirar do James Laurence —</option>':'');
   return ' <select onchange="definirLoteProc(\''+n+'\',this.value)" title="Enviar este processo para uma pasta-lote, ou para o grupo James Laurence — nos dois casos ele sai da lista principal (continua recebendo publicações normalmente)" style="width:auto;max-width:220px;font-size:11px;padding:3px 6px;border:1px solid var(--line);border-radius:8px;background:'+cor+';color:'+((susp||atualL)?'#fff':'#5d6673')+'">'+opts+'</select>';
 }
 async function definirLoteProc(num, val){
@@ -19138,7 +19144,12 @@ function abrirContatoOrgao(numEnc){
   var num=decodeURIComponent(numEnc); var p=(DADOS.processos||[]).filter(function(x){return x.numero===num;})[0]||{};
   var ex=contatoDoProcesso(p)||{};
   window.__coCtx={numero:num, tribunal:tribunalAlias(num), id:ex.id||null};
-  document.getElementById('co-orgao').value=ex.orgao||p.foro||'';
+  /* A vara vem de `orgao` na maioria dos processos e de `foro` em alguns. Usar só
+     `foro` deixava o campo vazio, e salvar assim gravava um contato SEM ÓRGÃO —
+     que a ficha nunca mais encontra (o casamento é pelo nome da vara) e que a
+     proteção contra duplicata também não vê, então cada save criava outra cópia.
+     Foi exatamente o que aconteceu. */
+  document.getElementById('co-orgao').value=ex.orgao||p.orgao||p.foro||p.orgao_atual||'';
   document.getElementById('co-email').value=ex.email||'';
   document.getElementById('co-whats').value=ex.whatsapp||'';
   var _ct=document.getElementById('co-tels'); if(_ct) _ct.value=ex.telefones||'';
@@ -19148,9 +19159,20 @@ function abrirContatoOrgao(numEnc){
 function fecharContatoOrgao(){ document.getElementById('modal-contato-orgao').classList.add('hidden'); }
 async function salvarContatoOrgao(){
   var ctx=window.__coCtx, sb=window.__sb; if(!sb||!ctx) return;
+  /* Sem o nome da vara o contato fica órfão: some da ficha e volta a ser pedido
+     na próxima vez, criando uma cópia a cada tentativa. Melhor recusar aqui. */
+  var _org=String((document.getElementById('co-orgao')||{}).value||'').trim();
+  if(!_org){
+    alert('Informe o nome da vara/órgão.\n\nÉ por ele que o contato é encontrado — o mesmo e-mail passa a valer para todos os processos desta vara. Sem o nome, o contato não aparece em ficha nenhuma.');
+    try{ document.getElementById('co-orgao').focus(); }catch(e){}
+    return;
+  }
   var ug=await sb.auth.getUser(); var pf=await sb.from('usuarios').select('escritorio_id').eq('id',ug.data.user.id).single();
   var esc2=pf.data&&pf.data.escritorio_id; if(!esc2){ alert('Escritório não encontrado.'); return; }
-  var row={escritorio_id:esc2, tribunal:ctx.tribunal, orgao:document.getElementById('co-orgao').value||null, email:document.getElementById('co-email').value||null, whatsapp:document.getElementById('co-whats').value||null, telefones:((document.getElementById('co-tels')||{}).value||null), balcao_link:document.getElementById('co-link').value||null};
+  var _lim=function(id){ var el=document.getElementById(id); return el?(String(el.value||'').trim()||null):null; };
+  var row={escritorio_id:esc2, tribunal:ctx.tribunal, orgao:_org,
+    email:_lim('co-email'), whatsapp:_lim('co-whats'),
+    telefones:_lim('co-tels'), balcao_link:_lim('co-link')};
   /* memória de removidos: avisa se algum contato sendo salvo já foi apagado antes */
   try{
     var vals=[]; if(row.email) vals.push(String(row.email).trim().toLowerCase());
