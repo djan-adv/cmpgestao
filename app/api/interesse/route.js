@@ -14,7 +14,7 @@
 // de fora seria deixar qualquer um escrever lead dentro de escritório alheio.
 
 import { createClient } from '@supabase/supabase-js'
-import { enviarEmailCore } from '../enviar-email/enviar.js'
+import { enviarTextoProduto } from '../_lib/email-produto.js'
 
 export const dynamic = 'force-dynamic'
 
@@ -85,7 +85,7 @@ export async function POST(request) {
   // O lead já está guardado; o aviso é conveniência. Falha aqui não pode
   // devolver erro a quem preencheu — ele fez a parte dele.
   try {
-    await enviarEmailCore({
+    await enviarTextoProduto({
       para: AVISAR,
       assunto: 'Pedido de demonstração — ' + nome,
       corpo:
@@ -95,9 +95,6 @@ export async function POST(request) {
         (body.telefone ? ('Telefone: ' + corta(body.telefone, LIM.telefone) + '\n') : '') +
         (detalhe ? ('\n' + detalhe + '\n') : '') +
         '\nO pedido também está no Comercial, como lead novo.',
-      dedup: false,
-      convidarApp: false,
-      escritorioId: null,   // conta do servidor
     })
   } catch (e) {}
 

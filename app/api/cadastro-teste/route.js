@@ -27,7 +27,7 @@ import { createClient } from '@supabase/supabase-js'
 import crypto from 'crypto'
 import dns from 'dns'
 import { enviarEmailConta } from '../_lib/email-conta.js'
-import { enviarEmailCore } from '../enviar-email/enviar.js'
+import { enviarTextoProduto, remetenteProduto } from '../_lib/email-produto.js'
 import { LIMITES_TESTE, DIAS_TESTE, fimDoTeste } from '../_lib/planos.js'
 import { VERSAO_TERMO } from '../../../lib/termo-uso.js'
 
@@ -179,7 +179,7 @@ export async function POST(request) {
       })
     } catch (e) {}
     try {
-      await enviarEmailCore({
+      await enviarTextoProduto({
         para: AVISAR,
         assunto: 'Teste NÃO criado (teto atingido) — ' + escritorio,
         corpo: 'Alguém tentou abrir um teste e o teto foi atingido.\n\n' +
@@ -188,7 +188,6 @@ export async function POST(request) {
           '\n\nTestes ativos: ' + (ativosCount || 0) + ' (teto ' + MAX_ATIVOS + ')' +
           '\nCriados hoje: ' + (hojeCount || 0) + ' (teto ' + MAX_DIA + ')' +
           '\n\nO interessado está no Comercial como lead novo.',
-        dedup: false, convidarApp: false, escritorioId: null,
       })
     } catch (e) {}
     return Response.json({
@@ -293,7 +292,8 @@ export async function POST(request) {
     })
   } catch (e) {}
   try {
-    await enviarEmailCore({
+    const rem = remetenteProduto()
+    await enviarTextoProduto({
       para: AVISAR,
       assunto: 'Novo teste aberto — ' + escritorio,
       corpo:
@@ -383,7 +383,7 @@ async function pedirCodigo(body, ip, navegador) {
   })
   if (error) return Response.json({ erro: 'Não consegui iniciar agora. Tente de novo em instantes.' }, { status: 500 })
 
-  const envio = await enviarEmailCore({
+  const envio = await enviarTextoProduto({
     para: email,
     assunto: 'Seu código de confirmação — ' + codigo,
     corpo:
@@ -393,7 +393,6 @@ async function pedirCodigo(body, ip, navegador) {
       '    ' + codigo + '\n\n' +
       'Ele vale por 30 minutos.\n\n' +
       'Se não foi você quem pediu, ignore esta mensagem: nada foi criado, e sem o código nada será.',
-    dedup: false, convidarApp: false, escritorioId: null,
   })
   if (!envio || envio.erro) {
     return Response.json({ erro: 'Não consegui enviar o código para esse endereço. Confira o e-mail digitado.' }, { status: 502 })

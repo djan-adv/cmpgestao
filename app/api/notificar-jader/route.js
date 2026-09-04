@@ -30,6 +30,8 @@ const JADER = ['jadergabrielpinheiro.adv@gmail.com', 'jaderpinheiroadv@gmail.com
 // (fase dos robos por inquilino: este nao entra ate ter credencial propria)
 const ESCRITORIO_CMP = ESCRITORIO_RAIZ
 const REMIND_MS = 29 * 60 * 1000   // reenvia lembrete de lead a cada ~30 min
+// Canais que são do SISTEMA, não da advocacia (ver o filtro dos leads, abaixo).
+const CANAIS_DO_PRODUTO = new Set(['site do sistema', 'auto-cadastro teste'])
 const OFF_BR = -3                  // Brasília = UTC-3 (sem horário de verão hoje)
 // e-mails de quem tem que ser avisado NO CELULAR (push do /chat), além do
 // aviso no grupo "Todos" — pedido do dono (20/08/2026): "avisar imediatamente
@@ -143,6 +145,13 @@ export async function GET(request) {
     const { data: leads } = await q
     const devidos = (leads || []).filter(l => {
       if (l.notif_ack) return false
+      // Lead DO PRODUTO não é lead da banca. Quem se interessa pelo sistema
+      // pela página de vendas cai no mesmo crm_leads (o escritorio_id da tabela
+      // é a raiz), e sem este filtro o aviso ia para os sócios do escritório de
+      // advocacia — que não vendem software e não têm o que fazer com ele.
+      // Esses leads já têm canal próprio: o e-mail para quem vende, mandado
+      // pela conta do produto.
+      if (CANAIS_DO_PRODUTO.has(String(l.canal || '').toLowerCase())) return false
       if (!l.notif_ultimo) return true                         // nunca avisado → imediato
       return (agora - new Date(l.notif_ultimo)) >= REMIND_MS   // passou ~30 min
     })
