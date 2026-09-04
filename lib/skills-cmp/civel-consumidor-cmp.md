@@ -107,5 +107,5 @@ instrução.
 Quando um caso novo desta área for concluído e revelar um padrão útil (uma tese nova,
 um cálculo diferente, um jeito de driblar uma defesa comum), atualize este arquivo com
 o padrão **generalizado** (sem nome de parte, CNPJ/CPF ou nº de processo). O caso real
-em si — com os dados — fica registrado no Astrea e, se for útil como exemplo de
+em si — com os dados — fica registrado no sistema e, se for útil como exemplo de
 redação, na base de conhecimento do Project "CMP — Cível/Consumidor".

@@ -1,7 +1,7 @@
 // Carga inicial do escritório que administra o sistema.
 //
 // Estes dados — 60 processos do Kanban, 79 tarefas e a agenda importada do
-// Astrea — estavam ESCRITOS DENTRO de public/sistema.html. Esse arquivo é
+// do sistema anterior — estavam ESCRITOS DENTRO de public/sistema.html. Esse arquivo é
 // servido como estático: qualquer pessoa com o endereço baixava e lia nome de
 // cliente e número de processo, sem login. Sigilo de cliente num arquivo
 // público.
@@ -392,7 +392,7 @@ const CARGA = {
 "data": "2026-07-01",
 "prazo": "",
 "tipoForm": "tarefa",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7002,
@@ -404,7 +404,7 @@ const CARGA = {
 "data": "2026-07-01",
 "prazo": "",
 "tipoForm": "tarefa",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7003,
@@ -416,7 +416,7 @@ const CARGA = {
 "data": "2026-07-01",
 "prazo": "",
 "tipoForm": "tarefa",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7004,
@@ -428,7 +428,7 @@ const CARGA = {
 "data": "2026-07-01",
 "prazo": "",
 "tipoForm": "tarefa",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7005,
@@ -440,7 +440,7 @@ const CARGA = {
 "data": "2026-07-01",
 "prazo": "",
 "tipoForm": "tarefa",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7006,
@@ -452,7 +452,7 @@ const CARGA = {
 "data": "2026-08-01",
 "prazo": "",
 "tipoForm": "tarefa",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7007,
@@ -464,7 +464,7 @@ const CARGA = {
 "data": "2026-09-01",
 "prazo": "",
 "tipoForm": "tarefa",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7008,
@@ -476,7 +476,7 @@ const CARGA = {
 "data": "2026-07-02",
 "prazo": "",
 "tipoForm": "tarefa",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7009,
@@ -488,7 +488,7 @@ const CARGA = {
 "data": "2026-08-04",
 "prazo": "",
 "tipoForm": "tarefa",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7010,
@@ -500,7 +500,7 @@ const CARGA = {
 "data": "2026-09-04",
 "prazo": "",
 "tipoForm": "tarefa",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7011,
@@ -512,7 +512,7 @@ const CARGA = {
 "data": "2026-07-06",
 "prazo": "",
 "tipoForm": "tarefa",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7012,
@@ -524,7 +524,7 @@ const CARGA = {
 "data": "2026-07-06",
 "prazo": "",
 "tipoForm": "tarefa",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7013,
@@ -536,7 +536,7 @@ const CARGA = {
 "data": "2026-07-07",
 "prazo": "",
 "tipoForm": "tarefa",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7014,
@@ -548,7 +548,7 @@ const CARGA = {
 "data": "2026-05-08",
 "prazo": "",
 "tipoForm": "tarefa",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7015,
@@ -560,7 +560,7 @@ const CARGA = {
 "data": "2026-07-10",
 "prazo": "",
 "tipoForm": "tarefa",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7016,
@@ -572,7 +572,7 @@ const CARGA = {
 "data": "2026-08-11",
 "prazo": "",
 "tipoForm": "tarefa",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7017,
@@ -584,7 +584,7 @@ const CARGA = {
 "data": "2026-09-11",
 "prazo": "",
 "tipoForm": "tarefa",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7018,
@@ -596,7 +596,7 @@ const CARGA = {
 "data": "2026-09-11",
 "prazo": "",
 "tipoForm": "tarefa",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7019,
@@ -608,7 +608,7 @@ const CARGA = {
 "data": "2026-05-13",
 "prazo": "",
 "tipoForm": "tarefa",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7020,
@@ -620,7 +620,7 @@ const CARGA = {
 "data": "2026-05-13",
 "prazo": "",
 "tipoForm": "tarefa",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7021,
@@ -632,7 +632,7 @@ const CARGA = {
 "data": "2026-05-13",
 "prazo": "",
 "tipoForm": "tarefa",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7022,
@@ -644,7 +644,7 @@ const CARGA = {
 "data": "2026-05-13",
 "prazo": "",
 "tipoForm": "tarefa",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7023,
@@ -656,7 +656,7 @@ const CARGA = {
 "data": "2026-05-13",
 "prazo": "",
 "tipoForm": "tarefa",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7024,
@@ -668,7 +668,7 @@ const CARGA = {
 "data": "2026-05-13",
 "prazo": "",
 "tipoForm": "tarefa",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7025,
@@ -680,7 +680,7 @@ const CARGA = {
 "data": "2026-05-13",
 "prazo": "",
 "tipoForm": "tarefa",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7026,
@@ -692,7 +692,7 @@ const CARGA = {
 "data": "2026-05-13",
 "prazo": "",
 "tipoForm": "tarefa",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7027,
@@ -704,7 +704,7 @@ const CARGA = {
 "data": "2026-05-13",
 "prazo": "",
 "tipoForm": "tarefa",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7028,
@@ -716,7 +716,7 @@ const CARGA = {
 "data": "2026-05-13",
 "prazo": "",
 "tipoForm": "tarefa",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7029,
@@ -728,7 +728,7 @@ const CARGA = {
 "data": "2026-05-13",
 "prazo": "",
 "tipoForm": "tarefa",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7030,
@@ -740,7 +740,7 @@ const CARGA = {
 "data": "2026-05-13",
 "prazo": "",
 "tipoForm": "tarefa",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7031,
@@ -752,7 +752,7 @@ const CARGA = {
 "data": "2026-05-13",
 "prazo": "",
 "tipoForm": "tarefa",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7032,
@@ -764,7 +764,7 @@ const CARGA = {
 "data": "2026-07-14",
 "prazo": "",
 "tipoForm": "tarefa",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7033,
@@ -776,7 +776,7 @@ const CARGA = {
 "data": "2026-09-14",
 "prazo": "",
 "tipoForm": "tarefa",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7034,
@@ -788,7 +788,7 @@ const CARGA = {
 "data": "2026-09-14",
 "prazo": "",
 "tipoForm": "tarefa",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7035,
@@ -800,7 +800,7 @@ const CARGA = {
 "data": "2026-07-15",
 "prazo": "",
 "tipoForm": "tarefa",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7036,
@@ -812,7 +812,7 @@ const CARGA = {
 "data": "2026-07-15",
 "prazo": "",
 "tipoForm": "tarefa",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7037,
@@ -824,7 +824,7 @@ const CARGA = {
 "data": "2026-09-15",
 "prazo": "",
 "tipoForm": "tarefa",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7038,
@@ -836,7 +836,7 @@ const CARGA = {
 "data": "2026-09-15",
 "prazo": "",
 "tipoForm": "tarefa",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7039,
@@ -848,7 +848,7 @@ const CARGA = {
 "data": "2026-07-17",
 "prazo": "",
 "tipoForm": "tarefa",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7040,
@@ -860,7 +860,7 @@ const CARGA = {
 "data": "2026-07-17",
 "prazo": "",
 "tipoForm": "tarefa",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7041,
@@ -872,7 +872,7 @@ const CARGA = {
 "data": "2026-07-22",
 "prazo": "",
 "tipoForm": "tarefa",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7042,
@@ -884,7 +884,7 @@ const CARGA = {
 "data": "2026-07-23",
 "prazo": "",
 "tipoForm": "tarefa",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7043,
@@ -896,7 +896,7 @@ const CARGA = {
 "data": "2026-07-23",
 "prazo": "",
 "tipoForm": "tarefa",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7044,
@@ -908,7 +908,7 @@ const CARGA = {
 "data": "2026-07-24",
 "prazo": "",
 "tipoForm": "tarefa",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7045,
@@ -920,7 +920,7 @@ const CARGA = {
 "data": "2026-06-25",
 "prazo": "",
 "tipoForm": "tarefa",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7046,
@@ -932,7 +932,7 @@ const CARGA = {
 "data": "2026-06-25",
 "prazo": "",
 "tipoForm": "tarefa",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7047,
@@ -944,7 +944,7 @@ const CARGA = {
 "data": "2026-06-25",
 "prazo": "",
 "tipoForm": "tarefa",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7048,
@@ -956,7 +956,7 @@ const CARGA = {
 "data": "2026-06-25",
 "prazo": "",
 "tipoForm": "tarefa",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7049,
@@ -968,7 +968,7 @@ const CARGA = {
 "data": "2026-06-26",
 "prazo": "",
 "tipoForm": "tarefa",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7050,
@@ -980,7 +980,7 @@ const CARGA = {
 "data": "2026-06-26",
 "prazo": "",
 "tipoForm": "tarefa",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7051,
@@ -992,7 +992,7 @@ const CARGA = {
 "data": "2026-06-26",
 "prazo": "",
 "tipoForm": "tarefa",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7052,
@@ -1004,7 +1004,7 @@ const CARGA = {
 "data": "2026-06-26",
 "prazo": "",
 "tipoForm": "tarefa",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7053,
@@ -1016,7 +1016,7 @@ const CARGA = {
 "data": "2026-06-26",
 "prazo": "",
 "tipoForm": "tarefa",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7054,
@@ -1028,7 +1028,7 @@ const CARGA = {
 "data": "2026-06-26",
 "prazo": "",
 "tipoForm": "tarefa",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7055,
@@ -1040,7 +1040,7 @@ const CARGA = {
 "data": "2026-07-28",
 "prazo": "",
 "tipoForm": "tarefa",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7056,
@@ -1052,7 +1052,7 @@ const CARGA = {
 "data": "2026-07-28",
 "prazo": "",
 "tipoForm": "tarefa",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7057,
@@ -1064,7 +1064,7 @@ const CARGA = {
 "data": "2026-09-28",
 "prazo": "",
 "tipoForm": "tarefa",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7058,
@@ -1076,7 +1076,7 @@ const CARGA = {
 "data": "2026-06-29",
 "prazo": "",
 "tipoForm": "tarefa",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7059,
@@ -1088,7 +1088,7 @@ const CARGA = {
 "data": "2026-06-29",
 "prazo": "",
 "tipoForm": "tarefa",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7060,
@@ -1100,7 +1100,7 @@ const CARGA = {
 "data": "2026-06-29",
 "prazo": "",
 "tipoForm": "tarefa",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7061,
@@ -1112,7 +1112,7 @@ const CARGA = {
 "data": "2026-06-29",
 "prazo": "",
 "tipoForm": "tarefa",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7062,
@@ -1124,7 +1124,7 @@ const CARGA = {
 "data": "2026-06-29",
 "prazo": "",
 "tipoForm": "tarefa",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7063,
@@ -1136,7 +1136,7 @@ const CARGA = {
 "data": "2026-06-29",
 "prazo": "",
 "tipoForm": "tarefa",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7064,
@@ -1148,7 +1148,7 @@ const CARGA = {
 "data": "2026-06-30",
 "prazo": "",
 "tipoForm": "tarefa",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7065,
@@ -1160,7 +1160,7 @@ const CARGA = {
 "data": "2026-09-30",
 "prazo": "",
 "tipoForm": "tarefa",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7066,
@@ -1172,7 +1172,7 @@ const CARGA = {
 "data": "2026-06-18",
 "prazo": "2026-06-17",
 "tipoForm": "prazo",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7067,
@@ -1184,7 +1184,7 @@ const CARGA = {
 "data": "2026-06-23",
 "prazo": "2026-06-25",
 "tipoForm": "prazo",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7068,
@@ -1196,7 +1196,7 @@ const CARGA = {
 "data": "2026-06-24",
 "prazo": "",
 "tipoForm": "prazo",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7069,
@@ -1208,7 +1208,7 @@ const CARGA = {
 "data": "2026-06-25",
 "prazo": "2026-06-29",
 "tipoForm": "prazo",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7070,
@@ -1220,7 +1220,7 @@ const CARGA = {
 "data": "2026-06-25",
 "prazo": "2026-06-26",
 "tipoForm": "prazo",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7071,
@@ -1232,7 +1232,7 @@ const CARGA = {
 "data": "2026-06-25",
 "prazo": "",
 "tipoForm": "prazo",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7072,
@@ -1244,7 +1244,7 @@ const CARGA = {
 "data": "2026-06-25",
 "prazo": "2026-06-29",
 "tipoForm": "prazo",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7073,
@@ -1256,7 +1256,7 @@ const CARGA = {
 "data": "2026-06-26",
 "prazo": "2026-06-30",
 "tipoForm": "prazo",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7074,
@@ -1268,7 +1268,7 @@ const CARGA = {
 "data": "2026-06-29",
 "prazo": "2026-07-01",
 "tipoForm": "prazo",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7075,
@@ -1280,7 +1280,7 @@ const CARGA = {
 "data": "2026-06-30",
 "prazo": "2026-07-02",
 "tipoForm": "prazo",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7076,
@@ -1292,7 +1292,7 @@ const CARGA = {
 "data": "2026-07-03",
 "prazo": "",
 "tipoForm": "prazo",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7077,
@@ -1304,7 +1304,7 @@ const CARGA = {
 "data": "2026-07-06",
 "prazo": "",
 "tipoForm": "prazo",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7078,
@@ -1316,7 +1316,7 @@ const CARGA = {
 "data": "2026-07-06",
 "prazo": "2026-07-08",
 "tipoForm": "prazo",
-"origem": "astrea"
+"origem": "importado"
 },
 {
 "id": 7079,
@@ -1328,7 +1328,7 @@ const CARGA = {
 "data": "2026-07-06",
 "prazo": "2026-06-19",
 "tipoForm": "prazo",
-"origem": "astrea"
+"origem": "importado"
 }
 ],
 "agenda": [

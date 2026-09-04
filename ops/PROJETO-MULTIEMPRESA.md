@@ -24,7 +24,7 @@ vendido em **planos por número de acessos**.
    ferramentas, **exceto envio de e-mail**. → vira o **1º inquilino-protótipo**.
 2. **Sem cadastrar senha de ninguém:** o Djan não quer digitar senha de usuário. As
    pessoas devem **entrar com o próprio e-mail e senha** (auto-cadastro por link).
-3. **E-mail estilo Astrea:** o sistema envia de **um único remetente**, configurado uma
+3. **E-mail de remetente único:** o sistema envia de **um único remetente**, configurado uma
    vez, **sem senha por usuário**. E-mail institucional (ex.: domínio novo tipo
    *CMPDigital*, sem nome de advogado) fica para depois; por ora envio desligado p/ Inove.
 4. **Nada vinculado ao Djan:** para vender a outros escritórios, **nada** pode estar
@@ -80,7 +80,7 @@ vendido em **planos por número de acessos**.
    domínio.
 5. **Marca por inquilino** (logo/nome/cores da configuração) — nada chumbado.
 6. **Remetente único por domínio do cliente** (SPF/DKIM configurados uma vez); envia
-   como `@dominiodocliente`. Sem senha por usuário (modelo Astrea).
+   como `@dominiodocliente`. Sem senha por usuário.
 7. **Painel-mãe:** o operador (Djan) vê todos os inquilhinos como **pastas** no menu.
 
 **Personalização sem fork:** marca, ligar/desligar módulos por plano, campos/etapas/

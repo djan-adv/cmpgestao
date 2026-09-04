@@ -114,7 +114,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
-<div class="demo">⚠ PROTÓTIPO com DADOS REAIS do CMP (480 processos importados do Astrea). Identidade real. Respostas da IA são exemplos.</div>
+<div class="demo">⚠ PROTÓTIPO com DADOS REAIS do CMP (480 processos importados na carga inicial). Identidade real. Respostas da IA são exemplos.</div>
 
 <section id="login">
   <div class="loginbox">
@@ -433,7 +433,7 @@ function abrir(i){
   html+='<div class="card"><p class="sectlabel">Atividades do escritório neste processo</p><ul class="timeline">'+(_ah||'<li><div class="note">Nenhuma atividade do escritório vinculada ainda — crie em "+ Nova tarefa neste processo".</div></li>')+'</ul></div>';
   html+='<div class="card"><p class="sectlabel">Etiquetas</p><div id="det-etq"></div>'+
     '<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><select id="det-etq-sel" style="width:auto;max-width:280px"></select><button class="btn sm" onclick="addEtqProc()">adicionar etiqueta</button></div></div>';
-  // blocos estilo Astrea (onde entram os dados nas próximas fases)
+  // blocos de dados do processo (onde entram os dados nas próximas fases)
   html+='<div class="grid2">'+
     '<div class="card"><p class="sectlabel">Honorários e valores</p>'+kv('Faturado','R$ 0,00')+kv('A faturar','R$ 0,00')+kv('Valor da causa',p.causa?('R$ '+p.causa):'—')+'</div>'+
     '<div class="card"><p class="sectlabel">Apensos, documentos e atendimentos</p><div class="note">Nenhum item vinculado ainda. Aqui entram apensos, peças, comprovantes e o registro de conversas/reuniões com o cliente.</div></div>'+
@@ -595,7 +595,7 @@ function renderTriagem(){
   });
 }
 function toggleTeor(id){var d=document.getElementById("teor-"+id);if(!d)return;d.style.display=(d.style.display==="none")?"block":"none";}
-function irParaProcesso(num){var dd=String(num).replace(/\D/g,"");var i=DADOS.processos.findIndex(function(p){return String(p.numero).replace(/\D/g,"")===dd;});if(i>=0){abrir(i);}else{alert("Este processo (nº "+num+") tem publicação capturada, mas não está na base de 480 processos importada do Astrea. No sistema real, todos os processos entram e o link abre a página completa.");}}
+function irParaProcesso(num){var dd=String(num).replace(/\D/g,"");var i=DADOS.processos.findIndex(function(p){return String(p.numero).replace(/\D/g,"")===dd;});if(i>=0){abrir(i);}else{alert("Este processo (nº "+num+") tem publicação capturada, mas não está na base importada na carga inicial. No sistema real, todos os processos entram e o link abre a página completa.");}}
 function acaoTriagem(id){
   var t=TRIAGEM.find(function(x){return x.id===id});if(!t)return;
   var sug=sugestaoTeor(t.texto||t.titulo); triagemAtual=id;

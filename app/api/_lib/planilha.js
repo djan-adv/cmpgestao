@@ -1,6 +1,6 @@
 // Ler a planilha que o escritório trouxe do sistema antigo.
 //
-// Quem vende para quem já usa Astrea (ou Projuris, ou uma planilha de controle)
+// Quem vende para quem já usa outro sistema de gestão (ou uma planilha de controle)
 // esbarra sempre na mesma porta: o acervo já existe, e ninguém redigita mil
 // processos. Este arquivo é a parte chata disso — abrir CSV e XLSX de origens
 // que não combinaram nada entre si, e adivinhar o que cada coluna significa.

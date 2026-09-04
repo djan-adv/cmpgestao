@@ -64,7 +64,7 @@ export default function Importar() {
         status: p.status || null,
         valor_causa: p.valor_causa ?? null,
         ultima_movimentacao: p.ultima_movimentacao || null,
-        fonte: 'astrea',
+        fonte: 'importado',
       }))
       const B = 500
       let done = 0
