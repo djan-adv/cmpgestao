@@ -11,12 +11,17 @@ import fs from 'fs'
 import path from 'path'
 import { createClient } from '@supabase/supabase-js'
 import { enviarEmailCore } from '../../enviar-email/enviar.js'
+import { raizDocs, remetenteDoEscritorio, emailDoEscritorio, ESCRITORIO_RAIZ } from '../../_lib/inquilino.js'
+import { baseDoEscritorio } from '../../portal/convite-lib.js'
+import { embutirLogo } from '../../../../lib/timbre.js'
 import { gerarMinuta, prazoUteis } from '../../peticao/core.js'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 120
 
-const ROOT = '/opt/cmpdocs'
+// A pasta é a do escritório dono do caso (ver raizDocs): a procuração assinada
+// de um escritório caindo na árvore de outro seria documento de cliente na casa
+// errada — e é o documento mais sensível que passa por aqui.
 const EMAIL_ESCRITORIO = process.env.EMAIL_CONFIRMACAO_ASSINATURA || 'contato@cmpadvogados.com.br'
 // destino nos Documentos do processo:
 //  - procuração: ARQUIVO na raiz, numerado "2 Procuração - ..." (sem subpasta)
@@ -157,7 +162,7 @@ const MESES_BR = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'j
 // pdf-lib usa WinAnsi na Helvetica: troca o que não codifica para não explodir
 function winAnsi(s) { return String(s || '').replace(/[""]/g, '"').replace(/['']/g, "'").replace(/[–—]/g, '-').replace(/[^\x09\x0A\x20-\x7E -ÿ]/g, ' ') }
 
-async function pdfProcuracaoA4({ d, s0, evtAssinado, selfieBuf }) {
+async function pdfProcuracaoA4({ d, s0, evtAssinado, selfieBuf, sb = null, esc = null }) {
   const { PDFDocument, StandardFonts, rgb } = await import('pdf-lib')
   const pdf = await PDFDocument.create()
   const reg = await pdf.embedFont(StandardFonts.Helvetica)
@@ -166,8 +171,9 @@ async function pdfProcuracaoA4({ d, s0, evtAssinado, selfieBuf }) {
   const AZUL = rgb(0.059, 0.165, 0.29), TINTA = rgb(0.11, 0.15, 0.2), CINZA = rgb(0.36, 0.4, 0.45)
   const W = 595.28, H = 841.89, M = 62, UTIL = W - M * 2, TAM = 10.5, ALT = 15.5
 
-  let logo = null
-  try { logo = await pdf.embedPng(fs.readFileSync(path.join(process.cwd(), 'public', 'logo_cmp_full.png'))) } catch (e) {}
+  // o timbre é do escritório dono do caso: a procuração vai para os autos, e
+  // com o logotipo de outro escritório o documento fica simplesmente errado
+  const logo = await embutirLogo(pdf, sb, esc)
 
   const dd = (s0.dados && typeof s0.dados === 'object') ? s0.dados : {}
   const fem = /a$/i.test(String(dd.nacionalidade || ''))
@@ -320,7 +326,7 @@ export async function GET(request) {
   const passos = []
   try { sign = await signAdmin(cmp, false, passos) } catch (e) { return Response.json({ ok: false, erro: String((e && e.message) || e), passos }, { status: 502 }) }
 
-  const SEL_DOC = 'id, titulo, tipo, modelo, finalidade, processo, status, sync_cmp_em, signatarios(nome, cpf, email, telefone, ip, dados, status, assinado_em, selfie_path, selfie_em)'
+  const SEL_DOC = 'id, escritorio_id, titulo, tipo, modelo, finalidade, processo, status, sync_cmp_em, signatarios(nome, cpf, email, telefone, ip, dados, status, assinado_em, selfie_path, selfie_em)'
   const buscaPendentes = (cli) => cli.from('documentos').select(SEL_DOC)
     .is('sync_cmp_em', null).eq('status', 'assinado').limit(10)
   let { data: docs, error } = await buscaPendentes(sign)
@@ -351,14 +357,21 @@ export async function GET(request) {
   for (const d of (docs || [])) {
     try {
       const dig = String(d.processo || '').replace(/\D/g, '')
-      // acha o processo no CMP (quando há vínculo): número exato ou por dígitos
+      /* De qual escritório é o documento. O assinador guarda isso na própria
+         linha; documento antigo, de quando havia um escritório só, vem sem — e
+         aí é da casa. Sem este filtro, a busca do processo achava o de OUTRO
+         escritório com o mesmo número (número se repete entre tribunais) e a
+         procuração assinada era arquivada na ficha de quem não é parte. */
+      const escDoc = d.escritorio_id || ESCRITORIO_RAIZ
+      // acha o processo DAQUELE escritório: número exato ou por dígitos
       let row = null
       const SEL = 'id, numero, cliente_nome, oponente, observacoes, contatos_livres, contatos_partes, escritorio_id, peca_pendente, rascunho_gerado_em'
       if (d.processo) {
-        let q = await cmp.from('processos').select(SEL).eq('numero', d.processo).limit(1)
+        const doEsc = () => cmp.from('processos').select(SEL).eq('escritorio_id', escDoc)
+        let q = await doEsc().eq('numero', d.processo).limit(1)
         row = q.data && q.data[0]
-        if (!row && dig) { q = await cmp.from('processos').select(SEL).eq('numero_digitos', dig).limit(1); row = q.data && q.data[0] }
-        if (!row && dig) { q = await cmp.from('processos').select(SEL).ilike('numero', '%' + d.processo + '%').limit(1); row = q.data && q.data[0] }
+        if (!row && dig) { q = await doEsc().eq('numero_digitos', dig).limit(1); row = q.data && q.data[0] }
+        if (!row && dig) { q = await doEsc().ilike('numero', '%' + d.processo + '%').limit(1); row = q.data && q.data[0] }
       }
 
       const sigs = (d.signatarios || []).filter(s => s.status === 'assinado')
@@ -386,7 +399,7 @@ export async function GET(request) {
             const ds = await sign.storage.from('assinaturas').download(sigs[0].selfie_path)
             if (!ds.error && ds.data) selfieBuf = Buffer.from(await ds.data.arrayBuffer())
           }
-          const bonito = await pdfProcuracaoA4({ d, s0: sigs[0], evtAssinado: (evt && evt[0]) || null, selfieBuf })
+          const bonito = await pdfProcuracaoA4({ d, s0: sigs[0], evtAssinado: (evt && evt[0]) || null, selfieBuf, sb: cmp, esc: escDoc })
           if (bonito && bonito.length > 2000) pdfBuf = bonito
         } catch (e) { console.warn('pdf A4 da procuração:', (e && e.message) || e) }
       }
@@ -394,7 +407,7 @@ export async function GET(request) {
       let salvoEm = '', pdfNome = ''
       if (row && pdfBuf) {
         const chave = dig || ('caso-' + String(row.id).replace(/[^a-zA-Z0-9-]/g, ''))
-        const dir = path.join(ROOT, chave, dest.dir)
+        const dir = path.join(raizDocs(escDoc), chave, dest.dir)
         fs.mkdirSync(dir, { recursive: true })
         // "✓" no nome = assinado. Procuração sai "Procuração assinada ✓ - Nome do
         // Cliente.pdf" (pedido do dono); os demais mantêm o título + ✓.
@@ -432,6 +445,9 @@ export async function GET(request) {
             '.\n\nA procuração já foi assinada eletronicamente e está na pasta do caso — os demais documentos anexados também estão na pasta.'
           const rm = await gerarMinuta(cmp, {
             numero: row.numero, instrucao, autor: 'robo', rotina: 'minuta_caso_novo', maxFiles: 6,
+            /* o caso é do escritório que colheu a assinatura: é na pasta dele
+               que a procuração assinada está, e é lá que o rascunho tem de cair */
+            esc: row.escritorio_id,
             tarefaTitulo: 'Revisar rascunho: ' + row.peca_pendente + ' — ' + (row.cliente_nome || ''),
             prazoEm: prazo, resp: 'Maria Rita', origemTarefa: 'minuta_caso_novo', pecaNome: row.peca_pendente,
           })
@@ -458,19 +474,27 @@ export async function GET(request) {
       let emailOk = false
       try {
         const quando = (sigs[0] && sigs[0].assinado_em) ? new Date(sigs[0].assinado_em).toLocaleString('pt-BR', { timeZone: 'America/Fortaleza' }) : ''
-        const corpo = (reprocesso ? 'Selfie de confirmação recebida — a via da procuração na pasta foi atualizada com ela.\n\n' : 'Documento assinado no assinador do CMPGestão.\n\n') +
+        const corpo = (reprocesso ? 'Selfie de confirmação recebida — a via da procuração na pasta foi atualizada com ela.\n\n' : 'Documento assinado no assinador do sistema.\n\n') +
           'Documento: ' + (d.titulo || '(sem título)') + '\n' +
           (quem ? ('Assinado por: ' + quem + '\n') : '') +
           (quando ? ('Quando: ' + quando + '\n') : '') +
           (d.processo ? ('Processo/caso: ' + d.processo + '\n') : 'Sem processo vinculado.\n') +
           (salvoEm ? ('Cópia salva na ficha do processo, em ' + salvoEm + '.\n') : 'Cópia disponível no painel de Assinaturas.\n') +
-          '\nPainel: https://gestao.cmpadvogados.com.br/assinatura/painel'
-        const env = await enviarEmailCore({
-          para: EMAIL_ESCRITORIO,
-          cc: 'djan.adv@gmail.com',   // confirmação também direto pro Djan (pedido 20/08/2026)
+          '\nPainel: ' + (await baseDoEscritorio(cmp, escDoc)) + '/assinatura/painel'
+        /* O aviso de "assinado" é INTERNO do escritório dono do documento. Ia
+           sempre para a caixa da casa (com cópia para o dono), o que, num
+           documento de escritório cliente, entrega o nome do cliente dele a
+           quem não tem nada com o caso — e deixa o próprio escritório sem
+           aviso nenhum. */
+        const ehDaCasa = !escDoc || escDoc === ESCRITORIO_RAIZ
+        const paraAviso = ehDaCasa ? EMAIL_ESCRITORIO : (await emailDoEscritorio(escDoc))
+        const env = paraAviso ? await enviarEmailCore({
+          para: paraAviso,
+          cc: ehDaCasa ? 'djan.adv@gmail.com' : '',   // confirmação direto pro dono só nos documentos da casa
           assunto: (reprocesso ? '📸 Selfie recebida: ' : '✍ Assinado: ') + (d.titulo || 'documento') + (quem ? ' — ' + quem.split(';')[0] : ''),
-          corpo, numero: dig || '', dedup: true
-        })
+          corpo, numero: dig || '', dedup: true,
+          escritorioId: await remetenteDoEscritorio(escDoc),
+        }) : null
         emailOk = !!(env && env.ok)
       } catch (e) {}
 

@@ -27,11 +27,11 @@ import { svc, confereSenha, hashSenha, sessao, tokenDo, digitos, processosPermit
 import { enviarEmailCore } from '../enviar-email/enviar.js'
 import { URL_PORTAL, urlPortalDoEscritorio, nomeDoEscritorio } from './convite-lib.js'
 import { PASTA_APP_CLIENTE, RE_OFICIAL } from '../../../lib/appCliente.js'
+import { raizDocs, remetenteDoEscritorio } from '../_lib/inquilino.js'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
-const DOCS_ROOT = '/opt/cmpdocs'
 const MIMES = {
   pdf: 'application/pdf', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp',
   docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', doc: 'application/msword',
@@ -138,7 +138,7 @@ async function docsDoProcesso(sb, p) {
   const nomesOficiais = new Set(oficiais.map(o => String(o.nome || '')))
   const marcados = []
   try {
-    const dirApp = path.join(DOCS_ROOT, dig, PASTA_APP_CLIENTE)
+    const dirApp = path.join(raizDocs(p.escritorio_id), dig, PASTA_APP_CLIENTE)
     for (const nome of fs.readdirSync(dirApp)) {
       if (nome.startsWith('.') || nome.endsWith('.parcial')) continue
       if (nomesOficiais.has(nome)) continue
@@ -281,7 +281,15 @@ export async function POST(request) {
       urlApp + '?reset=' + token + '\n\n' +
       'Se você não pediu esta troca, ignore este e-mail — sua senha continua a mesma.\n\n' +
       'Atenciosamente,\n' + casa
-    try { await enviarEmailCore({ para: email, assunto: 'Redefinir a senha do aplicativo — ' + casa, corpo, convidarApp: false, dedup: false }) } catch (e) {}
+    try {
+      await enviarEmailCore({
+        para: email, assunto: 'Redefinir a senha do aplicativo — ' + casa, corpo,
+        // pela conta do escritório dele: o cliente pediu senha ao escritório que
+        // contratou, e é dele que a resposta tem de vir
+        escritorioId: await remetenteDoEscritorio(a.escritorio_id),
+        convidarApp: false, dedup: false,
+      })
+    } catch (e) {}
     return Response.json(NEUTRA)
   }
 
@@ -704,7 +712,7 @@ export async function GET(request) {
       return Response.json({ erro: 'Documento inválido.' }, { status: 400 })
     }
     if (!numerosOk.has(dig)) return Response.json({ erro: 'Documento não disponível para este acesso.' }, { status: 403 })
-    const base = path.join(DOCS_ROOT, dig, PASTA_APP_CLIENTE)
+    const base = path.join(raizDocs(acesso.escritorio_id), dig, PASTA_APP_CLIENTE)
     const abs = path.resolve(base, nomeArq)
     if (!abs.startsWith(base + path.sep)) return Response.json({ erro: 'Caminho inválido.' }, { status: 400 })
     let buf = null
@@ -763,8 +771,11 @@ export async function GET(request) {
     const rel = tipo === 'peticao' ? data.arquivo_caminho : data.comprovante_caminho
     const nomeArq = (tipo === 'peticao' ? (data.arquivo_nome || data.titulo) : (data.comprovante_nome || 'comprovante')) || 'documento'
     if (!rel) return Response.json({ erro: 'Arquivo não disponível.' }, { status: 404 })
-    const abs = path.resolve(rel.startsWith('/') ? rel : path.join(DOCS_ROOT, rel))
-    if (!abs.startsWith(DOCS_ROOT + path.sep) && abs !== DOCS_ROOT) {
+    // a raiz de documentos é a do escritório do acesso: um caminho relativo
+    // resolvido contra a árvore de outro escritório entregaria arquivo alheio
+    const raizAcesso = raizDocs(acesso.escritorio_id)
+    const abs = path.resolve(rel.startsWith('/') ? rel : path.join(raizAcesso, rel))
+    if (!abs.startsWith(raizAcesso + path.sep) && abs !== raizAcesso) {
       return Response.json({ erro: 'Caminho inválido.' }, { status: 400 })
     }
     let buf = null

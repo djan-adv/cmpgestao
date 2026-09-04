@@ -18,7 +18,8 @@ import { createClient } from '@supabase/supabase-js'
 import fs from 'fs'
 import path from 'path'
 import { chamarClaude } from '../../_ia/claude.js'
-import { coletaPdfs, ROOT, ESCRITORIO_CMP } from '../../peticao/core.js'
+import { coletaPdfs } from '../../peticao/core.js'
+import { escritorioDoUsuario, pastaProcesso } from '../../_lib/inquilino.js'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 180
@@ -103,10 +104,12 @@ export async function POST(request) {
   const dig = String(body.numero || '').replace(/\D/g, '')
   if (dig.length < 16) return Response.json({ erro: 'número de processo inválido' }, { status: 400 })
 
+  const esc = await escritorioDoUsuario(user.id)
+  if (!esc) return Response.json({ erro: 'usuário sem escritório vinculado' }, { status: 403 })
   const sb = admin()
   const { data: proc } = await sb.from('processos')
     .select('id,numero,cliente_nome,classe,assunto,status,fase,valor_causa,valor_condenacao,hon_val_contratual,hon_val_sucumbencia,hon_val_execucao,hon_pct_contratual,hon_pct_sucumbencia,hon_pct_execucao,hon_origem')
-    .eq('escritorio_id', ESCRITORIO_CMP).eq('numero_digitos', dig).maybeSingle()
+    .eq('escritorio_id', esc).eq('numero_digitos', dig).maybeSingle()
   if (!proc) return Response.json({ erro: 'processo não encontrado no sistema' }, { status: 404 })
   if (proc.hon_origem === 'manual') {
     return Response.json({ ok: true, pulou: 'os valores deste processo foram digitados à mão — o robô não sobrescreve. Apague o valor no quadro de Honorários se quiser que o robô preencha de novo.' })
@@ -126,7 +129,7 @@ export async function POST(request) {
   if (!proc.valor_causa) chaves.push('inicial', 'exordial')
   chaves.push('procuracao', 'honorarios', 'contrato')
   const arr = []
-  coletaPdfs(path.join(ROOT, dig), arr)
+  coletaPdfs(pastaProcesso(esc, dig), arr)
   if (!arr.length) return Response.json({ ok: true, processo: proc.numero, sem_documentos: true, aviso: 'Nenhum PDF encontrado na pasta deste processo — nada para ler.' })
   const pontua = (nome) => { const n = semAcento(nome); return chaves.reduce((acc, k) => acc + (n.indexOf(k) > -1 ? 1 : 0), 0) }
   arr.sort((a, b) => (pontua(b.nome) - pontua(a.nome)) || (b.mtime - a.mtime))
@@ -152,7 +155,7 @@ export async function POST(request) {
   content.push({ type: 'text', text: pedido })
 
   const r = await chamarClaude({
-    rotina: 'honorarios', sb, ref: proc.numero, escritorioId: ESCRITORIO_CMP,
+    rotina: 'honorarios', sb, ref: proc.numero, escritorioId: esc,
     modelo: 'claude-sonnet-5', maxTokens: 2000,
     sistemaFixo: MANUAL_HONORARIOS, conteudo: content,
     ferramentas: FERRAMENTA_HONORARIOS, toolChoice: { type: 'tool', name: 'registrar_honorarios' },

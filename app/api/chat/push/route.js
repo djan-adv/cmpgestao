@@ -12,6 +12,10 @@ import webpush from 'web-push'
 import { createClient } from '@supabase/supabase-js'
 import { contaDemo, respostaDemo } from '../../../../lib/demo.js'
 
+// contato técnico do push (vai para o servidor de push do navegador, não para o
+// cliente): é de quem opera a instalação, não do escritório dono do processo
+const VAPID_CONTATO = 'mailto:' + (process.env.VAPID_EMAIL || 'contato@djan.app.br')
+
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
 
@@ -145,7 +149,7 @@ export async function POST(request) {
   if (body.acao === 'testar') {
     const v = await vapid()
     if (!v) return Response.json({ erro: 'push não configurado no servidor' }, { status: 400 })
-    webpush.setVapidDetails('mailto:contato@cmpadvogados.com.br', v.public, v.private)
+    webpush.setVapidDetails(VAPID_CONTATO, v.public, v.private)
     const admin = svc()
     const { data: subs } = await admin.from('chat_push_subs').select('*').eq('user_id', user.id)
     if (!subs || !subs.length) return Response.json({ ok: true, enviados: 0, motivo: 'nenhum aparelho seu com alarme ativo' })
@@ -164,7 +168,7 @@ export async function POST(request) {
     if (body.autor_id !== user.id) return Response.json({ erro: 'autor não confere com a sessão' }, { status: 403 })
     const v = await vapid()
     if (!v) return Response.json({ ok: true, enviados: 0 }) // push não configurado — não trava o chat
-    webpush.setVapidDetails('mailto:contato@cmpadvogados.com.br', v.public, v.private)
+    webpush.setVapidDetails(VAPID_CONTATO, v.public, v.private)
 
     // Quem recebe: só os OUTROS. Nada do que a pessoa escreve volta para ela.
     //

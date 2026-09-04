@@ -10,6 +10,7 @@
 
 import { createClient } from '@supabase/supabase-js'
 import { gerarMinuta } from './core.js'
+import { escritorioDoUsuario } from '../_lib/inquilino.js'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 600
@@ -36,11 +37,17 @@ export async function POST(request) {
   let body
   try { body = await request.json() } catch (e) { return Response.json({ erro: 'json inválido' }, { status: 400 }) }
 
+  // a minuta é do escritório de quem pediu: é no acervo dele que os documentos
+  // do processo estão, e é na pasta dele que o rascunho tem de cair
+  const esc = await escritorioDoUsuario(user.id)
+  if (!esc) return Response.json({ erro: 'usuário sem escritório vinculado' }, { status: 403 })
+
   const r = await gerarMinuta(admin(), {
     numero: body.numero,
     instrucao: body.instrucao,
     autor: String(user.email || 'user'),
     rotina: 'peticao',
+    esc,
   })
   if (r.erro) return Response.json({ erro: r.erro }, { status: r.status || 502 })
 

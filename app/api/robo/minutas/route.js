@@ -788,7 +788,7 @@ async function faseMinuta(sb, esc) {
   const instrucao = alvo.instrucao || ('Redigir ' + (alvo.tipo_peca || 'a peça') + ' cabível diante da última intimação.')
   const r = await gerarMinuta(sb, {
     numero: alvo.processo_numero, instrucao, autor: 'robô', maxFiles: 4,
-    docsPreferidos: alvo.docs_necessarios || [], rotina: 'minuta',
+    docsPreferidos: alvo.docs_necessarios || [], rotina: 'minuta', esc,
     prazoEm: alvo.prazo_em || null,
     tarefaTitulo: 'Revisar e protocolar: ' + (alvo.tipo_peca || 'peça') + ' — ' + String(instrucao).slice(0, 70),
     pecaNome: alvo.tipo_peca || null,

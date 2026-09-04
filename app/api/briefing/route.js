@@ -28,7 +28,8 @@ import { createClient } from '@supabase/supabase-js'
 import fs from 'fs'
 import path from 'path'
 import { chamarClaude } from '../_ia/claude.js'
-import { ROOT, ESCRITORIO_CMP, coletaPdfs } from '../peticao/core.js'
+import { coletaPdfs } from '../peticao/core.js'
+import { escritorioDoUsuario, pastaProcesso } from '../_lib/inquilino.js'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -94,12 +95,16 @@ export async function POST(request) {
   if (dig.length < 8) return Response.json({ erro: 'número de processo inválido' }, { status: 400 })
   if (!tarefa) return Response.json({ erro: 'a tarefa não tem título — descreva o que precisa ser feito' }, { status: 400 })
 
+  // o briefing é do escritório de quem pediu: é no acervo dele que o processo
+  // está e é na pasta dele que a inicial foi guardada
+  const esc = await escritorioDoUsuario(u.id)
+  if (!esc) return Response.json({ erro: 'usuário sem escritório vinculado' }, { status: 403 })
   const sb = admin()
 
   // ——— ficha ———
   const { data: proc } = await sb.from('processos')
     .select('id,numero,cliente_nome,oponente,classe,assunto,orgao,orgao_atual,foro,valor_causa,distribuido_em')
-    .eq('escritorio_id', ESCRITORIO_CMP).eq('numero_digitos', dig).maybeSingle()
+    .eq('escritorio_id', esc).eq('numero_digitos', dig).maybeSingle()
   if (!proc) return Response.json({ erro: 'processo não encontrado no sistema' }, { status: 404 })
 
   // ——— últimos atos COM teor ———
@@ -120,7 +125,7 @@ export async function POST(request) {
 
   // ——— petição inicial da pasta ———
   const arr = []
-  try { coletaPdfs(path.join(ROOT, dig), arr) } catch (e) {}
+  try { coletaPdfs(pastaProcesso(esc, dig), arr) } catch (e) {}
   const ehInicial = (f) => /inicial|peti[cç]/.test(semAcento(f.nome))
   // a íntegra dos autos COMEÇA pela petição inicial — para efeito de
   // qualificação das partes ela vale como inicial, e é a melhor fonte quando o
@@ -186,7 +191,7 @@ export async function POST(request) {
     maxTokens: 4000,
     sb,
     ref: proc.numero,
-    escritorioId: ESCRITORIO_CMP,
+    escritorioId: esc,
   })
   if (r.erro) return Response.json({ erro: r.erro }, { status: r.status || 502 })
 

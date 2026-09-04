@@ -33,6 +33,21 @@ export async function urlPortalDoEscritorio(sb, escritorioId) {
   return URL_PORTAL
 }
 
+// O endereço público DO ESCRITÓRIO (sem /portal.html): é a base dos links que
+// saem nos e-mails dele — confirmação de leitura, pixel de abertura, convite.
+// Com a base fixa da instalação, o cliente de um escritório recebia link
+// apontando para o domínio de outro.
+export async function baseDoEscritorio(sb, escritorioId) {
+  try {
+    if (sb && escritorioId) {
+      const { data } = await sb.from('escritorios').select('hosts').eq('id', escritorioId).maybeSingle()
+      const host = (data && Array.isArray(data.hosts) && data.hosts.find(h => h && !/^localhost/i.test(h))) || ''
+      if (host) return 'https://' + host.replace(/^https?:\/\//, '').replace(/\/+$/, '')
+    }
+  } catch (e) {}
+  return (process.env.PUBLIC_URL || '').replace(/\/+$/, '') || URL_PORTAL.replace(/\/portal\.html$/, '')
+}
+
 // Nome do escritório que assina o que vai para o cliente dele.
 export async function nomeDoEscritorio(sb, escritorioId) {
   try {

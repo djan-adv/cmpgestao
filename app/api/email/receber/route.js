@@ -187,7 +187,9 @@ async function lerCaixa(sb, ImapFlow, escritorioId, conta, dias) {
         // cabeçalhos de conversa
         let refs = ''
         try { refs = (m.headers ? Buffer.from(m.headers).toString('utf8') : '') } catch (e) {}
-        const raizes = (refs.match(/<cmp-thread-[a-f0-9]+@cmpadvogados\.com\.br>/gi) || [])
+        /* aceita os dois formatos: o antigo, com o domínio da casa (mensagens já
+           enviadas continuam encadeando), e o neutro, usado desde 04/09/2026 */
+        const raizes = (refs.match(/<(?:cmp-)?thread-[a-f0-9]+@[^>]+>/gi) || [])
 
         // mala direta e automação não são resposta de ninguém: newsletter, aviso de
         // sistema, "não responda". Sem isso a caixa vira lixeira em uma semana.

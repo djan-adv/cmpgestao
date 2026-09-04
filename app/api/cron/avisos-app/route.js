@@ -14,6 +14,10 @@
 import { createClient } from '@supabase/supabase-js'
 import webpush from 'web-push'
 
+// contato técnico do push (vai para o servidor de push do navegador, não para o
+// cliente): é de quem opera a instalação, não do escritório dono do processo
+const VAPID_CONTATO = 'mailto:' + (process.env.VAPID_EMAIL || 'contato@djan.app.br')
+
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
 export const revalidate = 0
@@ -65,7 +69,7 @@ export async function GET(request) {
 
   const { data: v } = await sb.from('app_secrets').select('valor').eq('chave', 'vapid_chat').maybeSingle()
   if (!(v && v.valor)) return Response.json({ ok: true, enviados: 0, erro: 'VAPID não configurado' })
-  webpush.setVapidDetails('mailto:contato@cmpadvogados.com.br', v.valor.public, v.valor.private)
+  webpush.setVapidDetails(VAPID_CONTATO, v.valor.public, v.valor.private)
 
   const rel = { ok: true, enviados: 0, semDestino: 0, falhas: 0, detalhe: [] }
 

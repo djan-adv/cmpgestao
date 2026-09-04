@@ -98,6 +98,43 @@ export function raizDocs(esc) {
   return base + '-inq/' + esc
 }
 
+// A pasta de UM processo. Existe para não haver duas maneiras de montar este
+// caminho no sistema: número de processo se repete entre tribunais, e bastou um
+// módulo montar `/opt/cmpdocs/<numero>` por conta própria para dois escritórios
+// gravarem na mesma pasta. Quem precisa do caminho pede aqui.
+export function pastaProcesso(esc, numero) {
+  return raizDocs(esc) + '/' + String(numero || '').replace(/\D/g, '')
+}
+
+// Quem assina um envio: o id do escritório, ou `null` quando é a raiz.
+//
+// A conta de e-mail da raiz é a do ambiente e o resto do sistema a identifica
+// por `null` (ver contaDeEnvio). Passar o id da raiz faz o sistema procurar uma
+// conta cadastrada que não existe — e o e-mail não sai. Como os robôs e crons
+// leem o escritório de uma LINHA (que sempre traz o id, inclusive o da raiz),
+// esta função faz a tradução num lugar só.
+export async function remetenteDoEscritorio(escId) {
+  if (!escId || escId === ESCRITORIO_RAIZ) return null
+  try {
+    const { data } = await admin().from('escritorios').select('raiz').eq('id', escId).maybeSingle()
+    if (data && data.raiz === true) return null
+  } catch (e) {}
+  return escId
+}
+
+// O e-mail de contato do escritório (cadastro do escritório → dados.email).
+// É para onde vão os avisos internos DELE — confirmação de assinatura, por
+// exemplo. Sem isso, esses avisos caíam todos na caixa da casa, levando junto o
+// nome do cliente de quem não é cliente dela.
+export async function emailDoEscritorio(escId) {
+  if (!escId) return ''
+  try {
+    const { data } = await admin().from('escritorios').select('dados').eq('id', escId).maybeSingle()
+    const e = data && data.dados && data.dados.email
+    return (e && /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(String(e).trim())) ? String(e).trim() : ''
+  } catch (e) { return '' }
+}
+
 // ---------------------------------------------------------------------------
 // Canais que saem para FORA (e-mail, WhatsApp, protocolo, assinatura).
 //

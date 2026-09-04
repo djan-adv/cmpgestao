@@ -59,7 +59,7 @@ export async function GET(request) {
   // O `caminho_disco is null` é cinto e suspensório: quem já está no disco NUNCA
   // pode voltar para a lista, nem que uma leitura velha escape em algum ponto.
   const { data: linhas, error } = await sb.from('jusbr_arquivos')
-    .select('id,processo_numero,doc_nome,tamanho').not('conteudo_b64', 'is', null).is('caminho_disco', null)
+    .select('id,escritorio_id,processo_numero,doc_nome,tamanho').not('conteudo_b64', 'is', null).is('caminho_disco', null)
     .order('tamanho', { ascending: false, nullsFirst: false })
     .limit(limite)
   if (error) return Response.json({ erro: error.message }, { status: 500 })
@@ -80,7 +80,7 @@ export async function GET(request) {
       if (!buf.length) { rel.erros.push({ id: r.id, erro: 'conteúdo vazio' }); continue }
 
       // grava e CONFERE o tamanho no disco; só devolve o caminho se deu certo
-      const destino = gravarNoDisco(r.processo_numero, r.doc_nome, r.id, buf)
+      const destino = gravarNoDisco(r.processo_numero, r.doc_nome, r.id, buf, r.escritorio_id)
       if (!destino) { rel.erros.push({ id: r.id, erro: 'falha ao gravar no disco' }); continue }
 
       const up = await sb.from('jusbr_arquivos')

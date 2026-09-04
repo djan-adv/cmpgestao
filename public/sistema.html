@@ -788,8 +788,8 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
           <summary class="note" style="cursor:pointer;margin:0">Ainda usa o Tampermonkey? O userscript antigo continua aqui.</summary>
           <div style="margin-top:8px">
             <button class="btn sm ghost" onclick="gerarUserscriptJusbr()">📄 Gerar meu userscript</button>
-            <div id="robos-userscript" style="display:none;margin-top:10px">
-              <textarea id="robos-userscript-txt" readonly style="width:100%;height:180px;font-family:monospace;font-size:11px;border:1px solid var(--line);border-radius:8px;padding:8px"></textarea>
+            <div class="us-box" style="display:none;margin-top:10px">
+              <textarea class="us-txt" readonly style="width:100%;height:180px;font-family:monospace;font-size:11px;border:1px solid var(--line);border-radius:8px;padding:8px"></textarea>
               <div style="margin-top:6px"><button class="btn sm" onclick="copiarUserscriptJusbr()">📋 Copiar</button> <span class="note">Cole no Tampermonkey (novo script) e salve.</span></div>
             </div>
           </div>
@@ -851,6 +851,28 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
           <li>Clique em <b>Carregar sem compactação</b> (no Edge: <b>Carregar descompactado</b>) e escolha a pasta.</li>
           <li>Entre no <b>portaldeservicos.pdpj.jus.br</b> com o seu certificado. O ícone da extensão fica com o selo <b>ok</b> verde quando o token chega.</li>
         </ol>
+        <!-- A extensão é Chrome/Edge (Manifest V3, API chrome.*): o Firefox não
+             carrega este pacote. Quem trabalha no Firefox tem dois caminhos, e
+             os dois estão aqui — sem isso a pessoa instala, nada acontece e a
+             conclusão é que "o sistema não funciona". -->
+        <details style="margin-top:10px">
+          <summary class="note" style="cursor:pointer;margin:0">Usa Firefox? Leia antes de baixar.</summary>
+          <div class="note" style="margin-top:8px;line-height:1.6">
+            A extensão acima é do <b>Chrome e do Edge</b> — o Firefox não instala este pacote.
+            O <b>sistema</b> funciona normalmente no Firefox; o que precisa de outro caminho é só a ponte com o jus.br:
+            <ul style="margin:6px 0 0;padding-left:18px">
+              <li><b>Mais simples:</b> use o Chrome (ou o Edge) só para entrar no portal do jus.br com o certificado. O token chega aqui e o sistema segue trabalhando com o Firefox aberto — inclusive de madrugada, com tudo fechado.</li>
+              <li><b>Ficando no Firefox:</b> instale o <b>Tampermonkey</b> (add-on do Firefox) e cole o script abaixo. Ele faz a mesma ponte, sem extensão.</li>
+            </ul>
+            <div style="margin-top:8px">
+              <button class="btn sm ghost" onclick="gerarUserscriptJusbr()">📄 Gerar meu script do Tampermonkey</button>
+              <div class="us-box" style="display:none;margin-top:10px">
+                <textarea class="us-txt" readonly style="width:100%;height:160px;font-family:monospace;font-size:11px;border:1px solid var(--line);border-radius:8px;padding:8px"></textarea>
+                <div style="margin-top:6px"><button class="btn sm" onclick="copiarUserscriptJusbr()">📋 Copiar</button> <span class="note">No Tampermonkey: novo script, cole por cima de tudo e salve.</span></div>
+              </div>
+            </div>
+          </div>
+        </details>
         <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--line)">
           <div id="rl-jusbr-status" class="note" style="margin-bottom:8px"></div>
           <button class="btn sm ghost" onclick="renderStatusJusbrInq()">↻ conferir a sessão</button>
@@ -23404,12 +23426,17 @@ async function gerarUserscriptJusbr(){
     var r=await fetch('/api/jusbr/userscript',{headers:tok?{Authorization:'Bearer '+tok}:{}});
     var txt=await r.text();
     if(!r.ok){ alert('Não foi possível gerar: '+txt.slice(0,200)); return; }
-    document.getElementById('robos-userscript-txt').value=txt;
-    document.getElementById('robos-userscript').style.display='block';
+    document.querySelectorAll('.us-txt').forEach(function(t){ t.value=txt; });
+    document.querySelectorAll('.us-box').forEach(function(b){ b.style.display='block'; });
   }catch(e){ alert('Erro: '+(e&&e.message||e)); }
 }
 function copiarUserscriptJusbr(){
-  var ta=document.getElementById('robos-userscript-txt'); if(!ta) return;
+  /* o script aparece em dois cartões (o da casa e o do escritório cliente);
+     copia o que estiver visível */
+  var ta=null;
+  document.querySelectorAll('.us-txt').forEach(function(t){ if(!ta && t.offsetParent!==null) ta=t; });
+  if(!ta) ta=document.querySelector('.us-txt');
+  if(!ta) return;
   ta.select(); try{ document.execCommand('copy'); }catch(e){}
   try{ navigator.clipboard.writeText(ta.value); }catch(e){}
   alert('Copiado! No Tampermonkey: novo script → cole tudo → salve. Depois entre no jus.br uma vez.');

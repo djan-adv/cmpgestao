@@ -5,16 +5,20 @@
 // É SEMPRE rascunho para revisão — nunca protocola.
 
 import crypto from 'crypto'
-import { ESCRITORIO_RAIZ } from '../_lib/inquilino.js'
+import { ESCRITORIO_RAIZ, raizDocs, pastaProcesso } from '../_lib/inquilino.js'
 import fs from 'fs'
 import path from 'path'
 import { chamarClaude, orcamento } from '../_ia/claude.js'
 import { lerPlanilhaTexto } from '../../../lib/planilha.js'
 
-export const ROOT = '/opt/cmpdocs'
-// Ainda de um escritorio so, de proposito: Minuta: le a arvore de documentos e o modelo do dono.
-// (fase dos robos por inquilino: este nao entra ate ter credencial propria)
-export const ESCRITORIO_CMP = ESCRITORIO_RAIZ
+// A árvore de documentos é DE CADA ESCRITÓRIO (ver raizDocs). Havia aqui um
+// caminho fixo — `/opt/cmpdocs` — e um escritório fixo: a minuta de qualquer
+// um procurava o processo no acervo da casa e gravava o rascunho na pasta dela.
+// Com dois escritórios no mesmo número de processo (número se repete entre
+// tribunais), era a mesma pasta para os dois.
+// Quem chama diz de quem é o pedido; sem isso, vale a raiz — que é o caso do
+// robô e do cron da própria casa.
+export { raizDocs }
 /* Orçamento de PDFs enviados à IA. A conta que importa NÃO é a do arquivo no
    disco: o PDF viaja em base64, que cresce 4/3, e a API recusa a requisição
    inteira acima de 32 MB ("Request exceeds the maximum size" — 02/09/2026, um
@@ -163,8 +167,9 @@ export async function dinheiroIA(sb, usd) {
 export async function gerarMinuta(sb, {
   numero, instrucao, autor = 'robo', maxFiles = 6, docsPreferidos = [], rotina = 'minuta',
   tarefaTitulo = null, prazoEm = null, resp = null, origemTarefa = 'minuta', pecaNome = null,
-  modelo = 'claude-sonnet-5', contexto = '',
+  modelo = 'claude-sonnet-5', contexto = '', esc = null,
 }) {
+  const escAlvo = esc || ESCRITORIO_RAIZ
   const dig = String(numero || '').replace(/\D/g, '')
   // CNJ tem 20 dígitos; casos administrativos (sem CNJ) usam a numeração interna
   // ano.mes.dia.horaminuto (12 dígitos) — o mínimo aqui é só sanidade de entrada,
@@ -175,9 +180,9 @@ export async function gerarMinuta(sb, {
 
   let proc = null
   {
-    const r = await sb.from('processos').select('id,numero,cliente_nome,oponente,classe,assunto,orgao').eq('escritorio_id', ESCRITORIO_CMP).eq('numero_digitos', dig).maybeSingle()
+    const r = await sb.from('processos').select('id,numero,cliente_nome,oponente,classe,assunto,orgao').eq('escritorio_id', escAlvo).eq('numero_digitos', dig).maybeSingle()
     proc = r.data || null
-    if (!proc) { const r2 = await sb.from('processos').select('id,numero,cliente_nome,oponente,classe,assunto,orgao').eq('escritorio_id', ESCRITORIO_CMP).ilike('numero', '%' + dig + '%').maybeSingle(); proc = r2.data || null }
+    if (!proc) { const r2 = await sb.from('processos').select('id,numero,cliente_nome,oponente,classe,assunto,orgao').eq('escritorio_id', escAlvo).ilike('numero', '%' + dig + '%').maybeSingle(); proc = r2.data || null }
   }
   if (!proc) return { erro: 'processo não encontrado no sistema', status: 404 }
 
@@ -188,7 +193,7 @@ export async function gerarMinuta(sb, {
   // documentos (PDFs) da pasta do processo (inclui _OUTRA_PARTE). Ordem: primeiro
   // os que a triagem pediu pelo nome, depois os mais recentes.
   const arr = []
-  coletaPdfs(path.join(ROOT, dig), arr)
+  coletaPdfs(pastaProcesso(escAlvo, dig), arr)
   const chaves = (docsPreferidos || []).map(semAcento).filter(k => k.length >= 4)
   const pontua = (f) => {
     const n = semAcento(f.nome)
@@ -212,7 +217,7 @@ export async function gerarMinuta(sb, {
 
   // planilhas (.xlsx/.csv) da pasta do processo — viram texto (CSV), até 4 arquivos
   const arrPlan = []
-  coletaPlanilhas(path.join(ROOT, dig), arrPlan)
+  coletaPlanilhas(pastaProcesso(escAlvo, dig), arrPlan)
   arrPlan.sort((a, b) => (pontua(b) - pontua(a)) || (b.mtime - a.mtime))
   const nomesPlanilhas = []
   for (const f of arrPlan) {
@@ -235,7 +240,7 @@ export async function gerarMinuta(sb, {
   content.push({ type: 'text', text: pedidoTexto })
 
   const r = await chamarClaude({
-    rotina, sb, ref: proc.numero, escritorioId: ESCRITORIO_CMP,
+    rotina, sb, ref: proc.numero, escritorioId: escAlvo,
     modelo, maxTokens: 16000,
     sistemaFixo: sistemaBase(), conteudo: content,
   })
@@ -261,25 +266,25 @@ export async function gerarMinuta(sb, {
 
   // 2) Word (.doc) anexado ao histórico (bucket 'capturas' + anexos) — só a PEÇA
   const buf = Buffer.from(minutaDoc(proc, pecaText), 'utf8')
-  const pathCap = ESCRITORIO_CMP + '/' + dig + '/' + crypto.randomUUID() + '_' + fileName
+  const pathCap = escAlvo + '/' + dig + '/' + crypto.randomUUID() + '_' + fileName
   let anexoId = null
   try {
     const up = await sb.storage.from('capturas').upload(pathCap, buf, { contentType: 'application/msword', upsert: false })
     if (!up.error) {
-      const ia = await sb.from('anexos').insert({ escritorio_id: ESCRITORIO_CMP, processo_numero: proc.numero, andamento_id: andId, origem: 'minuta', nome: fileName, tipo: 'application/msword', tamanho: buf.length, path: pathCap, criado_por: String(autor || 'robo') }).select('id').single()
+      const ia = await sb.from('anexos').insert({ escritorio_id: escAlvo, processo_numero: proc.numero, andamento_id: andId, origem: 'minuta', nome: fileName, tipo: 'application/msword', tamanho: buf.length, path: pathCap, criado_por: String(autor || 'robo') }).select('id').single()
       anexoId = ia.data && ia.data.id
     }
   } catch (e) {}
 
   // 2b) o MESMO Word direto na pasta do processo ("Documentos do processo" no
-  //     disco, /opt/cmpdocs/<dig>/) — o anexo acima só aparece dentro do
+  //     disco, na pasta do processo daquele escritório) — o anexo acima só aparece dentro do
   //     histórico; o advogado revisa pela pasta, então o rascunho tem que
   //     estar lá também. Nome fixo "<peça> - a corrigir.doc"; se já existir um
   //     rascunho com esse nome (nova tentativa), nunca sobrescreve — numera.
   let arquivoPasta = null
   try {
     const baseNome = String(pecaNome || instrucao).replace(/\s+/g, ' ').trim().slice(0, 60).replace(/[\/\\]/g, '-')
-    const dirDestino = path.join(ROOT, dig)
+    const dirDestino = pastaProcesso(escAlvo, dig)
     fs.mkdirSync(dirDestino, { recursive: true })
     let nomeFinal = baseNome + ' - a corrigir.doc'
     let destino = path.join(dirDestino, nomeFinal)
@@ -296,7 +301,7 @@ export async function gerarMinuta(sb, {
   let tarefaId = null
   try {
     const linhaTarefa = {
-      escritorio_id: ESCRITORIO_CMP, titulo: tarefaTitulo || ('Protocolar/corrigir minuta: ' + instrucao.slice(0, 90)),
+      escritorio_id: escAlvo, titulo: tarefaTitulo || ('Protocolar/corrigir minuta: ' + instrucao.slice(0, 90)),
       cliente: proc.cliente_nome || '—', numero: proc.numero, coluna: 'distribuir',
       data: quando, prazo: quando, tipo: 'prazo', origem: origemTarefa,
     }

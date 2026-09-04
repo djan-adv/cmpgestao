@@ -175,8 +175,8 @@ pg_restore --data-only --no-owner -t andamentos \
 | Agendamentos (cron) | GitHub (`ops/crontab-cmp.txt`) | a cada mudança | histórico completo |
 | Banco (VPS) | `~/cmp-backups/` | diário 03:00 | 30 dias |
 | Banco (nuvem) | Google Drive `Sistema/backups` | diário 03:00 | 30 dias + histórico do Drive |
-| Documentos (VPS) | `/opt/cmpdocs` | ao vivo | — (é o original) |
-| Documentos (nuvem) | Google Drive `Sistema/backups/cmpdocs` | diário 03:15 | espelho contínuo |
+| Documentos (VPS) | `/opt/cmpdocs` e `/opt/cmpdocs-inq` | ao vivo | — (é o original) |
+| Documentos (nuvem) | Google Drive `Sistema/backups/cmpdocs` e `…/cmpdocs-inq` | diário 03:15 | espelho contínuo |
 
 ---
 

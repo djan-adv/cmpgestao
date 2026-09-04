@@ -5,7 +5,7 @@
 // cópia oculta ao coordenador, cópia na pasta "Enviados" e trava anti-repetição.
 
 import { createClient } from '@supabase/supabase-js'
-import { estadoConvite, blocoConviteHtml, blocoConviteTexto, registrarConvite, svcOpcional } from '../portal/convite-lib.js'
+import { estadoConvite, blocoConviteHtml, blocoConviteTexto, registrarConvite, svcOpcional, nomeDoEscritorio, baseDoEscritorio } from '../portal/convite-lib.js'
 import nodemailer from 'nodemailer'
 import crypto from 'crypto'
 import { contaDeEnvio, contaDeLeitura } from '../_lib/smtp.js'
@@ -17,7 +17,9 @@ import path from 'path'
 // webmail/Gmail (e as respostas entram na mesma cadeia).
 function raizThread(chave) {
   const h = crypto.createHash('sha1').update(String(chave || '')).digest('hex').slice(0, 28)
-  return '<cmp-thread-' + h + '@cmpadvogados.com.br>'
+  // domínio neutro: este id só serve para amarrar a conversa, e ia parar no
+  // cabeçalho de e-mail de escritório que não tem nada com o domínio da casa
+  return '<thread-' + h + '@gestao.local>'
 }
 
 export { raizThread }
@@ -174,16 +176,38 @@ export async function enviarEmailCore({ para, cc, assunto, corpo, numero, dedup 
     } catch (e) { /* dedup indisponível: segue sem bloquear */ }
   }
 
-  // logo embutido via CID (não depende de link externo)
+  // ——— timbre do e-mail ———
+  // O logotipo (e o nome no rodapé) é de QUEM ENVIA. Este e-mail vai para a vara
+  // e para o cliente do escritório: sair com a marca de outro escritório é o
+  // rastro mais visível que existe — e, num e-mail processual, é erro.
+  // Escritório da instalação: arquivo local, embutido via CID (não depende de
+  // link externo). Escritório cliente: o logotipo que ele cadastrou, por URL
+  // pública do próprio sistema. Sem logotipo, o e-mail sai sem timbre.
+  const ehCasa = !escritorioId
+  const nomeCasa = ehCasa ? '' : await nomeDoEscritorio(svcOpcional(), escritorioId)
+  // os links deste e-mail (confirmação, abertura) apontam para o endereço DO
+  // ESCRITÓRIO que envia — não para o da instalação
+  const baseLinks = ehCasa ? URL_PUBLICA : await baseDoEscritorio(svcOpcional(), escritorioId)
   const attachments = []
   let logoTag = ''
-  try {
-    const lp = path.join(process.cwd(), 'public', 'logo_cmp_full.png')
-    if (fs.existsSync(lp)) {
-      attachments.push({ filename: 'logo.png', path: lp, cid: 'logocmp' })
-      logoTag = '<img src="cid:logocmp" alt="Crispim Mendonça e Pinheiro Advogados" style="height:56px;margin-bottom:6px">'
-    }
-  } catch (e) {}
+  if (ehCasa) {
+    try {
+      const lp = path.join(process.cwd(), 'public', 'logo_cmp_full.png')
+      if (fs.existsSync(lp)) {
+        attachments.push({ filename: 'logo.png', path: lp, cid: 'logocmp' })
+        logoTag = '<img src="cid:logocmp" alt="' + esc(process.env.SMTP_FROM_NAME || 'Escritório') + '" style="height:56px;margin-bottom:6px">'
+      }
+    } catch (e) {}
+  } else {
+    try {
+      const sbm = svcOpcional()
+      const { data } = sbm ? await sbm.from('escritorios').select('marca').eq('id', escritorioId).maybeSingle() : { data: null }
+      const url = data && data.marca && data.marca.logo
+      if (url && /^https?:\/\//i.test(String(url))) {
+        logoTag = '<img src="' + esc(String(url)) + '" alt="' + esc(nomeCasa) + '" style="height:56px;margin-bottom:6px">'
+      }
+    } catch (e) {}
+  }
 
   // anexos escolhidos pelo advogado (ex.: a sentença, um comprovante) — vêm em
   // base64 do navegador. 9 MB por arquivo: acima disso o SMTP costuma recusar.
@@ -201,7 +225,7 @@ export async function enviarEmailCore({ para, cc, assunto, corpo, numero, dedup 
   const tokenRastreio = await criarRastreio({ para, numero, assunto, eventoId: confirmarEventoId })
   let blocoConfirmar = ''
   if (tokenRastreio && confirmarEventoId) {
-    const urlConf = URL_PUBLICA + '/api/email/confirmar?t=' + tokenRastreio
+    const urlConf = baseLinks + '/api/email/confirmar?t=' + tokenRastreio
     blocoConfirmar =
       '<div style="text-align:center;padding:6px 0 14px">' +
         '<a href="' + urlConf + '" style="display:inline-block;background:#0F6E56;color:#fff;text-decoration:none;padding:12px 26px;border-radius:24px;font-size:15px;font-weight:700">&#9989; Confirmo que recebi este aviso</a>' +
@@ -209,12 +233,15 @@ export async function enviarEmailCore({ para, cc, assunto, corpo, numero, dedup 
       '</div>'
   }
   const pixel = tokenRastreio
-    ? '<img src="' + URL_PUBLICA + '/api/email/abertura?t=' + tokenRastreio + '" width="1" height="1" alt="" style="display:block;width:1px;height:1px;border:0">'
+    ? '<img src="' + baseLinks + '/api/email/abertura?t=' + tokenRastreio + '" width="1" height="1" alt="" style="display:block;width:1px;height:1px;border:0">'
     : ''
 
   // rodapé social (Instagram / áreas de atuação): só faz sentido para o CLIENTE.
   // Para vara/cartório é inadequado — e-mail processual não é lugar de divulgação.
-  const paraVara = destino === 'vara'
+  // As redes e o site do rodapé são do escritório da instalação. Um escritório
+  // cliente não divulga o Instagram de outro — enquanto ele não puder cadastrar
+  // os dele, o rodapé simplesmente não sai.
+  const paraVara = destino === 'vara' || !ehCasa
   const rodapeSocial = paraVara ? '' :
     '<div style="text-align:center;padding:14px 0;border-top:1px solid #eaeaea;margin-top:6px">' +
       '<div style="font-size:12px;color:#8a8f98;margin-bottom:8px">Acompanhe o escritório:</div>' +
@@ -254,17 +281,22 @@ export async function enviarEmailCore({ para, cc, assunto, corpo, numero, dedup 
       rodapeSocial +
     '</div>'
 
-  const fromName = process.env.SMTP_FROM_NAME || 'Crispim Mendonça e Pinheiro Advogados'
+  // o nome que aparece no "de": o cadastrado na conta de envio, senão o nome do
+  // próprio escritório — nunca o de outro
+  const fromName = conta.fromNome || (ehCasa ? (process.env.SMTP_FROM_NAME || 'Escritório') : (nomeCasa || 'Escritório'))
   // cabeçalhos de conversa: raiz por (processo|destinatário) — agrupa envios e respostas
   const raiz = raizThread((numero || 'sem-proc') + '|' + para.toLowerCase())
   await anotarThread(raiz, numero, para.toLowerCase())
-  const messageId = '<' + crypto.randomUUID() + '@cmpadvogados.com.br>'
+  // o domínio do Message-ID é o da caixa que envia: um id com o domínio de
+  // outro escritório atrapalha o encadeamento e entrega marca alheia no cabeçalho
+  const dominioMsg = (String(smtpUser || '').split('@')[1] || 'localhost').toLowerCase()
+  const messageId = '<' + crypto.randomUUID() + '@' + dominioMsg + '>'
   const dados = {
     from: '"' + fromName + '" <' + smtpUser + '>',
     to: para,
     subject: assunto,
     // texto puro: o link de confirmação vai por extenso (clientes sem HTML)
-    text: corpo + ((tokenRastreio && confirmarEventoId) ? ('\n\nPara confirmar que recebeu este aviso, basta abrir o link (um clique, sem precisar responder):\n' + URL_PUBLICA + '/api/email/confirmar?t=' + tokenRastreio) : '') + conviteTexto,
+    text: corpo + ((tokenRastreio && confirmarEventoId) ? ('\n\nPara confirmar que recebeu este aviso, basta abrir o link (um clique, sem precisar responder):\n' + baseLinks + '/api/email/confirmar?t=' + tokenRastreio) : '') + conviteTexto,
     html,
     attachments,
     messageId,

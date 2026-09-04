@@ -32,10 +32,21 @@ node scripts/novo-escritorio.mjs senha fulano@exemplo.com
 ## Onde ficam os documentos
 
 - Escritório da instalação (CMP): `/opt/cmpdocs` — **nada se moveu**.
-- Escritório convidado: `/opt/cmpdocs/_esc/<id-do-escritorio>`.
+- Escritório cliente: `/opt/cmpdocs-inq/<id-do-escritorio>` — árvore **irmã**, não
+  subpasta: a tela de documentos lista o conteúdo da raiz, e uma pasta de cliente
+  embaixo dela apareceria para o dono como se fosse acervo próprio.
 
-Quem decide isso é `pastaDoEscritorio()` em `lib/escritorio.js`, a partir do usuário
-logado. `/api/docs` resolve a pasta **por pedido**; não existe mais raiz fixa.
+Quem decide isso é `raizDocs(esc)` em `app/api/_lib/inquilino.js` (com o invólucro
+`pastaDoEscritorio()` em `lib/escritorio.js`), e `pastaProcesso(esc, numero)` monta
+a pasta de um processo. **Não existe mais raiz fixa em módulo nenhum** (04/09/2026):
+minuta, briefing, honorários, diagnóstico, íntegra dos autos, protocolo, arquivos do
+jus.br, procuração assinada e a pasta "App do Cliente" resolvem a árvore pelo
+escritório de quem pediu — antes eram `/opt/cmpdocs` escrito à mão, e dois
+escritórios com o mesmo número de processo (número se repete entre tribunais)
+gravariam na mesma pasta.
+
+**Backup:** `ops/backup-cmpdocs.sh` copia as DUAS árvores. Ao mexer nelas, conferir
+o script — árvore fora do backup é arquivo perdido sem ninguém perceber.
 
 ## O que já funciona para um escritório convidado
 

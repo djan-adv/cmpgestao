@@ -22,8 +22,7 @@ import path from 'path'
 import crypto from 'crypto'
 import { createClient } from '@supabase/supabase-js'
 import { jusbrAdmin, getFreshToken } from '../lib.js'
-import { escritorioDoUsuario } from '../../_lib/inquilino.js'
-import { ROOT } from '../../peticao/core.js'
+import { escritorioDoUsuario, pastaProcesso } from '../../_lib/inquilino.js'
 import { contaDemo, respostaDemo } from '../../../../lib/demo.js'
 
 export const dynamic = 'force-dynamic'
@@ -519,16 +518,19 @@ export async function POST(request) {
   if (!rel) return Response.json({ erro: 'escolha o arquivo da petição' }, { status: 400 })
   if (!idTipo) return Response.json({ erro: 'escolha o tipo de documento' }, { status: 400 })
 
-  // o arquivo tem de estar DENTRO da pasta do processo — nada de caminho solto
-  const alvo = path.resolve(ROOT, dig, rel)
-  if (!alvo.startsWith(path.resolve(ROOT, dig) + path.sep)) return Response.json({ erro: 'caminho de arquivo inválido' }, { status: 400 })
+  // o arquivo tem de estar DENTRO da pasta do processo — nada de caminho solto.
+  // E a pasta do processo é a do escritório de quem está protocolando: sem isso,
+  // o caminho relativo entraria na árvore da casa e subiria peça de outro.
+  const esc = await escritorioDoUsuario(user.id)
+  if (!esc) return Response.json({ erro: 'usuário sem escritório vinculado' }, { status: 403 })
+  const pastaDoProc = pastaProcesso(esc, dig)
+  const alvo = path.resolve(pastaDoProc, rel)
+  if (!alvo.startsWith(path.resolve(pastaDoProc) + path.sep)) return Response.json({ erro: 'caminho de arquivo inválido' }, { status: 400 })
   let bytes
   try { bytes = fs.readFileSync(alvo) } catch (e) { return Response.json({ erro: 'não achei o arquivo na pasta do processo' }, { status: 404 }) }
   if (!bytes.length) return Response.json({ erro: 'o arquivo está vazio' }, { status: 400 })
   if (bytes.slice(0, 5).toString('latin1') !== '%PDF-') return Response.json({ erro: 'o arquivo precisa ser PDF' }, { status: 400 })
 
-  const esc = await escritorioDoUsuario(user.id)
-  if (!esc) return Response.json({ erro: 'usuário sem escritório vinculado' }, { status: 403 })
   const sb = jusbrAdmin()
   const tk = await getFreshToken(sb, null, esc)
   if (!tk || !tk.token) return Response.json({ erro: 'sem acesso ao jus.br — entre no portal (a extensão sincroniza)', sem_sessao: true }, { status: 409 })
@@ -552,8 +554,8 @@ export async function POST(request) {
   for (const ra of (Array.isArray(b.anexos) ? b.anexos : []).slice(0, 20)) {
     const relA = String(ra || '')
     if (!relA) continue
-    const alvoA = path.resolve(ROOT, dig, relA)
-    if (!alvoA.startsWith(path.resolve(ROOT, dig) + path.sep)) return Response.json({ erro: 'caminho de anexo inválido' }, { status: 400 })
+    const alvoA = path.resolve(pastaDoProc, relA)
+    if (!alvoA.startsWith(path.resolve(pastaDoProc) + path.sep)) return Response.json({ erro: 'caminho de anexo inválido' }, { status: 400 })
     let bufA
     try { bufA = fs.readFileSync(alvoA) } catch (e) { return Response.json({ erro: 'não achei o anexo "' + path.basename(relA) + '" na pasta' }, { status: 404 }) }
     if (!bufA.length) return Response.json({ erro: 'o anexo "' + path.basename(relA) + '" está vazio' }, { status: 400 })
@@ -638,7 +640,7 @@ export async function POST(request) {
         if (r5.ok) {
           const pdf = Buffer.from(await r5.arrayBuffer())
           const nomeRec = 'protocoloPeticao_' + (j4.nroProtocolo || j3.numeroReciboCnj || idPet) + '.pdf'
-          const pastaProt = path.join(ROOT, dig, path.dirname(rel))
+          const pastaProt = path.join(pastaDoProc, path.dirname(rel))
           fs.mkdirSync(pastaProt, { recursive: true })
           fs.writeFileSync(path.join(pastaProt, nomeRec), pdf)
           recibo = { arquivo: nomeRec, bytes: pdf.length, protocolo: j4.nroProtocolo || null }

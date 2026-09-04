@@ -149,14 +149,14 @@ export async function POST(request) {
     doc_nome: nome, doc_tipo: tipoFinal, tamanho: buf.length,
     baixado_por: String(user.email || ''),
     // conteúdo vai para o disco do VPS; o banco fica só com o caminho
-    ...camposConteudo(numero, nome, uuid, buf),
+    ...camposConteudo(numero, nome, uuid, buf, esc),
   }
   if (ehLeve) linhaArq.expira_em = '2999-12-31T00:00:00.000Z' // permanente (coluna é NOT NULL)
   const { data: ins, error } = await sb.from('jusbr_arquivos').insert(linhaArq).select('id,doc_nome,doc_tipo,tamanho').single()
   if (error) return Response.json({ erro: 'falha ao guardar: ' + error.message }, { status: 500 })
   // espelha a peça oficial na pasta "App do Cliente" — é o que o cliente vê,
   // e é onde o escritório confere o que já foi entregue a ele
-  if (ehOficial(nome, tipoFinal)) { try { copiarParaAppCliente(numero, nome, buf) } catch (e) {} }
+  if (ehOficial(nome, tipoFinal)) { try { copiarParaAppCliente(numero, nome, buf, esc) } catch (e) {} }
 
   return Response.json({ ok: true, id: ins.id, nome: ins.doc_nome, tipo: ins.doc_tipo, tamanho: ins.tamanho })
 }

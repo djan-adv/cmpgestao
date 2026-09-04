@@ -18,7 +18,8 @@ import fs from 'fs'
 import path from 'path'
 import { createClient } from '@supabase/supabase-js'
 import { chamarClaude, orcamento } from '../../_ia/claude.js'
-import { gerarMinuta, ROOT, ESCRITORIO_CMP } from '../../peticao/core.js'
+import { gerarMinuta } from '../../peticao/core.js'
+import { escritorioDoUsuario, pastaProcesso, raizDocs } from '../../_lib/inquilino.js'
 import { pecaEmPdf } from '../../../../lib/peca-pdf.js'
 import { getFreshToken } from '../../jusbr/lib.js'
 import { buscarProcesso, movimentosDoProcesso, aplicarMeta, gravarMovimentos } from '../../jusbr/movimentos/core.js'
@@ -143,8 +144,8 @@ async function atualizaDoTribunal(sb, dig) {
    nova que o último andamento do processo — íntegra velha esconde justamente a
    decisão que motivou o diagnóstico. Quando está atrasada, remonta (o
    salvarNaPasta substitui a anterior). */
-async function garantirIntegra(sb, dig, quem, ultimoAndamento) {
-  const pasta = path.join(ROOT, dig)
+async function garantirIntegra(sb, dig, quem, ultimoAndamento, esc) {
+  const pasta = pastaProcesso(esc, dig)
   let atual = null
   try {
     for (const nome of fs.readdirSync(pasta)) {
@@ -162,16 +163,16 @@ async function garantirIntegra(sb, dig, quem, ultimoAndamento) {
   }
   // desatualizada (ou inexistente): remonta agora
   try {
-    const col = await coletarPecas(sb, dig, {})
+    const col = await coletarPecas(sb, dig, { esc })
     if (col.erro) return { erro: col.erro, sem_sessao: col.motivo === 'expirado' || col.motivo === 'sem_token', arquivo: atual && atual.arquivo, ja_existia: !!atual }
     if (!col.files || !col.files.length) return { erro: 'o jus.br não devolveu nenhuma peça deste processo', arquivo: atual && atual.arquivo, ja_existia: !!atual }
     ordenarPecas(col.files, { ordem: 'asc' })
     const r = await pdfUnico(col.files)
     if (r.erro) return { erro: r.erro, arquivo: atual && atual.arquivo, ja_existia: !!atual }
-    const nome = salvarNaPasta(fs, path, ROOT, dig, r.bytes, true)
+    const nome = salvarNaPasta(fs, path, raizDocs(esc), dig, r.bytes, true)
     if (!nome) return { erro: 'não consegui gravar a íntegra na pasta do processo' }
     try {
-      const { data: pr } = await sb.from('processos').select('id').eq('escritorio_id', ESCRITORIO_CMP).eq('numero_digitos', dig).maybeSingle()
+      const { data: pr } = await sb.from('processos').select('id').eq('escritorio_id', esc).eq('numero_digitos', dig).maybeSingle()
       if (pr && pr.id) {
         await sb.from('andamentos').insert({
           processo_id: pr.id, data: new Date().toISOString().slice(0, 10), fonte: 'minuta',
@@ -194,8 +195,8 @@ async function garantirIntegra(sb, dig, quem, ultimoAndamento) {
    se o PDPJ tem a versão em texto da peça e ela é substanciosa, a peça vai como
    texto; se não tem (ou o texto é vazio, que é o que acontece com scan), vai a
    página como está. Nada fica de fora — só sai o retrato de folha de texto. */
-async function autosParaIA(sb, dig, orcamentoB64) {
-  const col = await coletarPecas(sb, dig, { preferirTexto: true })
+async function autosParaIA(sb, dig, orcamentoB64, esc) {
+  const col = await coletarPecas(sb, dig, { preferirTexto: true, esc })
   if (col.erro) return { erro: col.erro, sem_sessao: col.motivo === 'expirado' || col.motivo === 'sem_token' }
   ordenarPecas(col.files, { ordem: 'asc' })
   const blocos = []
@@ -230,10 +231,12 @@ export async function GET(request) {
   const u = await usuario(request)
   if (!u) return Response.json({ erro: 'não autenticado' }, { status: 401 })
   const { searchParams } = new URL(request.url)
+  const esc = await escritorioDoUsuario(u.id)
+  if (!esc) return Response.json({ erro: 'usuário sem escritório vinculado' }, { status: 403 })
   const sb = admin()
   const id = searchParams.get('id')
   if (id) {
-    const { data } = await sb.from('ia_diagnosticos').select('*').eq('id', id).maybeSingle()
+    const { data } = await sb.from('ia_diagnosticos').select('*').eq('id', id).eq('escritorio_id', esc).maybeSingle()
     if (!data) return Response.json({ erro: 'diagnóstico não encontrado' }, { status: 404 })
     return Response.json({ ok: true, diag: data })
   }
@@ -243,12 +246,12 @@ export async function GET(request) {
     try {
       await sb.from('ia_diagnosticos')
         .update({ status: 'erro', erro: 'interrompido antes de terminar (servidor reiniciou ou a chamada estourou o tempo)', concluido_em: new Date().toISOString() })
-        .eq('escritorio_id', ESCRITORIO_CMP).eq('status', 'rodando')
+        .eq('escritorio_id', esc).eq('status', 'rodando')
         .lt('criado_em', new Date(Date.now() - 20 * 60000).toISOString())
     } catch (e) {}
     const { data } = await sb.from('ia_diagnosticos')
       .select('id,processo_numero,status,erro,concluido_em,criado_em,com_peca')
-      .eq('escritorio_id', ESCRITORIO_CMP).is('visto_em', null)
+      .eq('escritorio_id', esc).is('visto_em', null)
       .gte('criado_em', new Date(Date.now() - 24 * 3600000).toISOString())
       .order('criado_em', { ascending: false }).limit(20)
     return Response.json({ ok: true, itens: data || [] })
@@ -271,6 +274,8 @@ export async function POST(request) {
   const quem = String(b.quem || '').slice(0, 80)
   if (dig.length < 8) return Response.json({ erro: 'número de processo inválido' }, { status: 400 })
 
+  const esc = await escritorioDoUsuario(u.id)
+  if (!esc) return Response.json({ erro: 'usuário sem escritório vinculado' }, { status: 403 })
   const sb = admin()
   const orc = await orcamento(sb)
   _cambio = Number(orc.cambio) || 5.4
@@ -278,7 +283,7 @@ export async function POST(request) {
 
   const { data: proc } = await sb.from('processos')
     .select('id,numero,cliente_nome,oponente,classe,assunto,orgao,orgao_atual,foro,valor_causa,distribuido_em,fase,status')
-    .eq('escritorio_id', ESCRITORIO_CMP).eq('numero_digitos', dig).maybeSingle()
+    .eq('escritorio_id', esc).eq('numero_digitos', dig).maybeSingle()
   if (!proc) return Response.json({ erro: 'processo não encontrado no sistema' }, { status: 404 })
 
   /* A linha nasce AQUI, antes do trabalho: o pedido leva minutos e o advogado vai
@@ -288,7 +293,7 @@ export async function POST(request) {
      A segunda para aqui e devolve a que já está correndo. */
   try {
     const { data: jaRodando } = await sb.from('ia_diagnosticos')
-      .select('id,criado_em').eq('escritorio_id', ESCRITORIO_CMP).eq('processo_numero', proc.numero)
+      .select('id,criado_em').eq('escritorio_id', esc).eq('processo_numero', proc.numero)
       .eq('status', 'rodando').gte('criado_em', new Date(Date.now() - 20 * 60000).toISOString())
       .order('criado_em', { ascending: false }).limit(1)
     if (jaRodando && jaRodando.length) {
@@ -306,7 +311,7 @@ export async function POST(request) {
   let regId = null
   try {
     const ins = await sb.from('ia_diagnosticos').insert({
-      escritorio_id: ESCRITORIO_CMP, processo_numero: proc.numero, processo_id: proc.id,
+      escritorio_id: esc, processo_numero: proc.numero, processo_id: proc.id,
       pedido_por: quem || null, status: 'rodando', com_integra: querIntegra, com_peca: querPeca,
       pedido_por_id: u.id || null,
       origem: String(b.origem || '').slice(0, 40) || (confirmado ? 'confirmacao_custo' : 'api'),
@@ -336,7 +341,7 @@ export async function POST(request) {
 
   // ——— íntegra dos autos (remontada se ficou para trás do último andamento) ———
   let integra = null
-  if (querIntegra && !economico) integra = await garantirIntegra(sb, dig, quem, (oficiais[0] && oficiais[0].data) || null)
+  if (querIntegra && !economico) integra = await garantirIntegra(sb, dig, quem, (oficiais[0] && oficiais[0].data) || null, esc)
 
   // ——— o que já protocolamos e o que está aberto ———
   const { data: tarefas } = await sb.from('kanban_tarefas')
@@ -348,7 +353,7 @@ export async function POST(request) {
   let foraPorTamanho = []
   let comoTexto = [], comoImagem = []
   if (economico) {
-    const a = await autosParaIA(sb, dig, MAX_B64)
+    const a = await autosParaIA(sb, dig, MAX_B64, esc)
     if (a.erro) { leitura.erro = a.erro; leitura.sem_sessao = !!a.sem_sessao }
     else {
       conteudo.push(...a.blocos)
@@ -362,7 +367,7 @@ export async function POST(request) {
   if (!conteudo.length) {
     let b64 = 0
     try {
-      const pasta = path.join(ROOT, dig)
+      const pasta = pastaProcesso(esc, dig)
       const arqs = fs.readdirSync(pasta).filter(n => /\.pdf$/i.test(n))
         .map(n => { const st = fs.statSync(path.join(pasta, n)); return { nome: n, full: path.join(pasta, n), size: st.size, mtime: st.mtimeMs } })
         .sort((x, y) => (y.nome.startsWith(INTEGRA_PREFIXO) - x.nome.startsWith(INTEGRA_PREFIXO)) || (y.mtime - x.mtime))
@@ -417,7 +422,7 @@ export async function POST(request) {
   }
 
   const r = await chamarClaude({
-    rotina: 'diagnostico', sb, ref: proc.numero, escritorioId: ESCRITORIO_CMP,
+    rotina: 'diagnostico', sb, ref: proc.numero, escritorioId: esc,
     modelo: 'claude-opus-5', maxTokens: 8000,
     sistemaFixo: sistemaFixo(), conteudo,
     ferramentas: [FERRAMENTA], toolChoice: { type: 'tool', name: 'diagnostico' },
@@ -453,7 +458,7 @@ export async function POST(request) {
       ((diag.falta_nos_autos && diag.falta_nos_autos.length) ? ('Falta nos autos (marque [A PREENCHER] onde depender disto): ' + diag.falta_nos_autos.join(' · ') + '\n') : '')
     const m = await gerarMinuta(sb, {
       numero: proc.numero, instrucao: diag.instrucao_para_redigir, autor: quem || 'diagnóstico',
-      rotina: 'peca_diagnostico', pecaNome: diag.peca_recomendada || 'Petição',
+      rotina: 'peca_diagnostico', pecaNome: diag.peca_recomendada || 'Petição', esc,
       tarefaTitulo: 'Revisar e protocolar: ' + (diag.peca_recomendada || 'petição'),
       modelo: 'claude-opus-5', contexto: ctx,
     })
@@ -465,10 +470,10 @@ export async function POST(request) {
         const texto = await lerMinutaTexto(sb, m)
         if (texto) {
           const pdf = await pecaEmPdf({
-            texto, processo: proc,
+            texto, processo: proc, sb, esc,
             rodape: 'Minuta gerada em ' + hoje.split('-').reverse().join('/') + ' — conferir e assinar antes de protocolar',
           })
-          const dirProt = path.join(ROOT, dig, 'Protocolo')
+          const dirProt = path.join(pastaProcesso(esc, dig), 'Protocolo')
           fs.mkdirSync(dirProt, { recursive: true })
           const nomePdf = (hoje + ' - ' + (diag.peca_recomendada || 'Petição')).replace(/[\/\\:*?"<>|]+/g, '-').slice(0, 100) + '.pdf'
           fs.writeFileSync(path.join(dirProt, nomePdf), pdf)
@@ -515,7 +520,7 @@ async function lerMinutaTexto(sb, m) {
   try {
     const dig = String((m.processo && m.processo.numero) || '').replace(/\D/g, '')
     if (!dig || !m.arquivo_pasta) return ''
-    const html = fs.readFileSync(path.join(ROOT, dig, m.arquivo_pasta), 'utf8')
+    const html = fs.readFileSync(path.join(pastaProcesso(esc, dig), m.arquivo_pasta), 'utf8')
     return html
       .replace(/<\/(p|div|h[1-6]|li)>/gi, '\n\n')
       .replace(/<br\s*\/?>/gi, '\n')

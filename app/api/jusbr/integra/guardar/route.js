@@ -14,11 +14,10 @@
 // substituída (é o que segura o disco).
 
 import fs from 'fs'
-import { escritorioDoUsuario } from '../../../_lib/inquilino.js'
+import { escritorioDoUsuario, raizDocs, pastaProcesso } from '../../../_lib/inquilino.js'
 import path from 'path'
 import { createClient } from '@supabase/supabase-js'
 import { coletarPecas, ordenarPecas, pdfUnico, salvarNaPasta, INTEGRA_PREFIXO } from '../core.js'
-import { ROOT } from '../../../peticao/core.js'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -52,7 +51,7 @@ export async function POST(request) {
   const esc = await escritorioDoUsuario(user.id)
   if (!esc) return Response.json({ erro: 'usuário sem escritório vinculado' }, { status: 403 })
   const sb = admin()
-  const pasta = path.join(ROOT, dig)
+  const pasta = pastaProcesso(esc, dig)
 
   // já tem uma íntegra recente? devolve ela — baixar de novo custa minutos e disco
   try {
@@ -76,7 +75,7 @@ export async function POST(request) {
   try { r = await pdfUnico(col.files) } catch (e) { r = { erro: String((e && e.message) || e) } }
   if (r.erro) return Response.json({ erro: r.erro }, { status: 502 })
 
-  const nome = salvarNaPasta(fs, path, ROOT, dig, r.bytes, true)
+  const nome = salvarNaPasta(fs, path, raizDocs(esc), dig, r.bytes, true)
   if (!nome) return Response.json({ erro: 'não consegui gravar o arquivo na pasta do processo' }, { status: 500 })
 
   // registra no histórico com o marcador de sempre: a linha conta a história,

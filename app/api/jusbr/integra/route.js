@@ -10,7 +10,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { zip } from '../../_lib/zip.js'
 import { jusbrAdmin } from '../lib.js'
-import { escritorioDoUsuario } from '../../_lib/inquilino.js'
+import { escritorioDoUsuario, raizDocs } from '../../_lib/inquilino.js'
 import fs from 'fs'
 import path from 'path'
 import { coletarPecas, ordenarPecas, pdfUnico, salvarNaPasta } from './core.js'
@@ -20,7 +20,7 @@ export const fetchCache = 'force-no-store'
 export const revalidate = 0
 export const maxDuration = 60
 
-const ROOT = '/opt/cmpdocs'
+
 const soDig = (s) => String(s || '').replace(/\D/g, '')
 
 async function usuario(jwt) {
@@ -74,7 +74,7 @@ export async function GET(request) {
     let salvo = null
     if (searchParams.get('salvar') != null) {
       const completa = !uuidsSel.length || uuidsSel.length >= (col.totalDocs || 0)
-      salvo = salvarNaPasta(fs, path, ROOT, numero, r.bytes, completa)
+      salvo = salvarNaPasta(fs, path, raizDocs(esc), numero, r.bytes, completa)
     }
     const cab = {
       'Content-Type': 'application/pdf',

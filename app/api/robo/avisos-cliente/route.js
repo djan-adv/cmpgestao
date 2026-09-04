@@ -15,7 +15,7 @@
 import { createClient } from '@supabase/supabase-js'
 import webpush from 'web-push'
 import { chamarClaude, orcamento } from '../../_ia/claude.js'
-import { ESCRITORIO_CMP } from '../../peticao/core.js'
+import { escritoriosAtivos } from '../../_lib/inquilino.js'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -24,6 +24,10 @@ export const maxDuration = 60
 const JANELA_DIAS = 5     // publicações mais antigas que isto o robô não pega
 const LOTE = 5             // andamentos analisados por rodada (custo de IA)
 const RESERVA_USD = 0.1    // só chama a IA se sobrar isto do teto do mês
+// contato técnico exigido pelo protocolo do push (vai para o servidor de push do
+// navegador, não para o cliente). É de quem opera a instalação — não do
+// escritório dono do processo, que não responde por infraestrutura.
+const VAPID_CONTATO = 'mailto:' + (process.env.VAPID_EMAIL || 'contato@djan.app.br')
 
 // pré-filtro barato (sem IA): só manda para classificação quem tem chance real de
 // ser sentença/acórdão — a maioria das publicações do DJEN não é isso
@@ -88,7 +92,7 @@ function foraDoHorario() {
   return m < 6 * 60 || m > 18 * 60 + 30
 }
 
-async function processaUm(sb, a, proc) {
+async function processaUm(sb, a, proc, esc) {
   const variavel =
     'PROCESSO nº ' + (proc.numero || '') + ' | Cliente do escritório: ' + (proc.cliente_nome || '?') +
     ' | Parte contrária: ' + (proc.oponente || '?') + ' | Classe/Assunto: ' + ((proc.classe || '') + ' ' + (proc.assunto || '')).trim() +
@@ -96,19 +100,19 @@ async function processaUm(sb, a, proc) {
     'TEOR DA PUBLICAÇÃO:\n' + String(a.texto || '').slice(0, 12000)
 
   const r = await chamarClaude({
-    rotina: 'aviso_cliente', sb, ref: proc.numero, escritorioId: ESCRITORIO_CMP,
+    rotina: 'aviso_cliente', sb, ref: proc.numero, escritorioId: esc,
     modelo: 'claude-sonnet-5', maxTokens: 1500,
     sistemaFixo: MANUAL_AVISO,
     conteudo: [{ type: 'text', text: variavel }],
     ferramentas: FERRAMENTA_AVISO,
     toolChoice: { type: 'tool', name: 'registrar_aviso' },
   })
-  if (r.erro) return { linha: { escritorio_id: ESCRITORIO_CMP, processo_id: proc.id, processo_numero: proc.numero, andamento_id: a.id, motivo: 'erro: ' + r.erro } }
+  if (r.erro) return { linha: { escritorio_id: esc, processo_id: proc.id, processo_numero: proc.numero, andamento_id: a.id, motivo: 'erro: ' + r.erro } }
   const t = (r.ferramenta && r.ferramenta.input) || null
-  if (!t) return { linha: { escritorio_id: ESCRITORIO_CMP, processo_id: proc.id, processo_numero: proc.numero, andamento_id: a.id, motivo: 'erro: a IA não devolveu a classificação' } }
+  if (!t) return { linha: { escritorio_id: esc, processo_id: proc.id, processo_numero: proc.numero, andamento_id: a.id, motivo: 'erro: a IA não devolveu a classificação' } }
 
   const linhaBase = {
-    escritorio_id: ESCRITORIO_CMP, processo_id: proc.id, processo_numero: proc.numero, andamento_id: a.id,
+    escritorio_id: esc, processo_id: proc.id, processo_numero: proc.numero, andamento_id: a.id,
     eh_decisao: !!t.eh_decisao_final, resultado: t.eh_decisao_final ? (t.resultado || null) : null,
     custo_usd: r.custoUsd,
   }
@@ -119,7 +123,7 @@ async function processaUm(sb, a, proc) {
   // nome do escritório dono do processo — nunca uma constante de código
   let nomeCasa = 'Seu escritório'
   try {
-    const { data: casa } = await sb.from('escritorios').select('nome').eq('id', proc.escritorio_id || ESCRITORIO_CMP).maybeSingle()
+    const { data: casa } = await sb.from('escritorios').select('nome').eq('id', proc.escritorio_id || esc).maybeSingle()
     if (casa && casa.nome) nomeCasa = casa.nome
   } catch (e) {}
 
@@ -128,7 +132,7 @@ async function processaUm(sb, a, proc) {
   if (!vivos.length) return { linha: { ...linhaBase, motivo: 'sem_acesso', mensagem: t.mensagem } }
 
   const ins = await sb.from('portal_chat').insert({
-    escritorio_id: ESCRITORIO_CMP, processo_id: proc.id, autor_tipo: 'escritorio',
+    escritorio_id: esc, processo_id: proc.id, autor_tipo: 'escritorio',
     // quem assina a mensagem no app é o ESCRITÓRIO DONO do processo: o cliente
     // dele não pode receber recado assinado por outro escritório
     autor_id: null, autor_nome: nomeCasa, texto: t.mensagem,
@@ -141,7 +145,7 @@ async function processaUm(sb, a, proc) {
   try {
     // idem: escritório explícito, porque aqui não há usuário logado
     await sb.rpc('robot_add_andamento_esc', {
-      p_esc: proc.escritorio_id || ESCRITORIO_CMP,
+      p_esc: proc.escritorio_id || esc,
       p_num: String(proc.numero || '').replace(/\D/g, ''),
       p_data: new Date().toISOString().slice(0, 10),
       p_texto: '[App] Aviso automático de ' + (t.resultado === 'favoravel' ? 'decisão favorável' : (t.resultado === 'parcial' ? 'decisão parcial' : 'decisão')) + ' enviado ao cliente pelo chat.',
@@ -154,7 +158,7 @@ async function processaUm(sb, a, proc) {
   try {
     if (foraDoHorario()) {
       await sb.from('avisos_app_fila').insert({
-        escritorio_id: ESCRITORIO_CMP, processo_id: proc.id, processo_numero: proc.numero,
+        escritorio_id: esc, processo_id: proc.id, processo_numero: proc.numero,
         etapa: 'chat:decisao:' + a.id,
         enviar_em: (() => { const d = new Date(Date.now() - 3 * 3600000); if (d.getUTCHours() * 60 + d.getUTCMinutes() > 18 * 60 + 30) d.setUTCDate(d.getUTCDate() + 1); d.setUTCHours(6, 0, 0, 0); return new Date(d.getTime() + 3 * 3600000).toISOString() })(),
         titulo: 'mensagem no seu processo',
@@ -164,7 +168,7 @@ async function processaUm(sb, a, proc) {
     } else {
       const { data: v } = await sb.from('app_secrets').select('valor').eq('chave', 'vapid_chat').maybeSingle()
       if (v && v.valor) {
-        webpush.setVapidDetails('mailto:contato@cmpadvogados.com.br', v.valor.public, v.valor.private)
+        webpush.setVapidDetails(VAPID_CONTATO, v.valor.public, v.valor.private)
         const { data: subs } = await sb.from('portal_push_subs').select('*').in('acesso_id', vivos.map(x => x.id))
         const payload = JSON.stringify({ titulo: nomeCasa + ' — mensagem no seu processo', corpo: String(t.mensagem || '').slice(0, 140), url: '/portal.html?proc=' + proc.id })
         const mortos = []
@@ -180,7 +184,7 @@ async function processaUm(sb, a, proc) {
   return { linha: { ...linhaBase, motivo: 'enviado', enviado: true, mensagem: t.mensagem } }
 }
 
-export async function GET() {
+export async function GET(request) {
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) return Response.json({ erro: 'falta service key' }, { status: 500 })
   if (!process.env.ANTHROPIC_API_KEY) return Response.json({ erro: 'falta ANTHROPIC_API_KEY' }, { status: 501 })
   const sb = admin()
@@ -189,37 +193,63 @@ export async function GET() {
   if (!orc.ativo) return Response.json({ ok: true, pulou: 'robô desligado no painel (mesmo teto do Estagiário Virtual)' })
   if (orc.restanteUsd < RESERVA_USD) return Response.json({ ok: true, pulou: 'teto do mês atingido', orcamento: orc })
 
+  let escs = await escritoriosAtivos()
+  const soEste = new URL(request.url).searchParams.get('esc')
+  if (soEste) escs = escs.filter(e => e.id === soEste)
+
+  const porEscritorio = []
+  for (const e of escs) {
+    let r
+    try { r = await rodarPara(sb, e) }
+    catch (err) { r = { ok: false, escritorio: e.nome, erro: String((err && err.message) || err) } }
+    porEscritorio.push(r)
+  }
+  const soma = (c) => porEscritorio.reduce((t, r) => t + (Number(r[c]) || 0), 0)
+  return Response.json({ ok: true, escritorios: porEscritorio.length, processados: soma('processados'), restam: soma('restam'), por_escritorio: porEscritorio })
+}
+
+// Uma rodada para UM escritório.
+//
+// A janela de andamentos era global: o robô lia os 300 mais recentes da
+// INSTALAÇÃO INTEIRA e só depois descartava o que não fosse da casa. Com um
+// segundo escritório movimentando processos, a janela enchia com linhas alheias
+// e as decisões da casa simplesmente não apareciam — sem erro nenhum na tela.
+// Agora a janela é dos processos DAQUELE escritório, e o robô roda para todos.
+async function rodarPara(sb, e) {
+  const esc = e.id
+  const { data: procsAtivos } = await sb.from('processos')
+    .select('id,numero,cliente_nome,oponente,classe,assunto,orgao,status,suspenso,escritorio_id')
+    .eq('escritorio_id', esc).or('suspenso.is.null,suspenso.eq.false').limit(2000)
+  const mapaProc = {}
+  ;(procsAtivos || []).forEach(p => {
+    const arquivado = /arquiv|encerr|baixad/i.test(String(p.status || ''))
+    if (!arquivado) mapaProc[p.id] = p
+  })
+  const idsProc = Object.keys(mapaProc)
+  if (!idsProc.length) return { ok: true, escritorio: e.nome, processados: 0, nada: true }
+
   const desde = new Date(Date.now() - JANELA_DIAS * 86400000).toISOString()
   const { data: ands, error } = await sb.from('andamentos')
     .select('id,processo_id,data,texto')
+    .in('processo_id', idsProc)
     .in('fonte', ['djen', 'jusbr', 'datajud']).gte('criado_em', desde)
     .order('id', { ascending: false }).limit(300)
-  if (error) return Response.json({ erro: 'não consegui ler os andamentos: ' + error.message }, { status: 500 })
+  if (error) return { ok: false, escritorio: e.nome, erro: 'não consegui ler os andamentos: ' + error.message }
   const candidatos = (ands || []).filter(a => RE_DECISAO.test(String(a.texto || '')))
-  if (!candidatos.length) return Response.json({ ok: true, processados: 0, nada: true })
+  if (!candidatos.length) return { ok: true, escritorio: e.nome, processados: 0, nada: true }
 
   const ids = candidatos.map(a => a.id)
-  const { data: jaVistos } = await sb.from('robo_avisos_cliente').select('andamento_id').in('andamento_id', ids)
+  const { data: jaVistos } = await sb.from('robo_avisos_cliente').select('andamento_id').eq('escritorio_id', esc).in('andamento_id', ids)
   const vistos = new Set((jaVistos || []).map(r => Number(r.andamento_id)))
   const novos = candidatos.filter(a => !vistos.has(Number(a.id)))
-  if (!novos.length) return Response.json({ ok: true, processados: 0, nada: true })
-
-  const pids = [...new Set(novos.map(a => a.processo_id))]
-  const { data: procs } = await sb.from('processos')
-    .select('id,numero,cliente_nome,oponente,classe,assunto,orgao,status,suspenso')
-    .eq('escritorio_id', ESCRITORIO_CMP).in('id', pids)
-  const mapaProc = {}
-  ;(procs || []).forEach(p => {
-    const arquivado = /arquiv|encerr|baixad/i.test(String(p.status || ''))
-    if (!arquivado && p.suspenso !== true) mapaProc[p.id] = p
-  })
+  if (!novos.length) return { ok: true, escritorio: e.nome, processados: 0, nada: true }
 
   const fila = novos.filter(a => mapaProc[a.processo_id]).slice(0, LOTE)
   const resultados = []
   for (const a of fila) {
-    const { linha } = await processaUm(sb, a, mapaProc[a.processo_id])
-    const ins = await sb.from('robo_avisos_cliente').insert(linha)
+    const { linha } = await processaUm(sb, a, mapaProc[a.processo_id], esc)
+    await sb.from('robo_avisos_cliente').insert(linha)
     resultados.push({ andamento_id: a.id, processo: linha.processo_numero, motivo: linha.motivo })
   }
-  return Response.json({ ok: true, processados: resultados.length, restam: novos.length - fila.length, resultados })
+  return { ok: true, escritorio: e.nome, processados: resultados.length, restam: novos.length - fila.length, resultados }
 }
