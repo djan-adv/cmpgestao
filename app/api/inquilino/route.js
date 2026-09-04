@@ -42,14 +42,49 @@ export async function GET(request) {
   // vazio (ainda não existia).
   const semCache = { headers: { 'Cache-Control': 'no-store, max-age=0' } }
 
-  // Endereço desconhecido não é erro: é o caso de quem abre por um domínio
-  // ainda não cadastrado. A tela cai na marca neutra e o login segue valendo.
-  if (!data) return Response.json({ ok: true, conhecido: false, host }, semCache)
+  // Endereço desconhecido não é erro: é o caso de quem abre pela porta comum
+  // (djan.app.br) ou por um domínio ainda não cadastrado. A tela cai na marca
+  // neutra e o login segue valendo — o escritório de cada um vem do USUÁRIO, e
+  // não do endereço, então entrar por aqui dá acesso normal ao próprio acervo.
+  //
+  // Mas com um usuário logado ainda precisamos saber a SITUAÇÃO do escritório
+  // dele. Sem isto, um escritório suspenso que entrasse pela porta comum veria
+  // um sistema vazio, sem uma linha explicando por quê — e ligaria achando que
+  // perdeu os processos. Por isso, quando vem sessão junto, a resposta é sobre
+  // o escritório DO USUÁRIO. Nada aqui expõe dado alheio: é o escritório dele.
+  if (!data) {
+    const jwt = (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '').trim()
+    if (jwt) {
+      try {
+        const anon = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
+        const { data: u } = await anon.auth.getUser(jwt)
+        const uid = u && u.user && u.user.id
+        if (uid) {
+          const { data: perfil } = await sb.from('usuarios').select('escritorio_id').eq('id', uid).maybeSingle()
+          if (perfil && perfil.escritorio_id) {
+            const { data: meu } = await sb.from('escritorios')
+              .select('id,nome,marca,ativo,raiz,dados,teste_ate,suspenso_motivo')
+              .eq('id', perfil.escritorio_id).maybeSingle()
+            if (meu) return Response.json(publico(meu, host, true), semCache)
+          }
+        }
+      } catch (e) {}
+    }
+    return Response.json({ ok: true, conhecido: false, host }, semCache)
+  }
+
+  return Response.json(publico(data, host, false), semCache)
+}
+
+// O que pode sair daqui. `porUsuario` diz que a resposta veio da sessão, e não
+// do endereço — a tela usa isso para não trocar a marca da porta comum.
+function publico(data, host, porUsuario) {
 
   const marca = data.marca || {}
-  return Response.json({
+  return {
     ok: true,
     conhecido: true,
+    por_usuario: !!porUsuario,
     host,
     escritorio_id: data.id,
     raiz: !!data.raiz,
@@ -71,5 +106,5 @@ export async function GET(request) {
     // cliente dele assina — e é dado profissional público (o que já vai escrito
     // na própria procuração), não dado sigiloso.
     dados: data.dados || null,
-  }, semCache)
+  }
 }

@@ -27429,10 +27429,36 @@ async function cadastrarOabUm(k,btn){
     document.body.appendChild(f);
   }
 
+  /* Token da sessão, se já houver. Na PORTA COMUM (djan.app.br) o endereço não
+     identifica escritório nenhum — quem entra por ali cai no próprio acervo
+     porque o escritório vem do usuário, não do endereço. Sem mandar a sessão,
+     esta consulta não saberia de quem é a tela, e um escritório suspenso
+     entrando pela porta comum veria um sistema vazio sem uma linha de
+     explicação. */
+  async function token(){
+    try{
+      var sb=window.__sb; if(!sb||!sb.auth) return '';
+      var s=await sb.auth.getSession();
+      return (s&&s.data&&s.data.session&&s.data.session.access_token)||'';
+    }catch(e){ return ''; }
+  }
+
+  async function consultar(){
+    var h={}; var tk=await token(); if(tk) h.Authorization='Bearer '+tk;
+    var r=await fetch('/api/inquilino',{cache:'no-store',headers:h});
+    return await r.json();
+  }
+
   async function ver(){
     try{
-      var r=await fetch('/api/inquilino',{cache:'no-store'});
-      var info=await r.json();
+      var info=await consultar();
+      /* A sessão costuma ficar pronta DEPOIS da primeira pintura da tela. Se a
+         primeira consulta não achou dono, tenta de novo enquanto o login se
+         resolve — em vez de desistir e deixar a pessoa sem aviso. */
+      for(var i=0;i<10 && (!info||!info.conhecido);i++){
+        await new Promise(function(ok){ setTimeout(ok,1200); });
+        info=await consultar();
+      }
       if(!info||!info.ok||!info.conhecido) return;
       if(info.raiz) return;                    /* a casa não tem teste nem bloqueio */
       if(info.ativo===false){ telaBloqueada(info); return; }
