@@ -728,7 +728,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
       <div class="card">
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
           <p class="sectlabel" style="margin:0">🎓 Estagiário Virtual — fila de peças</p>
-          <span style="display:inline-flex;gap:6px"><button class="btn sm ghost" onclick="abrirContaIA()" title="Gasto de IA do mês e link para pagar/recarregar a conta da Anthropic">💳 conta da API</button><button class="btn sm ghost" onclick="renderEstagiario()">↻ atualizar</button></span>
+          <span style="display:inline-flex;gap:6px"><button class="btn sm ghost cmp-only" onclick="abrirContaIA()" title="Gasto de IA do mês e link para pagar/recarregar a conta da Anthropic">💳 conta da API</button><button class="btn sm ghost" onclick="renderEstagiario()">↻ atualizar</button></span>
         </div>
         <p class="note" style="margin:6px 0 10px">O robô lê as intimações do DJEN, separa as que exigem peça e monta um dossiê: <b>um zip só</b>, com as instruções da petição e os documentos dos autos, na pasta <b>&ldquo;Estagiário Virtual&rdquo;</b> do processo. Baixe, mande redigir no Claude do escritório e suba a minuta revisada. O prazo já entra no Kanban na hora da triagem.</p>
         <div id="estagiario-orcamento" class="note" style="margin-bottom:8px"></div>
@@ -21945,7 +21945,8 @@ async function renderEstagiario(){
   el.innerHTML='<div class="note">Carregando…</div>';
   var orc=document.getElementById('estagiario-orcamento');
   try{
-    var r=await fetch('/api/robo/minutas?status=1');
+    var _tk=(typeof finToken==='function')?await finToken():'';
+    var r=await fetch('/api/robo/minutas?status=1',{headers:_tk?{Authorization:'Bearer '+_tk}:{},cache:'no-store'});
     var bruto=await r.text();
     var j=null; try{ j=JSON.parse(bruto); }catch(eJ){}
     if(!j){
@@ -21956,12 +21957,16 @@ async function renderEstagiario(){
       return;
     }
     if(!j.ok){ el.innerHTML='<div class="note">Não consegui carregar a fila: '+finEsc(j.erro||'erro desconhecido')+' <a onclick="renderEstagiario()" style="cursor:pointer;color:#185FA5;text-decoration:underline">tentar de novo</a></div>'; return; }
-    if(orc&&j.orcamento){
-      var o=j.orcamento, pct=o.tetoBrl?Math.min(100,Math.round(o.gastoBrl/o.tetoBrl*100)):0;
-      orc.innerHTML='Modo: <b>'+(j.modo==='api'?'robô redige pela API (custa)':'dossiê para redigir fora (sem custo de API)')+'</b>'
-        +' · Gasto de IA no mês: <b>R$ '+(o.gastoBrl||0).toFixed(2)+'</b> de R$ '+(o.tetoBrl||0).toFixed(2)+' ('+pct+'%)'
-        +(o.estourou?' — <b style="color:#b5342b">teto atingido</b>':'')
-        +(o.ativo?'':' — <b style="color:#b5342b">robô desligado</b>');
+    /* O gasto de IA é a conta de quem OPERA o sistema — a chave da API é dele e
+       a fatura também. Escritório cliente vê só o modo de trabalho. */
+    if(orc){
+      if(j.orcamento){
+        var o=j.orcamento, pct=o.tetoBrl?Math.min(100,Math.round(o.gastoBrl/o.tetoBrl*100)):0;
+        orc.innerHTML='Modo: <b>'+(j.modo==='api'?'robô redige pela API (custa)':'dossiê para redigir fora (sem custo de API)')+'</b>'
+          +' · Gasto de IA no mês: <b>R$ '+(o.gastoBrl||0).toFixed(2)+'</b> de R$ '+(o.tetoBrl||0).toFixed(2)+' ('+pct+'%)'
+          +(o.estourou?' — <b style="color:#b5342b">teto atingido</b>':'')
+          +(o.ativo?'':' — <b style="color:#b5342b">robô desligado</b>');
+      } else orc.innerHTML='Modo: <b>dossiê pronto para redigir</b> — o robô junta as instruções e os documentos dos autos num zip só.';
     }
     var fila=(j.fila||[]).slice().sort(function(a,b){
       /* prazo mais próximo primeiro; sem prazo, no fim da fila */
@@ -21970,7 +21975,13 @@ async function renderEstagiario(){
       return pa<pb?-1:(pa>pb?1:0);
     });
     _badgeMov(fila.length);
-    if(!fila.length){ el.innerHTML='<div class="note">Nenhuma intimação exigindo peça no momento.'+(j.arquivadas_sem_peca?(' O robô já arquivou '+j.arquivadas_sem_peca+' publicação(ões) que não exigiam peça.'):'')+'</div>'; return; }
+    if(!fila.length){
+      el.innerHTML='<div class="note">Nenhuma intimação exigindo peça no momento.'
+        +(j.arquivadas_sem_peca?(' O robô já arquivou '+j.arquivadas_sem_peca+' publicação(ões) que não exigiam peça.'):'')
+        +(j.raiz?'':' O Estagiário Virtual lê as publicações que o robô do diário traz — confira em <b>Diários e robôs</b> se as inscrições na OAB do escritório estão cadastradas.')
+        +'</div>';
+      return;
+    }
     el.innerHTML='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:10px">'+fila.map(function(x){
       var cor=_EST_CORES[x.status]||'#697180', rot=_EST_ROTULOS[x.status]||x.status;
       var prazo=x.prazo_em?String(x.prazo_em).split('-').reverse().join('/'):'—';
@@ -22730,7 +22741,8 @@ function _badgeMov(n){
    sistema, do mesmo jeito que o badge de e-mails. */
 async function atualizaBadgeMovimentar(){
   try{
-    var r=await fetch('/api/robo/minutas?status=1');
+    var _tk=(typeof finToken==='function')?await finToken():'';
+    var r=await fetch('/api/robo/minutas?status=1',{headers:_tk?{Authorization:'Bearer '+_tk}:{},cache:'no-store'});
     var t=await r.text(); var j=null; try{ j=JSON.parse(t); }catch(e2){}
     if(j&&j.ok) _badgeMov((j.fila||[]).length);
   }catch(e){}

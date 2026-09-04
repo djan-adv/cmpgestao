@@ -18,7 +18,11 @@ import { createClient } from '@supabase/supabase-js'
 import fs from 'fs'
 import path from 'path'
 import { chamarClaude, orcamento } from '../../_ia/claude.js'
-import { gerarMinuta, coletaPdfs, ROOT, ESCRITORIO_CMP } from '../../peticao/core.js'
+import { gerarMinuta, coletaPdfs } from '../../peticao/core.js'
+import {
+  usuarioDoRequest, escritorioDoUsuario, ESCRITORIO_RAIZ, escritoriosAtivos, raizDocs,
+} from '../../_lib/inquilino.js'
+import { anotarRobo } from '../../_lib/robolog.js'
 import { zip } from '../../_lib/zip.js'
 import { coletarPecas, ordenarPecas, pdfUnico, INTEGRA_PREFIXO, nomeArquivoAutos } from '../../jusbr/integra/core.js'
 
@@ -146,14 +150,40 @@ function dataPrazo(dias, uteis) {
 }
 
 // ————— fase 1: triagem —————
-async function faseTriagem(sb, limite) {
+// Triagem das intimações — o Estagiário Virtual.
+//
+// Roda para UM escritório de cada vez. Antes lia os 300 andamentos mais novos do
+// banco inteiro e só depois descartava o que não era da casa: com dois
+// escritórios, a janela do escritório menor era engolida pelo movimento do
+// maior, e ele podia nunca ser triado. Agora a janela já sai filtrada pelos
+// processos DELE.
+async function faseTriagem(sb, esc, limite) {
   const desde = new Date(Date.now() - JANELA_DIAS * 86400000).toISOString()
-  const { data: ands, error } = await sb.from('andamentos')
-    .select('id,processo_id,data,texto')
-    .eq('fonte', 'djen').gte('criado_em', desde)
-    .order('id', { ascending: false }).limit(300)
+
+  // processos ativos DESTE escritório (arquivado/suspenso não gera prazo)
+  const { data: meus } = await sb.from('processos')
+    .select('id,numero,cliente_nome,oponente,classe,assunto,orgao,status,suspenso')
+    .eq('escritorio_id', esc)
+  const mapaProc = {}
+  const idsProc = []
+  ;(meus || []).forEach(p => {
+    const arquivado = /arquiv|encerr|baixad/i.test(String(p.status || ''))
+    if (!arquivado && p.suspenso !== true) { mapaProc[p.id] = p; idsProc.push(p.id) }
+  })
+  if (!idsProc.length) return { triados: 0, nada: true, motivo: 'nenhum processo ativo neste escritório' }
+
+  let ands = [], error = null
+  for (let i = 0; i < idsProc.length; i += 200) {
+    const r = await sb.from('andamentos')
+      .select('id,processo_id,data,texto')
+      .eq('fonte', 'djen').gte('criado_em', desde).in('processo_id', idsProc.slice(i, i + 200))
+      .order('id', { ascending: false }).limit(300)
+    if (r.error) { error = r.error; break }
+    ands = ands.concat(r.data || [])
+  }
   if (error) return { erro: 'não consegui ler os andamentos: ' + error.message }
-  if (!ands || !ands.length) return { triados: 0, nada: true }
+  if (!ands.length) return { triados: 0, nada: true }
+  ands.sort((a, b) => b.id - a.id)
 
   // tira as que já passaram pelo robô (o unique em andamento_id é a rede de segurança)
   const ids = ands.map(a => a.id)
@@ -161,17 +191,6 @@ async function faseTriagem(sb, limite) {
   const vistos = new Set((jaVistos || []).map(r => Number(r.andamento_id)))
   const novas = ands.filter(a => !vistos.has(Number(a.id)) && String(a.texto || '').trim().length > 60)
   if (!novas.length) return { triados: 0, nada: true }
-
-  // só processos ativos do escritório (arquivado/suspenso não gera prazo)
-  const pids = [...new Set(novas.map(a => a.processo_id))]
-  const { data: procs } = await sb.from('processos')
-    .select('id,numero,cliente_nome,oponente,classe,assunto,orgao,status,suspenso')
-    .eq('escritorio_id', ESCRITORIO_CMP).in('id', pids)
-  const mapaProc = {}
-  ;(procs || []).forEach(p => {
-    const arquivado = /arquiv|encerr|baixad/i.test(String(p.status || ''))
-    if (!arquivado && p.suspenso !== true) mapaProc[p.id] = p
-  })
 
   const fila = novas.filter(a => mapaProc[a.processo_id]).slice(0, limite)
   const resultados = []
@@ -185,7 +204,7 @@ async function faseTriagem(sb, limite) {
       'TEOR DA PUBLICAÇÃO:\n' + String(a.texto || '').slice(0, 12000)
 
     const r = await chamarClaude({
-      rotina: 'triagem', sb, ref: p.numero, escritorioId: ESCRITORIO_CMP,
+      rotina: 'triagem', sb, ref: p.numero, escritorioId: esc,
       modelo: 'claude-sonnet-5', maxTokens: 1200,
       sistemaFixo: MANUAL_TRIAGEM,
       conteudo: [{ type: 'text', text: variavel }],
@@ -207,12 +226,13 @@ async function faseTriagem(sb, limite) {
     let duplicado = null
     if (t.exige_peca && prazoEm) {
       const { data: ex } = await sb.from('robo_minutas')
-        .select('id').eq('processo_id', p.id).eq('exige_peca', true).eq('prazo_em', prazoEm).limit(1)
+        .select('id').eq('escritorio_id', esc).eq('processo_id', p.id)
+        .eq('exige_peca', true).eq('prazo_em', prazoEm).limit(1)
       if (ex && ex.length) duplicado = ex[0].id
     }
 
     const linha = {
-      escritorio_id: ESCRITORIO_CMP, processo_id: p.id, processo_numero: p.numero, andamento_id: a.id,
+      escritorio_id: esc, processo_id: p.id, processo_numero: p.numero, andamento_id: a.id,
       status: (t.exige_peca && !duplicado) ? 'triado' : 'sem_peca',
       exige_peca: !!t.exige_peca && !duplicado,
       tipo_peca: limpaCampo(t.tipo_peca, 120),
@@ -230,7 +250,7 @@ async function faseTriagem(sb, limite) {
     if (t.exige_peca && prazoEm && !duplicado) {
       try {
         const tr = await sb.from('kanban_tarefas').insert({
-          escritorio_id: ESCRITORIO_CMP,
+          escritorio_id: esc,
           titulo: 'Prazo: ' + (linha.tipo_peca || 'peça') + ' — ' + String(t.resumo || '').slice(0, 70),
           cliente: p.cliente_nome || '—', numero: p.numero, coluna: 'distribuir',
           data: prazoEm, prazo: prazoEm, tipo: 'prazo', origem: 'robo_minuta',
@@ -250,13 +270,14 @@ async function faseTriagem(sb, limite) {
     if (t.ato_decisorio && atoRecente(a.data)) {
       embargosEm = dataPrazo(EMBARGOS_DIAS, t.prazo_uteis !== false)
       const jaTem = await sb.from('kanban_tarefas')
-        .select('id').eq('numero', p.numero).eq('origem', 'robo_embargos').eq('prazo', embargosEm).limit(1)
+        .select('id').eq('escritorio_id', esc).eq('numero', p.numero)
+        .eq('origem', 'robo_embargos').eq('prazo', embargosEm).limit(1)
       // o DJEN repete a mesma decisão em vários canais: sem isto, uma sentença
       // publicada 3 vezes viraria 3 tarefas idênticas de embargos
       if (!jaTem.data || !jaTem.data.length) {
         try {
           await sb.from('kanban_tarefas').insert({
-            escritorio_id: ESCRITORIO_CMP,
+            escritorio_id: esc,
             titulo: 'Prazo: embargos de declaração (' + EMBARGOS_DIAS + ' dias) — ' + String(t.resumo || 'decisão publicada').slice(0, 70),
             cliente: p.cliente_nome || '—', numero: p.numero, coluna: 'distribuir',
             data: embargosEm, prazo: embargosEm, tipo: 'prazo', origem: 'robo_embargos',
@@ -332,10 +353,11 @@ function limpaCampo(v, max) {
   return t ? t.slice(0, max) : null
 }
 
-async function faseDossie(sb) {
-  // a mais urgente primeiro: prazo mais curto na frente
+async function faseDossie(sb, esc) {
+  // a mais urgente primeiro: prazo mais curto na frente — dentro do escritório
   const { data: pend } = await sb.from('robo_minutas')
     .select('id,processo_id,processo_numero,andamento_id,instrucao,tipo_peca,prazo_em,prazo_dias,urgencia,resumo,docs_necessarios')
+    .eq('escritorio_id', esc)
     .in('status', ['triado', 'sem_orcamento']).eq('exige_peca', true)
     .order('prazo_em', { ascending: true, nullsFirst: false }).limit(1)
   const alvo = pend && pend[0]
@@ -361,7 +383,7 @@ async function faseDossie(sb) {
   const pontua = (nome) => { const n = semAcento(nome); return chaves.reduce((acc, k) => acc + (n.indexOf(k) > -1 ? 1 : 0), 0) }
 
   const locais = []
-  coletaPdfs(path.join(ROOT, dig), locais)
+  coletaPdfs(path.join(raizDocs(esc), dig), locais)
   locais.sort((a, b) => (pontua(b.nome) - pontua(a.nome)) || (b.mtime - a.mtime))
 
   const arquivos = [], listaDocs = []
@@ -378,7 +400,7 @@ async function faseDossie(sb) {
   }
   if (arquivos.length < DOSSIE_MAX_DOCS) {
     const { data: doJus } = await sb.from('jusbr_arquivos')
-      .select('doc_nome,doc_tipo,conteudo_b64,caminho_disco').eq('escritorio_id', ESCRITORIO_CMP)
+      .select('doc_nome,doc_tipo,conteudo_b64,caminho_disco').eq('escritorio_id', esc)
       .eq('processo_numero', proc.numero).order('baixado_em', { ascending: false }).limit(30)
     const ordenados = (doJus || []).sort((a, b) => pontua(b.doc_nome) - pontua(a.doc_nome))
     for (const d of ordenados) {
@@ -406,7 +428,7 @@ async function faseDossie(sb) {
   const hoje = new Date().toISOString().slice(0, 10)
   const slug = semAcento(alvo.tipo_peca || 'peca').replace(/[^\w]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'peca'
   const nomeZip = hoje + '_' + slug + '.zip'
-  const dir = path.join(ROOT, dig, PASTA_DOSSIE)
+  const dir = path.join(raizDocs(esc), dig, PASTA_DOSSIE)
   let buf
   try {
     buf = zip(arquivos)
@@ -454,10 +476,11 @@ async function faseDossie(sb) {
 // crescente (começa pela petição inicial e vai até a peça mais recente), com
 // prefixo "000 - " para ser o primeiro arquivo da pasta. A íntegra anterior é
 // substituída — é isso que segura o disco.
-async function faseIntegra(sb) {
-  // a mais urgente primeiro: prazo mais curto na frente
+async function faseIntegra(sb, esc) {
+  // a mais urgente primeiro: prazo mais curto na frente — dentro do escritório
   const { data: pend } = await sb.from('robo_minutas')
     .select('id,processo_id,processo_numero,prazo_em,integra_em')
+    .eq('escritorio_id', esc)
     .eq('integra_pedida', true).is('integra_em', null)
     .order('prazo_em', { ascending: true, nullsFirst: false }).limit(1)
   const alvo = pend && pend[0]
@@ -468,7 +491,7 @@ async function faseIntegra(sb) {
     await sb.from('robo_minutas').update({ integra_em: new Date().toISOString(), integra_erro: 'número inválido' }).eq('id', alvo.id)
     return { integra: false, erro: 'número de processo inválido' }
   }
-  const pastaProc = path.join(ROOT, dig)
+  const pastaProc = path.join(raizDocs(esc), dig)
 
   // já existe íntegra recente? então não baixa de novo (economiza tempo e disco)
   try {
@@ -536,19 +559,20 @@ async function faseIntegra(sb) {
 }
 
 // ————— fase 2 (modo 'api'): o robô redige pela API paga —————
-async function faseMinuta(sb) {
+async function faseMinuta(sb, esc) {
   const orc = await orcamento(sb)
   if (!orc.ativo) return { pulou: 'robô de minutas desligado no painel' }
   if (orc.restanteUsd < RESERVA_MINUTA_USD) {
     // marca a fila como sem orçamento para o painel explicar por que parou
     await sb.from('robo_minutas').update({ status: 'sem_orcamento', atualizado_em: new Date().toISOString() })
-      .eq('status', 'triado').eq('exige_peca', true)
+      .eq('escritorio_id', esc).eq('status', 'triado').eq('exige_peca', true)
     return { pulou: 'teto do mês atingido', orcamento: orc }
   }
 
   // a mais urgente primeiro: prazo mais curto na frente
   const { data: pend } = await sb.from('robo_minutas')
     .select('id,processo_numero,instrucao,tipo_peca,prazo_em,docs_necessarios')
+    .eq('escritorio_id', esc)
     .in('status', ['triado', 'sem_orcamento']).eq('exige_peca', true)
     .order('prazo_em', { ascending: true, nullsFirst: false }).limit(1)
   const alvo = pend && pend[0]
@@ -612,11 +636,25 @@ async function _get(request) {
   const sb = admin()
 
   if (searchParams.get('status') != null) {
-    const orc = await orcamento(sb)
+    // De quem é esta fila. Sem esta pergunta a tela listava robo_minutas do banco
+    // INTEIRO: o escritório cliente abria "Movimentar" e via os processos do
+    // fornecedor, com nome de cliente, número e prazo. Não é só constrangimento
+    // — é o acervo de um escritório aberto para outro.
+    const user = await usuarioDoRequest(request)
+    if (!user) return Response.json({ erro: 'não autenticado' }, { status: 401 })
+    const esc = await escritorioDoUsuario(user.id)
+    if (!esc) return Response.json({ erro: 'usuário sem escritório vinculado' }, { status: 403 })
+    const ehRaiz = esc === ESCRITORIO_RAIZ
+
+    // O orçamento é a conta de IA de quem OPERA o sistema — a chave da API é
+    // dele, e a fatura também. Escritório cliente não tem o que ver ali.
+    const orc = ehRaiz ? await orcamento(sb) : null
+
     const { data: fila, error: erroFila } = await sb.from('robo_minutas')
       .select('id,tarefa_id,processo_id,processo_numero,status,tipo_peca,prazo_em,urgencia,resumo,dossie_nome,dossie_path,dossie_bytes,integra_path,integra_bytes,integra_erro,integra_pedida,integra_pedida_por,minuta_anexo_id,erro,criado_em')
       // prazo mais próximo primeiro — é a ordem em que o trabalho tem que sair.
       // Sem prazo vai para o fim; empate desempata pela triagem mais recente.
+      .eq('escritorio_id', esc)
       .eq('exige_peca', true)
       .order('prazo_em', { ascending: true, nullsFirst: false })
       .order('criado_em', { ascending: false })
@@ -627,14 +665,14 @@ async function _get(request) {
     // (a triagem já filtra isso na entrada, mas o status do processo muda depois)
     const pids = [...new Set(lista.map(x => x.processo_id).filter(Boolean))]
     if (pids.length) {
-      const { data: procs } = await sb.from('processos').select('id,status,suspenso').in('id', pids)
+      const { data: procs } = await sb.from('processos').select('id,status,suspenso').eq('escritorio_id', esc).in('id', pids)
       const fora = new Set((procs || []).filter(p => /arquiv|encerr|baixad/i.test(String(p.status || '')) || p.suspenso === true).map(p => p.id))
       lista = lista.filter(x => !fora.has(x.processo_id))
     }
     // tarefa do Kanban concluída (ou apagada) = trabalho feito → o card sai da fila
     const tids = lista.map(x => x.tarefa_id).filter(Boolean)
     if (tids.length) {
-      const { data: ts } = await sb.from('kanban_tarefas').select('id,coluna,arquivada').in('id', tids)
+      const { data: ts } = await sb.from('kanban_tarefas').select('id,coluna,arquivada').eq('escritorio_id', esc).in('id', tids)
       const abertas = new Set((ts || []).filter(t => t.coluna !== 'finalizado' && t.arquivada !== true).map(t => t.id))
       lista = lista.filter(x => !x.tarefa_id || abertas.has(x.tarefa_id))
     }
@@ -649,32 +687,72 @@ async function _get(request) {
     const nums = [...new Set(lista.map(x => x.processo_numero).filter(Boolean))]
     if (nums.length) {
       const { data: ts2 } = await sb.from('kanban_tarefas')
-        .select('id,numero,titulo,prazo,coluna,arquivada').eq('origem', 'robo_minuta').in('numero', nums)
+        .select('id,numero,titulo,prazo,coluna,arquivada').eq('escritorio_id', esc).eq('origem', 'robo_minuta').in('numero', nums)
       lista = tirarJaFeitas(lista, ts2 || [])
     }
-    const { count: semPeca } = await sb.from('robo_minutas').select('id', { count: 'exact', head: true }).eq('exige_peca', false)
-    return Response.json({ ok: true, orcamento: orc, modo: await modoAtual(sb), fila: lista, arquivadas_sem_peca: semPeca || 0 })
+    const { count: semPeca } = await sb.from('robo_minutas')
+      .select('id', { count: 'exact', head: true }).eq('escritorio_id', esc).eq('exige_peca', false)
+    return Response.json({
+      ok: true, raiz: ehRaiz,
+      ...(orc ? { orcamento: orc } : {}),
+      modo: await modoAtual(sb), fila: lista, arquivadas_sem_peca: semPeca || 0,
+    })
   }
 
   const orc = await orcamento(sb)
   if (!orc.ativo) return Response.json({ ok: true, pulou: 'robô desligado no painel' })
 
   const fase = searchParams.get('fase') || 'triagem'
-  // fase 3: íntegra dos autos (download do jus.br, sem custo de IA)
-  if (fase === 'integra') return Response.json({ ok: true, fase, ...(await faseIntegra(sb)) })
-  // fase 2: dossiê (padrão, sem custo) ou minuta pela API, conforme ia_config.modo
-  if (fase === 'dossie' || fase === 'minuta') {
-    const modo = await modoAtual(sb)
-    if (modo === 'api') {
-      if (!process.env.ANTHROPIC_API_KEY) return Response.json({ erro: 'falta ANTHROPIC_API_KEY' }, { status: 501 })
-      return Response.json({ ok: true, fase: 'minuta', modo, ...(await faseMinuta(sb)) })
-    }
-    return Response.json({ ok: true, fase: 'dossie', modo, ...(await faseDossie(sb)) })
+
+  // Uma passada POR ESCRITÓRIO.
+  //
+  // A triagem consome IA, e a chave da API é de quem OPERA o sistema — não do
+  // escritório cliente. Por isso ela não vem ligada de fábrica para ninguém:
+  // liga-se escritório por escritório (modulos.estagiario), no painel de quem
+  // vende, junto com o plano. Ligar sozinho seria fazer a conta de um crescer
+  // com o movimento do outro, sem ninguém ter combinado isso.
+  //
+  // O dossiê e a íntegra não custam IA (só juntam o que já está no processo),
+  // mas dependem da triagem ter enchido a fila — então seguem a mesma chave.
+  let escs = await escritoriosAtivos()
+  const soEste = searchParams.get('esc')
+  if (soEste) escs = escs.filter(e => e.id === soEste)
+  escs = escs.filter(e => e.raiz === true || (e.modulos || {}).estagiario === true)
+  if (!escs.length) {
+    return Response.json({ ok: true, fase, nada: true, motivo: 'nenhum escritório com o Estagiário Virtual ligado' })
   }
 
-  if (!process.env.ANTHROPIC_API_KEY) return Response.json({ erro: 'falta ANTHROPIC_API_KEY' }, { status: 501 })
+  const modo = await modoAtual(sb)
+  if ((fase === 'dossie' || fase === 'minuta') && modo === 'api' && !process.env.ANTHROPIC_API_KEY) {
+    return Response.json({ erro: 'falta ANTHROPIC_API_KEY' }, { status: 501 })
+  }
+  if (fase === 'triagem' && !process.env.ANTHROPIC_API_KEY) {
+    return Response.json({ erro: 'falta ANTHROPIC_API_KEY' }, { status: 501 })
+  }
 
   const limite = Math.min(parseInt(searchParams.get('limite') || '', 10) || LOTE_TRIAGEM, 40)
-  const t = await faseTriagem(sb, limite)
-  return Response.json({ ok: true, fase: 'triagem', gasto_mes_brl: Math.round(orc.gastoBrl * 100) / 100, ...t })
+  const porEscritorio = []
+  for (const e of escs) {
+    let r
+    try {
+      if (fase === 'integra') r = await faseIntegra(sb, e.id)
+      else if (fase === 'dossie' || fase === 'minuta') {
+        r = modo === 'api' ? await faseMinuta(sb, e.id) : await faseDossie(sb, e.id)
+      } else r = await faseTriagem(sb, e.id, limite)
+    } catch (err) { r = { erro: String((err && err.message) || err) } }
+    porEscritorio.push({ escritorio: e.nome, ...r })
+    if (fase === 'triagem') {
+      await anotarRobo(e.id, 'minuta_triagem', !r.erro,
+        r.erro || ((r.triados || 0) + ' intimação(ões) triada(s)' + (r.restam ? ', ' + r.restam + ' na fila' : '')))
+    }
+  }
+
+  const soma = (c) => porEscritorio.reduce((t, r) => t + (Number(r[c]) || 0), 0)
+  return Response.json({
+    ok: !porEscritorio.every(r => r.erro),
+    fase, modo, escritorios: porEscritorio.length,
+    triados: soma('triados'),
+    gasto_mes_brl: Math.round(orc.gastoBrl * 100) / 100,
+    por_escritorio: porEscritorio,
+  })
 }

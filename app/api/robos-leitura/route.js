@@ -46,6 +46,13 @@ const ROBOS = [
     url: '/api/jusbr/movimentos/robo',
     precisa: 'jusbr',
   },
+  {
+    nome: 'minuta_triagem',
+    rotulo: 'Estagiário Virtual — triagem das intimações',
+    faz: 'Lê cada intimação que o diário trouxe, decide se ela exige peça, abre o prazo no Kanban e monta o dossiê dos autos para a peça ser redigida. Todo ato decisório também ganha, por segurança, o prazo de embargos.',
+    url: '/api/robo/minutas?fase=triagem',
+    precisa: 'estagiario',
+  },
 ]
 
 function admin() {
@@ -75,6 +82,18 @@ async function pendencia(sb, esc, precisa) {
     if ((e?.modulos || {}).email !== true) {
       return 'Cadastre a conta de e-mail do escritório (⚙ → Conta de e-mail) e passe no teste de envio. Só depois disso o sistema lê a caixa.'
     }
+    return null
+  }
+  if (precisa === 'estagiario') {
+    // A triagem consome IA, e a chave da API é de quem opera o sistema. Por isso
+    // ela é liberada escritório por escritório, junto com o plano — não por
+    // quem usa. Dizer isso é melhor do que um botão que não faz nada.
+    if (e?.raiz === true) return null
+    if ((e?.modulos || {}).estagiario !== true) {
+      return 'O Estagiário Virtual ainda não está liberado para este escritório. Peça a liberação em "Solicitar funcionalidades" — ele entra pelo plano.'
+    }
+    const oabs = Array.isArray(e?.oabs) ? e.oabs : []
+    if (!oabs.length) return 'Cadastre as inscrições na OAB (⚙): a triagem só existe sobre as publicações que o robô do diário traz.'
     return null
   }
   if (precisa === 'jusbr') {
