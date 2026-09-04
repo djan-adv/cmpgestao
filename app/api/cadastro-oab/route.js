@@ -72,6 +72,53 @@ async function consulta(params, falhas) {
 
 const maisFrequente = (o) => Object.entries(o).sort((a, b) => b[1] - a[1]).map(e => e[0])[0] || ''
 
+/* O TEOR só existe no Diário.
+   O DataJud entrega o TÍTULO do movimento ("Conclusos para despacho", 27
+   caracteres) e o jus.br entrega o mesmo título; nenhum dos dois traz o texto
+   da decisão. Quem publica o inteiro teor é o DJEN. Por isso, ao cadastrar,
+   além do histórico do DataJud, buscamos as comunicações DO PROCESSO no
+   Comunica e gravamos o texto inteiro: sem isto o processo entra no acervo com
+   176 andamentos e "Com teor (0)", que foi exatamente o que apareceu na tela.
+   Volta quantas publicações entraram. Nunca lança: o processo já está
+   cadastrado, e ficar sem o teor é menos ruim do que perder o cadastro. */
+async function trazerTeorDoProcesso(sb, esc, numeroDigitos) {
+  const dig = soDig(numeroDigitos)
+  if (dig.length < 16) return { novas: 0 }
+  let brutos = []
+  try {
+    for (let pagina = 1; pagina <= 5; pagina++) {
+      const url = DJEN + '?numeroProcesso=' + dig + '&pagina=' + pagina + '&itensPorPagina=100'
+      const r = await fetch(url, { headers: { Accept: 'application/json', 'User-Agent': UA }, cache: 'no-store', signal: AbortSignal.timeout(25000) })
+      if (!r.ok) break
+      const d = await r.json().catch(() => null)
+      const lote = (d && (d.items || d.content || d.comunicacoes)) || []
+      if (!lote.length) break
+      brutos = brutos.concat(lote)
+      if (lote.length < 100) break
+    }
+  } catch (e) { return { novas: 0, erro: String((e && e.message) || e) } }
+
+  // a mesma publicação sai em mais de uma OAB do escritório: entra uma vez só
+  const vistos = new Set()
+  let novas = 0
+  for (const b of brutos) {
+    const texto = String(b.texto || b.teor || '')
+      .replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '').replace(/[ \t]+\n/g, '\n').trim()
+    if (!texto) continue
+    const data = String(b.dataDisponibilizacao || b.data_disponibilizacao || '').slice(0, 10) || null
+    const chave = (data || '') + '|' + texto.slice(0, 120)
+    if (vistos.has(chave)) continue
+    vistos.add(chave)
+    try {
+      const { data: res } = await sb.rpc('robot_add_andamento_esc', {
+        p_esc: esc, p_num: dig, p_data: data, p_texto: texto, p_fonte: 'djen', p_tipo: 'publicacao',
+      })
+      if (res === 'inserido') novas++
+    } catch (e) {}
+  }
+  return { novas }
+}
+
 export async function GET(request) {
   const q = await quem(request)
   if (q.semEsc) return semEscritorio()
@@ -167,6 +214,21 @@ export async function POST(request) {
 
   let body = {}
   try { body = await request.json() } catch (e) {}
+
+  /* Só o teor, para processo que JÁ está no acervo. Existe porque o acervo que
+     entrou antes desta correção ficou com o histórico do DataJud e nenhum texto:
+     na ficha, "Com teor (0)". */
+  if (String(body.acao || '') === 'teor') {
+    const nums = (Array.isArray(body.numeros) ? body.numeros : []).slice(0, MAX_LOTE)
+    if (!nums.length) return Response.json({ erro: 'Nenhum processo informado.' }, { status: 400 })
+    const feitos = []
+    for (const n of nums) {
+      const r = await trazerTeorDoProcesso(sb, esc, n)
+      feitos.push({ numero: String(n), ok: !r.erro, publicacoes: r.novas || 0, motivo: r.erro || null })
+    }
+    return Response.json({ ok: true, itens: feitos, publicacoes: feitos.reduce((t, f) => t + (f.publicacoes || 0), 0) })
+  }
+
   const itens = (Array.isArray(body.itens) ? body.itens : []).slice(0, MAX_LOTE)
   if (!itens.length) return Response.json({ erro: 'Nada marcado.' }, { status: 400 })
 
@@ -232,7 +294,9 @@ export async function POST(request) {
     }))
     if (rows.length) { try { await sb.from('andamentos').insert(rows) } catch (er) {} }
 
-    feitos.push({ numero, ok: true, id: pid, andamentos: rows.length, sem_datajud: !!dj.erro })
+    // e o teor, que é o que o advogado abre para ler
+    const teor = await trazerTeorDoProcesso(sb, esc, dig)
+    feitos.push({ numero, ok: true, id: pid, andamentos: rows.length, publicacoes: teor.novas, sem_datajud: !!dj.erro })
   }
 
   // rastro de quem trouxe o lote (é o mesmo log que a tela de Produtividade lê)

@@ -10626,6 +10626,7 @@ function renderProc(){
       <span id="oab-contador" style="font-weight:700;color:#0F6E56;font-size:13.5px">0 marcados</span>
       <button class="btn sm ghost" onclick="oabLimpar()">limpar seleção</button>
       <label class="note" style="display:flex;align-items:center;gap:6px;margin:0;cursor:pointer"><input type="checkbox" id="oab-so-novos" checked onchange="oabPintar()" style="width:auto"> esconder os que já estão no acervo</label>
+      <button class="btn sm ghost" id="oab-btn-teor" style="display:none" onclick="trazerTeorOab(this)" title="O texto das decisões só existe no Diário de Justiça. Traz as publicações (com o inteiro teor) dos processos desta busca que já estão no seu acervo.">&#8635; trazer o teor dos já cadastrados</button>
     </div>
     <button class="btn" id="oab-btn-lote" style="background:#0F6E56;color:#fff;flex:none" onclick="cadastrarOabLote(this)" disabled>+ Cadastrar os marcados</button>
   </div>
@@ -27130,6 +27131,9 @@ function oabPintar(){
   b.disabled=!n; b.textContent=n?('+ Cadastrar os '+n+' marcados'):'+ Cadastrar os marcados';
   var novos=vis.filter(function(i){ return !i.meu; }).length;
   document.getElementById('oab-todos-rot').textContent='marcar todos os novos ('+novos+')';
+  var jaTem=OAB_ITENS.filter(function(i){ return i.meu; }).length;
+  var bt=document.getElementById('oab-btn-teor');
+  if(bt){ bt.style.display=jaTem?'':'none'; bt.textContent='↻ trazer o teor dos já cadastrados ('+jaTem+')'; }
 }
 function oabMarcar(k,v){ if(v) OAB_MARCADOS[k]=true; else delete OAB_MARCADOS[k]; oabPintar(); }
 function oabMarcarTodos(v){
@@ -27181,7 +27185,8 @@ function _oabDepois(feitos,msg){
   var fora=feitos.filter(function(f){ return !f.ok; });
   feitos.forEach(_oabMarcarFeito);
   oabPintar();
-  msg.innerHTML='<b style="color:#127a53">'+ok+' processo(s) cadastrado(s).</b>'
+  var pubs=feitos.reduce(function(t,f){ return t+(f.publicacoes||0); },0);
+  msg.innerHTML='<b style="color:#127a53">'+ok+' processo(s) cadastrado(s)'+(pubs?(', com '+pubs+' publicação(ões) do Diário — é onde está o inteiro teor'):'')+'.</b>'
     +(fora.length?(' '+fora.length+' fora: '+esc(fora.slice(0,3).map(function(f){ return f.numero+' ('+f.motivo+')'; }).join('; '))+(fora.length>3?'…':'')):'')
     +' <a onclick="location.reload()" style="cursor:pointer;color:#185FA5;text-decoration:underline">recarregar a lista de processos</a>';
 }
@@ -27223,6 +27228,37 @@ async function cadastrarOabLote(btn){
   OAB_RODANDO=false;
   btn.disabled=false; btn.textContent=t0;
   oabPintar();
+}
+/* O teor não vem do DataJud nem do jus.br: os dois entregam só o TÍTULO do
+   movimento. Quem publica o texto da decisão é o Diário. Isto busca as
+   publicações dos processos que já estão no acervo e grava o texto inteiro —
+   depois disso o filtro "Com teor" da ficha deixa de vir zerado. */
+async function trazerTeorOab(btn){
+  var alvos=OAB_ITENS.filter(function(i){ return i.meu; });
+  if(!alvos.length) return;
+  if(!confirm('Buscar no Diário de Justiça as publicações de '+alvos.length+' processo(s) que já estão no acervo?\n\nÉ do Diário que vem o inteiro teor — o DataJud e o jus.br trazem só o título do movimento. Roda em segundo plano: pode fechar esta janela.')) return;
+  var msg=document.getElementById('oab-msg'); var t0=btn.textContent;
+  btn.disabled=true; OAB_RODANDO=true;
+  var pubs=0, feitos=0;
+  try{
+    for(var i=0;i<alvos.length;i++){
+      btn.innerHTML='<span class="gira">↻</span> buscando… '+(i+1)+' de '+alvos.length;
+      _oabSelo('<b><span class="gira">↻</span> Buscando o teor no Diário…</b><div class="note" style="margin-top:2px">'+(i+1)+' de '+alvos.length+' — '+esc(fmtCNJ(alvos[i].numero))+'</div>');
+      var tok=await _oabToken();
+      var r=await fetch('/api/cadastro-oab',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({acao:'teor',numeros:[alvos[i].digitos]}),signal:AbortSignal.timeout(180000)});
+      var txt=await r.text(); var d;
+      try{ d=JSON.parse(txt); }catch(e){ throw new Error('resposta inesperada do servidor (HTTP '+r.status+')'); }
+      if(!r.ok||d.erro) throw new Error(d.erro||('HTTP '+r.status));
+      pubs+=(d.publicacoes||0); feitos++;
+    }
+    msg.innerHTML='<b style="color:#127a53">'+pubs+' publicação(ões) do Diário trazidas</b> em '+feitos+' processo(s). '
+      +'<a onclick="location.reload()" style="cursor:pointer;color:#185FA5;text-decoration:underline">atualizar a lista</a>';
+    _oabSelo('<b style="color:#127a53">✓ '+pubs+' publicação(ões) com teor</b><div class="note" style="margin-top:2px"><a onclick="location.reload()" style="cursor:pointer;color:#185FA5;text-decoration:underline">atualizar a lista</a> · <a onclick="_oabSeloFora()" style="cursor:pointer;color:var(--muted)">dispensar</a></div>','#127a53');
+  }catch(e){
+    msg.innerHTML='<span style="color:#b5342b">Parou em: '+esc(String(e&&e.message||e))+'</span>';
+    _oabSelo('<b style="color:#b5342b">A busca do teor parou</b><div class="note" style="margin-top:2px">'+pubs+' publicação(ões) já entraram. <a onclick="_oabSeloFora()" style="cursor:pointer;color:var(--muted)">dispensar</a></div>','#b5342b');
+  }
+  OAB_RODANDO=false; btn.disabled=false; btn.textContent=t0;
 }
 async function cadastrarOabUm(k,btn){
   var i=OAB_ITENS.filter(function(x){ return x.digitos===k; })[0]; if(!i) return;
