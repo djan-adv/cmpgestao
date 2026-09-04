@@ -112,7 +112,7 @@ export default function Vendas({ aoEntrar }) {
       {/* ---------- primeira dobra ---------- */}
       <section style={{ background: NAVY2, color: '#fff', paddingBottom: 56 }}>
         <div style={{ ...faixa, padding: '28px 22px 0' }}>
-          <h1 style={{ fontSize: 38, lineHeight: 1.18, margin: '0 0 16px', maxWidth: 780, fontWeight: 800 }}>
+          <h1 style={{ fontSize: 'clamp(27px, 5vw, 38px)', lineHeight: 1.18, margin: '0 0 16px', maxWidth: 780, fontWeight: 800 }}>
             O sistema que já toca um escritório inteiro, agora com a marca do seu.
           </h1>
           <p style={{ fontSize: 18.5, color: '#c8d4e4', maxWidth: 680, margin: '0 0 10px' }}>
@@ -141,7 +141,7 @@ export default function Vendas({ aoEntrar }) {
         <p style={{ color: CINZA, maxWidth: 720, marginTop: 0 }}>
           É aqui que o sistema se paga. O resto — cadastro, pasta, agenda — todo sistema tem.
         </p>
-        <div style={grade(2)}>
+        <div style={gradeRobos}>
           {ROBOS.map(r => (
             <div key={r.t} style={{ ...cartao, borderLeft: '3px solid ' + VERDE }}>
               <div style={{ fontWeight: 700, color: NAVY, marginBottom: 6, fontSize: 17 }}>{r.t}</div>
@@ -307,7 +307,7 @@ export default function Vendas({ aoEntrar }) {
 
       <footer style={{ background: '#141d29', color: '#8b9bb0', fontSize: 13.5 }}>
         <div style={{ ...faixa, padding: '22px', display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center' }}>
-          <span>Sistema de gestão jurídica.</span>
+          <span><b style={{ color: '#c8d4e4' }}>Gestão<span style={{ color: GOLD }}>Jurídica</span></b> — sistema de gestão para escritórios de advocacia.</span>
           <button onClick={aoEntrar} style={{ background: 'none', border: 0, color: '#c8d4e4', cursor: 'pointer', fontSize: 13.5, textDecoration: 'underline', padding: 0, marginLeft: 'auto' }}>
             Já é cliente? Entrar
           </button>
@@ -338,7 +338,7 @@ function Campo({ rot, v, on, req, tipo, dica }) {
 }
 
 const faixa = { maxWidth: 1060, margin: '0 auto' }
-const h2 = { fontSize: 27, lineHeight: 1.25, margin: '2px 0 14px', color: NAVY, fontWeight: 800 }
+const h2 = { fontSize: 'clamp(21px, 3.2vw, 27px)', lineHeight: 1.25, margin: '2px 0 14px', color: NAVY, fontWeight: 800 }
 const cartao = { background: '#fff', border: '1px solid ' + LINHA, borderRadius: 12, padding: 18 }
 const pCartao = { color: '#46505e', fontSize: 14.5, margin: '6px 0 0' }
 const nota = { color: CINZA, fontSize: 13.5, maxWidth: 760 }
@@ -346,4 +346,7 @@ const liPlano = { padding: '5px 0', borderBottom: '1px solid ' + LINHA }
 const botao = { border: 0, borderRadius: 9, fontWeight: 700, cursor: 'pointer', fontSize: 14 }
 const rotuloCampo = { display: 'block', fontSize: 12.5, fontWeight: 700, color: NAVY, margin: '10px 0 3px' }
 const campo = { width: '100%', padding: 10, border: '1px solid ' + LINHA, borderRadius: 8, boxSizing: 'border-box', fontSize: 14.5, fontFamily: 'inherit' }
+// Os robôs são quatro: em três colunas, o quarto fica sozinho embaixo e a seção
+// parece incompleta. Duas colunas fecham 2×2 e ainda dão largura para o texto.
+const gradeRobos = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(420px,1fr))', gap: 16, marginTop: 14 }
 const grade = (n) => ({ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(' + (n === 3 ? 250 : 300) + 'px,1fr))', gap: 16, marginTop: 14 })
