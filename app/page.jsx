@@ -8,6 +8,9 @@ import Vendas from './_vendas/Vendas'
 // desconhecido cai na marca neutra — nunca na marca de outro escritório.
 const NAVY = '#2E3A4B'
 const GOLD = '#C9A227'
+// Nome com que o sistema é vendido. Vale para quem ainda não escolheu um nome
+// próprio na marca; a raiz continua sendo CMPGestão.
+const PRODUTO = 'GestãoJurídica'
 
 export default function Login() {
   const [email, setEmail] = useState('')
@@ -63,7 +66,7 @@ export default function Login() {
       setMarca(m)
       // o nome na aba do navegador segue o dono do endereço
       try {
-        document.title = (m.marca && m.marca.sistema) || (m.raiz ? 'CMPGestão' : (m.nome || 'Gestão'))
+        document.title = (m.marca && m.marca.sistema) || (m.raiz ? 'CMPGestão' : (m.nome || PRODUTO))
       } catch (e) {}
       supabase.auth.getSession().then(({ data }) => { if (data.session) depoisDoLogin(m) })
     }).catch(() => { if (vivo) setMarca({ conhecido: false }) })
@@ -100,7 +103,7 @@ export default function Login() {
 
   // Marca da tela: do escritório do endereço; na dúvida, neutra.
   const ehRaiz = !!(marca && marca.raiz)
-  const nomeSistema = (marca && marca.marca && marca.marca.sistema) || (ehRaiz ? 'CMPGestão' : 'Gestão')
+  const nomeSistema = (marca && marca.marca && marca.marca.sistema) || (ehRaiz ? 'CMPGestão' : PRODUTO)
   const nomeEscritorio = (marca && marca.conhecido && marca.nome) || ''
   const logo = (marca && marca.marca && marca.marca.logo) || (ehRaiz ? '/logo_cmp_full.png' : null)
   const cor = (marca && marca.marca && marca.marca.cor) || NAVY

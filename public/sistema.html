@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="icon" type="image/png" sizes="64x64" href="/favicon-cmp.png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-<meta name="apple-mobile-web-app-title" content="Gestão">
-<title>Sistema de gestão jurídica</title>
+<meta name="apple-mobile-web-app-title" content="GestãoJurídica">
+<title>GestãoJurídica</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -1741,6 +1741,10 @@ async function salvarMeuEscritorio(){
    solta — porque `entrar()` também mexe no mesmo atributo: quando o sistema
    monta a tela, ele escrevia 'cmp' por cima e a marca do cliente voltava a ser
    a da casa. Agora quem decide é aqui, e as duas pontas chamam esta função. */
+/* Nome do PRODUTO, para o escritório que ainda não escolheu um nome próprio na
+   marca. É o nome com que o sistema é vendido — nunca o nome desta casa, que só
+   vale na raiz. */
+var NOME_PRODUTO='GestãoJurídica';
 /* O nome que a casa usa em textos: o do escritório de quem está logado, e
    'CMPGestão' só quando é mesmo a raiz. Antes cada texto trazia o nome fixo, e
    o cliente recebia convite dizendo que o sistema era de outro escritório. */
@@ -1774,7 +1778,7 @@ function preencherSelecoesDePessoas(){
 }
 function _nomeDaCasa(){
   var e=window.__escInfo;
-  if(e && e.raiz!==true) return ((e.marca&&e.marca.sistema)||e.nome||'Gestão');
+  if(e && e.raiz!==true) return ((e.marca&&e.marca.sistema)||e.nome||NOME_PRODUTO);
   return 'CMPGestão';
 }
 function aplicarPerfilDaTela(){
@@ -1791,7 +1795,7 @@ function aplicarPerfilDaTela(){
       if(lnkS) lnkS.innerHTML='<span class="ic">🧩</span> Solicitar funcionalidades';
     }catch(eL){}
     try{ document.querySelectorAll('.inq-only').forEach(function(el){ el.style.display=''; }); }catch(eIQ){}
-    var nome=((e.marca&&e.marca.sistema)||e.nome||'Gestão');
+    var nome=((e.marca&&e.marca.sistema)||e.nome||NOME_PRODUTO);
     var bn=document.querySelector('.brand-neutral'); if(bn) bn.textContent=nome;
     try{ document.title=nome; }catch(eT){}
     /* o subtítulo da tela de login interna também nomeia a casa */
@@ -1807,6 +1811,9 @@ function aplicarPerfilDaTela(){
     return;
   }
   document.documentElement.setAttribute('data-perfil','cmp');
+  /* A aba nasce com o nome do produto para não piscar o nome desta casa na aba
+     de um escritório cliente. Na raiz, o título de sempre volta aqui. */
+  try{ document.title='Sistema · Crispim Mendonça e Pinheiro Advogados'; }catch(eT2){}
 }
 function entrar(){
   var r=document.getElementById("roleSel").value, p=perfis[r];
