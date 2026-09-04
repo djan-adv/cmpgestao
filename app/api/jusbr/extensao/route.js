@@ -10,7 +10,7 @@
 // sete arquivos de texto pequenos; comprimir não valeria uma biblioteca nova.
 
 import fs from 'fs'
-import { ESCRITORIO_RAIZ } from '../../_lib/inquilino.js'
+import { ESCRITORIO_RAIZ, escritorioDoUsuario } from '../../_lib/inquilino.js'
 import path from 'path'
 import { createClient } from '@supabase/supabase-js'
 import { basePublica } from '../userscript/gerar.js'
@@ -21,9 +21,10 @@ export const fetchCache = 'force-no-store'
 export const revalidate = 0
 export const maxDuration = 20
 
-// Ainda de um escritorio so, de proposito: Ponte da extensao do navegador do dono.
-// (fase dos robos por inquilino: este nao entra ate ter credencial propria)
-const ESCRITORIO_CMP = ESCRITORIO_RAIZ
+// A extensao e DE QUEM BAIXA. A chave de pareamento que vai dentro dela e a
+// identidade do escritorio na rota /api/jusbr/token: e por ela que o servidor
+// sabe de quem e o token que chegou. Uma chave so, da raiz, faria o certificado
+// de um escritorio abrir sessao no nome de outro.
 const PASTA = path.join(process.cwd(), 'public', 'extensao-jusbr')
 const ARQUIVOS = ['manifest.json', 'fundo.js', 'padrao.js', 'pagina.js', 'ponte.js', 'opcoes.html', 'opcoes.js', 'LEIA-ME.txt']
 
@@ -37,15 +38,28 @@ async function usuario(request) {
 function admin() { return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } }) }
 
 // mesma chave do userscript: quem já usa o Tampermonkey não precisa trocar nada
-async function segredoDoEscritorio(sb) {
+async function segredoDoEscritorio(sb, esc) {
   const { data } = await sb.from('produtividade_config').select('valor')
-    .eq('escritorio_id', ESCRITORIO_CMP).eq('chave', 'jusbr_relay_secret').maybeSingle()
+    .eq('escritorio_id', esc).eq('chave', 'jusbr_relay_secret').maybeSingle()
   if (data && data.valor) return data.valor
   const novo = 'rly_' + crypto.randomBytes(24).toString('hex')
   await sb.from('produtividade_config').upsert(
-    { escritorio_id: ESCRITORIO_CMP, chave: 'jusbr_relay_secret', valor: novo },
+    { escritorio_id: esc, chave: 'jusbr_relay_secret', valor: novo },
     { onConflict: 'escritorio_id,chave' })
   return novo
+}
+
+// O nome que aparece no navegador de quem instala.
+//
+// Os arquivos da pasta ficam com o nome do produto — eles são servidos crus em
+// /extensao-jusbr, então não podem carregar a marca de escritório nenhum. Na
+// instalação da casa, a marca antiga é reposta aqui: o dono não tem por que ver
+// o produto trocar de nome no navegador dele.
+const MARCA_PRODUTO = 'GestãoJurídica'
+function marcaDe(ehRaiz) { return ehRaiz ? 'CMPGestão' : MARCA_PRODUTO }
+function pastaDe(marca) {
+  const s = marca.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '')
+  return (s || 'gestaojuridica') + '-jusbr'
 }
 
 // ————— zip mínimo (store), suficiente para um punhado de arquivos de texto —————
@@ -103,17 +117,25 @@ export async function GET(request) {
   if (!user) return new Response('Faça login no sistema para baixar a extensão.', { status: 401 })
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) return new Response('servidor sem service key', { status: 500 })
 
-  const segredo = await segredoDoEscritorio(admin())
+  const sb = admin()
+  const esc = await escritorioDoUsuario(user.id)
+  if (!esc) return new Response('Usuário sem escritório vinculado.', { status: 403 })
+  const segredo = await segredoDoEscritorio(sb, esc)
   const endpoint = basePublica(request) + '/api/jusbr/token'
+  const marca = marcaDe(esc === ESCRITORIO_RAIZ)
+  const pasta = pastaDe(marca)
 
   const entradas = []
   for (const nome of ARQUIVOS) {
     let txt
     try { txt = fs.readFileSync(path.join(PASTA, nome), 'utf8') } catch (e) { continue }
+    // marca e nome da pasta: o texto do pacote fala com quem instala, e quem
+    // instala é o escritório que baixou — não a casa que opera o sistema
+    txt = txt.split(MARCA_PRODUTO).join(marca).split('gestaojuridica-jusbr').join(pasta)
     if (nome === 'padrao.js') {
       txt = txt.replace(
-        /self\.CMP_PADRAO\s*=\s*\{[^}]*\};/,
-        'self.CMP_PADRAO = { endpoint: ' + JSON.stringify(endpoint) + ', segredo: ' + JSON.stringify(segredo) + ' };')
+        /self\.GJ_PADRAO\s*=\s*\{[^}]*\};/,
+        'self.GJ_PADRAO = { endpoint: ' + JSON.stringify(endpoint) + ', segredo: ' + JSON.stringify(segredo) + ' };')
     }
     if (nome === 'manifest.json') {
       // o endereço do escritório entra nas permissões: sem isto o Chrome pede
@@ -125,7 +147,7 @@ export async function GET(request) {
         txt = JSON.stringify(m, null, 2)
       } catch (e) {}
     }
-    entradas.push({ nome: 'cmpgestao-jusbr/' + nome, conteudo: txt })
+    entradas.push({ nome: pasta + '/' + nome, conteudo: txt })
   }
   if (!entradas.length) return new Response('arquivos da extensão não encontrados no servidor', { status: 500 })
 
@@ -133,7 +155,7 @@ export async function GET(request) {
   return new Response(buf, {
     headers: {
       'Content-Type': 'application/zip',
-      'Content-Disposition': 'attachment; filename="cmpgestao-jusbr.zip"',
+      'Content-Disposition': 'attachment; filename="' + pasta + '.zip"',
       'Cache-Control': 'no-store',
     },
   })

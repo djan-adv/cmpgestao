@@ -8,7 +8,7 @@
    aberta. O token sai daqui e chega ao servidor na hora. */
 (function () {
   'use strict';
-  var MARCA = '__cmp_jusbr_ponte__';
+  var MARCA = '__gj_jusbr_ponte__';
 
   function ehJwt(t) { return typeof t === 'string' && t.split('.').length === 3 && t.length > 60; }
   function corpoJwt(t) {

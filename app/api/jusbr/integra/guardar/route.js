@@ -14,7 +14,7 @@
 // substituída (é o que segura o disco).
 
 import fs from 'fs'
-import { ESCRITORIO_RAIZ } from '../../../_lib/inquilino.js'
+import { escritorioDoUsuario } from '../../../_lib/inquilino.js'
 import path from 'path'
 import { createClient } from '@supabase/supabase-js'
 import { coletarPecas, ordenarPecas, pdfUnico, salvarNaPasta, INTEGRA_PREFIXO } from '../core.js'
@@ -25,9 +25,8 @@ export const fetchCache = 'force-no-store'
 export const revalidate = 0
 export const maxDuration = 300
 
-// Ainda de um escritorio so, de proposito: Integra dos autos guardada na arvore de documentos do dono.
-// (fase dos robos por inquilino: este nao entra ate ter credencial propria)
-const ESCRITORIO_CMP = ESCRITORIO_RAIZ
+// A íntegra é baixada com a sessão do jus.br do escritório de quem pediu e
+// guardada na pasta do processo.
 const VALIDADE_DIAS = 7   // íntegra recém-baixada não é baixada de novo
 
 function admin() { return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } }) }
@@ -50,6 +49,8 @@ export async function POST(request) {
   const quem = String(b.quem || '').slice(0, 80)
   if (dig.length < 16) return Response.json({ erro: 'número de processo inválido' }, { status: 400 })
 
+  const esc = await escritorioDoUsuario(user.id)
+  if (!esc) return Response.json({ erro: 'usuário sem escritório vinculado' }, { status: 403 })
   const sb = admin()
   const pasta = path.join(ROOT, dig)
 
@@ -63,7 +64,7 @@ export async function POST(request) {
     }
   } catch (e) { /* pasta ainda não existe — segue e baixa */ }
 
-  const col = await coletarPecas(sb, dig, {})
+  const col = await coletarPecas(sb, dig, { esc })
   if (col.erro) {
     const semSessao = col.motivo === 'expirado' || col.motivo === 'sem_token'
     return Response.json({ erro: col.erro, motivo: col.motivo || null, sem_sessao: semSessao }, { status: semSessao ? 409 : 502 })
@@ -81,7 +82,7 @@ export async function POST(request) {
   // registra no histórico com o marcador de sempre: a linha conta a história,
   // mas NÃO conta como movimentação do processo (ver _andamentoNaoOficial)
   try {
-    const { data: proc } = await sb.from('processos').select('id').eq('escritorio_id', ESCRITORIO_CMP).eq('numero_digitos', dig).maybeSingle()
+    const { data: proc } = await sb.from('processos').select('id').eq('escritorio_id', esc).eq('numero_digitos', dig).maybeSingle()
     if (proc && proc.id) {
       await sb.from('andamentos').insert({
         processo_id: proc.id, data: new Date().toISOString().slice(0, 10), fonte: 'minuta',

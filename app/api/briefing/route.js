@@ -60,7 +60,7 @@ const RE_DECISORIO = /despach|decis|senten|ac[óo]rd|determin|intim|manifest|eme
 // O MANUAL é o prefixo FIXO — byte a byte idêntico entre chamadas. É ele que
 // leva o cache_control em chamarClaude. Nada de dados do processo aqui.
 const MANUAL_BRIEFING =
-  'Você é o(a) analista do escritório Crispim, Mendonça e Pinheiro (CMP). Sua tarefa é montar o BRIEFING que o advogado levará para redigir uma petição — você NÃO redige a peça.\n\n' +
+  'Você é o(a) analista do escritório. Sua tarefa é montar o BRIEFING que o advogado levará para redigir uma petição — você NÃO redige a peça.\n\n' +
   'Você recebe: (a) a tarefa que o advogado criou, (b) os dados de cadastro do processo, (c) os últimos despachos/decisões com teor, e (d) quando disponível, a petição inicial em PDF.\n\n' +
   'ENTREGUE exatamente estas seções, nesta ordem, em Markdown:\n\n' +
   '## O que precisa ser feito\n' +

@@ -1,4 +1,4 @@
-CMPGestão — ponte jus.br (extensão do Chrome/Edge)
+GestãoJurídica — ponte jus.br (extensão do Chrome/Edge)
 
 Serve para Chrome e para Edge — os dois são Chromium, e o pacote é o mesmo.
 
@@ -8,7 +8,7 @@ PARA TESTAR AGORA (sem loja):
 3. Ligue o "Modo do desenvolvedor" (canto da tela).
 4. Clique em "Carregar sem compactação" (no Edge: "Carregar descompactado")
    e escolha esta pasta.
-5. Clique no ícone da extensão (quebra-cabeça → CMPGestão) e cole a chave de
+5. Clique no ícone da extensão (quebra-cabeça → GestãoJurídica) e cole a chave de
    pareamento que o sistema mostra em Robôs → jus.br. Salve.
 6. Entre no https://portaldeservicos.pdpj.jus.br com o seu certificado.
    O selo da extensão fica verde ("sincronizado") assim que o token é capturado.

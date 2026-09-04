@@ -8,7 +8,9 @@
 //   Parâmetros: ?dias=2 (janela de movimentação) ?porproc=3 ?max=120 (tetos)
 // Aberta (sem login) para rodar no crontab; não expõe o token.
 
-import { jusbrAdmin, getFreshToken, tipoRealDoArquivo, ESCRITORIO_CMP } from '../lib.js'
+import { jusbrAdmin, getFreshToken, tipoRealDoArquivo } from '../lib.js'
+import { escritoriosAtivos, usuarioDoRequest, escritorioDoUsuario } from '../../_lib/inquilino.js'
+import { anotarRobo } from '../../_lib/robolog.js'
 import { camposConteudo } from '../guardar.js'
 import { ehOficial, copiarParaAppCliente } from '../../../../lib/appCliente.js'
 import { docsDoPayload } from '../integra/core.js'
@@ -94,43 +96,27 @@ async function baixarDoc(token, numero, doc) {
   return { buf, tipo }
 }
 
-export async function GET(request) {
-  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) return Response.json({ erro: 'falta service key' }, { status: 500 })
-  if (!process.env.JUSBR_ENC_KEY) return Response.json({ erro: 'falta JUSBR_ENC_KEY' }, { status: 500 })
-  const { searchParams } = new URL(request.url)
-  const debug = searchParams.get('debug') != null
-  const soNumero = soDig(searchParams.get('numero') || '')
-  const dias = Math.min(parseInt(searchParams.get('dias') || '2', 10) || 2, 30)
-  const porProc = Math.min(parseInt(searchParams.get('porproc') || '3', 10) || 3, 10)
-  const maxTotal = Math.min(parseInt(searchParams.get('max') || '120', 10) || 120, 400)
-  /* VARREDURA AUTOMÁTICA ≠ PEDIDO DE ALGUÉM.
-     A rotina diária baixava os 3 documentos mais recentes de todo processo que
-     se mexeu, fossem eles quais fossem — e assim caíam na pasta do processo
-     coisas que ninguém pediu: "Imagem obras mal acabadas.pdf", "ENTREGA
-     2021.pdf", "DECLARAÇÃO DE QUITAÇÃO" (reclamado em 31/08/2026). Agora, na
-     varredura sem dono, só entra PEÇA OFICIAL — sentença, acórdão, decisão,
-     despacho, acordo, homologação, ata/termo de audiência, alvará — que é o que
-     alimenta o app do cliente e a contagem de prazo. Anexo de parte só vem
-     quando alguém clica em "⬇ puxar".
-     Quando a chamada traz ?numero= (alguém pediu aquele processo — a ficha, a
-     Inove) ou ?tudo=1, o comportamento antigo continua valendo. */
-  const soPecas = !soNumero && searchParams.get('tudo') == null
+// Uma rodada para UM escritório: a sessão do jus.br, os processos e os
+// arquivos são todos dele. Com o id do dono escrito no código, o robô do
+// cliente baixava o acervo do fornecedor com o certificado do fornecedor.
+async function rodarPara(esc, opcoes) {
+  const { debug, soNumero, dias, porProc, maxTotal, soPecas } = opcoes
   const sb = jusbrAdmin()
 
-  const tk = await getFreshToken(sb)
-  if (tk.erro) return Response.json({ ok: false, erro: 'jus.br: ' + tk.erro + ' — sincronize a sessão do jus.br', motivo: tk.erro })
+  const tk = await getFreshToken(sb, null, esc.id)
+  if (tk.erro) return { ok: false, escritorio: esc.nome, erro: 'jus.br: ' + tk.erro + ' — sincronize a sessão do jus.br', motivo: tk.erro }
   const token = tk.token
 
   // seleciona os processos-alvo
   let alvos = []
   if (soNumero) {
-    const { data } = await sb.from('processos').select('id,numero,numero_digitos').eq('escritorio_id', ESCRITORIO_CMP).eq('numero_digitos', soNumero).limit(1)
+    const { data } = await sb.from('processos').select('id,numero,numero_digitos').eq('escritorio_id', esc.id).eq('numero_digitos', soNumero).limit(1)
     alvos = data || []
   } else {
     const corte = new Date(Date.now() - dias * 86400000).toISOString().slice(0, 10)
     const { data } = await sb.from('processos')
       .select('id,numero,numero_digitos,status,suspenso,ultima_movimentacao')
-      .eq('escritorio_id', ESCRITORIO_CMP)
+      .eq('escritorio_id', esc.id)
       .or('suspenso.is.null,suspenso.eq.false')
       .gte('ultima_movimentacao', corte)
       .order('ultima_movimentacao', { ascending: false })
@@ -148,7 +134,7 @@ export async function GET(request) {
     if (lst.erro) { rel.detalhe.push({ numero, erro: lst.erro }); if (lst.erro === 'expirado') break; continue }
     // ordena por data desc e pega os mais recentes ainda não guardados
     const ordenados = lst.docs.slice().sort((a, b) => String(b.data || '').localeCompare(String(a.data || '')))
-    const { data: jaTem } = await sb.from('jusbr_arquivos').select('doc_uuid').eq('escritorio_id', ESCRITORIO_CMP).eq('processo_numero', numero)
+    const { data: jaTem } = await sb.from('jusbr_arquivos').select('doc_uuid').eq('escritorio_id', esc.id).eq('processo_numero', numero)
     const tem = new Set((jaTem || []).map(r => r.doc_uuid))
     const naoTem = ordenados.filter(d => d.uuid && !tem.has(d.uuid))
     let novos
@@ -168,7 +154,7 @@ export async function GET(request) {
       const r = await baixarDoc(token, numero, d)
       if (r.erro) { rel.pulados++; if (r.erro === 'expirado') { rel.detalhe.push({ numero, erro: 'expirado' }); total = maxTotal; break } continue }
       const linha = {
-        escritorio_id: ESCRITORIO_CMP, processo_numero: numero, doc_uuid: d.uuid,
+        escritorio_id: esc.id, processo_numero: numero, doc_uuid: d.uuid,
         doc_nome: d.nome, doc_tipo: r.tipo, tamanho: r.buf.length,
         baixado_por: 'robo',
         // conteúdo vai para o disco do VPS; o banco fica só com o caminho
@@ -188,11 +174,11 @@ export async function GET(request) {
   // ——— passo B: processos ATIVOS ainda SEM nenhum documento no sistema ———
   // preenche aos poucos (só a inicial/procuração + 1), sem estourar a rodada.
   if (!soNumero && total < maxTotal) {
-    const { data: comArq } = await sb.from('jusbr_arquivos').select('processo_numero').eq('escritorio_id', ESCRITORIO_CMP)
+    const { data: comArq } = await sb.from('jusbr_arquivos').select('processo_numero').eq('escritorio_id', esc.id)
     const jaTemAlgum = new Set((comArq || []).map(r => r.processo_numero))
     const { data: ativos } = await sb.from('processos')
       .select('numero,numero_digitos,status,suspenso')
-      .eq('escritorio_id', ESCRITORIO_CMP)
+      .eq('escritorio_id', esc.id)
       .or('suspenso.is.null,suspenso.eq.false')
       .order('ultima_movimentacao', { ascending: false, nullsFirst: false })
       .limit(400)
@@ -220,7 +206,7 @@ export async function GET(request) {
         if (!d.uuid) continue
         const r = await baixarDoc(token, numero, d)
         if (r.erro) { rel.pulados++; if (r.erro === 'expirado') { total = maxTotal; break } continue }
-        const linha = { escritorio_id: ESCRITORIO_CMP, processo_numero: numero, doc_uuid: d.uuid, doc_nome: d.nome, doc_tipo: r.tipo, tamanho: r.buf.length, baixado_por: 'robo', ...camposConteudo(numero, d.nome, d.uuid, r.buf) }
+        const linha = { escritorio_id: esc.id, processo_numero: numero, doc_uuid: d.uuid, doc_nome: d.nome, doc_tipo: r.tipo, tamanho: r.buf.length, baixado_por: 'robo', ...camposConteudo(numero, d.nome, d.uuid, r.buf) }
         if (ehDocLeve(d.nome) || RE_PECA_OFICIAL.test(d.nome || '')) linha.expira_em = '2999-12-31T00:00:00.000Z' // permanente (coluna NOT NULL)
         const ins = await sb.from('jusbr_arquivos').insert(linha).select('id').single()
         if (!ins.error) {
@@ -234,5 +220,64 @@ export async function GET(request) {
     rel.vazios_processados = feitos
   }
 
-  return Response.json(rel)
+  rel.escritorio = esc.nome
+  return rel
+}
+
+export async function GET(request) {
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) return Response.json({ erro: 'falta service key' }, { status: 500 })
+  if (!process.env.JUSBR_ENC_KEY) return Response.json({ erro: 'falta JUSBR_ENC_KEY' }, { status: 500 })
+  const { searchParams } = new URL(request.url)
+  const soNumero = soDig(searchParams.get('numero') || '')
+  const opcoes = {
+    debug: searchParams.get('debug') != null,
+    soNumero,
+    dias: Math.min(parseInt(searchParams.get('dias') || '2', 10) || 2, 30),
+    porProc: Math.min(parseInt(searchParams.get('porproc') || '3', 10) || 3, 10),
+    maxTotal: Math.min(parseInt(searchParams.get('max') || '120', 10) || 120, 400),
+    /* VARREDURA AUTOMÁTICA ≠ PEDIDO DE ALGUÉM.
+       A rotina diária baixava os 3 documentos mais recentes de todo processo que
+       se mexeu, fossem eles quais fossem — e assim caíam na pasta do processo
+       coisas que ninguém pediu: "Imagem obras mal acabadas.pdf", "ENTREGA
+       2021.pdf", "DECLARAÇÃO DE QUITAÇÃO" (reclamado em 31/08/2026). Agora, na
+       varredura sem dono, só entra PEÇA OFICIAL — sentença, acórdão, decisão,
+       despacho, acordo, homologação, ata/termo de audiência, alvará — que é o que
+       alimenta o app do cliente e a contagem de prazo. Anexo de parte só vem
+       quando alguém clica em "⬇ puxar".
+       Quando a chamada traz ?numero= (alguém pediu aquele processo — a ficha, a
+       Inove) ou ?tudo=1, o comportamento antigo continua valendo. */
+    soPecas: !soNumero && searchParams.get('tudo') == null,
+  }
+
+  // Só quem tem sessão própria do jus.br: sem certificado sincronizado não há o
+  // que baixar, e tentar seria usar a credencial de outro escritório.
+  let escs = await escritoriosAtivos('jusbr')
+  // Pedido feito de dentro do sistema (ficha do processo, "⬇ puxar"): roda só o
+  // escritório de quem pediu. Sem isto, um clique de um cliente colocaria a
+  // instalação inteira para varrer — e o relatório voltaria falando de processo
+  // que não é dele.
+  let soEste = searchParams.get('esc')
+  if (!soEste) {
+    const user = await usuarioDoRequest(request)
+    if (user) soEste = await escritorioDoUsuario(user.id)
+  }
+  if (soEste) escs = escs.filter(e => e.id === soEste)
+  if (!escs.length) return Response.json({ ok: true, nada: true, motivo: 'nenhum escritório com sessão do jus.br' })
+
+  const porEscritorio = []
+  for (const esc of escs) {
+    let r
+    try { r = await rodarPara(esc, opcoes) }
+    catch (e) { r = { ok: false, escritorio: esc.nome, erro: String((e && e.message) || e) } }
+    porEscritorio.push(r)
+    await anotarRobo(esc.id, 'jusbr_docs', r.ok !== false, r.erro || ((r.baixados || 0) + ' documento(s) novo(s)'))
+  }
+  const soma = (campo) => porEscritorio.reduce((t, r) => t + (Number(r[campo]) || 0), 0)
+  return Response.json({
+    ok: porEscritorio.some(r => r.ok !== false),
+    dia: new Date().toISOString().slice(0, 10),
+    escritorios: porEscritorio.length,
+    baixados: soma('baixados'), pulados: soma('pulados'), processos: soma('processos'),
+    por_escritorio: porEscritorio,
+  })
 }

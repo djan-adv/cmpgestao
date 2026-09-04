@@ -3,26 +3,35 @@
 import crypto from 'crypto'
 import { ESCRITORIO_RAIZ } from '../../_lib/inquilino.js'
 
-// Ainda de um escritorio so, de proposito: Gera o userscript do dono.
-// (fase dos robos por inquilino: este nao entra ate ter credencial propria)
-const ESCRITORIO_CMP = ESCRITORIO_RAIZ
+// O userscript sai PAREADO com um escritório: o segredo de relay que vai dentro
+// dele é a identidade daquele escritório na rota do token. Gerá-lo sempre com o
+// segredo da raiz entregava, a qualquer usuário logado, a chave da sessão da
+// casa — e com ela o token de um certificado alheio entraria no lugar do dela.
+//
+// A marca também acompanha quem baixou: para os escritórios clientes é o nome
+// do produto; para a casa, o nome que ela sempre teve.
+const MARCA_PRODUTO = 'GestãoJurídica'
+export function marcaDoEscritorio(esc) { return esc === ESCRITORIO_RAIZ ? 'CMPGestão' : MARCA_PRODUTO }
 
 function basePublica(request) {
   const proto = (request.headers.get('x-forwarded-proto') || 'https').split(',')[0].trim()
   const host = (request.headers.get('x-forwarded-host') || request.headers.get('host') || '').split(',')[0].trim()
   if (host && !/^(127\.|localhost|0\.0\.0\.0|\[::1\])/i.test(host)) return proto + '://' + host
-  return process.env.PUBLIC_BASE_URL || 'https://gestao.cmpadvogados.com.br'
+  // sem domínio público conhecido, vale o host da própria requisição: um
+  // endereço fixo aqui seria o de um escritório no pacote de todos os outros
+  return process.env.PUBLIC_BASE_URL || (host ? proto + '://' + host : '')
 }
 
 export { basePublica }
 
-export function scriptTexto(segredo, endpoint, urlAtualizacao) {
+export function scriptTexto(segredo, endpoint, urlAtualizacao, marca) {
   const host = new URL(endpoint).host
+  const MARCA = marca || MARCA_PRODUTO
   return `// ==UserScript==
-// @name         CMPGestão — Sincronizar token jus.br (PDPJ)
-// @namespace    cmpadvogados.com.br
+// @name         ${MARCA} — Sincronizar token jus.br (PDPJ)
+// @namespace    ${host}
 // @version      5.6
-// @description  Ponte entre a sua sessão do jus.br e o CMPGestão. A aba do jus.br guarda o token no cofre do Tampermonkey; a aba do CMPGestão o envia (mesma origem, sem bloqueios). Selo na tela mostra o estado.
+// @description  Ponte entre a sua sessão do jus.br e o ${MARCA}. A aba do jus.br guarda o token no cofre do Tampermonkey; a aba do sistema o envia (mesma origem, sem bloqueios). Selo na tela mostra o estado.
 // @match        https://portaldeservicos.pdpj.jus.br/*
 // @match        https://sso.cloud.pje.jus.br/*
 // @match        https://${host}/*
@@ -40,9 +49,9 @@ export function scriptTexto(segredo, endpoint, urlAtualizacao) {
   var ENDPOINT = '${endpoint}';
   var HOST_GESTAO = '${host}';
   var NO_GESTAO = (location.host === HOST_GESTAO);
-  var CHAVE = 'cmp_jusbr_token';
-  var CHAVE_APRENDER = 'cmp_jusbr_aprender';
-  var CHAVE_MIN = 'cmp_jusbr_selo_min';
+  var CHAVE = 'gj_jusbr_token';
+  var CHAVE_APRENDER = 'gj_jusbr_aprender';
+  var CHAVE_MIN = 'gj_jusbr_selo_min';
 
   var estado = '', cor = '#8a5a00', origem = '', quandoOk = 0;
   function ehJwt(t) { return typeof t === 'string' && t.split('.').length === 3 && t.length > 60; }
@@ -97,7 +106,7 @@ export function scriptTexto(segredo, endpoint, urlAtualizacao) {
     selo();
     enviarDireto(payload);   // tenta enviar já (se o portal permitir)
   }
-  // tentativa direta (pode ser barrada pelo CSP do portal — tudo bem, o CMPGestão envia)
+  // tentativa direta (pode ser barrada pelo CSP do portal — tudo bem, a aba do sistema envia)
   function enviarDireto(payload) {
     try {
       GM_xmlhttpRequest({
@@ -231,7 +240,7 @@ export function scriptTexto(segredo, endpoint, urlAtualizacao) {
       var respForma = null;
       try { if (respTxt && respTxt.length < 20000) respForma = esqueleto(JSON.parse(respTxt), 0); } catch (e) {}
       var payload = { metodo: metodo, url: String(url).split('?')[0], cabecalhos: nomes, corpo_forma: formaDoCorpo(body), resposta_status: status || null, resposta_forma: respForma, ts: Date.now() };
-      // vai para a FILA no cofre do Tampermonkey — a aba do CMPGestão envia
+      // vai para a FILA no cofre do Tampermonkey — a aba do sistema envia
       // (o portal bloqueia envio direto; foi o que já nos travou antes).
       try {
         var fila = [];
@@ -281,7 +290,7 @@ export function scriptTexto(segredo, endpoint, urlAtualizacao) {
     setInterval(function () { varrerStorage(); selo(); }, 60000);
   }
 
-  // ------------- LADO B: dentro do CMPGestão — LER do cofre e ENVIAR -------------
+  // ------------- LADO B: dentro do sistema — LER do cofre e ENVIAR -------------
   // Aqui é o nosso próprio site: fetch de mesma origem, sem CORS/CSP/permissão.
   var ultimoEnviado = '';
   function empurrar() {
@@ -339,7 +348,7 @@ export function scriptTexto(segredo, endpoint, urlAtualizacao) {
   }
 
   // ---------------------------- selo visível ----------------------------
-  // Canto INFERIOR ESQUERDO (o CMPGestão tem um chat da equipe fixo no canto
+  // Canto INFERIOR ESQUERDO (o sistema tem um chat da equipe fixo no canto
   // direito — ficar do lado oposto evita os dois se sobreporem). Minimiza para
   // uma pastilha pequena com um clique; lembra o estado (GM_setValue) entre
   // páginas e recarregamentos.
@@ -362,11 +371,11 @@ export function scriptTexto(segredo, endpoint, urlAtualizacao) {
       }
       if (minimizado()) {
         el.style.padding = '5px 9px';
-        el.innerHTML = '<span style="cursor:pointer;color:' + cor + ';font-weight:700" data-a="max" title="' + estado.replace(/"/g, '&quot;') + '">● CMPGestão' + (NO_GESTAO ? '' : ' · jus.br') + '</span>';
+        el.innerHTML = '<span style="cursor:pointer;color:' + cor + ';font-weight:700" data-a="max" title="' + estado.replace(/"/g, '&quot;') + '">● ${MARCA}' + (NO_GESTAO ? '' : ' · jus.br') + '</span>';
         return;
       }
       el.style.padding = '8px 11px';
-      el.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:2px"><b style="color:#2E3A4B">CMPGestão' + (NO_GESTAO ? '' : ' · jus.br') + '</b><span data-a="min" title="Minimizar" style="cursor:pointer;color:#8a93a2;font-weight:700;padding:0 3px">▁</span></div>'
+      el.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:2px"><b style="color:#2E3A4B">${MARCA}' + (NO_GESTAO ? '' : ' · jus.br') + '</b><span data-a="min" title="Minimizar" style="cursor:pointer;color:#8a93a2;font-weight:700;padding:0 3px">▁</span></div>'
         + '<div style="color:' + cor + ';font-weight:600">' + estado + '</div>'
         + (origem ? '<div style="color:#697180;font-size:11px">via ' + origem + '</div>' : '')
         + '<div style="margin-top:5px"><button data-a="go" style="cursor:pointer;border:1px solid #cfe0f2;background:#eef4fb;color:#185FA5;border-radius:7px;padding:3px 8px;font-size:11px">sincronizar agora</button></div>';
@@ -379,20 +388,21 @@ export function scriptTexto(segredo, endpoint, urlAtualizacao) {
 }
 
 // monta o script já com segredo, endereço público e URL de auto-atualização
-export async function montarScript(sb, request) {
-  const { data: d1 } = await sb.from('produtividade_config').select('valor').eq('escritorio_id', ESCRITORIO_CMP).eq('chave', 'jusbr_relay_secret').maybeSingle()
+export async function montarScript(sb, request, esc) {
+  const alvo = esc || ESCRITORIO_RAIZ
+  const { data: d1 } = await sb.from('produtividade_config').select('valor').eq('escritorio_id', alvo).eq('chave', 'jusbr_relay_secret').maybeSingle()
   let segredo = d1 && d1.valor
   if (!segredo) {
     segredo = 'rly_' + crypto.randomBytes(24).toString('hex')
-    await sb.from('produtividade_config').upsert({ escritorio_id: ESCRITORIO_CMP, chave: 'jusbr_relay_secret', valor: segredo }, { onConflict: 'escritorio_id,chave' })
+    await sb.from('produtividade_config').upsert({ escritorio_id: alvo, chave: 'jusbr_relay_secret', valor: segredo }, { onConflict: 'escritorio_id,chave' })
   }
-  const { data: d2 } = await sb.from('produtividade_config').select('valor').eq('escritorio_id', ESCRITORIO_CMP).eq('chave', 'userscript_dist_key').maybeSingle()
+  const { data: d2 } = await sb.from('produtividade_config').select('valor').eq('escritorio_id', alvo).eq('chave', 'userscript_dist_key').maybeSingle()
   let dist = d2 && d2.valor
   if (!dist) {
     dist = 'dk_' + crypto.randomBytes(20).toString('hex')
-    await sb.from('produtividade_config').upsert({ escritorio_id: ESCRITORIO_CMP, chave: 'userscript_dist_key', valor: dist }, { onConflict: 'escritorio_id,chave' })
+    await sb.from('produtividade_config').upsert({ escritorio_id: alvo, chave: 'userscript_dist_key', valor: dist }, { onConflict: 'escritorio_id,chave' })
   }
   const base = basePublica(request)
   const atualizacao = base + '/api/jusbr/userscript/pub?k=' + dist
-  return scriptTexto(segredo, base + '/api/jusbr/token', atualizacao)
+  return scriptTexto(segredo, base + '/api/jusbr/token', atualizacao, marcaDoEscritorio(alvo))
 }

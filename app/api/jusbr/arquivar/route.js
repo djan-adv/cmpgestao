@@ -17,16 +17,15 @@
 // próxima rodada. Nada é apagado sem cópia conferida no disco.
 
 import fs from 'fs'
-import { ESCRITORIO_RAIZ } from '../../_lib/inquilino.js'
 import { createClient } from '@supabase/supabase-js'
 import { gravarNoDisco } from '../guardar.js'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
 
-// Ainda de um escritorio so, de proposito: Faxina do cache de arquivos do jus.br no banco do dono.
-// (fase dos robos por inquilino: este nao entra ate ter credencial propria)
-const ESCRITORIO_CMP = ESCRITORIO_RAIZ
+// Faxina do cache de arquivos do jus.br: tira o conteúdo do banco e põe no
+// disco. É manutenção da instalação inteira, não consulta de acervo — por isso
+// varre as linhas de todos os escritórios; nada do conteúdo é exposto aqui.
 const LOTE_PADRAO = 40
 
 // IMPORTANTE: cache: 'no-store'. Sem isto o Next.js guarda a resposta da LISTA e
@@ -51,8 +50,7 @@ export async function GET(request) {
 
   // quanto ainda falta (para o painel saber quando acabou)
   const { count: faltam } = await sb.from('jusbr_arquivos')
-    .select('id', { count: 'exact', head: true })
-    .eq('escritorio_id', ESCRITORIO_CMP).not('conteudo_b64', 'is', null).is('caminho_disco', null)
+    .select('id', { count: 'exact', head: true }).not('conteudo_b64', 'is', null).is('caminho_disco', null)
 
   // Só a LISTA (sem o conteúdo). Puxar 40 arquivos de uma vez traria centenas de
   // MB para a memória de uma tacada — tem vídeo de 60 MB aqui dentro — e derrubaria
@@ -61,8 +59,7 @@ export async function GET(request) {
   // O `caminho_disco is null` é cinto e suspensório: quem já está no disco NUNCA
   // pode voltar para a lista, nem que uma leitura velha escape em algum ponto.
   const { data: linhas, error } = await sb.from('jusbr_arquivos')
-    .select('id,processo_numero,doc_nome,tamanho')
-    .eq('escritorio_id', ESCRITORIO_CMP).not('conteudo_b64', 'is', null).is('caminho_disco', null)
+    .select('id,processo_numero,doc_nome,tamanho').not('conteudo_b64', 'is', null).is('caminho_disco', null)
     .order('tamanho', { ascending: false, nullsFirst: false })
     .limit(limite)
   if (error) return Response.json({ erro: error.message }, { status: 500 })
@@ -109,7 +106,7 @@ export async function GET(request) {
   // (inicial, procuração) têm expira_em em 2999 e nunca entram aqui.
   try {
     const { data: velhos } = await sb.from('jusbr_arquivos')
-      .select('id,caminho_disco').eq('escritorio_id', ESCRITORIO_CMP)
+      .select('id,caminho_disco')
       .lt('expira_em', new Date().toISOString()).limit(200)
     if (velhos && velhos.length) {
       for (const v of velhos) { if (v.caminho_disco) { try { fs.unlinkSync(v.caminho_disco) } catch (e) {} } }

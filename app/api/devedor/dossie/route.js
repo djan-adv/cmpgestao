@@ -31,7 +31,7 @@
 
 import { createClient } from '@supabase/supabase-js'
 import { chamarClaude } from '../../_ia/claude.js'
-import { ESCRITORIO_CMP } from '../../peticao/core.js'
+import { escritorioDoUsuario } from '../../_lib/inquilino.js'
 import { getFreshToken } from '../../jusbr/lib.js'
 import { buscarProcesso, movimentosDoProcesso, extraiMeta, tramitacoesDoProcesso, buscarProcessosPorDocumento } from '../../jusbr/movimentos/core.js'
 
@@ -88,7 +88,7 @@ function poloDoNome(item, alvoNorm) {
 
 // ————— Manual do dossiê (bloco FIXO, com cache_control) —————
 const MANUAL_DOSSIE =
-  'Você é o(a) analista de execução do escritório Crispim, Mendonça e Pinheiro (CMP). Recebe trechos (de publicações do Diário de Justiça e/ou de movimentações processuais lidas direto no jus.br) em que UMA pessoa/empresa (o devedor investigado) figura como parte, em processos variados, e tem uma única tarefa: apontar SINAIS PATRIMONIAIS aproveitáveis para penhora ou para localizar crédito desse devedor.\n\n' +
+  'Você é o(a) analista de execução do escritório. Recebe trechos (de publicações do Diário de Justiça e/ou de movimentações processuais lidas direto no jus.br) em que UMA pessoa/empresa (o devedor investigado) figura como parte, em processos variados, e tem uma única tarefa: apontar SINAIS PATRIMONIAIS aproveitáveis para penhora ou para localizar crédito desse devedor.\n\n' +
 
   'O QUE É SINAL PATRIMONIAL (reporte):\n' +
   '- Penhora, arresto, sequestro ou constrição de bem (imóvel, veículo, quotas, ações, faturamento, safra, maquinário, semovente).\n' +
@@ -177,8 +177,8 @@ async function varrer(nome, meses) {
 }
 
 // ————— fonte 2: varredura do PDPJ por CPF/CNPJ —————
-async function varrerPorDocumento(sb, documento, deadline) {
-  const tok = await getFreshToken(sb)
+async function varrerPorDocumento(sb, documento, deadline, esc) {
+  const tok = await getFreshToken(sb, null, esc)
   if (tok.erro) return { erro: 'sessão do jus.br indisponível: ' + tok.erro + ' — sincronize o jus.br e tente de novo.', processos: [], candidatas: [] }
 
   const busca = await buscarProcessosPorDocumento(tok.token, documento, deadline)
@@ -234,6 +234,8 @@ export async function GET(request) {
   const user = await usuario(request)
   if (!user) return Response.json({ erro: 'não autenticado' }, { status: 401 })
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) return Response.json({ erro: 'falta service key' }, { status: 500 })
+  const esc = await escritorioDoUsuario(user.id)
+  if (!esc) return Response.json({ erro: 'usuário sem escritório vinculado' }, { status: 403 })
 
   const { searchParams } = new URL(request.url)
   const nome = String(searchParams.get('nome') || '').trim()
@@ -250,7 +252,7 @@ export async function GET(request) {
   // as duas fontes rodam em paralelo — não têm nada em comum até a hora de somar os resultados
   const [djen, pdpj] = await Promise.all([
     temNome ? varrer(nome, meses) : Promise.resolve({ itens: [], requisicoes: 0, truncou: false, ms: 0 }),
-    temDoc ? varrerPorDocumento(sb, documento, deadline) : Promise.resolve(null),
+    temDoc ? varrerPorDocumento(sb, documento, deadline, esc) : Promise.resolve(null),
   ])
   const { itens, requisicoes, truncou, ms } = djen
 
@@ -315,7 +317,7 @@ export async function GET(request) {
     const nums = processos.map(p => p.numero)
     for (let i = 0; i < nums.length; i += 200) {
       const { data } = await sb.from('processos').select('numero_digitos,cliente_nome,oponente')
-        .eq('escritorio_id', ESCRITORIO_CMP).in('numero_digitos', nums.slice(i, i + 200))
+        .eq('escritorio_id', esc).in('numero_digitos', nums.slice(i, i + 200))
       for (const row of (data || [])) {
         const P = porProc[digitos(row.numero_digitos)]
         if (P) { P.nosso = true; P.cliente = row.cliente_nome || null }
@@ -341,7 +343,7 @@ export async function GET(request) {
     }).join('\n\n———\n\n')
 
     const r = await chamarClaude({
-      rotina: 'dossie_devedor', sb, ref: (nome || documento).slice(0, 60), escritorioId: ESCRITORIO_CMP,
+      rotina: 'dossie_devedor', sb, ref: (nome || documento).slice(0, 60), escritorioId: esc,
       modelo: 'claude-sonnet-5', maxTokens: 6000,
       sistemaFixo: MANUAL_DOSSIE,
       conteudo: [{ type: 'text', text: 'DEVEDOR INVESTIGADO: ' + (nome || ('documento ' + documento)) + '\n\nTRECHOS:\n\n' + blocos }],

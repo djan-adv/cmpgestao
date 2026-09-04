@@ -713,7 +713,7 @@ async function faseIntegra(sb, esc) {
     }
   } catch (e) { /* pasta ainda não existe — segue e baixa */ }
 
-  const col = await coletarPecas(sb, dig, {})
+  const col = await coletarPecas(sb, dig, { esc })
   if (col.erro) {
     // sessão do jus.br caída é temporário: não marca como resolvido, tenta de novo
     const temporario = col.motivo === 'expirado' || col.motivo === 'sem_token'

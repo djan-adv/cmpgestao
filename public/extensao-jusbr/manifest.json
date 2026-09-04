@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "CMPGestão — ponte jus.br",
+  "name": "GestãoJurídica — ponte jus.br",
   "version": "1.3.0",
-  "description": "Leva o token da sua sessão do jus.br (PDPJ) para o CMPGestão. Sem senha, sem Tampermonkey. Chrome e Edge.",
+  "description": "Leva o token da sua sessão do jus.br (PDPJ) para o GestãoJurídica. Sem senha, sem Tampermonkey. Chrome e Edge.",
   "permissions": [
     "storage",
     "downloads"
@@ -43,6 +43,6 @@
   "options_page": "opcoes.html",
   "action": {
     "default_popup": "opcoes.html",
-    "default_title": "CMPGestão — ponte jus.br"
+    "default_title": "GestãoJurídica — ponte jus.br"
   }
 }

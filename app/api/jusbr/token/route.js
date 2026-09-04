@@ -14,9 +14,37 @@ export const fetchCache = 'force-no-store'
 export const revalidate = 0
 export const maxDuration = 15
 
-// Ainda de um escritorio so, de proposito: Recebe o token do userscript do dono.
-// (fase dos robos por inquilino: este nao entra ate ter credencial propria)
-const ESCRITORIO_CMP = ESCRITORIO_RAIZ
+// A sessão do jus.br é DE CADA ESCRITÓRIO.
+//
+// Ela é aberta com o certificado digital de quem entra no portal — e certificado
+// é credencial pessoal, do escritório. Enquanto isto era de uma casa só, o token
+// de qualquer um caía na linha da raiz: o certificado de um escritório passaria
+// a consultar o tribunal em nome de outro, e o dado voltaria atribuído a quem
+// não autorizou. Por isso a rota recusava quem não fosse da raiz.
+//
+// Agora cada escritório tem a própria linha em jusbr_sessao e o próprio segredo
+// de pareamento. Quem chega pelo segredo é identificado POR ELE — é o segredo
+// que diz de qual escritório é a extensão; quem chega logado é identificado pelo
+// usuário. Em nenhum dos dois caminhos o escritório vem do corpo da requisição.
+//
+// Não existe mais um escritório padrão nesta rota: cair na raiz por omissão era
+// exatamente o defeito — o certificado de um escritório abrindo sessão no nome
+// de outro.
+
+// Descobre de quem é a extensão pelo segredo que ela apresenta. Devolve null
+// quando o segredo não é de ninguém — e aí não se grava nada.
+async function escritorioDoSegredo(sbA, segredo) {
+  if (!segredo) return null
+  try {
+    const { data } = await sbA.from('produtividade_config')
+      .select('escritorio_id').eq('chave', 'jusbr_relay_secret').eq('valor', segredo).maybeSingle()
+    if (data && data.escritorio_id) return data.escritorio_id
+  } catch (e) {}
+  // segredo do ambiente: é o da instalação, portanto da raiz
+  const doAmbiente = process.env.JUSBR_RELAY_SECRET || ''
+  if (doAmbiente && segredo === doAmbiente) return ESCRITORIO_RAIZ
+  return null
+}
 
 async function usuario(request) {
   const auth = request.headers.get('authorization') || ''
@@ -60,37 +88,21 @@ export async function POST(request) {
     //  (b) segredo de relay (x-jusbr-relay) — usado pelo userscript no jus.br,
     //      que não tem a sessão do Supabase. O segredo fica em JUSBR_RELAY_SECRET.
     const relay = request.headers.get('x-jusbr-relay') || ''
-    const relaySecret = process.env.JUSBR_RELAY_SECRET || ''
     let quem = null
-    // segredo do banco (gerado pelo /api/jusbr/userscript) — dispensa configurar env
-    let relayDB = ''
+    let escAlvo = null     // de qual escritório é esta sessão
     if (relay && process.env.SUPABASE_SERVICE_ROLE_KEY) {
-      try {
-        const sbA = admin()
-        const { data } = await sbA.from('produtividade_config').select('valor').eq('escritorio_id', ESCRITORIO_CMP).eq('chave', 'jusbr_relay_secret').maybeSingle()
-        relayDB = (data && data.valor) || ''
-      } catch (e) {}
+      // O SEGREDO É A IDENTIDADE. Cada escritório tem o seu, gerado quando baixa
+      // a extensão, e é ele que diz de quem é o token que está chegando. Buscar
+      // pelo valor (e não pelo escritório) é o que torna a rota multi-escritório
+      // sem confiar em nada que venha do corpo da requisição.
+      const dono = await escritorioDoSegredo(admin(), relay)
+      if (dono) { quem = 'relay'; escAlvo = dono }
     }
-    if (relay && ((relaySecret && relay === relaySecret) || (relayDB && relay === relayDB))) {
-      quem = 'relay'
-    } else {
+    if (!escAlvo) {
       const user = await usuario(request)
       if (!user) return j({ erro: 'não autenticado (segredo de relay ausente/incorreto)' }, 401)
-      // Esta sessão é gravada SEMPRE no escritório raiz (ver ESCRITORIO_CMP
-      // acima). Enquanto for assim, quem não é da raiz não pode mandar token
-      // para cá: o token do certificado DELE sobrescreveria a sessão do dono do
-      // sistema, e os robôs passariam a consultar o tribunal com a credencial
-      // errada — do lado de quem usa, dois escritórios trocando de identidade
-      // dentro dos autos. Recusar é o único comportamento aceitável até a sessão
-      // do jus.br ser por escritório.
-      const escUser = await escritorioDoUsuario(user.id)
-      if (escUser !== ESCRITORIO_RAIZ) {
-        return j({
-          erro: 'A conexão com o jus.br ainda é do escritório que opera o sistema. ' +
-                'Enquanto ela não for por escritório, o token do seu certificado não pode ser guardado aqui — ' +
-                'ele sobrescreveria a sessão de outro escritório. Fale com o suporte para liberar o jus.br para o seu.',
-        }, 403)
-      }
+      escAlvo = await escritorioDoUsuario(user.id)
+      if (!escAlvo) return j({ erro: 'usuário sem escritório vinculado' }, 403)
       quem = String(user.email || '')
     }
     let body
@@ -120,7 +132,7 @@ export async function POST(request) {
     // novo que o bom. Entrando no lugar dele, o banco fica "válido" e todo
     // download passa a dar 401. Agora quem decide é o PRÓPRIO PDPJ.
     // Se o teste não puder ser feito (rede fora, sem processo), não barramos nada.
-    const prova = await provarToken(sb, token)
+    const prova = await provarToken(sb, token, escAlvo)
     if (prova.aceito === false) {
       const nota = {
         quando: new Date().toISOString(), por: quem, http: prova.http,
@@ -129,7 +141,7 @@ export async function POST(request) {
       }
       try {
         await sb.from('produtividade_config').upsert(
-          { escritorio_id: ESCRITORIO_CMP, chave: 'jusbr_ultima_rejeicao', valor: JSON.stringify(nota).slice(0, 4000) },
+          { escritorio_id: escAlvo, chave: 'jusbr_ultima_rejeicao', valor: JSON.stringify(nota).slice(0, 4000) },
           { onConflict: 'escritorio_id,chave' })
       } catch (e) {}
       return j({ ok: true, ignorado: 'recusado_pelo_pdpj', http: prova.http }, 200)
@@ -139,14 +151,14 @@ export async function POST(request) {
     // funciona. Um token guardado que o PDPJ recusa não pode barrar o bom só
     // por vencer mais tarde; era essa a armadilha que travava a sincronização.
     try {
-      const { data: atual } = await sb.from('jusbr_sessao').select('expira').eq('escritorio_id', ESCRITORIO_CMP).maybeSingle()
+      const { data: atual } = await sb.from('jusbr_sessao').select('expira').eq('escritorio_id', escAlvo).maybeSingle()
       if (atual && atual.expira && expira && new Date(expira).getTime() <= new Date(atual.expira).getTime()) {
         let guardadoServe = true
         if (prova.aceito === true) {
           const { lerSessao } = await import('../lib.js')
-          const sess = await lerSessao(sb)
+          const sess = await lerSessao(sb, escAlvo)
           if (sess && sess.token && sess.token !== token) {
-            const pv = await provarToken(sb, sess.token)
+            const pv = await provarToken(sb, sess.token, escAlvo)
             guardadoServe = (pv.aceito !== false)
           }
         }
@@ -156,7 +168,7 @@ export async function POST(request) {
 
     if (!oidc) oidc = {}
     oidc.claims = resumoClaims(token)   // rastro de qual sessão do jus.br está valendo
-    const { error } = await sb.rpc('jusbr_set_sessao', { p_esc: ESCRITORIO_CMP, p_token: token, p_refresh: refresh, p_key: encKey, p_expira: expira, p_por: quem, p_oidc: oidc })
+    const { error } = await sb.rpc('jusbr_set_sessao', { p_esc: escAlvo, p_token: token, p_refresh: refresh, p_key: encKey, p_expira: expira, p_por: quem, p_oidc: oidc })
     if (error) return j({ erro: 'falha ao salvar token: ' + error.message }, 500)
     return j({ ok: true, expira, refresh: !!refresh })
   } catch (e) {
@@ -174,7 +186,7 @@ export async function GET(request) {
   const tParam = searchParams.get('t') || ''
   if (tParam) {
     const fecha = (msg) => new Response(
-      '<!doctype html><meta charset="utf-8"><title>CMPGestão</title>' +
+      '<!doctype html><meta charset="utf-8"><title>jus.br</title>' +
       '<body style="font:13px system-ui;padding:14px;color:#1e2733">' + msg +
       '<script>setTimeout(function(){window.close()},1200)</script></body>',
       { headers: { 'Content-Type': 'text/html; charset=utf-8', 'Access-Control-Allow-Origin': '*' } }
@@ -185,15 +197,13 @@ export async function GET(request) {
       if (tParam.split('.').length !== 3) return fecha('token inválido.')
       if (!process.env.JUSBR_ENC_KEY || !process.env.SUPABASE_SERVICE_ROLE_KEY) return fecha('servidor sem chaves.')
       const sbA = admin()
-      let segOk = (process.env.JUSBR_RELAY_SECRET || '') === s
-      if (!segOk) {
-        const { data } = await sbA.from('produtividade_config').select('valor').eq('escritorio_id', ESCRITORIO_CMP).eq('chave', 'jusbr_relay_secret').maybeSingle()
-        segOk = !!(data && data.valor && data.valor === s)
-      }
-      if (!segOk) return fecha('segredo incorreto.')
+      // Aqui também é o segredo que identifica o escritório: esta aba oculta não
+      // tem sessão do sistema, só o segredo embutido na extensão que a abriu.
+      const escAlvo = await escritorioDoSegredo(sbA, s)
+      if (!escAlvo) return fecha('segredo incorreto.')
       const rParam = searchParams.get('r') || null
       const expira = expDoJwt(tParam)
-      const { error } = await sbA.rpc('jusbr_set_sessao', { p_esc: ESCRITORIO_CMP, p_token: tParam, p_refresh: rParam, p_key: process.env.JUSBR_ENC_KEY, p_expira: expira, p_por: 'relay-nav', p_oidc: null })
+      const { error } = await sbA.rpc('jusbr_set_sessao', { p_esc: escAlvo, p_token: tParam, p_refresh: rParam, p_key: process.env.JUSBR_ENC_KEY, p_expira: expira, p_por: 'relay-nav', p_oidc: null })
       if (error) return fecha('falha ao salvar: ' + error.message)
       return fecha('✓ jus.br sincronizado. Pode fechar.')
     } catch (e) { return fecha('erro: ' + String((e && e.message) || e)) }
@@ -201,8 +211,10 @@ export async function GET(request) {
 
   const user = await usuario(request)
   if (!user) return Response.json({ erro: 'não autenticado' }, { status: 401 })
+  const esc = await escritorioDoUsuario(user.id)
+  if (!esc) return Response.json({ erro: 'usuário sem escritório vinculado' }, { status: 403 })
   const sb = admin()
-  const { data } = await sb.from('jusbr_sessao').select('expira,atualizado_em,atualizado_por,refresh_cif,refresh_em').eq('escritorio_id', ESCRITORIO_CMP).maybeSingle()
+  const { data } = await sb.from('jusbr_sessao').select('expira,atualizado_em,atualizado_por,refresh_cif,refresh_em').eq('escritorio_id', esc).maybeSingle()
   const valido = !!(data && data.expira && new Date(data.expira).getTime() > Date.now())
   const autoRenova = !!(data && data.refresh_cif)
   return Response.json({ ok: true, valido, auto_renova: autoRenova, expira: data && data.expira || null, atualizado_em: data && data.atualizado_em || null, refresh_em: data && data.refresh_em || null })
@@ -223,8 +235,10 @@ export async function DELETE(request) {
   const user = await usuario(request)
   if (!user) return Response.json({ erro: 'não autenticado' }, { status: 401 })
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) return Response.json({ erro: 'servidor sem service key' }, { status: 500 })
+  const esc = await escritorioDoUsuario(user.id)
+  if (!esc) return Response.json({ erro: 'usuário sem escritório vinculado' }, { status: 403 })
   const sb = admin()
-  const { error } = await sb.from('jusbr_sessao').delete().eq('escritorio_id', ESCRITORIO_CMP)
+  const { error } = await sb.from('jusbr_sessao').delete().eq('escritorio_id', esc)
   if (error) return Response.json({ erro: error.message }, { status: 500 })
   return Response.json({ ok: true, apagado: true })
 }

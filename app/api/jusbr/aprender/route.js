@@ -7,16 +7,17 @@
 //   POST /api/jusbr/aprender   (header x-jusbr-relay: <segredo>)
 
 import { createClient } from '@supabase/supabase-js'
-import { ESCRITORIO_RAIZ } from '../../_lib/inquilino.js'
+import { ESCRITORIO_RAIZ, usuarioDoRequest, escritorioDoUsuario } from '../../_lib/inquilino.js'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
 export const revalidate = 0
 export const maxDuration = 20
 
-// Ainda de um escritorio so, de proposito: Aprendizado do protocolo: base tecnica compartilhada, nao dado de cliente.
-// (fase dos robos por inquilino: este nao entra ate ter credencial propria)
-const ESCRITORIO_CMP = ESCRITORIO_RAIZ
+// A captura é a FORMA da requisição, não dado de cliente — mas ela chega pela
+// mesma chave de pareamento do token, e cada escritório tem a sua. Guardar tudo
+// na linha da raiz misturaria a base técnica de escritórios diferentes e, pior,
+// obrigaria a rota a conhecer um segredo só. Aqui também o segredo é a identidade.
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
@@ -32,17 +33,19 @@ export async function POST(request) {
     if (!process.env.SUPABASE_SERVICE_ROLE_KEY) return j({ erro: 'sem service key' }, 500)
     const sb = admin()
     const relay = request.headers.get('x-jusbr-relay') || ''
-    let ok = (process.env.JUSBR_RELAY_SECRET || '') === relay
-    if (!ok && relay) {
-      const { data } = await sb.from('produtividade_config').select('valor').eq('escritorio_id', ESCRITORIO_CMP).eq('chave', 'jusbr_relay_secret').maybeSingle()
-      ok = !!(data && data.valor && data.valor === relay)
+    let esc = null
+    if (relay) {
+      const { data } = await sb.from('produtividade_config').select('escritorio_id')
+        .eq('chave', 'jusbr_relay_secret').eq('valor', relay).maybeSingle()
+      if (data && data.escritorio_id) esc = data.escritorio_id
+      else if ((process.env.JUSBR_RELAY_SECRET || '') === relay) esc = ESCRITORIO_RAIZ
     }
-    if (!ok) return j({ erro: 'segredo inválido' }, 401)
+    if (!esc) return j({ erro: 'segredo inválido' }, 401)
 
     let b = {}
     try { b = await request.json() } catch (e) { return j({ erro: 'json inválido' }, 400) }
     const { error } = await sb.from('pdpj_capturas').insert({
-      escritorio_id: ESCRITORIO_CMP,
+      escritorio_id: esc,
       metodo: String(b.metodo || '').slice(0, 10),
       url: String(b.url || '').slice(0, 500),
       cabecalhos: b.cabecalhos || null,
@@ -55,10 +58,16 @@ export async function POST(request) {
   } catch (e) { return j({ erro: String((e && e.message) || e) }, 500) }
 }
 
-// GET: lista o que já foi aprendido (para o painel/diagnóstico)
-export async function GET() {
+// GET: lista o que já foi aprendido (para o painel/diagnóstico), só do próprio
+// escritório e só para quem está logado — a captura traz endereços e cabeçalhos
+// do peticionamento de quem protocolou.
+export async function GET(request) {
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) return Response.json({ erro: 'sem service key' }, { status: 500 })
+  const user = await usuarioDoRequest(request)
+  if (!user) return Response.json({ erro: 'não autenticado' }, { status: 401 })
+  const esc = await escritorioDoUsuario(user.id)
+  if (!esc) return Response.json({ erro: 'usuário sem escritório vinculado' }, { status: 403 })
   const sb = admin()
-  const { data } = await sb.from('pdpj_capturas').select('*').eq('escritorio_id', ESCRITORIO_CMP).order('criado_em', { ascending: false }).limit(20)
+  const { data } = await sb.from('pdpj_capturas').select('*').eq('escritorio_id', esc).order('criado_em', { ascending: false }).limit(20)
   return Response.json({ ok: true, total: (data || []).length, capturas: data || [] })
 }

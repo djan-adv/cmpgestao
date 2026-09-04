@@ -34,25 +34,30 @@ function admin() {
   return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } })
 }
 function emailValido(e) { return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(e || '').trim()) }
+function assinaturaDe(casa) { return (casa && casa.escritorioNome) || 'Equipe do escritório' }
+function enderecoDe(casa) { return (casa && casa.endereco) || URL_PORTAL }
 
-function corpoLembrete({ nome, email }) {
+// A assinatura é do escritório que manda o e-mail, não da casa que opera o
+// sistema: o cliente do escritório cliente não conhece — nem deve conhecer — o
+// nome do fornecedor. `casa` vem de dadosDaCasa(sb, escritorio_id).
+function corpoLembrete({ nome, email, casa }) {
   const primeiro = String(nome || '').trim().split(/\s+/)[0] || ''
   const ola = primeiro ? ('Olá, ' + primeiro + '!') : 'Olá!'
   return ola + '\n\n' +
     'Passando para lembrar que o seu acesso ao aplicativo do escritório já está liberado, mas ainda não foi usado nenhuma vez.\n\n' +
     'No aplicativo você acompanha o andamento do processo em tempo real, recebe os avisos de audiência e fala direto com o escritório — sem precisar ligar ou esperar retorno.\n\n' +
-    'Endereço: ' + URL_PORTAL + '\n' +
+    'Endereço: ' + enderecoDe(casa) + '\n' +
     'Login: ' + email + '\n' +
     'Senha: a que enviamos no e-mail de acesso. Se não achar ou não funcionar, é só responder esta mensagem que enviamos outra na hora.\n\n' +
-    'Atenciosamente,\nCrispim Mendonça e Pinheiro Advogados'
+    'Atenciosamente,\n' + assinaturaDe(casa)
 }
-function corpoAtualizacao({ nome }) {
+function corpoAtualizacao({ nome, casa }) {
   const primeiro = String(nome || '').trim().split(/\s+/)[0] || ''
   const ola = primeiro ? ('Olá, ' + primeiro + '!') : 'Olá!'
   return ola + '\n\n' +
     'Passando para avisar que o chat do aplicativo do escritório recebeu melhorias — ficou mais rápido e estável para você falar com a gente sobre o seu processo.\n\n' +
-    'Continue usando pelo mesmo endereço e login de sempre:\n' + URL_PORTAL + '\n\n' +
-    'Qualquer dúvida, é só responder este e-mail.\n\nAtenciosamente,\nCrispim Mendonça e Pinheiro Advogados'
+    'Continue usando pelo mesmo endereço e login de sempre:\n' + enderecoDe(casa) + '\n\n' +
+    'Qualquer dúvida, é só responder este e-mail.\n\nAtenciosamente,\n' + assinaturaDe(casa)
 }
 
 export async function GET(request) {
@@ -112,14 +117,14 @@ export async function GET(request) {
         tipo = 'atualizacao'
         env = await enviarEmailCore({
           para: mail, assunto: 'O chat do aplicativo foi atualizado — CMP Advogados',
-          corpo: corpoAtualizacao({ nome: acesso.nome || c.nome }), numero: '', dedup: false, convidarApp: false,
+          corpo: corpoAtualizacao({ nome: acesso.nome || c.nome, casa: await dadosDaCasa(sb, c.escritorio_id) }), numero: '', dedup: false, convidarApp: false,
         })
       } else if (acesso) {
         // tem acesso, nunca entrou: lembrete + entra na fila do robô de cobrança
         tipo = 'lembrete'
         env = await enviarEmailCore({
           para: mail, assunto: 'Seu acesso ao aplicativo do escritório está esperando por você',
-          corpo: corpoLembrete({ nome: acesso.nome || c.nome, email: mail }), numero: '', dedup: false, convidarApp: false,
+          corpo: corpoLembrete({ nome: acesso.nome || c.nome, email: mail, casa: await dadosDaCasa(sb, c.escritorio_id) }), numero: '', dedup: false, convidarApp: false,
         })
         if (!env.erro) {
           await registrarConvite(sb, {

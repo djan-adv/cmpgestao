@@ -3,7 +3,8 @@
 // encerra o prazo fatal, para ninguém ficar com alerta vermelho à toa.
 //   GET /api/jusbr/conferir-protocolo[?debug=1]
 
-import { jusbrAdmin, getFreshToken, ESCRITORIO_CMP } from '../lib.js'
+import { jusbrAdmin, getFreshToken } from '../lib.js'
+import { escritoriosAtivos } from '../../_lib/inquilino.js'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -52,24 +53,24 @@ function colheMovimentos(node, out, prof) {
   return out
 }
 
-export async function GET(request) {
-  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) return Response.json({ erro: 'falta service key' }, { status: 500 })
-  const debug = new URL(request.url).searchParams.get('debug') != null
+// Uma conferência para UM escritório: as petições pendentes, a sessão do jus.br
+// e o processo em que o andamento é gravado são todos dele.
+async function rodarPara(esc, debug) {
   const sb = jusbrAdmin()
 
   const { data: pend } = await sb.from('peticoes_protocolo')
     .select('id,processo_numero,titulo,criado_em,prazo_fatal,criado_por')
-    .eq('escritorio_id', ESCRITORIO_CMP).eq('status', 'pendente').limit(200)
-  if (!pend || !pend.length) return Response.json({ ok: true, pendentes: 0, fechadas: 0 })
+    .eq('escritorio_id', esc.id).eq('status', 'pendente').limit(200)
+  if (!pend || !pend.length) return { ok: true, escritorio: esc.nome, pendentes: 0, fechadas: 0 }
 
-  const tk = await getFreshToken(sb)
-  if (tk.erro) return Response.json({ ok: false, pendentes: pend.length, erro: 'jus.br: ' + tk.erro, motivo: tk.erro })
+  const tk = await getFreshToken(sb, null, esc.id)
+  if (tk.erro) return { ok: false, escritorio: esc.nome, pendentes: pend.length, erro: 'jus.br: ' + tk.erro, motivo: tk.erro }
 
   // agrupa por processo (um pedido ao PDPJ por processo)
   const porProc = {}
   pend.forEach(x => { const n = soDig(x.processo_numero); (porProc[n] = porProc[n] || []).push(x) })
 
-  const rel = { ok: true, pendentes: pend.length, fechadas: 0, detalhe: [] }
+  const rel = { ok: true, escritorio: esc.nome, pendentes: pend.length, fechadas: 0, detalhe: [] }
   for (const numero of Object.keys(porProc)) {
     let data
     try {
@@ -108,7 +109,7 @@ export async function GET(request) {
         }).eq('id', p.id)
         // registro permanente no histórico do processo (quem/quando/por qual via)
         try {
-          const { data: pr } = await sb.from('processos').select('id').eq('numero_digitos', soDig(p.processo_numero)).limit(1)
+          const { data: pr } = await sb.from('processos').select('id').eq('escritorio_id', esc.id).eq('numero_digitos', soDig(p.processo_numero)).limit(1)
           const pid = pr && pr[0] && pr[0].id
           if (pid) {
             const hoje = new Date(Date.now() - 3 * 3600000).toISOString().slice(0, 10)
@@ -122,5 +123,26 @@ export async function GET(request) {
       rel.detalhe.push({ numero, titulo: p.titulo, via, peca: achou.nome, juntada: achou.dataHoraJuntada })
     }
   }
-  return Response.json(rel)
+  return rel
+}
+
+export async function GET(request) {
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) return Response.json({ erro: 'falta service key' }, { status: 500 })
+  const { searchParams } = new URL(request.url)
+  const debug = searchParams.get('debug') != null
+
+  let escs = await escritoriosAtivos('jusbr')
+  const soEste = searchParams.get('esc')
+  if (soEste) escs = escs.filter(e => e.id === soEste)
+  if (!escs.length) return Response.json({ ok: true, nada: true, motivo: 'nenhum escritório com sessão do jus.br' })
+
+  const linhas = []
+  for (const esc of escs) {
+    let r
+    try { r = await rodarPara(esc, debug) }
+    catch (e) { r = { ok: false, escritorio: esc.nome, erro: String((e && e.message) || e) } }
+    linhas.push(r)
+  }
+  const soma = (c) => linhas.reduce((t, r) => t + (Number(r[c]) || 0), 0)
+  return Response.json({ ok: linhas.some(l => l.ok !== false), escritorios: linhas.length, pendentes: soma('pendentes'), fechadas: soma('fechadas'), por_escritorio: linhas })
 }

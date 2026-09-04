@@ -18,6 +18,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { enviarEmailCore } from '../../enviar-email/enviar.js'
 import { estadoConvite, ehDiaUtil, diasUteisEntre, URL_PORTAL } from '../../portal/convite-lib.js'
+import { dadosDaCasa } from '../../portal/lib.js'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -38,7 +39,12 @@ function admin() {
 
 function horaBrasilia(d) { return new Date(d.getTime() - 3 * 3600000).getUTCHours() }
 
-function corpoCobranca({ nome, email, situacao, faltaTelefone, numero, envios }) {
+// Quem assina é o escritório que manda — o cliente dele não tem por que ler o
+// nome de quem opera o sistema.
+function assinaturaDe(casa) { return (casa && casa.escritorioNome) || 'Equipe do escritório' }
+function enderecoDe(casa) { return (casa && casa.endereco) || URL_PORTAL }
+
+function corpoCobranca({ nome, email, situacao, faltaTelefone, numero, envios, casa }) {
   const primeiro = String(nome || '').trim().split(/\s+/)[0] || ''
   const ola = primeiro ? ('Olá, ' + primeiro + '!') : 'Olá!'
   const proc = numero
@@ -49,7 +55,7 @@ function corpoCobranca({ nome, email, situacao, faltaTelefone, numero, envios })
       + 'mas ainda não foi usado nenhuma vez.\n\n'
       + 'No aplicativo você acompanha o andamento do processo em tempo real, recebe os avisos de audiência '
       + 'e fala direto com o escritório — sem precisar ligar ou esperar retorno.\n\n'
-      + 'Endereço: ' + URL_PORTAL + '\n'
+      + 'Endereço: ' + enderecoDe(casa) + '\n'
       + 'Login: ' + email + '\n'
       + 'Senha: a que enviamos no e-mail de acesso. Se não achar ou não funcionar, é só responder esta '
       + 'mensagem que enviamos outra na hora.'
@@ -57,7 +63,7 @@ function corpoCobranca({ nome, email, situacao, faltaTelefone, numero, envios })
       + 'andamento atualizado, avisos de audiência e conversa direta com o escritório.\n\n'
       + 'Ainda não identificamos um acesso em seu nome. Para liberar, basta responder esta mensagem '
       + 'com um "quero o acesso" — enviamos a senha em seguida.\n\n'
-      + 'Endereço: ' + URL_PORTAL
+      + 'Endereço: ' + enderecoDe(casa)
   const tel = faltaTelefone
     ? '\n\nAproveitando: o seu telefone/WhatsApp ainda não consta no nosso cadastro. '
       + 'Responda este e-mail com o número (com DDD) que registramos na sua ficha — '
@@ -67,7 +73,7 @@ function corpoCobranca({ nome, email, situacao, faltaTelefone, numero, envios })
     ? '\n\nEste é o último lembrete automático sobre o aplicativo — não queremos incomodar. '
       + 'Quando quiser o acesso, é só pedir a qualquer momento.'
     : '\n\nSe preferir acompanhar só por e-mail mesmo, é só nos dizer que paramos os lembretes.'
-  return ola + '\n\n' + miolo + proc + tel + fecho + '\n\nAtenciosamente,\nCrispim Mendonça e Pinheiro Advogados'
+  return ola + '\n\n' + miolo + proc + tel + fecho + '\n\nAtenciosamente,\n' + assinaturaDe(casa)
 }
 
 export async function GET(request) {
@@ -144,10 +150,11 @@ export async function GET(request) {
       para: c.email,
       assunto: est.situacao === 'parado'
         ? 'Seu acesso ao aplicativo do escritório está esperando por você'
-        : 'Acompanhe seu processo pelo aplicativo — CMP Advogados',
+        : 'Acompanhe seu processo pelo aplicativo',
       corpo: corpoCobranca({
         nome: est.nome || c.nome, email: c.email, situacao: est.situacao,
         faltaTelefone: est.falta_telefone, numero: c.processo_numero, envios: c.envios || 0,
+        casa: await dadosDaCasa(sb, c.escritorio_id),
       }),
       numero: c.processo_numero || '',
       // dedup: false porque a cobrança é a MESMA mensagem de propósito; quem

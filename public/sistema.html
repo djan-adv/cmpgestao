@@ -770,7 +770,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
         <p class="note" style="margin:6px 0 10px">É ela que mantém a sessão do jus.br viva no sistema: quando você entra no portal com o certificado, o token chega aqui na hora, mesmo com o Gestão fechado. O download já vem pareado com este escritório: não há nada para colar.</p>
         <button class="btn sm" onclick="baixarExtensaoJusbr(this)">⬇ Baixar a extensão (.zip)</button>
         <ol class="note" style="margin:10px 0 0;padding-left:18px;line-height:1.7">
-          <li>Descompacte o arquivo (vai virar a pasta <b>cmpgestao-jusbr</b>).</li>
+          <li>Descompacte o arquivo — ele vira uma pasta com o nome do sistema.</li>
           <li>Abra <b>chrome://extensions</b> (no Edge: <b>edge://extensions</b>) e ligue o <b>Modo do desenvolvedor</b>.</li>
           <li>Clique em <b>Carregar sem compactação</b> (no Edge: <b>Carregar descompactado</b>) e escolha a pasta.</li>
           <li>Entre no <b>portaldeservicos.pdpj.jus.br</b> com o seu certificado. O ícone da extensão fica com o selo <b>ok</b> verde quando o token chega.</li>
@@ -834,6 +834,27 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
         </div>
         <p class="note" style="margin:6px 0 10px">Rodam sozinhos no servidor, com o computador desligado. Aqui você vê a última rodada <b>do seu escritório</b> e pode mandar rodar na hora.</p>
         <div id="rl-body"><div class="note">Carregando…</div></div>
+      </div>
+      <!-- A ponte com o jus.br morava só no painel de robôs da casa. Como agora
+           cada escritório tem a PRÓPRIA sessão do jus.br (o token do certificado
+           dele fica na linha dele), o cartão precisa estar onde o escritório
+           cliente entra — senão ele loga no portal, o token não chega a lugar
+           nenhum e os documentos "não aparecem" sem explicação. -->
+      <div class="card inq-only" style="display:none">
+        <p class="sectlabel">🧩 jus.br — conectar o certificado do escritório</p>
+        <p class="note" style="margin:6px 0 10px">O certificado digital é seu, não do sistema: é ele que abre os autos. A extensão do Chrome/Edge leva a sua sessão do jus.br até aqui — e a partir daí o sistema busca peças e movimentos sozinho, mesmo com o navegador fechado. O download já vem pareado com <b>este</b> escritório: não há chave para colar.</p>
+        <button class="btn sm" onclick="baixarExtensaoJusbr(this)">⬇ Baixar a extensão (.zip)</button>
+        <ol class="note" style="margin:10px 0 0;padding-left:18px;line-height:1.7">
+          <li>Descompacte o arquivo — ele vira uma pasta com o nome do sistema.</li>
+          <li>Abra <b>chrome://extensions</b> (no Edge: <b>edge://extensions</b>) e ligue o <b>Modo do desenvolvedor</b>.</li>
+          <li>Clique em <b>Carregar sem compactação</b> (no Edge: <b>Carregar descompactado</b>) e escolha a pasta.</li>
+          <li>Entre no <b>portaldeservicos.pdpj.jus.br</b> com o seu certificado. O ícone da extensão fica com o selo <b>ok</b> verde quando o token chega.</li>
+        </ol>
+        <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--line)">
+          <div id="rl-jusbr-status" class="note" style="margin-bottom:8px"></div>
+          <button class="btn sm ghost" onclick="renderStatusJusbrInq()">↻ conferir a sessão</button>
+          <button class="btn sm ghost" style="color:#b5342b;border-color:#e8c4bf" onclick="desconectarJusbr(this)" title="Apaga o token que o SERVIDOR guarda deste escritório. Sair do portal no navegador não faz isso — o sistema tem a própria cópia, é o que faz os robôs rodarem de madrugada.">🧹 desconectar</button>
+        </div>
       </div>
     </section>
 <section id="s-sugestoes" class="hidden">
@@ -3418,23 +3439,12 @@ function abrir(i){
   /* Desconsideração da personalidade jurídica: busca pelo CNPJ da parte no jus.br
      (PDPJ) — diferente do dossiê acima, que busca por NOME no DJEN */
   html+='<div class="card cmp-only" id="desconsideracao-card"><p class="sectlabel" style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">🏛 Desconsideração da personalidade jurídica <button class="btn sm" style="font-size:12px;background:#7a4b00;color:#fff" onclick="abrirDesconsideracaoPJ()">Procurar decisões (por CNPJ)</button></p><div class="note">Busca <b>exclusivamente pelo CNPJ</b> da empresa devedora, no jus.br (PDPJ): todos os processos em que ela é parte — inclusive de outros tribunais — e varre as movimentações atrás de decisão de desconsideração da personalidade jurídica (IDPJ). Sem nome, sem CPF. É pista de investigação, não certidão.</div></div>';
-  /* Trazer as peças DOS AUTOS depende de sessão do jus.br, e a sessão é aberta
-     com o certificado digital de quem entra. Isso ainda é de um escritório só
-     (ver /api/jusbr/token). Esconder o card do escritório cliente fazia parecer
-     que o sistema não sabe buscar documento nenhum — e ele sabe: o que falta é o
-     certificado DELE. Então o card aparece dizendo isso, e apontando os dois
-     caminhos que funcionam hoje. */
-  if(!(window.__escInfo&&window.__escInfo.raiz===true)){
-    html+='<div class="card" id="jusbr-card"><p class="sectlabel">Peças dos autos</p>'
-      +'<div class="note" style="margin-bottom:8px">Para o sistema baixar as peças direto do tribunal é preciso conectar o <b>certificado digital do escritório</b> ao jus.br — é o certificado que abre os autos, e ele é seu, não do sistema. Enquanto isso não estiver configurado, dois caminhos funcionam agora:</div>'
-      +'<div style="display:flex;gap:8px;flex-wrap:wrap">'
-      +'<button class="btn sm" style="font-size:12px" onclick="document.getElementById(\'doc-file\').click()" title="Subir para a pasta do processo os arquivos que você já tem no computador">&#128193; Subir arquivos do computador</button>'
-      +'<button class="btn sm ghost" style="font-size:12px" onclick="atualizarDadosProcesso()" title="Busca na base pública do CNJ a classe, o assunto, o órgão e todas as movimentações — sem certificado">&#8635; Atualizar pela base pública do CNJ</button>'
-      +'</div>'
-      +'<div class="note" style="margin-top:7px;font-size:11.5px">A base pública traz a ficha e o histórico completo de movimentações; as <b>peças</b> (inicial, contestação, sentença em PDF) só saem com certificado.</div>'
-      +'</div>';
-  } else
-  html+='<div class="card cmp-only" id="jusbr-card"><p class="sectlabel" style="display:flex;justify-content:space-between;align-items:center">Documentos do jus.br <button class="btn sm" style="font-size:12px" onclick="jusbrCarregar(\''+esc(p.numero)+'\')">Carregar documentos</button> <button class="btn sm ghost" style="font-size:11px" title="Diagnóstico técnico dos documentos (para o Claude)" onclick="jusbrDiag(\''+esc(p.numero)+'\')">🔎 diag</button></p><div id="jusbr-status" class="note" style="margin-bottom:6px">Lista as peças do processo no jus.br. O arquivo escolhido é baixado sob demanda e removido do sistema após 30 dias (o original fica no tribunal).</div><div id="jusbr-barra" style="display:none;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px;padding:7px 9px;background:#f4f7fb;border:1px solid #e1e8f0;border-radius:9px"><span class="note" style="margin:0;font-weight:600">Marcados:</span><button class="btn sm ghost" style="font-size:11px" onclick="jusbrMarcarTodos()">marcar todos</button><button id="jusbr-ordem-btn" class="btn sm ghost" style="font-size:11px" title="Inverter a ordem da lista — o download e o PDF seguem esta ordem" onclick="jusbrInverterOrdem()">↓ mais recentes primeiro</button><button class="btn sm" style="font-size:11px;background:#0F6E56;color:#fff" title="Baixa os marcados numa pasta compactada (.zip)" onclick="jusbrBaixarSelecionados(\'zip\')">⬇ pasta .zip</button><button class="btn sm" style="font-size:11px;background:#185FA5;color:#fff" title="Junta todos os marcados num único arquivo PDF" onclick="jusbrBaixarSelecionados(\'pdf\')">⬇ PDF único</button><button class="btn sm ghost" style="font-size:11px" title="Baixa cada arquivo separadamente na pasta Downloads" onclick="jusbrBaixarSelecionados(\'soltos\')">⬇ soltos</button></div><div id="jusbr-lista"></div></div>';
+  /* Trazer as peças DOS AUTOS depende de sessão do jus.br, aberta com o
+     certificado digital de quem entra no portal. Desde 04/09/2026 cada
+     escritório tem a SUA sessão (ver /api/jusbr/token), então o card é o mesmo
+     para todo mundo: quem ainda não conectou o certificado recebe, no lugar da
+     lista, o caminho para conectar — e os dois atalhos que funcionam sem ele. */
+  html+='<div class="card" id="jusbr-card"><p class="sectlabel" style="display:flex;justify-content:space-between;align-items:center">Documentos do jus.br <button class="btn sm" style="font-size:12px" onclick="jusbrCarregar(\''+esc(p.numero)+'\')">Carregar documentos</button> <button class="btn sm ghost" style="font-size:11px" title="Diagnóstico técnico dos documentos (para o Claude)" onclick="jusbrDiag(\''+esc(p.numero)+'\')">🔎 diag</button></p><div id="jusbr-status" class="note" style="margin-bottom:6px">Lista as peças do processo no jus.br. O arquivo escolhido é baixado sob demanda e removido do sistema após 30 dias (o original fica no tribunal).</div><div id="jusbr-barra" style="display:none;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px;padding:7px 9px;background:#f4f7fb;border:1px solid #e1e8f0;border-radius:9px"><span class="note" style="margin:0;font-weight:600">Marcados:</span><button class="btn sm ghost" style="font-size:11px" onclick="jusbrMarcarTodos()">marcar todos</button><button id="jusbr-ordem-btn" class="btn sm ghost" style="font-size:11px" title="Inverter a ordem da lista — o download e o PDF seguem esta ordem" onclick="jusbrInverterOrdem()">↓ mais recentes primeiro</button><button class="btn sm" style="font-size:11px;background:#0F6E56;color:#fff" title="Baixa os marcados numa pasta compactada (.zip)" onclick="jusbrBaixarSelecionados(\'zip\')">⬇ pasta .zip</button><button class="btn sm" style="font-size:11px;background:#185FA5;color:#fff" title="Junta todos os marcados num único arquivo PDF" onclick="jusbrBaixarSelecionados(\'pdf\')">⬇ PDF único</button><button class="btn sm ghost" style="font-size:11px" title="Baixa cada arquivo separadamente na pasta Downloads" onclick="jusbrBaixarSelecionados(\'soltos\')">⬇ soltos</button></div><div id="jusbr-lista"></div></div>';
   // IA
   if(!KAN)initKanban(); initAgenda();
   html+='<div class="card"><p class="sectlabel" style="display:flex;justify-content:space-between;align-items:center">Atividades do escritório neste processo (tarefas e prazos)<button class="btn sm" style="font-size:12px" onclick="novaTarefaDoProcesso()">+ Nova tarefa</button></p><div id="ativ-proc"></div></div>';
@@ -12491,7 +12501,7 @@ function go(s){
   if(s==="produtividade" && typeof renderProdutividade==='function')renderProdutividade();
   if(s==="monitoramento" && typeof renderMonitoramento==='function')renderMonitoramento();
   if(s==="robos" && typeof renderRobos==='function')renderRobos();
-  if(s==="diarios"){ try{ renderRobosLeitura(); _diAlvo(); }catch(e){} }
+  if(s==="diarios"){ try{ renderRobosLeitura(); renderStatusJusbrInq(); _diAlvo(); }catch(e){} }
   if(s==="movimentar" && typeof renderEstagiario==='function')renderEstagiario();
   if(s==="emails" && typeof renderEmails==='function')renderEmails();
   if(s==="chats" && typeof waCarregar==='function')waCarregar(true);
@@ -17291,6 +17301,26 @@ async function renderRobosLeitura(){
           +'</div>';
       }).join('')+'</div>';
   }catch(e){ el.innerHTML='<div class="note" style="color:#b5342b">'+esc(String(e&&e.message||e))+'</div>'; }
+}
+/* Estado da sessão do jus.br DESTE escritório, na tela dele. A rota devolve só
+   metadados (validade, quando chegou) — nunca o token. */
+async function renderStatusJusbrInq(){
+  var el=document.getElementById('rl-jusbr-status'); if(!el) return;
+  el.textContent='Conferindo…';
+  try{
+    var tok=await _diToken();
+    var r=await fetch('/api/jusbr/token',{headers:{Authorization:'Bearer '+tok},cache:'no-store'});
+    var d=await r.json();
+    if(!r.ok||d.erro){ el.innerHTML='<span style="color:#b5342b">'+esc(d.erro||'não consegui conferir')+'</span>'; return; }
+    if(!d.valido){
+      el.innerHTML='<b style="color:#8a6d00">Sem sessão ativa.</b> Instale a extensão e entre no portal do jus.br com o seu certificado — o token chega aqui em segundos.';
+      return;
+    }
+    var ate=d.expira?new Date(d.expira).toLocaleString('pt-BR'):'';
+    el.innerHTML='<b style="color:#127a53">Sessão ativa.</b> Vale até '+esc(ate)
+      +(d.auto_renova?' · renova sozinha enquanto o portal permitir':'')
+      +'<div class="note" style="font-size:11px;margin-top:2px">A sessão do jus.br dura poucas horas: quando vencer, basta entrar no portal de novo com o certificado.</div>';
+  }catch(e){ el.innerHTML='<span style="color:#b5342b">'+esc(String(e&&e.message||e))+'</span>'; }
 }
 async function rodarRoboLeitura(nome,btn){
   var txt=btn.textContent; btn.disabled=true; btn.textContent='rodando…';
@@ -23240,8 +23270,13 @@ async function baixarExtensaoJusbr(btn){
     var r=await fetch('/api/jusbr/extensao',{headers:tok?{Authorization:'Bearer '+tok}:{}});
     if(!r.ok){ alert('Não foi possível baixar: '+(await r.text()).slice(0,200)); return; }
     var blob=await r.blob();
+    /* o nome do arquivo vem do servidor (Content-Disposition): é ele que sabe
+       de qual escritório é o pacote — fixá-lo aqui devolvia ao cliente um zip
+       com o nome do sistema do fornecedor. */
+    var nomeZip='extensao-jusbr.zip';
+    try{ var cd=r.headers.get('content-disposition')||''; var m=cd.match(/filename="?([^";]+)"?/i); if(m&&m[1]) nomeZip=m[1]; }catch(e){}
     var a=document.createElement('a');
-    a.href=URL.createObjectURL(blob); a.download='cmpgestao-jusbr.zip';
+    a.href=URL.createObjectURL(blob); a.download=nomeZip;
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(function(){ URL.revokeObjectURL(a.href); },4000);
     try{ if(typeof logEvent==='function') logEvent('record_saved','extensao',null,{campo:'baixou a extensão do jus.br'}); }catch(e){}

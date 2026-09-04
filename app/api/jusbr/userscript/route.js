@@ -4,6 +4,7 @@
 
 import { createClient } from '@supabase/supabase-js'
 import { montarScript } from './gerar.js'
+import { escritorioDoUsuario } from '../../_lib/inquilino.js'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -23,6 +24,10 @@ export async function GET(request) {
   const user = await usuario(request)
   if (!user) return new Response('Faça login no sistema para gerar o userscript.', { status: 401 })
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) return new Response('servidor sem service key', { status: 500 })
-  const texto = await montarScript(admin(), request)
+  // O segredo vai DENTRO do arquivo: gerar sempre o da raiz entregaria a chave
+  // da sessão da casa a qualquer usuário logado do sistema.
+  const esc = await escritorioDoUsuario(user.id)
+  if (!esc) return new Response('Usuário sem escritório vinculado.', { status: 403 })
+  const texto = await montarScript(admin(), request, esc)
   return new Response(texto, { headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' } })
 }

@@ -17,8 +17,6 @@ import { createClient } from '@supabase/supabase-js'
 // escolha explícita, não descuido.
 import { ESCRITORIO_RAIZ } from '../_lib/inquilino.js'
 export { ESCRITORIO_RAIZ }
-// nome antigo, mantido para as rotas ainda não migradas
-export const ESCRITORIO_CMP = ESCRITORIO_RAIZ
 
 // endpoint padrão de token do PDPJ (gov.br SSO). Pode ser sobrescrito pelo que o
 // userscript capturar (campo oidc.token_url), caso o provedor mude.
@@ -130,16 +128,25 @@ export function ehFaltaDeAcessoAoProcesso(corpo) {
 // validade" de "token que serve". Devolve { aceito, http } — e { aceito:null }
 // quando não deu para testar (sem processo, rede fora): nesse caso quem chama
 // NÃO deve barrar nada, para não travar por causa de falha nossa.
-export async function provarToken(sb, token) {
+export async function provarToken(sb, token, esc) {
+  // Testa num processo do qual JÁ baixamos peça — ou seja, comprovadamente
+  // acessível com uma credencial boa. Testar num processo qualquer confundiria
+  // "token ruim" com "processo que o advogado não acompanha".
+  //
+  // E o processo tem de ser DO MESMO ESCRITÓRIO do token. Este código roda com
+  // a chave de serviço, que enxerga a instalação inteira: sem o filtro, o
+  // certificado de um escritório era provado num processo de outro, o PDPJ
+  // respondia 401 e a sessão boa era jogada fora na porta de entrada.
   try {
-    // Testa num processo do qual JÁ baixamos peça — ou seja, comprovadamente
-    // acessível com uma credencial boa. Testar num processo qualquer confundiria
-    // "token ruim" com "processo que o advogado não acompanha".
     let numero = ''
-    const { data: ja } = await sb.from('jusbr_arquivos').select('processo_numero').order('criado_em', { ascending: false }).limit(1)
+    let q1 = sb.from('jusbr_arquivos').select('processo_numero')
+    if (esc) q1 = q1.eq('escritorio_id', esc)
+    const { data: ja } = await q1.order('criado_em', { ascending: false }).limit(1)
     if (ja && ja[0]) numero = String(ja[0].processo_numero || '').replace(/\D/g, '')
     if (numero.length < 16) {
-      const { data: pr } = await sb.from('processos').select('numero_digitos').not('numero_digitos', 'is', null).limit(1)
+      let q2 = sb.from('processos').select('numero_digitos').not('numero_digitos', 'is', null)
+      if (esc) q2 = q2.eq('escritorio_id', esc)
+      const { data: pr } = await q2.limit(1)
       numero = (pr && pr[0] && String(pr[0].numero_digitos || '').replace(/\D/g, '')) || ''
     }
     if (!numero || numero.length < 16) return { aceito: null, motivo: 'sem processo para testar' }

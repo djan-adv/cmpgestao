@@ -10,6 +10,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { zip } from '../../_lib/zip.js'
 import { jusbrAdmin } from '../lib.js'
+import { escritorioDoUsuario } from '../../_lib/inquilino.js'
 import fs from 'fs'
 import path from 'path'
 import { coletarPecas, ordenarPecas, pdfUnico, salvarNaPasta } from './core.js'
@@ -43,7 +44,9 @@ export async function GET(request) {
   const user = await usuario(jwt)
   if (!user) return Response.json({ erro: 'não autenticado' }, { status: 401 })
 
-  const col = await coletarPecas(jusbrAdmin(), numero, { uuidsSel })
+  const esc = await escritorioDoUsuario(user.id)
+  if (!esc) return Response.json({ erro: 'usuário sem escritório vinculado' }, { status: 403 })
+  const col = await coletarPecas(jusbrAdmin(), numero, { uuidsSel, esc })
   if (col.erro) return Response.json({ erro: col.erro, motivo: col.motivo }, { status: col.status || 502 })
   const { files, pulados } = col
   ordenarPecas(files, { uuidsSel, ordem: searchParams.get('ordem') || '' })

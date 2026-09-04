@@ -21,7 +21,8 @@ import fs from 'fs'
 import path from 'path'
 import crypto from 'crypto'
 import { createClient } from '@supabase/supabase-js'
-import { jusbrAdmin, getFreshToken, ESCRITORIO_CMP } from '../lib.js'
+import { jusbrAdmin, getFreshToken } from '../lib.js'
+import { escritorioDoUsuario } from '../../_lib/inquilino.js'
 import { ROOT } from '../../peticao/core.js'
 import { contaDemo, respostaDemo } from '../../../../lib/demo.js'
 
@@ -168,10 +169,10 @@ function assuntosDe(fontes) {
 // cada protocolo feito à mão, quando falta um campo ESTRUTURAL nós o tiramos de
 // lá: mesmo processo, mesmo órgão, envelope que o tribunal já aceitou (201).
 // A tela diz quais campos vieram daí e de quando, para conferência antes do envio.
-async function envelopeDeCaptura(sb, dig) {
+async function envelopeDeCaptura(sb, dig, esc) {
   try {
     const { data } = await sb.from('pdpj_capturas')
-      .select('corpo_forma,criado_em').eq('escritorio_id', ESCRITORIO_CMP)
+      .select('corpo_forma,criado_em').eq('escritorio_id', esc)
       .eq('metodo', 'POST').eq('resposta_status', 201).like('url', '%peticoes/protocolar%')
       .order('criado_em', { ascending: false }).limit(50)
     for (const c of (data || [])) {
@@ -232,7 +233,7 @@ async function pdpj(url, token, opts) {
 }
 
 // monta o envelope do POST /peticoes/protocolar a partir do processo do PDPJ
-async function montarEnvelope(token, dig, sb) {
+async function montarEnvelope(token, dig, sb, esc) {
   const r = await pdpj(`${PDPJ}/api/v2/processos/${dig}`, token)
   if (!r.ok) return { erro: 'não consegui ler o processo no jus.br (HTTP ' + r.status + ')', http: r.status }
   const j = await r.json().catch(() => null)
@@ -324,7 +325,7 @@ async function montarEnvelope(token, dig, sb) {
   let reaproveitado = null
   let divergencias = []
   if (sb) {
-    const cap = await envelopeDeCaptura(sb, d)
+    const cap = await envelopeDeCaptura(sb, d, esc)
     /* Mesmo com tudo preenchido, se existe um protocolo ACEITO neste processo,
        vale comparar: nome de vara certo com CÓDIGO errado não se vê na tela, e
        protocolo não se desfaz. Diferença aqui não é necessariamente erro (o
@@ -469,8 +470,13 @@ export async function GET(request) {
   const dig = soDig(searchParams.get('numero'))
   if (dig.length < 16) return Response.json({ erro: 'número de processo inválido' }, { status: 400 })
 
+  // A sessão do jus.br é a DE QUEM PEDE. Protocolar é ato com a credencial do
+  // advogado: com a sessão de outro escritório, a petição sairia assinada por
+  // quem não redigiu — e no acervo de quem não é parte.
+  const esc = await escritorioDoUsuario(user.id)
+  if (!esc) return Response.json({ erro: 'usuário sem escritório vinculado' }, { status: 403 })
   const sb = jusbrAdmin()
-  const tk = await getFreshToken(sb)
+  const tk = await getFreshToken(sb, null, esc)
   if (!tk || !tk.token) return Response.json({ erro: 'sem acesso ao jus.br — entre no portal (a extensão sincroniza)', sem_sessao: true }, { status: 409 })
 
   if (searchParams.get('situacao') != null) {
@@ -478,7 +484,7 @@ export async function GET(request) {
     return Response.json({ ok: true, numero: mascara(dig), peticoes: r.peticoes, tentativas: r.tentativas })
   }
 
-  const m = await montarEnvelope(tk.token, dig, sb)
+  const m = await montarEnvelope(tk.token, dig, sb, esc)
   if (m.erro) return Response.json({ erro: m.erro }, { status: m.http === 401 ? 409 : 502 })
 
   // lista de tipos de documento (é o "Juntada de Petição de" da tela do portal)
@@ -521,11 +527,13 @@ export async function POST(request) {
   if (!bytes.length) return Response.json({ erro: 'o arquivo está vazio' }, { status: 400 })
   if (bytes.slice(0, 5).toString('latin1') !== '%PDF-') return Response.json({ erro: 'o arquivo precisa ser PDF' }, { status: 400 })
 
+  const esc = await escritorioDoUsuario(user.id)
+  if (!esc) return Response.json({ erro: 'usuário sem escritório vinculado' }, { status: 403 })
   const sb = jusbrAdmin()
-  const tk = await getFreshToken(sb)
+  const tk = await getFreshToken(sb, null, esc)
   if (!tk || !tk.token) return Response.json({ erro: 'sem acesso ao jus.br — entre no portal (a extensão sincroniza)', sem_sessao: true }, { status: 409 })
 
-  const m = await montarEnvelope(tk.token, dig, sb)
+  const m = await montarEnvelope(tk.token, dig, sb, esc)
   if (m.erro) return Response.json({ erro: m.erro }, { status: 502 })
   if (m.permitePeticionar === false) {
     return Response.json({ erro: 'o jus.br informa que este processo não aceita peticionamento pelo portal — protocole pelo sistema do próprio tribunal', nao_permite: true }, { status: 422 })
@@ -641,7 +649,7 @@ export async function POST(request) {
 
   // registra no histórico do processo
   try {
-    const { data: proc } = await sb.from('processos').select('id').eq('escritorio_id', ESCRITORIO_CMP).eq('numero_digitos', dig).maybeSingle()
+    const { data: proc } = await sb.from('processos').select('id').eq('escritorio_id', esc).eq('numero_digitos', dig).maybeSingle()
     if (proc && proc.id) {
       /* mesma fonte do protocolo confirmado à mão ('protocolo', providência):
          é o mesmo ato jurídico, e registrá-lo de dois jeitos diferentes fazia a

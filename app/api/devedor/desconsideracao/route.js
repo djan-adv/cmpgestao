@@ -29,7 +29,8 @@
 
 import { createClient } from '@supabase/supabase-js'
 import { chamarClaude } from '../../_ia/claude.js'
-import { getFreshToken, ESCRITORIO_CMP } from '../../jusbr/lib.js'
+import { getFreshToken } from '../../jusbr/lib.js'
+import { escritorioDoUsuario } from '../../_lib/inquilino.js'
 import { buscarProcesso, movimentosDoProcesso, extraiMeta, tramitacoesDoProcesso, buscarProcessosPorDocumento } from '../../jusbr/movimentos/core.js'
 
 export const dynamic = 'force-dynamic'
@@ -56,7 +57,7 @@ function admin() {
 function digitos(s) { return String(s || '').replace(/\D/g, '') }
 
 const MANUAL_DESCONSIDERACAO =
-  'Você é o(a) analista de execução do escritório Crispim, Mendonça e Pinheiro (CMP). Recebe trechos de movimentações processuais de processos em que UM CNPJ investigado (a pessoa jurídica devedora) figura como parte, e tem uma única tarefa: dizer se o trecho é uma movimentação de DESCONSIDERAÇÃO DA PERSONALIDADE JURÍDICA (IDPJ, art. 133 a 137 do CPC) contra essa empresa — e em que situação está.\n\n' +
+  'Você é o(a) analista de execução do escritório. Recebe trechos de movimentações processuais de processos em que UM CNPJ investigado (a pessoa jurídica devedora) figura como parte, e tem uma única tarefa: dizer se o trecho é uma movimentação de DESCONSIDERAÇÃO DA PERSONALIDADE JURÍDICA (IDPJ, art. 133 a 137 do CPC) contra essa empresa — e em que situação está.\n\n' +
   'CLASSIFIQUE cada trecho (campo situacao):\n' +
   '- "deferida": o juízo DEFERIU/ACOLHEU a desconsideração — sócio(s)/administrador(es) passam a responder com bens pessoais.\n' +
   '- "indeferida": o juízo NEGOU/REJEITOU o pedido de desconsideração.\n' +
@@ -115,9 +116,12 @@ export async function GET(request) {
   const origem = digitos(searchParams.get('numero'))
   if (cnpj.length !== 14) return Response.json({ erro: 'informe um CNPJ válido (14 dígitos)' }, { status: 400 })
 
+  const esc = await escritorioDoUsuario(user.id)
+  if (!esc) return Response.json({ erro: 'usuário sem escritório vinculado' }, { status: 403 })
   const sb = admin()
 
-  const tok = await getFreshToken(sb)
+  // sessão do jus.br do escritório de quem pediu — a consulta sai no nome dele
+  const tok = await getFreshToken(sb, null, esc)
   if (tok.erro) return Response.json({ erro: 'sessão do jus.br indisponível: ' + tok.erro + ' — sincronize o jus.br (ver instruções do Estagiário Virtual) e tente de novo.' }, { status: 502 })
 
   // 1) lista de processos onde o CNPJ é parte
@@ -159,7 +163,7 @@ export async function GET(request) {
   // marca o que já é do escritório (contexto)
   try {
     const nums = processos.map(p => p.numero)
-    const { data } = await sb.from('processos').select('numero_digitos,cliente_nome').eq('escritorio_id', ESCRITORIO_CMP).in('numero_digitos', nums)
+    const { data } = await sb.from('processos').select('numero_digitos,cliente_nome').eq('escritorio_id', esc).in('numero_digitos', nums)
     const porNum = {}
     for (const row of (data || [])) porNum[digitos(row.numero_digitos)] = row
     processos.forEach(p => { const row = porNum[p.numero]; if (row) { p.nosso = true; p.cliente = row.cliente_nome || null } })
@@ -197,7 +201,7 @@ export async function GET(request) {
     }).join('\n\n———\n\n')
 
     const r = await chamarClaude({
-      rotina: 'desconsideracao_pj', sb, ref: cnpj, escritorioId: ESCRITORIO_CMP,
+      rotina: 'desconsideracao_pj', sb, ref: cnpj, escritorioId: esc,
       modelo: 'claude-sonnet-5', maxTokens: 4000,
       sistemaFixo: MANUAL_DESCONSIDERACAO,
       conteudo: [{ type: 'text', text: 'CNPJ INVESTIGADO: ' + cnpj + '\n\nTRECHOS DAS MOVIMENTAÇÕES:\n\n' + blocos }],

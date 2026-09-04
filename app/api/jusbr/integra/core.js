@@ -123,8 +123,10 @@ export function docsDoPayload(data) {
   return out
 }
 
-export async function coletarPecas(sb, numero, { uuidsSel = [], preferirTexto = false } = {}) {
-  const sess = await getFreshToken(sb)
+// `esc` é o escritório dono do processo: é a sessão dele no jus.br que baixa as
+// peças. Sem esse parâmetro, todo mundo baixava com o certificado da casa.
+export async function coletarPecas(sb, numero, { uuidsSel = [], preferirTexto = false, esc = null } = {}) {
+  const sess = await getFreshToken(sb, null, esc)
   if (sess.erro) return { erro: 'jus.br: ' + sess.erro + ' — sincronize a sessão', motivo: sess.erro, status: 409 }
   const token = sess.token
   const uuidSet = uuidsSel.length ? new Set(uuidsSel) : null

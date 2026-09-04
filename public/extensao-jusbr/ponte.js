@@ -4,7 +4,7 @@
    certa e da própria janela. */
 (function () {
   'use strict';
-  var MARCA = '__cmp_jusbr_ponte__';
+  var MARCA = '__gj_jusbr_ponte__';
   window.addEventListener('message', function (ev) {
     try {
       if (ev.source !== window) return;

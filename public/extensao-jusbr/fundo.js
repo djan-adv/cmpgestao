@@ -1,11 +1,14 @@
-/* Serviço de fundo: é ele que fala com o CMPGestão.
+/* Serviço de fundo: é ele que fala com o GestãoJurídica.
    Aqui está o ganho real sobre o Tampermonkey: o portal do jus.br bloqueia, por
    CSP, qualquer envio saindo da página dele — por isso o userscript precisava
    guardar o token num cofre e esperar a aba do sistema estar aberta para
    entregá-lo. A extensão não tem esse limite: a requisição sai daqui, do
    próprio navegador, no instante da captura. O sistema pode estar fechado. */
 try { importScripts('padrao.js'); } catch (e) {}
-const PADRAO_ENDPOINT = (self.CMP_PADRAO && self.CMP_PADRAO.endpoint) || 'https://gestao.cmpadvogados.com.br/api/jusbr/token';
+/* O endereço vem do pacote gerado pelo sistema (padrao.js) ou das opções.
+   Não há endereço de fábrica: um domínio fixo aqui seria o endereço de um
+   escritório dentro do pacote de todos os outros. */
+const PADRAO_ENDPOINT = (self.GJ_PADRAO && self.GJ_PADRAO.endpoint) || '';
 let ultimoToken = '';
 let ultimoEnvio = 0;
 
@@ -24,6 +27,7 @@ async function situacao(estado, cor, detalhe) {
 async function enviar(msg) {
   const { endpoint, segredo } = await cfg();
   if (!segredo) return situacao('falta o segredo — abra as opções da extensão', 'vermelho');
+  if (!endpoint) return situacao('falta o endereço do sistema — abra as opções da extensão', 'vermelho');
   /* o mesmo token não precisa ir de novo a cada requisição do portal */
   if (msg.token === ultimoToken && (Date.now() - ultimoEnvio) < 5 * 60 * 1000) return;
   ultimoToken = msg.token; ultimoEnvio = Date.now();
@@ -58,7 +62,7 @@ async function enviar(msg) {
    mesma chave. Aqui não há o rodeio do cofre: sai na hora. */
 async function aprender(dados) {
   const { endpoint, segredo } = await cfg();
-  if (!segredo || !dados) return;
+  if (!segredo || !endpoint || !dados) return;
   try {
     await fetch(endpoint.replace(/\/token$/, '/aprender'), {
       method: 'POST',
@@ -105,7 +109,7 @@ chrome.runtime.onMessage.addListener((msg, remetente, responder) => {
 });
 /* baixada pelo próprio sistema, a extensão já vem pareada: nada a colar */
 async function semear() {
-  const p = self.CMP_PADRAO || {};
+  const p = self.GJ_PADRAO || {};
   if (!p.segredo) return;
   const o = await chrome.storage.local.get(['endpoint', 'segredo']);
   if (o.segredo) return;                       /* já configurada: não sobrescreve */

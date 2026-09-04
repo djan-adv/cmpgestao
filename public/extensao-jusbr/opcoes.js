@@ -12,7 +12,7 @@ if (typeof chrome === 'undefined' || !chrome.storage || !chrome.storage.local) {
     + '<p class="n">Você abriu o arquivo <b>opcoes.html</b> direto da pasta. Assim ele é só uma página — a extensão não está instalada, e por isso os campos aparecem vazios.</p>'
     + '<p class="n"><b>Para instalar:</b><br>1. Abra <b>chrome://extensions</b> (no Edge: <b>edge://extensions</b>).<br>'
     + '2. Ligue o <b>Modo do desenvolvedor</b>.<br>'
-    + '3. Clique em <b>Carregar sem compactação</b> (Edge: <b>Carregar descompactado</b>) e escolha a pasta <b>cmpgestao-jusbr</b> inteira — a pasta, não um arquivo.<br>'
+    + '3. Clique em <b>Carregar sem compactação</b> (Edge: <b>Carregar descompactado</b>) e escolha a pasta <b>gestaojuridica-jusbr</b> inteira — a pasta, não um arquivo.<br>'
     + '4. Depois clique no ícone da extensão (quebra-cabeça na barra do navegador).</p>'
     + '<p class="n">Baixando o .zip pelo sistema (Robôs → jus.br), a chave já vem dentro: não há nada para colar.</p>';
   throw new Error('fora da extensão');
@@ -21,7 +21,7 @@ const CORES = { verde: ['#e9f6f0', '#0f5c46'], amarelo: ['#fdf3e7', '#8a5a00'], 
 
 async function pintar() {
   const o = await chrome.storage.local.get(['endpoint', 'segredo', 'estado', 'cor', 'detalhe', 'quando', 'aprendidos']);
-  $('endpoint').value = o.endpoint || 'https://gestao.cmpadvogados.com.br/api/jusbr/token';
+  $('endpoint').value = o.endpoint || '';
   $('segredo').value = o.segredo || '';
   const c = CORES[o.cor] || CORES.amarelo;
   const q = o.quando ? new Date(o.quando).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
