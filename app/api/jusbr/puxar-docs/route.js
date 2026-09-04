@@ -12,6 +12,7 @@ import { jusbrAdmin, getFreshToken, tipoRealDoArquivo } from '../lib.js'
 import { escritoriosAtivos, usuarioDoRequest, escritorioDoUsuario } from '../../_lib/inquilino.js'
 import { anotarRobo } from '../../_lib/robolog.js'
 import { camposConteudo } from '../guardar.js'
+import { cabeMais, contabilizar } from '../../../../lib/espaco.js'
 import { ehOficial, copiarParaAppCliente } from '../../../../lib/appCliente.js'
 import { docsDoPayload } from '../integra/core.js'
 
@@ -153,6 +154,20 @@ async function rodarPara(esc, opcoes) {
       if (total >= maxTotal) break
       const r = await baixarDoc(token, numero, d)
       if (r.erro) { rel.pulados++; if (r.erro === 'expirado') { rel.detalhe.push({ numero, erro: 'expirado' }); total = maxTotal; break } continue }
+
+      // Teto de disco do plano. Este robô é o maior consumidor de espaço do
+      // sistema — traz a íntegra dos autos — e sem porteiro ele sozinho estoura
+      // o 1 GB de um teste em uma tarde. Sem espaço, para o escritório inteiro
+      // nesta rodada: continuar processo a processo só encheria o relatório de
+      // erro igual.
+      const espaco = await cabeMais(esc.id, r.buf.length, sb)
+      if (!espaco.cabe) {
+        rel.detalhe.push({ numero, erro: 'sem espaço no plano do escritório' })
+        rel.sem_espaco = true
+        total = maxTotal
+        break
+      }
+
       const linha = {
         escritorio_id: esc.id, processo_numero: numero, doc_uuid: d.uuid,
         doc_nome: d.nome, doc_tipo: r.tipo, tamanho: r.buf.length,
@@ -164,6 +179,7 @@ async function rodarPara(esc, opcoes) {
       const ins = await sb.from('jusbr_arquivos').insert(linha).select('id').single()
       if (!ins.error) {
         baix++; total++; rel.baixados++
+        contabilizar(esc.id, r.buf.length)
         // espelha na pasta "App do Cliente" (é o que o cliente vê no app)
         if (ehOficial(d.nome, r.tipo)) { try { copiarParaAppCliente(numero, d.nome, r.buf, esc.id) } catch (e) {} }
       }

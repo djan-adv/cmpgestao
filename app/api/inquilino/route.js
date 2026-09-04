@@ -31,7 +31,7 @@ export async function GET(request) {
   })
   const { data } = await sb
     .from('escritorios')
-    .select('id,nome,marca,ativo,raiz,dados')
+    .select('id,nome,marca,ativo,raiz,dados,teste_ate,suspenso_motivo')
     .contains('hosts', [host])
     .maybeSingle()
 
@@ -54,6 +54,13 @@ export async function GET(request) {
     escritorio_id: data.id,
     raiz: !!data.raiz,
     ativo: data.ativo !== false,
+    // Por que a porta está fechada. Sem isto, o escritório bloqueado veria um
+    // sistema vazio e ligaria perguntando se perdeu os processos — que é
+    // exatamente o susto que o fim do teste não pode causar.
+    suspenso_motivo: data.ativo === false ? (data.suspenso_motivo || null) : null,
+    // Período de teste: a tela mostra quantos dias faltam. É informação do
+    // endereço, não do acervo — pode sair antes do login.
+    teste_ate: data.teste_ate || null,
     nome: data.nome,
     marca: {
       sistema: marca.sistema || null,   // nome que aparece no lugar de "Gestão"

@@ -89,6 +89,10 @@ const JOBS = [
   // audiências/reuniões → Google Calendar (com Meet automático nas reuniões).
   // Sem custo quando não há autorização ainda (só confirma e sai).
   { nome: 'google_sync', rotulo: 'Agenda — sincronizar com o Google Calendar', url: '/api/cron/google-sync', cada_min: 10 },
+  // Período de teste: avisa a 10, a 3 e no último dia; depois bloqueia o acesso
+  // sem apagar nada, mantendo a captura do diário durante a carência. Roda uma
+  // vez por dia, de manhã — aviso de fim de teste às 3 da madrugada não é aviso.
+  { nome: 'testes_30_dias', rotulo: 'Teste de 30 dias — avisar e encerrar', url: '/api/cron/testes', diario_hora: 9 },
 ]
 
 function jobDevido(job, execRow, bt) {

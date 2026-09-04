@@ -27372,5 +27372,74 @@ async function cadastrarOabUm(k,btn){
   },800);
 })();
 </script>
+
+<script>
+/* ————————————————————————————————————————————————————————————————
+   Período de teste e acesso bloqueado.
+
+   Vive num bloco próprio, com a própria consulta a /api/inquilino, porque é
+   justamente quando o escritório está bloqueado que o RESTO da tela não
+   consegue se carregar: a RLS passa a devolver vazio, e `_carregarEscritorio`
+   volta sem nada. Se o aviso dependesse do carregamento normal, quem fosse
+   bloqueado veria um sistema vazio, sem explicação — e ligaria perguntando se
+   perdeu os processos. Que é o susto que o fim de um teste não pode causar.
+
+   A rota /api/inquilino responde pelo ENDEREÇO, com a chave de serviço, e não
+   depende de login. Por isso funciona mesmo com a porta fechada.
+   ———————————————————————————————————————————————————————————————— */
+(function(){
+  function diasAte(d){
+    if(!d) return null;
+    var hoje=new Date(); hoje.setHours(0,0,0,0);
+    var alvo=new Date(String(d)+'T00:00:00'); alvo.setHours(0,0,0,0);
+    return Math.round((alvo-hoje)/86400000);
+  }
+  function br(d){ return String(d||'').split('-').reverse().join('/'); }
+
+  function telaBloqueada(info){
+    var motivo=info.suspenso_motivo||'O acesso a este escritório está suspenso.';
+    var d=document.createElement('div');
+    d.id='esc-bloqueado';
+    d.style.cssText='position:fixed;inset:0;z-index:99999;background:#f6f7f9;display:flex;align-items:center;justify-content:center;padding:20px;font:14px system-ui,Segoe UI,Arial,sans-serif';
+    d.innerHTML='<div style="max-width:520px;background:#fff;border:1px solid #e4e8ef;border-radius:12px;padding:26px 24px;box-shadow:0 6px 28px rgba(20,30,50,.10)">'
+      +'<div style="font-size:22px;font-weight:700;color:#2E3A4B;margin:0 0 12px">Acesso suspenso</div>'
+      +'<p style="margin:0 0 12px;line-height:1.55;color:#3a4658">'+String(motivo).replace(/</g,'&lt;')+'</p>'
+      +'<p style="margin:0 0 12px;line-height:1.55;color:#3a4658"><b>Nenhum dado foi apagado.</b> Processos, prazos, documentos e histórico continuam guardados e voltam exatamente como estavam assim que o acesso for restabelecido.</p>'
+      +'<p style="margin:0;line-height:1.55;color:#697180;font-size:13px">Para reativar, fale com quem cuida do contrato.</p>'
+      +'</div>';
+    document.body.appendChild(d);
+  }
+
+  function faixaDeTeste(dias, info){
+    var urgente = dias<=3;
+    var f=document.createElement('div');
+    f.id='faixa-teste';
+    f.style.cssText='position:fixed;left:12px;bottom:12px;z-index:9990;max-width:300px;'
+      +'background:'+(urgente?'#8a1c1c':'#2E3A4B')+';color:#fff;border-radius:10px;'
+      +'padding:9px 12px;font:12.5px system-ui,Segoe UI,Arial,sans-serif;line-height:1.45;'
+      +'box-shadow:0 4px 18px rgba(20,30,50,.22)';
+    var quanto = dias<=0 ? 'Último dia de teste' : ('Teste — falta'+(dias===1?'':'m')+' '+dias+' dia'+(dias===1?'':'s'));
+    f.innerHTML='<b>'+quanto+'</b><div style="opacity:.85;margin-top:3px">Até '+br(info.teste_ate)
+      +'. Ao contratar, os limites sobem e <b>nada é apagado</b>.</div>';
+    f.title='No teste cabem 200 processos, 10 acessos e 1 GB de documentos. O sistema inteiro está liberado.';
+    document.body.appendChild(f);
+  }
+
+  async function ver(){
+    try{
+      var r=await fetch('/api/inquilino',{cache:'no-store'});
+      var info=await r.json();
+      if(!info||!info.ok||!info.conhecido) return;
+      if(info.raiz) return;                    /* a casa não tem teste nem bloqueio */
+      if(info.ativo===false){ telaBloqueada(info); return; }
+      var d=diasAte(info.teste_ate);
+      if(d==null) return;
+      faixaDeTeste(d, info);
+    }catch(e){}
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',ver);
+  else ver();
+})();
+</script>
 </body>
 </html>

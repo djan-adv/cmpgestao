@@ -11,6 +11,7 @@ import path from 'path'
 import { contaDemo, respostaDemo } from '../../../lib/demo.js'
 import { escritorioDoUsuario, semEscritorio, raizDocs } from '../_lib/inquilino.js'
 import { carimboDoPedido, marcarPdf, marcarHtml, tipoCarimbavel } from '../../../lib/marcadagua.js'
+import { cabeMais, contabilizar } from '../../../lib/espaco.js'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -375,10 +376,18 @@ export async function POST(request) {
     return Response.json({ ok: true, path: rel })
   }
 
-  fs.mkdirSync(path.dirname(full), { recursive: true })
   const buf = Buffer.from(b.b64 || '', 'base64')
+
+  // Teto de disco do plano. Confere-se ANTES de gravar e a cada pedaço do
+  // upload — arquivo grande sobe em partes, e conferir só na primeira deixaria
+  // passar justamente o que estoura. A raiz e quem não tem teto nem chegam aqui.
+  const espaco = await cabeMais(esc, buf.length)
+  if (!espaco.cabe) return Response.json({ erro: espaco.erro, sem_espaco: true }, { status: 507 })
+
+  fs.mkdirSync(path.dirname(full), { recursive: true })
   if (b.append) fs.appendFileSync(full, buf)
   else fs.writeFileSync(full, buf)
+  contabilizar(esc, buf.length)
   if (b.mtime) { try { const t = new Date(b.mtime); if (!isNaN(t)) fs.utimesSync(full, t, t) } catch (e) {} }
   return Response.json({ ok: true, bytes: buf.length, path: rel })
 }

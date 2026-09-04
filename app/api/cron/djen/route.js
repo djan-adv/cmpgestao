@@ -89,7 +89,13 @@ export async function GET(request) {
   const sb = createClient(url, svcKey, { auth: { persistSession: false } })
 
   // Uma varredura por escritório: cada um procura as PRÓPRIAS inscrições.
-  let escs = await escritoriosAtivos()
+  //
+  // 'coleta' inclui também quem está bloqueado mas ainda dentro da carência
+  // (teste vencido, fatura em aberto). O escritório não entra no sistema, e
+  // nada é enviado em nome dele — mas a publicação do dia continua sendo
+  // guardada. Fim de contrato não pode virar prazo perdido, e a publicação que
+  // não é capturada no dia não volta depois.
+  let escs = await escritoriosAtivos('coleta')
   // o painel de robôs do escritório roda o robô DELE, não a rodada de todos
   const soEste = searchParams.get('esc')
   if (soEste) escs = escs.filter(e => e.id === soEste)

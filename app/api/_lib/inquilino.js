@@ -181,8 +181,27 @@ export function bloqueioDeCanal(res) {
 // está dito em cada um deles, não subentendido.
 export async function escritoriosAtivos(filtro) {
   const sb = admin()
-  const { data } = await sb.from('escritorios').select('id,nome,raiz,oabs,modulos').eq('ativo', true)
+  const { data } = await sb.from('escritorios').select('id,nome,raiz,oabs,modulos,ativo,coleta_ate').eq('ativo', true)
   let lista = data || []
+
+  // CARÊNCIA DE COLETA. Escritório suspenso (teste vencido, fatura em aberto)
+  // sai da lista por não estar ativo — e com ele sai a varredura do diário.
+  // Isso transforma uma pendência comercial em prazo perdido: a publicação sai
+  // no dia seguinte ao bloqueio e não entra em lugar nenhum, nem quando o
+  // cliente volta.
+  //
+  // Por isso o filtro 'coleta' — usado SÓ pelos robôs que capturam e guardam,
+  // nunca pelos que enviam algo em nome do escritório. Bloqueado ele não entra
+  // e nada sai no nome dele; o acervo, esse continua sendo alimentado até a
+  // data de carência.
+  if (filtro === 'coleta') {
+    const hoje = new Date().toISOString().slice(0, 10)
+    const { data: emCarencia } = await sb.from('escritorios')
+      .select('id,nome,raiz,oabs,modulos,ativo,coleta_ate')
+      .eq('ativo', false).gte('coleta_ate', hoje)
+    const jaTem = new Set(lista.map(e => e.id))
+    for (const e of emCarencia || []) if (!jaTem.has(e.id)) lista.push(e)
+  }
   // com sessão do jus.br: só faz sentido varrer tribunal para quem tem
   // certificado sincronizado. Os demais nem entram na fila.
   if (filtro === 'jusbr') {
@@ -191,6 +210,8 @@ export async function escritoriosAtivos(filtro) {
     lista = lista.filter(e => comSessao.has(e.id))
   }
   // varredura do diário: só quem cadastrou OAB
+  // (o filtro 'coleta' não entra aqui: a raiz varre por uma lista de OAB
+  // escrita no próprio robô, e filtrar por `oabs` a tiraria da rodada)
   if (filtro === 'oab') lista = lista.filter(e => Array.isArray(e.oabs) && e.oabs.length > 0)
   return lista
 }

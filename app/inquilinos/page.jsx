@@ -10,6 +10,7 @@ const NAVY = '#2E3A4B'
 const cardStyle = { background: '#fff', border: '1px solid #e4e8ef', borderRadius: 12, padding: 16, marginBottom: 14 }
 const inputStyle = { width: '100%', padding: 9, border: '1px solid #cbd5e1', borderRadius: 8, boxSizing: 'border-box', fontSize: 14 }
 const rotulo = { fontSize: 12, color: '#697180', display: 'block', marginBottom: 3 }
+const botaoClaro = { padding: '7px 12px', background: '#fff', border: '1px solid #cbd5e1', borderRadius: 7, fontSize: 12.5, cursor: 'pointer' }
 
 export default function Inquilinos() {
   const [lista, setLista] = useState([])
@@ -98,6 +99,14 @@ export default function Inquilinos() {
   const ativos = lista.filter(e => e.ativo !== false)
   const suspensos = lista.filter(e => e.ativo === false)
   const brl = (v) => v == null ? '—' : Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+  const dataBR = (d) => String(d || '').split('-').reverse().join('/')
+  // dias de calendário até a data (negativo = já venceu)
+  const diasAte = (d) => {
+    if (!d) return null
+    const hoje = new Date(); hoje.setHours(0, 0, 0, 0)
+    const alvo = new Date(String(d) + 'T00:00:00'); alvo.setHours(0, 0, 0, 0)
+    return Math.round((alvo - hoje) / 86400000)
+  }
 
   function Linha({ e }) {
     const abertoAqui = aberto === e.id
@@ -107,6 +116,13 @@ export default function Inquilinos() {
           <div style={{ fontWeight: 600 }}>{e.nome}</div>
           {e.raiz && <span style={{ fontSize: 11, color: '#697180' }}>administra o sistema</span>}
           {e.ativo === false && <span style={{ fontSize: 11, color: '#b5342b', fontWeight: 600 }}>suspenso</span>}
+          {e.teste_ate && (() => {
+            const d = diasAte(e.teste_ate)
+            return <span style={{ fontSize: 11, fontWeight: 600, color: d < 0 ? '#b5342b' : (d <= 3 ? '#8a1c1c' : '#0F6E56') }}>
+              {d < 0 ? 'teste vencido em ' + dataBR(e.teste_ate)
+                     : 'em teste — ' + d + (d === 1 ? ' dia' : ' dias') + ' (até ' + dataBR(e.teste_ate) + ')'}
+            </span>
+          })()}
           {e.pausa_ate && <span style={{ fontSize: 11, color: '#8a6d00' }}>cobrança pausada até {e.pausa_ate}</span>}
           {!e.raiz && (
             <button onClick={() => abrirGestao(e.id)}
@@ -124,6 +140,7 @@ export default function Inquilinos() {
           {' · '}
           processos {e.uso ? e.uso.processos : '—'}{e.limite_processos ? '/' + e.limite_processos : ' (sem limite)'}
           {e.limite_gb ? ' · até ' + e.limite_gb + ' GB' : ''}
+          {e.ia_teto_brl ? ' · IA até ' + brl(e.ia_teto_brl) + '/mês' : ''}
         </div>
         {abertoAqui && <PainelGestao e={e} />}
       </div>
@@ -136,6 +153,8 @@ export default function Inquilinos() {
       desconto: e.desconto ?? '', pausa_ate: e.pausa_ate || '', observacoes: e.observacoes || '',
     })
     const [comp, setComp] = useState(new Date().toISOString().slice(0, 7))
+    const [t, setT] = useState({ teste_ate: e.teste_ate || '', ia_teto_brl: e.ia_teto_brl ?? '' })
+    const [m, setM] = useState({ ...(e.modulos || {}) })
     return (
       <div style={{ marginTop: 10, padding: 12, background: '#f7f9fc', border: '1px solid #e4e8ef', borderRadius: 10 }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10 }}>
@@ -165,6 +184,50 @@ export default function Inquilinos() {
         <div style={{ marginTop: 8 }}>
           <label style={rotulo}>Anotações do contrato</label>
           <input style={inputStyle} value={c.observacoes} onChange={ev => setC({ ...c, observacoes: ev.target.value })} />
+        </div>
+
+        {/* Período de teste e módulos. Nasceram juntos porque resolvem o mesmo
+            problema: até aqui, prorrogar um teste ou liberar o Estagiário
+            Virtual para um cliente exigia rodar UPDATE no banco — o cliente
+            pedia pela tela, o pedido chegava, e a resposta dependia de alguém
+            abrir o SQL. */}
+        <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px dashed #d8e0ea' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10, alignItems: 'end' }}>
+            <div>
+              <label style={rotulo}>Teste até</label>
+              <input style={inputStyle} type="date" value={t.teste_ate}
+                onChange={ev => setT({ ...t, teste_ate: ev.target.value })} />
+            </div>
+            <div>
+              <label style={rotulo}>Teto de IA (R$/mês)</label>
+              <input style={inputStyle} type="number" step="1" placeholder="sem teto" value={t.ia_teto_brl}
+                onChange={ev => setT({ ...t, ia_teto_brl: ev.target.value })} />
+            </div>
+            <div style={{ gridColumn: 'span 2', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button onClick={() => acao({ acao: 'teste', id: e.id, teste_ate: t.teste_ate || null, ia_teto_brl: t.ia_teto_brl })}
+                style={botaoClaro}>Salvar teste</button>
+              <button onClick={() => acao({ acao: 'teste', id: e.id, dias_mais: 7 })} style={botaoClaro}>+7 dias</button>
+              <button onClick={() => acao({ acao: 'teste', id: e.id, dias_mais: 30 })} style={botaoClaro}>+30 dias</button>
+            </div>
+          </div>
+
+          <div style={{ marginTop: 10, display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
+            <span style={{ ...rotulo, margin: 0 }}>Módulos</span>
+            <label style={{ fontSize: 12.5, display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer' }}>
+              <input type="checkbox" checked={!!m.estagiario}
+                onChange={ev => { const v = { ...m, estagiario: ev.target.checked }; setM(v); acao({ acao: 'modulos', id: e.id, modulos: v }) }} />
+              Estagiário e Secretária Virtual <span style={{ color: '#697180' }}>(consome IA)</span>
+            </label>
+            <label style={{ fontSize: 12.5, display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer' }}>
+              <input type="checkbox" checked={!!m.email}
+                onChange={ev => { const v = { ...m, email: ev.target.checked }; setM(v); acao({ acao: 'modulos', id: e.id, modulos: v }) }} />
+              Envio e leitura de e-mail
+            </label>
+          </div>
+          <p style={{ fontSize: 11.5, color: '#697180', margin: '6px 0 0' }}>
+            O e-mail também se liga sozinho quando o escritório cadastra a conta dele e passa no teste de envio.
+            Contratar um plano encerra o teste e devolve o acesso automaticamente.
+          </p>
         </div>
 
         <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>

@@ -65,3 +65,46 @@ export function limitesDoPlano(codigo) {
     limite_gb: p.limite_gb,
   }
 }
+
+// ————— período de teste —————
+//
+// Não se escolhe plano para testar: testa-se o sistema INTEIRO. O plano é
+// escolhido na hora de contratar, e aí os limites sobem — sem que nada tenha
+// sido apagado no caminho. O que o teste limita é tamanho, não função.
+//
+// Os números existem para proteger o disco e o banco de todos os outros: um
+// teste que traga um acervo inteiro consumiria sozinho o que sustenta os
+// clientes que pagam.
+export const DIAS_TESTE = 30
+
+// Depois de o teste vencer, o acesso para mas os robôs continuam COLETANDO por
+// este tanto de dias. É o que impede o fim do teste de virar prazo perdido:
+// quem contratar depois encontra o histórico do período inteiro no lugar.
+export const DIAS_CARENCIA_COLETA = 10
+
+export const LIMITES_TESTE = {
+  limite_acessos: 10,
+  limite_processos: 200,
+  limite_gb: 1,
+  // Teto de IA do período, em reais. O teste dá acesso às rotinas de IA
+  // (Estagiário, Secretária, suporte), e elas custam dinheiro de verdade a
+  // cada rodada — sem teto próprio, um teste consome o orçamento de IA da casa
+  // inteira. Este valor é custo de aquisição, não prejuízo.
+  ia_teto_brl: 30,
+}
+
+// A data em que um teste começado hoje vence.
+export function fimDoTeste(dias) {
+  const d = new Date()
+  d.setDate(d.getDate() + (Number(dias) || DIAS_TESTE))
+  return d.toISOString().slice(0, 10)
+}
+
+// Quantos dias faltam para a data (negativo = já venceu). Conta em dias de
+// calendário, não em horas: "falta 1 dia" tem de valer o dia inteiro.
+export function diasAte(data) {
+  if (!data) return null
+  const hoje = new Date(); hoje.setHours(0, 0, 0, 0)
+  const alvo = new Date(String(data) + 'T00:00:00'); alvo.setHours(0, 0, 0, 0)
+  return Math.round((alvo - hoje) / 86400000)
+}

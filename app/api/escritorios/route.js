@@ -20,7 +20,7 @@
 import { createClient } from '@supabase/supabase-js'
 import crypto from 'crypto'
 import { enviarEmailConta } from '../_lib/email-conta.js'
-import { PLANOS, limitesDoPlano, plano } from '../_lib/planos.js'
+import { PLANOS, limitesDoPlano, plano, LIMITES_TESTE, DIAS_TESTE, DIAS_CARENCIA_COLETA, fimDoTeste } from '../_lib/planos.js'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -88,7 +88,7 @@ export async function POST(request) {
     if (acao === 'listar') {
       const { data, error } = await sb
         .from('escritorios')
-        .select('id,nome,subdominio,hosts,plano,plano_codigo,ativo,raiz,limite_acessos,limite_processos,limite_gb,mensalidade,desconto,pausa_ate,suspenso_em,suspenso_motivo,observacoes,criado_em')
+        .select('id,nome,subdominio,hosts,plano,plano_codigo,ativo,raiz,limite_acessos,limite_processos,limite_gb,mensalidade,desconto,pausa_ate,suspenso_em,suspenso_motivo,observacoes,criado_em,teste_ate,coleta_ate,ia_teto_brl,modulos')
         .order('criado_em', { ascending: true })
       if (error) throw new Error(error.message)
       // quantos acessos e quantos processos cada um já usa (para mostrar o
@@ -123,6 +123,33 @@ export async function POST(request) {
       if (jaUser) return Response.json({ erro: 'Este e-mail já tem acesso ao sistema.' }, { status: 409 })
 
       const sub = host.split('.')[0]
+
+      // Todo escritório novo nasce EM TESTE, com o sistema inteiro na mão e o
+      // tamanho limitado. Não se escolhe plano para testar — escolhe-se ao
+      // contratar, e aí os limites sobem sem que nada tenha sido apagado.
+      // Quem quiser criar já contratado manda `plano` diferente de 'teste' (ou
+      // os limites na mão), e nenhuma data de teste é gravada.
+      const ehTeste = String(body.plano || 'teste') === 'teste'
+      const dias = parseInt(body.dias_teste, 10) > 0 ? parseInt(body.dias_teste, 10) : DIAS_TESTE
+      const escolhido = (n) => body[n] == null || body[n] === '' ? null : Number(body[n])
+      const limites = ehTeste
+        ? {
+            limite_acessos: escolhido('limite_acessos') ?? LIMITES_TESTE.limite_acessos,
+            limite_processos: escolhido('limite_processos') ?? LIMITES_TESTE.limite_processos,
+            limite_gb: escolhido('limite_gb') ?? LIMITES_TESTE.limite_gb,
+            ia_teto_brl: escolhido('ia_teto_brl') ?? LIMITES_TESTE.ia_teto_brl,
+            teste_ate: fimDoTeste(dias),
+          }
+        : {
+            // Nulo = sem teto. É como entram os primeiros clientes, com o
+            // sistema inteiro liberado.
+            limite_acessos: escolhido('limite_acessos'),
+            limite_processos: escolhido('limite_processos'),
+            limite_gb: escolhido('limite_gb'),
+            ia_teto_brl: escolhido('ia_teto_brl'),
+            teste_ate: null,
+          }
+
       const { data: esc, error: e1 } = await sb.from('escritorios').insert({
         nome,
         subdominio: sub,
@@ -132,11 +159,10 @@ export async function POST(request) {
         mensalidade: body.mensalidade == null || body.mensalidade === '' ? null : Number(body.mensalidade),
         ativo: true,
         raiz: false,
-        // Nulo = sem teto. Os primeiros clientes entram com o sistema inteiro
-        // liberado; restringir depois é editar estes campos, não mexer no código.
-        limite_acessos: body.limite_acessos == null ? null : parseInt(body.limite_acessos, 10),
-        limite_processos: body.limite_processos == null ? null : parseInt(body.limite_processos, 10),
-        limite_gb: body.limite_gb == null ? null : Number(body.limite_gb),
+        ...limites,
+        // Nulo = todos os módulos ligados. O teste é do sistema INTEIRO: quem
+        // testa metade não compra — e o que segura o custo é o teto, não o
+        // portão.
         modulos: null,
         criado_em_por: dono.id,
       }).select('id,nome').single()
@@ -173,6 +199,13 @@ export async function POST(request) {
           'Entre com o e-mail <b>' + escaparTexto(email) + '</b> e a senha provisória abaixo:',
           '<b style="font-size:22px;letter-spacing:2px">' + senha + '</b>',
           'No primeiro acesso o sistema pede uma senha nova, só sua. A provisória deixa de valer nesse momento.',
+          ...(limites.teste_ate ? [
+            'Você tem <b>' + dias + ' dias de teste</b>, com o sistema inteiro liberado, até <b>' +
+              limites.teste_ate.split('-').reverse().join('/') + '</b>. No teste cabem ' +
+              limites.limite_processos + ' processos, ' + limites.limite_acessos + ' acessos e ' +
+              limites.limite_gb + ' GB de documentos.',
+            'Ao contratar, você escolhe o plano e os limites sobem. <b>Nada é apagado no caminho</b>: o que você cadastrar no teste continua lá.',
+          ] : []),
         ],
         botao: { texto: 'Entrar no sistema', url: 'https://' + host },
       })
@@ -180,6 +213,7 @@ export async function POST(request) {
       return Response.json({
         ok: true,
         escritorio: esc,
+        teste_ate: limites.teste_ate,
         contratante: { email, nome: nomeContratante },
         // A senha volta na tela porque o e-mail pode não sair (SMTP fora do ar,
         // caixa cheia) e o cliente estar esperando do outro lado da linha.
@@ -226,6 +260,19 @@ export async function POST(request) {
         // os limites do degrau são COPIADOS agora; o plano pode mudar depois
         // sem alterar quem já está dentro
         Object.assign(patch, lim)
+        // Contratar É o fim do teste. Sem isto, o escritório que acabou de
+        // pagar continuaria com a data correndo e seria bloqueado por um robô
+        // no meio da semana seguinte — o pior jeito possível de receber um
+        // cliente novo. E o que estava suspenso volta ao ar no mesmo ato.
+        patch.plano = 'pago'
+        patch.teste_ate = null
+        patch.coleta_ate = null
+        patch.suspenso_em = null
+        patch.suspenso_motivo = null
+        patch.ativo = true
+        // O teto de IA do teste era proteção contra teste caro. Mantê-lo em
+        // quem passou a pagar sufocaria o Estagiário no primeiro mês, calado.
+        if (!('ia_teto_brl' in body)) patch.ia_teto_brl = null
         // O preço de tabela só entra quando o escritório ainda NÃO tem
         // mensalidade e o operador não digitou uma. Trocar o degrau de quem já
         // negociou desconto não pode devolvê-lo ao preço cheio sem ninguém
@@ -244,6 +291,62 @@ export async function POST(request) {
       return Response.json({ ok: true })
     }
 
+    // Módulos ligados/desligados. Até aqui a única forma de liberar o
+    // Estagiário e a Secretária Virtual para um escritório era rodar UPDATE no
+    // banco — o cliente pedia pela tela, o pedido chegava, e a resposta
+    // dependia de alguém abrir o SQL. Vender sozinho não convive com isso.
+    if (acao === 'modulos') {
+      const id = String(body.id || '')
+      if (!id) return Response.json({ erro: 'id ausente' }, { status: 400 })
+      const mods = body.modulos && typeof body.modulos === 'object' ? body.modulos : null
+      if (!mods) return Response.json({ erro: 'informe os módulos' }, { status: 400 })
+      const { data: atual } = await sb.from('escritorios').select('modulos').eq('id', id).maybeSingle()
+      const novo = { ...(atual?.modulos || {}) }
+      // Lista fechada: chave inventada aqui viraria módulo fantasma, ligado no
+      // banco e ignorado pelo código.
+      for (const k of ['estagiario', 'email']) {
+        if (k in mods) novo[k] = mods[k] === true
+      }
+      const { error } = await sb.from('escritorios').update({ modulos: novo }).eq('id', id)
+      if (error) throw new Error(error.message)
+      return Response.json({ ok: true, modulos: novo })
+    }
+
+    // Período de teste: estender, encerrar na hora, ou mexer no teto de IA.
+    // Prorrogar tem de ser um clique — a conversa "me dá mais uma semana"
+    // acontece toda vez, e a alternativa é o cliente ser bloqueado no meio
+    // dela.
+    if (acao === 'teste') {
+      const id = String(body.id || '')
+      if (!id) return Response.json({ erro: 'id ausente' }, { status: 400 })
+      const patch = {}
+      if ('teste_ate' in body) patch.teste_ate = body.teste_ate || null
+      if ('ia_teto_brl' in body) {
+        patch.ia_teto_brl = body.ia_teto_brl === '' || body.ia_teto_brl == null ? null : Number(body.ia_teto_brl)
+      }
+      if (body.dias_mais) {
+        const { data: e0 } = await sb.from('escritorios').select('teste_ate').eq('id', id).maybeSingle()
+        // Prorrogação conta a partir do vencimento, não de hoje: prorrogar no
+        // dia 3 um teste que vence no dia 10 não pode ENCURTAR o prazo.
+        const base = e0 && e0.teste_ate && e0.teste_ate > new Date().toISOString().slice(0, 10)
+          ? new Date(e0.teste_ate + 'T00:00:00') : new Date()
+        base.setDate(base.getDate() + parseInt(body.dias_mais, 10))
+        patch.teste_ate = base.toISOString().slice(0, 10)
+      }
+      // Reabrir um teste vencido devolve o acesso junto: senão o painel diz
+      // "vai até dia tal" e a porta continua fechada.
+      if (patch.teste_ate && patch.teste_ate >= new Date().toISOString().slice(0, 10)) {
+        patch.ativo = true
+        patch.coleta_ate = null
+        patch.suspenso_em = null
+        patch.suspenso_motivo = null
+      }
+      if (!Object.keys(patch).length) return Response.json({ erro: 'nada a alterar' }, { status: 400 })
+      const { error } = await sb.from('escritorios').update(patch).eq('id', id)
+      if (error) throw new Error(error.message)
+      return Response.json({ ok: true, teste_ate: patch.teste_ate })
+    }
+
     // Suspender é o oposto de excluir: o acervo fica intacto, o acesso para.
     // Para escritório de advocacia, apagar é destruir processo com prazo
     // correndo dentro — por isso a saída padrão é esta.
@@ -254,10 +357,18 @@ export async function POST(request) {
       if (!alvo) return Response.json({ erro: 'Escritório não encontrado.' }, { status: 404 })
       if (alvo.raiz) return Response.json({ erro: 'O escritório que administra o sistema não pode ser suspenso.' }, { status: 400 })
       const suspender = acao === 'suspender'
+      // Carência de coleta: o acesso para hoje, mas o robô do diário continua
+      // varrendo e guardando por mais alguns dias. Cortar a captura no mesmo
+      // instante em que se corta o acesso é o jeito mais fácil de um
+      // escritório perder prazo por causa de uma fatura — e de a culpa disso
+      // sobrar para quem vendeu o sistema.
+      const carencia = new Date()
+      carencia.setDate(carencia.getDate() + DIAS_CARENCIA_COLETA)
       const { error } = await sb.from('escritorios').update({
         ativo: !suspender,
         suspenso_em: suspender ? new Date().toISOString() : null,
         suspenso_motivo: suspender ? String(body.motivo || '') : null,
+        coleta_ate: suspender ? carencia.toISOString().slice(0, 10) : null,
       }).eq('id', id)
       if (error) throw new Error(error.message)
       return Response.json({ ok: true, escritorio: alvo.nome })

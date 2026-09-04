@@ -98,6 +98,42 @@ async function montarDoStream(r) {
   return out
 }
 
+// O escritório estourou o próprio teto de IA deste mês?
+//
+// Devolve null quando pode seguir, ou o objeto de erro que a rotina repassa à
+// tela. Nunca devolve erro por falha de leitura: ficar sem IA por causa de uma
+// consulta que não respondeu é pior do que gastar alguns centavos a mais.
+async function tetoDoEscritorio(sb, escritorioId) {
+  if (!sb || !escritorioId) return null
+  try {
+    const { data: e } = await sb.from('escritorios')
+      .select('ia_teto_brl,teste_ate,nome').eq('id', escritorioId).maybeSingle()
+    const teto = e && e.ia_teto_brl
+    if (teto == null || !(Number(teto) > 0)) return null
+
+    let cambio = 5.4
+    try {
+      const { data: c } = await sb.from('ia_config').select('cambio_usd_brl').eq('id', 1).maybeSingle()
+      if (c && Number(c.cambio_usd_brl) > 0) cambio = Number(c.cambio_usd_brl)
+    } catch (er) {}
+
+    const { data: gasto } = await sb.rpc('ia_gasto_mes_esc', { p_esc: escritorioId })
+    const gastoBrl = (Number(gasto) || 0) * cambio
+    if (gastoBrl < Number(teto)) return null
+
+    const emTeste = !!(e && e.teste_ate)
+    return {
+      erro: 'O limite de uso de inteligência artificial deste mês foi atingido (R$ ' +
+        gastoBrl.toFixed(2).replace('.', ',') + ' de R$ ' + Number(teto).toFixed(2).replace('.', ',') + '). ' +
+        (emTeste
+          ? 'As demais funções do sistema continuam funcionando normalmente até o fim do teste; ao contratar, o limite sobe.'
+          : 'Fale com o suporte para ampliar o limite. O restante do sistema segue funcionando.'),
+      teto_ia: true,
+      status: 429,
+    }
+  } catch (e) { return null }
+}
+
 // Chamada padrão. `sistemaFixo` é o prefixo byte a byte idêntico entre chamadas
 // (persona + manual + formato de saída) — é ele que leva o cache_control.
 // `conteudo` é o bloco variável (dados do processo, PDFs, pedido): vem depois.
@@ -115,6 +151,16 @@ export async function chamarClaude({
 }) {
   const key = process.env.ANTHROPIC_API_KEY
   if (!key) return { erro: 'IA não configurada no servidor (falta ANTHROPIC_API_KEY).', status: 501 }
+
+  // Teto de IA DO ESCRITÓRIO. O teto de `ia_config` é um só para o sistema
+  // inteiro: bastava um escritório em teste rodar o Estagiário sobre um acervo
+  // grande para consumir o orçamento de IA de todos os outros — inclusive o da
+  // casa. Aqui cada um responde pelo próprio consumo.
+  //
+  // Este é o lugar certo porque é o único por onde toda chamada passa. Espalhar
+  // a conferência pelas oito rotinas garantiria que a nona nascesse sem ela.
+  const barrado = await tetoDoEscritorio(sb, escritorioId)
+  if (barrado) return barrado
 
   const corpo = {
     model: modelo,
