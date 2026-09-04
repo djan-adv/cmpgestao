@@ -16,6 +16,13 @@ const GOLD = '#C9A227'
 export default function AssinaturaLayout({ children }) {
   const router = useRouter()
   const pathname = usePathname()
+  // Aberto DENTRO do sistema (?embed=1): o cabeçalho daqui seria um segundo
+  // cabeçalho na mesma tela, com a marca repetida. A navegação interna
+  // continua, só encolhe.
+  const [embutido, setEmbutido] = useState(false)
+  useEffect(() => {
+    try { setEmbutido(new URLSearchParams(window.location.search).get('embed') === '1') } catch (e) {}
+  }, [])
   const [pronto, setPronto] = useState(false)
   const [email, setEmail] = useState('')
   const [casa, setCasa] = useState(null)   // escritório de quem está logado
@@ -37,10 +44,14 @@ export default function AssinaturaLayout({ children }) {
     })
   }, [router])
 
+  // Dentro do sistema a navegação precisa levar o `embed` adiante: sem isso, o
+  // primeiro clique numa aba recarregaria a página sem o parâmetro e o
+  // cabeçalho voltaria a aparecer — dentro da janela, duplicado.
+  const sufixo = embutido ? '?embed=1' : ''
   const tabs = [
-    { href: '/assinatura', rotulo: '＋ Nova procuração' },
-    { href: '/assinatura/avulso', rotulo: '📄 PDF avulso' },
-    { href: '/assinatura/painel', rotulo: '📁 Painel' },
+    { href: '/assinatura' + sufixo, rotulo: '＋ Nova procuração' },
+    { href: '/assinatura/avulso' + sufixo, rotulo: '📄 PDF avulso' },
+    { href: '/assinatura/painel' + sufixo, rotulo: '📁 Painel' },
   ]
 
   if (!pronto) return <div style={{ padding: 40, textAlign: 'center', color: '#697180' }}>Carregando…</div>
@@ -50,7 +61,7 @@ export default function AssinaturaLayout({ children }) {
 
   return (
     <div style={{ minHeight: '100vh', background: '#f3f5f8' }}>
-      <header style={{ background: NAVY, color: '#fff', padding: '12px 22px', display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+      <header style={{ display: embutido ? 'none' : 'flex', background: NAVY, color: '#fff', padding: '12px 22px', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
         {ehRaiz && <img src="/logo_cmp_white.png" alt="CMP" style={{ height: 26 }} onError={e => { e.currentTarget.style.display = 'none' }} />}
         <div style={{ fontWeight: 700, fontSize: 16 }}>
           {ehRaiz
@@ -61,7 +72,7 @@ export default function AssinaturaLayout({ children }) {
           {tabs.map(t => (
             <a key={t.href} href={t.href} style={{
               color: '#fff', textDecoration: 'none', fontSize: 13, fontWeight: 600,
-              background: pathname === t.href ? 'rgba(255,255,255,.28)' : 'rgba(255,255,255,.12)',
+              background: pathname === t.href.split('?')[0] ? 'rgba(255,255,255,.28)' : 'rgba(255,255,255,.12)',
               padding: '6px 11px', borderRadius: 8,
             }}>{t.rotulo}</a>
           ))}

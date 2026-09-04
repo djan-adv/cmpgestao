@@ -347,7 +347,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
       <a data-s="publicacoes" class="cmp-only" onclick="go('publicacoes')" title="Portal de notícias: extrato dos artigos dos sites, rascunhos e publicação direta no WordPress (sem navegador)"><span class="ic">📰</span> Postagens</a>
       <a data-s="crm" onclick="go('crm')"><span class="ic">▣</span> Comercial</a>
       <a data-s="financeiro" onclick="go('financeiro')"><span class="ic">＄</span> Financeiro</a>
-      <a onclick="window.open('/assinatura','_blank')" title="Assinador de documentos do escritório — procurações e contratos com assinatura eletrônica"><span class="ic">✍</span> Assinaturas</a>
+      <a data-s="assinaturas" onclick="abrirAssinaturasDentro()" title="Assinador de documentos do escritório — procurações e contratos com assinatura eletrônica"><span class="ic">✍</span> Assinaturas</a>
       <a data-s="contatos" onclick="go('contatos')"><span class="ic">☎</span> Contatos</a>
       <a data-s="etiquetas" onclick="go('etiquetas')"><span class="ic">⬤</span> Etiquetas</a>
       <a data-s="fases" onclick="go('fases')"><span class="ic">◑</span> Revisar fases</a>
@@ -16877,6 +16877,29 @@ var TRIBSIS={
   trt15:{s:'PJe',g1:'https://pje.trt15.jus.br/primeirograu/login.seam',g2:'https://pje.trt15.jus.br/segundograu/login.seam',c:'https://pje.trt15.jus.br/consultaprocessual/'},
   trf5:{s:'PJe',g1:'https://pje1g.trf5.jus.br/pje/',p:'https://www.trf5.jus.br/index.php/pje'}
 };
+/* O módulo de assinaturas abria numa aba nova. Para quem usa, era sair do
+   sistema: outra aba, outro cabeçalho, e a sensação de outro produto — pior
+   ainda num escritório cliente, que via ali a moldura de quem vendeu. Agora
+   abre DENTRO, numa janela que ocupa a tela; a página em si continua a mesma
+   (o parâmetro `embed` só esconde o cabeçalho dela, que aqui seria repetido). */
+function abrirAssinaturasDentro(query){
+  var q=String(query||'');
+  q += (q.indexOf('?')<0?'?':'&')+'embed=1';
+  var m=document.getElementById('modal-assinaturas');
+  if(!m){
+    m=document.createElement('div');
+    m.id='modal-assinaturas'; m.className='overlay';
+    m.innerHTML='<div class="modal" style="max-width:1100px;width:96vw;padding:0;overflow:hidden">'
+      +'<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--line)">'
+      +'<b style="font-size:15px">Assinaturas</b>'
+      +'<button class="btn sm ghost" style="margin-left:auto" onclick="document.getElementById(\'modal-assinaturas\').classList.add(\'hidden\')">Fechar</button>'
+      +'</div>'
+      +'<iframe id="if-assinaturas" style="width:100%;height:78vh;border:0;display:block"></iframe></div>';
+    document.body.appendChild(m);
+  }
+  m.classList.remove('hidden');
+  document.getElementById('if-assinaturas').src='/assinatura'+q;
+}
 /* ===== Módulo Assinaturas (/assinatura) — assinador de documentos do escritório ===== */
 /* Abre o assinador já com o cliente do processo no contexto (nome + nº do processo). */
 function abrirAssinatura(num){
@@ -16893,7 +16916,7 @@ function abrirAssinatura(num){
   }catch(e){}
   if(num) q.push('processo='+encodeURIComponent(num));
   if(p.tipo&&String(p.tipo).trim()) q.push('finalidade='+encodeURIComponent(String(p.tipo).trim()));
-  window.open('/assinatura'+(q.length?('?'+q.join('&')):''),'_blank');
+  abrirAssinaturasDentro(q.length?('?'+q.join('&')):'');
 }
 /* ===== Gerar procuração automática (Word + PDF) — no padrão CMP, salva direto
    na pasta do processo. Diferente do "✍ Procuração" acima (que abre o link de
@@ -17448,7 +17471,7 @@ function assinaturaDoContato(){
   if(n&&n!=='—') q.push('nome='+encodeURIComponent(n));
   if(e&&e!=='—') q.push('email='+encodeURIComponent(e));
   if(t&&t!=='—') q.push('tel='+encodeURIComponent(t));
-  window.open('/assinatura'+(q.length?('?'+q.join('&')):''),'_blank');
+  abrirAssinaturasDentro(q.length?('?'+q.join('&')):'');
 }
 function abrirTribunal(numero){
   var digs=String(numero||'').replace(/\D/g,'');
