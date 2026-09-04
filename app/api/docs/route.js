@@ -10,6 +10,7 @@ import fs from 'fs'
 import path from 'path'
 import { contaDemo, respostaDemo } from '../../../lib/demo.js'
 import { escritorioDoUsuario, semEscritorio, raizDocs } from '../_lib/inquilino.js'
+import { carimboDoPedido, marcarPdf, marcarHtml, tipoCarimbavel } from '../../../lib/marcadagua.js'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -155,7 +156,16 @@ export async function GET(request) {
     const full = path.join(ROOT, seguro(file))
     if (!full.startsWith(ROOT) || !fs.existsSync(full) || fs.statSync(full).isDirectory())
       return Response.json({ erro: 'arquivo não encontrado' }, { status: 404 })
-    const buf = fs.readFileSync(full)
+    let buf = fs.readFileSync(full)
+    /* Marca d'água de estagiário: quando o escritório liga a opção, o documento
+       que sai para um estagiário leva o nome dele ao fundo. O arquivo no disco
+       não muda — o carimbo é aplicado nesta cópia, na entrega. */
+    const carimbo = await carimboDoPedido(esc, user.id)
+    if (carimbo.marcar) {
+      const tipo = tipoCarimbavel('', path.basename(full))
+      if (tipo === 'pdf') buf = await marcarPdf(buf, carimbo.etiqueta)
+      else if (tipo === 'html') buf = Buffer.from(marcarHtml(buf.toString('utf8'), carimbo.etiqueta), 'utf8')
+    }
     return new Response(buf, { headers: {
       'Content-Type': 'application/octet-stream',
       'Content-Disposition': 'attachment; filename="' + encodeURIComponent(path.basename(full)) + '"',

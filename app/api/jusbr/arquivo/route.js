@@ -7,6 +7,7 @@ import fs from 'fs'
 import { createClient } from '@supabase/supabase-js'
 import { tipoRealDoArquivo, pdfDeTexto } from '../lib.js'
 import { escritorioDoUsuario, semEscritorio } from '../../_lib/inquilino.js'
+import { carimboDoPedido, marcarPdf, marcarHtml, tipoCarimbavel } from '../../../../lib/marcadagua.js'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 20
@@ -66,6 +67,13 @@ export async function GET(request) {
       if (!/<base\b/i.test(h)) h = h.replace(/<head([^>]*)>/i, '<head$1><base href="https://portaldeservicos.pdpj.jus.br/">')
       buf = Buffer.from(h, 'utf8')
     } catch (e) {}
+  }
+  // marca d'água de estagiário (opção do escritório): o original no disco não muda
+  const carimbo = await carimboDoPedido(esc, u.data.user.id, sb)
+  if (carimbo.marcar) {
+    const alvo = tipoCarimbavel(tipo, nomeFinal)
+    if (alvo === 'pdf') buf = await marcarPdf(buf, carimbo.etiqueta)
+    else if (alvo === 'html') buf = Buffer.from(marcarHtml(buf.toString('utf8'), carimbo.etiqueta), 'utf8')
   }
   const disp = (dl ? 'attachment' : 'inline') + '; filename="' + nomeFinal + '"'
   return new Response(buf, {
