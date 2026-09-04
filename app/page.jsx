@@ -49,6 +49,10 @@ export default function Login() {
       if (!vivo) return
       const m = d && d.ok ? d : { conhecido: false }
       setMarca(m)
+      // o nome na aba do navegador segue o dono do endereço
+      try {
+        document.title = (m.marca && m.marca.sistema) || (m.raiz ? 'CMPGestão' : (m.nome || 'Gestão'))
+      } catch (e) {}
       supabase.auth.getSession().then(({ data }) => { if (data.session) depoisDoLogin(m) })
     }).catch(() => { if (vivo) setMarca({ conhecido: false }) })
     return () => { vivo = false }
