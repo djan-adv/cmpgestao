@@ -402,7 +402,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
         <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
           <div class="switch"><button id="ag-mes" class="on" onclick="setAgView('mes')">Mês</button><button id="ag-sem" onclick="setAgView('semana')">Semana</button><button id="ag-dia" onclick="setAgView('dia')">Dia</button></div>
           <label style="margin:0;color:var(--muted);font-size:13px">Responsável:</label>
-          <select id="ag-resp" style="width:auto" onchange="setAgResp(this.value)"><option>Todos</option><option>Djan</option><option>Maria Rita</option><option>Jader Pinheiro</option><option>Maria Eduarda</option><option>Estagiário(a)</option></select>
+          <select id="ag-resp" style="width:auto" onchange="setAgResp(this.value)"><option>Todos</option></select>
         </div>
         <div class="calnav"><button class="navbtn" onclick="navega(-1)">‹ anterior</button><b id="cal-label"></b><button class="navbtn" onclick="navega(1)">próximo ›</button></div>
         <div class="cal" id="cal"></div>
@@ -626,33 +626,10 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
     </section>
 
     <section id="s-procedimentos" class="hidden">
-      <div class="card">
-        <p class="sectlabel">Espinha dorsal — todo caso (Parte A)</p>
-        <div class="step"><div class="n">1</div><div class="txt"><b>Portão</b> — caso novo só entra com ficha completa (documentos + prazo-limite + viabilidade). <div class="sla">Comercial / Jader · é o portão, sem SLA próprio</div></div></div>
-        <div class="step"><div class="n">2</div><div class="txt"><b>Escopo, estratégia e responsável</b> — define tese/escopo e responsável; checa conflito. <div class="sla">Djan + Maria Eduarda · ≤1 dia útil após a ficha</div></div></div>
-        <div class="step"><div class="n">3</div><div class="txt"><b>Produção</b> — peça/minuta/requerimento com IA. <div class="sla">Maria Rita + IA · 3–5 dias úteis, dentro do prazo legal</div></div></div>
-        <div class="step"><div class="n">4</div><div class="txt"><b>Revisão e OK</b> — confere pelo checklist; OK final humano. <div class="sla">Maria Eduarda ou Djan · ≤2 dias úteis</div></div></div>
-        <div class="step"><div class="n">5</div><div class="txt"><b>Execução</b> — protocolo, assinatura ou registro. <div class="sla">Maria Rita · ≤1 dia após o OK, folga ≥2 dias do prazo fatal</div></div></div>
-        <div class="step"><div class="n">6</div><div class="txt"><b>Acompanhamento e pós</b> — registra, avisa o cliente, acompanha. <div class="sla">Aviso ≤1 dia útil após executar</div></div></div>
-      </div>
-      <div class="card"><p class="sectlabel">Fluxo no Kanban (Parte E)</p>
-        <div class="flowrow"><span class="stage">A distribuir</span><span class="stage">Produção</span><span class="stage">Em revisão</span><span class="stage">A executar</span><span class="stage">Acompanhamento</span><span class="stage alt">Aguardando cliente</span></div>
-        <p class="note">Passar de etapa = mover o card + abrir a tarefa do próximo responsável. Passos fixos (revisão semanal de prazos às segundas; aviso ao cliente) entram como tarefas recorrentes.</p>
-      </div>
-      <div class="card"><p class="sectlabel">Publicações — triagem diária</p>
-        A captura (DJEN) sugere ação + prazo; a equipe <b>confirma, atribui responsável e separa ciência de ação</b> — no mesmo dia da publicação. <span class="sla">Eduarda ou Rita (uma faz, a outra cobre).</span></div>
-      <div class="grid2">
-        <div class="card"><p class="sectlabel">Checklist — petição inicial (Parte D)</p>
-          <div class="chk">Partes e qualificação corretas</div><div class="chk">Causa de pedir e pedidos coerentes</div>
-          <div class="chk">Tutela de urgência, se cabível</div><div class="chk">Valor da causa coerente</div>
-          <div class="chk">Procuração e contrato de honorários anexados</div><div class="chk">Custas / gratuidade definidos</div></div>
-        <div class="card"><p class="sectlabel">Checklist — contratos (Parte D)</p>
-          <div class="chk">Objeto e obrigações de cada parte</div><div class="chk">Preço, forma de pagamento e reajuste</div>
-          <div class="chk">Prazo, vigência e renovação</div><div class="chk">Multa, rescisão e extinção</div>
-          <div class="chk">Garantias e confidencialidade/LGPD</div><div class="chk">Foro; poderes de quem assina; registro</div></div>
-      </div>
-      <div class="card"><p class="sectlabel">Equipe e papéis</p>
-        Djan (sócio-diretor) · Jader (comercial/captação) · Maria Eduarda (coordenação operacional) · Maria Rita (produção) · Adriana (subscritora BA). Revisão semanal de prazos: <b>segunda-feira</b>, com Eduarda, Djan e Rita.</div>
+      <!-- Conteúdo montado a partir do cadastro do escritório: era texto fixo
+           com as etapas, os prazos e os NOMES dos sócios de um escritório só —
+           e aparecia inteiro na tela de qualquer cliente. -->
+      <div id="proc-conteudo"></div>
     </section>
   <section id="s-diligencias" class="hidden">
   <div class="agtools"><div class="switch"><button id="dg-sw-p" class="on" onclick="setDilView('parados')">Processos parados</button><button id="dg-sw-a" onclick="setDilView('andamento')">Diligências em andamento</button></div></div>
@@ -945,7 +922,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
       <button type="button" class="btn sm ghost" id="t-btn-abrir-proc" style="display:none;white-space:nowrap" onclick="abrirProcessoDaTarefaModal()">Abrir processo</button>
     </div>
     <div class="row2">
-      <div><label>Responsável</label><select id="t-resp"><option>Djan</option><option>Maria Rita</option><option>Jader Pinheiro</option><option>Maria Eduarda</option><option>Estagiário(a)</option></select></div>
+      <div><label>Responsável</label><select id="t-resp"></select></div>
       <div><label>Tipo</label><select id="t-tipo" onchange="onTipoTarefa()"><option value="tarefa">Tarefa</option><option value="prazo">Prazo</option><option value="audiencia">Audiência</option><option value="reuniao">Reunião</option><option value="manifestacao">Manifestação</option><option value="diligencia">Diligência</option><option value="execucao">Execução (após trânsito)</option><option value="evento">Evento</option><option value="comercial">Comercial / Captação</option></select></div>
     </div>
     <div id="t-corrigir-tipo" style="display:none;background:#fbeceb;border:1px solid #f3d4d1;border-radius:10px;padding:8px 11px;margin:0 0 8px">
@@ -1545,6 +1522,34 @@ async function salvarMeuEscritorio(){
 /* O nome que a casa usa em textos: o do escritório de quem está logado, e
    'CMPGestão' só quando é mesmo a raiz. Antes cada texto trazia o nome fixo, e
    o cliente recebia convite dizendo que o sistema era de outro escritório. */
+/* As pessoas DESTE escritório. Vários pontos do sistema tinham a mesma lista
+   escrita à mão — os sócios da casa — e ela reaparecia na tela de qualquer
+   cliente: no seletor de responsável, no filtro da agenda, no substituto de
+   férias e no dono padrão de uma tarefa. Agora sai dos assentos do escritório;
+   só a raiz mantém a lista antiga como último recurso. */
+function pessoasDaCasa(){
+  var out=(USUARIOS_VISUAIS||[]).filter(function(u){return u.ativo!==false;})
+    .map(function(u){return u.nome;}).filter(Boolean);
+  if(out.length) return out;
+  var e=window.__escInfo;
+  if(e && e.raiz!==true) return [];
+  return ['Djan','Maria Rita','Jader Pinheiro','Maria Eduarda','Estagiário(a)'];
+}
+/* Para quem vai a tarefa quando ninguém escolhe. Era sempre 'Djan'. */
+function responsavelPadrao(){ var l=pessoasDaCasa(); return l.length?l[0]:''; }
+/* Preenche os seletores de responsável com a equipe do escritório. Os <option>
+   estavam escritos no HTML com os nomes da casa. */
+function preencherSelecoesDePessoas(){
+  var pes=pessoasDaCasa();
+  ['ag-resp','tar-resp'].forEach(function(id){
+    var sel=document.getElementById(id); if(!sel) return;
+    var atual=sel.value;
+    sel.innerHTML='<option>Todos</option>'+pes.map(function(n){return '<option>'+esc(n)+'</option>';}).join('');
+    if(atual) sel.value=atual;
+  });
+  var t=document.getElementById('t-resp');
+  if(t){ var a=t.value; t.innerHTML=pes.map(function(n){return '<option>'+esc(n)+'</option>';}).join(''); if(a) t.value=a; }
+}
 function _nomeDaCasa(){
   var e=window.__escInfo;
   if(e && e.raiz!==true) return ((e.marca&&e.marca.sistema)||e.nome||'Gestão');
@@ -1651,7 +1656,7 @@ function _substitutoDeFerias(nome){
     if(toks.every(function(t){ return alvo.indexOf(t)>-1; })) achou=u;
   });
   if(!achou) return null;
-  return (achou.ferias&&achou.ferias.substituto)||'Djan';
+  return (achou.ferias&&achou.ferias.substituto)||responsavelPadrao();
 }
 /* Responsável EFETIVO: quem realmente deve tocar a tarefa hoje. */
 function _respEfetivo(nome){
@@ -1682,7 +1687,7 @@ function _rotulosResp(){
   var s=document.getElementById('tar-resp')||document.getElementById('ag-resp');
   var out=[];
   if(s){ for(var i=0;i<s.options.length;i++){ var n=(s.options[i].getAttribute('data-nome')||s.options[i].textContent||'').replace(/\s*\(em férias\)\s*$/,'').trim(); if(n&&n!=='Todos') out.push(n); } }
-  return out.length?out:['Djan','Maria Rita','Jader Pinheiro','Maria Eduarda','Estagiário(a)'];
+  return out.length?out:pessoasDaCasa();
 }
 /* nome cheio do assento ("Maria Rita Caldas") → rótulo curto usado nas tarefas ("Maria Rita") */
 function _rotuloDoAssento(nome){
@@ -1705,13 +1710,13 @@ async function redistribuirTarefasDe(u,motivo){
     if(resp!==null){
       String(resp).split(/[,;]| e /i).forEach(function(pd){
         pd=pd.trim(); if(!pd) return;
-        if(/^(eu|mim|pra mim)$/i.test(pd)) pd='Djan';
+        if(/^(eu|mim|pra mim)$/i.test(pd)) pd=responsavelPadrao();
         var pt=_normNomeAcesso(pd).split(' ').filter(Boolean);
         var m=cands.find(function(cd){ var ct=_normNomeAcesso(cd).split(' ').filter(Boolean); return pt.length&&pt.every(function(t){ return ct.some(function(c){ return c===t||c.indexOf(t)===0; }); }); });
         if(m&&escolhidos.indexOf(m)<0) escolhidos.push(m);
       });
     }
-    if(!escolhidos.length) escolhidos=['Djan'];
+    if(!escolhidos.length){ var rp=responsavelPadrao(); escolhidos=rp?[rp]:[]; }
     /* prazo mais curto primeiro, alternando entre os escolhidos — carga equilibrada */
     abertas.sort(function(a,b){ var pa=a.prazo||a.data||'9999', pb=b.prazo||b.data||'9999'; return pa<pb?-1:(pa>pb?1:0); });
     var porAlvo={};
@@ -2276,7 +2281,7 @@ function go(s){
   document.getElementById("s-"+s).classList.remove("hidden");
   document.querySelectorAll("#nav a").forEach(function(a){a.classList.remove("active")});
   var link=document.querySelector('#nav a[data-s="'+s+'"]');if(link)link.classList.add("active");
-  var t={painel:"Painel",triagem:"Publicações",agenda:"Agenda — Kanban (etapas CMP)",processos:"Processos",crm:"CRM",procedimentos:"Procedimentos CMP",etiquetas:"Etiquetas","proc-det":"Processo"};
+  var t={painel:"Painel",triagem:"Publicações",agenda:"Agenda — Kanban",processos:"Processos",crm:"CRM",procedimentos:"Procedimentos",etiquetas:"Etiquetas","proc-det":"Processo"};
   document.getElementById("scr-title").textContent=t[s]||"Painel";
   if(s==="painel")renderPainel(); if(s==="triagem")renderTriagem(); if(s==="processos")renderProc(); if(s==="crm")renderCrm(); if(s==="etiquetas")renderEtiquetas(); if(s==="agenda")renderAgendaView();
   window.scrollTo(0,0);
@@ -4474,10 +4479,15 @@ function initKanban(){
       _vistos[k]=t; KAN.push(t); });
   }
   function _semDup(a){ var k=_kanContentKey(a); if(_vistos[k]) return false; _vistos[k]=a; return true; }
-  /* seed inicial de processos a distribuir */
-  DADOS.kanbanSeed.forEach(function(p,i){ var a={id:i+1,titulo:p.titulo,cliente:p.cliente,numero:p.numero,col:"distribuir"}; if(_semDup(a)) KAN.push(a); });
+  /* Cargas iniciais embutidas no arquivo: 60 processos no Kanban e a agenda
+     importada do Astrea, todos com NOME DE CLIENTE e número de processo reais
+     do escritório dono do sistema. Apareciam na tela de qualquer escritório que
+     abrisse o sistema — 138 cartões com processos de outra casa. Só a raiz
+     carrega isto; para os demais, a tela começa do banco, vazia. */
+  var _ehRaizSeed=!(window.__escInfo && window.__escInfo.raiz!==true);
+  if(_ehRaizSeed) DADOS.kanbanSeed.forEach(function(p,i){ var a={id:i+1,titulo:p.titulo,cliente:p.cliente,numero:p.numero,col:"distribuir"}; if(_semDup(a)) KAN.push(a); });
   /* tarefas e prazos importados da agenda do Astrea (embutidos) — sempre presentes */
-  if(typeof ASTREA_TAREFAS_SEED!=='undefined'){ ASTREA_TAREFAS_SEED.forEach(function(t){ var a={id:t.id,titulo:t.titulo,cliente:t.cliente,numero:t.numero,col:t.col||'distribuir',resp:t.resp,data:t.data,prazo:t.prazo,tipoForm:t.tipoForm,__colAnt:(t.col||'distribuir')}; if(_semDup(a)) KAN.push(a); }); }
+  if(_ehRaizSeed && typeof ASTREA_TAREFAS_SEED!=='undefined'){ ASTREA_TAREFAS_SEED.forEach(function(t){ var a={id:t.id,titulo:t.titulo,cliente:t.cliente,numero:t.numero,col:t.col||'distribuir',resp:t.resp,data:t.data,prazo:t.prazo,tipoForm:t.tipoForm,__colAnt:(t.col||'distribuir')}; if(_semDup(a)) KAN.push(a); }); }
   /* re-aplica as colunas salvas localmente (cookie) por cima do seed/banco,
      para o card não voltar para "A distribuir" depois do F5. */
   _aplicarKanbanCookie();
@@ -5346,7 +5356,7 @@ function _comDestinos(){
     var b=(sel.options[i].getAttribute('data-nome')||sel.options[i].textContent||'').replace(/\s*\(em férias\)\s*$/,'').trim();
     if(b&&out.indexOf(b)<0) out.push(b);
   } }
-  if(!out.length) out=['Djan','Maria Rita','Jader Pinheiro','Maria Eduarda','Estagiário(a)'];
+  if(!out.length) out=pessoasDaCasa();
   return out;
 }
 /* A tarefa precisa existir no banco para receber comentário: as importadas do
@@ -5833,7 +5843,10 @@ function initAgenda(){
   /* agenda real: carregada do banco (agenda_eventos) — sincronizada com o Google Calendar */
   AGENDA=(window.__AGDB||[]).slice();
   /* se o banco ainda não tem eventos, usa as audiências importadas do Astrea (embutidas) */
-  if(AGENDA.length===0 && typeof ASTREA_AGENDA_SEED!=='undefined'){ AGENDA=ASTREA_AGENDA_SEED.slice(); }
+  /* mesma razão do Kanban: a agenda embutida traz audiências reais, com nome
+     de cliente, do escritório dono do sistema */
+  var _raizAg=!(window.__escInfo && window.__escInfo.raiz!==true);
+  if(_raizAg && AGENDA.length===0 && typeof ASTREA_AGENDA_SEED!=='undefined'){ AGENDA=ASTREA_AGENDA_SEED.slice(); }
   /* remove os concluídos/excluídos persistidos (itens sem id no banco) */
   if(window.__AGOCULT){ AGENDA=AGENDA.filter(function(e){ return !window.__AGOCULT[_agChave(e)]; }); }
 }
@@ -11666,7 +11679,7 @@ function go(s){
   var sec=document.getElementById("s-"+s); if(sec) sec.classList.remove("hidden");
   document.querySelectorAll("#nav a").forEach(function(a){a.classList.remove("active")});
   var link=document.querySelector('#nav a[data-s="'+s+'"]');if(link)link.classList.add("active");
-  var t={painel:"Painel",triagem:"Publicações",agenda:"Agenda — Kanban (etapas CMP)",processos:"Processos",crm:"CRM",procedimentos:"Procedimentos CMP",etiquetas:"Etiquetas","proc-det":"Processo",diligencias:"Diligências"};
+  var t={painel:"Painel",triagem:"Publicações",agenda:"Agenda — Kanban",processos:"Processos",crm:"CRM",procedimentos:"Procedimentos",etiquetas:"Etiquetas","proc-det":"Processo",diligencias:"Diligências"};
   var st=document.getElementById("scr-title"); if(st) st.textContent=t[s]||"Painel";
   if(s==="painel")renderPainel(); if(s==="triagem")renderTriagem(); if(s==="processos")renderProc(); if(s==="crm")renderCrm(); if(s==="etiquetas")renderEtiquetas(); if(s==="agenda")renderAgendaView(); if(s==="diligencias")renderDiligencias();
   window.scrollTo(0,0);
@@ -11864,7 +11877,7 @@ function go(s){
   var sec=document.getElementById("s-"+s); if(sec) sec.classList.remove("hidden");
   document.querySelectorAll("#nav a").forEach(function(a){a.classList.remove("active")});
   var link=document.querySelector('#nav a[data-s="'+s+'"]');if(link)link.classList.add("active");
-  var t={painel:"Painel",triagem:"Publicações",agenda:"Agenda — Kanban (etapas CMP)",processos:"Processos",crm:"Comercial",procedimentos:"Procedimentos CMP",etiquetas:"Etiquetas","proc-det":"Processo",diligencias:"Diligências",relatorio:"Relatório mensal para clientes"};
+  var t={painel:"Painel",triagem:"Publicações",agenda:"Agenda — Kanban",processos:"Processos",crm:"Comercial",procedimentos:"Procedimentos",etiquetas:"Etiquetas","proc-det":"Processo",diligencias:"Diligências",relatorio:"Relatório mensal para clientes"};
   var st=document.getElementById("scr-title"); if(st) st.textContent=t[s]||"Painel";
   if(s==="painel")renderPainel(); if(s==="triagem")renderTriagem(); if(s==="processos")renderProc(); if(s==="crm")renderCrm(); if(s==="etiquetas")renderEtiquetas(); if(s==="agenda")renderAgendaView(); if(s==="diligencias")renderDiligencias();
   window.scrollTo(0,0);
@@ -11906,7 +11919,7 @@ function go(s){
   var sec=document.getElementById("s-"+showId); if(sec) sec.classList.remove("hidden");
   document.querySelectorAll("#nav a").forEach(function(a){a.classList.remove("active")});
   var link=document.querySelector('#nav a[data-s="'+s+'"]');if(link)link.classList.add("active");
-  var t={painel:"Painel",triagem:"Publicações",agenda:"Agenda — Kanban (etapas CMP)",processos:"Processos",crm:"Comercial",financeiro:"Financeiro — cobranças e recebimentos",contatos:"Contatos",procedimentos:"Procedimentos CMP",etiquetas:"Etiquetas","proc-det":"Processo",diligencias:"Diligências",movimentar:"Movimentar — fila do Estagiário Virtual",emails:"E-mails — respostas recebidas",chats:"Chats — clientes e equipe",relatorio:"Relatório mensal para clientes",encerrados:"Processos encerrados",inove:"Processos Inove (terceiros)",james:"Processos contra James Laurence",contratacao:"Sem contrato — acompanhados sem contrato assinado",cadastros:"Cadastros — Tribunais de Justiça",inovesol:"Solicitar novas funcionalidades",fases:"Revisar fases dos processos",produtividade:"Produtividade e auditoria de logins"};
+  var t={painel:"Painel",triagem:"Publicações",agenda:"Agenda — Kanban",processos:"Processos",crm:"Comercial",financeiro:"Financeiro — cobranças e recebimentos",contatos:"Contatos",procedimentos:"Procedimentos",etiquetas:"Etiquetas","proc-det":"Processo",diligencias:"Diligências",movimentar:"Movimentar — fila do Estagiário Virtual",emails:"E-mails — respostas recebidas",chats:"Chats — clientes e equipe",relatorio:"Relatório mensal para clientes",encerrados:"Processos encerrados",inove:"Processos Inove (terceiros)",james:"Processos contra James Laurence",contratacao:"Sem contrato — acompanhados sem contrato assinado",cadastros:"Cadastros — Tribunais de Justiça",inovesol:"Solicitar novas funcionalidades",fases:"Revisar fases dos processos",produtividade:"Produtividade e auditoria de logins"};
   /* sub-pastas de Processos (Inove/Encerrados/James/lotes personalizados): só
      aparecem dentro da área de Processos (inclusive ao abrir um lote específico) */
   try{
