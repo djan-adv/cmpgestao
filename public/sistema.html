@@ -485,7 +485,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
       </div>
     </section>
     <section id="s-processos" class="hidden">
-      <div class="searchbar"><input id="busca" placeholder="Buscar por cliente, número, oponente ou assunto..." oninput="renderProc()"><select id="ordena" onchange="renderProc()" class="btn sm sb-sel" style="margin-left:8px;max-width:120px"><option value="">Novos Protocolos</option><option value="az">Cliente (A→Z)</option><option value="za">Cliente (Z→A)</option><option value="data_desc">Movimentação mais recente</option><option value="parados">Parados (mov. mais antiga)</option><option value="valor">Valor da causa (maior→menor)</option></select><select id="filtroEtq" onchange="renderProc()" class="btn sm sb-sel" style="margin-left:8px;max-width:112px"><option value="">Todas as etiquetas</option></select><select id="porPagina" onchange="renderProc()" class="btn sm sb-sel" style="margin-left:8px;max-width:76px"><option value="20">20 por página</option><option value="40">40</option><option value="60">60</option><option value="80">80</option><option value="100">100</option><option value="todos" selected>Todos</option></select><span class="note" id="proc-count" style="align-self:center"></span><span id="proc-semvara" style="align-self:center;margin-left:10px;display:none"></span><span class="note" id="proc-espaco" style="align-self:center;margin-left:10px;cursor:pointer" onclick="carregarEspacoDocs(true)" title="Espaço que os documentos ocupam no servidor (VPS) — clique para recalcular"></span><button id="btn-atu-todos" class="btn sm sb-btn" style="margin-left:auto" onclick="atualizarTodosProcessos()" title="Buscar no DJEN as publicações novas de TODOS os processos (últimos 7 dias, pelas OABs do escritório)">↻ Atualizar todos</button><button class="btn sm gold sb-btn" style="margin-left:8px" onclick="abrirBusca()">+ Cadastrar por número <span style="font-weight:400;font-size:10px;opacity:.8">(pesquisa pelo djen)</span></button><button class="btn sm sb-btn" style="margin-left:8px;background:var(--navy);color:#fff;border-color:var(--navy)" onclick="abrirCadManual()">+ Cadastrar manual / caso</button><button class="btn sm sb-btn" style="margin-left:8px;background:#0F6E56;color:#fff;border-color:#0F6E56" onclick="abrirSyncPastas()" title="Enviar de uma vez uma pasta com vários processos — o sistema reconhece cada subpasta e manda para o processo certo">&#8645; Sincronizar pasta</button><button class="btn sm sb-btn" style="margin-left:8px;background:#8a6d1a;color:#fff;border-color:#8a6d1a" onclick="abrirHonLote()" title="Roda o robô de honorários (lê petição inicial/sentença/procuração) em todos os processos da lista principal, um a um">💰 Honorários — buscar todos</button></div>
+      <div class="searchbar"><input id="busca" placeholder="Buscar por cliente, número, oponente ou assunto..." oninput="renderProc()"><select id="ordena" onchange="renderProc()" class="btn sm sb-sel" style="margin-left:8px;max-width:120px"><option value="">Novos Protocolos</option><option value="az">Cliente (A→Z)</option><option value="za">Cliente (Z→A)</option><option value="data_desc">Movimentação mais recente</option><option value="parados">Parados (mov. mais antiga)</option><option value="valor">Valor da causa (maior→menor)</option></select><select id="filtroEtq" onchange="renderProc()" class="btn sm sb-sel" style="margin-left:8px;max-width:112px"><option value="">Todas as etiquetas</option></select><select id="porPagina" onchange="renderProc()" class="btn sm sb-sel" style="margin-left:8px;max-width:76px"><option value="20">20 por página</option><option value="40">40</option><option value="60">60</option><option value="80">80</option><option value="100">100</option><option value="todos" selected>Todos</option></select><span class="note" id="proc-count" style="align-self:center"></span><span id="proc-semvara" style="align-self:center;margin-left:10px;display:none"></span><span class="note" id="proc-espaco" style="align-self:center;margin-left:10px;cursor:pointer" onclick="carregarEspacoDocs(true)" title="Espaço que os documentos ocupam no servidor (VPS) — clique para recalcular"></span><button id="btn-atu-todos" class="btn sm sb-btn" style="margin-left:auto" onclick="atualizarTodosProcessos()" title="Buscar no DJEN as publicações novas de TODOS os processos (últimos 7 dias, pelas OABs do escritório)">↻ Atualizar todos</button><button class="btn sm gold sb-btn" style="margin-left:8px" onclick="abrirBusca()">+ Cadastrar por número <span style="font-weight:400;font-size:10px;opacity:.8">(pesquisa pelo djen)</span></button><button class="btn sm sb-btn inq-only" style="display:none;margin-left:8px;background:#6d28a8;color:#fff;border-color:#6d28a8" onclick="abrirCadastroOab()" title="Traz do Diário de Justiça a lista dos processos daquela OAB, com as partes sugeridas — você marca e cadastra em lote">+ Cadastrar por OAB <span style="font-weight:400;font-size:10px;opacity:.85">(traz a lista)</span></button><button class="btn sm sb-btn" style="margin-left:8px;background:var(--navy);color:#fff;border-color:var(--navy)" onclick="abrirCadManual()">+ Cadastrar manual / caso</button><button class="btn sm sb-btn" style="margin-left:8px;background:#0F6E56;color:#fff;border-color:#0F6E56" onclick="abrirSyncPastas()" title="Enviar de uma vez uma pasta com vários processos — o sistema reconhece cada subpasta e manda para o processo certo">&#8645; Sincronizar pasta</button><button class="btn sm sb-btn" style="margin-left:8px;background:#8a6d1a;color:#fff;border-color:#8a6d1a" onclick="abrirHonLote()" title="Roda o robô de honorários (lê petição inicial/sentença/procuração) em todos os processos da lista principal, um a um">💰 Honorários — buscar todos</button></div>
       <div class="card"><table><thead><tr><th style="width:26%;cursor:pointer;user-select:none" onclick="ordenarCliente()" title="Clique para ordenar por cliente (A→Z / Z→A)">Cliente <span id="cli-sort-arrow" style="font-size:10px;color:var(--muted)"></span></th><th style="width:150px;cursor:pointer;user-select:none" onclick="ordenarJulgado()" title="Clique para agrupar por julgados / não julgados">Processos/casos <span id="julg-sort-arrow" style="font-size:10px;color:var(--muted)"></span></th><th style="width:22%"><span onclick="ordenarAssuntoLocal('assunto')" style="cursor:pointer;user-select:none" title="Ordenar por assunto (A→Z / Z→A)">Assunto <span id="asn-sort-arrow" style="font-size:10px;color:var(--muted)"></span></span><span style="color:var(--line);margin:0 5px">|</span><span onclick="ordenarAssuntoLocal('local')" style="cursor:pointer;user-select:none" title="Ordenar por vara/local (A→Z / Z→A) — agrupa os processos da mesma vara">Local <span id="loc-sort-arrow" style="font-size:10px;color:var(--muted)"></span></span><span style="color:var(--line);margin:0 5px">|</span><select id="fase-filtro" onchange="filtrarPorFase(this.value)" title="Mostrar só os processos da fase escolhida" style="width:auto;max-width:150px;font-size:12px;font-weight:700;color:var(--muted);border:none;background:transparent;cursor:pointer;padding:0"><option value="">Fase</option><option value="prot">Correção e Protocolo</option><option value="post">Fase de Conhecimento</option><option value="sane">Fase Saneadora</option><option value="instr">Fase Instrutória</option><option value="decis">Fase Decisória</option><option value="recur">Fase Recursal</option><option value="exec">Fase de Cumprimento</option><option value="alvara">Expedir Alvará</option></select></th><th style="width:170px;cursor:pointer;user-select:none" onclick="ordenarMov()" title="Clique para ordenar pela data da última movimentação (mais recente ↔ mais antiga)">Última movimentação <span id="mov-sort-arrow" style="font-size:10px;color:var(--muted)"></span></th><th style="width:96px;cursor:pointer;user-select:none" onclick="ordenarParado()" title="Clique para ordenar por dias parado (mais ↔ menos)">Parado há <span id="par-sort-arrow" style="font-size:10px;color:var(--muted)"></span></th><th style="width:104px;text-align:right"><span onclick="ordenarCondenacao()" style="cursor:pointer;user-select:none" title="Ordenar por valor da condenação (maior ↔ menor)">Valor total <span id="cond-sort-arrow" style="font-size:10px;color:var(--muted)"></span></span> <span onclick="toggleStatusFiltro()" style="cursor:pointer;user-select:none;font-size:10px;color:var(--muted);font-weight:400" title="Filtrar: todos → julgados → não julgados">⚖<span id="st-filtro-lbl"></span></span></th><th style="width:110px;cursor:pointer;user-select:none" onclick="ordenarPrazoToggle()" title="Clique para ordenar pelo prazo fatal (mais próximo ↔ mais distante)">Prazo fatal <span id="prazo-sort-arrow" style="font-size:10px;color:var(--muted)"></span></th><th style="width:58px;text-align:center;cursor:pointer;user-select:none" onclick="ordenarDocs()" title="Clique para ordenar pelo tamanho dos documentos no servidor (maior ↔ menor)">Docs <span id="docs-sort-arrow" style="font-size:10px;color:var(--muted)"></span></th></tr></thead><tbody id="proc-body"></tbody></table></div><div id="proc-pager" style="display:flex;gap:6px;align-items:center;justify-content:center;padding:14px;flex-wrap:wrap"></div>
     </section>
 
@@ -10570,6 +10570,30 @@ function renderProc(){
   <div class="note" style="margin:4px 0 10px">Fonte: DataJud (CNJ). Melhor para 1º grau; segredo de justiça pode não retornar.</div>
   <div style="display:flex;gap:8px"><button class="btn" onclick="buscarProcessos()">Buscar processos</button><button class="btn ghost" onclick="fecharBusca()">Cancelar</button></div>
   <div id="busca-result" style="margin-top:14px;max-height:360px;overflow:auto"></div>
+</div></div>
+<!-- Cadastro em lote pela OAB (só escritório cliente): a busca NÃO grava; entra
+     no acervo só o que for marcado. Ver /api/cadastro-oab. -->
+<div id="modal-oab" class="overlay hidden"><div class="modal" style="max-width:1000px">
+  <h2 style="margin:0 0 4px">Cadastrar processos pela OAB</h2>
+  <p class="note" style="margin:0 0 12px">Procura no Diário de Justiça de todos os tribunais o que saiu nesta inscrição e monta a lista dos processos. <b>Nada entra no seu acervo automaticamente</b> — só o que você marcar.</p>
+  <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap">
+    <div style="min-width:230px"><label>Inscrição na OAB</label><select id="oab-sel"><option value="">todas as do escritório</option></select></div>
+    <div style="width:150px"><label>Período</label><select id="oab-dias"><option value="30">Últimos 30 dias</option><option value="90" selected>Últimos 90 dias</option><option value="180">Últimos 180 dias</option><option value="365">Último ano</option></select></div>
+    <button class="btn" style="background:#6d28a8" onclick="buscarOab(this)">Procurar</button>
+    <span style="flex:1"></span>
+    <button class="btn ghost" onclick="fecharCadastroOab()">Fechar</button>
+  </div>
+  <div id="oab-msg" class="note" style="margin-top:10px"></div>
+  <div id="oab-lote" style="display:none;position:sticky;top:0;z-index:2;background:#eef4fb;border:1px solid #d7e4f3;border-radius:12px;padding:10px 14px;margin:12px 0;gap:12px;align-items:center;flex-wrap:wrap">
+    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;flex:1;min-width:260px">
+      <label style="display:flex;align-items:center;gap:7px;font-weight:600;font-size:13.5px;color:var(--navy);cursor:pointer;margin:0"><input type="checkbox" id="oab-todos" onchange="oabMarcarTodos(this.checked)" style="width:auto"> <span id="oab-todos-rot">marcar todos os novos</span></label>
+      <span id="oab-contador" style="font-weight:700;color:#0F6E56;font-size:13.5px">0 marcados</span>
+      <button class="btn sm ghost" onclick="oabLimpar()">limpar seleção</button>
+      <label class="note" style="display:flex;align-items:center;gap:6px;margin:0;cursor:pointer"><input type="checkbox" id="oab-so-novos" checked onchange="oabPintar()" style="width:auto"> esconder os que já estão no acervo</label>
+    </div>
+    <button class="btn" id="oab-btn-lote" style="background:#0F6E56;color:#fff;flex:none" onclick="cadastrarOabLote(this)" disabled>+ Cadastrar os marcados</button>
+  </div>
+  <div id="oab-lista" style="max-height:52vh;overflow:auto"></div>
 </div></div>
 <div id="modal-sync" class="overlay hidden"><div class="modal" style="max-width:860px">
   <h2>Sincronizar pasta de processos</h2>
@@ -26963,6 +26987,152 @@ function exportarTempoProcessoCSV(){
     });
   })(0);
 })();
+</script>
+<script>
+/* ===== Cadastrar processos pela OAB (lote) =====
+   A lista vem do Diário de Justiça pela inscrição na OAB — é a única fonte
+   pública que responde "quais processos são deste advogado" sem certificado.
+   Consequência que a tela precisa dizer: só aparece processo que teve
+   publicação no período; acervo parado não aparece.
+   Nada é gravado na busca. O que entra é o que for marcado — e o lote vai em
+   fatias, para o servidor não estourar o tempo e para a tela mostrar andamento. */
+var OAB_ITENS = [], OAB_MARCADOS = {};
+async function _oabToken(){ if(typeof finToken==='function') return await finToken(); var s=await window.__sb.auth.getSession(); return (s.data.session&&s.data.session.access_token)||''; }
+function fecharCadastroOab(){ document.getElementById('modal-oab').classList.add('hidden'); }
+async function abrirCadastroOab(){
+  var m=document.getElementById('modal-oab'); if(!m) return;
+  OAB_ITENS=[]; OAB_MARCADOS={};
+  document.getElementById('oab-lista').innerHTML='';
+  document.getElementById('oab-lote').style.display='none';
+  document.getElementById('oab-msg').textContent='';
+  m.classList.remove('hidden');
+  /* as inscrições do escritório no seletor: quem tem duas OAB quase sempre quer
+     uma de cada vez (a do sócio e a do associado trazem acervos diferentes) */
+  try{
+    var e=(window.__escInfo&&window.__escInfo.oabs)||[];
+    var sel=document.getElementById('oab-sel');
+    sel.innerHTML='<option value="">todas as do escritório</option>'+e.map(function(o){
+      return '<option value="'+esc(o.numero+'|'+o.uf)+'">'+esc(o.numero+' — '+o.uf)+'</option>';
+    }).join('');
+  }catch(er){}
+}
+async function buscarOab(btn){
+  var t0=btn.textContent; btn.disabled=true; btn.textContent='procurando…';
+  var msg=document.getElementById('oab-msg');
+  msg.textContent='Consultando o Diário de Justiça… em período longo isso leva alguns segundos.';
+  try{
+    var sel=(document.getElementById('oab-sel')||{}).value||'';
+    var dias=(document.getElementById('oab-dias')||{}).value||'90';
+    var q='dias='+encodeURIComponent(dias);
+    if(sel){ var p=sel.split('|'); q+='&numero='+encodeURIComponent(p[0])+'&uf='+encodeURIComponent(p[1]||''); }
+    var tok=await _oabToken();
+    var r=await fetch('/api/cadastro-oab?'+q,{headers:{Authorization:'Bearer '+tok},cache:'no-store'});
+    var d=await r.json();
+    if(!r.ok||d.erro){ msg.innerHTML='<span style="color:#b5342b">'+esc(d.erro||('HTTP '+r.status))+'</span>'; return; }
+    OAB_ITENS=d.itens||[]; OAB_MARCADOS={};
+    var cabe=(d.plano&&d.plano.limite_processos!=null)?(d.plano.limite_processos-(d.plano.usados||0)):null;
+    msg.innerHTML='<b>'+d.total+' processo(s) encontrado(s)</b> em '+esc(d.busca)+' · '+d.cadastrados+' já no seu acervo'
+      +(d.total>OAB_ITENS.length?(' · mostrando '+OAB_ITENS.length):'')
+      +(cabe!=null?(' · cabem mais <b>'+cabe+'</b> no seu plano'):'')
+      +(d.alerta?('<div style="color:#b5342b;margin-top:4px">'+esc(d.alerta)+'</div>'):'')
+      +'<div class="note" style="margin-top:3px">Só aparece processo que teve publicação no período escolhido — acervo parado não sai no Diário.</div>';
+    document.getElementById('oab-lote').style.display=OAB_ITENS.length?'flex':'none';
+    oabPintar();
+  }catch(e){ msg.innerHTML='<span style="color:#b5342b">'+esc(String(e&&e.message||e))+'</span>'; }
+  btn.disabled=false; btn.textContent=t0;
+}
+function _oabVisiveis(){
+  var soNovos=(document.getElementById('oab-so-novos')||{}).checked;
+  return OAB_ITENS.filter(function(i){ return !(soNovos&&i.meu); });
+}
+function oabPintar(){
+  var el=document.getElementById('oab-lista'); if(!el) return;
+  var vis=_oabVisiveis();
+  if(!vis.length){ el.innerHTML='<div class="note" style="padding:10px">Nada para mostrar com este filtro.</div>'; }
+  else el.innerHTML=vis.map(function(i){
+    var k=i.digitos, marcado=!!OAB_MARCADOS[k];
+    var dt=i.data?String(i.data).split('-').reverse().join('/'):'';
+    return '<div class="oab-linha" style="border:1px solid '+(marcado?'#bcd8cd':'var(--line)')+';background:'+(marcado?'#f6fbf8':(i.meu?'#fafbfd':'#fff'))+';border-radius:12px;padding:10px 12px;margin-bottom:8px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">'
+      +'<input type="checkbox" '+(i.meu?'disabled style="opacity:.35;width:18px;height:18px;flex:none"':'style="width:18px;height:18px;accent-color:#0F6E56;flex:none;cursor:pointer"')+' '+(marcado?'checked':'')+' onchange="oabMarcar(\''+k+'\',this.checked)">'
+      +'<div style="min-width:190px"><div style="font-family:ui-monospace,Menlo,monospace;font-weight:700;color:var(--navy);font-size:13px">'+esc(fmtCNJ(i.numero))+'</div>'
+        +'<div class="note" style="font-size:11.5px">'+esc(i.tribunal||'')+(dt?(' · publicação em '+dt):'')+(i.publicacoes>1?(' · '+i.publicacoes+' publicações'):'')+'</div></div>'
+      +'<div style="flex:1;min-width:260px;font-size:13.5px">'
+        +'<div><span class="note" style="font-size:10.5px;text-transform:uppercase;letter-spacing:.4px">ativo</span> <b>'+esc(i.ativo||'—')+'</b></div>'
+        +'<div><span class="note" style="font-size:10.5px;text-transform:uppercase;letter-spacing:.4px">passivo</span> '+esc(i.passivo||'—')+'</div>'
+      +'</div>'
+      +(i.meu
+        ? '<span style="display:inline-block;border-radius:20px;padding:2px 10px;font-size:11px;font-weight:700;background:#e5f4ed;color:#127a53">já cadastrado</span>'
+        : '<button class="btn sm ghost" title="Trocar quem é autor e quem é réu" onclick="oabInverter(\''+k+'\')">⇅ inverter polos</button>'
+          +'<button class="btn sm ghost" title="Cadastra só este" onclick="cadastrarOabUm(\''+k+'\',this)">+ cadastrar</button>')
+      +'</div>';
+  }).join('');
+  var n=Object.keys(OAB_MARCADOS).length;
+  document.getElementById('oab-contador').textContent=n+' marcado'+(n===1?'':'s');
+  var b=document.getElementById('oab-btn-lote');
+  b.disabled=!n; b.textContent=n?('+ Cadastrar os '+n+' marcados'):'+ Cadastrar os marcados';
+  var novos=vis.filter(function(i){ return !i.meu; }).length;
+  document.getElementById('oab-todos-rot').textContent='marcar todos os novos ('+novos+')';
+}
+function oabMarcar(k,v){ if(v) OAB_MARCADOS[k]=true; else delete OAB_MARCADOS[k]; oabPintar(); }
+function oabMarcarTodos(v){
+  _oabVisiveis().forEach(function(i){ if(i.meu) return; if(v) OAB_MARCADOS[i.digitos]=true; else delete OAB_MARCADOS[i.digitos]; });
+  oabPintar();
+}
+function oabLimpar(){ OAB_MARCADOS={}; var t=document.getElementById('oab-todos'); if(t) t.checked=false; oabPintar(); }
+/* Inverter os polos: o Diário marca o destinatário como A ou P, mas em execução
+   invertida e em recurso o papel muda de lado. Trocar aqui é mais rápido do que
+   corrigir depois na ficha. */
+function oabInverter(k){
+  var i=OAB_ITENS.filter(function(x){ return x.digitos===k; })[0]; if(!i) return;
+  var a=i.ativo; i.ativo=i.passivo; i.passivo=a; oabPintar();
+}
+async function _oabEnviar(itens,aoAndar){
+  var feitos=[], fatia=5;
+  for(var i=0;i<itens.length;i+=fatia){
+    var parte=itens.slice(i,i+fatia);
+    var tok=await _oabToken();
+    var r=await fetch('/api/cadastro-oab',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({itens:parte})});
+    var d=await r.json();
+    if(!r.ok||d.erro){ throw new Error(d.erro||('HTTP '+r.status)); }
+    feitos=feitos.concat(d.itens||[]);
+    if(aoAndar) aoAndar(Math.min(i+fatia,itens.length),itens.length);
+  }
+  return feitos;
+}
+function _oabDepois(feitos,msg){
+  var ok=feitos.filter(function(f){ return f.ok; }).length;
+  var fora=feitos.filter(function(f){ return !f.ok; });
+  feitos.forEach(function(f){
+    if(!f.ok) return;
+    var dig=String(f.numero||'').replace(/\D/g,'');
+    delete OAB_MARCADOS[dig];
+    var it=OAB_ITENS.filter(function(x){ return x.digitos===dig; })[0];
+    if(it) it.meu=true;
+  });
+  oabPintar();
+  msg.innerHTML='<b style="color:#127a53">'+ok+' processo(s) cadastrado(s).</b>'
+    +(fora.length?(' '+fora.length+' fora: '+esc(fora.slice(0,3).map(function(f){ return f.numero+' ('+f.motivo+')'; }).join('; '))+(fora.length>3?'…':'')):'')
+    +' <a onclick="location.reload()" style="cursor:pointer;color:#185FA5;text-decoration:underline">recarregar a lista de processos</a>';
+}
+async function cadastrarOabLote(btn){
+  var marcados=OAB_ITENS.filter(function(i){ return OAB_MARCADOS[i.digitos]; });
+  if(!marcados.length) return;
+  if(!confirm('Cadastrar '+marcados.length+' processo(s) no acervo?')) return;
+  var msg=document.getElementById('oab-msg'); var t0=btn.textContent;
+  btn.disabled=true;
+  try{
+    var feitos=await _oabEnviar(marcados,function(feito,total){ btn.textContent='cadastrando… '+feito+' de '+total; });
+    _oabDepois(feitos,msg);
+  }catch(e){ msg.innerHTML='<span style="color:#b5342b">'+esc(String(e&&e.message||e))+'</span>'; }
+  btn.disabled=false; btn.textContent=t0;
+}
+async function cadastrarOabUm(k,btn){
+  var i=OAB_ITENS.filter(function(x){ return x.digitos===k; })[0]; if(!i) return;
+  var msg=document.getElementById('oab-msg'); var t0=btn.textContent;
+  btn.disabled=true; btn.textContent='cadastrando…';
+  try{ _oabDepois(await _oabEnviar([i]),msg); }
+  catch(e){ msg.innerHTML='<span style="color:#b5342b">'+esc(String(e&&e.message||e))+'</span>'; btn.disabled=false; btn.textContent=t0; }
+}
 </script>
 </body>
 </html>
