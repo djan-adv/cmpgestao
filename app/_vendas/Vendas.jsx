@@ -305,12 +305,31 @@ export default function Vendas({ aoEntrar }) {
         </div>
       </section>
 
+      {/* Quem vende, com nome e endereço de contato.
+          Página que cobra mensalidade e não diz quem está do outro lado levanta
+          suspeita — e com razão. O CPF fica de fora: identificar não exige expor
+          documento, e enquanto a contratação for por conversa (e não por
+          checkout no site) não há por que publicá-lo. */}
       <footer style={{ background: '#141d29', color: '#8b9bb0', fontSize: 13.5 }}>
-        <div style={{ ...faixa, padding: '22px', display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center' }}>
-          <span><b style={{ color: '#c8d4e4' }}>Gestão<span style={{ color: GOLD }}>Jurídica</span></b> — sistema de gestão para escritórios de advocacia.</span>
-          <button onClick={aoEntrar} style={{ background: 'none', border: 0, color: '#c8d4e4', cursor: 'pointer', fontSize: 13.5, textDecoration: 'underline', padding: 0, marginLeft: 'auto' }}>
-            Já é cliente? Entrar
-          </button>
+        <div style={{ ...faixa, padding: '26px 22px', display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+          <div style={{ minWidth: 260 }}>
+            <div style={{ color: '#c8d4e4', fontWeight: 700, marginBottom: 2 }}>
+              Gestão<span style={{ color: GOLD }}>Jurídica</span>
+            </div>
+            <div>Sistema de gestão para escritórios de advocacia.</div>
+          </div>
+          <div style={{ minWidth: 260 }}>
+            <div style={{ color: '#c8d4e4', fontWeight: 700, marginBottom: 2 }}>Desenvolvimento e suporte</div>
+            <div>Djan Henrique Mendonça — desenvolvedor</div>
+            <div>
+              <a href="mailto:contato@djan.app.br" style={{ color: '#c8d4e4' }}>contato@djan.app.br</a>
+            </div>
+          </div>
+          <div style={{ marginLeft: 'auto', paddingTop: 2 }}>
+            <button onClick={aoEntrar} style={{ background: 'none', border: 0, color: '#c8d4e4', cursor: 'pointer', fontSize: 13.5, textDecoration: 'underline', padding: 0 }}>
+              Já é cliente? Entrar
+            </button>
+          </div>
         </div>
       </footer>
     </div>
