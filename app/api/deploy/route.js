@@ -24,16 +24,27 @@ const LOG_FILE = path.join(REPO_DIR, '.deploy-build.log')
 // e-mails autorizados a publicar (coordenador), além de quem estiver como sócio
 // na tabela usuarios com um desses nomes — mesmo critério já usado em
 // /api/acessos e /api/convite (assim Jader e Maria Eduarda também publicam).
+// Publicar recompila e reinicia o servidor — o sistema INTEIRO, de todos os
+// escritórios. Só pode quem mantém o sistema: sócio ou contratante do
+// escritório RAIZ.
+//
+// A regra anterior era um teste pelo NOME da pessoa (/djan/, /jader/,
+// /eduarda/) somado ao papel de sócio. Com escritórios clientes dentro do mesmo
+// banco isso vira brecha de verdade: bastaria um sócio chamado Djan em qualquer
+// escritório cliente para ele derrubar ou publicar o sistema de todo mundo.
+// Nome não é credencial.
 const DEPLOY_ALLOW = ['djan.adv@gmail.com']
-const DEPLOY_NOMES = [/djan/i, /jader/i, /eduarda/i]
 async function podePublicar(user) {
   const email = String((user && user.email) || '').toLowerCase()
-  if (DEPLOY_ALLOW.map(e => e.toLowerCase()).includes(email)) return true
   try {
     const sbA = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } })
-    const { data } = await sbA.from('usuarios').select('nome,papel').eq('id', user.id).maybeSingle()
-    if (!data || data.papel !== 'socio') return false
-    return DEPLOY_NOMES.some(rx => rx.test(String(data.nome || '')))
+    const { data } = await sbA
+      .from('usuarios').select('papel, escritorios!inner(raiz)')
+      .eq('id', user.id).maybeSingle()
+    if (!data || !data.escritorios || data.escritorios.raiz !== true) return false
+    if (['socio', 'contratante'].includes(String(data.papel || ''))) return true
+    // o e-mail do mantenedor continua valendo, mas só dentro da raiz
+    return DEPLOY_ALLOW.map(e => e.toLowerCase()).includes(email)
   } catch (e) { return false }
 }
 

@@ -1119,7 +1119,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
         <button class="btn sm ghost" onclick="novoAssento('est')">+ Estagiário(a)</button>
       </span>
       <button class="btn sm ghost" id="btn-ver-acessos" onclick="toggleListaAcessos()">👥 Acessos</button>
-      <button class="btn sm gold coord-only" id="btn-abrir-publicar" style="display:none" onclick="abrirPublicar()">↑ Publicar</button>
+      <button class="btn sm gold coord-only cmp-only" id="btn-abrir-publicar" style="display:none" onclick="abrirPublicar()">↑ Publicar</button>
     </div>
     <p class="note" id="acessos-intro" style="margin-top:6px">Cada pessoa usa o mesmo link e entra no próprio acesso. Cada um cadastra/altera apenas o seu e-mail e senha. O coordenador (Djan) gerencia todos.</p>
     <div id="acessos-body" class="acessos-list" style="display:none"></div>
@@ -1826,7 +1826,7 @@ async function trocarNomeVisual(id){
 }
 /* apenas o coordenador (Djan) ativa/desativa acessos */
 async function toggleAtivoAcesso(id){
-  if(!souCoordenador()){ alert('Apenas os coordenadores (Djan, Jader e Maria Eduarda) podem ativar/desativar acessos.'); return; }
+  if(!souCoordenador()){ alert('Apenas quem administra os acessos pode ativar ou desativar.'); return; }
   var u=(USUARIOS_VISUAIS||[]).find(function(x){return x.id===id;}); if(!u) return;
   if(u.id==='djan'){ alert('O acesso do coordenador não pode ser desativado.'); return; }
   if(!u.email){ alert('Este acesso ainda não foi cadastrado. Clique em "Cadastrar" primeiro.'); return; }
@@ -2010,6 +2010,12 @@ function _publicarTrava(on){ var f=document.getElementById('publicar-btn-fechar'
    rejeitadas ficam guardadas para reformulação e não somem da lista. */
 async function publicarAtualizacao(){
   if(!souCoordenador()){ alert('Apenas os coordenadores podem publicar atualizações.'); return; }
+  /* segunda tranca, além de esconder o botão: publicar reinicia o servidor de
+     TODOS os escritórios, e o atalho poderia ser chamado pelo console */
+  if(window.__escInfo && window.__escInfo.raiz!==true){
+    alert('Publicar atualiza o sistema para todos os escritórios — é função de quem mantém o sistema, não do seu escritório.');
+    return;
+  }
   var btn=document.getElementById('btn-publicar'), st=document.getElementById('publicar-status');
   if(!btn) return;
   btn.disabled=true; var txt0=btn.textContent; btn.textContent='Publicando…';
@@ -2083,7 +2089,11 @@ function renderAcessos(){
     ? 'Você é o coordenador: pode cadastrar, editar, renomear, ativar/desativar qualquer acesso.'
     : 'Você pode cadastrar e alterar apenas o seu próprio acesso (e-mail e senha).';
   /* Publicar tem tela própria (modal-publicar); aqui fica só o atalho */
-  var bp=document.getElementById('btn-abrir-publicar'); if(bp) bp.style.display=ehCoord?'inline-block':'none';
+  /* Publicar recompila e reinicia o SERVIDOR — o sistema inteiro, de todos os
+     escritórios. Não é função de quem comprou o sistema: é de quem o mantém.
+     O contratante de um escritório cliente manda nos acessos dele, e só. */
+  var ehDaCasa=!(window.__escInfo && window.__escInfo.raiz!==true);
+  var bp=document.getElementById('btn-abrir-publicar'); if(bp) bp.style.display=(ehCoord&&ehDaCasa)?'inline-block':'none';
   try{ var _lb=document.getElementById('acessos-body'); _rotuloBtnAcessos(_lb&&_lb.style.display!=='none'); }catch(e){}
   body.innerHTML=(USUARIOS_VISUAIS||[]).map(function(u){
     var p=perfis[u.perfil]||perfis.adv;
