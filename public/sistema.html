@@ -2381,6 +2381,19 @@ async function carregarMarcaDagua(){
     ck.disabled=!d.pode_mudar;
     var box=document.getElementById('md-box');
     if(box&&!d.pode_mudar) box.style.opacity='.65';
+    /* No teste a marca vale para todo mundo e não se desliga. Sem esta linha, o
+       contratante veria a chave desligada, concluiria que o PDF sai limpo — e
+       descobriria o contrário abrindo um documento na frente de um cliente. */
+    var av=document.getElementById('md-aviso-teste');
+    if(!av&&d.forcado_teste&&box){
+      av=document.createElement('p'); av.id='md-aviso-teste';
+      av.className='note';
+      av.style.cssText='margin:8px 0 0;color:#8a6d00';
+      av.innerHTML='<b>Durante o período de teste</b>, todo documento baixado sai com a marca ao fundo, '
+        +'com o nome de quem baixou — para qualquer pessoa do escritório, inclusive você. '
+        +'Ao contratar, a marca volta a ser opcional e vale só para quem você escolher.';
+      box.appendChild(av);
+    }
   }catch(e){}
 }
 async function salvarMarcaDagua(ck){

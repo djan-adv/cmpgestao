@@ -192,6 +192,19 @@ export async function GET(request) {
   const { data: e } = await sb.from('escritorios').select('limite_processos').eq('id', esc).maybeSingle()
   const { count } = await sb.from('processos').select('id', { count: 'exact', head: true }).eq('escritorio_id', esc)
 
+  // RASTRO DA BUSCA. O campo da OAB aceita qualquer inscrição, inclusive a de
+  // outro advogado — o que se obtém com isso é público (o Diário é público), mas
+  // sai daqui reunido e pronto para levar. Não dá para impedir sem conferência
+  // de identidade de verdade; dá para deixar de ser anônimo. Fica gravado quem
+  // pesquisou o quê, e quando.
+  try {
+    await sb.from('activity_events').insert({
+      escritorio_id: esc, user_id: user.id, event_type: 'oab_busca',
+      entity_type: 'oab', entity_id: oabs.map(o => o.numero + '/' + o.uf).join(','),
+      metadata: { dias, encontrados: lista.length, informada_na_busca: !!(num && uf.length === 2) },
+    })
+  } catch (er) {}
+
   return Response.json({
     ok: falhas.length === 0,
     busca: oabs.map(o => 'OAB ' + o.numero + '/' + o.uf).join(', '),

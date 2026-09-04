@@ -75,7 +75,8 @@ export async function GET(request) {
     const base = await pdfDeExemplo()
     // o carimbo do exemplo leva o nome de quem pediu: é assim que o coordenador
     // vê o formato exato (nome, e-mail, data e hora) que sai para o estagiário
-    const buf = await marcarPdf(base, etiquetaDe(q.perfil))
+    const { data: e0 } = await q.sb.from('escritorios').select('teste_ate').eq('id', q.esc).maybeSingle()
+    const buf = await marcarPdf(base, etiquetaDe(q.perfil, !!(e0 && e0.teste_ate)))
     return new Response(buf, {
       headers: {
         'Content-Type': 'application/pdf',
@@ -85,11 +86,19 @@ export async function GET(request) {
     })
   }
 
+  // Durante o teste a marca vale para TODOS e não se desliga. Dizer isso aqui
+  // evita o pior desfecho da tela: o contratante ver a chave "desligada",
+  // concluir que os documentos saem limpos, e descobrir o contrário abrindo um
+  // PDF na frente de um cliente.
+  const { data: escr } = await q.sb.from('escritorios').select('teste_ate').eq('id', q.esc).maybeSingle()
+  const emTeste = !!(escr && escr.teste_ate)
+
   return Response.json({
     ok: true,
-    ligado: await ligado(q.sb, q.esc),
-    pode_mudar: q.manda,
-    exemplo_de: etiquetaDe(q.perfil),
+    ligado: emTeste ? true : await ligado(q.sb, q.esc),
+    pode_mudar: q.manda && !emTeste,
+    forcado_teste: emTeste,
+    exemplo_de: etiquetaDe(q.perfil, emTeste),
   })
 }
 
