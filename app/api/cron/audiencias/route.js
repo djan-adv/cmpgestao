@@ -113,7 +113,11 @@ export async function GET(request) {
     if (!quando) { rel.erros++; continue }
 
     const dig = String(e.processo_numero || '').replace(/\D/g, '')
-    const pr = await sb.from('processos').select('id,numero,cliente_nome,escritorio_id,audiencia_link').eq('numero_digitos', dig).maybeSingle()
+    // o processo é procurado DENTRO do escritório dono do compromisso: número de
+    // processo se repete entre tribunais, e sem isto a audiência de um
+    // escritório avisaria o cliente de outro (ou o maybeSingle quebraria)
+    const pr = await sb.from('processos').select('id,numero,cliente_nome,escritorio_id,audiencia_link')
+      .eq('escritorio_id', e.escritorio_id).eq('numero_digitos', dig).maybeSingle()
     const p = pr && pr.data
     if (!p) { rel.semProcesso++; if (debug) rel.detalhe.push({ numero: e.processo_numero, erro: 'processo não cadastrado' }); continue }
 

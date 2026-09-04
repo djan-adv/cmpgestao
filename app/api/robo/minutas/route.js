@@ -54,7 +54,7 @@ async function modoAtual(sb) {
 // Precisa ser byte a byte idêntico entre chamadas: nada de data, nº de processo
 // ou qualquer variável aqui dentro.
 const MANUAL_TRIAGEM =
-  'Você é o(a) advogado(a) de triagem do escritório Crispim, Mendonça e Pinheiro (CMP), que atua em Direito do Consumidor e Direito Civil no Nordeste (PB, PE, SE, CE, BA). Sua função é ler UMA publicação do Diário de Justiça (DJEN) e decidir, com precisão, o que ela exige do escritório.\n\n' +
+  'Você é o(a) advogado(a) de triagem de um escritório de advocacia brasileiro. Sua função é ler UMA publicação do Diário de Justiça (DJEN) e decidir, com precisão, duas coisas: o que ela exige do escritório e se ela designa audiência. O nome do escritório e as áreas em que ele atua vêm adiante, junto com a publicação.\n\n' +
 
   'REGRA DE OURO: só marque exige_peca = true quando a publicação impuser ao escritório a apresentação de uma PETIÇÃO com prazo. Publicação que apenas informa, ou que pede providência não-petitória (comparecer a audiência, retirar alvará, pagar custas), NÃO exige peça — mesmo que exija providência.\n\n' +
 
@@ -97,6 +97,15 @@ const MANUAL_TRIAGEM =
 
   'ATO DECISÓRIO (campo ato_decisorio): responde a uma pergunta INDEPENDENTE de exige_peca — "esta publicação traz uma sentença, um acórdão ou uma decisão já proferida?". Marque true também quando o resultado for TOTALMENTE FAVORÁVEL ao nosso cliente, porque cabem embargos de declaração de qualquer decisão. Marque false para despacho de mero expediente, ato ordinatório, intimação para comparecer/pagar/retirar, juntada, certidão e publicação que apenas informa.\n\n' +
 
+  'AUDIÊNCIA DESIGNADA (campos audiencia_*): responde a uma pergunta INDEPENDENTE de exige_peca — "esta publicação DESIGNA, REDESIGNA ou ADIA uma audiência, sessão de julgamento, sessão de conciliação ou perícia com data marcada?". Se sim, marque audiencia_designada = true e devolva a data em AAAA-MM-DD e a hora em HH:MM, exatamente como estão escritas na publicação.\n' +
+  'Regras da audiência, todas obrigatórias:\n' +
+  '- NUNCA calcule, deduza ou invente a data e a hora: só devolva o que está escrito na publicação. Se a publicação disser apenas "audiência a ser designada", "em data oportuna" ou não trouxer dia certo, marque audiencia_designada = false.\n' +
+  '- Se a publicação trouxer o dia e o mês mas não o ano, use o ano da data da publicação — e, se o dia/mês já tiver passado nesse ano, use o ano seguinte.\n' +
+  '- Sem hora escrita, devolva hora vazia; não chute 09:00 nem qualquer outro horário.\n' +
+  '- audiencia_tipo: o nome que a publicação der (conciliação, mediação, instrução e julgamento, una, justificação, sessão de julgamento, perícia). Se não disser, devolva "audiência".\n' +
+  '- audiencia_modalidade: "videoconferência" quando a publicação falar em virtual, telepresencial, videoconferência, sala virtual ou link; "presencial" quando indicar comparecimento ao fórum; "híbrida" quando disser as duas; vazio quando não disser.\n' +
+  '- audiencia_local: a vara, o fórum, a sala ou o endereço de comparecimento; ou o endereço da sala virtual, quando a publicação trouxer o link. Vazio se não houver.\n' +
+  'Designação de audiência continua NÃO exigindo peça: os dois campos convivem, e uma publicação pode marcar audiência e exigir peça ao mesmo tempo.\n\n' +
   'CAUTELA: na dúvida entre exigir peça e não exigir, marque exige_peca = true — perder prazo é irreversível, e o advogado revisa a triagem de qualquer forma. Você NÃO redige a peça, apenas classifica. Responda SEMPRE chamando a ferramenta registrar_triagem.'
 
 const FERRAMENTA_TRIAGEM = [{
@@ -115,8 +124,14 @@ const FERRAMENTA_TRIAGEM = [{
       urgencia: { type: 'string', enum: ['alta', 'media', 'baixa'] },
       resumo: { type: 'string', description: 'Uma frase dizendo o que a publicação determina.' },
       docs_necessarios: { type: 'array', items: { type: 'string' }, description: 'Até 4 palavras-chave de nomes de arquivos a consultar.' },
+      audiencia_designada: { type: 'boolean', description: 'A publicação DESIGNA, REDESIGNA ou ADIA audiência/sessão/perícia com dia certo? false quando disser apenas que será designada em data oportuna.' },
+      audiencia_data: { type: 'string', description: 'Data da audiência em AAAA-MM-DD, exatamente como escrita na publicação. Vazio se não houver dia certo.' },
+      audiencia_hora: { type: 'string', description: 'Hora da audiência em HH:MM, como escrita na publicação. Vazio se a publicação não disser a hora.' },
+      audiencia_tipo: { type: 'string', description: 'Conciliação, mediação, instrução e julgamento, una, justificação, sessão de julgamento, perícia. "audiência" se a publicação não especificar.' },
+      audiencia_modalidade: { type: 'string', description: 'presencial, videoconferência ou híbrida. Vazio se a publicação não disser.' },
+      audiencia_local: { type: 'string', description: 'Vara, fórum, sala ou endereço de comparecimento; ou o endereço da sala virtual. Vazio se não houver.' },
     },
-    required: ['exige_peca', 'ato_decisorio', 'tipo_peca', 'instrucao', 'prazo_dias', 'prazo_uteis', 'urgencia', 'resumo', 'docs_necessarios'],
+    required: ['exige_peca', 'ato_decisorio', 'tipo_peca', 'instrucao', 'prazo_dias', 'prazo_uteis', 'urgencia', 'resumo', 'docs_necessarios', 'audiencia_designada', 'audiencia_data', 'audiencia_hora', 'audiencia_tipo', 'audiencia_modalidade', 'audiencia_local'],
     additionalProperties: false,
   },
 }]
@@ -150,6 +165,95 @@ function dataPrazo(dias, uteis) {
 }
 
 // ————— fase 1: triagem —————
+// ————— Secretária Virtual: a audiência designada vira compromisso —————
+//
+// A publicação que marca audiência sempre foi triada e descartada — "é agenda,
+// não peça". Só que ninguém colocava na agenda: alguém tinha que ler a
+// publicação e digitar. Audiência perdida é revelia ou preclusão de prova, e
+// custa mais caro que prazo perdido.
+//
+// Sai da MESMA leitura da triagem: nenhuma chamada de IA a mais, nenhum custo
+// novo. O que a IA devolve aqui é só o que estava ESCRITO na publicação — ela é
+// instruída a nunca calcular data nem chutar hora.
+//
+// O compromisso nasce marcado como vindo do robô (origem 'robo_secretaria') e a
+// agenda mostra isso com selo: é um recado de secretária sobre a mesa, não fato
+// consumado. Quem confere é quem vai à audiência.
+const AUD_HORA_PADRAO = '09:00'
+
+// Aceita só data que a publicação realmente trouxe, e só para frente. Audiência
+// de ontem virando compromisso amanhã é ruído que faz a agenda perder crédito;
+// a folga de um dia cobre a publicação que sai na manhã do próprio dia.
+function dataAudienciaValida(iso) {
+  const t = String(iso || '').trim()
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(t)) return null
+  const d = new Date(t + 'T12:00:00Z')
+  if (isNaN(d)) return null
+  // 31 de fevereiro não é erro para o JavaScript: ele rola para 3 de março, e a
+  // audiência entraria na agenda em dia que a publicação nunca mencionou
+  if (d.toISOString().slice(0, 10) !== t) return null
+  const ontem = Date.now() - 86400000
+  if (d.getTime() < ontem) return null
+  // pauta de tribunal não marca audiência para daqui a três anos
+  if (d.getTime() > Date.now() + 3 * 365 * 86400000) return null
+  return t
+}
+
+function horaAudiencia(h) {
+  const m = String(h || '').trim().match(/^(\d{1,2})[:h](\d{2})/)
+  if (!m) return null
+  const hh = parseInt(m[1], 10), mm = parseInt(m[2], 10)
+  if (hh > 23 || mm > 59) return null
+  return String(hh).padStart(2, '0') + ':' + String(mm).padStart(2, '0')
+}
+
+async function marcarAudiencia(sb, esc, proc, t, publicadoEm) {
+  if (!t || t.audiencia_designada !== true) return null
+  const data = dataAudienciaValida(t.audiencia_data)
+  if (!data) return null
+  const hora = horaAudiencia(t.audiencia_hora)
+
+  // A MESMA audiência sai no diário mais de uma vez (dois canais, e depois a
+  // redesignação). Mesmo processo no mesmo dia = mesma audiência: atualiza o que
+  // faltava em vez de encher a agenda de linhas repetidas.
+  const { data: ja } = await sb.from('agenda_eventos')
+    .select('id,hora,local_evento,confirmado_em')
+    .eq('escritorio_id', esc).eq('processo_numero', proc.numero).eq('data', data).eq('tipo', 'az').limit(1)
+  const tipo = String(t.audiencia_tipo || 'audiência').trim().slice(0, 60) || 'audiência'
+  const modalidade = String(t.audiencia_modalidade || '').trim().slice(0, 30)
+  const local = [modalidade, String(t.audiencia_local || '').trim()].filter(Boolean).join(' — ').slice(0, 200) || null
+  const titulo = ('Audiência de ' + tipo).replace(/^Audiência de audiência$/i, 'Audiência')
+    + ' — ' + (proc.cliente_nome || 'cliente')
+
+  if (ja && ja.length) {
+    const patch = {}
+    // só completa o que faltava. Evento que o cliente já confirmou fica intocado:
+    // mexer no horário depois de a pessoa ter confirmado presença é pior que a
+    // informação faltando.
+    if (hora && !ja[0].hora && !ja[0].confirmado_em) patch.hora = hora
+    if (local && !ja[0].local_evento && !ja[0].confirmado_em) patch.local_evento = local
+    if (Object.keys(patch).length) await sb.from('agenda_eventos').update(patch).eq('id', ja[0].id)
+    return { id: ja[0].id, data, hora: hora || ja[0].hora, repetida: true }
+  }
+
+  const ins = await sb.from('agenda_eventos').insert({
+    escritorio_id: esc,
+    data,
+    hora: hora || AUD_HORA_PADRAO,
+    tipo: 'az',
+    titulo: titulo.slice(0, 160),
+    processo_numero: proc.numero,
+    local_evento: local,
+    descricao: 'Marcada pela Secretária Virtual a partir da publicação de '
+      + (publicadoEm ? String(publicadoEm).slice(0, 10).split('-').reverse().join('/') : 'data não informada') + '. '
+      + (hora ? '' : 'A publicação não trazia a hora — o horário abaixo é provisório. ')
+      + 'Confira no processo antes de contar com esta data.\n\n' + String(t.resumo || '').slice(0, 400),
+    origem: 'robo_secretaria',
+  }).select('id').single()
+  if (ins.error) return { erro: ins.error.message }
+  return { id: ins.data.id, data, hora: hora || AUD_HORA_PADRAO, sem_hora: !hora, novo: true }
+}
+
 // Triagem das intimações — o Estagiário Virtual.
 //
 // Roda para UM escritório de cada vez. Antes lia os 300 andamentos mais novos do
@@ -171,6 +275,11 @@ async function faseTriagem(sb, esc, limite) {
     if (!arquivado && p.suspenso !== true) { mapaProc[p.id] = p; idsProc.push(p.id) }
   })
   if (!idsProc.length) return { triados: 0, nada: true, motivo: 'nenhum processo ativo neste escritório' }
+
+  // Vai no bloco VARIÁVEL do prompt, nunca no manual: o manual é o prefixo
+  // cacheado e precisa ser byte a byte igual entre escritórios.
+  const { data: casa } = await sb.from('escritorios').select('nome').eq('id', esc).maybeSingle()
+  const nomeEsc = (casa && casa.nome) || ''
 
   let ands = [], error = null
   for (let i = 0; i < idsProc.length; i += 200) {
@@ -198,6 +307,7 @@ async function faseTriagem(sb, esc, limite) {
     const p = mapaProc[a.processo_id]
     // bloco VARIÁVEL — sempre depois do breakpoint do cache
     const variavel =
+      'ESCRITÓRIO: ' + (nomeEsc || 'escritório de advocacia') + '\n' +
       'PROCESSO nº ' + (p.numero || '') + ' | Cliente do escritório: ' + (p.cliente_nome || '?') +
       ' | Parte contrária: ' + (p.oponente || '?') + ' | Classe/Assunto: ' + ((p.classe || '') + ' ' + (p.assunto || '')).trim() +
       ' | Órgão: ' + (p.orgao || '?') + ' | Data da publicação: ' + (a.data || '?') + '\n\n' +
@@ -288,14 +398,22 @@ async function faseTriagem(sb, esc, limite) {
       } else { embargosEm = null }
     }
 
+    // ——— Secretária Virtual ———
+    // Mesma leitura, nenhuma chamada de IA a mais: se a publicação designou
+    // audiência, ela vira compromisso na agenda (pendente de conferência).
+    let audiencia = null
+    try { audiencia = await marcarAudiencia(sb, esc, p, t, a.data) } catch (e) { audiencia = { erro: String((e && e.message) || e) } }
+
     const ins = await sb.from('robo_minutas').insert(linha).select('id').single()
     resultados.push({
       andamento_id: a.id, numero: p.numero, exige_peca: linha.exige_peca,
       tipo: linha.tipo_peca, prazo_em: prazoEm, embargos_em: embargosEm,
+      audiencia: audiencia && audiencia.data ? { data: audiencia.data, hora: audiencia.hora, nova: !!audiencia.novo } : null,
       erro: ins.error ? ins.error.message : null,
     })
   }
-  return { triados: resultados.length, restam: novas.length - fila.length, resultados }
+  const audienciasNovas = resultados.filter(r => r.audiencia && r.audiencia.nova).length
+  return { triados: resultados.length, audiencias: audienciasNovas, restam: novas.length - fila.length, resultados }
 }
 
 // ————— fase 2 (padrão): dossiê do Estagiário Virtual —————
@@ -744,6 +862,10 @@ async function _get(request) {
     if (fase === 'triagem') {
       await anotarRobo(e.id, 'minuta_triagem', !r.erro,
         r.erro || ((r.triados || 0) + ' intimação(ões) triada(s)' + (r.restam ? ', ' + r.restam + ' na fila' : '')))
+      // a Secretária sai da mesma leitura, mas tem linha própria: quem olha o
+      // painel quer saber da agenda, não da fila de peças
+      await anotarRobo(e.id, 'secretaria_audiencias', !r.erro,
+        r.erro || ((r.audiencias || 0) + ' audiência(s) nova(s) na agenda, de ' + (r.triados || 0) + ' publicação(ões) lida(s)'))
     }
   }
 
@@ -751,7 +873,7 @@ async function _get(request) {
   return Response.json({
     ok: !porEscritorio.every(r => r.erro),
     fase, modo, escritorios: porEscritorio.length,
-    triados: soma('triados'),
+    triados: soma('triados'), audiencias: soma('audiencias'),
     gasto_mes_brl: Math.round(orc.gastoBrl * 100) / 100,
     por_escritorio: porEscritorio,
   })

@@ -3022,6 +3022,7 @@ function renderAudSemana(){
       /* selos: agendada automaticamente / conferida pelo histórico */
       var selos='';
       if(a.org==='auto-sistema') selos+=' <span style="font-size:10px;background:#eaf4f4;color:#0b7285;border-radius:10px;padding:1px 7px;font-weight:600;white-space:nowrap">agendada automaticamente pelo sistema</span>';
+      if(a.org==='robo_secretaria') selos+=' <span style="font-size:10px;background:#fff4e5;color:#8a5a00;border-radius:10px;padding:1px 7px;font-weight:600;white-space:nowrap" title="A Secretária Virtual leu a publicação e marcou esta audiência. Confira a data no processo antes de contar com ela.">🗓 marcada pela Secretária Virtual — confira</span>';
       else { try{ var dig=String(num).replace(/\D/g,''); var pr2=(DADOS.processos||[]).find(function(x){return String(x.numero||'').replace(/\D/g,'')===dig;});
         if(pr2 && _audienciasFuturasDoHist(pr2).some(function(h){return h.iso===a.data;})) selos+=' <span style="font-size:10px;background:#eaf7f1;color:#0F6E56;border-radius:10px;padding:1px 7px;font-weight:600;white-space:nowrap">✓ conferida pelo histórico</span>'; }catch(e){} }
       if(a.conf) selos+=' <span style="font-size:10px;background:#0F6E56;color:#fff;border-radius:10px;padding:1px 7px;font-weight:700;white-space:nowrap" title="'+esc(a.confPor||'')+'">✓ cliente confirmou</span>';
@@ -15630,6 +15631,7 @@ function renderAudienciaSugestao(){
     var br=e.data.split('-').reverse().join('/');
     var selo='';
     if(e.org==='auto-sistema') selo='<span style="font-size:10px;background:#eaf4f4;color:#0b7285;border-radius:10px;padding:1px 7px;font-weight:600;white-space:nowrap">agendada automaticamente pelo sistema</span>';
+    if(e.org==='robo_secretaria') selo='<span style="font-size:10px;background:#fff4e5;color:#8a5a00;border-radius:10px;padding:1px 7px;font-weight:600;white-space:nowrap" title="A Secretária Virtual leu a publicação e marcou esta audiência. Confira a data no processo antes de contar com ela.">🗓 marcada pela Secretária Virtual — confira</span>';
     else if(auds.some(function(h){return h.iso===e.data;})) selo='<span style="font-size:10px;background:#eaf7f1;color:#0F6E56;border-radius:10px;padding:1px 7px;font-weight:600;white-space:nowrap">✓ conferida pelo histórico</span>';
     selo+=e.conf
       ? ' <span style="font-size:10px;background:#0F6E56;color:#fff;border-radius:10px;padding:1px 7px;font-weight:700;white-space:nowrap" title="'+esc(e.confPor||'')+'">✓ cliente confirmou</span>'

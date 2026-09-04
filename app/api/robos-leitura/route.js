@@ -53,6 +53,13 @@ const ROBOS = [
     url: '/api/robo/minutas?fase=triagem',
     precisa: 'estagiario',
   },
+  {
+    nome: 'secretaria_audiencias',
+    rotulo: 'Secretária Virtual — audiências na agenda',
+    faz: 'Na mesma leitura do Estagiário, reconhece a publicação que designa, redesigna ou adia audiência e coloca o compromisso na agenda, com dia, hora, modalidade e local — marcado como recado da Secretária, para você conferir. A partir daí o aviso ao cliente sai sozinho.',
+    url: '/api/robo/minutas?fase=triagem',
+    precisa: 'estagiario',
+  },
 ]
 
 function admin() {
@@ -90,7 +97,7 @@ async function pendencia(sb, esc, precisa) {
     // quem usa. Dizer isso é melhor do que um botão que não faz nada.
     if (e?.raiz === true) return null
     if ((e?.modulos || {}).estagiario !== true) {
-      return 'O Estagiário Virtual ainda não está liberado para este escritório. Peça a liberação em "Solicitar funcionalidades" — ele entra pelo plano.'
+      return 'O Estagiário Virtual e a Secretária Virtual ainda não estão liberados para este escritório — os dois saem da mesma leitura, e por isso da mesma liberação. Peça em "Solicitar funcionalidades": eles entram pelo plano.'
     }
     const oabs = Array.isArray(e?.oabs) ? e.oabs : []
     if (!oabs.length) return 'Cadastre as inscrições na OAB (⚙): a triagem só existe sobre as publicações que o robô do diário traz.'
