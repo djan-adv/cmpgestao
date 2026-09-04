@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="icon" type="image/png" sizes="64x64" href="/favicon-cmp.png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-<meta name="apple-mobile-web-app-title" content="CMPGestão">
+<meta name="apple-mobile-web-app-title" content="Gestão">
 <title>Sistema · Crispim Mendonça e Pinheiro Advogados</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -168,7 +168,7 @@
 </head>
 <body>
 <script>try{if(localStorage.getItem('sb-ndeqlyrydcijbgjiviuw-auth-token')){document.documentElement.setAttribute('data-boot','1');}}catch(e){}</script>
-<style>html[data-boot="1"] #login{display:none!important}html[data-boot="1"] body::before{content:"Carregando o CMPGestão…";display:block;text-align:center;color:#697180;font-size:14px;padding:48px}</style>
+<style>html[data-boot="1"] #login{display:none!important}html[data-boot="1"] body::before{content:"Carregando…";display:block;text-align:center;color:#697180;font-size:14px;padding:48px}</style>
 <style>
 /* Barra lateral em coluna: marca no topo, navegação rolável no meio, rodapé (perfil) fixo embaixo sem sobrepor */
 .side{display:flex;flex-direction:column;overflow:hidden!important}
@@ -1329,22 +1329,12 @@ async function identificarUsuarioLogado(){
       var novo={id:'auto_'+(email.split('@')[0]||'user'),nome:nomeBanco||email,perfil:(papelBanco==='socio'?'socio':(/estagi/i.test(papelBanco)?'est':'adv')),email:email,senha:'definida',ativo:true};
       USUARIOS_VISUAIS.push(novo); USUARIO_ATUAL_VISUAL=novo.id; seat=novo;
     }
-    /* De quem é este sistema? O escritório dono (a raiz) continua com a marca
-       da casa; um escritório CLIENTE vê o nome dele, e nunca a marca de quem
-       vendeu — o cliente não pode abrir o sistema e ler o nome de outro
-       escritório de advocacia no alto da tela. */
+    /* De quem é este sistema? A raiz continua com a marca da casa; um
+       escritório CLIENTE vê o nome dele, e nunca o de quem vendeu. */
     try{
-      var esc=await sb.from('escritorios').select('nome,raiz,marca').eq('id', (pf&&pf.data&&pf.data.escritorio_id)||undefined).maybeSingle();
-      if(esc&&esc.error){ esc=await sb.from('escritorios').select('nome,raiz,marca').limit(1).maybeSingle(); }
-      var e=esc&&esc.data;
-      window.__esc=(pf&&pf.data&&pf.data.escritorio_id)||null;
-      if(e && e.raiz!==true){
-        document.documentElement.setAttribute('data-perfil','cliente');
-        SOU_DONO_DO_ESCRITORIO=(papelBanco==='contratante'||papelBanco==='socio');
-        var bn=document.querySelector('.brand-neutral');
-        if(bn) bn.textContent=((e.marca&&e.marca.sistema)||e.nome||'Gestão');
-        try{ document.title=((e.marca&&e.marca.sistema)||e.nome||'Gestão'); }catch(eT){}
-      }
+      if(!window.__escInfo) await _carregarEscritorio();
+      SOU_DONO_DO_ESCRITORIO=(papelBanco==='contratante'||papelBanco==='socio');
+      aplicarPerfilDaTela();
     }catch(e){}
     var pf2=perfis[seat.perfil]||perfis.adv;
     var el=document.getElementById('who-name'); if(el) el.textContent=nomeBanco||seat.nome;
@@ -1434,6 +1424,33 @@ async function sairSistema(){
   try{ await window.__sb.auth.signOut(); }catch(e){}
   location.replace('/');
 }
+/* Aplica o perfil visual da tela. Existe como função — e não como uma linha
+   solta — porque `entrar()` também mexe no mesmo atributo: quando o sistema
+   monta a tela, ele escrevia 'cmp' por cima e a marca do cliente voltava a ser
+   a da casa. Agora quem decide é aqui, e as duas pontas chamam esta função. */
+/* O nome que a casa usa em textos: o do escritório de quem está logado, e
+   'CMPGestão' só quando é mesmo a raiz. Antes cada texto trazia o nome fixo, e
+   o cliente recebia convite dizendo que o sistema era de outro escritório. */
+function _nomeDaCasa(){
+  var e=window.__escInfo;
+  if(e && e.raiz!==true) return ((e.marca&&e.marca.sistema)||e.nome||'Gestão');
+  return 'CMPGestão';
+}
+function aplicarPerfilDaTela(){
+  var e=window.__escInfo;
+  var perfilSel=''; try{ perfilSel=(document.getElementById('roleSel')||{}).value||''; }catch(er){}
+  if(perfilSel==='inove'){ document.documentElement.setAttribute('data-perfil','inove'); return; }
+  if(e && e.raiz!==true){
+    document.documentElement.setAttribute('data-perfil','cliente');
+    var nome=((e.marca&&e.marca.sistema)||e.nome||'Gestão');
+    var bn=document.querySelector('.brand-neutral'); if(bn) bn.textContent=nome;
+    try{ document.title=nome; }catch(eT){}
+    /* o subtítulo da tela de login interna também nomeia a casa */
+    try{ var sub=document.querySelector('#login .sub'); if(sub) sub.textContent=nome; }catch(eS){}
+    return;
+  }
+  document.documentElement.setAttribute('data-perfil','cmp');
+}
 function entrar(){
   var r=document.getElementById("roleSel").value, p=perfis[r];
   document.getElementById("who-name").textContent=p.nome;
@@ -1441,7 +1458,7 @@ function entrar(){
   document.getElementById("login").classList.add("hidden");document.getElementById("app").classList.remove("hidden");
   document.documentElement.removeAttribute('data-boot');
   var __ehInove=(r==='inove');
-  document.documentElement.setAttribute('data-perfil',__ehInove?'inove':'cmp');
+  aplicarPerfilDaTela();
   var __sec="painel"; try{ __sec=localStorage.getItem('cmp_secao')||"painel"; }catch(e){}
   if(__ehInove) __sec='inove';
   try{ window.__restoreProc=(__sec==='proc-det')?localStorage.getItem('cmp_proc'):null; }catch(eR){ window.__restoreProc=null; }
@@ -1648,14 +1665,45 @@ async function marcarFerias(id){
   await redistribuirTarefasDe(u,'férias');
 }
 /* ===== Assentos (pessoas do escritório) — persistidos em produtividade_config ===== */
+/* De quem é este sistema. Carregado uma vez e guardado em window.__escInfo:
+   quem pergunta depois (marca, perfil da tela, assentos) usa a mesma resposta,
+   em vez de cada trecho consultar o banco por conta e chegar a conclusões
+   diferentes. */
+async function _carregarEscritorio(){
+  try{
+    var sb=window.__sb; if(!sb) return null;
+    var esc=await _escBusca(); if(!esc) return null;
+    var r=await sb.from('escritorios').select('id,nome,raiz,marca').eq('id',esc).maybeSingle();
+    window.__esc=esc;
+    window.__escInfo=(r&&r.data)||{id:esc,nome:'',raiz:false,marca:null};
+    return window.__escInfo;
+  }catch(e){ return null; }
+}
 async function _carregarAssentos(){
   try{
     var sb=window.__sb; if(!sb) return;
-    var esc=await _escBusca(); if(!esc) return;
+    var esc=(window.__escInfo&&window.__escInfo.id)||await _escBusca(); if(!esc) return;
     var r=await sb.from('produtividade_config').select('valor').eq('escritorio_id',esc).eq('chave','assentos').maybeSingle();
     if(r&&r.data&&r.data.valor){
       var arr=JSON.parse(r.data.valor);
-      if(Array.isArray(arr)&&arr.length) USUARIOS_VISUAIS=arr;
+      if(Array.isArray(arr)&&arr.length){ USUARIOS_VISUAIS=arr; return; }
+    }
+    /* Sem assentos salvos, a lista ficava com a equipe da CMP escrita no
+       código — e um escritório cliente abria o sistema vendo "Djan Mendonça"
+       logado e os nomes dos sócios daqui na tela de acessos. Escritório que
+       não é a raiz começa vazio e é preenchido pelas pessoas dele. */
+    if(window.__escInfo && window.__escInfo.raiz!==true){
+      USUARIOS_VISUAIS=[];
+      var us=await sb.from('usuarios').select('id,nome,email,papel,so_privado').eq('escritorio_id',esc);
+      (us&&us.data||[]).forEach(function(u){
+        USUARIOS_VISUAIS.push({
+          id:'auto_'+String(u.email||u.id).split('@')[0],
+          nome:u.nome||u.email, email:u.email||'', senha:'definida', ativo:true,
+          perfil:(u.papel==='contratante'||u.papel==='socio')?'socio':(/estag/i.test(u.papel||'')?'est':'adv'),
+          so_privado:!!u.so_privado,
+        });
+      });
+      if(USUARIOS_VISUAIS.length) USUARIO_ATUAL_VISUAL=USUARIOS_VISUAIS[0].id;
     }
   }catch(e){}
 }
@@ -2007,7 +2055,7 @@ async function gerarConvite(idVisual){
     if(!r.ok||!j.token){ alert('Não foi possível gerar o link: '+((j&&j.erro)||('HTTP '+r.status))+'\n\n(se o sistema acabou de ser atualizado, aguarde o build do Publicar terminar)'); return; }
     var link=location.origin+'/convite.html?t='+j.token;
     var primeiro=String(u.nome||'').split(' ')[0];
-    var msg='Olá, '+primeiro+'! Segue seu acesso ao CMPGestão (sistema do escritório).\nAbra o link, confira seu nome, informe seu e-mail e crie sua senha (vale por 7 dias):\n'+link;
+    var msg='Olá, '+primeiro+'! Segue seu acesso ao '+_nomeDaCasa()+' (sistema do escritório).\nAbra o link, confira seu nome, informe seu e-mail e crie sua senha (vale por 7 dias):\n'+link;
     var copiaMsg=confirm('Link de convite gerado para '+u.nome+':\n\n'+link+'\n\nOK = copiar a MENSAGEM pronta para o WhatsApp\nCancelar = copiar só o link');
     try{ await navigator.clipboard.writeText(copiaMsg?msg:link); alert((copiaMsg?'Mensagem':'Link')+' copiado! Cole no WhatsApp de '+primeiro+'.'); }
     catch(e){ window.prompt('Copie e envie pelo WhatsApp:', copiaMsg?msg:link); }
@@ -9327,6 +9375,8 @@ function toggleConcluirTarefa(id){
   try{ if(document.getElementById('app').classList.contains('hidden') && typeof entrar==='function'){ entrar(); } }catch(e){}
   /* quem está logado de verdade + assentos salvos (antes disso o sistema
      mostrava sempre "Djan" para qualquer pessoa) */
+  try{ await _carregarEscritorio(); }catch(e){}
+  try{ aplicarPerfilDaTela(); }catch(e){}
   try{ await _carregarAssentos(); }catch(e){}
   try{ await identificarUsuarioLogado(); }catch(e){}
   try{ carregarProtocolosPendentes(); }catch(e){}
