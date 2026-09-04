@@ -199,12 +199,13 @@ export async function POST(request) {
           'Entre com o e-mail <b>' + escaparTexto(email) + '</b> e a senha provisória abaixo:',
           '<b style="font-size:22px;letter-spacing:2px">' + senha + '</b>',
           'No primeiro acesso o sistema pede uma senha nova, só sua. A provisória deixa de valer nesse momento.',
+          // Sem os números do teto aqui: teto anunciado na primeira mensagem
+          // soa como aviso de que vai faltar. Quando algum limite chegar, a
+          // tela avisa naquele momento e propõe a contratação.
           ...(limites.teste_ate ? [
             'Você tem <b>' + dias + ' dias de teste</b>, com o sistema inteiro liberado, até <b>' +
-              limites.teste_ate.split('-').reverse().join('/') + '</b>. No teste cabem ' +
-              limites.limite_processos + ' processos, ' + limites.limite_acessos + ' acessos e ' +
-              limites.limite_gb + ' GB de documentos.',
-            'Ao contratar, você escolhe o plano e os limites sobem. <b>Nada é apagado no caminho</b>: o que você cadastrar no teste continua lá.',
+              limites.teste_ate.split('-').reverse().join('/') + '</b>.',
+            'Ao contratar, você escolhe o plano. <b>Nada é apagado no caminho</b>: o que você cadastrar no teste continua exatamente onde está.',
           ] : []),
         ],
         botao: { texto: 'Entrar no sistema', url: 'https://' + host },

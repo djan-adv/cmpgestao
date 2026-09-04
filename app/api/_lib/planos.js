@@ -108,3 +108,26 @@ export function diasAte(data) {
   const alvo = new Date(String(data) + 'T00:00:00'); alvo.setHours(0, 0, 0, 0)
   return Math.round((alvo - hoje) / 86400000)
 }
+
+// A frase que aparece quando um teto é atingido.
+//
+// Não é mensagem de erro: é o momento de venda. Quem bateu no limite está
+// USANDO o sistema — é o melhor instante possível para propor a contratação, e
+// o pior possível para dar um "não" seco. Por isso toda frase diz três coisas,
+// nesta ordem: o que aconteceu, que nada foi perdido, e o que fazer agora.
+//
+// Vale também para a segunda regra do teste: os números do teto não são
+// anunciados de véspera, mas aqui são ditos com todas as letras — no momento em
+// que importam, esconder o número seria o que confunde.
+export function fraseTeto({ oque, limite, usados, emTeste, unidade }) {
+  const u = unidade || ''
+  const quanto = limite == null ? '' : (' (' + limite + u + ')')
+  const inicio = emTeste
+    ? 'O teste chegou ao limite de ' + oque + quanto + '.'
+    : 'O plano chegou ao limite de ' + oque + quanto + '.'
+  const meio = ' Nada foi apagado: o que já está cadastrado continua exatamente onde está.'
+  const fim = emTeste
+    ? ' Para continuar de onde parou, é só contratar um plano — os limites sobem na hora, sem nenhuma migração.'
+    : ' Para ampliar, fale com quem cuida do contrato: o plano maior vale a partir do mesmo dia.'
+  return inicio + meio + fim
+}

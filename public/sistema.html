@@ -27419,9 +27419,13 @@ async function cadastrarOabUm(k,btn){
       +'padding:9px 12px;font:12.5px system-ui,Segoe UI,Arial,sans-serif;line-height:1.45;'
       +'box-shadow:0 4px 18px rgba(20,30,50,.22)';
     var quanto = dias<=0 ? 'Último dia de teste' : ('Teste — falta'+(dias===1?'':'m')+' '+dias+' dia'+(dias===1?'':'s'));
+    /* Sem números de teto aqui, de propósito. Anunciar "cabem X processos" na
+       primeira tela soa como aviso de que vai faltar, e o teste existe para
+       mostrar o sistema — não para negociar limite. Quando algum teto chegar, a
+       própria tela avisa naquele momento e propõe a contratação. */
     f.innerHTML='<b>'+quanto+'</b><div style="opacity:.85;margin-top:3px">Até '+br(info.teste_ate)
-      +'. Ao contratar, os limites sobem e <b>nada é apagado</b>.</div>';
-    f.title='No teste cabem 200 processos, 10 acessos e 1 GB de documentos. O sistema inteiro está liberado.';
+      +'. Ao contratar, <b>nada é apagado</b>.</div>';
+    f.title='Sistema inteiro liberado durante o teste.';
     document.body.appendChild(f);
   }
 

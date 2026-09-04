@@ -49,15 +49,27 @@ set search_path = public
 as $$
 declare
   lim integer;
+  em_teste boolean;
   usados integer;
 begin
-  select limite_processos into lim from public.escritorios where id = new.escritorio_id;
+  select limite_processos, teste_ate is not null
+    into lim, em_teste
+    from public.escritorios where id = new.escritorio_id;
   -- Nulo = sem teto. É o caso da raiz e o de quem contratou sem limite.
   if lim is null then return new; end if;
 
   select count(*) into usados from public.processos where escritorio_id = new.escritorio_id;
   if usados >= lim then
-    raise exception 'LIMITE_PROCESSOS: o plano deste escritorio permite % processos, e os % ja estao em uso. Nada foi apagado: ao contratar o plano maior, os proximos entram normalmente.', lim, usados
+    -- A mensagem aparece INTEIRA na tela de quem tentou cadastrar, então é
+    -- escrita para ser lida por advogado, não por programador: diz o que houve,
+    -- garante que nada se perdeu e propõe o passo seguinte. Quem bateu no teto
+    -- está usando o sistema — é o melhor momento que existe para propor o plano,
+    -- e o pior possível para um "não" seco.
+    raise exception '%',
+      case when em_teste
+        then 'O teste chegou ao limite de processos (' || lim || '). Nada foi apagado: tudo o que já está cadastrado continua onde está. Para continuar de onde parou, é só contratar um plano — os limites sobem na hora, sem nenhuma migração.'
+        else 'O plano chegou ao limite de processos (' || lim || '). Nada foi apagado: tudo o que já está cadastrado continua onde está. Para ampliar, fale com quem cuida do contrato: o plano maior vale a partir do mesmo dia.'
+      end
       using errcode = 'check_violation';
   end if;
   return new;

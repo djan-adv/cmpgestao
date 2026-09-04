@@ -66,3 +66,47 @@ Tudo no painel `/inquilinos`, botão **gerir**: data do teste, **+7 / +30 dias**
 teto de IA, e as caixas de **Estagiário/Secretária Virtual** e **e-mail**.
 Prorrogação conta a partir do vencimento, não de hoje — prorrogar no dia 3 um
 teste que vence no dia 10 não pode encurtar o prazo.
+
+## Auto-cadastro (o cliente se cadastra sozinho)
+
+`POST /api/cadastro-teste` — rota **pública** ligada ao formulário da página de
+vendas (seção "Começar o teste de 30 dias"). O visitante preenche escritório,
+nome, e-mail e telefone; o sistema:
+
+1. reserva um endereço livre a partir do nome (`silvaesouza.djan.app.br`;
+   se ocupado, tenta com número — nunca devolve a porta de outro escritório);
+2. cria o escritório em teste, com o sistema inteiro liberado;
+3. cria a conta de contratante com senha provisória e manda por e-mail;
+4. avisa `VENDAS_EMAIL` e grava o interessado no Comercial como lead novo.
+
+O certificado TLS do endereço novo sai sozinho na primeira visita (`on_demand`
+no Caddy, com o `ask` batendo em `/api/tls`), e o DNS já é curinga. **Nenhum
+passo manual em nenhum ponto.**
+
+### Os freios (rota pública que CRIA coisas)
+
+| Freio | Padrão | Variável |
+|---|---|---|
+| Cadastros por dia | 5 | `TESTES_MAX_DIA` |
+| Testes ativos ao mesmo tempo | 25 | `TESTES_MAX_ATIVOS` |
+| Por e-mail | 1 por hora, e nunca para quem já tem acesso | — |
+
+Batido o teto, **o interessado não é descartado**: entra no Comercial como fila
+de espera, recebe uma mensagem dizendo que os testes estão sendo abertos por
+ordem de chegada, e um aviso sai para quem vende. Perder o lead seria pior do
+que abrir mais um teste.
+
+Subdomínios reservados (`www`, `api`, `admin`, `sistema`, `suporte`…) não podem
+ser escolhidos por quem se cadastra.
+
+A senha provisória vai por e-mail e é obrigatória para entrar — isso já faz as
+vezes de confirmação de endereço, sem nenhuma tela a mais.
+
+### O que o cliente NÃO vê
+
+Os números dos tetos não aparecem na página, nem no e-mail de boas-vindas, nem
+na faixa da tela, nem nas respostas do robô de suporte. Teto anunciado na porta
+soa como aviso de que vai faltar. A **existência** do limite é dita (a página
+diz que o teste tem limites de volume e que o sistema avisa antes de travar
+qualquer coisa); o número aparece no momento em que ele é atingido — junto com
+o convite para contratar, que é quando ele funciona.

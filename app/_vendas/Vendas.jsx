@@ -139,6 +139,30 @@ export default function Vendas({ aoEntrar }) {
   const [ampliada, setAmpliada] = useState(null)
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value })
 
+  // Auto-cadastro do teste. É o caminho principal da página: quem chega decide
+  // sozinho, o escritório nasce pronto e ninguém do outro lado precisa fazer
+  // nada. O formulário de demonstração continua existindo para quem prefere
+  // conversar antes — são públicos diferentes, não etapas do mesmo funil.
+  const [t, setT] = useState({ escritorio: '', nome: '', email: '', telefone: '' })
+  const [tEnviando, setTEnviando] = useState(false)
+  const [tErro, setTErro] = useState('')
+  const [criado, setCriado] = useState(null)
+  const setT_ = (k) => (e) => setT({ ...t, [k]: e.target.value })
+
+  async function comecar(e) {
+    e.preventDefault()
+    setTErro(''); setTEnviando(true)
+    try {
+      const r = await fetch('/api/cadastro-teste', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(t),
+      })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok || d.erro) { setTErro(d.erro || 'Não consegui criar agora.'); setTEnviando(false); return }
+      setCriado(d)
+    } catch (err) { setTErro('Não consegui criar agora. Tente de novo em instantes.') }
+    setTEnviando(false)
+  }
+
   async function enviar(e) {
     e.preventDefault()
     setErro(''); setEnviando(true)
@@ -182,11 +206,14 @@ export default function Vendas({ aoEntrar }) {
             aberto para outros escritórios usarem.
           </p>
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-            <a href="#demonstracao" style={{ ...botao, background: GOLD, color: NAVY2, fontSize: 15.5, padding: '13px 24px', textDecoration: 'none', display: 'inline-block' }}>
-              Pedir uma demonstração
+            <a href="#comecar" style={{ ...botao, background: GOLD, color: NAVY2, fontSize: 15.5, padding: '13px 24px', textDecoration: 'none', display: 'inline-block' }}>
+              Começar o teste de 30 dias
             </a>
             <a href="#robos" style={{ ...botao, background: 'transparent', border: '1px solid rgba(255,255,255,.3)', color: '#fff', fontSize: 15.5, padding: '13px 24px', textDecoration: 'none', display: 'inline-block' }}>
               Ver o que ele faz sozinho
+            </a>
+            <a href="#demonstracao" style={{ color: '#c8d4e4', fontSize: 14.5, alignSelf: 'center', textDecoration: 'underline' }}>
+              ou peça uma demonstração
             </a>
           </div>
         </div>
@@ -427,6 +454,93 @@ export default function Vendas({ aoEntrar }) {
           incluída. Precisa de mais processos ou mais acessos do que o degrau comporta? É só subir de plano —
           o acervo continua onde está.
         </p>
+        <p style={{ ...nota, marginTop: 10 }}>
+          <b>Você não escolhe plano para testar.</b> O teste de 30 dias vem com o sistema inteiro, e o degrau
+          é escolhido depois — quando você já souber de quanto precisa. <a href="#comecar" style={{ color: VERDE, fontWeight: 700 }}>Começar o teste</a>.
+        </p>
+      </section>
+
+      {/* ---------- auto-cadastro do teste ----------
+          A oferta inteira cabe numa frase: preencha quatro campos e o sistema
+          do seu escritório está no ar. Nenhuma etapa depende de alguém do outro
+          lado — nem para criar, nem para configurar, nem para liberar função.
+
+          Sobre os NÚMEROS do teto: eles não aparecem aqui de propósito. Teto
+          anunciado na porta soa como aviso de que vai faltar, e o teste existe
+          para mostrar o sistema, não para negociar limite. Mas a EXISTÊNCIA do
+          limite é dita — quem contrata tem direito de saber que ele existe, e
+          quando algum chegar a tela avisa naquele momento, sem apagar nada. */}
+      <section id="comecar" style={{ background: '#0F6E56', color: '#fff' }}>
+        <div style={{ ...faixa, padding: '52px 22px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(300px,1fr))', gap: 36, alignItems: 'start' }}>
+            <div>
+              <Rotulo cor="#a9e7d2">Teste de 30 dias</Rotulo>
+              <h2 style={{ ...h2, color: '#fff', marginTop: 6 }}>
+                Comece agora. O sistema do seu escritório fica pronto em um minuto.
+              </h2>
+              <p style={{ color: '#cdeee2', fontSize: 15.5, maxWidth: 460 }}>
+                Você recebe o endereço do seu escritório e a senha por e-mail, e entra com o
+                <b> sistema inteiro liberado</b> — os quatro robôs, o app do cliente, a ponte com o
+                jus.br, tudo. Sem cartão, sem instalar nada, sem conversa antes.
+              </p>
+              <ul style={{ color: '#cdeee2', fontSize: 15, paddingLeft: 18, margin: '0 0 12px' }}>
+                <li><b>Nada é apagado</b> quando o teste acaba: o que você cadastrar continua onde está e volta inteiro ao contratar.</li>
+                <li>O plano é escolhido <b>depois</b>, quando você já souber do que precisa.</li>
+                <li>O teste tem limites de volume. Se algum chegar, o sistema avisa na hora — nada trava sem aviso e nada se perde.</li>
+              </ul>
+              <p style={{ color: '#9ed5c2', fontSize: 13.5, maxWidth: 460, margin: 0 }}>
+                Seus dados servem para criar e manter o seu acesso. Nada é publicado e nada é repassado.
+              </p>
+            </div>
+
+            <div style={{ background: '#fff', borderRadius: 14, padding: 22, color: '#1b2430' }}>
+              {criado ? (
+                <div style={{ padding: '12px 4px' }}>
+                  <div style={{ fontWeight: 800, color: VERDE, fontSize: 19, marginBottom: 8 }}>
+                    {criado.fila ? 'Pedido recebido.' : 'Pronto. Seu sistema está no ar.'}
+                  </div>
+                  {criado.fila ? (
+                    <p style={{ color: '#46505e', fontSize: 15, margin: 0 }}>{criado.mensagem}</p>
+                  ) : (
+                    <>
+                      <p style={{ color: '#46505e', fontSize: 15, margin: '0 0 10px' }}>
+                        O endereço do seu escritório é:
+                      </p>
+                      <a href={criado.url} style={{ display: 'block', fontSize: 17, fontWeight: 700, color: NAVY, marginBottom: 12, wordBreak: 'break-all' }}>
+                        {criado.host}
+                      </a>
+                      <p style={{ color: '#46505e', fontSize: 15, margin: '0 0 10px' }}>
+                        {criado.email_enviado
+                          ? 'A senha provisória foi enviada para o seu e-mail — confira também a caixa de spam. No primeiro acesso o sistema pede uma senha nova, só sua.'
+                          : 'O e-mail com a senha não saiu por aqui. Fale com o suporte pelo endereço no rodapé desta página que a gente resolve em minutos.'}
+                      </p>
+                      <a href={criado.url} style={{ ...botao, background: VERDE, color: '#fff', display: 'inline-block', textDecoration: 'none', padding: '11px 20px' }}>
+                        Abrir o meu sistema
+                      </a>
+                    </>
+                  )}
+                </div>
+              ) : (
+                <form onSubmit={comecar}>
+                  <Campo rot="Nome do escritório" req dica="é o nome que aparece no sistema e nas peças" v={t.escritorio} on={setT_('escritorio')} />
+                  <Campo rot="Seu nome" req v={t.nome} on={setT_('nome')} />
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                    <Campo rot="E-mail" req tipo="email" dica="a senha vai para cá" v={t.email} on={setT_('email')} />
+                    <Campo rot="Telefone / WhatsApp" v={t.telefone} on={setT_('telefone')} />
+                  </div>
+                  {tErro && <div style={{ color: '#b5342b', fontSize: 13.5, margin: '4px 0 8px' }}>{tErro}</div>}
+                  <button type="submit" disabled={tEnviando}
+                    style={{ ...botao, background: tEnviando ? '#9aa6b5' : VERDE, color: '#fff', width: '100%', padding: 14, fontSize: 16, marginTop: 6 }}>
+                    {tEnviando ? 'Criando o seu sistema…' : 'Criar meu sistema agora'}
+                  </button>
+                  <p style={{ color: '#697180', fontSize: 12.5, textAlign: 'center', margin: '10px 0 0' }}>
+                    Leva menos de um minuto. Não pedimos cartão.
+                  </p>
+                </form>
+              )}
+            </div>
+          </div>
+        </div>
       </section>
 
       {/* ---------- formulário ---------- */}

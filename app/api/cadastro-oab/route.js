@@ -24,6 +24,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { usuarioDoRequest, escritorioDoUsuario, semEscritorio } from '../_lib/inquilino.js'
 import { consultaDataJud } from '../processo/route.js'
+import { fraseTeto } from '../_lib/planos.js'
 
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
@@ -233,13 +234,13 @@ export async function POST(request) {
   if (!itens.length) return Response.json({ erro: 'Nada marcado.' }, { status: 400 })
 
   // ——— limite do plano, antes de escrever a primeira linha ———
-  const { data: e } = await sb.from('escritorios').select('limite_processos').eq('id', esc).maybeSingle()
+  const { data: e } = await sb.from('escritorios').select('limite_processos,teste_ate').eq('id', esc).maybeSingle()
   const { count } = await sb.from('processos').select('id', { count: 'exact', head: true }).eq('escritorio_id', esc)
   const limite = (e && e.limite_processos) ?? null
   if (limite !== null && (count || 0) + itens.length > limite) {
     return Response.json({
-      erro: 'O plano permite ' + limite + ' processos e o escritório já tem ' + (count || 0) + '. ' +
-        'Esta remessa tem ' + itens.length + '. Marque menos processos ou peça a ampliação do plano.',
+      erro: fraseTeto({ oque: 'processos', limite, usados: count || 0, emTeste: !!(e && e.teste_ate) }) +
+        ' Cabem ' + Math.max(0, limite - (count || 0)) + ' agora; esta remessa tem ' + itens.length + '.',
       plano: { limite_processos: limite, usados: count || 0 },
     }, { status: 409 })
   }

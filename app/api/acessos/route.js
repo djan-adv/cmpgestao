@@ -32,6 +32,7 @@
 import { createClient } from '@supabase/supabase-js'
 import crypto from 'crypto'
 import { enviarEmailConta } from '../_lib/email-conta.js'
+import { fraseTeto } from '../_lib/planos.js'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -166,13 +167,14 @@ export async function POST(request) {
       // Limite de assentos do plano. Conta só quem ainda não existe: renovar a
       // senha de quem já está dentro não consome assento novo.
       if (!existente) {
-        const { data: plano } = await sb.from('escritorios').select('limite_acessos,nome').eq('id', esc).maybeSingle()
+        const { data: plano } = await sb.from('escritorios').select('limite_acessos,nome,teste_ate').eq('id', esc).maybeSingle()
         const limite = plano && plano.limite_acessos
         if (limite != null) {
           const { count } = await sb.from('usuarios').select('id', { count: 'exact', head: true }).eq('escritorio_id', esc)
           if ((count || 0) >= limite) {
             return Response.json({
-              erro: 'Seu plano tem ' + limite + ' acessos e todos estão em uso. Para incluir mais alguém, libere um acesso ou contrate acessos adicionais.',
+              erro: fraseTeto({ oque: 'acessos', limite, usados: count || 0, emTeste: !!plano.teste_ate }) +
+                ' Você também pode liberar um acesso desativando alguém que não usa mais.',
               limite_atingido: true, limite, em_uso: count || 0,
             }, { status: 409 })
           }
