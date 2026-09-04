@@ -89,6 +89,28 @@ const EQUIPE = [
   },
 ]
 
+// As telas da galeria. As imagens saem de scripts/capturar-telas-vendas.mjs, que
+// renderiza o HTML REAL do sistema com dados de exemplo — nenhum nome de cliente
+// ou número de processo verdadeiro numa página pública, e nenhuma imagem
+// prometendo tela que o sistema não tem.
+const TELAS = [
+  {
+    img: '/vendas/cadastro-oab.png',
+    t: 'O acervo inteiro entra pela OAB',
+    d: 'O sistema procura no Diário de Justiça o que saiu na sua inscrição, monta a lista dos processos com as partes já sugeridas, e você marca os que quer. Nada entra sozinho.',
+  },
+  {
+    img: '/vendas/robos.png',
+    t: 'Os robôs, com a última rodada à vista',
+    d: 'Diário, caixa de e-mail, Estagiário e Secretária: cada um mostra quando rodou e o que trouxe. Rodam no servidor, com o seu computador desligado.',
+  },
+  {
+    img: '/vendas/marca-dagua.png',
+    t: 'Documento aberto por estagiário sai marcado',
+    d: 'Opcional, ligada pela coordenação: o nome de quem abriu fica ao fundo da página. O texto continua nítido e o carimbo não entra no copiar e colar.',
+  },
+]
+
 const QUEM = {
   starter: 'Escritório pequeno, começando a organizar o acervo.',
   intermediario: 'Escritório em crescimento, com equipe e volume de prazos.',
@@ -99,6 +121,8 @@ const num = (n) => Number(n).toLocaleString('pt-BR')
 const PLANOS = CATALOGO.slice().sort((a, b) => a.limite_processos - b.limite_processos).map(p => ({
   nome: p.nome,
   preco: p.preco_mensal,
+  cheio: p.preco_cheio || null,
+  desconto: p.preco_cheio ? Math.round((1 - p.preco_mensal / p.preco_cheio) * 100) : 0,
   proc: num(p.limite_processos),
   acessos: num(p.limite_acessos),
   gb: String(p.limite_gb).replace('.', ','),
@@ -111,6 +135,7 @@ export default function Vendas({ aoEntrar }) {
   const [enviando, setEnviando] = useState(false)
   const [pronto, setPronto] = useState(false)
   const [erro, setErro] = useState('')
+  const [ampliada, setAmpliada] = useState(null)
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value })
 
   async function enviar(e) {
@@ -203,6 +228,61 @@ export default function Vendas({ aoEntrar }) {
         </div>
       </section>
 
+      {/* ---------- galeria ---------- */}
+      {/* Página que vende software jurídico sem mostrar a tela é folheto. Estas
+          imagens saem do HTML real do sistema (ver scripts/capturar-telas-vendas.mjs),
+          com dados de exemplo — é a diferença entre provar e prometer. */}
+      <section style={{ background: '#f6f8fb', borderTop: '1px solid ' + LINHA, borderBottom: '1px solid ' + LINHA }}>
+        <div style={{ ...faixa, padding: '52px 22px' }}>
+          <Rotulo>Por dentro</Rotulo>
+          <h2 style={h2}>As telas, como elas são</h2>
+          <p style={{ color: '#46505e', fontSize: 15.5, maxWidth: 780, margin: '0 0 22px' }}>
+            Capturas do sistema em funcionamento, com dados de exemplo — nenhum processo ou cliente real
+            aparece aqui. Clique para ampliar.
+          </p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(300px,1fr))', gap: 18 }}>
+            {TELAS.map(t => (
+              <figure key={t.img} style={{ margin: 0 }}>
+                <button
+                  onClick={() => setAmpliada(t)}
+                  style={{
+                    display: 'block', width: '100%', padding: 0, border: '1px solid ' + LINHA,
+                    borderRadius: 12, overflow: 'hidden', background: '#fff', cursor: 'zoom-in',
+                    boxShadow: '0 1px 3px rgba(20,30,50,.06)',
+                  }}
+                  title="ampliar"
+                >
+                  <img src={t.img} alt={t.t} loading="lazy" style={{ display: 'block', width: '100%', height: 210, objectFit: 'cover', objectPosition: 'top' }} />
+                </button>
+                <figcaption style={{ marginTop: 10 }}>
+                  <b style={{ color: NAVY, fontSize: 15.5 }}>{t.t}</b>
+                  <p style={{ color: '#46505e', fontSize: 14, margin: '3px 0 0' }}>{t.d}</p>
+                </figcaption>
+              </figure>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* a imagem ampliada: só uma camada por cima, fechada no clique ou no Esc */}
+      {ampliada ? (
+        <div
+          onClick={() => setAmpliada(null)}
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(18,26,38,.82)', zIndex: 999,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, cursor: 'zoom-out',
+          }}
+        >
+          <div style={{ maxWidth: 1100, width: '100%' }} onClick={e => e.stopPropagation()}>
+            <img src={ampliada.img} alt={ampliada.t} style={{ display: 'block', width: '100%', borderRadius: 12, background: '#fff' }} />
+            <div style={{ color: '#fff', marginTop: 10, display: 'flex', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+              <b>{ampliada.t}</b>
+              <button onClick={() => setAmpliada(null)} style={{ background: 'transparent', color: '#cfd6e0', border: '1px solid #55606f', borderRadius: 8, padding: '4px 12px', cursor: 'pointer' }}>fechar</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {/* ---------- equipe ---------- */}
       {/* Pedido do dono (04/09/2026): o controle de estagiário e associado é
           argumento de venda forte e estava só implícito numa linha do dia a dia.
@@ -282,6 +362,24 @@ export default function Vendas({ aoEntrar }) {
           O que muda entre os planos é o tamanho: quantos processos, quantos acessos e quanto espaço de documento.
           Nenhuma função é cortada por plano.
         </p>
+        {/* Preço de lançamento. O valor riscado é o de TABELA — o que passa a
+            valer quando o lançamento terminar —, não um preço que já tenha sido
+            praticado: dizer o contrário seria propaganda enganosa, e quem
+            compra aqui é advogado. */}
+        <div style={{
+          display: 'inline-flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+          background: '#fff6e0', border: '1px solid #f0dfb4', borderRadius: 12,
+          padding: '10px 16px', margin: '4px 0 6px',
+        }}>
+          <span style={{
+            background: VERDE, color: '#fff', borderRadius: 20, padding: '3px 12px',
+            fontWeight: 800, fontSize: 14, letterSpacing: .3,
+          }}>−70%</span>
+          <b style={{ color: NAVY, fontSize: 15.5 }}>Preço de lançamento</b>
+          <span style={{ color: '#7a6417', fontSize: 14.5 }}>
+            quem entrar agora fica com este valor; o de tabela passa a valer no fim do lançamento.
+          </span>
+        </div>
         <div style={grade(3)}>
           {PLANOS.map(p => (
             <div key={p.nome} style={{
@@ -290,10 +388,20 @@ export default function Vendas({ aoEntrar }) {
               background: p.destaque ? '#fffdf6' : '#fff',
             }}>
               <div style={{ fontWeight: 800, color: NAVY, fontSize: 19 }}>{p.nome}</div>
-              <div style={{ margin: '8px 0 2px', color: NAVY2 }}>
+              {p.cheio ? (
+                <div style={{ marginTop: 8, color: CINZA, fontSize: 14 }}>
+                  tabela <s>R$ {num(p.cheio)}</s>
+                  <span style={{
+                    marginLeft: 8, background: '#e8f4ee', color: VERDE, borderRadius: 20,
+                    padding: '2px 9px', fontSize: 12.5, fontWeight: 800,
+                  }}>−{p.desconto}%</span>
+                </div>
+              ) : null}
+              <div style={{ margin: '2px 0 2px', color: NAVY2 }}>
                 <span style={{ fontSize: 14, color: CINZA }}>R$ </span>
                 <span style={{ fontSize: 34, fontWeight: 800, letterSpacing: -.5 }}>{num(p.preco)}</span>
                 <span style={{ fontSize: 14, color: CINZA }}> /mês</span>
+                <span style={{ fontSize: 12.5, color: VERDE, fontWeight: 700, marginLeft: 6 }}>lançamento</span>
               </div>
               <div style={{ color: CINZA, fontSize: 13.5, minHeight: 40, marginTop: 4 }}>{p.quem}</div>
               <ul style={{ listStyle: 'none', padding: 0, margin: '14px 0 0', fontSize: 15 }}>
@@ -304,6 +412,15 @@ export default function Vendas({ aoEntrar }) {
             </div>
           ))}
         </div>
+        {/* Comparação de mercado informada pelo vendedor. Sem citar nome: nada
+            aqui depende de qual é o concorrente, e comparação nominal exige
+            prova pronta se alguém reclamar. */}
+        <p style={{ ...nota, marginTop: 16, color: '#46505e' }}>
+          Para comparar: sistemas de gestão jurídica com menos funções do que esta lista cobram
+          cerca de <b>R$ 700 por 1.000 processos e 10 acessos</b>. O Starter, no preço de lançamento,
+          entrega <b>2.500 processos e 25 acessos</b> — com os quatro robôs, o aplicativo do cliente e a
+          assinatura eletrônica incluídos.
+        </p>
         <p style={{ ...nota, marginTop: 16 }}>
           Mensalidade, sem fidelidade e sem taxa de instalação. A migração do acervo do sistema atual está
           incluída. Precisa de mais processos ou mais acessos do que o degrau comporta? É só subir de plano —
