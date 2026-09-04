@@ -1411,7 +1411,7 @@ async function identificarUsuarioLogado(){
     if(seat){ seat.email=seat.email||email; USUARIO_ATUAL_VISUAL=seat.id; }
     else{
       /* conta sem assento na lista: cria um assento temporário para esta sessão */
-      var novo={id:'auto_'+(email.split('@')[0]||'user'),nome:nomeBanco||email,perfil:(papelBanco==='socio'?'socio':(/estagi/i.test(papelBanco)?'est':'adv')),email:email,senha:'definida',ativo:true};
+      var novo={id:'auto_'+(email.split('@')[0]||'user'),nome:nomeBanco||email,perfil:((papelBanco==='socio'||papelBanco==='contratante')?'socio':(/estagi/i.test(papelBanco)?'est':'adv')),email:email,senha:'definida',ativo:true};
       USUARIOS_VISUAIS.push(novo); USUARIO_ATUAL_VISUAL=novo.id; seat=novo;
     }
     /* De quem é este sistema? A raiz continua com a marca da casa; um
@@ -19541,9 +19541,21 @@ function setDilView(v){
     /* o rodapé é um BOTÃO: clicar no nome abre a TELA de acessos (editar/incluir), estilo Astrea */
     uf.innerHTML='<div class="av" id="uf-av">—</div>'+
       '<div style="flex:1;min-width:0"><div class="nm" id="uf-nm"></div><div class="pp" id="uf-pp"></div></div>'+
-      '<div id="uf-acessos" style="color:#8fa0b5;font-size:11px;flex-shrink:0" title="Editar / incluir acessos">acessos ›</div>';
+      '<div id="uf-acessos" style="color:#8fa0b5;font-size:11px;flex-shrink:0" title="Editar / incluir acessos">acessos ›</div>'+
+      /* atalho para o cadastro do escritório no rodapé, que é onde quem manda já
+         clica — a engrenagem da barra de cima passa despercebida, e é ali que
+         estão os dados que a procuração precisa */
+      '<div id="uf-config" style="display:none;color:#8fa0b5;font-size:15px;flex-shrink:0;margin-left:8px" title="Cadastro do escritório — nome, OAB e endereço que entram na procuração">&#9881;</div>';
     sideEl.appendChild(uf);
     uf.style.cursor='pointer';
+    try{
+      var _cfg=uf.querySelector('#uf-config');
+      if(_cfg){
+        _cfg.style.cursor='pointer';
+        _cfg.addEventListener('click',function(ev){ ev.stopPropagation(); abrirMeuEscritorio(); });
+        if(typeof souCoordenador==='function'&&souCoordenador()) _cfg.style.display='block';
+      }
+    }catch(eC){}
     /* dois destinos no mesmo rodapé: o nome (e "acessos ›") abre a lista de
        acessos; "publicar ↑" vai direto para a tela de publicação, sem passar
        pela lista — no celular era ela que empurrava o botão para fora da tela */
