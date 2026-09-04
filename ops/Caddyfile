@@ -1,0 +1,45 @@
+# Caddyfile do VPS do sistema — cópia de referência, versionada.
+#
+# Fica no repositório de propósito: o terminal do navegador da Hostinger
+# corrompe textos colados (transforma endereços em links), e escrever o arquivo
+# à mão por lá já causou três tentativas perdidas. Publicar e copiar daqui é
+# mais seguro e deixa histórico.
+#
+# Instalar no servidor:
+#   cp /opt/cmpgestao/ops/Caddyfile /etc/caddy/Caddyfile
+#   caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+#   systemctl reload caddy
+
+{
+	# Certificado sob demanda, para o subdomínio de cada escritório cliente.
+	#
+	# Sem isto, vender "advogado.djan.app.br" exigiria abrir o terminal a cada
+	# venda. Com isto, o Caddy emite o certificado no primeiro acesso — mas
+	# pergunta antes ao sistema se aquele endereço pertence mesmo a um escritório
+	# cadastrado. A pergunta é o que impede um estranho de apontar o domínio dele
+	# para este servidor e ganhar um certificado às nossas custas (e, pior, nos
+	# fazer bater no limite de emissões da autoridade certificadora).
+	on_demand_tls {
+		ask http://127.0.0.1:3000/api/tls
+	}
+}
+
+# A casa: porta do escritório dono do sistema.
+gestao.cmpadvogados.com.br {
+	reverse_proxy 127.0.0.1:3000
+}
+
+# A porta comum do produto. Quem não paga por endereço próprio entra por aqui,
+# e cai nos dados do próprio escritório depois do login.
+djan.app.br, www.djan.app.br {
+	reverse_proxy 127.0.0.1:3000
+}
+
+# Endereço próprio por escritório (o que se paga a mais). O DNS já é curinga;
+# o certificado sai sozinho, um por nome, na primeira visita.
+*.djan.app.br {
+	tls {
+		on_demand
+	}
+	reverse_proxy 127.0.0.1:3000
+}
