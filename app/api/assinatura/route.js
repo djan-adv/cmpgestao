@@ -27,6 +27,7 @@
 
 import { createClient } from '@supabase/supabase-js'
 import { randomUUID } from 'crypto'
+import { escritorioDoUsuario, semEscritorio } from '../_lib/inquilino.js'
 import { contaDemo, respostaDemo } from '../../../lib/demo.js'
 import { montarFinalExterno } from '../../../lib/assinatura-externa.js'
 import { enviarEmailCore } from '../enviar-email/enviar.js'
@@ -136,11 +137,44 @@ export async function POST(request) {
 
   const acao = body.acao
 
+  /* De quem é o documento. O banco do assinador é separado e nasceu para um
+     escritório só: os documentos não tinham dono, e a listagem devolvia TODOS,
+     de TODOS os escritórios — procuração e contrato de cliente de uma banca
+     visíveis para outra. Aqui é o único caminho até aquelas tabelas, então é
+     aqui que o isolamento é garantido. */
+  const escritorioId = await escritorioDoUsuario(user.id)
+  if (!escritorioId) return semEscritorio()
+
+  /* Confere que o documento é deste escritório antes de qualquer ação que
+     receba doc_id. Documento sem dono (anterior à separação) é tratado como do
+     escritório raiz, que é de onde todos vieram. */
+  async function doDesteEscritorio(sbc, docId) {
+    const { data } = await sbc.from('documentos').select('id,escritorio_id').eq('id', docId).maybeSingle()
+    if (!data) return { erro: 'Documento não encontrado.', status: 404 }
+    if (data.escritorio_id && data.escritorio_id !== escritorioId) {
+      // mesma resposta de "não existe": dizer "é de outro escritório" já
+      // confirmaria que o documento existe
+      return { erro: 'Documento não encontrado.', status: 404 }
+    }
+    return { ok: true }
+  }
+
+  /* Os arquivos são guardados sob o id do documento ("<id>.pdf",
+     "<id>/assinado.pdf"). Extrai o id do caminho e confere o dono. Caminho que
+     não começa por um id (assinatura solta do signatário) segue livre: ele não
+     revela documento. */
+  async function doDoCaminho(sbc, caminho) {
+    const m = String(caminho || '').match(/^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i)
+    if (!m) return { ok: true }
+    return doDesteEscritorio(sbc, m[1])
+  }
+
   try {
     const sb = await admin()
     if (acao === 'listar') {
       const { data, error } = await sb.from('documentos')
         .select('*, signatarios(*)')
+        .eq('escritorio_id', escritorioId)
         .order('criado_em', { ascending: false })
       if (error) throw new Error(error.message)
       const docs = data || []
@@ -160,6 +194,8 @@ export async function POST(request) {
 
     if (acao === 'detalhe') {
       if (!body.doc_id) return Response.json({ erro: 'doc_id obrigatório' }, { status: 400 })
+      const dono = await doDesteEscritorio(sb, body.doc_id)
+      if (dono.erro) return Response.json({ erro: dono.erro }, { status: dono.status })
       const d = await sb.from('documentos').select('*').eq('id', body.doc_id).single()
       if (d.error) throw new Error(d.error.message)
       const s = await sb.from('signatarios').select('*').eq('documento_id', body.doc_id).order('ordem', { ascending: true })
@@ -187,6 +223,7 @@ export async function POST(request) {
         processo: String(body.processo || '').trim() || null,
         arquivo_path: body.arquivo_path || null,
         status: 'enviado',
+        escritorio_id: escritorioId,
       })).error
       if (e1) throw new Error(e1.message)
 
@@ -214,6 +251,10 @@ export async function POST(request) {
     }
 
     if (acao === 'email') {
+      if (body.doc_id) {
+        const donoM = await doDesteEscritorio(sb, body.doc_id)
+        if (donoM.erro) return Response.json({ erro: donoM.erro }, { status: donoM.status })
+      }
       if (!body.sig_id || !/.+@.+\..+/.test(String(body.email || ''))) return Response.json({ erro: 'Dados inválidos.' }, { status: 400 })
       const { error } = await sb.from('signatarios').update({ email: String(body.email).trim() }).eq('id', body.sig_id)
       if (error) throw new Error(error.message)
@@ -222,6 +263,8 @@ export async function POST(request) {
 
     if (acao === 'excluir') {
       if (!body.doc_id) return Response.json({ erro: 'doc_id obrigatório' }, { status: 400 })
+      const donoEx = await doDesteEscritorio(sb, body.doc_id)
+      if (donoEx.erro) return Response.json({ erro: donoEx.erro }, { status: donoEx.status })
       // limpa os arquivos do storage (best-effort, como no painel antigo)
       try {
         const sigs = await sb.from('signatarios').select('assinatura_path').eq('documento_id', body.doc_id)
@@ -236,6 +279,10 @@ export async function POST(request) {
 
     if (acao === 'signed') {
       if (!BUCKETS.includes(body.bucket) || !body.path) return Response.json({ erro: 'Pedido inválido.' }, { status: 400 })
+      /* o caminho do arquivo começa pelo id do documento; sem esta conferência,
+         quem soubesse um id de outro escritório pegaria o PDF assinado dele */
+      const donoS = await doDoCaminho(sb, body.path)
+      if (donoS.erro) return Response.json({ erro: donoS.erro }, { status: donoS.status })
       const { data, error } = await sb.storage.from(body.bucket).createSignedUrl(String(body.path), 600)
       if (error) return Response.json({ erro: error.message }, { status: 404 })
       return Response.json({ ok: true, url: data.signedUrl })
@@ -248,6 +295,8 @@ export async function POST(request) {
        marca o signatário como assinado e manda o PDF ao escritório por e-mail. */
     if (acao === 'juntar_externo') {
       if (!body.doc_id || !body.sig_id || !body.pdf_b64) return Response.json({ erro: 'Faltou o documento, o signatário ou o arquivo.' }, { status: 400 })
+      const donoJ = await doDesteEscritorio(sb, body.doc_id)
+      if (donoJ.erro) return Response.json({ erro: donoJ.erro }, { status: donoJ.status })
       let bytesAssinado
       try { bytesAssinado = Buffer.from(String(body.pdf_b64), 'base64') } catch { return Response.json({ erro: 'Arquivo inválido.' }, { status: 400 }) }
       if (bytesAssinado.length < 100 || bytesAssinado.slice(0, 5).toString('latin1') !== '%PDF-') return Response.json({ erro: 'O arquivo precisa ser um PDF.' }, { status: 400 })
@@ -303,6 +352,8 @@ export async function POST(request) {
     if (acao === 'apagar_arquivo') {
       // remove um arquivo para permitir re-upload (ex.: remontar o PDF final do avulso)
       if (!BUCKETS.includes(body.bucket) || !body.path) return Response.json({ erro: 'Pedido inválido.' }, { status: 400 })
+      const donoA = await doDoCaminho(sb, body.path)
+      if (donoA.erro) return Response.json({ erro: donoA.erro }, { status: donoA.status })
       const { error } = await sb.storage.from(body.bucket).remove([String(body.path)])
       if (error) return Response.json({ erro: error.message }, { status: 400 })
       return Response.json({ ok: true })
