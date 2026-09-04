@@ -1328,6 +1328,10 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
       <div id="me-smtp-estado" class="note" style="margin-top:6px"></div>
     </div>
     <div class="card" id="me-plano-card"><p class="sectlabel">Seu plano</p><div id="me-plano"></div></div>
+    <div class="card"><p class="sectlabel">Migrar acervo de outro sistema</p>
+      <div class="note">Já usa outro sistema (ou uma planilha de controle)? Exporte a lista de processos em CSV ou XLSX e traga para cá. O sistema mostra o que entendeu de cada coluna, você corrige, confere quantos entram — e só então grava. Se sair torto, dá para desfazer.</div>
+      <button type="button" class="btn sm" style="margin-top:8px" onclick="abrirMigracao()">Abrir a área de migração</button>
+    </div>
   </div>
   <div id="me-msg" class="note" style="margin-top:6px"></div>
   <div class="foot"><button class="btn ghost" onclick="fecharMeuEscritorio()">Fechar</button><button class="btn" id="me-salvar" onclick="salvarMeuEscritorio()">Salvar</button></div>
@@ -16882,24 +16886,30 @@ var TRIBSIS={
    ainda num escritório cliente, que via ali a moldura de quem vendeu. Agora
    abre DENTRO, numa janela que ocupa a tela; a página em si continua a mesma
    (o parâmetro `embed` só esconde o cabeçalho dela, que aqui seria repetido). */
-function abrirAssinaturasDentro(query){
+function abrirModuloDentro(chave,titulo,caminho,query){
   var q=String(query||'');
   q += (q.indexOf('?')<0?'?':'&')+'embed=1';
-  var m=document.getElementById('modal-assinaturas');
+  var id='modal-'+chave;
+  var m=document.getElementById(id);
   if(!m){
     m=document.createElement('div');
-    m.id='modal-assinaturas'; m.className='overlay';
+    m.id=id; m.className='overlay';
     m.innerHTML='<div class="modal" style="max-width:1100px;width:96vw;padding:0;overflow:hidden">'
       +'<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--line)">'
-      +'<b style="font-size:15px">Assinaturas</b>'
-      +'<button class="btn sm ghost" style="margin-left:auto" onclick="document.getElementById(\'modal-assinaturas\').classList.add(\'hidden\')">Fechar</button>'
+      +'<b style="font-size:15px">'+esc(titulo)+'</b>'
+      +'<button class="btn sm ghost" style="margin-left:auto" onclick="document.getElementById(\''+id+'\').classList.add(\'hidden\')">Fechar</button>'
       +'</div>'
-      +'<iframe id="if-assinaturas" style="width:100%;height:78vh;border:0;display:block"></iframe></div>';
+      +'<iframe id="if-'+chave+'" style="width:100%;height:78vh;border:0;display:block"></iframe></div>';
     document.body.appendChild(m);
   }
   m.classList.remove('hidden');
-  document.getElementById('if-assinaturas').src='/assinatura'+q;
+  document.getElementById('if-'+chave).src=caminho+q;
 }
+function abrirAssinaturasDentro(query){ abrirModuloDentro('assinaturas','Assinaturas','/assinatura',query); }
+/* Migrar acervo: quem contrata vindo de outro sistema traz uma planilha. A tela
+   fica dentro do sistema pelo mesmo motivo das assinaturas — e porque é o
+   primeiro dia do escritório aqui: mandar para fora seria mandar embora. */
+function abrirMigracao(){ abrirModuloDentro('migracao','Migrar acervo de outro sistema','/migracao',''); }
 /* ===== Módulo Assinaturas (/assinatura) — assinador de documentos do escritório ===== */
 /* Abre o assinador já com o cliente do processo no contexto (nome + nº do processo). */
 function abrirAssinatura(num){

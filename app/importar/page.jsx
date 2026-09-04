@@ -1,5 +1,13 @@
 'use client'
-import { useState } from 'react'
+// Carga inicial por arquivo JSON — ferramenta interna, de uso único.
+//
+// Ela LIMPA os processos do escritório antes de inserir. Isso fazia sentido
+// quando o sistema era de um escritório só e a carga era feita uma vez, à mão.
+// Num sistema vendido é uma armadilha: qualquer pessoa logada de um escritório
+// cliente chegava a este endereço e apagava o acervo inteiro sem confirmação
+// nenhuma. Agora só a raiz abre; escritório cliente é mandado para a área de
+// migração, que confere antes, não apaga nada e pode ser desfeita.
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../../lib/supabase'
 
@@ -7,7 +15,21 @@ export default function Importar() {
   const router = useRouter()
   const [log, setLog] = useState([])
   const [busy, setBusy] = useState(false)
+  const [liberado, setLiberado] = useState(null)   // null = ainda checando
   const add = (m) => setLog((l) => [...l, m])
+
+  useEffect(() => {
+    (async () => {
+      const { data: s } = await supabase.auth.getSession()
+      if (!s.session) { router.push('/'); return }
+      const { data: perfil } = await supabase
+        .from('usuarios').select('escritorio_id').eq('id', s.session.user.id).maybeSingle()
+      if (!perfil?.escritorio_id) { setLiberado(false); return }
+      const { data: esc } = await supabase
+        .from('escritorios').select('raiz').eq('id', perfil.escritorio_id).maybeSingle()
+      setLiberado(esc?.raiz === true)
+    })()
+  }, [router])
 
   async function handleFile(e) {
     const file = e.target.files?.[0]
@@ -78,6 +100,26 @@ export default function Importar() {
       add('Falha: ' + err.message)
     }
     setBusy(false)
+  }
+
+  if (liberado === null) {
+    return <div style={{ padding: 40, textAlign: 'center', color: '#697180' }}>Carregando…</div>
+  }
+  if (!liberado) {
+    return (
+      <div style={{ maxWidth: 620, margin: '40px auto', padding: 24, background: '#fff', borderRadius: 12, border: '1px solid #e4e8ef' }}>
+        <div style={{ fontSize: 18, fontWeight: 700, color: '#2E3A4B' }}>Para trazer o seu acervo, use a área de migração</div>
+        <p style={{ fontSize: 13.5, color: '#697180', lineHeight: 1.6 }}>
+          Lá você envia a planilha exportada do sistema que usa hoje (CSV ou XLSX), confere
+          o que vai entrar antes de gravar e pode desfazer depois. Esta página é uma
+          ferramenta interna antiga, que substitui o acervo em vez de completá-lo.
+        </p>
+        <button onClick={() => router.push('/migracao')}
+          style={{ background: '#2E3A4B', color: '#fff', border: 0, borderRadius: 8, padding: '10px 16px', fontWeight: 700, cursor: 'pointer' }}>
+          Ir para a migração de acervo
+        </button>
+      </div>
+    )
   }
 
   return (
