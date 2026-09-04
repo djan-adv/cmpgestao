@@ -17342,6 +17342,7 @@ async function renderStatusJusbrInq(){
     var ate=d.expira?new Date(d.expira).toLocaleString('pt-BR'):'';
     el.innerHTML='<b style="color:#127a53">Sessão ativa.</b> Vale até '+esc(ate)
       +(d.auto_renova?' · renova sozinha enquanto o portal permitir':'')
+      +(d.titular?('<div class="note" style="font-size:11px;margin-top:2px">Aberta com o certificado de <b>'+esc(d.titular)+'</b> — se este não for o seu, o token veio de outro navegador ou de outra extensão instalada na mesma máquina.</div>'):'')
       +'<div class="note" style="font-size:11px;margin-top:2px">A sessão do jus.br dura poucas horas: quando vencer, basta entrar no portal de novo com o certificado.</div>';
   }catch(e){ el.innerHTML='<span style="color:#b5342b">'+esc(String(e&&e.message||e))+'</span>'; }
 }
@@ -23366,7 +23367,8 @@ async function _renderJusbrStatus(){
     if(j&&j.ok){
       var v=j.valido?'<b style="color:#127a53">sessão válida</b>':'<b style="color:#b5342b">sessão expirada — faça login no jus.br</b>';
       var ar=j.auto_renova?' · <span style="color:#127a53">auto-renovação armada ✓</span>':' · <span style="color:#8a5a00">sem refresh (faça 1 login com o userscript v2 instalado)</span>';
-      el.innerHTML=v+ar+(j.expira?(' · expira '+new Date(j.expira).toLocaleString('pt-BR')):'');
+      el.innerHTML=v+ar+(j.expira?(' · expira '+new Date(j.expira).toLocaleString('pt-BR')):'')
+        +(j.titular?('<div class="note" style="font-size:11px;margin-top:2px">Certificado: <b>'+esc(j.titular)+'</b> — se não for o seu, outra extensão no mesmo navegador está alimentando esta sessão.</div>'):'');
     } else el.innerHTML='<span class="note">Não foi possível ler o status.</span>';
   }catch(e){ el.innerHTML='<span class="note">Status indisponível (recompile o build).</span>'; }
 }

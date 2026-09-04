@@ -214,10 +214,18 @@ export async function GET(request) {
   const esc = await escritorioDoUsuario(user.id)
   if (!esc) return Response.json({ erro: 'usuário sem escritório vinculado' }, { status: 403 })
   const sb = admin()
-  const { data } = await sb.from('jusbr_sessao').select('expira,atualizado_em,atualizado_por,refresh_cif,refresh_em').eq('escritorio_id', esc).maybeSingle()
+  const { data } = await sb.from('jusbr_sessao').select('expira,atualizado_em,atualizado_por,refresh_cif,refresh_em,oidc').eq('escritorio_id', esc).maybeSingle()
   const valido = !!(data && data.expira && new Date(data.expira).getTime() > Date.now())
   const autoRenova = !!(data && data.refresh_cif)
-  return Response.json({ ok: true, valido, auto_renova: autoRenova, expira: data && data.expira || null, atualizado_em: data && data.atualizado_em || null, refresh_em: data && data.refresh_em || null })
+  /* DE QUEM é o certificado que abriu esta sessão.
+     Vale a pena mostrar: se duas extensões (a do escritório e a de outro)
+     estiverem no MESMO navegador, as duas capturam a mesma sessão do jus.br e
+     cada uma entrega o token ao seu escritório — e aí a sessão de um passa a ser
+     o certificado do outro. O sintoma seria "sem acesso ao processo" nos
+     próprios processos, que ninguém liga a isso. Com o titular na tela, dá para
+     ver na hora. Não devolve o token, só o usuário que veio nas claims. */
+  const titular = (data && data.oidc && data.oidc.claims && data.oidc.claims.usuario) || null
+  return Response.json({ ok: true, valido, auto_renova: autoRenova, titular, expira: data && data.expira || null, atualizado_em: data && data.atualizado_em || null, refresh_em: data && data.refresh_em || null })
 }
 
 // DELETE /api/jusbr/token  (Authorization: Bearer <jwt do Supabase>)
