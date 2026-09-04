@@ -23795,6 +23795,17 @@ async function monitTrazerAssessoria(id){
       if(_alvoSel) return m.para_id && ((m.autor_id===eu&&String(m.para_id)===_alvoSel)||(String(m.autor_id)===_alvoSel&&m.para_id===eu));
       return !m.para_id;
     });
+    /* Escritório de uma pessoa só: a conversa da equipe abre vazia e parece
+       quebrada. Dizer para que ela serve e como povoá-la é a diferença entre
+       "não funciona" e "ainda não tem com quem falar". */
+    if(!lista.length && !_alvoSel && !pessoas.length){
+      el.innerHTML='<div style="color:#5a6473;font-size:12px;line-height:1.6;padding:6px 2px">'
+        +'<b>A conversa da equipe começa aqui.</b><br>'
+        +'Por enquanto você é a única pessoa com acesso a este escritório — por isso não há com quem conversar ainda.<br>'
+        +'Cadastre advogados, colaboradores ou estagiários no <b>painel de Acessos</b> (⚙ ao lado do seu nome, no alto) e eles passam a aparecer aqui, com conversa em grupo e privada.'
+        +'</div>';
+      return;
+    }
     if(!lista.length){ el.innerHTML='<div style="color:#5a6473;font-size:12px">'+(_alvoSel?'Nenhuma mensagem privada com esta pessoa ainda. O que você escrever abaixo só vocês dois veem.':'Sem mensagens ainda. Escreva abaixo — vai para todo o escritório, ou escolha uma pessoa para conversa privada.')+'</div>'; return; }
     el.innerHTML=lista.map(function(m,_i){
       var faixa=(_i===0 || _diaChave(m.criado_em)!==_diaChave(lista[_i-1].criado_em)) ? _faixaDia(m.criado_em) : '';
