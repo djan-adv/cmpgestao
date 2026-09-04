@@ -1747,6 +1747,12 @@ function entrar(){
   if(__sec==='proc-det') __sec='processos'; /* a ficha é reaberta após carregar os dados */
   initKanban();initTriagem();initEtiquetas();go(__sec);renderSeletorUsuariosVisual();
 }
+/* Quem responde pelo contrato do escritório. Apagar ou desativar ESTE acesso é
+   o escritório se trancar para fora do próprio sistema — na prática, cancelar o
+   contrato por engano, e sem ninguém dentro para desfazer. A API já recusa; aqui
+   o botão deixa de existir, que é onde o erro seria cometido.
+   Na casa raiz o papel é do dono do sistema, identificado pelo assento fixo. */
+function ehDonoDoContrato(u){ return !!u && (u.id==='djan' || u.contratante===true); }
 function usuarioVisualAtual(){ return (USUARIOS_VISUAIS||[]).find(function(u){return u.id===USUARIO_ATUAL_VISUAL;})||USUARIOS_VISUAIS[0]; }
 function setUsuarioVisual(id){
   var u=(USUARIOS_VISUAIS||[]).find(function(x){return x.id===id&&x.ativo!==false;}); if(!u) return;
@@ -1995,6 +2001,7 @@ async function _carregarAssentos(){
           id:'auto_'+String(u.email||u.id).split('@')[0],
           nome:u.nome||u.email, email:u.email||'', senha:'definida', ativo:true,
           perfil:(u.papel==='contratante'||u.papel==='socio')?'socio':(/estag/i.test(u.papel||'')?'est':'adv'),
+          contratante:(u.papel==='contratante'),
           so_privado:!!u.so_privado,
         });
       });
@@ -2399,12 +2406,16 @@ function renderAcessos(){
       acoes+='<button class="btn sm ghost" style="'+(_ff?'color:#8a5a00;border-color:#e8dcbb;background:var(--accentbg)':'')+'" title="'+(_ff?'Encerrar as ferias e voltar a distribuir':'Registrar periodo de ferias')+'" onclick="marcarFerias(\''+u.id+'\')">🏖'+(_ff?' de ferias':(_fp?' agendada':' ferias'))+'</button>';
       var _sp=soPrivado(u);
       acoes+='<button class="btn sm ghost" style="'+(_sp?'color:#6d28a8;border-color:#dcc9f0':'')+'" title="'+(_sp?'Fora do grupo: só conversa privada. Clique para devolver ao grupo':'Tirar do chat do grupo — passa a ter só conversas privadas')+'" onclick="alternarSoPrivado(\''+u.id+'\')">'+(_sp?'só privado':'no grupo')+'</button>';
-      acoes+='<button class="btn sm ghost" onclick="toggleAtivoAcesso(\''+u.id+'\')">'+(ativo?'Desativar':'Ativar')+'</button>';
-      if(!u.email) acoes+='<button class="btn sm ghost" style="color:#b5342b" title="Remover da lista (ainda sem cadastro)" onclick="removerAssento(\''+u.id+'\')">✕</button>';
-      /* Desativar tranca o login mas MANTÉM o vínculo com o escritório — e é
-         isso que impede o mesmo e-mail de virar acesso de outro escritório
-         (uma pessoa pertence a um só). Quem sai de vez precisa sair daqui. */
-      else acoes+='<button class="btn sm ghost" style="color:#b5342b" title="Apagar o acesso de vez (libera o e-mail para outro escritório)" onclick="apagarAcesso(\''+u.id+'\')">Apagar</button>';
+      if(ehDonoDoContrato(u)){
+        acoes+='<span class="note" style="margin:0;align-self:center" title="Este é o acesso que responde pelo contrato do escritório. Para trocar de responsável, fale com o suporte.">responsável pelo contrato</span>';
+      } else {
+        acoes+='<button class="btn sm ghost" onclick="toggleAtivoAcesso(\''+u.id+'\')">'+(ativo?'Desativar':'Ativar')+'</button>';
+        if(!u.email) acoes+='<button class="btn sm ghost" style="color:#b5342b" title="Remover da lista (ainda sem cadastro)" onclick="removerAssento(\''+u.id+'\')">✕</button>';
+        /* Desativar tranca o login mas MANTÉM o vínculo com o escritório — e é
+           isso que impede o mesmo e-mail de virar acesso de outro escritório
+           (uma pessoa pertence a um só). Quem sai de vez precisa sair daqui. */
+        else acoes+='<button class="btn sm ghost" style="color:#b5342b" title="Apagar o acesso de vez (libera o e-mail para outro escritório)" onclick="apagarAcesso(\''+u.id+'\')">Apagar</button>';
+      }
     }
     /* mesmas ações, em menu — é o que aparece no celular */
     var menu=[];
@@ -2416,9 +2427,11 @@ function renderAcessos(){
       if(!u.senha) menu.push(['convite','🔗 Link de convite']);
       menu.push(['ferias', emFerias(u)?'🏖 Encerrar férias':'🏖 Registrar férias']);
       menu.push(['priv', soPrivado(u)?'Devolver ao grupo do chat':'Tirar do grupo (só privado)']);
-      menu.push(['ativo', ativo?'Desativar acesso':'Reativar acesso']);
-      if(!u.email) menu.push(['remover','Remover da lista']);
-      else menu.push(['apagar','Apagar acesso de vez']);
+      if(!ehDonoDoContrato(u)){
+        menu.push(['ativo', ativo?'Desativar acesso':'Reativar acesso']);
+        if(!u.email) menu.push(['remover','Remover da lista']);
+        else menu.push(['apagar','Apagar acesso de vez']);
+      }
     }
     var menuHtml=menu.length
       ? '<select class="ac-menu" onchange="acaoAcesso(\''+u.id+'\',this)"><option value="">⚙ ações…</option>'
@@ -3164,7 +3177,14 @@ function abrir(i){
     var rotV={triagem:'← voltar às publicações',painel:'← voltar ao painel',agenda:'← voltar à agenda',diligencias:'← voltar às diligências',crm:'← voltar ao comercial',processos:'← voltar aos processos'};
     var bv=document.getElementById('btn-voltar-proc'); if(bv) bv.textContent=rotV[window.__voltarPara||'processos']||'← voltar';
   }catch(eV){}
-  atual=DADOS.processos[i]; var p=atual, resp="Djan Henrique";
+  /* O responsável exibido na ficha estava escrito no código com o nome do sócio
+     desta casa: no sistema de um escritório cliente, toda ficha dele apresentava
+     um advogado que não é dele. Agora vale o responsável gravado no processo e,
+     na falta dele, a primeira pessoa da equipe do próprio escritório. */
+  atual=DADOS.processos[i]; var p=atual;
+  var resp=(p&&p.resp)||(p&&p.responsavel)||'';
+  if(!resp){ try{ resp=responsavelPadrao()||''; }catch(eR){ resp=''; } }
+  if(!resp) resp='—';
   /* abrir a ficha JÁ é o "visto" — é isso que responde "você viu o processo de fulano?" */
   try{ if(typeof registrarVistoProcesso==='function') registrarVistoProcesso(p); }catch(eVi){}
   try{ if(typeof _visIniciar==='function') _visIniciar(p); }catch(eVs){}

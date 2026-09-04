@@ -24,9 +24,20 @@ export const ESCRITORIO_RAIZ = String(
   '908f77fc-19f5-4d86-9576-f5590af09e0a',
 ).trim()
 
+// O Next põe em cache as requisições `fetch` feitas dentro de rotas, e o
+// supabase-js consulta por fetch. Foi assim que o robô do diário passou a rodar
+// para uma lista de escritórios CONGELADA: ele varria os dois escritórios que
+// existiam quando a lista foi cacheada e simplesmente não enxergava o cliente
+// cadastrado depois — sem erro nenhum, o que é o pior tipo de defeito. Aqui a
+// consulta é sempre fresca, para todos os robôs de uma vez.
+function semCache(url, opcoes) {
+  return fetch(url, { ...opcoes, cache: 'no-store' })
+}
+
 function admin() {
   return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
     auth: { persistSession: false },
+    global: { fetch: semCache },
   })
 }
 
@@ -103,9 +114,7 @@ export function raizDocs(esc) {
 // própria. Mesma decisão que já valeu para a Inove: envio desligado.
 export async function canalLiberado(esc, canal) {
   if (!esc) return { ok: false, erro: 'Sem escritório.' }
-  const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
-    auth: { persistSession: false },
-  })
+  const sb = admin()
   const { data } = await sb.from('escritorios').select('raiz,ativo,modulos,nome').eq('id', esc).maybeSingle()
   if (!data) return { ok: false, erro: 'Escritório não encontrado.' }
   if (data.ativo === false) return { ok: false, erro: 'Este escritório está com o acesso suspenso.' }
@@ -134,9 +143,7 @@ export function bloqueioDeCanal(res) {
 // WhatsApp ou produto de captação do dono) — esses seguem só na raiz, e isso
 // está dito em cada um deles, não subentendido.
 export async function escritoriosAtivos(filtro) {
-  const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
-    auth: { persistSession: false },
-  })
+  const sb = admin()
   const { data } = await sb.from('escritorios').select('id,nome,raiz,oabs,modulos').eq('ativo', true)
   let lista = data || []
   // com sessão do jus.br: só faz sentido varrer tribunal para quem tem

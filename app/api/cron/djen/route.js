@@ -2,6 +2,8 @@
 // e grava os andamentos novos no banco. Roda na NUVEM (Vercel Cron), PC desligado.
 // Escreve via função robot_add_andamento (SECURITY DEFINER) usando a chave PÚBLICA.
 export const dynamic = 'force-dynamic'
+export const fetchCache = 'force-no-store'
+export const revalidate = 0
 export const maxDuration = 60
 
 import { createClient } from '@supabase/supabase-js'
