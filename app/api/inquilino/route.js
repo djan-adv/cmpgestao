@@ -31,7 +31,7 @@ export async function GET(request) {
   })
   const { data } = await sb
     .from('escritorios')
-    .select('id,nome,marca,ativo,raiz')
+    .select('id,nome,marca,ativo,raiz,dados')
     .contains('hosts', [host])
     .maybeSingle()
 
@@ -53,5 +53,9 @@ export async function GET(request) {
       cor: marca.cor || null,
       logo: marca.logo || null,
     },
+    // Cadastro do escritório. É o que preenche a procuração e o contrato que o
+    // cliente dele assina — e é dado profissional público (o que já vai escrito
+    // na própria procuração), não dado sigiloso.
+    dados: data.dados || null,
   })
 }

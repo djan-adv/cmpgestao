@@ -91,7 +91,38 @@ async function gerarCodigoVerificacao(partes) {
 }
 function agruparCodigo(hex) { return (hex || '').replace(/(.{4})(?=.)/g, '$1-') }
 
-const OUTORGADO = '<b>Djan Henrique Mendonça do Nascimento</b>, brasileiro, casado, advogado, inscrito na OAB/PB n. 5.219-A, e os integrantes da sociedade <b>CRISPIM, MENDONÇA E PINHEIRO ADVOGADOS</b>, registrada na Ordem dos Advogados do Brasil, seccional da Paraíba sob o número OAB/PB 2200042, e no CNPJ 45.487.942/0001-84, com sede na Rua Abelardo da Silva Guimarães Barreto, 51, sala 604-C edf. Alliance Plaza Business, CEP 58046-110, Altiplano Cabo Branco, João Pessoa/PB, e-mail: djan.adv@gmail.com'
+// Quem recebe os poderes na procuração.
+//
+// Isto era uma linha fixa com o nome, a OAB, o CNPJ e o endereço de um
+// escritório só. Num sistema vendido, o cliente de OUTRO escritório abriria a
+// procuração dele e assinaria poderes para o escritório do fornecedor — não é
+// erro de marca, é o documento errado, com efeito jurídico real.
+//
+// Agora o texto vem do cadastro do escritório dono do endereço. Sem cadastro
+// preenchido, a procuração NÃO é montada: melhor a tela dizer que falta
+// cadastro do que gerar um documento nomeando quem não é o advogado.
+const OUTORGADO_RAIZ = '<b>Djan Henrique Mendonça do Nascimento</b>, brasileiro, casado, advogado, inscrito na OAB/PB n. 5.219-A, e os integrantes da sociedade <b>CRISPIM, MENDONÇA E PINHEIRO ADVOGADOS</b>, registrada na Ordem dos Advogados do Brasil, seccional da Paraíba sob o número OAB/PB 2200042, e no CNPJ 45.487.942/0001-84, com sede na Rua Abelardo da Silva Guimarães Barreto, 51, sala 604-C edf. Alliance Plaza Business, CEP 58046-110, Altiplano Cabo Branco, João Pessoa/PB, e-mail: djan.adv@gmail.com'
+
+function outorgadoDe(dados) {
+  if (!dados) return null
+  const p = []
+  if (dados.socio_nome) p.push('<b>' + escH(dados.socio_nome) + '</b>')
+  const q = [dados.socio_nacionalidade, dados.socio_estado_civil, 'advogado(a)'].filter(Boolean)
+  if (q.length) p.push(q.join(', '))
+  if (dados.socio_oab) p.push('inscrito(a) na OAB n. ' + escH(dados.socio_oab))
+  if (dados.nome_sociedade) {
+    let soc = 'e os integrantes da sociedade <b>' + escH(dados.nome_sociedade) + '</b>'
+    if (dados.oab_sociedade) soc += ', registrada na Ordem dos Advogados do Brasil sob o número ' + escH(dados.oab_sociedade)
+    if (dados.cnpj) soc += ', e no CNPJ ' + escH(dados.cnpj)
+    p.push(soc)
+  }
+  if (dados.endereco) p.push('com sede na ' + escH(dados.endereco))
+  if (dados.email) p.push('e-mail: ' + escH(dados.email))
+  const texto = p.join(', ')
+  // sem o mínimo (quem é e onde), não vale como qualificação de outorgado
+  if (!dados.socio_nome || !dados.endereco) return null
+  return texto
+}
 
 function tituloNome(s) { const min = new Set(['da', 'de', 'do', 'das', 'dos', 'e', 'di', 'du', 'del', 'van', 'von', 'y']); return (s || '').toLowerCase().trim().split(/\s+/).map((w, i) => (i > 0 && min.has(w)) ? w : (w.charAt(0).toUpperCase() + w.slice(1))).join(' ') }
 function cpfValido(cpf) { cpf = (cpf || '').replace(/\D/g, ''); if (cpf.length !== 11 || /^(\d)\1{10}$/.test(cpf)) return false; let s = 0; for (let i = 0; i < 9; i++) s += +cpf[i] * (10 - i); let d1 = (s * 10) % 11; if (d1 === 10) d1 = 0; if (d1 !== +cpf[9]) return false; s = 0; for (let i = 0; i < 10; i++) s += +cpf[i] * (11 - i); let d2 = (s * 10) % 11; if (d2 === 10) d2 = 0; return d2 === +cpf[10] }
@@ -124,6 +155,9 @@ function carregarScript(src, pronto) {
 export default function AssinarProcuracao() {
   const [params, setParams] = useState(null) // {d, s}
   const [doc, setDoc] = useState(null)
+  // de quem é este endereço: define a marca do topo e, principalmente, QUEM
+  // recebe os poderes na procuração
+  const [casa, setCasa] = useState(null)
   const [gateMsg, setGateMsg] = useState('')
   const [f, setF] = useState({ nome: '', nacionalidade: 'brasileiro(a)', estadocivil: '', profissao: '', cpf: '', rg: '', cep: '', numero: '', endereco: '', email: '', telefone: '' })
   const [cepMsg, setCepMsg] = useState('')
@@ -137,6 +171,10 @@ export default function AssinarProcuracao() {
   const [busy, setBusy] = useState(false)
   const canvasRef = useRef(null)
   const desenhando = useRef(false)
+
+  useEffect(() => {
+    fetch('/api/inquilino').then(r => r.json()).then(d => setCasa(d && d.ok ? d : { conhecido: false })).catch(() => setCasa({ conhecido: false }))
+  }, [])
 
   useEffect(() => {
     const q = new URLSearchParams(window.location.search)
@@ -227,11 +265,18 @@ export default function AssinarProcuracao() {
          <div class="cpf-out">${escH(f.cpf) || '—'}</div>
        </div>`
 
+  // Raiz mantém o texto de sempre; escritório cliente usa o cadastro dele.
+  const ehRaizCasa = !(casa && casa.conhecido && casa.raiz === false)
+  const outorgado = ehRaizCasa ? OUTORGADO_RAIZ : outorgadoDe(casa && casa.dados)
+  const nomeCasa = (casa && (casa.marca?.sistema || casa.nome)) || ''
+
   const docHTML = `
-    <div class="timbre"><img src="/logo_cmp_full.png" alt="Crispim, Mendonça e Pinheiro — Advogados" onerror="this.style.display='none'"></div>
+    <div class="timbre">${ehRaizCasa
+      ? '<img src="/logo_cmp_full.png" alt="Advogados" onerror="this.style.display=&#39;none&#39;">'
+      : ('<div style="font-weight:700;font-size:13pt;letter-spacing:.4px">' + escH(nomeCasa) + '</div>')}</div>
     <h1>Procuração</h1>
     <p><b>Outorgante:</b> ${f.nome.trim() ? ('<b>' + escH(f.nome.trim()) + '</b>') : ph('nome', '')}, ${qualif}, inscrito(a) no CPF de nº ${ph('CPF', f.cpf)}${f.rg.trim() ? ' e RG ' + escH(f.rg.trim()) : ''}, residente e domiciliado(a) na ${ph('endereço', enderecoCompleto)}, com e-mail: ${escH(f.email.trim())}${f.telefone.trim() ? (' e contato: ' + escH(f.telefone.trim())) : ''}.</p>
-    <p><b>Outorgado:</b> ${OUTORGADO}.</p>
+    <p><b>Outorgado:</b> ${outorgado}.</p>
     <p><b>Poderes:</b> o(a) outorgante nomeia e constitui seu bastante procurador o(a) outorgado(a), conferindo-lhe a cláusula <b>ad judicia et extra</b>, para o foro em geral, ${doc && doc.finalidade ? 'em especial para <b>' + escH(doc.finalidade) + '</b>, ' : ''}podendo propor, acompanhar e contestar ações em qualquer juízo, instância ou tribunal, bem como representá-lo(a) perante repartições públicas e privadas, com poderes especiais para <b>transigir, negociar</b>, firmar acordos, desistir, renunciar, substabelecer com ou sem reserva${podExtra}.</p>
     ${clausulas(doc && doc.modelo)}
     <p>Outorgada de forma livre e consciente, por assinatura eletrônica, nos termos da Lei nº 14.063/2020 e da MP nº 2.200-2/2001.</p>
@@ -336,7 +381,7 @@ export default function AssinarProcuracao() {
       <link rel="preconnect" href="https://fonts.googleapis.com" />
       <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;600;700&family=Dancing+Script:wght@700&family=Great+Vibes&family=Sacramento&display=swap" rel="stylesheet" />
       <header className="asn-topo">
-        <div className="asn-marca">CMP Advogados · Assinatura eletrônica</div>
+        <div className="asn-marca">{(casa && casa.conhecido && casa.raiz === false ? (casa.marca?.sistema || casa.nome) : 'CMP Advogados')} · Assinatura eletrônica</div>
         <div className="asn-selo">🔒 Assinatura com trilha de auditoria</div>
       </header>
 
@@ -429,8 +474,18 @@ export default function AssinarProcuracao() {
           </div>
           <div>
             <div className="asn-card asn-doc">
-              <div className="asn-watermark"></div>
-              <div className="asn-doc-inner" dangerouslySetInnerHTML={{ __html: docHTML }} />
+              {(!casa || casa.raiz !== false) && <div className="asn-watermark"></div>}
+              {/* Sem cadastro do escritório não se monta procuração: um
+                  documento com o outorgado errado tem efeito jurídico, e o
+                  erro só apareceria depois de assinado. */}
+              {(!ehRaizCasa && !outorgado)
+                ? <div style={{ padding: 28, color: '#8a3b2b', lineHeight: 1.6 }}>
+                    <b>Cadastro do escritório incompleto.</b><br />
+                    A procuração precisa do nome do advogado, da OAB e do endereço do escritório para
+                    ser gerada. Peça ao responsável para preencher o cadastro do escritório no sistema —
+                    até lá, este documento não é montado.
+                  </div>
+                : <div className="asn-doc-inner" dangerouslySetInnerHTML={{ __html: docHTML }} />}
               {assinado && (
                 <div className="asn-selo-lateral">
                   <div className="txt">CMP ADVOGADOS · ASSINATURA ELETRÔNICA · CÓDIGO DE VERIFICAÇÃO {assinado.codigo} · ASSINADO EM {assinado.quando} · LEI 14.063/2020</div>

@@ -176,6 +176,9 @@
 .side>#nav{flex:1 1 auto;overflow-y:auto;min-height:0}
 .side .userft{position:static!important;flex:0 0 auto}
 .side>.brand-neutral{flex:0 0 auto}
+/* a lateral é escura: o texto herdava a cor navy e sumia no fundo — o nome do
+   escritório só aparecia quando o usuário selecionava o texto com o mouse */
+.brand-neutral{color:#fff!important}
 /* Perfil neutro "Inove/Perito": esconde marcas e ferramentas exclusivas da CMP */
 /* Escritório CLIENTE (quem comprou o sistema). Reaproveita a marca neutra que
    já existia para o perfil do perito, mas SEM esconder as ferramentas: o
@@ -196,6 +199,12 @@ html[data-perfil="cliente"] #nav a[data-s="encerrados"],
    - O canal de pedidos continua, com outro nome: para o cliente não é
      "sugestão", é encomendar funcionalidade — e o dono do sistema responde com
      orçamento. */
+/* Pastas da casa que estavam escritas no menu, não vindas do cadastro: "Sem
+   contrato", "James Laurence", "Inove" e "Encerrados" apareciam zeradas na tela
+   de um cliente que nada tem com elas. Somem no perfil de cliente até os lotes
+   virem do cadastro de cada escritório. */
+html[data-perfil="cliente"] #nav a[data-s="contratacao"],
+html[data-perfil="cliente"] #nav a[data-s="james"]{display:none!important}
 html[data-perfil="cliente"] #nav a[data-s="produtividade"]{display:flex!important}
 html[data-perfil="cliente"] #nav a[data-s="sugestoes"]{display:flex!important;color:#ffd98a}
 html[data-perfil="inove"] .brand{display:none!important}
@@ -352,7 +361,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
   </aside>
   <main class="main">
     <div class="topbar"><h1 id="scr-title">Painel</h1>
-      <div class="who">Logado: <b id="who-name">Djan Mendonça</b> <span id="who-pill" class="pill socio">sócio</span> <button id="btn-cfg-proc" class="btn sm ghost cmp-only coord-only" onclick="abrirConfig()" title="Configurações — lotes/pastas do menu" style="display:none;font-size:15px;line-height:1;padding:3px 9px;margin-left:8px">⚙</button> <button class="btn sm ghost" onclick="abrirMeusAparelhos()" title="Aparelhos onde seu acesso está registrado (até 3)" style="font-size:12px;margin-left:8px">📱 aparelhos</button> <button class="btn sm ghost" onclick="sairSistema()" title="Sair do sistema (encerra a sessão)" style="font-size:12px;margin-left:8px">Sair</button></div></div>
+      <div class="who"><button id="btn-meu-escritorio" onclick="abrirMeuEscritorio()" class="btn sm ghost" title="Cadastro do escritório — nome, OAB, sociedade e endereço que entram na procuração e no contrato" style="display:none;font-size:15px;line-height:1;padding:3px 9px;margin-right:8px">⚙</button>Logado: <b id="who-name">Djan Mendonça</b> <span id="who-pill" class="pill socio">sócio</span> <button id="btn-cfg-proc" class="btn sm ghost cmp-only coord-only" onclick="abrirConfig()" title="Configurações — lotes/pastas do menu" style="display:none;font-size:15px;line-height:1;padding:3px 9px;margin-left:8px">⚙</button> <button class="btn sm ghost" onclick="abrirMeusAparelhos()" title="Aparelhos onde seu acesso está registrado (até 3)" style="font-size:12px;margin-left:8px">📱 aparelhos</button> <button class="btn sm ghost" onclick="sairSistema()" title="Sair do sistema (encerra a sessão)" style="font-size:12px;margin-left:8px">Sair</button></div></div>
 
     <section id="s-painel">
       <div id="painel-hello"></div>
@@ -1258,6 +1267,46 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
   <div id="tardia-body" style="max-height:65vh;overflow:auto;margin-top:6px"></div>
   <div class="foot"><button class="btn ghost" onclick="novaTarefaDoDia()">+ Nova tarefa neste dia</button><button class="btn" onclick="fecharTarDia()">Fechar</button></div>
 </div></div>
+<div id="modal-meu-esc" class="overlay hidden"><div class="modal" style="max-width:720px">
+  <h2>Cadastro do escritório</h2>
+  <p class="note" style="margin-top:2px">Estes dados aparecem no sistema e, principalmente, entram na <b>procuração</b> e no <b>contrato</b> que o seu cliente assina. Sem eles, o documento não é gerado.</p>
+  <div style="max-height:62vh;overflow:auto;margin-top:10px">
+    <div class="card"><p class="sectlabel">Identificação</p>
+      <div class="grid2">
+        <div><label>Nome do escritório</label><input id="me-nome"></div>
+        <div><label>Nome que aparece no sistema</label><input id="me-marca-sistema" placeholder="deixe em branco para usar o nome do escritório"></div>
+      </div>
+    </div>
+    <div class="card"><p class="sectlabel">Advogado responsável (o outorgado da procuração)</p>
+      <div class="grid2">
+        <div><label>Nome completo</label><input id="me-socio_nome"></div>
+        <div><label>OAB</label><input id="me-socio_oab" placeholder="OAB/UF n. 0.000"></div>
+        <div><label>Nacionalidade</label><input id="me-socio_nacionalidade" placeholder="brasileiro(a)"></div>
+        <div><label>Estado civil</label><input id="me-socio_estado_civil"></div>
+      </div>
+    </div>
+    <div class="card"><p class="sectlabel">Sociedade</p>
+      <div class="grid2">
+        <div><label>Razão social</label><input id="me-nome_sociedade"></div>
+        <div><label>Registro OAB da sociedade</label><input id="me-oab_sociedade"></div>
+        <div><label>CNPJ</label><input id="me-cnpj"></div>
+        <div><label>Site</label><input id="me-site"></div>
+      </div>
+    </div>
+    <div class="card"><p class="sectlabel">Endereço e contato</p>
+      <div class="grid2">
+        <div style="grid-column:1/-1"><label>Endereço completo (entra na procuração)</label><input id="me-endereco" placeholder="rua, número, complemento, bairro, CEP, cidade/UF"></div>
+        <div><label>Telefone</label><input id="me-telefone"></div>
+        <div><label>WhatsApp</label><input id="me-whatsapp"></div>
+        <div><label>E-mail</label><input id="me-email"></div>
+        <div><label>Cidade / UF</label><input id="me-cidade"></div>
+      </div>
+    </div>
+    <div class="card" id="me-plano-card"><p class="sectlabel">Seu plano</p><div id="me-plano"></div></div>
+  </div>
+  <div id="me-msg" class="note" style="margin-top:6px"></div>
+  <div class="foot"><button class="btn ghost" onclick="fecharMeuEscritorio()">Fechar</button><button class="btn" id="me-salvar" onclick="salvarMeuEscritorio()">Salvar</button></div>
+</div></div>
 <div id="modal-cproc" class="overlay hidden"><div class="modal" style="max-width:680px">
   <h2 id="cproc-tit">Processos do contato</h2>
   <div id="cproc-body" style="max-height:60vh;overflow:auto;margin-top:6px"></div>
@@ -1430,6 +1479,64 @@ async function sairSistema(){
   try{ if(typeof logEvent==='function') logEvent('logout','sessao',null,null); }catch(e){}
   try{ await window.__sb.auth.signOut(); }catch(e){}
   location.replace('/');
+}
+/* Cadastro do próprio escritório — a engrenagem do rodapé.
+   É daqui que saem o nome na tela e, principalmente, a qualificação do
+   outorgado na procuração e no contrato. Enquanto isso morava no código, o
+   cliente de um escritório assinava documento nomeando o advogado de outro. */
+var _MEU_ESC_CAMPOS=['socio_nome','socio_oab','socio_nacionalidade','socio_estado_civil',
+  'nome_sociedade','oab_sociedade','cnpj','endereco','cidade','telefone','whatsapp','email','site'];
+async function _meuEscApi(metodo, corpo){
+  var sb=window.__sb; var g=await sb.auth.getSession();
+  var tk=g&&g.data&&g.data.session&&g.data.session.access_token; if(!tk) throw new Error('sem sessão');
+  var r=await fetch('/api/meu-escritorio',{method:metodo,
+    headers:{'Content-Type':'application/json',Authorization:'Bearer '+tk},
+    body:corpo?JSON.stringify(corpo):undefined});
+  var d=await r.json().catch(function(){return {};});
+  if(!r.ok||d.erro) throw new Error(d.erro||('falha ('+r.status+')'));
+  return d;
+}
+async function abrirMeuEscritorio(){
+  var m=document.getElementById('modal-meu-esc'); if(!m) return;
+  m.classList.remove('hidden');
+  var msg=document.getElementById('me-msg'); msg.textContent='Carregando…';
+  try{
+    var d=await _meuEscApi('GET');
+    document.getElementById('me-nome').value=d.escritorio.nome||'';
+    document.getElementById('me-marca-sistema').value=(d.escritorio.marca&&d.escritorio.marca.sistema)||'';
+    _MEU_ESC_CAMPOS.forEach(function(c){
+      var el=document.getElementById('me-'+c); if(el) el.value=(d.escritorio.dados&&d.escritorio.dados[c])||'';
+    });
+    var p=d.plano||{};
+    document.getElementById('me-plano').innerHTML=
+      '<div style="font-size:13px;line-height:1.7">'
+      +'<b>'+esc(p.codigo||'—')+'</b><br>'
+      +'Processos: '+(p.uso_processos||0)+(p.limite_processos?(' de '+p.limite_processos):' (sem limite)')+'<br>'
+      +'Acessos: '+(p.uso_acessos||0)+(p.limite_acessos?(' de '+p.limite_acessos):' (sem limite)')+'<br>'
+      +(p.limite_gb?('Documentos: até '+p.limite_gb+' GB<br>'):'')
+      +'</div>'
+      +'<p class="note" style="margin-top:8px">Para mudar de plano ou tratar de valores, use <b>Solicitar funcionalidades</b> — o pedido chega a quem cuida do contrato.</p>';
+    /* quem não é contratante nem sócio vê, mas não altera */
+    var sv=document.getElementById('me-salvar'); if(sv) sv.style.display=d.pode_editar?'inline-block':'none';
+    msg.textContent=d.pode_editar?'':'Somente o contratante ou um sócio pode alterar este cadastro.';
+  }catch(e){ msg.textContent='Não consegui carregar: '+(e&&e.message||e); }
+}
+function fecharMeuEscritorio(){ var m=document.getElementById('modal-meu-esc'); if(m) m.classList.add('hidden'); }
+async function salvarMeuEscritorio(){
+  var msg=document.getElementById('me-msg'); msg.textContent='Salvando…';
+  var dados={}; _MEU_ESC_CAMPOS.forEach(function(c){
+    var el=document.getElementById('me-'+c); if(el) dados[c]=el.value.trim();
+  });
+  try{
+    await _meuEscApi('POST',{
+      nome:document.getElementById('me-nome').value.trim(),
+      marca:{sistema:document.getElementById('me-marca-sistema').value.trim()},
+      dados:dados,
+    });
+    msg.textContent='Salvo. A procuração e o contrato passam a usar estes dados.';
+    /* a marca da tela acompanha na hora, sem precisar recarregar */
+    try{ await _carregarEscritorio(); aplicarPerfilDaTela(); }catch(e){}
+  }catch(e){ msg.textContent='Não consegui salvar: '+(e&&e.message||e); }
 }
 /* Aplica o perfil visual da tela. Existe como função — e não como uma linha
    solta — porque `entrar()` também mexe no mesmo atributo: quando o sistema
@@ -2094,6 +2201,8 @@ function renderAcessos(){
      O contratante de um escritório cliente manda nos acessos dele, e só. */
   var ehDaCasa=!(window.__escInfo && window.__escInfo.raiz!==true);
   var bp=document.getElementById('btn-abrir-publicar'); if(bp) bp.style.display=(ehCoord&&ehDaCasa)?'inline-block':'none';
+  /* o cadastro do escritório fica à mão de quem responde por ele */
+  var bm=document.getElementById('btn-meu-escritorio'); if(bm) bm.style.display=ehCoord?'inline-block':'none';
   try{ var _lb=document.getElementById('acessos-body'); _rotuloBtnAcessos(_lb&&_lb.style.display!=='none'); }catch(e){}
   body.innerHTML=(USUARIOS_VISUAIS||[]).map(function(u){
     var p=perfis[u.perfil]||perfis.adv;
