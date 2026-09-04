@@ -139,9 +139,19 @@ export default function Inquilinos() {
           acessos {e.uso ? e.uso.acessos : '—'}{e.limite_acessos ? '/' + e.limite_acessos : ' (sem limite)'}
           {' · '}
           processos {e.uso ? e.uso.processos : '—'}{e.limite_processos ? '/' + e.limite_processos : ' (sem limite)'}
-          {e.limite_gb ? ' · até ' + e.limite_gb + ' GB' : ''}
+          {e.limite_gb ? ' · ' + (e.uso && e.uso.gb != null ? e.uso.gb : '—') + '/' + e.limite_gb + ' GB' : ''}
           {e.ia_teto_brl ? ' · IA até ' + brl(e.ia_teto_brl) + '/mês' : ''}
         </div>
+        {/* Passou do que está contratado. A régua do excedente NÃO está neste
+            arquivo de propósito: o painel é compilado para o navegador, e o que
+            ele importa fica público. O cálculo vem pronto da rota, que só
+            responde à raiz. */}
+        {e.passou && (
+          <div style={{ fontSize: 12.5, color: '#8a1c1c', marginTop: 2 }}>
+            passou do contratado: {e.passou.linhas.map(l => l.o_que + ' +' + (l.o_que === 'espaço' ? l.quanto.toFixed(1) + ' GB' : l.quanto)).join(' · ')}
+            {' → '}<b>{brl(e.passou.total)}</b> a mais/mês
+          </div>
+        )}
         {abertoAqui && <PainelGestao e={e} />}
       </div>
     )

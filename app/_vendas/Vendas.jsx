@@ -143,7 +143,7 @@ export default function Vendas({ aoEntrar }) {
   // sozinho, o escritório nasce pronto e ninguém do outro lado precisa fazer
   // nada. O formulário de demonstração continua existindo para quem prefere
   // conversar antes — são públicos diferentes, não etapas do mesmo funil.
-  const [t, setT] = useState({ escritorio: '', nome: '', email: '', telefone: '' })
+  const [t, setT] = useState({ escritorio: '', nome: '', email: '', telefone: '', aceite: false })
   const [tEnviando, setTEnviando] = useState(false)
   const [tErro, setTErro] = useState('')
   const [criado, setCriado] = useState(null)
@@ -154,7 +154,7 @@ export default function Vendas({ aoEntrar }) {
     setTErro(''); setTEnviando(true)
     try {
       const r = await fetch('/api/cadastro-teste', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(t),
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...t, aceite: t.aceite === true }),
       })
       const d = await r.json().catch(() => ({}))
       if (!r.ok || d.erro) { setTErro(d.erro || 'Não consegui criar agora.'); setTEnviando(false); return }
@@ -528,6 +528,18 @@ export default function Vendas({ aoEntrar }) {
                     <Campo rot="E-mail" req tipo="email" dica="a senha vai para cá" v={t.email} on={setT_('email')} />
                     <Campo rot="Telefone / WhatsApp" v={t.telefone} on={setT_('telefone')} />
                   </div>
+                  {/* O aceite é obrigatório e o texto fica a um clique, aberto
+                      em outra aba para ninguém perder o que já digitou. */}
+                  <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 13.5, color: '#46505e', margin: '10px 0 4px', cursor: 'pointer' }}>
+                    <input type="checkbox" required checked={t.aceite} style={{ marginTop: 3 }}
+                      onChange={(ev) => setT({ ...t, aceite: ev.target.checked })} />
+                    <span>
+                      Li e aceito o <a href="/termos" target="_blank" rel="noreferrer" style={{ color: VERDE, fontWeight: 700 }}>
+                      Termo de Uso e de Tratamento de Dados</a>. Ele diz, em resumo: os dados do meu
+                      escritório são meus, o sistema é ferramenta auxiliar e o controle de prazos continua
+                      comigo, e nada é apagado quando o teste termina.
+                    </span>
+                  </label>
                   {tErro && <div style={{ color: '#b5342b', fontSize: 13.5, margin: '4px 0 8px' }}>{tErro}</div>}
                   <button type="submit" disabled={tEnviando}
                     style={{ ...botao, background: tEnviando ? '#9aa6b5' : VERDE, color: '#fff', width: '100%', padding: 14, fontSize: 16, marginTop: 6 }}>
@@ -607,6 +619,9 @@ export default function Vendas({ aoEntrar }) {
               Gestão<span style={{ color: GOLD }}>Jurídica</span>
             </div>
             <div>Sistema de gestão para escritórios de advocacia.</div>
+            <div style={{ marginTop: 6 }}>
+              <a href="/termos" style={{ color: '#c8d4e4' }}>Termo de Uso e de Tratamento de Dados</a>
+            </div>
           </div>
           <div style={{ minWidth: 260 }}>
             <div style={{ color: '#c8d4e4', fontWeight: 700, marginBottom: 2 }}>Desenvolvimento e suporte</div>

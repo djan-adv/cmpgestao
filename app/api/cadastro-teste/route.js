@@ -28,6 +28,7 @@ import crypto from 'crypto'
 import { enviarEmailConta } from '../_lib/email-conta.js'
 import { enviarEmailCore } from '../enviar-email/enviar.js'
 import { LIMITES_TESTE, DIAS_TESTE, fimDoTeste } from '../_lib/planos.js'
+import { VERSAO_TERMO } from '../../../lib/termo-uso.js'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -107,6 +108,19 @@ export async function POST(request) {
   if (escritorio.length < 3) return Response.json({ erro: 'Informe o nome do escritório.' }, { status: 400 })
   if (nome.length < 3) return Response.json({ erro: 'Informe o seu nome.' }, { status: 400 })
   if (!emailValido(email)) return Response.json({ erro: 'Informe um e-mail válido.' }, { status: 400 })
+
+  // Aceite do termo. Conferido no SERVIDOR, e não só pela caixa de marcar da
+  // tela: o que a tela obriga, uma requisição direta contorna — e um aceite que
+  // se contorna não prova nada. O escritório que entra aqui vai guardar dados
+  // de clientes de terceiros, sob sigilo profissional; sem instrumento, o
+  // fornecedor fica com a guarda e sem o contrato que a autoriza.
+  if (body.aceite !== true) {
+    return Response.json({ erro: 'É preciso aceitar o Termo de Uso e de Tratamento de Dados para começar.' }, { status: 400 })
+  }
+  // De onde veio o aceite. Atrás do Caddy, o endereço real está no cabeçalho —
+  // sem isto, todo aceite ficaria registrado como vindo de 127.0.0.1.
+  const ip = String(request.headers.get('x-forwarded-for') || '').split(',')[0].trim() || null
+  const navegador = String(request.headers.get('user-agent') || '').slice(0, 300) || null
 
   const sb = admin()
 
@@ -210,6 +224,18 @@ export async function POST(request) {
     return Response.json({ erro: 'Não consegui criar a conta agora.' }, { status: 500 })
   }
 
+  // ---- registro do aceite -------------------------------------------------
+  // Gravado depois de o escritório existir, para a linha já nascer ligada a
+  // ele. Falha aqui NÃO desfaz o cadastro: o aceite também é reconstituível
+  // pelo e-mail e pela data, e derrubar um cliente novo por causa do registro
+  // seria trocar um problema pequeno por um grande.
+  try {
+    await sb.from('aceites_termo').insert({
+      escritorio_id: esc.id, nome, email,
+      versao: VERSAO_TERMO, ip, navegador, origem: 'auto-cadastro',
+    })
+  } catch (e) {}
+
   // ---- e-mail de boas-vindas ---------------------------------------------
   // O que este e-mail NÃO diz: quantos processos, acessos e GB cabem no teste.
   // Número de teto na primeira mensagem soa como aviso de que vai faltar, e o
@@ -227,6 +253,7 @@ export async function POST(request) {
       'No primeiro acesso o sistema pede uma senha nova, só sua. A provisória deixa de valer nesse momento.',
       'Você tem <b>' + DIAS_TESTE + ' dias</b> com o sistema inteiro liberado. Ao contratar, <b>nada é apagado</b>: o que você cadastrar no teste continua exatamente onde está.',
       'Primeiro passo sugerido: em ⚙, cadastre as <b>inscrições na OAB</b> do escritório. É por elas que o robô do Diário de Justiça começa a trazer as suas publicações.',
+      'Você aceitou o <a href="https://' + end.host + '/termos">Termo de Uso e de Tratamento de Dados</a> (versão ' + VERSAO_TERMO + ') no cadastro. Guarde este e-mail: ele é o seu comprovante.',
     ],
     botao: { texto: 'Entrar no sistema', url: 'https://' + end.host },
   })

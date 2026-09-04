@@ -82,10 +82,14 @@ export const DIAS_TESTE = 30
 // quem contratar depois encontra o histórico do período inteiro no lugar.
 export const DIAS_CARENCIA_COLETA = 10
 
+// Os números são os do primeiro escritório cliente, e é de propósito: é o
+// tamanho real de um escritório pequeno em operação, não um palpite. Quem
+// couber aqui está avaliando o sistema; quem passar disso já é cliente — e é
+// nesse ponto exato que a tela propõe a contratação.
 export const LIMITES_TESTE = {
-  limite_acessos: 10,
-  limite_processos: 200,
-  limite_gb: 1,
+  limite_acessos: 3,
+  limite_processos: 100,
+  limite_gb: 2,
   // Teto de IA do período, em reais. O teste dá acesso às rotinas de IA
   // (Estagiário, Secretária, suporte), e elas custam dinheiro de verdade a
   // cada rodada — sem teto próprio, um teste consome o orçamento de IA da casa

@@ -21,6 +21,11 @@ import { createClient } from '@supabase/supabase-js'
 import crypto from 'crypto'
 import { enviarEmailConta } from '../_lib/email-conta.js'
 import { PLANOS, limitesDoPlano, plano, LIMITES_TESTE, DIAS_TESTE, DIAS_CARENCIA_COLETA, fimDoTeste } from '../_lib/planos.js'
+// Régua do que passa do maior plano. Importada SÓ aqui, no servidor: a página
+// de vendas e o painel são compilados para o navegador, e o que eles importam
+// fica público no arquivo que qualquer um baixa.
+import { EXCEDENTE, calcularExcedente } from '../_lib/excedente.js'
+import { ocupadoAgora } from '../../../lib/espaco.js'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -98,9 +103,24 @@ export async function POST(request) {
       for (const id of ids) {
         const u = await sb.from('usuarios').select('id', { count: 'exact', head: true }).eq('escritorio_id', id)
         const p = await sb.from('processos').select('id', { count: 'exact', head: true }).eq('escritorio_id', id)
-        uso[id] = { acessos: u.count || 0, processos: p.count || 0 }
+        // Espaço em disco: o censo é o mesmo que trava o upload, com o cache
+        // curto dele. É o único dos três números que não está no banco — os
+        // arquivos ficam no disco do servidor.
+        let gb = 0
+        try { gb = ocupadoAgora(id) / 1073741824 } catch (e) {}
+        uso[id] = { acessos: u.count || 0, processos: p.count || 0, gb: Math.round(gb * 100) / 100 }
       }
-      return Response.json({ ok: true, planos: PLANOS, escritorios: (data || []).map(e => ({ ...e, uso: uso[e.id] })) })
+      return Response.json({
+        ok: true,
+        planos: PLANOS,
+        // Só chega aqui quem já passou pela conferência de raiz, lá em cima.
+        excedente: EXCEDENTE,
+        escritorios: (data || []).map(e => ({
+          ...e,
+          uso: uso[e.id],
+          passou: calcularExcedente(e, uso[e.id]),
+        })),
+      })
     }
 
     if (acao === 'criar') {

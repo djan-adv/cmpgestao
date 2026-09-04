@@ -1,6 +1,8 @@
 # Teste de 30 dias — como funciona, ponta a ponta
 
-A oferta: o escritório entra e usa o **sistema inteiro** por 30 dias. Não se
+A oferta: o escritório entra e usa o **sistema inteiro** por 30 dias. Dois
+gatilhos levam à contratação, e o que vier primeiro vale: **passou dos 30 dias**,
+ou **passou do tamanho do teste**. Não se
 escolhe plano para testar — o plano é escolhido na hora de contratar. **Nada é
 apagado** no fim: o acesso para, o acervo fica, e ao pagar tudo reaparece.
 
@@ -8,9 +10,9 @@ O que o teste limita é **tamanho**, não função.
 
 | | Teste | Starter | Intermediário | Full |
 |---|---|---|---|---|
-| Processos | 200 | 2.500 | 5.000 | 10.000 |
-| Acessos | 10 | 25 | 50 | 100 |
-| Documentos | 1 GB | 2,5 GB | 5 GB | 10 GB |
+| Processos | 100 | 2.500 | 5.000 | 10.000 |
+| Acessos | 3 | 25 | 50 | 100 |
+| Documentos | 2 GB | 2,5 GB | 5 GB | 10 GB |
 | IA | teto de R$ 30 no mês | sem teto próprio | sem teto próprio | sem teto próprio |
 
 ## O que acontece sozinho

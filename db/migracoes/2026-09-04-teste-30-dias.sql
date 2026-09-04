@@ -142,3 +142,41 @@ comment on function public.meu_escritorio() is
   'Escritorio do usuario logado, base de toda a RLS. Devolve NULL quando o escritorio esta suspenso ou o usuario desativado: e o que faz a suspensao valer no banco, e nao so na tela.';
 
 commit;
+
+-- ————————————————————————————————————————————————————————————————
+-- ACEITE DO TERMO DE USO
+--
+-- O auto-cadastro mudou a natureza do risco: até ele, cada cliente entrava por
+-- uma conversa e um contrato. Agora um advogado que nunca falou com ninguém
+-- sobe, no primeiro dia, processos com dados de clientes DELE — dados de
+-- terceiros, muitos sob sigilo profissional. Guardar isso sem instrumento é o
+-- único ponto do "tudo automático" que o código não resolve sozinho.
+--
+-- A VERSÃO é o que dá valor à linha: sem ela não há como provar, depois, qual
+-- texto a pessoa aceitou. E a linha sobrevive à exclusão do escritório de
+-- propósito — é prova, não cadastro.
+begin;
+
+create table if not exists public.aceites_termo (
+  id uuid primary key default gen_random_uuid(),
+  escritorio_id uuid references public.escritorios(id) on delete set null,
+  nome text,
+  email text not null,
+  versao text not null,
+  ip text,
+  navegador text,
+  origem text,
+  aceito_em timestamptz not null default now()
+);
+
+comment on table public.aceites_termo is
+  'Registro do aceite eletronico do Termo de Uso: quem, quando, de onde e QUAL versao do texto.';
+
+create index if not exists aceites_termo_email_idx on public.aceites_termo (email, aceito_em desc);
+create index if not exists aceites_termo_esc_idx on public.aceites_termo (escritorio_id, aceito_em desc);
+
+-- Sem política: quem lê é o servidor, com a chave de serviço. Aceite não é
+-- dado que navegador nenhum precise consultar.
+alter table public.aceites_termo enable row level security;
+
+commit;
