@@ -27013,6 +27013,28 @@ function exportarTempoProcessoCSV(){
    Nada é gravado na busca. O que entra é o que for marcado — e o lote vai em
    fatias, para o servidor não estourar o tempo e para a tela mostrar andamento. */
 var OAB_ITENS = [], OAB_MARCADOS = {};
+/* O lote roda em SEGUNDO PLANO: quem marcou trinta processos não pode ficar
+   preso numa janela olhando barra de progresso. Fechada a janela, o laço
+   continua (é o mesmo JS da página) e um selo no canto conta o andamento.
+   O que NÃO sobrevive é recarregar a página — por isso o aviso ao sair. */
+var OAB_RODANDO = false;
+function _oabSelo(html, cor){
+  var el=document.getElementById('oab-selo');
+  if(!el){
+    el=document.createElement('div'); el.id='oab-selo';
+    el.style.cssText='position:fixed;left:14px;bottom:14px;z-index:400;background:#fff;border:1px solid var(--line);border-left:4px solid #6d28a8;border-radius:12px;padding:10px 14px;font-size:13px;box-shadow:0 6px 18px rgba(20,30,50,.14);max-width:340px';
+    document.body.appendChild(el);
+  }
+  el.style.borderLeftColor=cor||'#6d28a8';
+  el.innerHTML=html;
+}
+function _oabSeloFora(){ var el=document.getElementById('oab-selo'); if(el) el.remove(); }
+/* Recarregar no meio do lote perde o que ainda não entrou (o servidor só sabe
+   do processo que está gravando naquele instante). */
+window.addEventListener('beforeunload', function(e){
+  if(!OAB_RODANDO) return;
+  e.preventDefault(); e.returnValue='';
+});
 async function _oabToken(){ if(typeof finToken==='function') return await finToken(); var s=await window.__sb.auth.getSession(); return (s.data.session&&s.data.session.access_token)||''; }
 function fecharCadastroOab(){ document.getElementById('modal-oab').classList.add('hidden'); }
 async function abrirCadastroOab(){
@@ -27146,29 +27168,39 @@ function _oabDepois(feitos,msg){
 async function cadastrarOabLote(btn){
   var marcados=OAB_ITENS.filter(function(i){ return OAB_MARCADOS[i.digitos]; });
   if(!marcados.length) return;
-  if(!confirm('Cadastrar '+marcados.length+' processo(s) no acervo?\n\nCada um leva alguns segundos: o sistema busca classe, assunto, órgão e o histórico na base do CNJ. Deixe esta janela aberta.')) return;
+  if(!confirm('Cadastrar '+marcados.length+' processo(s) no acervo?\n\nCada um leva alguns segundos (classe, assunto, órgão e histórico vêm da base do CNJ). O cadastro roda em SEGUNDO PLANO: você pode fechar esta janela e continuar trabalhando — só não recarregue a página.')) return;
   var msg=document.getElementById('oab-msg'); var t0=btn.textContent;
   btn.disabled=true;
   /* feedback IMEDIATO: antes disto, a primeira mudança na tela só vinha depois
      do primeiro processo pronto, e a espera parecia travamento */
   btn.innerHTML='<span class="gira">↻</span> cadastrando… 0 de '+marcados.length;
   msg.innerHTML='<b><span class="gira">↻</span> Cadastrando…</b> <span id="oab-and">preparando</span>'
-    +'<div class="note" style="margin-top:2px">Cada processo leva alguns segundos (classe, assunto, órgão e histórico vêm da base do CNJ). Não feche esta janela — o que já entrou fica salvo.</div>';
+    +'<div class="note" style="margin-top:2px">Roda em segundo plano: <b>pode fechar esta janela e continuar usando o sistema</b>. O andamento fica no canto da tela. Só não recarregue a página até terminar.</div>';
+  OAB_RODANDO=true;
+  _oabSelo('<b><span class="gira">↻</span> Cadastrando processos…</b><div class="note" style="margin-top:2px">0 de '+marcados.length+'</div>');
   var parciais=[];
   try{
     var feitos=await _oabEnviar(marcados,function(feito,total,item,resultado){
       btn.innerHTML='<span class="gira">↻</span> cadastrando… '+feito+' de '+total;
       if(resultado){ parciais.push(resultado); _oabMarcarFeito(resultado); oabPintar(); }
       var el=document.getElementById('oab-and');
-      if(el) el.innerHTML=feito+' de '+total+' — '+esc(fmtCNJ((item&&item.numero)||''))
+      var passo=feito+' de '+total+' — '+esc(fmtCNJ((item&&item.numero)||''))
         +(resultado?'':' <span class="note">(buscando na base do CNJ…)</span>');
+      if(el) el.innerHTML=passo;
+      _oabSelo('<b><span class="gira">↻</span> Cadastrando processos…</b><div class="note" style="margin-top:2px">'+passo+'</div>');
     });
     _oabDepois(feitos,msg);
+    var ok=feitos.filter(function(f){ return f.ok; }).length;
+    _oabSelo('<b style="color:#127a53">✓ '+ok+' processo(s) cadastrado(s)</b>'
+      +'<div class="note" style="margin-top:2px"><a onclick="location.reload()" style="cursor:pointer;color:#185FA5;text-decoration:underline">atualizar a lista de processos</a> · <a onclick="_oabSeloFora()" style="cursor:pointer;color:var(--muted)">dispensar</a></div>','#127a53');
   }catch(e){
     if(parciais.length) _oabDepois(parciais,msg);
     var m=document.getElementById('oab-msg');
     m.innerHTML=(parciais.length?(m.innerHTML+'<br>'):'')+'<span style="color:#b5342b">Parou em: '+esc(String(e&&e.message||e))+'</span>';
+    _oabSelo('<b style="color:#b5342b">O lote parou</b><div class="note" style="margin-top:2px">'+esc(String(e&&e.message||e)).slice(0,140)
+      +'<br>'+parciais.filter(function(f){ return f.ok; }).length+' já entraram. Abra "Cadastrar por OAB" e clique de novo — os que faltam continuam marcados. <a onclick="_oabSeloFora()" style="cursor:pointer;color:var(--muted)">dispensar</a></div>','#b5342b');
   }
+  OAB_RODANDO=false;
   btn.disabled=false; btn.textContent=t0;
   oabPintar();
 }
