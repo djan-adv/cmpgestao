@@ -5,13 +5,19 @@
 //
 // Uso:  GET /api/partes?numero=0802628-08.2021.8.15.2003
 
+import { usuarioDoRequest } from '../_lib/inquilino.js'
+
 export const dynamic = 'force-dynamic'
+export const fetchCache = 'force-no-store'
 export const maxDuration = 60
 
 const DJEN = 'https://comunicaapi.pje.jus.br/api/v1/comunicacao'
 const UA = 'Mozilla/5.0 (compatible; CMPGestao/1.0)'
 
 export async function GET(request) {
+  // exige sessão: sem isto a rota é um proxy aberto para o CNJ, no IP do servidor
+  const user = await usuarioDoRequest(request)
+  if (!user) return Response.json({ erro: 'não autenticado' }, { status: 401 })
   const { searchParams } = new URL(request.url)
   const numero = searchParams.get('numero')
   if (!numero) return Response.json({ erro: 'informe ?numero=' }, { status: 400 })

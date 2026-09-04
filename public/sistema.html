@@ -3339,6 +3339,22 @@ function abrir(i){
   /* Desconsideração da personalidade jurídica: busca pelo CNPJ da parte no jus.br
      (PDPJ) — diferente do dossiê acima, que busca por NOME no DJEN */
   html+='<div class="card cmp-only" id="desconsideracao-card"><p class="sectlabel" style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">🏛 Desconsideração da personalidade jurídica <button class="btn sm" style="font-size:12px;background:#7a4b00;color:#fff" onclick="abrirDesconsideracaoPJ()">Procurar decisões (por CNPJ)</button></p><div class="note">Busca <b>exclusivamente pelo CNPJ</b> da empresa devedora, no jus.br (PDPJ): todos os processos em que ela é parte — inclusive de outros tribunais — e varre as movimentações atrás de decisão de desconsideração da personalidade jurídica (IDPJ). Sem nome, sem CPF. É pista de investigação, não certidão.</div></div>';
+  /* Trazer as peças DOS AUTOS depende de sessão do jus.br, e a sessão é aberta
+     com o certificado digital de quem entra. Isso ainda é de um escritório só
+     (ver /api/jusbr/token). Esconder o card do escritório cliente fazia parecer
+     que o sistema não sabe buscar documento nenhum — e ele sabe: o que falta é o
+     certificado DELE. Então o card aparece dizendo isso, e apontando os dois
+     caminhos que funcionam hoje. */
+  if(!(window.__escInfo&&window.__escInfo.raiz===true)){
+    html+='<div class="card" id="jusbr-card"><p class="sectlabel">Peças dos autos</p>'
+      +'<div class="note" style="margin-bottom:8px">Para o sistema baixar as peças direto do tribunal é preciso conectar o <b>certificado digital do escritório</b> ao jus.br — é o certificado que abre os autos, e ele é seu, não do sistema. Enquanto isso não estiver configurado, dois caminhos funcionam agora:</div>'
+      +'<div style="display:flex;gap:8px;flex-wrap:wrap">'
+      +'<button class="btn sm" style="font-size:12px" onclick="document.getElementById(\'doc-file\').click()" title="Subir para a pasta do processo os arquivos que você já tem no computador">&#128193; Subir arquivos do computador</button>'
+      +'<button class="btn sm ghost" style="font-size:12px" onclick="atualizarDadosProcesso()" title="Busca na base pública do CNJ a classe, o assunto, o órgão e todas as movimentações — sem certificado">&#8635; Atualizar pela base pública do CNJ</button>'
+      +'</div>'
+      +'<div class="note" style="margin-top:7px;font-size:11.5px">A base pública traz a ficha e o histórico completo de movimentações; as <b>peças</b> (inicial, contestação, sentença em PDF) só saem com certificado.</div>'
+      +'</div>';
+  } else
   html+='<div class="card cmp-only" id="jusbr-card"><p class="sectlabel" style="display:flex;justify-content:space-between;align-items:center">Documentos do jus.br <button class="btn sm" style="font-size:12px" onclick="jusbrCarregar(\''+esc(p.numero)+'\')">Carregar documentos</button> <button class="btn sm ghost" style="font-size:11px" title="Diagnóstico técnico dos documentos (para o Claude)" onclick="jusbrDiag(\''+esc(p.numero)+'\')">🔎 diag</button></p><div id="jusbr-status" class="note" style="margin-bottom:6px">Lista as peças do processo no jus.br. O arquivo escolhido é baixado sob demanda e removido do sistema após 30 dias (o original fica no tribunal).</div><div id="jusbr-barra" style="display:none;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px;padding:7px 9px;background:#f4f7fb;border:1px solid #e1e8f0;border-radius:9px"><span class="note" style="margin:0;font-weight:600">Marcados:</span><button class="btn sm ghost" style="font-size:11px" onclick="jusbrMarcarTodos()">marcar todos</button><button id="jusbr-ordem-btn" class="btn sm ghost" style="font-size:11px" title="Inverter a ordem da lista — o download e o PDF seguem esta ordem" onclick="jusbrInverterOrdem()">↓ mais recentes primeiro</button><button class="btn sm" style="font-size:11px;background:#0F6E56;color:#fff" title="Baixa os marcados numa pasta compactada (.zip)" onclick="jusbrBaixarSelecionados(\'zip\')">⬇ pasta .zip</button><button class="btn sm" style="font-size:11px;background:#185FA5;color:#fff" title="Junta todos os marcados num único arquivo PDF" onclick="jusbrBaixarSelecionados(\'pdf\')">⬇ PDF único</button><button class="btn sm ghost" style="font-size:11px" title="Baixa cada arquivo separadamente na pasta Downloads" onclick="jusbrBaixarSelecionados(\'soltos\')">⬇ soltos</button></div><div id="jusbr-lista"></div></div>';
   // IA
   if(!KAN)initKanban(); initAgenda();
@@ -14930,6 +14946,32 @@ function _atdAssociaDocs(textos, nomes){
   });
   return {porNome:porNome, todos:todos};
 }
+/* Partes oficiais pelo Diário de Justiça (DJEN/CNJ), por número do processo.
+   Fonte estruturada: cada comunicação traz os destinatários com o polo. Sem
+   certificado, sem IA, sem depender de o processo já ter documento na pasta. */
+async function _atdPartesCNJ(dig){
+  var box=document.getElementById('atd-cnj'); if(!box) return;
+  box.innerHTML='<span class="note" style="font-size:11px">consultando as partes no CNJ…</span>';
+  try{
+    var tok=(typeof finToken==='function')?await finToken():'';
+    var r=await fetch('/api/partes?numero='+encodeURIComponent(dig),{headers:tok?{Authorization:'Bearer '+tok}:{},cache:'no-store'});
+    var d=await r.json();
+    var A=(d&&d.poloAtivo)||[], P=(d&&d.poloPassivo)||[];
+    if(!A.length && !P.length){
+      box.innerHTML='<span class="note" style="font-size:11px">O CNJ não tem partes para este número no Diário'+((d&&d.comunicacoes===0)?' (nenhuma comunicação publicada)':'')+'.</span>';
+      return;
+    }
+    var chip=function(n,lado){
+      var fn=(lado==='A')?'atdAddAutor':'atdAddReu';
+      return '<span class="quick-link" style="cursor:pointer;font-size:12px" data-n="'+esc(n)+'" onclick="'+fn+'(this.getAttribute(\'data-n\'))" title="Clique para acrescentar">+ '+esc(n)+'</span>';
+    };
+    box.innerHTML='<div style="background:#f2f8f5;border:1px solid #cfe6da;border-radius:9px;padding:8px 10px">'
+      +'<div style="font-size:11px;font-weight:700;color:#0F6E56;text-transform:uppercase;letter-spacing:.4px;margin-bottom:5px">Partes segundo o CNJ — polo já identificado</div>'
+      +(A.length?('<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:4px"><span class="note" style="margin:0;font-size:11px;align-self:center">autor:</span>'+A.slice(0,8).map(function(n){return chip(n,'A');}).join('')+'</div>'):'')
+      +(P.length?('<div style="display:flex;gap:5px;flex-wrap:wrap"><span class="note" style="margin:0;font-size:11px;align-self:center">réu:</span>'+P.slice(0,8).map(function(n){return chip(n,'P');}).join('')+'</div>'):'')
+      +'</div>';
+  }catch(e){ box.innerHTML='<span class="note" style="font-size:11px">Não consegui consultar o CNJ agora.</span>'; }
+}
 async function abrirAtualizarDados(){
   if(!atual) return;
   var p=atual, dig=_docChaveProc(p.numero);
@@ -14949,6 +14991,7 @@ async function abrirAtualizarDados(){
     +'</div>'
     +'<div style="margin-top:12px"><div style="'+SEC+'">Nomes encontrados nos documentos e no histórico <span style="text-transform:none;letter-spacing:0;font-weight:400">— use os botões para mandar cada um para o campo certo</span></div>'
     +'<div id="atd-nomes"><div class="note">procurando nomes nos documentos…</div></div>'
+    +'<div id="atd-cnj" style="margin-top:6px"></div>'
     +'<div id="atd-reu-cands" style="margin-top:6px;display:flex;gap:5px;flex-wrap:wrap"></div></div>'
     +'<label style="font-size:12px;font-weight:600;color:var(--muted);margin-top:10px;display:block">Assunto</label><input id="atd-assunto" style="width:100%">'
     +'<div style="margin-top:14px;display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px">'
@@ -14973,6 +15016,12 @@ async function abrirAtualizarDados(){
     rc.innerHTML=(cands&&cands.length)?cands.slice(0,10).map(function(c){ return '<span class="quick-link" style="cursor:pointer;font-size:12px" data-n="'+esc(c.nome)+'" onclick="atdAddReu(this.getAttribute(\'data-n\'))" title="Clique para ACRESCENTAR à parte contrária">+ '+esc(c.nome)+' <span style="opacity:.6">×'+c.freq+'</span></span>'; }).join(''):'<span class="note" style="font-size:11px">sem candidatos no histórico ainda</span>';
   }catch(e){}
   window.__atdCtx={p:p, dig:dig};
+  /* Partes pelo CNJ: as comunicações do Diário trazem os destinatários JÁ
+     separados por polo (A = autor, P = réu). É dado oficial e estruturado — não
+     depende de haver documento na pasta, não gasta IA e não erra o polo, que é
+     onde a leitura por IA mais tropeça. Roda sozinho ao abrir, porque não custa
+     nada; a leitura dos documentos continua no botão, para quando faltar. */
+  _atdPartesCNJ(dig);
   /* ficha já editada (autor E réu preenchidos): NÃO busca sozinho — abre limpo e
      rápido, e a busca fica no botão "🔎 buscar nos documentos" */
   var jaEditada=!!(String(p.cliente||'').trim() && String(p.oponente||'').trim());
