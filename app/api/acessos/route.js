@@ -242,6 +242,37 @@ export async function POST(request) {
     // as mensagens sem destinatário — quem decide isso é a política de RLS de
     // chat_mensagens, que lê esta coluna. Por isso a marca vive em `usuarios`,
     // e não num JSON de configuração no navegador.
+    // Apagar de vez. Desativar bloqueia o login mas mantém o vínculo — e é isso
+    // que impede o mesmo e-mail de virar contratante de outro escritório
+    // (uma pessoa pertence a UM escritório). Quem sai de verdade precisa sair
+    // do cadastro, não só ficar cinza na lista.
+    if (acao === 'apagar') {
+      const u = await acharPorEmail(sb, email)
+      const { data: alvo } = await sb.from('usuarios').select('id,papel,escritorio_id,nome').eq('email', email).maybeSingle()
+      // fora do escritório de quem pede: não existe para ele
+      if (!alvo || alvo.escritorio_id !== esc) {
+        if (!u) return Response.json({ erro: 'Conta não encontrada.' }, { status: 404 })
+        return Response.json({ erro: 'Esta conta não é do seu escritório.' }, { status: 403 })
+      }
+      if (alvo.papel === 'contratante') {
+        return Response.json({ erro: 'O contratante não pode ser apagado — o escritório ficaria sem responsável.' }, { status: 400 })
+      }
+      if (alvo.id === coord.id) {
+        return Response.json({ erro: 'Você não pode apagar o seu próprio acesso.' }, { status: 400 })
+      }
+      // A conta de autenticação leva junto a linha em usuarios e os lembretes
+      // pessoais (as duas têm exclusão em cascata). O que a pessoa escreveu —
+      // mensagens do chat, tarefas, visitas — FICA: o histórico do escritório
+      // não some porque alguém saiu; só deixa de exibir o nome dela.
+      if (u) {
+        const { error } = await sb.auth.admin.deleteUser(u.id)
+        if (error) throw new Error(error.message)
+      } else {
+        await sb.from('usuarios').delete().eq('id', alvo.id)
+      }
+      return Response.json({ ok: true, apagado: alvo.nome || email })
+    }
+
     if (acao === 'so_privado') {
       const valor = body.valor !== false
       const { error } = await sb.from('usuarios').update({ so_privado: valor }).eq('email', email).eq('escritorio_id', esc)

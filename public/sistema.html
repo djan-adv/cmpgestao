@@ -1776,6 +1776,27 @@ async function toggleAtivoAcesso(id){
     if(desativar) await redistribuirTarefasDe(u,'desativado');
   }catch(e){ alert('Não foi possível alterar.\n\n'+(e&&e.message||e)); }
 }
+/* Apagar o acesso de vez.
+   Desativar tranca o login e mantém a pessoa vinculada ao escritório. Isso é o
+   certo para quem saiu de férias, foi afastado ou pode voltar — e é o que
+   preserva o histórico dela na tela. Mas o vínculo é o que impede aquele e-mail
+   de ser usado em OUTRO escritório (uma pessoa pertence a um só). Quem saiu de
+   verdade, ou vai virar acesso de outro escritório, precisa sair do cadastro.
+   O que a pessoa escreveu — chat, tarefas, andamentos — continua no sistema. */
+async function apagarAcesso(id){
+  if(!souCoordenador()){ alert('Apenas quem administra os acessos pode apagar.'); return; }
+  var u=(USUARIOS_VISUAIS||[]).find(function(x){return x.id===id;}); if(!u) return;
+  if(!u.email){ return removerAssento(id); }
+  if(!confirm('Apagar o acesso de '+u.nome+' ('+u.email+')?\n\n'
+    +'A conta deixa de existir e o e-mail fica livre para ser cadastrado em outro escritório.\n'
+    +'O que a pessoa escreveu (chat, tarefas, andamentos) permanece no sistema.\n\n'
+    +'Se a ideia é só bloquear a entrada por um tempo, use "Desativar".')) return;
+  try{
+    await apiAcessos('apagar',{email:u.email});
+    USUARIOS_VISUAIS=(USUARIOS_VISUAIS||[]).filter(function(x){return x.id!==id;});
+    renderAcessos(); renderSeletorUsuariosVisual();
+  }catch(e){ alert('Não foi possível apagar.\n\n'+(e&&e.message||e)); }
+}
 /* ===== Tela de Acessos (estilo Astrea), aberta pelo botão do nome ===== */
 function abrirAcessos(){ renderAcessos(); try{ marcaFeriasNosSelects(); }catch(e){} document.getElementById('modal-acessos').classList.remove('hidden'); syncAcessosDoBanco().then(function(){ renderAcessos(); }); }
 /* A lista de pessoas nasce fechada. Com seis acessos ela já passava da altura
@@ -2019,6 +2040,10 @@ function renderAcessos(){
       acoes+='<button class="btn sm ghost" style="'+(_sp?'color:#6d28a8;border-color:#dcc9f0':'')+'" title="'+(_sp?'Fora do grupo: só conversa privada. Clique para devolver ao grupo':'Tirar do chat do grupo — passa a ter só conversas privadas')+'" onclick="alternarSoPrivado(\''+u.id+'\')">'+(_sp?'só privado':'no grupo')+'</button>';
       acoes+='<button class="btn sm ghost" onclick="toggleAtivoAcesso(\''+u.id+'\')">'+(ativo?'Desativar':'Ativar')+'</button>';
       if(!u.email) acoes+='<button class="btn sm ghost" style="color:#b5342b" title="Remover da lista (ainda sem cadastro)" onclick="removerAssento(\''+u.id+'\')">✕</button>';
+      /* Desativar tranca o login mas MANTÉM o vínculo com o escritório — e é
+         isso que impede o mesmo e-mail de virar acesso de outro escritório
+         (uma pessoa pertence a um só). Quem sai de vez precisa sair daqui. */
+      else acoes+='<button class="btn sm ghost" style="color:#b5342b" title="Apagar o acesso de vez (libera o e-mail para outro escritório)" onclick="apagarAcesso(\''+u.id+'\')">Apagar</button>';
     }
     /* mesmas ações, em menu — é o que aparece no celular */
     var menu=[];
@@ -2032,6 +2057,7 @@ function renderAcessos(){
       menu.push(['priv', soPrivado(u)?'Devolver ao grupo do chat':'Tirar do grupo (só privado)']);
       menu.push(['ativo', ativo?'Desativar acesso':'Reativar acesso']);
       if(!u.email) menu.push(['remover','Remover da lista']);
+      else menu.push(['apagar','Apagar acesso de vez']);
     }
     var menuHtml=menu.length
       ? '<select class="ac-menu" onchange="acaoAcesso(\''+u.id+'\',this)"><option value="">⚙ ações…</option>'
@@ -2060,6 +2086,7 @@ function acaoAcesso(id, sel){
   if(v==='priv') return alternarSoPrivado(id);
   if(v==='ativo') return toggleAtivoAcesso(id);
   if(v==='remover') return removerAssento(id);
+  if(v==='apagar') return apagarAcesso(id);
 }
 /* mantém compatibilidade: o rodapé agora só chama a tela de acessos */
 function renderSeletorUsuariosVisual(){ if(document.getElementById('modal-acessos') && !document.getElementById('modal-acessos').classList.contains('hidden')) renderAcessos(); }

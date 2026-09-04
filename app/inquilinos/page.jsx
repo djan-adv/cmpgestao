@@ -32,6 +32,10 @@ export default function Inquilinos() {
       body: JSON.stringify(corpo),
     })
     const d = await r.json().catch(() => ({}))
+    // 401 é sessão vencida — a tela ficou aberta e o acesso caducou. Mandar de
+    // volta ao login resolve; dizer "esta tela não é sua" mandaria a pessoa
+    // procurar um problema que não existe.
+    if (r.status === 401) { window.location.href = '/'; return {} }
     if (r.status === 403) setSemPermissao(true)
     return d
   }, [])

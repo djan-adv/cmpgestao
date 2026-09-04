@@ -34,18 +34,22 @@ function admin() {
 
 // Quem pode mexer aqui: usuário do escritório marcado como raiz. Sem lista de
 // e-mails no código — era assim que o sistema ficava preso ao nome do dono.
+//
+// Devolve { user } ou { motivo }. A separação importa: antes, sessão vencida e
+// falta de permissão davam a MESMA resposta, e a tela dizia "esta tela é do
+// escritório que administra o sistema" para quem só precisava entrar de novo.
 async function donoDoSistema(request) {
   const jwt = (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '').trim()
-  if (!jwt) return null
+  if (!jwt) return { motivo: 'sem_sessao' }
   const { data } = await createClient(SB_URL, ANON).auth.getUser(jwt)
   const user = (data && data.user) || null
-  if (!user) return null
+  if (!user) return { motivo: 'sem_sessao' }
   const sb = admin()
   const { data: perfil } = await sb
     .from('usuarios').select('escritorio_id, escritorios!inner(raiz)')
     .eq('id', user.id).maybeSingle()
-  if (!perfil || !perfil.escritorios || perfil.escritorios.raiz !== true) return null
-  return user
+  if (!perfil || !perfil.escritorios || perfil.escritorios.raiz !== true) return { motivo: 'sem_permissao' }
+  return { user }
 }
 
 // Senha provisória legível ao telefone: sem 0/O nem 1/l, que viram confusão na
@@ -67,8 +71,12 @@ function emailValido(e) { return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(e || '
 
 export async function POST(request) {
   if (!SERVICE) return Response.json({ erro: 'servidor sem SUPABASE_SERVICE_ROLE_KEY' }, { status: 500 })
-  const dono = await donoDoSistema(request)
-  if (!dono) return Response.json({ erro: 'Só o escritório raiz administra inquilinos.' }, { status: 403 })
+  const quem = await donoDoSistema(request)
+  if (quem.motivo === 'sem_sessao') {
+    return Response.json({ erro: 'Sua sessão expirou. Entre novamente.', sessao_expirada: true }, { status: 401 })
+  }
+  if (!quem.user) return Response.json({ erro: 'Só o escritório raiz administra inquilinos.' }, { status: 403 })
+  const dono = quem.user
 
   let body = {}
   try { body = await request.json() } catch (e) {}
