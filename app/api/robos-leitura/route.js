@@ -56,8 +56,8 @@ const ROBOS = [
   {
     nome: 'secretaria_audiencias',
     rotulo: 'Secretária Virtual — audiências na agenda',
-    faz: 'Na mesma leitura do Estagiário, reconhece a publicação que designa, redesigna ou adia audiência e coloca o compromisso na agenda, com dia, hora, modalidade e local — marcado como recado da Secretária, para você conferir. A partir daí o aviso ao cliente sai sozinho.',
-    url: '/api/robo/minutas?fase=triagem',
+    faz: 'Na mesma leitura do Estagiário, reconhece a publicação que designa, redesigna ou adia audiência e coloca o compromisso na agenda, com dia, hora, modalidade e local — marcado como recado da Secretária, para você conferir. A partir daí o aviso ao cliente sai sozinho. Rodar agora relê também as publicações antigas, que foram triadas antes de ela existir.',
+    url: '/api/robo/minutas?fase=audiencias&dias=90',
     precisa: 'estagiario',
   },
 ]

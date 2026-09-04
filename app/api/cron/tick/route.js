@@ -64,6 +64,10 @@ const JOBS = [
   // caixa de entrada: traz as respostas das varas e dos clientes para o histórico
   { nome: 'email_receber', rotulo: 'E-mails — ler respostas (IMAP)', url: '/api/email/receber', cada_min: 10, timeout_ms: 280000 },  // agora é uma caixa por escritório
   { nome: 'minuta_triagem', rotulo: 'Minutas — triar intimações', url: '/api/robo/minutas?fase=triagem', cada_min: 30 },
+  // Secretária Virtual: relê o que foi triado antes de ela existir, só para achar
+  // audiência. Diário porque é repescagem de acervo, não trabalho do dia — o que
+  // chega hoje já sai marcado pela própria triagem.
+  { nome: 'secretaria_audiencias', rotulo: 'Secretária Virtual — audiências atrasadas', url: '/api/robo/minutas?fase=audiencias&dias=90', diario_hora: 7, timeout_ms: 280000 },
   // dossiê (.zip) DESLIGADO em 15/08/2026 a pedido do dono: ninguém baixava os zips.
   // A triagem continua lendo a intimação, sugerindo a peça e lançando o prazo, e a
   // íntegra continua indo pra pasta. Pra reativar, é só descomentar a linha.

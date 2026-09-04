@@ -350,6 +350,7 @@ async function faseTriagem(sb, esc, limite) {
       prazo_em: prazoEm,
       urgencia: t.urgencia || null,
       resumo: ((duplicado ? ('[mesma publicação do card já aberto — id ' + duplicado + '] ') : '') + String(t.resumo || '')).slice(0, 600),
+      secretaria_em: new Date().toISOString(),
       docs_necessarios: Array.isArray(t.docs_necessarios) ? t.docs_necessarios.slice(0, 4) : [],
       instrucao: String(t.instrucao || '').slice(0, 600) || null,
       custo_usd: r.custoUsd,
@@ -414,6 +415,92 @@ async function faseTriagem(sb, esc, limite) {
   }
   const audienciasNovas = resultados.filter(r => r.audiencia && r.audiencia.nova).length
   return { triados: resultados.length, audiencias: audienciasNovas, restam: novas.length - fila.length, resultados }
+}
+
+// ————— Repescagem da Secretária Virtual —————
+//
+// A Secretária nasceu depois do Estagiário. Toda publicação triada antes dela
+// ficou marcada como vista, e a trava de andamento_id impede o robô de reler —
+// então as audiências já publicadas nunca entrariam na agenda, e no primeiro
+// "rodar agora" o escritório veria "0 triadas" e concluiria que a Secretária não
+// funciona. Esta fase relê essas publicações, e SÓ para procurar audiência:
+// nunca abre prazo, nunca cria card, nunca mexe na fila de peças — aquilo já foi
+// decidido e reabrir seria duplicar trabalho já feito.
+//
+// Antes de gastar IA, filtra pelo texto: publicação que não fala em audiência,
+// sessão ou perícia é marcada como lida e sai do caminho sem custo nenhum.
+const AUD_PALAVRAS = /audi[êe]nci|sess[ãa]o de julgamento|sess[ãa]o virtual|per[íi]cia|concilia[çc][ãa]o|media[çc][ãa]o/i
+const AUD_LOTE = 25
+
+async function faseAudiencias(sb, esc, dias) {
+  const desde = new Date(Date.now() - Math.min(Math.max(dias || 60, 1), 365) * 86400000).toISOString()
+  const { data: pend } = await sb.from('robo_minutas')
+    .select('id,processo_id,processo_numero,andamento_id')
+    .eq('escritorio_id', esc).is('secretaria_em', null).gte('criado_em', desde)
+    .order('criado_em', { ascending: false }).limit(300)
+  if (!pend || !pend.length) return { lidas: 0, audiencias: 0, nada: true }
+
+  const ids = pend.map(r => r.andamento_id).filter(Boolean)
+  const textos = {}
+  for (let i = 0; i < ids.length; i += 200) {
+    const { data } = await sb.from('andamentos').select('id,data,texto').in('id', ids.slice(i, i + 200))
+    for (const a of (data || [])) textos[a.id] = a
+  }
+
+  const semAudiencia = pend.filter(r => !AUD_PALAVRAS.test(String((textos[r.andamento_id] || {}).texto || '')))
+  const candidatas = pend.filter(r => AUD_PALAVRAS.test(String((textos[r.andamento_id] || {}).texto || '')))
+
+  // as que nem mencionam audiência saem de graça
+  const agora = new Date().toISOString()
+  for (let i = 0; i < semAudiencia.length; i += 100) {
+    const bloco = semAudiencia.slice(i, i + 100).map(r => r.id)
+    await sb.from('robo_minutas').update({ secretaria_em: agora }).in('id', bloco)
+  }
+
+  const { data: casa } = await sb.from('escritorios').select('nome').eq('id', esc).maybeSingle()
+  const nomeEsc = (casa && casa.nome) || ''
+
+  const alvo = candidatas.slice(0, AUD_LOTE)
+  const marcadas = []
+  for (const r of alvo) {
+    const a = textos[r.andamento_id]
+    if (!a) { await sb.from('robo_minutas').update({ secretaria_em: agora }).eq('id', r.id); continue }
+    const { data: p } = await sb.from('processos')
+      .select('id,numero,cliente_nome,oponente,classe,assunto,orgao')
+      .eq('escritorio_id', esc).eq('id', r.processo_id).maybeSingle()
+    if (!p) { await sb.from('robo_minutas').update({ secretaria_em: agora }).eq('id', r.id); continue }
+
+    // mesmo prefixo cacheado da triagem: só o bloco variável muda
+    const variavel =
+      'ESCRITÓRIO: ' + (nomeEsc || 'escritório de advocacia') + '\n' +
+      'PROCESSO nº ' + (p.numero || '') + ' | Cliente do escritório: ' + (p.cliente_nome || '?') +
+      ' | Parte contrária: ' + (p.oponente || '?') + ' | Classe/Assunto: ' + ((p.classe || '') + ' ' + (p.assunto || '')).trim() +
+      ' | Órgão: ' + (p.orgao || '?') + ' | Data da publicação: ' + (a.data || '?') + '\n\n' +
+      'TEOR DA PUBLICAÇÃO:\n' + String(a.texto || '').slice(0, 12000)
+
+    const rIA = await chamarClaude({
+      rotina: 'triagem', sb, ref: p.numero, escritorioId: esc,
+      modelo: 'claude-sonnet-5', maxTokens: 1200,
+      sistemaFixo: MANUAL_TRIAGEM,
+      conteudo: [{ type: 'text', text: variavel }],
+      ferramentas: FERRAMENTA_TRIAGEM,
+      toolChoice: { type: 'tool', name: 'registrar_triagem' },
+    })
+    const t = (rIA.ferramenta && rIA.ferramenta.input) || null
+    if (t) {
+      const aud = await marcarAudiencia(sb, esc, p, t, a.data)
+      if (aud && aud.novo) marcadas.push({ numero: p.numero, data: aud.data, hora: aud.hora })
+    }
+    // marca lida mesmo quando a IA falhou: insistir na mesma publicação a cada
+    // rodada gastaria a conta sem nunca mudar de resultado
+    await sb.from('robo_minutas').update({ secretaria_em: agora }).eq('id', r.id)
+  }
+
+  return {
+    lidas: alvo.length, sem_audiencia: semAudiencia.length,
+    audiencias: marcadas.length, restam: Math.max(0, candidatas.length - alvo.length),
+    marcadas,
+  }
 }
 
 // ————— fase 2 (padrão): dossiê do Estagiário Virtual —————
@@ -844,7 +931,7 @@ async function _get(request) {
   if ((fase === 'dossie' || fase === 'minuta') && modo === 'api' && !process.env.ANTHROPIC_API_KEY) {
     return Response.json({ erro: 'falta ANTHROPIC_API_KEY' }, { status: 501 })
   }
-  if (fase === 'triagem' && !process.env.ANTHROPIC_API_KEY) {
+  if ((fase === 'triagem' || fase === 'audiencias') && !process.env.ANTHROPIC_API_KEY) {
     return Response.json({ erro: 'falta ANTHROPIC_API_KEY' }, { status: 501 })
   }
 
@@ -854,6 +941,7 @@ async function _get(request) {
     let r
     try {
       if (fase === 'integra') r = await faseIntegra(sb, e.id)
+      else if (fase === 'audiencias') r = await faseAudiencias(sb, e.id, parseInt(searchParams.get('dias') || '60', 10))
       else if (fase === 'dossie' || fase === 'minuta') {
         r = modo === 'api' ? await faseMinuta(sb, e.id) : await faseDossie(sb, e.id)
       } else r = await faseTriagem(sb, e.id, limite)
@@ -867,13 +955,18 @@ async function _get(request) {
       await anotarRobo(e.id, 'secretaria_audiencias', !r.erro,
         r.erro || ((r.audiencias || 0) + ' audiência(s) nova(s) na agenda, de ' + (r.triados || 0) + ' publicação(ões) lida(s)'))
     }
+    if (fase === 'audiencias') {
+      await anotarRobo(e.id, 'secretaria_audiencias', !r.erro,
+        r.erro || ((r.audiencias || 0) + ' audiência(s) nova(s) na agenda, de ' + (r.lidas || 0)
+          + ' publicação(ões) relida(s)' + (r.restam ? '; faltam ' + r.restam : '')))
+    }
   }
 
   const soma = (c) => porEscritorio.reduce((t, r) => t + (Number(r[c]) || 0), 0)
   return Response.json({
     ok: !porEscritorio.every(r => r.erro),
     fase, modo, escritorios: porEscritorio.length,
-    triados: soma('triados'), audiencias: soma('audiencias'),
+    triados: soma('triados'), audiencias: soma('audiencias'), lidas: soma('lidas'), restam: soma('restam'),
     gasto_mes_brl: Math.round(orc.gastoBrl * 100) / 100,
     por_escritorio: porEscritorio,
   })

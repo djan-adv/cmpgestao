@@ -1961,6 +1961,13 @@ async function _carregarEscritorio(){
     return window.__escInfo;
   }catch(e){ return null; }
 }
+/* Os assentos de fábrica são a equipe da casa que escreveu o sistema. Eles não
+   podem, em hipótese nenhuma, ser GRAVADOS no escritório de um cliente — foi o
+   que aconteceu: a lista de fábrica existe desde o parse do arquivo, e bastou
+   algo chamar o salvamento antes de a carga terminar para os nomes dos sócios
+   daqui ficarem persistidos na tela de Acessos de um escritório cliente. */
+var _ASSENTOS_FABRICA=['djan','jader','eduarda','rita','est1','est2'];
+window.__assentosProntos=false;
 async function _carregarAssentos(){
   try{
     var sb=window.__sb; if(!sb) return;
@@ -1968,7 +1975,13 @@ async function _carregarAssentos(){
     var r=await sb.from('produtividade_config').select('valor').eq('escritorio_id',esc).eq('chave','assentos').maybeSingle();
     if(r&&r.data&&r.data.valor){
       var arr=JSON.parse(r.data.valor);
-      if(Array.isArray(arr)&&arr.length){ USUARIOS_VISUAIS=arr; return; }
+      /* Escritório cliente descarta assento de fábrica que tenha sido gravado
+         antes desta correção — senão a equipe da casa continuaria na tela dele
+         até alguém apagar um por um. */
+      if(Array.isArray(arr)&&window.__escInfo&&window.__escInfo.raiz!==true){
+        arr=arr.filter(function(u){ return _ASSENTOS_FABRICA.indexOf(String(u&&u.id||''))<0; });
+      }
+      if(Array.isArray(arr)&&arr.length){ USUARIOS_VISUAIS=arr; window.__assentosProntos=true; return; }
     }
     /* Sem assentos salvos, a lista ficava com a equipe da CMP escrita no
        código — e um escritório cliente abria o sistema vendo "Djan Mendonça"
@@ -1987,13 +2000,19 @@ async function _carregarAssentos(){
       });
       if(USUARIOS_VISUAIS.length) USUARIO_ATUAL_VISUAL=USUARIOS_VISUAIS[0].id;
     }
+    window.__assentosProntos=true;
   }catch(e){}
 }
 async function _salvarAssentos(){
   try{
     var sb=window.__sb; if(!sb) return;
+    /* Nunca gravar antes de saber o que já existe: gravar em cima do que ainda
+       não foi lido é como o escritório cliente herdou a equipe da casa. */
+    if(!window.__assentosProntos) return;
     var esc=await _escBusca(); if(!esc) return;
+    var ehRaiz=!!(window.__escInfo&&window.__escInfo.raiz===true);
     var limpos=(USUARIOS_VISUAIS||[]).filter(function(u){ return String(u.id||'').indexOf('auto_')!==0; })
+      .filter(function(u){ return ehRaiz || _ASSENTOS_FABRICA.indexOf(String(u.id||''))<0; })
       .map(function(u){ return {id:u.id,nome:u.nome,perfil:u.perfil,email:u.email||'',senha:'',ativo:u.ativo!==false,ferias:(u.ferias&&u.ferias.fim)?u.ferias:null,so_privado:!!u.so_privado}; });
     await sb.from('produtividade_config').upsert({escritorio_id:esc,chave:'assentos',valor:JSON.stringify(limpos)},{onConflict:'escritorio_id,chave'});
   }catch(e){}
