@@ -109,9 +109,9 @@ export async function canalLiberado(esc, canal) {
   const { data } = await sb.from('escritorios').select('raiz,ativo,modulos,nome').eq('id', esc).maybeSingle()
   if (!data) return { ok: false, erro: 'Escritório não encontrado.' }
   if (data.ativo === false) return { ok: false, erro: 'Este escritório está com o acesso suspenso.' }
-  if (data.raiz === true) return { ok: true }
+  if (data.raiz === true) return { ok: true, raiz: true }
   const mod = data.modulos || {}
-  if (mod[canal] === true) return { ok: true }
+  if (mod[canal] === true) return { ok: true, raiz: false }
   return {
     ok: false,
     erro: 'O envio por ' + (canal === 'email' ? 'e-mail' : canal) + ' ainda não está configurado para este escritório. ' +

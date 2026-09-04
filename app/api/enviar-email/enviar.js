@@ -8,6 +8,7 @@ import { createClient } from '@supabase/supabase-js'
 import { estadoConvite, blocoConviteHtml, blocoConviteTexto, registrarConvite, svcOpcional } from '../portal/convite-lib.js'
 import nodemailer from 'nodemailer'
 import crypto from 'crypto'
+import { contaDeEnvio } from '../_lib/smtp.js'
 import fs from 'fs'
 import path from 'path'
 
@@ -117,14 +118,16 @@ function esc(s) {
 // app e, se não usa, leva o convite junto (e pede o telefone que falta na ficha).
 // Passe false quando o próprio e-mail já for sobre isso — o e-mail de credenciais
 // do portal e a cobrança do robô, que não podem convidar a si mesmos.
-export async function enviarEmailCore({ para, cc, assunto, corpo, numero, dedup = true, inReplyTo = '', confirmarEventoId = null, anexos = [], destino = '', convidarApp = true }) {
-  const host = process.env.SMTP_HOST
-  const port = parseInt(process.env.SMTP_PORT || '465', 10)
-  const smtpUser = process.env.SMTP_USER
-  const pass = process.env.SMTP_PASS
-  if (!host || !smtpUser || !pass) {
-    return { erro: 'SMTP não configurado no servidor (defina SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS).', status: 500 }
-  }
+export async function enviarEmailCore({ para, cc, assunto, corpo, numero, dedup = true, inReplyTo = '', confirmarEventoId = null, anexos = [], destino = '', convidarApp = true, escritorioId = null }) {
+  // A conta de envio é a DO ESCRITÓRIO de quem manda. A raiz usa a do
+  // ambiente, que é dela; um escritório cliente usa a que cadastrou. Sem isso,
+  // o e-mail de um cliente sairia do endereço do fornecedor.
+  const conta = await contaDeEnvio(escritorioId, !escritorioId)
+  if (conta.erro) return { erro: conta.erro, status: 500 }
+  const host = conta.host
+  const port = conta.port
+  const smtpUser = conta.user
+  const pass = conta.pass
 
   para = String(para || '').trim()
   cc = String(cc || '').trim()

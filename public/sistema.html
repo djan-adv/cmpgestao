@@ -1292,6 +1292,21 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
       <label>Uma por linha, no formato <b>número/UF</b> (ex.: 12345/PB). É por elas que o robô do Diário de Justiça procura as publicações do escritório.</label>
       <textarea id="me-oabs" rows="3" style="width:100%;font-family:ui-monospace,monospace" placeholder="12345/PB"></textarea>
     </div>
+    <div class="card"><p class="sectlabel">Conta de e-mail do escritório</p>
+      <p class="note" style="margin-top:0">O sistema envia usando a SUA conta — o e-mail chega à vara e ao cliente com o endereço do seu escritório. Serve qualquer provedor. <b>O envio só é liberado depois do teste passar.</b></p>
+      <div class="grid2">
+        <div><label>Servidor (SMTP)</label><input id="me-smtp-host" placeholder="smtp.hostinger.com"></div>
+        <div><label>Porta</label><input id="me-smtp-porta" type="number" placeholder="465"></div>
+        <div><label>Usuário (e-mail completo)</label><input id="me-smtp-usuario" placeholder="contato@seuescritorio.com.br"></div>
+        <div><label>Senha</label><input id="me-smtp-senha" type="password" placeholder="deixe em branco para manter a atual"></div>
+        <div style="grid-column:1/-1"><label>Nome que aparece como remetente</label><input id="me-smtp-nome" placeholder="Seu Escritório — Avisos"></div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+        <button type="button" class="btn sm" onclick="salvarEmailEscritorio()">Salvar conta</button>
+        <button type="button" class="btn sm ghost" onclick="testarEmailEscritorio()">Enviar e-mail de teste</button>
+      </div>
+      <div id="me-smtp-estado" class="note" style="margin-top:6px"></div>
+    </div>
     <div class="card" id="me-plano-card"><p class="sectlabel">Seu plano</p><div id="me-plano"></div></div>
   </div>
   <div id="me-msg" class="note" style="margin-top:6px"></div>
@@ -1503,6 +1518,18 @@ async function abrirMeuEscritorio(){
     window.__logoRemover=false;
     var oabs=(d.escritorio.oabs||[]).map(function(o){return (o.numero||'')+'/'+(o.uf||'');}).join('\n');
     document.getElementById('me-oabs').value=oabs;
+    var ec=d.email_conta||{};
+    document.getElementById('me-smtp-host').value=ec.host||'';
+    document.getElementById('me-smtp-porta').value=ec.porta||'';
+    document.getElementById('me-smtp-usuario').value=ec.usuario||'';
+    document.getElementById('me-smtp-nome').value=ec.remetente_nome||'';
+    document.getElementById('me-smtp-senha').value='';
+    var est=document.getElementById('me-smtp-estado');
+    est.innerHTML = ec.canal_liberado
+      ? '<span style="color:#0F6E56;font-weight:700">Envio liberado.</span> Testado em '+esc(String(ec.testado_em||'').slice(0,16).replace('T',' '))+'.'
+      : (ec.tem_senha
+          ? '<span style="color:#8a6d00;font-weight:700">Conta cadastrada, envio ainda bloqueado.</span> Clique em "Enviar e-mail de teste".'+(ec.testado_erro?('<br>Último erro: '+esc(ec.testado_erro)):'')
+          : '<span style="color:#8a6d00">Sem conta cadastrada — o envio de e-mail está desligado.</span>');
     var p=d.plano||{};
     document.getElementById('me-plano').innerHTML=
       '<div style="font-size:13px;line-height:1.7">'
@@ -1522,6 +1549,26 @@ function removerLogoEscritorio(){
   var p=document.getElementById('me-logo-previa'); if(p){ p.style.display='none'; p.src=''; }
   var a=document.getElementById('me-logo-arq'); if(a) a.value='';
   var m=document.getElementById('me-msg'); if(m) m.textContent='O logo sai quando você salvar.';
+}
+async function salvarEmailEscritorio(){
+  var est=document.getElementById('me-smtp-estado'); est.textContent='Salvando…';
+  try{
+    await _meuEscApi('POST',{acao:'email_salvar',
+      host:document.getElementById('me-smtp-host').value.trim(),
+      porta:document.getElementById('me-smtp-porta').value.trim(),
+      usuario:document.getElementById('me-smtp-usuario').value.trim(),
+      senha:document.getElementById('me-smtp-senha').value,
+      remetente_nome:document.getElementById('me-smtp-nome').value.trim()});
+    document.getElementById('me-smtp-senha').value='';
+    est.innerHTML='<span style="color:#8a6d00;font-weight:700">Conta salva. O envio continua bloqueado até o teste passar.</span>';
+  }catch(e){ est.textContent='Não consegui salvar: '+(e&&e.message||e); }
+}
+async function testarEmailEscritorio(){
+  var est=document.getElementById('me-smtp-estado'); est.textContent='Enviando teste…';
+  try{
+    var d=await _meuEscApi('POST',{acao:'email_testar'});
+    est.innerHTML='<span style="color:#0F6E56;font-weight:700">Passou.</span> Enviei um e-mail para '+esc(d.enviado_para||'')+'. Confira a caixa (e o spam). O envio pelo sistema está liberado.';
+  }catch(e){ est.innerHTML='<span style="color:#b5342b;font-weight:700">Não passou.</span> '+esc(String(e&&e.message||e)); }
 }
 function fecharMeuEscritorio(){ var m=document.getElementById('modal-meu-esc'); if(m) m.classList.add('hidden'); }
 async function salvarMeuEscritorio(){

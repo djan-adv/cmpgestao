@@ -14,6 +14,8 @@
 
 import { createClient } from '@supabase/supabase-js'
 import { usuarioDoRequest, escritorioDoUsuario, semEscritorio } from '../_lib/inquilino.js'
+import { chaveCifra, contaDeEnvio } from '../_lib/smtp.js'
+import nodemailer from 'nodemailer'
 
 export const dynamic = 'force-dynamic'
 
@@ -40,7 +42,7 @@ export async function GET(request) {
 
   const sb = admin()
   const { data } = await sb.from('escritorios')
-    .select('id,nome,raiz,marca,dados,oabs,plano_codigo,limite_acessos,limite_processos,limite_gb,mensalidade')
+    .select('id,nome,raiz,marca,dados,oabs,modulos,plano_codigo,limite_acessos,limite_processos,limite_gb,mensalidade')
     .eq('id', esc).maybeSingle()
   if (!data) return Response.json({ erro: 'escritório não encontrado' }, { status: 404 })
 
@@ -59,6 +61,18 @@ export async function GET(request) {
       // as inscrições que o robô do diário usa para varrer publicações
       oabs: data.oabs || [],
     },
+    // conta de envio: nunca devolve a senha, só se existe e se o teste passou
+    email_conta: await (async () => {
+      const { data: sm } = await sb.from('escritorio_smtp')
+        .select('host,porta,usuario,remetente_nome,testado_ok,testado_em,testado_erro')
+        .eq('escritorio_id', esc).maybeSingle()
+      const mod = data.modulos || {}
+      return {
+        ...(sm || {}),
+        tem_senha: !!sm,
+        canal_liberado: data.raiz === true || mod.email === true,
+      }
+    })(),
     plano: {
       codigo: data.plano_codigo, mensalidade: data.mensalidade,
       limite_acessos: data.limite_acessos, limite_processos: data.limite_processos, limite_gb: data.limite_gb,
@@ -81,6 +95,63 @@ export async function POST(request) {
 
   let body = {}
   try { body = await request.json() } catch (e) {}
+
+  // ---- conta de e-mail do escritório -------------------------------------
+  // Salvar não libera o envio: só o teste libera. Sem isso, o escritório
+  // descobriria que a senha estava errada no dia em que perdesse um prazo
+  // achando que tinha avisado a vara.
+  if (body.acao === 'email_salvar' || body.acao === 'email_testar') {
+    const key = chaveCifra()
+    if (!key) return Response.json({ erro: 'Servidor sem chave de cifragem; não posso guardar a senha com segurança.' }, { status: 500 })
+
+    if (body.acao === 'email_salvar') {
+      const host = String(body.host || '').trim()
+      const usuario = String(body.usuario || '').trim()
+      if (!host || !usuario) return Response.json({ erro: 'Informe o servidor e o usuário.' }, { status: 400 })
+      const { error } = await sb.rpc('smtp_set', {
+        p_esc: esc, p_host: host, p_porta: parseInt(body.porta, 10) || 465,
+        p_usuario: usuario, p_senha: String(body.senha || ''),
+        p_nome: String(body.remetente_nome || '').slice(0, 80), p_key: key,
+      })
+      if (error) return Response.json({ erro: error.message }, { status: 500 })
+      // guardar de novo derruba o canal até passar no teste outra vez: uma
+      // troca de servidor com senha errada não pode continuar "liberada"
+      const { data: e0 } = await sb.from('escritorios').select('modulos,raiz').eq('id', esc).maybeSingle()
+      if (e0 && e0.raiz !== true) {
+        await sb.from('escritorios').update({ modulos: { ...(e0.modulos || {}), email: false } }).eq('id', esc)
+      }
+      await sb.from('escritorio_smtp').update({ testado_ok: null, testado_em: null, testado_erro: null }).eq('escritorio_id', esc)
+      return Response.json({ ok: true, precisa_testar: true })
+    }
+
+    // teste de verdade: manda um e-mail para o próprio usuário da conta
+    const conta = await contaDeEnvio(esc, false)
+    if (conta.erro) return Response.json({ erro: conta.erro }, { status: 400 })
+    try {
+      const t = nodemailer.createTransport({
+        host: conta.host, port: conta.port, secure: conta.port === 465,
+        auth: { user: conta.user, pass: conta.pass },
+      })
+      await t.sendMail({
+        from: '"' + (conta.fromNome || 'Sistema') + '" <' + conta.user + '>',
+        to: conta.user,
+        subject: 'Teste de envio — configuração de e-mail do escritório',
+        text: 'Se você recebeu esta mensagem, a conta de envio do escritório está funcionando e o envio pelo sistema foi liberado.',
+      })
+      await sb.from('escritorio_smtp').update({
+        testado_ok: true, testado_em: new Date().toISOString(), testado_erro: null,
+      }).eq('escritorio_id', esc)
+      const { data: e1 } = await sb.from('escritorios').select('modulos').eq('id', esc).maybeSingle()
+      await sb.from('escritorios').update({ modulos: { ...(e1?.modulos || {}), email: true } }).eq('id', esc)
+      return Response.json({ ok: true, enviado_para: conta.user })
+    } catch (e) {
+      const msg = String((e && e.message) || e)
+      await sb.from('escritorio_smtp').update({
+        testado_ok: false, testado_em: new Date().toISOString(), testado_erro: msg.slice(0, 300),
+      }).eq('escritorio_id', esc)
+      return Response.json({ erro: 'O teste não passou: ' + msg }, { status: 400 })
+    }
+  }
 
   const patch = {}
   if (typeof body.nome === 'string' && body.nome.trim()) patch.nome = body.nome.trim().slice(0, 160)

@@ -103,6 +103,8 @@ export async function POST(request) {
   // ——— envio na hora ———
   // in_reply_to: message-id do e-mail respondido — encaixa a resposta na conversa
   const r = await enviarEmailCore({
+    // a raiz continua com a conta do ambiente; um escritório cliente usa a dele
+    escritorioId: liberado.raiz ? null : escRemetente,
     para: body.para, cc: body.cc, assunto: body.assunto, corpo: body.corpo, numero: body.numero,
     inReplyTo: String(body.in_reply_to || ''),
     // aviso de audiência: liga o botão "confirmo presença" apontando para o evento
