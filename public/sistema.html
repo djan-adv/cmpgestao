@@ -5100,8 +5100,40 @@ async function historicoPubModal(){
   t.done=true; persisteTriada(t);
   fecharTarefa(); try{ renderTriagem(); }catch(e){}
 }
+/* ===== Etiquetas =====
+   Elas viviam SÓ na memória do navegador: `initEtiquetas` era uma função vazia
+   e nada gravava. Quem criava uma etiqueta e marcava trinta processos perdia
+   tudo no F5 seguinte — e a tabela no banco estava zerada desde sempre. Agora
+   vão para `etiquetas` e `processo_etiquetas`, por escritório (a RLS já
+   separa). A tela continua trabalhando por NÚMERO do processo; a tradução para
+   o id acontece só na hora de gravar. */
 var LABELS=[];
 var ASSIGN={};
+var _ETQ_PROC_ID={};   /* numero -> id do processo, para gravar o vínculo */
+async function _etqCarregar(){
+  try{
+    var sb=window.__sb; if(!sb) return;
+    var le=await sb.from('etiquetas').select('id,nome,cor').order('nome');
+    if(le&&!le.error) LABELS=(le.data||[]).map(function(l){return {id:String(l.id),nome:l.nome,cor:l.cor||'#185fa5'};});
+    var lv=await sb.from('processo_etiquetas').select('etiqueta_id,processos!inner(numero)');
+    if(lv&&!lv.error){
+      ASSIGN={};
+      (lv.data||[]).forEach(function(v){
+        var num=v.processos&&v.processos.numero; if(!num) return;
+        (ASSIGN[num]=ASSIGN[num]||[]).push(String(v.etiqueta_id));
+      });
+    }
+  }catch(e){}
+}
+async function _etqIdDoProcesso(numero){
+  if(_ETQ_PROC_ID[numero]) return _ETQ_PROC_ID[numero];
+  try{
+    var sb=window.__sb;
+    var r=await sb.from('processos').select('id').eq('numero',numero).maybeSingle();
+    if(r&&r.data){ _ETQ_PROC_ID[numero]=r.data.id; return r.data.id; }
+  }catch(e){}
+  return null;
+}
 function textColor(hex){var c=(hex||"#000").replace("#","");if(c.length===3)c=c.split("").map(function(x){return x+x}).join("");var r=parseInt(c.substr(0,2),16),g=parseInt(c.substr(2,2),16),b=parseInt(c.substr(4,2),16);return (0.299*r+0.587*g+0.114*b)>150?"#1e2733":"#fff";}
 function lblById(id){return LABELS.find(function(l){return l.id===id});}
 function chip(lb){return '<span class="chip2" style="background:'+lb.cor+';color:'+textColor(lb.cor)+'">'+esc(lb.nome)+'</span>';}
@@ -5293,8 +5325,28 @@ function limparFaseManual(num){
 }
 function initEtiquetas(){}
 function etiquetasDoProc(num){initEtiquetas();var ids=ASSIGN[num]||[];return ids.map(function(id){var lb=lblById(id);return lb?chip(lb):"";}).join("");}
-function criarEtiqueta(){var n=document.getElementById("lbl-nome").value.trim();if(!n){alert("Dê um nome à etiqueta.");return;}var cor=document.getElementById("lbl-cor").value;LABELS.push({id:"u"+Date.now(),nome:n,cor:cor});document.getElementById("lbl-nome").value="";renderEtiquetas();}
-function removerEtiqueta(id){LABELS=LABELS.filter(function(l){return l.id!==id});for(var k in ASSIGN)ASSIGN[k]=ASSIGN[k].filter(function(x){return x!==id});renderEtiquetas();}
+function criarEtiqueta(){var n=document.getElementById("lbl-nome").value.trim();if(!n){alert("Dê um nome à etiqueta.");return;}var cor=document.getElementById("lbl-cor").value;(async function(){
+    try{
+      var sb=window.__sb, esc=(window.__escInfo&&window.__escInfo.id);
+      var r=await sb.from('etiquetas').insert({escritorio_id:esc,nome:n,cor:cor}).select('id,nome,cor').single();
+      if(r&&r.error) throw new Error(r.error.message);
+      LABELS.push({id:String(r.data.id),nome:r.data.nome,cor:r.data.cor});
+    }catch(e){ alert('Não consegui salvar a etiqueta: '+(e&&e.message||e)); }
+    renderEtiquetas();
+  })();document.getElementById("lbl-nome").value="";renderEtiquetas();}
+async function removerEtiqueta(id){
+  try{
+    var sb=window.__sb;
+    /* o vínculo com os processos vai junto — deixar órfão faria a contagem
+       mentir e a etiqueta "voltar" numa recarga */
+    await sb.from('processo_etiquetas').delete().eq('etiqueta_id',id);
+    var r=await sb.from('etiquetas').delete().eq('id',id);
+    if(r&&r.error) throw new Error(r.error.message);
+  }catch(e){ alert('Não consegui apagar: '+(e&&e.message||e)); return; }
+  LABELS=LABELS.filter(function(l){return l.id!==id});
+  for(var k in ASSIGN)ASSIGN[k]=ASSIGN[k].filter(function(x){return x!==id});
+  renderEtiquetas();
+}
 
 /* ===== Procedimentos — conteúdo do escritório, não texto fixo =====
    Esta tela era o manual da casa escrito no HTML: etapas, prazos e os NOMES dos
@@ -5963,8 +6015,24 @@ function renderDetEtq(){var sel=document.getElementById("det-etq-sel");if(!sel)r
   sel.innerHTML=LABELS.map(function(l){return '<option value="'+l.id+'">'+esc(l.nome)+'</option>';}).join("");
   var ids=ASSIGN[atual.numero]||[];var box=document.getElementById("det-etq");
   box.innerHTML=ids.length?ids.map(function(id){var lb=lblById(id);return lb?('<span class="chip2" style="background:'+lb.cor+';color:'+textColor(lb.cor)+'">'+esc(lb.nome)+' <a onclick="delEtqProc(\''+id+'\')" style="color:inherit;cursor:pointer">×</a></span>'):"";}).join(""):'<span class="note">Sem etiquetas.</span>';}
-function addEtqProc(){var id=document.getElementById("det-etq-sel").value;if(!ASSIGN[atual.numero])ASSIGN[atual.numero]=[];if(ASSIGN[atual.numero].indexOf(id)<0)ASSIGN[atual.numero].push(id);renderDetEtq();}
-function delEtqProc(id){ASSIGN[atual.numero]=(ASSIGN[atual.numero]||[]).filter(function(x){return x!==id});renderDetEtq();}
+async function addEtqProc(){var id=document.getElementById("det-etq-sel").value;if(!id)return;
+  if(!ASSIGN[atual.numero])ASSIGN[atual.numero]=[];
+  if(ASSIGN[atual.numero].indexOf(id)<0){
+    ASSIGN[atual.numero].push(id);
+    try{
+      var pid=await _etqIdDoProcesso(atual.numero);
+      if(pid) await window.__sb.from('processo_etiquetas').upsert({processo_id:pid,etiqueta_id:id},{onConflict:'processo_id,etiqueta_id'});
+    }catch(e){}
+  }
+  renderDetEtq();}
+async function delEtqProc(id){
+  ASSIGN[atual.numero]=(ASSIGN[atual.numero]||[]).filter(function(x){return x!==id});
+  try{
+    var pid=await _etqIdDoProcesso(atual.numero);
+    if(pid) await window.__sb.from('processo_etiquetas').delete().eq('processo_id',pid).eq('etiqueta_id',id);
+  }catch(e){}
+  renderDetEtq();
+}
 function setViewAg(v){VIEWAG=v;
   document.getElementById("sw-ag").classList.toggle("on",v==="agenda");
   document.getElementById("sw-kan").classList.toggle("on",v==="kanban");
@@ -9758,6 +9826,7 @@ function toggleConcluirTarefa(id){
   /* quem está logado de verdade + assentos salvos (antes disso o sistema
      mostrava sempre "Djan" para qualquer pessoa) */
   try{ await _carregarEscritorio(); }catch(e){}
+  try{ await _etqCarregar(); }catch(e){}
   try{ aplicarPerfilDaTela(); }catch(e){}
   try{ await _carregarAssentos(); }catch(e){}
   try{ await identificarUsuarioLogado(); }catch(e){}
