@@ -1252,6 +1252,15 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
       <div class="grid2">
         <div><label>Nome do escritório</label><input id="me-nome"></div>
         <div><label>Nome que aparece no sistema</label><input id="me-marca-sistema" placeholder="deixe em branco para usar o nome do escritório"></div>
+        <div style="grid-column:1/-1">
+          <label>Logo do escritório (PNG, JPG, WEBP ou SVG — até 1 MB)</label>
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+            <input type="file" id="me-logo-arq" accept="image/png,image/jpeg,image/webp,image/svg+xml">
+            <img id="me-logo-previa" alt="" style="max-height:44px;display:none;border:1px solid var(--line);border-radius:6px;padding:3px;background:#fff">
+            <button type="button" class="btn sm ghost" onclick="removerLogoEscritorio()">remover logo</button>
+          </div>
+          <p class="note" style="margin-top:4px">Aparece na tela de entrada do seu endereço e no timbre da procuração.</p>
+        </div>
       </div>
     </div>
     <div class="card"><p class="sectlabel">Advogado responsável (o outorgado da procuração)</p>
@@ -1278,6 +1287,10 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
         <div><label>E-mail</label><input id="me-email"></div>
         <div><label>Cidade / UF</label><input id="me-cidade"></div>
       </div>
+    </div>
+    <div class="card"><p class="sectlabel">Publicações — inscrições na OAB</p>
+      <label>Uma por linha, no formato <b>número/UF</b> (ex.: 12345/PB). É por elas que o robô do Diário de Justiça procura as publicações do escritório.</label>
+      <textarea id="me-oabs" rows="3" style="width:100%;font-family:ui-monospace,monospace" placeholder="12345/PB"></textarea>
     </div>
     <div class="card" id="me-plano-card"><p class="sectlabel">Seu plano</p><div id="me-plano"></div></div>
   </div>
@@ -1484,6 +1497,12 @@ async function abrirMeuEscritorio(){
     _MEU_ESC_CAMPOS.forEach(function(c){
       var el=document.getElementById('me-'+c); if(el) el.value=(d.escritorio.dados&&d.escritorio.dados[c])||'';
     });
+    var lg=(d.escritorio.marca&&d.escritorio.marca.logo)||'';
+    var prev=document.getElementById('me-logo-previa');
+    if(prev){ prev.src=lg||''; prev.style.display=lg?'inline-block':'none'; }
+    window.__logoRemover=false;
+    var oabs=(d.escritorio.oabs||[]).map(function(o){return (o.numero||'')+'/'+(o.uf||'');}).join('\n');
+    document.getElementById('me-oabs').value=oabs;
     var p=d.plano||{};
     document.getElementById('me-plano').innerHTML=
       '<div style="font-size:13px;line-height:1.7">'
@@ -1498,6 +1517,12 @@ async function abrirMeuEscritorio(){
     msg.textContent=d.pode_editar?'':'Somente o contratante ou um sócio pode alterar este cadastro.';
   }catch(e){ msg.textContent='Não consegui carregar: '+(e&&e.message||e); }
 }
+function removerLogoEscritorio(){
+  window.__logoRemover=true;
+  var p=document.getElementById('me-logo-previa'); if(p){ p.style.display='none'; p.src=''; }
+  var a=document.getElementById('me-logo-arq'); if(a) a.value='';
+  var m=document.getElementById('me-msg'); if(m) m.textContent='O logo sai quando você salvar.';
+}
 function fecharMeuEscritorio(){ var m=document.getElementById('modal-meu-esc'); if(m) m.classList.add('hidden'); }
 async function salvarMeuEscritorio(){
   var msg=document.getElementById('me-msg'); msg.textContent='Salvando…';
@@ -1505,11 +1530,18 @@ async function salvarMeuEscritorio(){
     var el=document.getElementById('me-'+c); if(el) dados[c]=el.value.trim();
   });
   try{
-    await _meuEscApi('POST',{
-      nome:document.getElementById('me-nome').value.trim(),
-      marca:{sistema:document.getElementById('me-marca-sistema').value.trim()},
-      dados:dados,
-    });
+    var oabs=(document.getElementById('me-oabs').value||'').split(/[\n,;]+/)
+      .map(function(l){ var m=String(l).match(/(\d+)\s*[\/-]?\s*([A-Za-z]{2})/); return m?{numero:m[1],uf:m[2].toUpperCase()}:null; })
+      .filter(Boolean);
+    var marca={sistema:document.getElementById('me-marca-sistema').value.trim()};
+    var corpo={nome:document.getElementById('me-nome').value.trim(),marca:marca,dados:dados,oabs:oabs};
+    var arq=(document.getElementById('me-logo-arq')||{}).files;
+    if(arq&&arq[0]){
+      corpo.logo_arquivo=await new Promise(function(ok,nok){
+        var fr=new FileReader(); fr.onload=function(){ok(fr.result);}; fr.onerror=nok; fr.readAsDataURL(arq[0]);
+      });
+    } else if(window.__logoRemover){ marca.logo=''; }
+    await _meuEscApi('POST',corpo);
     msg.textContent='Salvo. A procuração e o contrato passam a usar estes dados.';
     /* a marca da tela acompanha na hora, sem precisar recarregar */
     try{ await _carregarEscritorio(); aplicarPerfilDaTela(); }catch(e){}
@@ -8376,6 +8408,23 @@ async function atualizarHistorico(){
       else if(!r2.ok){ notas+='\n• Movimentos do jus.br não vieram: '+((d2&&d2.erro)||('HTTP '+r2.status))+((d2&&(d2.motivo==='sem_token'||d2.motivo==='expirado'))?' — abra o jus.br logado para sincronizar.':''); }
       else { mvNovos=d2.novos||0; jbMeta=d2.meta||null; if(d2.ficha_atualizada) fichaUpd=true; }
     }catch(e){ notas+='\n• Movimentos do jus.br: '+(e&&e.message||e); }
+    /* 3) Base PÚBLICA (DataJud/CNJ) — sem certificado.
+       Quem acabou de contratar não tem sessão do jus.br no primeiro dia, e o
+       botão só sabia dizer que faltava token. O DataJud é público e traz
+       classe, assunto, órgão julgador e as movimentações. Só entra quando o
+       caminho do jus.br não trouxe nada, para não repetir trabalho. */
+    if(!mvNovos && !jbMeta){
+      try{
+        var r3=await fetch('/api/processo/publico',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+jwt},body:JSON.stringify({numero:atual.numero})});
+        var d3=await respJson(r3);
+        if(d3 && !d3.__naoJson && r3.ok){
+          mvNovos+=(d3.novos||0);
+          if(d3.meta){ jbMeta=d3.meta; }
+          if(d3.ficha_atualizada) fichaUpd=true;
+          notas+='\n• Consulta pública (DataJud/CNJ): '+(d3.novos||0)+' movimento(s) novo(s).';
+        } else if(d3 && d3.erro){ notas+='\n• Consulta pública: '+d3.erro; }
+      }catch(e){ notas+='\n• Consulta pública: '+(e&&e.message||e); }
+    }
     /* aplica os dados vindos do jus.br na ficha em memória (classe/assunto/vara/distribuição) */
     if(jbMeta){
       if(jbMeta.classe) atual.classe=jbMeta.classe;

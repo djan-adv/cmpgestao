@@ -71,7 +71,7 @@ async function buscaIndice(tribAlias, dig) {
   return (j && j.hits && j.hits.hits) || []
 }
 
-async function consultaDataJud(numero) {
+export async function consultaDataJud(numero) {
   const dig = String(numero).replace(/\D/g, '')
   const a = alias(dig)
   if (!a) return { erro: 'tribunal não identificado pelo número' }

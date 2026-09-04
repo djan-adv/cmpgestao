@@ -40,7 +40,7 @@ export async function GET(request) {
 
   const sb = admin()
   const { data } = await sb.from('escritorios')
-    .select('id,nome,raiz,marca,dados,plano_codigo,limite_acessos,limite_processos,limite_gb,mensalidade')
+    .select('id,nome,raiz,marca,dados,oabs,plano_codigo,limite_acessos,limite_processos,limite_gb,mensalidade')
     .eq('id', esc).maybeSingle()
   if (!data) return Response.json({ erro: 'escritório não encontrado' }, { status: 404 })
 
@@ -56,6 +56,8 @@ export async function GET(request) {
     escritorio: {
       id: data.id, nome: data.nome, raiz: data.raiz,
       marca: data.marca || {}, dados: data.dados || {},
+      // as inscrições que o robô do diário usa para varrer publicações
+      oabs: data.oabs || [],
     },
     plano: {
       codigo: data.plano_codigo, mensalidade: data.mensalidade,
@@ -85,11 +87,32 @@ export async function POST(request) {
 
   if (body.marca && typeof body.marca === 'object') {
     const { data: atual } = await sb.from('escritorios').select('marca').eq('id', esc).maybeSingle()
+    const marcaAtual = atual?.marca || {}
+    let logo = 'logo' in body.marca ? (String(body.marca.logo || '').slice(0, 500) || null) : (marcaAtual.logo || null)
+
+    // Logo enviado como arquivo. Vai para o armazenamento e o cadastro guarda
+    // só o endereço — imagem inteira dentro da linha do escritório deixaria
+    // pesada toda consulta que lê o cadastro (e ele é lido a cada tela).
+    if (body.logo_arquivo && typeof body.logo_arquivo === 'string') {
+      const m = body.logo_arquivo.match(/^data:(image\/(png|jpe?g|webp|svg\+xml));base64,(.+)$/)
+      if (!m) return Response.json({ erro: 'Envie o logo em PNG, JPG, WEBP ou SVG.' }, { status: 400 })
+      const buf = Buffer.from(m[3], 'base64')
+      if (buf.length > 1024 * 1024) return Response.json({ erro: 'O logo precisa ter no máximo 1 MB.' }, { status: 400 })
+      const ext = m[2] === 'svg+xml' ? 'svg' : (m[2] === 'jpeg' ? 'jpg' : m[2])
+      // nome novo a cada troca: com nome fixo, o navegador continuaria
+      // mostrando o logo antigo por causa do cache
+      const caminho = 'marcas/' + esc + '/logo-' + Date.now() + '.' + ext
+      const up = await sb.storage.from('publico').upload(caminho, buf, { contentType: m[1], upsert: true })
+      if (up.error) return Response.json({ erro: 'Não consegui guardar o logo: ' + up.error.message }, { status: 502 })
+      const { data: pub } = sb.storage.from('publico').getPublicUrl(caminho)
+      logo = (pub && pub.publicUrl) || null
+    }
+
     patch.marca = {
-      ...(atual?.marca || {}),
+      ...marcaAtual,
       sistema: String(body.marca.sistema || '').slice(0, 60) || null,
       cor: String(body.marca.cor || '').slice(0, 20) || null,
-      logo: String(body.marca.logo || '').slice(0, 500) || null,
+      logo,
     }
   }
 
@@ -100,6 +123,20 @@ export async function POST(request) {
       if (c in body.dados) dados[c] = String(body.dados[c] == null ? '' : body.dados[c]).slice(0, 300)
     }
     patch.dados = dados
+  }
+
+  // OAB do escritório: é o que faz o robô do diário varrer as publicações
+  // DELE. Sem isto, o escritório novo não recebe publicação nenhuma — e essa
+  // era a única parte do sistema que ainda dependia de alguém do fornecedor
+  // editar o banco à mão.
+  if (Array.isArray(body.oabs)) {
+    const limpas = []
+    for (const o of body.oabs.slice(0, 20)) {
+      const numero = String((o && o.numero) || '').replace(/\D/g, '').slice(0, 10)
+      const uf = String((o && o.uf) || '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 2)
+      if (numero && uf.length === 2) limpas.push({ numero, uf })
+    }
+    patch.oabs = limpas
   }
 
   if (!Object.keys(patch).length) return Response.json({ erro: 'nada a salvar' }, { status: 400 })
