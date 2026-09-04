@@ -6,7 +6,7 @@
 // processos dele. Fica em tabela com RLS (jusbr_sessao) — lido apenas pelo servidor.
 
 import { createClient } from '@supabase/supabase-js'
-import { ESCRITORIO_RAIZ } from '../../_lib/inquilino.js'
+import { ESCRITORIO_RAIZ, escritorioDoUsuario } from '../../_lib/inquilino.js'
 import { provarToken, resumoClaims, ehEmissorPdpj } from '../lib.js'
 
 export const dynamic = 'force-dynamic'
@@ -76,6 +76,21 @@ export async function POST(request) {
     } else {
       const user = await usuario(request)
       if (!user) return j({ erro: 'não autenticado (segredo de relay ausente/incorreto)' }, 401)
+      // Esta sessão é gravada SEMPRE no escritório raiz (ver ESCRITORIO_CMP
+      // acima). Enquanto for assim, quem não é da raiz não pode mandar token
+      // para cá: o token do certificado DELE sobrescreveria a sessão do dono do
+      // sistema, e os robôs passariam a consultar o tribunal com a credencial
+      // errada — do lado de quem usa, dois escritórios trocando de identidade
+      // dentro dos autos. Recusar é o único comportamento aceitável até a sessão
+      // do jus.br ser por escritório.
+      const escUser = await escritorioDoUsuario(user.id)
+      if (escUser !== ESCRITORIO_RAIZ) {
+        return j({
+          erro: 'A conexão com o jus.br ainda é do escritório que opera o sistema. ' +
+                'Enquanto ela não for por escritório, o token do seu certificado não pode ser guardado aqui — ' +
+                'ele sobrescreveria a sessão de outro escritório. Fale com o suporte para liberar o jus.br para o seu.',
+        }, 403)
+      }
       quem = String(user.email || '')
     }
     let body
