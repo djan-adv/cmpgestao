@@ -1244,6 +1244,26 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
   <div id="tardia-body" style="max-height:65vh;overflow:auto;margin-top:6px"></div>
   <div class="foot"><button class="btn ghost" onclick="novaTarefaDoDia()">+ Nova tarefa neste dia</button><button class="btn" onclick="fecharTarDia()">Fechar</button></div>
 </div></div>
+<div id="modal-proc-edit" class="overlay hidden"><div class="modal" style="max-width:760px">
+  <h2>Editar procedimentos</h2>
+  <p class="note" style="margin-top:2px">Uma linha por item. Nas etapas, separe com <b>|</b>: título | descrição | responsável e prazo.</p>
+  <div style="max-height:60vh;overflow:auto">
+    <label>Etapas de um caso</label>
+    <textarea id="pe-etapas" rows="7" style="width:100%;font-family:ui-monospace,monospace" placeholder="Triagem | confere documentos e prazo | responsável · até 1 dia útil"></textarea>
+    <label>Colunas do Kanban (separadas por vírgula)</label>
+    <input id="pe-kanban" style="width:100%">
+    <label>Observação do fluxo</label>
+    <input id="pe-kanban-nota" style="width:100%">
+    <label>Publicações — como o escritório tria</label>
+    <textarea id="pe-triagem" rows="3" style="width:100%"></textarea>
+    <label>Checklists (título na primeira linha, itens começando com "-", um bloco em branco separa checklists)</label>
+    <textarea id="pe-checklists" rows="9" style="width:100%;font-family:ui-monospace,monospace"></textarea>
+    <label>Equipe e papéis</label>
+    <textarea id="pe-equipe" rows="3" style="width:100%"></textarea>
+  </div>
+  <div id="pe-msg" class="note" style="margin-top:6px"></div>
+  <div class="foot"><button class="btn ghost" onclick="fecharEditorProcedimentos()">Fechar</button><button class="btn" onclick="salvarProcedimentos()">Salvar</button></div>
+</div></div>
 <div id="modal-meu-esc" class="overlay hidden"><div class="modal" style="max-width:720px">
   <h2>Cadastro do escritório</h2>
   <p class="note" style="margin-top:2px">Estes dados aparecem no sistema e, principalmente, entram na <b>procuração</b> e no <b>contrato</b> que o seu cliente assina. Sem eles, o documento não é gerado.</p>
@@ -2362,7 +2382,7 @@ function go(s){
   var link=document.querySelector('#nav a[data-s="'+s+'"]');if(link)link.classList.add("active");
   var t={painel:"Painel",triagem:"Publicações",agenda:"Agenda — Kanban",processos:"Processos",crm:"CRM",procedimentos:"Procedimentos",etiquetas:"Etiquetas","proc-det":"Processo"};
   document.getElementById("scr-title").textContent=t[s]||"Painel";
-  if(s==="painel")renderPainel(); if(s==="triagem")renderTriagem(); if(s==="processos")renderProc(); if(s==="crm")renderCrm(); if(s==="etiquetas")renderEtiquetas(); if(s==="agenda")renderAgendaView();
+  if(s==="procedimentos"){ _procCarregar().then(renderProcedimentos); } if(s==="painel")renderPainel(); if(s==="triagem")renderTriagem(); if(s==="processos")renderProc(); if(s==="crm")renderCrm(); if(s==="etiquetas")renderEtiquetas(); if(s==="agenda")renderAgendaView();
   window.scrollTo(0,0);
 }
 var FASES_META=[["prot","Correção e Protocolo","#C9A227"],["post","Fase de Conhecimento","#185FA5"],["sane","Fase Saneadora","#0F6E56"],["instr","Fase Instrutória","#8a5a00"],["decis","Fase Decisória","#6d28a8"],["recur","Fase Recursal","#b5342b"],["exec","Fase de Cumprimento","#0e7490"],["alvara","Expedir Alvará","#127a53"]];
@@ -5271,6 +5291,100 @@ function initEtiquetas(){}
 function etiquetasDoProc(num){initEtiquetas();var ids=ASSIGN[num]||[];return ids.map(function(id){var lb=lblById(id);return lb?chip(lb):"";}).join("");}
 function criarEtiqueta(){var n=document.getElementById("lbl-nome").value.trim();if(!n){alert("Dê um nome à etiqueta.");return;}var cor=document.getElementById("lbl-cor").value;LABELS.push({id:"u"+Date.now(),nome:n,cor:cor});document.getElementById("lbl-nome").value="";renderEtiquetas();}
 function removerEtiqueta(id){LABELS=LABELS.filter(function(l){return l.id!==id});for(var k in ASSIGN)ASSIGN[k]=ASSIGN[k].filter(function(x){return x!==id});renderEtiquetas();}
+
+/* ===== Procedimentos — conteúdo do escritório, não texto fixo =====
+   Esta tela era o manual da casa escrito no HTML: etapas, prazos e os NOMES dos
+   sócios. Aparecia inteira para qualquer escritório que abrisse o sistema.
+   Agora é conteúdo salvo por escritório; a casa continua com o texto dela, que
+   entra como padrão da raiz e pode ser editado igual. */
+var PROC_PADRAO_RAIZ={"etapas": [{"t": "Portão", "d": "caso novo só entra com ficha completa (documentos + prazo-limite + viabilidade).", "sla": "Comercial / Jader · é o portão, sem SLA próprio"}, {"t": "Escopo, estratégia e responsável", "d": "define tese/escopo e responsável; checa conflito.", "sla": "Djan + Maria Eduarda · ≤1 dia útil após a ficha"}, {"t": "Produção", "d": "peça/minuta/requerimento com IA.", "sla": "Maria Rita + IA · 3–5 dias úteis, dentro do prazo legal"}, {"t": "Revisão e OK", "d": "confere pelo checklist; OK final humano.", "sla": "Maria Eduarda ou Djan · ≤2 dias úteis"}, {"t": "Execução", "d": "protocolo, assinatura ou registro.", "sla": "Maria Rita · ≤1 dia após o OK, folga ≥2 dias do prazo fatal"}, {"t": "Acompanhamento e pós", "d": "registra, avisa o cliente, acompanha.", "sla": "Aviso ≤1 dia útil após executar"}], "kanban": ["A distribuir", "Produção", "Em revisão", "A executar", "Acompanhamento", "Aguardando cliente"], "kanban_nota": "Passar de etapa = mover o card + abrir a tarefa do próximo responsável. Passos fixos (revisão semanal de prazos às segundas; aviso ao cliente) entram como tarefas recorrentes.", "triagem": "A captura (DJEN) sugere ação + prazo; a equipe <b>confirma, atribui responsável e separa ciência de ação</b> — no mesmo dia da publicação. Eduarda ou Rita (uma faz, a outra cobre).", "checklists": [{"t": "Checklist — petição inicial", "itens": ["Partes e qualificação corretas", "Causa de pedir e pedidos coerentes", "Tutela de urgência, se cabível", "Valor da causa coerente", "Procuração e contrato de honorários anexados", "Custas / gratuidade definidos"]}, {"t": "Checklist — contratos", "itens": ["Objeto e obrigações de cada parte", "Preço, forma de pagamento e reajuste", "Prazo, vigência e renovação", "Multa, rescisão e extinção", "Garantias e confidencialidade/LGPD", "Foro; poderes de quem assina; registro"]}], "equipe": "Djan (sócio-diretor) · Jader (comercial/captação) · Maria Eduarda (coordenação operacional) · Maria Rita (produção) · Adriana (subscritora BA). Revisão semanal de prazos: <b>segunda-feira</b>, com Eduarda, Djan e Rita."};
+var PROC={};
+async function _procCarregar(){
+  try{
+    var sb=window.__sb, esc=(window.__escInfo&&window.__escInfo.id); if(!sb||!esc) return;
+    var r=await sb.from('produtividade_config').select('valor').eq('escritorio_id',esc).eq('chave','procedimentos').maybeSingle();
+    if(r&&r.data&&r.data.valor){ PROC=JSON.parse(r.data.valor); return; }
+  }catch(e){}
+  PROC=(window.__escInfo&&window.__escInfo.raiz===true)?JSON.parse(JSON.stringify(PROC_PADRAO_RAIZ)):{};
+}
+async function _procSalvar(){
+  var sb=window.__sb, esc=(window.__escInfo&&window.__escInfo.id); if(!sb||!esc) throw new Error('sem escritório');
+  var r=await sb.from('produtividade_config').upsert({escritorio_id:esc,chave:'procedimentos',valor:JSON.stringify(PROC)},{onConflict:'escritorio_id,chave'});
+  if(r.error) throw new Error(r.error.message);
+}
+function renderProcedimentos(){
+  var box=document.getElementById('proc-conteudo'); if(!box) return;
+  var podeEditar=(typeof souCoordenador==='function')&&souCoordenador();
+  var h='';
+  h+='<div style="display:flex;justify-content:flex-end;margin-bottom:8px">'
+    +(podeEditar?'<button class="btn sm" onclick="abrirEditorProcedimentos()">✎ editar</button>':'')+'</div>';
+  var vazio=!(PROC&&((PROC.etapas||[]).length||(PROC.checklists||[]).length||PROC.triagem||PROC.equipe));
+  if(vazio){
+    h+='<div class="card"><p class="sectlabel">Procedimentos do escritório</p>'
+      +'<p class="note">Ainda não há nada escrito aqui. Este é o lugar de registrar como o seu escritório trabalha: as etapas de um caso, quem responde por cada uma, os prazos internos e os checklists de conferência.'
+      +(podeEditar?' Clique em <b>editar</b> para montar o seu.':' Peça a quem administra o escritório para preencher.')+'</p></div>';
+    box.innerHTML=h; return;
+  }
+  if((PROC.etapas||[]).length){
+    h+='<div class="card"><p class="sectlabel">Etapas de um caso</p>';
+    PROC.etapas.forEach(function(e,i){
+      h+='<div class="step"><div class="n">'+(i+1)+'</div><div class="txt"><b>'+esc(e.t||'')+'</b>'
+        +(e.d?(' — '+esc(e.d)):'')+(e.sla?('<div class="sla">'+esc(e.sla)+'</div>'):'')+'</div></div>';
+    });
+    h+='</div>';
+  }
+  if((PROC.kanban||[]).length){
+    h+='<div class="card"><p class="sectlabel">Fluxo no Kanban</p><div class="flowrow">'
+      +PROC.kanban.map(function(k){return '<span class="stage">'+esc(k)+'</span>';}).join('')+'</div>'
+      +(PROC.kanban_nota?('<p class="note">'+esc(PROC.kanban_nota)+'</p>'):'')+'</div>';
+  }
+  if(PROC.triagem) h+='<div class="card"><p class="sectlabel">Publicações — triagem diária</p>'+PROC.triagem+'</div>';
+  if((PROC.checklists||[]).length){
+    h+='<div class="grid2">'+PROC.checklists.map(function(c){
+      return '<div class="card"><p class="sectlabel">'+esc(c.t||'Checklist')+'</p>'
+        +(c.itens||[]).map(function(i){return '<div class="chk">'+esc(i)+'</div>';}).join('')+'</div>';
+    }).join('')+'</div>';
+  }
+  if(PROC.equipe) h+='<div class="card"><p class="sectlabel">Equipe e papéis</p>'+PROC.equipe+'</div>';
+  box.innerHTML=h;
+}
+/* Editor em texto puro: uma linha por etapa/item. É o formato que um advogado
+   edita sem manual — e evita uma tela de formulário com botão de "+" para cada
+   nível, que seria mais bonita e menos usada. */
+function abrirEditorProcedimentos(){
+  var et=(PROC.etapas||[]).map(function(e){return [e.t||'',e.d||'',e.sla||''].join(' | ');}).join('\n');
+  var ck=(PROC.checklists||[]).map(function(c){return (c.t||'')+'\n'+(c.itens||[]).map(function(i){return '- '+i;}).join('\n');}).join('\n\n');
+  var m=document.getElementById('modal-proc-edit');
+  document.getElementById('pe-etapas').value=et;
+  document.getElementById('pe-kanban').value=(PROC.kanban||[]).join(', ');
+  document.getElementById('pe-kanban-nota').value=PROC.kanban_nota||'';
+  document.getElementById('pe-triagem').value=PROC.triagem||'';
+  document.getElementById('pe-checklists').value=ck;
+  document.getElementById('pe-equipe').value=PROC.equipe||'';
+  document.getElementById('pe-msg').textContent='';
+  m.classList.remove('hidden');
+}
+function fecharEditorProcedimentos(){ document.getElementById('modal-proc-edit').classList.add('hidden'); }
+async function salvarProcedimentos(){
+  var msg=document.getElementById('pe-msg'); msg.textContent='Salvando…';
+  try{
+    PROC.etapas=(document.getElementById('pe-etapas').value||'').split('\n').map(function(l){
+      var p=l.split('|'); if(!p[0]||!p[0].trim()) return null;
+      return {t:(p[0]||'').trim(), d:(p[1]||'').trim(), sla:(p[2]||'').trim()};
+    }).filter(Boolean);
+    PROC.kanban=(document.getElementById('pe-kanban').value||'').split(',').map(function(x){return x.trim();}).filter(Boolean);
+    PROC.kanban_nota=document.getElementById('pe-kanban-nota').value.trim();
+    PROC.triagem=document.getElementById('pe-triagem').value.trim();
+    PROC.equipe=document.getElementById('pe-equipe').value.trim();
+    var blocos=(document.getElementById('pe-checklists').value||'').split(/\n\s*\n/);
+    PROC.checklists=blocos.map(function(b){
+      var ls=b.split('\n').map(function(x){return x.trim();}).filter(Boolean); if(!ls.length) return null;
+      return {t:ls[0], itens:ls.slice(1).map(function(x){return x.replace(/^[-•]\s*/,'');})};
+    }).filter(Boolean);
+    await _procSalvar(); renderProcedimentos(); fecharEditorProcedimentos();
+  }catch(e){ msg.textContent='Não consegui salvar: '+(e&&e.message||e); }
+}
+
 function renderEtiquetas(){var count={};for(var k in ASSIGN)ASSIGN[k].forEach(function(id){count[id]=(count[id]||0)+1;});
   var l=document.getElementById("lbl-lista");l.innerHTML="";
   if(!LABELS.length){l.innerHTML='<span class="note">Nenhuma etiqueta ainda. Crie a primeira acima — o nome e a cor são do seu gosto.</span>';}
@@ -11777,7 +11891,7 @@ function go(s){
   var link=document.querySelector('#nav a[data-s="'+s+'"]');if(link)link.classList.add("active");
   var t={painel:"Painel",triagem:"Publicações",agenda:"Agenda — Kanban",processos:"Processos",crm:"CRM",procedimentos:"Procedimentos",etiquetas:"Etiquetas","proc-det":"Processo",diligencias:"Diligências"};
   var st=document.getElementById("scr-title"); if(st) st.textContent=t[s]||"Painel";
-  if(s==="painel")renderPainel(); if(s==="triagem")renderTriagem(); if(s==="processos")renderProc(); if(s==="crm")renderCrm(); if(s==="etiquetas")renderEtiquetas(); if(s==="agenda")renderAgendaView(); if(s==="diligencias")renderDiligencias();
+  if(s==="procedimentos"){ _procCarregar().then(renderProcedimentos); } if(s==="painel")renderPainel(); if(s==="triagem")renderTriagem(); if(s==="processos")renderProc(); if(s==="crm")renderCrm(); if(s==="etiquetas")renderEtiquetas(); if(s==="agenda")renderAgendaView(); if(s==="diligencias")renderDiligencias();
   window.scrollTo(0,0);
 }
 function pdias(d){ if(!d) return -1; var m=String(d).split('/'); if(m.length!==3) return -1; var dt=new Date(+m[2],+m[1]-1,+m[0]); if(isNaN(dt.getTime())) return -1; return Math.floor((Date.now()-dt.getTime())/86400000); }
@@ -11975,7 +12089,7 @@ function go(s){
   var link=document.querySelector('#nav a[data-s="'+s+'"]');if(link)link.classList.add("active");
   var t={painel:"Painel",triagem:"Publicações",agenda:"Agenda — Kanban",processos:"Processos",crm:"Comercial",procedimentos:"Procedimentos",etiquetas:"Etiquetas","proc-det":"Processo",diligencias:"Diligências",relatorio:"Relatório mensal para clientes"};
   var st=document.getElementById("scr-title"); if(st) st.textContent=t[s]||"Painel";
-  if(s==="painel")renderPainel(); if(s==="triagem")renderTriagem(); if(s==="processos")renderProc(); if(s==="crm")renderCrm(); if(s==="etiquetas")renderEtiquetas(); if(s==="agenda")renderAgendaView(); if(s==="diligencias")renderDiligencias();
+  if(s==="procedimentos"){ _procCarregar().then(renderProcedimentos); } if(s==="painel")renderPainel(); if(s==="triagem")renderTriagem(); if(s==="processos")renderProc(); if(s==="crm")renderCrm(); if(s==="etiquetas")renderEtiquetas(); if(s==="agenda")renderAgendaView(); if(s==="diligencias")renderDiligencias();
   window.scrollTo(0,0);
 }
 </script>
