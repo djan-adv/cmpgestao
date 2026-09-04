@@ -15,6 +15,10 @@
 //     dizer isso antes de vender é o que impede a frustração depois.
 
 import { useState } from 'react'
+// O catálogo é o mesmo que o painel usa para contratar. Repetir os números aqui
+// faria a página anunciar um plano e o sistema entregar outro no dia em que um
+// dos dois mudasse.
+import { PLANOS as CATALOGO } from '../api/_lib/planos.js'
 
 const NAVY = '#2E3A4B'
 const NAVY2 = '#1E2A3B'
@@ -53,11 +57,22 @@ const DIA_A_DIA = [
   ['Migração do acervo', 'Traga os processos do sistema que você usa hoje por planilha. O sistema mostra o que entendeu, você corrige, confere quantos entram — e só então grava. Dá para desfazer.'],
 ]
 
-const PLANOS = [
-  { nome: 'Starter', proc: '2.500', acessos: '25', gb: '2,5', quem: 'Escritório pequeno, começando a organizar o acervo.' },
-  { nome: 'Intermediário', proc: '5.000', acessos: '50', gb: '5', quem: 'Escritório em crescimento, com equipe e volume de prazos.', destaque: true },
-  { nome: 'Full', proc: '10.000', acessos: '100', gb: '10', quem: 'Escritório com acervo grande e equipe distribuída.' },
-]
+const QUEM = {
+  starter: 'Escritório pequeno, começando a organizar o acervo.',
+  intermediario: 'Escritório em crescimento, com equipe e volume de prazos.',
+  full: 'Escritório com acervo grande e equipe distribuída.',
+}
+const num = (n) => Number(n).toLocaleString('pt-BR')
+// do menor para o maior — é a ordem em que se lê preço
+const PLANOS = CATALOGO.slice().sort((a, b) => a.limite_processos - b.limite_processos).map(p => ({
+  nome: p.nome,
+  preco: p.preco_mensal,
+  proc: num(p.limite_processos),
+  acessos: num(p.limite_acessos),
+  gb: String(p.limite_gb).replace('.', ','),
+  quem: QUEM[p.codigo] || p.resumo,
+  destaque: p.codigo === 'intermediario',
+}))
 
 export default function Vendas({ aoEntrar }) {
   const [f, setF] = useState({ nome: '', email: '', telefone: '', oab: '', processos: '', sistema_atual: '', mensagem: '' })
@@ -217,6 +232,11 @@ export default function Vendas({ aoEntrar }) {
               background: p.destaque ? '#fffdf6' : '#fff',
             }}>
               <div style={{ fontWeight: 800, color: NAVY, fontSize: 19 }}>{p.nome}</div>
+              <div style={{ margin: '8px 0 2px', color: NAVY2 }}>
+                <span style={{ fontSize: 14, color: CINZA }}>R$ </span>
+                <span style={{ fontSize: 34, fontWeight: 800, letterSpacing: -.5 }}>{num(p.preco)}</span>
+                <span style={{ fontSize: 14, color: CINZA }}> /mês</span>
+              </div>
               <div style={{ color: CINZA, fontSize: 13.5, minHeight: 40, marginTop: 4 }}>{p.quem}</div>
               <ul style={{ listStyle: 'none', padding: 0, margin: '14px 0 0', fontSize: 15 }}>
                 <li style={liPlano}><b>{p.proc}</b> processos</li>
@@ -227,8 +247,9 @@ export default function Vendas({ aoEntrar }) {
           ))}
         </div>
         <p style={{ ...nota, marginTop: 16 }}>
-          O valor da mensalidade é combinado caso a caso, conforme o tamanho do escritório e o que ele vai usar.
-          Peça uma demonstração abaixo e conversamos sobre o seu caso.
+          Mensalidade, sem fidelidade e sem taxa de instalação. A migração do acervo do sistema atual está
+          incluída. Precisa de mais processos ou mais acessos do que o degrau comporta? É só subir de plano —
+          o acervo continua onde está.
         </p>
       </section>
 

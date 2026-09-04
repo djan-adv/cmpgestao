@@ -20,7 +20,7 @@
 import { createClient } from '@supabase/supabase-js'
 import crypto from 'crypto'
 import { enviarEmailConta } from '../_lib/email-conta.js'
-import { PLANOS, limitesDoPlano } from '../_lib/planos.js'
+import { PLANOS, limitesDoPlano, plano } from '../_lib/planos.js'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -226,6 +226,17 @@ export async function POST(request) {
         // os limites do degrau são COPIADOS agora; o plano pode mudar depois
         // sem alterar quem já está dentro
         Object.assign(patch, lim)
+        // O preço de tabela só entra quando o escritório ainda NÃO tem
+        // mensalidade e o operador não digitou uma. Trocar o degrau de quem já
+        // negociou desconto não pode devolvê-lo ao preço cheio sem ninguém
+        // mandar — e nem sempre se percebe, porque a tela não pergunta.
+        if (!('mensalidade' in body)) {
+          const { data: atual } = await sb.from('escritorios').select('mensalidade').eq('id', id).maybeSingle()
+          if (!atual || atual.mensalidade == null) {
+            const p = plano(body.plano_codigo)
+            if (p && p.preco_mensal) patch.mensalidade = p.preco_mensal
+          }
+        }
       }
       if (!Object.keys(patch).length) return Response.json({ erro: 'nada a alterar' }, { status: 400 })
       const { error } = await sb.from('escritorios').update(patch).eq('id', id)
