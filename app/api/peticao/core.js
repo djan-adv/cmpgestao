@@ -109,10 +109,10 @@ export function minutaDoc(proc, texto) {
     return '<p style="text-align:justify;text-indent:1.25cm;margin:0 0 8pt">' + escHtml(t).replace(/\n/g, '<br>') + '</p>'
   }).join('\n')
   return '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word">' +
-    '<head><meta charset="utf-8"><title>Minuta CMP</title>' +
+    '<head><meta charset="utf-8"><title>Minuta para revisão</title>' +
     '<style>body{font-family:\'Barlow\',\'Calibri\',\'Segoe UI\',sans-serif;font-size:12pt;line-height:1.5;margin:2.5cm}p{orphans:2;widows:2}</style></head><body>' +
     corpo +
-    '<p style="color:#888;font-size:9pt;margin-top:24pt">— Minuta gerada por IA no padrão CMP para REVISÃO do advogado (não protocolar sem conferência). Processo ' + escHtml(proc.numero || '') + '.</p>' +
+    '<p style="color:#888;font-size:9pt;margin-top:24pt">— Minuta gerada por IA para REVISÃO do advogado (não protocolar sem conferência). Processo ' + escHtml(proc.numero || '') + '.</p>' +
     '</body></html>'
 }
 

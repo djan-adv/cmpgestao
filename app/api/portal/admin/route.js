@@ -14,6 +14,7 @@
 //        (o sistema chama depois de responder no chat — o insert é direto no banco)
 
 import { createClient } from '@supabase/supabase-js'
+import { nomeDoEscritorio } from '../convite-lib.js'
 import webpush from 'web-push'
 import { URL_PUBLICA } from '../../enviar-email/enviar.js'
 import { svc, hashSenha, gerarSenha, digitos, emailCredenciais, dadosDaCasa } from '../lib.js'
@@ -462,7 +463,9 @@ export async function POST(request) {
 
     const ins = await sb.from('portal_chat').insert({
       escritorio_id: p.escritorio_id, processo_id: p.id, autor_tipo: 'escritorio',
-      autor_id: quem.id, autor_nome: quem.nome || 'CMP Advogados', texto,
+      // sem nome da pessoa, assina o ESCRITÓRIO dono do processo — nunca uma
+      // constante com o nome de outro escritório
+      autor_id: quem.id, autor_nome: quem.nome || (await nomeDoEscritorio(sb, p.escritorio_id)), texto,
       lida_escritorio: true, lida_cliente: false,
     }).select('id').single()
     if (ins.error) {
@@ -477,7 +480,7 @@ export async function POST(request) {
         webpush.setVapidDetails('mailto:contato@cmpadvogados.com.br', v.valor.public, v.valor.private)
         const { data: subs } = await sb.from('portal_push_subs').select('*').in('acesso_id', acessos.map(a => a.id))
         const payload = JSON.stringify({
-          titulo: 'CMP Advogados — audiência ' + (marcador === 'app_vespera' ? 'amanhã' : 'designada'),
+          titulo: (await nomeDoEscritorio(sb, p.escritorio_id)) + ' — audiência ' + (marcador === 'app_vespera' ? 'amanhã' : 'designada'),
           corpo: 'Processo ' + p.numero + ' · ' + dbr + horaTxt,
           url: '/portal.html?proc=' + p.id,
         })
@@ -535,7 +538,7 @@ export async function POST(request) {
     if (!ids.length) return Response.json({ ok: true, enviados: 0, motivo: 'sem destinatário além de quem escreveu' })
     const { data: subs } = await sb.from('portal_push_subs').select('*').in('acesso_id', ids)
     const payload = JSON.stringify({
-      titulo: 'CMP Advogados — mensagem no seu processo',
+      titulo: (await nomeDoEscritorio(sb, quem.escritorio_id)) + ' — mensagem no seu processo',
       corpo: String(body.texto || 'Nova mensagem do escritório.').slice(0, 140),
       url: '/portal.html?proc=' + p.id,
     })

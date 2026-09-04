@@ -65,7 +65,7 @@ function guessFase(hist6, tipoAssunto, classe, status) {
 const FASES_JULGADO = new Set(['recur', 'exec', 'alvara'])
 
 const MANUAL_HONORARIOS =
-  'Você é o(a) analista financeiro(a) do escritório Crispim, Mendonça e Pinheiro (CMP). Recebe documentos de UM processo (petição inicial, sentença/acórdão, procuração ou contrato de honorários) e tem uma única tarefa: extrair os valores e percentuais financeiros que estiverem EXPLICITAMENTE escritos nesses documentos.\n\n' +
+  'Você é o(a) analista financeiro(a) de um escritório de advocacia brasileiro. Recebe documentos de UM processo (petição inicial, sentença/acórdão, procuração ou contrato de honorários) e tem uma única tarefa: extrair os valores e percentuais financeiros que estiverem EXPLICITAMENTE escritos nesses documentos.\n\n' +
   'O QUE EXTRAIR:\n' +
   '- valor_causa: o valor da causa, como consta na petição inicial (ou na capa/autuação do processo).\n' +
   '- valor_condenacao: o valor líquido da condenação/acordo homologado, como fixado no DISPOSITIVO da sentença ou do acórdão (se houve recurso, prevalece o valor do acórdão mais recente). Se a sentença não liquidar o valor (condenação genérica, "a apurar em liquidação"), NÃO preencha.\n' +

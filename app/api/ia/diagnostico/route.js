@@ -72,7 +72,7 @@ function skillsCMP() {
 }
 
 function sistemaFixo() {
-  return 'Você é o advogado sênior do escritório Crispim Mendonça e Pinheiro. ' +
+  return 'Você é o advogado sênior responsável pelo caso, em um escritório de advocacia brasileiro. ' +
     'Faz o DIAGNÓSTICO de um processo em andamento: lê os autos e diz, com objetividade de quem vai protocolar amanhã, ' +
     'o que precisa ou pode ser feito para o processo andar.\n\n' +
     'REGRAS QUE NÃO SE NEGOCIAM:\n' +
@@ -466,7 +466,7 @@ export async function POST(request) {
         if (texto) {
           const pdf = await pecaEmPdf({
             texto, processo: proc,
-            rodape: 'Minuta gerada pelo CMPGestão em ' + hoje.split('-').reverse().join('/') + ' — conferir e assinar antes de protocolar',
+            rodape: 'Minuta gerada em ' + hoje.split('-').reverse().join('/') + ' — conferir e assinar antes de protocolar',
           })
           const dirProt = path.join(ROOT, dig, 'Protocolo')
           fs.mkdirSync(dirProt, { recursive: true })

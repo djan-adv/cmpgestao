@@ -16,6 +16,32 @@ import { createClient } from '@supabase/supabase-js'
 
 export const URL_PORTAL = (process.env.PUBLIC_URL || 'https://gestao.cmpadvogados.com.br').replace(/\/+$/, '') + '/portal.html'
 
+// O endereço do aplicativo DO ESCRITÓRIO.
+//
+// URL_PORTAL acima é o endereço da instalação — o do dono do sistema. Mandar
+// esse link para o cliente de um escritório vendido é pior do que um link
+// quebrado: ele chega numa porta com a marca de outro escritório de advocacia, e
+// o login dele nem funciona lá. Cada escritório tem o próprio host cadastrado;
+// é dele que sai o convite. Sem host cadastrado, cai no endereço da instalação,
+// que é onde ele realmente entra hoje.
+export async function urlPortalDoEscritorio(sb, escritorioId) {
+  try {
+    const { data } = await sb.from('escritorios').select('hosts').eq('id', escritorioId).maybeSingle()
+    const host = (data && Array.isArray(data.hosts) && data.hosts.find(h => h && !/^localhost/i.test(h))) || ''
+    if (host) return 'https://' + host.replace(/^https?:\/\//, '').replace(/\/+$/, '') + '/portal.html'
+  } catch (e) {}
+  return URL_PORTAL
+}
+
+// Nome do escritório que assina o que vai para o cliente dele.
+export async function nomeDoEscritorio(sb, escritorioId) {
+  try {
+    const { data } = await sb.from('escritorios').select('nome').eq('id', escritorioId).maybeSingle()
+    if (data && data.nome) return data.nome
+  } catch (e) {}
+  return 'Seu escritório'
+}
+
 export function svcOpcional() {
   const k = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!k) return null

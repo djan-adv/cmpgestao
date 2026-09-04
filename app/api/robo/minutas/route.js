@@ -515,10 +515,10 @@ function pedidoMd({ proc, alvo, intimacao, histTxt, docs, faltando }) {
   const hojeBr = new Date().toISOString().slice(0, 10).split('-').reverse().join('/')
   const prazoBr = alvo.prazo_em ? alvo.prazo_em.split('-').reverse().join('/') : '—'
   return '# Pedido de petição — ' + (alvo.tipo_peca || 'peça') + '\n\n' +
-    '> Dossiê montado automaticamente pelo CMPGestão em ' + hojeBr + '. ' +
+    '> Dossiê montado automaticamente pelo sistema em ' + hojeBr + '. ' +
     'Abra este zip no Claude (plano do escritório) junto com os PDFs anexos e peça a redação.\n\n' +
     '## O que redigir\n\n' +
-    'Usando a skill **peticoes-cmp**, redija no padrão CMP a seguinte peça:\n\n' +
+    'Redija a seguinte peça, no padrão do escritório:\n\n' +
     '- **Peça:** ' + (alvo.tipo_peca || '(definir pela intimação abaixo)') + '\n' +
     '- **O que ela deve fazer:** ' + (alvo.instrucao || '(ver a intimação abaixo)') + '\n' +
     '- **Prazo:** ' + (alvo.prazo_dias ? (alvo.prazo_dias + ' dias — vence em ' + prazoBr + ' (confira: a contagem não considera feriados)') : 'verificar na intimação') + '\n' +

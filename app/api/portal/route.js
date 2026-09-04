@@ -25,7 +25,7 @@ import path from 'path'
 import { tipoRealDoArquivo, pdfDeTexto } from '../jusbr/lib.js'
 import { svc, confereSenha, hashSenha, sessao, tokenDo, digitos, processosPermitidos, FILTRO_HIST_CLIENTE } from './lib.js'
 import { enviarEmailCore } from '../enviar-email/enviar.js'
-import { URL_PORTAL } from './convite-lib.js'
+import { URL_PORTAL, urlPortalDoEscritorio, nomeDoEscritorio } from './convite-lib.js'
 import { PASTA_APP_CLIENTE, RE_OFICIAL } from '../../../lib/appCliente.js'
 
 export const dynamic = 'force-dynamic'
@@ -270,13 +270,18 @@ export async function POST(request) {
     const ins = await sb.from('portal_reset').insert({ escritorio_id: a.escritorio_id, acesso_id: a.id, token })
     if (ins.error) return Response.json(NEUTRA)
     const primeiro = String(a.nome || '').trim().split(/\s+/)[0] || ''
+    // o link e a assinatura são do escritório DELE — o cliente não pode ser
+    // mandado para a porta de outro escritório, nem receber e-mail assinado por
+    // um advogado que ele nunca contratou
+    const urlApp = await urlPortalDoEscritorio(sb, a.escritorio_id)
+    const casa = await nomeDoEscritorio(sb, a.escritorio_id)
     const corpo = (primeiro ? 'Olá, ' + primeiro + '!' : 'Olá!') + '\n\n' +
       'Recebemos um pedido para redefinir a senha do seu acesso ao aplicativo do escritório.\n\n' +
       'Para criar uma nova senha, abra o link abaixo (vale por 1 hora e só funciona uma vez):\n' +
-      URL_PORTAL + '?reset=' + token + '\n\n' +
+      urlApp + '?reset=' + token + '\n\n' +
       'Se você não pediu esta troca, ignore este e-mail — sua senha continua a mesma.\n\n' +
-      'Atenciosamente,\nCrispim Mendonça e Pinheiro Advogados'
-    try { await enviarEmailCore({ para: email, assunto: 'Redefinir a senha do aplicativo — CMP Advogados', corpo, convidarApp: false, dedup: false }) } catch (e) {}
+      'Atenciosamente,\n' + casa
+    try { await enviarEmailCore({ para: email, assunto: 'Redefinir a senha do aplicativo — ' + casa, corpo, convidarApp: false, dedup: false }) } catch (e) {}
     return Response.json(NEUTRA)
   }
 

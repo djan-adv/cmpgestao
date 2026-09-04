@@ -35,7 +35,7 @@ function admin() {
 
 // ————— manual FIXO (vai com cache_control — byte a byte idêntico entre chamadas) —————
 const MANUAL_AVISO =
-  'Você é o(a) advogado(a) do escritório Crispim, Mendonça e Pinheiro (CMP), que atua em Direito do Consumidor e Direito Civil no Nordeste. ' +
+  'Você é o(a) advogado(a) responsável pelo processo, em um escritório de advocacia brasileiro. O nome do escritório vem adiante, junto com o caso. ' +
   'Sua tarefa é olhar UMA publicação do Diário de Justiça (DJEN) ou movimento do jus.br e decidir se ela é uma SENTENÇA ou ACÓRDÃO DE MÉRITO — ' +
   'ou seja, uma decisão que julga o pedido do processo (procedente, improcedente ou parcialmente procedente) — e, se for, redigir o aviso que vai ' +
   'direto para o CLIENTE, pelo chat do aplicativo do escritório.\n\n' +
@@ -116,13 +116,22 @@ async function processaUm(sb, a, proc) {
 
   // só manda quem tem acesso ativo ao app — sem acesso, o escritório continua
   // avisando pelo canal de sempre (WhatsApp/e-mail), este robô não cria login
+  // nome do escritório dono do processo — nunca uma constante de código
+  let nomeCasa = 'Seu escritório'
+  try {
+    const { data: casa } = await sb.from('escritorios').select('nome').eq('id', proc.escritorio_id || ESCRITORIO_CMP).maybeSingle()
+    if (casa && casa.nome) nomeCasa = casa.nome
+  } catch (e) {}
+
   const { data: acessos } = await sb.rpc('portal_acessos_do_processo', { p_processo: proc.id })
   const vivos = (acessos || []).filter(x => x.ativo && !x.bloqueado_em)
   if (!vivos.length) return { linha: { ...linhaBase, motivo: 'sem_acesso', mensagem: t.mensagem } }
 
   const ins = await sb.from('portal_chat').insert({
     escritorio_id: ESCRITORIO_CMP, processo_id: proc.id, autor_tipo: 'escritorio',
-    autor_id: null, autor_nome: 'CMP Advogados', texto: t.mensagem,
+    // quem assina a mensagem no app é o ESCRITÓRIO DONO do processo: o cliente
+    // dele não pode receber recado assinado por outro escritório
+    autor_id: null, autor_nome: nomeCasa, texto: t.mensagem,
     lida_escritorio: true, lida_cliente: false,
   }).select('id').single()
   if (ins.error) return { linha: { ...linhaBase, motivo: 'erro: ' + ins.error.message, mensagem: t.mensagem } }
@@ -157,7 +166,7 @@ async function processaUm(sb, a, proc) {
       if (v && v.valor) {
         webpush.setVapidDetails('mailto:contato@cmpadvogados.com.br', v.valor.public, v.valor.private)
         const { data: subs } = await sb.from('portal_push_subs').select('*').in('acesso_id', vivos.map(x => x.id))
-        const payload = JSON.stringify({ titulo: 'CMP Advogados — mensagem no seu processo', corpo: String(t.mensagem || '').slice(0, 140), url: '/portal.html?proc=' + proc.id })
+        const payload = JSON.stringify({ titulo: nomeCasa + ' — mensagem no seu processo', corpo: String(t.mensagem || '').slice(0, 140), url: '/portal.html?proc=' + proc.id })
         const mortos = []
         await Promise.all((subs || []).map(async (s) => {
           try { await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth_key } }, payload) }
