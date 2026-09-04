@@ -2134,6 +2134,21 @@ function _casaEmail(){ return String(_casaDados().email||'').trim(); }
 function _casaTel(){ var d=_casaDados(); return String(d.telefone||d.whatsapp||'').trim(); }
 function _casaOAB(){ return String(_casaDados().socio_oab||'').trim(); }
 function _casaAdvogado(){ return String(_casaDados().socio_nome||'').trim(); }
+/* O logotipo que entra nos DOCUMENTOS (procuração, contrato). Na casa é o
+   arquivo do projeto; no escritório cliente é o que ele cadastrou — e, sem
+   cadastro, nenhum: procuração de cliente sair com a marca de outro escritório
+   não é rastro de marca, é documento errado, e essa vai para os autos. */
+function _casaLogoUrl(){
+  try{
+    if(_casaRaiz()) return location.origin+'/logo_cmp_full.png';
+    var e=window.__escInfo||{};
+    return String((e.marca&&e.marca.logo)||'');
+  }catch(e){ return ''; }
+}
+function _casaLogoTag(estilo){
+  var u=_casaLogoUrl();
+  return u?('<img src="'+u+'" style="'+(estilo||'max-height:50px')+'" crossorigin="anonymous">'):'';
+}
 /* rodapé de documento: telefone e e-mail do escritório, no formato do timbre */
 function _casaRodape(){
   if(_casaRaiz()) return '0800 591 7259 | contato@cmpadvogados.com.br';
@@ -3455,7 +3470,7 @@ function abrir(i){
        boleto prontos em 3 cliques, tudo pré-preenchido com o que a ficha já sabe */
     (_ehCasoProc(p)?('<div style="margin-top:10px;background:#eef7f1;border:1px solid #cfe8db;border-radius:10px;padding:8px 12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
       +'<b style="color:#0F6E56;font-size:12.5px">🚀 Cliente novo:</b>'
-      +'<button class="btn sm" style="background:#f7f3e8;color:#8a6d00;border:1px solid #e8dcbb;font-weight:700" onclick="abrirGerarProcuracao(\''+p.numero+'\')" title="O sistema já monta a procuração pronta (Word + PDF, padrão CMP) com nome/CPF/e-mail/telefone que já tem — só falta o endereço">✍ 1. Gerar procuração</button>'
+      +'<button class="btn sm" style="background:#f7f3e8;color:#8a6d00;border:1px solid #e8dcbb;font-weight:700" onclick="abrirGerarProcuracao(\''+p.numero+'\')" title="O sistema já monta a procuração pronta (Word + PDF) com nome/CPF/e-mail/telefone que já tem — só falta o endereço">✍ 1. Gerar procuração</button>'
       +'<button class="btn sm ghost" style="font-weight:700" onclick="abrirAssinatura(\''+p.numero+'\')" title="Gera o link da procuração já com nome, e-mail, WhatsApp, processo e finalidade preenchidos — o cliente completa o resto e assina eletronicamente à distância">✍ 1b. p/ cliente assinar</button>'
       +'<button class="btn sm" style="background:#eef3fa;color:#185FA5;border:1px solid #cfe0f2;font-weight:700" onclick="abrirGerarContrato(\''+p.numero+'\')" title="O sistema já monta o contrato de honorários pronto (Word + PDF) — pergunta objeto, honorários iniciais/parcelamento e percentual de êxito">📄 2. Gerar contrato</button>'
       +'<button class="btn sm" style="background:#fdeef2;color:#c2185b;border:1px solid #f2c9d6;font-weight:700" onclick="gerarBoletoNovoDoProcesso()" title="Emite o 1º boleto (à vista ou parcelado — as parcelas seguintes saem sozinhas todo mês)">💳 3. Boleto/parcelas</button>'
@@ -3551,14 +3566,19 @@ function abrir(i){
     '<div id="docs-col">'+
     /* kit de documento do cliente: só serve no início do atendimento, então fica
        fora da barra de ações principal — faixa estreita logo acima da pasta */
-    '<div class="cmp-only" style="display:flex;gap:5px;flex-wrap:wrap;align-items:center;margin-bottom:8px">'+
-      '<button class="btn sm" style="background:#f7f3e8;color:#8a6d00;border:1px solid #e8dcbb;font-weight:700;font-size:11px;padding:3px 8px" onclick="abrirGerarProcuracao(\''+p.numero+'\')" title="Gera a procuração pronta (Word + PDF, padrão CMP) com os dados que o sistema já tem — só pede o que faltar">&#9997; Gerar procuração</button>'+
+    /* Faixa de ações do documento. O que depende SÓ do escritório (procuração,
+       contrato, assinatura eletrônica, protocolo no jus.br com o certificado
+       dele) vale para todo mundo. O que roda com credencial da casa — o Google
+       Meet e o Diagnóstico, que gasta a conta de IA da instalação — continua
+       marcado como cmp-only, senão o cliente clica e gasta o que não é dele. */
+    '<div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center;margin-bottom:8px">'+
+      '<button class="btn sm" style="background:#f7f3e8;color:#8a6d00;border:1px solid #e8dcbb;font-weight:700;font-size:11px;padding:3px 8px" onclick="abrirGerarProcuracao(\''+p.numero+'\')" title="Gera a procuração pronta (Word + PDF) com os dados que o sistema já tem — só pede o que faltar">&#9997; Gerar procuração</button>'+
       '<button class="btn sm ghost" style="font-weight:700;font-size:11px;padding:3px 8px" onclick="abrirAssinatura(\''+p.numero+'\')" title="Gerar link de procuração para o CLIENTE preencher o que faltar e assinar eletronicamente à distância">&#128231; p/ assinatura eletrônica</button>'+
       '<button class="btn sm" style="background:#f4eefb;color:#6d28a8;border:1px solid #ddd0f0;font-weight:700;font-size:11px;padding:3px 8px" onclick="escolherDocParaAssinar(\''+p.numero+'\')" title="Escolher um documento que já está na pasta e gerar o link de assinatura">&#9997; Assinar documento da pasta</button>'+
       '<button class="btn sm" style="background:#e8f4f0;color:#0F6E56;border:1px solid #bfe0d4;font-weight:700;font-size:11px;padding:3px 8px" onclick="criarSalaReuniao(\''+p.numero+'\')" title="Sala do próprio escritório: o cliente entra pelo navegador, sem instalar nada, e a conversa é transcrita para o histórico. Não guarda gravação.">&#127909; Sala de vídeo (nossa)</button>'+
-      '<button class="btn sm" style="background:#eef3fa;color:#185FA5;border:1px solid #cfe0f2;font-weight:700;font-size:11px;padding:3px 8px" onclick="criarMeetExterno(\''+p.numero+'\')" title="Cria uma reunião no Google Meet e põe no calendário — para quando o cliente já usa Meet ou a reunião tem mais de duas pessoas">&#128197; Meet (externo)</button>'+
-      '<button class="btn sm" style="background:#eef3fa;color:#185FA5;border:1px solid #cfe0f2;font-weight:700;font-size:11px;padding:3px 8px" onclick="abrirGerarContrato(\''+p.numero+'\')" title="Gera o contrato de honorários pronto (Word + PDF, padrão CMP) — pergunta objeto, honorários iniciais/parcelamento e percentual de êxito">&#128220; Gerar contrato</button>'+
-      '<button class="btn sm" style="background:#2E3A4B;color:#fff;border:1px solid #2E3A4B;font-weight:700;font-size:11px;padding:3px 8px" onclick="abrirDiagnostico(\''+p.numero+'\')" title="Lê a íntegra dos autos e o histórico e diz o que fazer para o processo andar — e redige a peça, se você mandar.">&#129517; Diagnóstico do processo</button>'+
+      '<button class="btn sm cmp-only" style="background:#eef3fa;color:#185FA5;border:1px solid #cfe0f2;font-weight:700;font-size:11px;padding:3px 8px" onclick="criarMeetExterno(\''+p.numero+'\')" title="Cria uma reunião no Google Meet e põe no calendário — para quando o cliente já usa Meet ou a reunião tem mais de duas pessoas">&#128197; Meet (externo)</button>'+
+      '<button class="btn sm" style="background:#eef3fa;color:#185FA5;border:1px solid #cfe0f2;font-weight:700;font-size:11px;padding:3px 8px" onclick="abrirGerarContrato(\''+p.numero+'\')" title="Gera o contrato de honorários pronto (Word + PDF) — pergunta objeto, honorários iniciais/parcelamento e percentual de êxito">&#128220; Gerar contrato</button>'+
+      '<button class="btn sm cmp-only" style="background:#2E3A4B;color:#fff;border:1px solid #2E3A4B;font-weight:700;font-size:11px;padding:3px 8px" onclick="abrirDiagnostico(\''+p.numero+'\')" title="Lê a íntegra dos autos e o histórico e diz o que fazer para o processo andar — e redige a peça, se você mandar.">&#129517; Diagnóstico do processo</button>'+
       '<button class="btn sm" style="background:#0F6E56;color:#fff;border:1px solid #0F6E56;font-weight:700;font-size:11px;padding:3px 8px;margin-left:4px" onclick="abrirProtocolarJusbr(\''+p.numero+'\')" title="Protocola de verdade no jus.br, daqui: sobe o PDF, envia ao tribunal e guarda o recibo do CNJ na pasta.">&#9878; Protocolar no jus.br</button>'+
     '</div>'+
     '<div class="card" id="doc-card"><p class="sectlabel">Documentos do processo'+
@@ -10639,7 +10659,7 @@ function renderProc(){
   <div id="cm-caso-id-wrap" style="display:none"><label>Identificação do caso <span class="note" style="font-weight:400">— CPF/CNPJ do cliente, protocolo, ou deixe em branco para gerar a numeração interna automática (ano.mês.dia.hora)</span></label><input id="cm-casoid" placeholder="Ex.: CPF/CNPJ, PA 123/2026 — ou vazio p/ gerar 2026.07.30.1651"></div>
   <div id="cm-novo-wrap" style="display:none">
     <div style="background:#eef7f1;border:1px solid #cfe8db;border-radius:9px;padding:10px 12px;margin-bottom:10px;font-size:12.5px;color:#0F6E56;line-height:1.5">
-      <b>Cliente novo (ainda sem processo).</b> Preencha a ficha no <b>modelo padrão CMP</b>, depois anexe a ficha + os documentos e clique em <b>Gerar caso</b>: o sistema lê a ficha, cria/vincula o cliente, sobe os arquivos para a pasta do caso e registra o pedido para o Claude elaborar a peça no padrão CMP.
+      <b>Cliente novo (ainda sem processo).</b> Preencha a ficha no <b>modelo do sistema</b>, depois anexe a ficha + os documentos e clique em <b>Gerar caso</b>: o sistema lê a ficha, cria/vincula o cliente, sobe os arquivos para a pasta do caso e registra o pedido de elaboração da peça.
       <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
         <button class="btn sm" type="button" style="background:#fff;color:#0F6E56;border:1px solid #0F6E56" onclick="baixarModeloFicha()">&#8681; Baixar modelo da ficha (Word)</button>
         <button class="btn sm" type="button" style="background:#0F6E56;border-color:#0F6E56" onclick="document.getElementById('cm-ficha-file').click()">&#128206; Anexar ficha + documentos</button>
@@ -11002,7 +11022,7 @@ async function gerarCasoNovoCliente(){
   /* numeração interna automática: ano.mes.dia.hora (hora com 4 dígitos) */
   var num=_numCasoAuto();
   var isoDia=d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
-  var pedido='[PEÇA SOLICITADA AO CLAUDE] '+peca+' — '+cli+(op?(' × '+op):'')+(assunto?(' — '+assunto):'')+'. Ficha de atendimento e documentos anexados na pasta do caso; elaborar no padrão CMP. (solicitada em '+dbr+', pendente de elaboração)';
+  var pedido='[PEÇA SOLICITADA AO CLAUDE] '+peca+' — '+cli+(op?(' × '+op):'')+(assunto?(' — '+assunto):'')+'. Ficha de atendimento e documentos anexados na pasta do caso; elaborar no padrão do escritório. (solicitada em '+dbr+', pendente de elaboração)';
   var hist=[{data:isoDia+'T00:00:00.000Z',texto:pedido,f:'manual'}];
   if(obs) hist.unshift({data:isoDia+'T00:00:00.000Z',texto:'[Cadastro manual] '+obs,f:'manual'});
   var novo={_id:null,cliente:cli,numero:num,oponente:op,tipo:assunto||peca,foro:'',status:'Administrativo',data:'',hist:'',causa:'0,00',hist_full:hist,hon_faturado:0,hon_afaturar:0,vinculados:[],ehCaso:true,fonte:'caso'};
@@ -11106,7 +11126,7 @@ async function gerarCasoNovoCliente(){
     _subirDocsCaso(digCaso, anexos).then(function(){ try{ if(atual&&String(atual.numero||'').replace(/\D/g,'')===digCaso) carregarDocs(atual.numero,'','proc'); }catch(e){} });
   }
   window.__cmDocs=[];
-  setTimeout(function(){ alert('Caso criado e ficha aberta!'+(anexos.length?('\n\n'+anexos.length+' arquivo(s) enviados para a pasta do caso (ficha + documentos).'):'\n\nDica: anexe a ficha e os documentos na seção Documentos.')+'\n\nAgora, no Cowork, diga ao Claude: "faça as peças pendentes" — ele lê a ficha e os documentos e redige a '+peca+' no padrão CMP, salvando na pasta do caso para sua revisão.'); },400);
+  setTimeout(function(){ alert('Caso criado e ficha aberta!'+(anexos.length?('\n\n'+anexos.length+' arquivo(s) enviados para a pasta do caso (ficha + documentos).'):'\n\nDica: anexe a ficha e os documentos na seção Documentos.')+'\n\nAgora, no Cowork, diga ao Claude: "faça as peças pendentes" — ele lê a ficha e os documentos e redige a '+peca+' no padrão do escritório, salvando na pasta do caso para sua revisão.'); },400);
 }
 /* ===== Ler ficha de atendimento preenchida (Word .docx ou PDF) e preencher os campos ===== */
 function _ensureJSZip(){
@@ -11224,7 +11244,7 @@ async function baixarModeloFicha(){
     var body='';
     body+='<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:b/><w:sz w:val="36"/><w:color w:val="1E2A3B"/></w:rPr><w:t>FICHA DE ATENDIMENTO</w:t></w:r></w:p>';
     body+='<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:color w:val="697180"/></w:rPr><w:t>'+esc2(_casaNome())+'</w:t></w:r></w:p>';
-    body+=p('Preencha o máximo que souber. Esta ficha e os documentos serão a base para o Claude elaborar a peça no padrão CMP.');
+    body+=p('Preencha o máximo que souber. Esta ficha e os documentos serão a base para a elaboração da peça.');
     body+=p('1. Identificação do cliente',{head:true});
     ['Nome completo','CPF/CNPJ','RG / órgão emissor','Nacionalidade / estado civil / profissão','Data de nascimento','Endereço completo','Telefone / WhatsApp','E-mail'].forEach(function(r){ body+=campo(r); });
     body+=p('2. Parte contrária',{head:true});
@@ -17558,7 +17578,7 @@ function _procDocWord(corpoHTML){
   return '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word">'
     +'<head><meta charset="utf-8"><title>Procuração</title>'
     +'<style>body{font-family:\'Barlow\',\'Calibri\',\'Segoe UI\',sans-serif;font-size:12pt;line-height:1.5;margin:2.5cm}p{text-align:justify;margin:0 0 10pt}</style></head><body>'
-    +'<div style="text-align:left;margin-bottom:14pt"><img src="'+location.origin+'/logo_cmp_full.png" style="max-height:50px"></div>'
+    +'<div style="text-align:left;margin-bottom:14pt">'+_casaLogoTag()+'</div>'
     +corpoHTML+'</body></html>';
 }
 function _ensureHtml2Canvas(){
@@ -17726,7 +17746,7 @@ async function gerarProcuracaoAuto(){
     await _ensureHtml2Canvas(); var jspdfLib=await _ensureJsPDF();
     var off=document.createElement('div');
     off.style.cssText='position:fixed;left:-9999px;top:0;width:740px;background:#fff;padding:40px;font-family:Barlow,Arial,sans-serif;font-size:12pt;line-height:1.5;color:#1c1c1c;text-align:justify';
-    off.innerHTML='<div style="margin-bottom:14pt"><img src="/logo_cmp_full.png" style="max-height:50px" crossorigin="anonymous"></div>'+corpo;
+    off.innerHTML='<div style="margin-bottom:14pt">'+_casaLogoTag()+'</div>'+corpo;
     document.body.appendChild(off);
     await new Promise(function(r){ setTimeout(r,80); });
     var canvas=await window.html2canvas(off, {scale:2, backgroundColor:'#ffffff', useCORS:true});
@@ -17996,7 +18016,7 @@ async function gerarContratoAuto(){
     await _ensureHtml2Canvas(); var jspdfLib=await _ensureJsPDF();
     var off=document.createElement('div');
     off.style.cssText='position:fixed;left:-9999px;top:0;width:740px;background:#fff;padding:40px;font-family:Barlow,Arial,sans-serif;font-size:12pt;line-height:1.5;color:#1c1c1c;text-align:justify';
-    off.innerHTML='<div style="margin-bottom:14pt"><img src="/logo_cmp_full.png" style="max-height:50px" crossorigin="anonymous"></div>'+corpo;
+    off.innerHTML='<div style="margin-bottom:14pt">'+_casaLogoTag()+'</div>'+corpo;
     document.body.appendChild(off);
     await new Promise(function(r){ setTimeout(r,80); });
     var canvas=await window.html2canvas(off, {scale:2, backgroundColor:'#ffffff', useCORS:true});
