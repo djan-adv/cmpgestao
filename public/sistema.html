@@ -586,6 +586,7 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
             <select id="prd-periodo" class="btn sm" onchange="renderProdutividade()" style="max-width:150px"><option value="7">Últimos 7 dias</option><option value="30" selected>Últimos 30 dias</option><option value="90">Últimos 90 dias</option><option value="hoje">Hoje</option></select>
             <select id="prd-user" class="btn sm" onchange="renderProdutividade()" style="max-width:180px"><option value="">Todas as pessoas</option></select>
             <button class="btn sm ghost" onclick="exportarProdutividadeCSV()">⬇ Exportar CSV</button>
+            <button class="btn sm ghost" onclick="exportarTempoProcessoCSV()" title="Quanto tempo cada pessoa passou em cada processo, no período">⬇ Tempo por processo</button>
             <button class="btn sm ghost coord-only" id="prd-cfg-toggle" onclick="_prdToggleConfig()" title="Configurações do módulo (pesos, tempo ocioso, faltoso)" style="font-size:16px;line-height:1;padding:5px 9px">⚙</button>
           </div>
         </div>
@@ -21808,6 +21809,118 @@ function _prdTempoAtivo(evs){
   return {ativo:ativo, entregavel:entregavel};
 }
 function _prdFmtMin(ms){ var m=Math.round(ms/60000); if(m<60) return m+' min'; return Math.floor(m/60)+'h'+String(m%60).padStart(2,'0'); }
+/* ===== Tempo POR PROCESSO =====
+   O tempo ativo dizia quanto a pessoa trabalhou; não dizia EM QUE. Para saber
+   quanto um processo custou de mão de obra — e é essa a conta que vira preço,
+   divisão de honorário e conversa com o cliente — o intervalo entre dois
+   eventos é atribuído ao processo em que a pessoa estava.
+   O processo "em que estava" é o do último evento que citou um: abrir a ficha,
+   salvar, mandar e-mail, concluir tarefa. Intervalo maior que a pausa
+   configurada não conta para ninguém (é o mesmo corte do tempo ativo), e
+   evento sem processo não muda o contexto — só não acrescenta.
+   É medida de ESFORÇO REGISTRADO, não cronômetro: quem trabalha fora do
+   sistema não aparece aqui, e isso está dito na tela. */
+function _prdTempoPorProcesso(evs){
+  var idleMs=(parseFloat(_prdCfg('idle_timeout_min','5'))||5)*60000;
+  var por={}, ctx=null;
+  function procDe(e){
+    if(e && e.entity_type==='processo' && e.entity_id) return String(e.entity_id);
+    var m=e&&e.metadata; if(m&&(m.processo||m.numero)) return String(m.processo||m.numero);
+    return null;
+  }
+  for(var i=0;i<evs.length;i++){
+    var pAtual=procDe(evs[i]);
+    if(i>0){
+      var gap=new Date(evs[i].occurred_at)-new Date(evs[i-1].occurred_at);
+      var alvo=pAtual||ctx;
+      if(gap>0 && gap<=idleMs && alvo) por[alvo]=(por[alvo]||0)+gap;
+    }
+    if(pAtual) ctx=pAtual;
+  }
+  return Object.keys(por).map(function(n){ return {numero:n, ms:por[n]}; })
+    .sort(function(a,b){ return b.ms-a.ms; });
+}
+/* abre a ficha comparando SÓ os dígitos: no log o número aparece ora com
+   máscara, ora sem, e comparar o texto cru não achava a ficha. */
+function _prdAbrirProc(num){
+  var d=String(num||'').replace(/\D/g,''); if(!d) return;
+  try{
+    var i=(DADOS.processos||[]).findIndex(function(p){ return String(p.numero||'').replace(/\D/g,'')===d; });
+    if(i>=0){ abrir(i); return; }
+  }catch(e){}
+  go('processos');
+}
+function _prdMascaraProc(n){
+  var d=String(n||'').replace(/\D/g,'');
+  return d.length===20 ? d.replace(/^(\d{7})(\d{2})(\d{4})(\d)(\d{2})(\d{4})$/,'$1-$2.$3.$4.$5.$6') : String(n||'');
+}
+function _prdTempoProcHTML(evs){
+  var lista=_prdTempoPorProcesso(evs); if(!lista.length) return '';
+  var top=lista.slice(0,5);
+  return '<details style="margin-top:8px"><summary style="cursor:pointer;font-size:12px;color:var(--navy);font-weight:700">Tempo por processo ('+lista.length+')</summary>'
+    +'<div style="margin-top:5px">'
+    +top.map(function(x){
+      return '<div style="display:flex;justify-content:space-between;font-size:12px;padding:1px 0;gap:8px">'
+        +'<a onclick="_prdAbrirProc(\''+String(x.numero).replace(/[^0-9.\-]/g,'')+'\')" style="cursor:pointer;color:#185FA5;text-decoration:underline">'+finEsc(_prdMascaraProc(x.numero))+'</a>'
+        +'<b>'+_prdFmtMin(x.ms)+'</b></div>';
+    }).join('')
+    +(lista.length>5?'<div class="note" style="font-size:11px;margin-top:3px">+'+(lista.length-5)+' processo(s) com menos tempo — o CSV traz todos.</div>':'')
+    +'<div class="note" style="font-size:11px;margin-top:4px">Soma dos intervalos entre registros feitos com o processo aberto, descontadas as pausas. Não mede o trabalho feito fora do sistema.</div>'
+    +'</div></details>';
+}
+/* ===== Meta =====
+   Ranking sem meta é só comparação: mostra quem está na frente, não se o
+   escritório entregou o que precisava. A meta é em PONTOS por mês (a mesma
+   moeda dos pesos por tipo de tarefa), com um valor geral do escritório e
+   ajuste individual — estagiário e sócio não têm a mesma carga.
+   Guardada em produtividade_config: chave 'meta_pontos_mes' e, por pessoa,
+   'meta_pontos_<user_id>'. */
+function _prdMetaMes(uid){
+  var ind=_prdCfg('meta_pontos_'+uid,''); var geral=_prdCfg('meta_pontos_mes','');
+  var v=parseFloat(String(ind||geral||'').replace(',','.'));
+  return (isNaN(v)||v<=0)?0:v;
+}
+/* quantos dias o período selecionado cobre — a meta é mensal e precisa ser
+   proporcional, senão "hoje" aparece sempre em 3% da meta */
+function _prdDiasDoPeriodo(){
+  var per=(document.getElementById('prd-periodo')||{}).value||'30';
+  if(per==='hoje') return 1;
+  if(/^\d{4}-\d{2}$/.test(per)){ var m=per.split('-'); return new Date(+m[0],+m[1],0).getDate(); }
+  var n=parseInt(per,10); return n>0?n:30;
+}
+function _prdMetaHTML(uid,pontos){
+  var meta=_prdMetaMes(uid); if(!meta) return '';
+  var dias=_prdDiasDoPeriodo();
+  var alvo=Math.round(meta*(dias/30)*10)/10;
+  if(alvo<=0) return '';
+  var pc=Math.min(100,Math.round((pontos/alvo)*100));
+  var cor=pc>=100?'#127a53':(pc>=70?'#8a6d00':'#b5342b');
+  return '<div style="margin:6px 0 2px">'
+    +'<div style="display:flex;justify-content:space-between;font-size:12px"><span style="color:var(--muted)">Meta do período</span>'
+    +'<b style="color:'+cor+'">'+(Math.round(pontos*10)/10)+' / '+alvo+' pts · '+pc+'%</b></div>'
+    +'<div style="height:7px;background:#eef1f5;border-radius:6px;overflow:hidden;margin-top:3px"><div style="height:100%;width:'+pc+'%;background:'+cor+'"></div></div>'
+    +'<div class="note" style="font-size:10.5px;margin-top:2px">Meta mensal de '+meta+' pts, proporcional a '+dias+' dia(s). <a onclick="editarMetaPessoa(\''+uid+'\')" style="cursor:pointer;color:#185FA5">✎ ajustar</a></div>'
+    +'</div>';
+}
+async function editarMetaPessoa(uid){
+  if(typeof souCoordenador==='function' && !souCoordenador()){ alert('Só a coordenação define meta.'); return; }
+  var atual=_prdCfg('meta_pontos_'+uid,'');
+  var v=window.prompt('Meta mensal desta pessoa, em pontos (vazio = usar a meta geral do escritório):',atual);
+  if(v===null) return; v=String(v).trim();
+  try{
+    var esc=window.__prodEsc||await (async function(){ await _prodIds(); return window.__prodEsc; })();
+    var chave='meta_pontos_'+uid;
+    if(!v){ await window.__sb.from('produtividade_config').delete().eq('escritorio_id',esc).eq('chave',chave); delete PRD_CFG[chave]; }
+    else{
+      var n=parseFloat(v.replace(',','.')); if(isNaN(n)||n<0){ alert('Valor inválido.'); return; }
+      var r=await window.__sb.from('produtividade_config').upsert({escritorio_id:esc,chave:chave,valor:String(n)});
+      if(r&&r.error){ alert('Erro: '+r.error.message); return; }
+      PRD_CFG[chave]=String(n);
+    }
+    logEvent('config_changed','produtividade_config',chave,{valor:v||null});
+    renderProdutividade();
+  }catch(e){ alert('Erro: '+(e&&e.message||e)); }
+}
 function _prdToggleConfig(){
   if(!souCoordenador()){ alert('Configurações restritas aos coordenadores.'); return; }
   var box=document.getElementById('prd-config-box'); if(!box) return;
@@ -21877,6 +21990,7 @@ function _prdPintaCartoes(){
       +'<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">'
         +'<b style="color:var(--navy)"><span style="display:inline-block;min-width:18px;color:'+(pos===0?'#b8860b':'#a6acb6')+';font-weight:800">'+(pos+1)+'º</span> '+finEsc(u.nome)+'</b>'
         +'<span style="font-size:18px;font-weight:800;color:#127a53">'+(Math.round(pontos*10)/10)+' pts</span></div>'
+      +_prdMetaHTML(uid,pontos)
       +linha('Tempo ativo (no sistema)',_prdFmtMin(t.ativo))
       +(t.entregavel?linha('Tempo em entregável (fora do sistema)',_prdFmtMin(t.entregavel)):'')
       +linha('Tarefas concluídas',c.task_completed||0)
@@ -21905,6 +22019,7 @@ function _prdPintaCartoes(){
       +linha('Fichas completadas (tel+e-mail)',c.contact_completed||0)
       +linha('Registros salvos',c.record_saved||0)
       +linha('Logins',c.login||0)
+      +_prdTempoProcHTML(u.evs)
       +_prdCalendarioHTML(u.evs)
       +_prdCartaoDiaHTML(u.evs)
       +_prdTotalPeriodoHTML(u.evs)
@@ -21962,7 +22077,7 @@ async function renderAuditoriaLogins(){
 /* §8 — parâmetros configuráveis (edição inline, gravada no banco) */
 async function renderProdutividadeConfig(){
   var el=document.getElementById('prd-config'); if(!el) return;
-  var rot={idle_timeout_min:'Pausa que corta o tempo ativo (minutos)',faltoso_dias:'Dias sem login para marcar como faltoso',peso_default:'Pontos para tarefa de tipo não listado',ranking_so_gestao:'Ranking visível só à gestão (true/false)',boleto_ok_regra:'Regra de "boleto enviado corretamente"'};
+  var rot={idle_timeout_min:'Pausa que corta o tempo ativo (minutos)',faltoso_dias:'Dias sem login para marcar como faltoso',peso_default:'Pontos para tarefa de tipo não listado',meta_pontos_mes:'Meta mensal do escritório, em pontos (vale para quem não tem meta própria)',ranking_so_gestao:'Ranking visível só à gestão (true/false)',boleto_ok_regra:'Regra de "boleto enviado corretamente"'};
   var html='<table style="width:100%;font-size:13px"><tbody>';
   Object.keys(rot).forEach(function(k){
     html+='<tr><td style="color:var(--muted);padding:4px 8px 4px 0">'+rot[k]+'</td><td style="padding:4px 0"><b>'+finEsc(_prdCfg(k,'—'))+'</b> <a onclick="editarPrdConfig(\''+k+'\')" style="cursor:pointer;color:#185FA5;font-size:12px">✎ editar</a></td></tr>';
@@ -24951,6 +25066,24 @@ function exportarProdutividadeCSV(){
   var rows=evs.map(function(e){ return [e.user_nome||'',e.event_type||'',e.entity_type||'',e.entity_id||'',e.occurred_at||'',JSON.stringify(e.metadata||{}).replace(/;/g,',')].join(';'); });
   var blob=new Blob(['﻿'+head+'\n'+rows.join('\n')],{type:'text/csv;charset=utf-8'});
   var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='produtividade-eventos.csv'; a.click();
+}
+/* O cartão mostra os 5 processos que mais consumiram tempo de cada pessoa; a
+   conta inteira — que é o que vira rateio de honorário e conversa de preço —
+   sai aqui, pessoa por processo. */
+function exportarTempoProcessoCSV(){
+  var evs=window.__prdEvsVis||PRD_EVT||[];
+  if(!evs.length){ alert('Nada para exportar no período.'); return; }
+  var por={};
+  evs.forEach(function(e){ var nm=(PRD_USERS&&PRD_USERS[e.user_id]&&PRD_USERS[e.user_id].nome)||e.user_nome||'—'; (por[nm]=por[nm]||[]).push(e); });
+  var linhas=[];
+  Object.keys(por).forEach(function(nm){
+    _prdTempoPorProcesso(por[nm]).forEach(function(x){
+      linhas.push([nm, _prdMascaraProc(x.numero), Math.round(x.ms/60000), _prdFmtMin(x.ms)].join(';'));
+    });
+  });
+  if(!linhas.length){ alert('Nenhum tempo por processo no período — os registros do log não citaram processo.'); return; }
+  var blob=new Blob(['\ufeff'+'pessoa;processo;minutos;tempo\n'+linhas.join('\n')],{type:'text/csv;charset=utf-8'});
+  var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='tempo-por-processo.csv'; a.click();
 }
 </script>
 

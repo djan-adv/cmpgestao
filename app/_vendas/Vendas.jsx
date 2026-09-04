@@ -54,7 +54,39 @@ const DIA_A_DIA = [
   ['Financeiro', 'Faturas para o cliente, controle do que entrou, e conferência de alvarás por mês.'],
   ['Documentos', 'Pasta por processo, com envio de arquivo ou de pasta inteira. Separado entre as suas peças e as da outra parte.'],
   ['Contatos de varas', 'E-mail, telefone e balcão virtual da vara, valendo para todos os processos dela — com o ofício ao cartório pronto para revisar e enviar.'],
+  ['Produtividade da equipe', 'Ranking por pontos, meta por pessoa, tempo em cada processo e o dia hora a hora — a partir do registro do trabalho, sem vigiar tela.'],
   ['Migração do acervo', 'Traga os processos do sistema que você usa hoje por planilha. O sistema mostra o que entendeu, você corrige, confere quantos entram — e só então grava. Dá para desfazer.'],
+]
+
+// O que a tela de Produtividade mede de verdade — cada linha tem contrapartida
+// no sistema (log de eventos, pesos por tipo de tarefa, metas em pontos, tempo
+// por processo, auditoria de login). Nada aqui é promessa: se sair da tela,
+// sai daqui junto.
+const EQUIPE = [
+  {
+    t: 'Ranking por pontos, não por impressão',
+    d: 'Cada tipo de entrega vale um número de pontos que você define — petição inicial, contestação, cálculo, atendimento. Quem entregou mais aparece em primeiro. Tarefa que passou por várias mãos divide o ponto entre elas, para não premiar quem só encostou no fim.',
+  },
+  {
+    t: 'Meta por pessoa, com barra de progresso',
+    d: 'Uma meta mensal em pontos para o escritório e ajuste individual — estagiário e sócio não carregam a mesma pauta. A ficha de cada um mostra quanto falta, proporcional ao período que você está olhando.',
+  },
+  {
+    t: 'Tempo em cada processo',
+    d: 'Quanto tempo cada pessoa passou em cada processo, somando os intervalos entre os registros com aquela ficha aberta e descontando as pausas. É a conta que vira rateio de honorário, preço de causa e resposta quando o cliente pergunta por que custou o que custou. Sai em CSV, pessoa por processo.',
+  },
+  {
+    t: 'O dia inteiro, hora a hora',
+    d: 'O que cada pessoa fez no dia, com a hora de cada registro: tarefa concluída, publicação tratada, e-mail enviado, documento subido, processo cadastrado, alvará conferido. Serve para prestar contas do dia e para reconstituir o que foi feito num processo.',
+  },
+  {
+    t: 'Quem entrou e quem sumiu',
+    d: 'Auditoria de acessos com o último login de cada um. Passou dos dias que você definiu sem entrar, aparece como faltoso — inclusive quem nunca entrou.',
+  },
+  {
+    t: 'Volume e esforço, sem vigiar tela',
+    d: 'As métricas saem do registro do trabalho no sistema — não há captura de tela, de teclado ou de mouse. Medem volume e esforço, não qualidade: servem para conversar com a equipe, não para decidir demissão sozinhas. Está escrito assim dentro do sistema também.',
+  },
 ]
 
 const QUEM = {
@@ -169,6 +201,32 @@ export default function Vendas({ aoEntrar }) {
             ))}
           </div>
         </div>
+      </section>
+
+      {/* ---------- equipe ---------- */}
+      {/* Pedido do dono (04/09/2026): o controle de estagiário e associado é
+          argumento de venda forte e estava só implícito numa linha do dia a dia.
+          Escritório com equipe compra por causa disto. */}
+      <section style={{ ...faixa, padding: '52px 22px' }}>
+        <Rotulo>Estagiários e associados</Rotulo>
+        <h2 style={h2}>Quem entregou o quê, quanto tempo levou e em qual processo</h2>
+        <p style={{ color: '#46505e', fontSize: 15.5, maxWidth: 780, margin: '0 0 22px' }}>
+          A pergunta que não tem resposta em escritório nenhum é <b>quanto do mês foi para cada processo e para cada pessoa</b>.
+          O sistema responde com o registro do próprio trabalho: cada entrega vale pontos que você define, cada
+          pessoa tem meta, e o tempo é somado processo a processo.
+        </p>
+        <div style={grade(2)}>
+          {EQUIPE.map(({ t, d }) => (
+            <div key={t} style={cartao}>
+              <b style={{ color: NAVY }}>{t}</b>
+              <p style={pCartao}>{d}</p>
+            </div>
+          ))}
+        </div>
+        <p style={{ color: CINZA, fontSize: 13.5, marginTop: 18, maxWidth: 780 }}>
+          Tudo exportável em CSV — o placar do mês, o dia hora a hora e o tempo por processo — para levar à
+          reunião de equipe ou fechar a conta de quem é horista.
+        </p>
       </section>
 
       {/* ---------- marca própria ---------- */}
