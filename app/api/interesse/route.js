@@ -14,8 +14,19 @@
 // de fora seria deixar qualquer um escrever lead dentro de escritório alheio.
 
 import { createClient } from '@supabase/supabase-js'
+import { enviarEmailCore } from '../enviar-email/enviar.js'
 
 export const dynamic = 'force-dynamic'
+
+// Para onde vai o aviso de que alguém pediu demonstração.
+//
+// O lead entrar no CRM não basta: ele fica lá parado até alguém abrir a tela, e
+// quem pediu demonstração espera resposta no mesmo dia. O aviso sai da conta do
+// próprio servidor para o endereço de quem vende — é e-mail interno, nunca
+// resposta automática ao interessado: a conta de envio da instalação tem o
+// endereço do escritório que a opera, e uma confirmação saindo dali chegaria ao
+// advogado com a marca de outro escritório, não a do produto.
+const AVISAR = process.env.VENDAS_EMAIL || 'contato@djan.app.br'
 
 const LIM = { nome: 120, email: 160, telefone: 40, oab: 40, processos: 30, sistema_atual: 80, mensagem: 1200 }
 
@@ -70,6 +81,25 @@ export async function POST(request) {
     ultima_atividade: new Date().toISOString(),
   })
   if (error) return Response.json({ erro: 'Não consegui registrar agora. Tente de novo em instantes.' }, { status: 500 })
+
+  // O lead já está guardado; o aviso é conveniência. Falha aqui não pode
+  // devolver erro a quem preencheu — ele fez a parte dele.
+  try {
+    await enviarEmailCore({
+      para: AVISAR,
+      assunto: 'Pedido de demonstração — ' + nome,
+      corpo:
+        'Alguém pediu demonstração pela página do sistema.\n\n' +
+        'Nome: ' + nome + '\n' +
+        'E-mail: ' + email + '\n' +
+        (body.telefone ? ('Telefone: ' + corta(body.telefone, LIM.telefone) + '\n') : '') +
+        (detalhe ? ('\n' + detalhe + '\n') : '') +
+        '\nO pedido também está no Comercial, como lead novo.',
+      dedup: false,
+      convidarApp: false,
+      escritorioId: null,   // conta do servidor
+    })
+  } catch (e) {}
 
   return Response.json({ ok: true })
 }
