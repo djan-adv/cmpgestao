@@ -1387,7 +1387,9 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
         <div><label>Servidor (SMTP)</label><input id="me-smtp-host" placeholder="smtp.hostinger.com"></div>
         <div><label>Porta</label><input id="me-smtp-porta" type="number" placeholder="465"></div>
         <div><label>Usuário (e-mail completo)</label><input id="me-smtp-usuario" placeholder="contato@seuescritorio.com.br"></div>
-        <div><label>Senha</label><input id="me-smtp-senha" type="password" placeholder="deixe em branco para manter a atual"></div>
+        <div><label>Senha <a onclick="_verSenhaSmtp(this)" style="cursor:pointer;color:#185FA5;font-weight:400;font-size:11px;margin-left:6px">mostrar</a></label>
+          <input id="me-smtp-senha" type="password" autocomplete="new-password" spellcheck="false" placeholder="deixe em branco para manter a atual">
+          <div class="note" style="font-size:11px;margin-top:3px">Fica cifrada no banco e nunca volta para a tela. Só o servidor a decifra, na hora de enviar.</div></div>
         <div style="grid-column:1/-1"><label>Nome que aparece como remetente</label><input id="me-smtp-nome" placeholder="Seu Escritório — Avisos"></div>
         <div><label>Servidor de leitura — IMAP <span class="note" style="display:inline">(opcional)</span></label><input id="me-imap-host" placeholder="deixe vazio: usamos o mesmo servidor com imap. no lugar de smtp."></div>
         <div><label>Porta do IMAP</label><input id="me-imap-porta" placeholder="993"></div>
@@ -1670,6 +1672,19 @@ function _smtpSuspeito(h){
   if(/^smpt\./.test(t)) return t.replace(/^smpt\./,'smtp.');
   if(/^stmp\./.test(t)) return t.replace(/^stmp\./,'smtp.');
   return null;
+}
+/* Ver o que digitou antes de salvar.
+   O campo é mascarado e a senha nunca volta do servidor — o que é certo, mas
+   deixa o escritório digitando às cegas uma senha que ele não pode conferir
+   depois. Errar uma letra aqui não dá erro visível: salva, o teste falha e ele
+   não sabe se errou o servidor, o usuário ou a senha. O olho fica no campo, sob
+   o clique dele, e volta a esconder sozinho. */
+function _verSenhaSmtp(a){
+  var el=document.getElementById('me-smtp-senha'); if(!el) return;
+  var ver=(el.type==='password');
+  el.type=ver?'text':'password';
+  a.textContent=ver?'ocultar':'mostrar';
+  if(ver) setTimeout(function(){ try{ el.type='password'; a.textContent='mostrar'; }catch(e){} }, 12000);
 }
 async function salvarEmailEscritorio(){
   var est=document.getElementById('me-smtp-estado'); est.textContent='Salvando…';
