@@ -189,7 +189,9 @@ html[data-perfil="cliente"] .brand{display:none!important}
 html[data-perfil="cliente"] .brand-neutral{display:block!important}
 html[data-perfil="cliente"] .cmp-only{display:none!important}
 html[data-perfil="cliente"] #nav a[data-s="emails"],
-html[data-perfil="cliente"] #nav a[data-s="financeiro"],
+/* Financeiro saiu daqui: o escritório cliente passa a ter a tela, com FATURA no
+   lugar do boleto (a conta do banco é de quem opera o sistema, não dele) e com a
+   conferência de alvarás, que não depende de banco nenhum. */
 html[data-perfil="cliente"] #nav a[data-s="inove"],
 html[data-perfil="cliente"] #nav a[data-s="james"],
 html[data-perfil="cliente"] #nav a[data-s="encerrados"],
@@ -523,10 +525,11 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
       <div class="agtools">
         <div class="switch"><button id="fin-sw-a" class="on" onclick="setFinView('abertas')">Em aberto</button><button id="fin-sw-p" onclick="setFinView('pagas')">Recebidas</button></div>
         <span id="fin-mes-box" style="display:none;margin-left:10px"><select id="fin-mes" class="btn sm" onchange="setFinMes(this.value)" title="Mostrar só o que foi EFETIVAMENTE recebido (boletos pagos + alvarás conferidos) no mês escolhido"><option value="todos">Todos os meses</option></select></span>
-        <button class="btn sm ghost" style="margin-left:auto" onclick="conferirPagamentos(this)" title="Pergunta ao Cora, agora, o status das cobranças em aberto e baixa as que já foram pagas">↻ Conferir pagamentos</button>
-        <button id="fin-btn-reenviar-todas" class="btn sm" style="background:#FE3E6D;border-color:#FE3E6D;color:#fff" onclick="reenviarTodasCobrancas()" title="Reenvia por e-mail, uma a uma, todas as cobranças em aberto que já têm boleto ou PIX. Mostra a lista antes de enviar.">&#9993; Reenviar todas em aberto</button>
-        <button class="btn sm ghost" onclick="ativarBaixaAutomatica(this)" title="Registra no Cora o aviso automático de pagamento: quando o cliente pagar, a cobrança é baixada sozinha">⚡ Ativar baixa automática</button>
-        <button class="btn sm" style="background:#FE3E6D;border-color:#FE3E6D;color:#fff" onclick="abrirNovaCobranca()">&#9673; Nova cobrança (Cora)</button>
+        <button class="btn sm ghost cmp-only" style="margin-left:auto" onclick="conferirPagamentos(this)" title="Pergunta ao Cora, agora, o status das cobranças em aberto e baixa as que já foram pagas">↻ Conferir pagamentos</button>
+        <button id="fin-btn-reenviar-todas" class="btn sm cmp-only" style="background:#FE3E6D;border-color:#FE3E6D;color:#fff" onclick="reenviarTodasCobrancas()" title="Reenvia por e-mail, uma a uma, todas as cobranças em aberto que já têm boleto ou PIX. Mostra a lista antes de enviar.">&#9993; Reenviar todas em aberto</button>
+        <button class="btn sm ghost cmp-only" onclick="ativarBaixaAutomatica(this)" title="Registra no Cora o aviso automático de pagamento: quando o cliente pagar, a cobrança é baixada sozinha">⚡ Ativar baixa automática</button>
+        <button class="btn sm" style="margin-left:auto;background:var(--navy);border-color:var(--navy);color:#fff" onclick="abrirNovaFatura()" title="Lançar uma cobrança e gerar a fatura para mandar ao cliente — sem depender de banco integrado">&#128441; Nova fatura</button>
+        <button class="btn sm cmp-only" style="background:#FE3E6D;border-color:#FE3E6D;color:#fff" onclick="abrirNovaCobranca()">&#9673; Nova cobrança (Cora)</button>
       </div>
       <div class="kpis" id="fin-kpis"></div>
       <div class="card"><div style="max-height:46vh;overflow:auto"><table><thead><tr><th>Cliente</th><th>Descrição</th><th>Valor</th><th>Vencimento</th><th>Status</th><th>Pago em</th><th>Boleto/PIX</th><th>Reenviar</th><th>NF</th><th></th></tr></thead><tbody id="fin-body"></tbody></table></div></div>
@@ -1016,6 +1019,31 @@ html[data-perfil="inove"] #nav a[data-s="inove"]{margin-top:0;opacity:1}
        ficha da tarefa, ao lado de "Salvar alterações", o botão verde atrapalhava
        — quem entra para editar não quer encerrar. Concluir continua no cartão do
        Kanban, no ✓ dos chips da agenda e na lista da ficha do processo. --><button class="btn" id="t-btn-salvar" onclick="salvarTarefa()">Criar e distribuir</button></div>
+  </div>
+</div>
+<div id="modal-fatura" class="overlay hidden">
+  <div class="modal">
+    <h2>&#128441; Nova fatura</h2>
+    <p class="note" style="margin-top:0">Lança a cobrança no financeiro e gera a fatura para você mandar ao cliente. O pagamento acontece do jeito que você combinar com ele (PIX, transferência, depósito) — quando entrar, você dá baixa aqui em um clique.</p>
+    <label>Cliente</label>
+    <select id="fat-cliente" onchange="fatClienteMudou()"><option value="">Carregando clientes…</option></select>
+    <div id="fat-novo-box" style="display:none;margin-top:8px">
+      <label>Nome do cliente novo</label><input id="fat-novo-nome" placeholder="Nome completo / razão social">
+      <div class="row2" style="margin-top:8px">
+        <div><label>CPF / CNPJ <span class="note" style="font-weight:400">— opcional</span></label><input id="fat-novo-doc" inputmode="numeric" placeholder="Só números"></div>
+        <div><label>E-mail <span class="note" style="font-weight:400">— opcional</span></label><input id="fat-novo-email" type="email" placeholder="cliente@email.com"></div>
+      </div>
+    </div>
+    <label style="margin-top:10px">Descrição</label>
+    <input id="fat-desc" placeholder="Ex.: Honorários contratuais — parcela 1/3">
+    <div class="row2">
+      <div><label>Valor (R$)</label><input id="fat-valor" inputmode="decimal" placeholder="0,00"></div>
+      <div><label>Vencimento</label><input id="fat-venc" type="date" min="2000-01-01" max="2100-12-31"></div>
+    </div>
+    <label style="margin-top:10px">Processo <span class="note" style="font-weight:400">— opcional; deixa a fatura ligada à ficha</span></label>
+    <input id="fat-proc" placeholder="0000000-00.0000.0.00.0000">
+    <div id="fat-msg" class="note" style="margin-top:8px"></div>
+    <div class="foot"><button class="btn ghost" onclick="fecharNovaFatura()">Cancelar</button><button class="btn" id="fat-btn" onclick="salvarNovaFatura()">Lançar fatura</button></div>
   </div>
 </div>
 <div id="modal-cobranca" class="overlay hidden">
@@ -19915,10 +19943,10 @@ function finRenderTabela(){
   var mesLbl=filtraMes?(' em '+FIN_MES.split('-').reverse().join('/')):'';
   var k=document.getElementById('fin-kpis');
   if(k) k.innerHTML='<div class="kpi"><div class="n">'+finReais(totAb)+'</div><div class="l">A receber ('+abertas.length+')</div></div>'+
-                    '<div class="kpi"><div class="n">'+finReais(totPgBol+totPgAlv)+'</div><div class="l">Recebido'+mesLbl+' — boletos '+finReais(totPgBol)+' ('+pagas.length+') + alvarás '+finReais(totPgAlv)+' ('+alvConf.length+')</div></div>'+
+                    '<div class="kpi"><div class="n">'+finReais(totPgBol+totPgAlv)+'</div><div class="l">Recebido'+mesLbl+' — faturas e boletos '+finReais(totPgBol)+' ('+pagas.length+') + alvarás '+finReais(totPgAlv)+' ('+alvConf.length+')</div></div>'+
                     '<div class="kpi"><div class="n" style="color:'+(nfPend?'#8a5a00':'#0F6E56')+'">'+nfPend+'</div><div class="l">NFs a emitir</div></div>';
   var lista=(FIN_VIEW==='pagas')?pagas:abertas;
-  if(!lista.length){ body.innerHTML='<tr><td colspan="10" class="note">'+(FIN_VIEW==='pagas'?'Nenhum pagamento recebido ainda.':'Nenhuma cobrança em aberto. Clique em “Nova cobrança (Cora)”.')+'</td></tr>'; }
+  if(!lista.length){ body.innerHTML='<tr><td colspan="10" class="note">'+(FIN_VIEW==='pagas'?'Nenhum pagamento recebido ainda.':'Nenhuma cobrança em aberto. Clique em “Nova fatura” para lançar a primeira.')+'</td></tr>'; }
   else body.innerHTML=lista.map(function(x){
     var venc=x.vencimento?String(x.vencimento).split('-').reverse().join('/'):'—';
     var pago=x.pago_em?new Date(x.pago_em).toLocaleDateString('pt-BR'):'—';
@@ -19928,9 +19956,13 @@ function finRenderTabela(){
     var cliHtml=(cli&&cli!=='—'&&x.processo_numero)
       ?('<a onclick="irParaProcesso(\''+String(x.processo_numero).replace(/'/g,'')+'\')" style="cursor:pointer;color:var(--navy);text-decoration:underline;font-weight:600" title="Abrir a ficha deste cliente">'+finEsc(cli)+'</a>')
       :finEsc(cli);
+    /* Linha SEM boleto é uma fatura lançada à mão: o que ela tem para oferecer
+       é o próprio documento, para imprimir ou salvar em PDF e mandar ao cliente. */
+    var ehFatura=!x.cora_invoice_id;
     var pagar='';
     if(x.boleto_url) pagar+='<a class="btn sm ghost" href="'+x.boleto_url+'" target="_blank" rel="noopener">Boleto</a> ';
     if(x.pix_emv) pagar+='<button class="btn sm ghost" onclick="finCopiarPix(this,\''+encodeURIComponent(x.pix_emv)+'\')">Copiar PIX</button>';
+    if(!pagar && ehFatura) pagar='<button class="btn sm ghost" style="font-size:11px" onclick="imprimirFatura(\''+x.id+'\')" title="Abrir a fatura para imprimir ou salvar em PDF">🖨 fatura</button>';
     if(!pagar) pagar='<span class="note">—</span>';
     /* sem e-mail cadastrado o reenvio não sai — e antes isso só se descobria ao
        clicar, ou no resumo do envio em lote ("1 cliente não recebeu"). A linha
@@ -19938,14 +19970,19 @@ function finRenderTabela(){
     var _cliFin=(FIN_CLIENTES&&FIN_CLIENTES[x.contato_id])||{};
     var _semEmail=!String(_cliFin.email||'').trim();
     var reenviarBtn;
-    if(!(x.boleto_url||x.pix_emv)) reenviarBtn='<span class="note">—</span>';
+    if(ehFatura){
+      reenviarBtn=(x.status==='paga')
+        ? '<button class="btn sm ghost" style="font-size:11px" onclick="baixarFatura(\''+x.id+'\',true)" title="Voltar esta fatura para em aberto">↩ reabrir</button>'
+        : '<button class="btn sm" style="background:#0F6E56;border-color:#0F6E56;color:#fff;font-size:11px;padding:4px 10px" onclick="baixarFatura(\''+x.id+'\')" title="Registrar que o cliente pagou esta fatura">✓ recebi</button>';
+    }
+    else if(!(x.boleto_url||x.pix_emv)) reenviarBtn='<span class="note">—</span>';
     else if(_semEmail) reenviarBtn='<button class="btn sm" style="background:#fff4e5;border:1px solid #ffd9a8;color:#8a5a00;font-size:11px;padding:4px 9px;font-weight:700;white-space:nowrap" onclick="finCadastrarEmail(\''+x.contato_id+'\')" title="Este cliente não tem e-mail cadastrado, então não recebe cobrança. Clique para cadastrar agora.">&#9888; sem e-mail</button>';
     else reenviarBtn='<button class="btn sm" style="background:#FE3E6D;border-color:#FE3E6D;color:#fff;font-size:11px;padding:4px 10px" onclick="reenviarBoletoLinha(\''+x.id+'\')" title="Reenviar este boleto por e-mail para '+finEsc(_cliFin.email||'')+'">reenviar</button>';
     var badge=(x.status==='paga')?'<span style="color:#0F6E56;font-weight:700">✓ paga</span>':(x.status==='cancelada'?'<span class="note">cancelada</span>':'<span style="color:#185FA5;font-weight:700">em aberto</span>');
     var nf=(x.nf_status==='emitida')?('NF '+finEsc(x.nf_numero||'')):(x.nf_status==='dispensada')?'<span class="note" style="margin:0">sem nota</span>':(x.status==='paga'?'<button class="btn sm gold" style="font-size:11px;padding:4px 10px" onclick="abrirNf(\''+x.id+'\')">Emitir NF</button>':'—');
     /* ações: cancelar boleto (se em aberto) e apagar a linha */
     var acoes='';
-    if(x.status==='aberta') acoes+='<a onclick="cancelarCobranca(\''+x.id+'\')" title="Cancelar o boleto no Cora" style="cursor:pointer;color:#b5342b;font-size:11.5px;margin-right:10px">cancelar</a>';
+    if(x.status==='aberta' && !ehFatura) acoes+='<a onclick="cancelarCobranca(\''+x.id+'\')" title="Cancelar o boleto no Cora" style="cursor:pointer;color:#b5342b;font-size:11.5px;margin-right:10px">cancelar</a>';
     acoes+='<a onclick="apagarCobranca(\''+x.id+'\')" title="Apagar esta linha do financeiro" style="cursor:pointer;color:#8a8f98;font-size:11.5px">🗑</a>';
     return '<tr><td>'+cliHtml+'</td><td>'+finEsc(x.descricao||'')+'</td><td>'+finReais(x.valor_centavos)+'</td><td>'+venc+'</td><td>'+badge+'</td><td>'+pago+'</td><td style="white-space:nowrap">'+pagar+'</td><td style="white-space:nowrap">'+reenviarBtn+'</td><td>'+nf+'</td><td style="white-space:nowrap">'+acoes+'</td></tr>';
   }).join('');
@@ -20167,6 +20204,117 @@ var FIN_CLIENTES=null;
 function finNomeCliente(id){ if(!id) return '—'; var c=FIN_CLIENTES&&FIN_CLIENTES[id]; return c?c.nome:'(cliente)'; }
 function finEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
+/* ===== Fatura: o financeiro de quem ainda não tem banco integrado ===========
+   O Financeiro nasceu em cima do Cora, e a conta do Cora é de quem opera o
+   sistema — não do escritório que comprou. Por isso a tela inteira ficava
+   escondida do cliente, que ficava sem financeiro nenhum. A fatura é a mesma
+   linha (mesma tabela, mesma lista, mesmos totais): o escritório lança o que
+   cobrou, imprime a fatura para mandar ao cliente e dá baixa quando receber.
+   Quando houver banco integrado, o boleto entra por cima sem migrar nada. ===== */
+function abrirNovaFatura(){
+  var m=document.getElementById('modal-fatura'); if(!m) return;
+  document.getElementById('fat-desc').value='';
+  document.getElementById('fat-valor').value='';
+  document.getElementById('fat-proc').value='';
+  document.getElementById('fat-msg').textContent='';
+  var v=new Date(); v.setDate(v.getDate()+10);
+  document.getElementById('fat-venc').value=v.toISOString().slice(0,10);
+  m.classList.remove('hidden');
+  if(!FIN_CLIENTES){ try{ finCarregarClientes(); }catch(e){} }
+  try{ fatClienteMudou(); }catch(e){}
+}
+function fecharNovaFatura(){ var m=document.getElementById('modal-fatura'); if(m) m.classList.add('hidden'); }
+function fatClienteMudou(){
+  var sel=document.getElementById('fat-cliente'), box=document.getElementById('fat-novo-box');
+  if(sel&&box) box.style.display=(sel.value==='__novo')?'block':'none';
+}
+function _fatCentavos(v){
+  var t=String(v||'').trim().replace(/[R$\s.]/g,'').replace(',','.');
+  var n=parseFloat(t); if(!isFinite(n)||n<=0) return 0;
+  return Math.round(n*100);
+}
+async function salvarNovaFatura(){
+  var msg=document.getElementById('fat-msg'), btn=document.getElementById('fat-btn');
+  var sel=(document.getElementById('fat-cliente')||{}).value||'';
+  var corpo={acao:'criar',
+    descricao:(document.getElementById('fat-desc').value||'').trim(),
+    valor_centavos:_fatCentavos(document.getElementById('fat-valor').value),
+    vencimento:(document.getElementById('fat-venc').value||''),
+    processo_numero:(document.getElementById('fat-proc').value||'').trim()};
+  if(sel && sel!=='__novo') corpo.contato_id=sel;
+  else {
+    corpo.nome=(document.getElementById('fat-novo-nome').value||'').trim();
+    corpo.cpf_cnpj=(document.getElementById('fat-novo-doc').value||'').trim();
+    corpo.email=(document.getElementById('fat-novo-email').value||'').trim();
+  }
+  if(!corpo.valor_centavos){ msg.innerHTML='<span style="color:#b5342b">Informe o valor.</span>'; return; }
+  btn.disabled=true; msg.textContent='Lançando…';
+  try{
+    var tok=await finToken();
+    var r=await fetch('/api/faturas',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify(corpo)});
+    var j=await r.json();
+    if(!r.ok||j.erro){ msg.innerHTML='<span style="color:#b5342b">'+finEsc(j.erro||'Falhou.')+'</span>'; btn.disabled=false; return; }
+    fecharNovaFatura();
+    FIN_CLIENTES=null;
+    await renderFinanceiro();
+    if(confirm('✓ Fatura lançada.\n\nAbrir agora a fatura para imprimir ou salvar em PDF e mandar ao cliente?')) imprimirFatura(j.id);
+  }catch(e){ msg.innerHTML='<span style="color:#b5342b">'+finEsc(String(e&&e.message||e))+'</span>'; }
+  btn.disabled=false;
+}
+/* Baixa manual: sem banco no meio, quem sabe que o dinheiro entrou é o
+   escritório. É reversível de propósito — marcar pago por engano não pode ser
+   um caminho sem volta. */
+async function baixarFatura(id, reabrir){
+  var corpo={acao:reabrir?'reabrir':'pagar', id:id};
+  if(!reabrir){
+    var d=window.prompt('Data em que o valor entrou (AAAA-MM-DD):', new Date().toISOString().slice(0,10));
+    if(d===null) return;
+    if(/^\d{4}-\d{2}-\d{2}$/.test(String(d).trim())) corpo.pago_em=String(d).trim();
+  } else if(!confirm('Reabrir esta fatura? Ela volta para "em aberto" e sai do recebido do mês.')) return;
+  try{
+    var tok=await finToken();
+    var r=await fetch('/api/faturas',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify(corpo)});
+    var j=await r.json();
+    if(!r.ok||j.erro){ alert(j.erro||'Falhou.'); return; }
+    await renderFinanceiro();
+  }catch(e){ alert(String(e&&e.message||e)); }
+}
+/* A fatura em si: o papel que vai para o cliente, com a marca do escritório que
+   está cobrando — nunca a de quem vendeu o sistema. */
+async function imprimirFatura(id){
+  var x=(FIN_ROWS||[]).filter(function(r){return String(r.id)===String(id);})[0];
+  if(!x){ alert('Fatura não encontrada na lista — atualize a tela.'); return; }
+  var casa={nome:'',dados:{}};
+  try{ var ri=await fetch('/api/inquilino',{cache:'no-store'}); var di=await ri.json(); if(di&&di.ok){ casa.nome=di.nome||''; casa.dados=di.dados||{}; } }catch(e){}
+  var d=casa.dados||{};
+  var cli=(FIN_CLIENTES&&FIN_CLIENTES[x.contato_id])||{};
+  var venc=x.vencimento?String(x.vencimento).split('-').reverse().join('/'):'—';
+  var hoje=new Date().toLocaleDateString('pt-BR');
+  var linhaCasa=[d.endereco,d.cidade,d.telefone,d.email].filter(Boolean).join(' · ');
+  var w=window.open('','_blank');
+  if(!w){ alert('O navegador bloqueou a janela. Libere os pop-ups para este endereço.'); return; }
+  w.document.write('<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Fatura</title>'
+    +'<style>body{font-family:Georgia,serif;color:#22303f;max-width:760px;margin:36px auto;padding:0 24px;line-height:1.55}'
+    +'h1{font-size:19px;letter-spacing:.5px;margin:0 0 2px}.sub{color:#697180;font-size:12px}'
+    +'table{width:100%;border-collapse:collapse;margin:22px 0}td,th{border-bottom:1px solid #e4e8ef;padding:9px 6px;text-align:left;font-size:14px}'
+    +'th{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#697180}'
+    +'.tot{font-size:22px;font-weight:700}.rod{margin-top:26px;font-size:11.5px;color:#697180;border-top:1px solid #e4e8ef;padding-top:10px}'
+    +'@media print{body{margin:0}}</style></head><body>'
+    +'<h1>'+finEsc(casa.nome||d.nome_sociedade||'Escritório de Advocacia')+'</h1>'
+    +'<div class="sub">'+finEsc(linhaCasa)+(d.socio_oab?(' · '+finEsc(d.socio_oab)):'')+'</div>'
+    +'<h2 style="margin:26px 0 0;font-size:16px">Fatura</h2>'
+    +'<div class="sub">Emitida em '+hoje+'</div>'
+    +'<table><tr><th style="width:130px">Cliente</th><td>'+finEsc(cli.nome||'—')+(cli.doc?(' — '+finEsc(cli.doc)):'')+'</td></tr>'
+    +(x.processo_numero?('<tr><th>Processo</th><td>'+finEsc(x.processo_numero)+'</td></tr>'):'')
+    +'<tr><th>Referente a</th><td>'+finEsc(x.descricao||'')+'</td></tr>'
+    +'<tr><th>Vencimento</th><td>'+venc+'</td></tr>'
+    +'<tr><th>Valor</th><td class="tot">'+finReais(x.valor_centavos)+'</td></tr></table>'
+    +'<div class="rod">Documento emitido pelo escritório para cobrança dos serviços descritos acima. '
+    +'Em caso de dúvida sobre valores ou forma de pagamento, procure o escritório pelos contatos no topo desta fatura.</div>'
+    +'</body></html>');
+  w.document.close();
+  try{ w.focus(); w.print(); }catch(e){}
+}
 async function finCarregarClientes(){
   var sel=document.getElementById('cob-cliente');
   try{
@@ -20181,7 +20329,14 @@ async function finCarregarClientes(){
         return '<option value="'+c.id+'">'+finEsc(c.nome)+falta+'</option>';
       }).join('');
     }
+    var selF=document.getElementById('fat-cliente');
+    if(selF){
+      selF.innerHTML='<option value="">Selecione o cliente…</option><option value="__novo">➕ Novo cliente</option>'+rows.map(function(c){
+        return '<option value="'+c.id+'">'+finEsc(c.nome)+'</option>';
+      }).join('');
+    }
     cobClienteMudou();
+    try{ fatClienteMudou(); }catch(eF){}
     /* re-render pra trocar "(cliente)" pelos nomes reais */
     finRenderTabela();
   }catch(e){ if(sel) sel.innerHTML='<option value="">Falha ao carregar clientes</option>'; }
