@@ -23,7 +23,8 @@ import crypto from 'crypto'
 import fs from 'fs'
 import path from 'path'
 import { tipoRealDoArquivo, pdfDeTexto } from '../jusbr/lib.js'
-import { svc, confereSenha, hashSenha, sessao, tokenDo, digitos, processosPermitidos, FILTRO_HIST_CLIENTE, SESSAO_DIAS, membroDaEquipe } from './lib.js'
+import { svc, confereSenha, hashSenha, sessao, tokenDo, digitos, processosPermitidos, FILTRO_HIST_CLIENTE, SESSAO_DIAS, membroDaEquipe, dadosDaCasa } from './lib.js'
+import { buscaDjenPorNome, docValido } from '../_lib/djen-nome.js'
 import { enviarEmailCore } from '../enviar-email/enviar.js'
 import { URL_PORTAL, urlPortalDoEscritorio, nomeDoEscritorio } from './convite-lib.js'
 import { PASTA_APP_CLIENTE, RE_OFICIAL } from '../../../lib/appCliente.js'
@@ -41,6 +42,16 @@ const MIMES = {
 const MAX_APARELHOS = 4         // o 5º aparelho diferente bloqueia o acesso
 const MAX_TEXTO_CHAT = 4000
 const MAX_ANEXO = 15 * 1024 * 1024   // mesmo teto do chat da equipe
+
+/* valor de configuração do escritório (produtividade_config), com padrão */
+async function cfgTexto(sb, escritorioId, chave, padrao) {
+  try {
+    const { data } = await sb.from('produtividade_config').select('valor')
+      .eq('escritorio_id', escritorioId).eq('chave', chave).maybeSingle()
+    const v = data && data.valor
+    return (v === null || v === undefined || v === '') ? padrao : String(v)
+  } catch (e) { return padrao }
+}
 
 /* ---------- trava simples contra chute de senha (por processo do Node) ---------- */
 const _tentativas = new Map()
@@ -444,6 +455,81 @@ export async function POST(request) {
     // a pessoa do próprio app no exato momento em que ela arrumou o acesso
     await sb.from('portal_sessoes').delete().eq('acesso_id', acesso.id).neq('token', tokenDo(request))
     return Response.json({ ok: true, email: acesso.email })
+  }
+
+  /* ---------- pesquisa de processos NO NOME DO CLIENTE (fora do escritório) ----------
+     Serviço da casa que opera o sistema, não dos escritórios clientes: quem
+     compra o sistema vende o próprio trabalho, não este serviço. Por isso a
+     liberação olha `escritorios.raiz`.
+
+     A consulta é por NOME no DJEN — a API pública do CNJ não aceita CPF/CNPJ
+     (já testado e descartado). O documento serve para identificar quem pede,
+     ficar registrado junto com a declaração de responsabilidade e alimentar a
+     cobrança. Consequência dita na tela: homônimo aparece.
+
+     Três documentos diferentes por acesso saem de graça; do quarto em diante o
+     app convida a assinar o acompanhamento mensal (que já existe, em
+     /api/monitoramento). Repetir um documento já pesquisado não gasta busca —
+     senão recarregar a tela consumiria a cota. */
+  if (acao === 'busca_status' || acao === 'buscar_publico') {
+    const casa = await dadosDaCasa(sb, acesso.escritorio_id)
+    const liberado = casa.escritorioRaiz === true
+    const gratis = parseInt(await cfgTexto(sb, acesso.escritorio_id, 'busca_publica_gratis', '3'), 10) || 3
+    const preco = parseInt(await cfgTexto(sb, acesso.escritorio_id, 'monit_assinatura_centavos', '1990'), 10) || 1990
+
+    const { data: feitas } = await sb.from('portal_buscas').select('doc').eq('acesso_id', acesso.id)
+    const docsUsados = new Set((feitas || []).map(x => String(x.doc)))
+
+    if (acao === 'busca_status') {
+      return Response.json({
+        ok: true, liberado, gratis, usadas: docsUsados.size,
+        restantes: Math.max(0, gratis - docsUsados.size), preco_mensal: preco,
+      })
+    }
+
+    if (!liberado) return Response.json({ erro: 'Serviço não disponível neste aplicativo.' }, { status: 403 })
+
+    const doc = String(body.doc || '').replace(/\D/g, '')
+    const nome = String(body.nome || '').replace(/\s+/g, ' ').trim()
+    if (!docValido(doc)) return Response.json({ erro: 'CPF ou CNPJ inválido — confira os números digitados.' }, { status: 400 })
+    if (nome.length < 5) return Response.json({ erro: 'Informe o nome completo, como aparece nos documentos.' }, { status: 400 })
+    // a declaração é o que autoriza a consulta; sem ela, nada roda
+    if (body.declaro !== true) {
+      return Response.json({ erro: 'Confirme que o CPF/CNPJ é seu para continuar.' }, { status: 400 })
+    }
+
+    // assinante do acompanhamento mensal não tem limite
+    let assinante = false
+    try {
+      const { data: as } = await sb.from('monit_assinaturas').select('id').eq('doc', doc).in('status', ['ativa', 'suspensa']).limit(1)
+      assinante = !!(as && as.length)
+    } catch (e) {}
+
+    if (!assinante && !docsUsados.has(doc) && docsUsados.size >= gratis) {
+      return Response.json({
+        ok: true, precisa_assinar: true, preco_mensal: preco, gratis,
+        aviso: 'Você já usou as ' + gratis + ' consultas gratuitas.',
+      })
+    }
+
+    let achados = []
+    try { achados = await buscaDjenPorNome(nome, 365, { resumo: 200 }) }
+    catch (e) { return Response.json({ erro: 'O Diário da Justiça não respondeu agora. Tente de novo em alguns minutos.' }, { status: 502 }) }
+
+    await sb.from('portal_buscas').insert({
+      escritorio_id: acesso.escritorio_id, acesso_id: acesso.id, doc, nome,
+      declarou: true, resultados: achados.length,
+      ip: (request.headers.get('x-forwarded-for') || '').split(',')[0].trim() || null,
+      user_agent: String(request.headers.get('user-agent') || '').slice(0, 300) || null,
+    })
+
+    const usadasDepois = docsUsados.has(doc) ? docsUsados.size : docsUsados.size + 1
+    return Response.json({
+      ok: true, nome, processos: achados, assinante,
+      restantes: assinante ? null : Math.max(0, gratis - usadasDepois), preco_mensal: preco,
+      aviso: achados.length ? undefined
+        : 'Não encontramos publicação neste nome nos últimos 12 meses. Isso não garante que não exista processo — só que não houve publicação no período.',
+    })
   }
 
   if (acao === 'meus') {

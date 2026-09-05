@@ -14,6 +14,9 @@ import { ESCRITORIO_RAIZ } from '../_lib/inquilino.js'
 import nodemailer from 'nodemailer'
 import { createClient } from '@supabase/supabase-js'
 import { coraConfigurado, coraApi } from '../cora/lib.js'
+// busca por nome no DJEN: uma fonte só (estava copiada aqui e no robô)
+import { buscaDjenPorNome as _buscaDjen } from '../_lib/djen-nome.js'
+const buscaDjenPorNome = (nome, dias) => _buscaDjen(nome, dias, { resumo: 160 })
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -42,31 +45,6 @@ async function nomeDoCnpj(cnpj) {
     const j = await r.json()
     return String(j.razao_social || j.nome_fantasia || '').trim()
   } catch (e) { return '' }
-}
-async function buscaDjenPorNome(nome, dias) {
-  const fim = new Date(), ini = new Date(Date.now() - dias * 86400000)
-  const base = `${DJEN}?nomeParte=${encodeURIComponent(nome)}&dataDisponibilizacaoInicio=${iso(ini)}&dataDisponibilizacaoFim=${iso(fim)}&meio=D`
-  let itens = [], pagina = 1
-  while (pagina <= 10) {
-    let r
-    try { r = await fetch(`${base}&pagina=${pagina}&itensPorPagina=100`, { headers: { Accept: 'application/json', 'User-Agent': UA }, signal: AbortSignal.timeout(25000) }) }
-    catch (e) { break }
-    if (!r.ok) break
-    const d = await r.json().catch(() => ({}))
-    const lote = d.items || d.content || d.comunicacoes || []
-    if (!lote.length) break
-    itens = itens.concat(lote); if (lote.length < 100) break; pagina++
-  }
-  const por = {}
-  for (const p of itens) {
-    const dig = soDig(p.numeroProcesso || p.numero_processo || p.numero)
-    if (dig.length < 16) continue
-    const data = String(p.dataDisponibilizacao || p.data_disponibilizacao || '').slice(0, 10)
-    const trib = p.siglaTribunal || p.sigla_tribunal || ''
-    const texto = String(p.texto || p.teor || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
-    if (!por[dig] || data > por[dig].data) por[dig] = { numero: dig, tribunal: trib, data, resumo: texto.slice(0, 160) }
-  }
-  return Object.values(por).sort((a, b) => String(b.data).localeCompare(String(a.data)))
 }
 // máscara CNJ NNNNNNN-DD.AAAA.J.TR.OOOO
 function maskCNJ(dig) {

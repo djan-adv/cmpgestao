@@ -11,6 +11,9 @@ import { ESCRITORIO_RAIZ } from '../../_lib/inquilino.js'
 import nodemailer from 'nodemailer'
 import { createClient } from '@supabase/supabase-js'
 import { coraConfigurado, coraApi } from '../../cora/lib.js'
+// busca por nome no DJEN: uma fonte só (estava copiada aqui e no robô)
+import { buscaDjenPorNome as _buscaDjen } from '../../_lib/djen-nome.js'
+const buscaDjenPorNome = (nome, dias) => _buscaDjen(nome, dias, { resumo: 200 })
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -50,30 +53,6 @@ async function emitirBoleto(sb, { nome, doc, email, valor, descricao }) {
   const info = extrairCora(r.json || {})
   const cob = await sb.from('cora_cobrancas').insert({ escritorio_id: ESCRITORIO_CMP, descricao, valor_centavos: valor, vencimento: venc, status: 'aberta', cora_invoice_id: info.invoice_id, cora_code: code, boleto_url: info.boleto_url, linha_digitavel: info.linha_digitavel, pix_emv: info.pix_emv }).select('id').single()
   return { cobrancaId: cob && cob.data && cob.data.id, info }
-}
-async function buscaDjenPorNome(nome, dias) {
-  const fim = new Date(), ini = new Date(Date.now() - dias * 86400000)
-  const base = `${DJEN}?nomeParte=${encodeURIComponent(nome)}&dataDisponibilizacaoInicio=${iso(ini)}&dataDisponibilizacaoFim=${iso(fim)}&meio=D`
-  let itens = [], pagina = 1
-  while (pagina <= 10) {
-    let r
-    try { r = await fetch(`${base}&pagina=${pagina}&itensPorPagina=100`, { headers: { Accept: 'application/json', 'User-Agent': UA }, signal: AbortSignal.timeout(25000) }) } catch (e) { break }
-    if (!r.ok) break
-    const d = await r.json().catch(() => ({}))
-    const lote = d.items || d.content || d.comunicacoes || []
-    if (!lote.length) break
-    itens = itens.concat(lote); if (lote.length < 100) break; pagina++
-  }
-  const por = {}
-  for (const p of itens) {
-    const dig = soDig(p.numeroProcesso || p.numero_processo || p.numero)
-    if (dig.length < 16) continue
-    const data = String(p.dataDisponibilizacao || p.data_disponibilizacao || '').slice(0, 10)
-    const trib = p.siglaTribunal || p.sigla_tribunal || ''
-    const texto = String(p.texto || p.teor || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
-    if (!por[dig] || data > por[dig].data) por[dig] = { numero: dig, tribunal: trib, data, resumo: texto.slice(0, 200) }
-  }
-  return Object.values(por)
 }
 
 export async function GET(request) {
