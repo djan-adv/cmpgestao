@@ -89,6 +89,11 @@
   .pcard .num{font-family:ui-monospace,Menlo,monospace;font-size:15.5px;color:var(--muted)}
   .pcard .vs{font-weight:700;font-size:21px;margin:3px 0 1px}
   .pcard .vs .x{color:var(--muted);font-weight:400}
+  /* O réu costuma vir em lista (litisconsórcio) e empurrava o card para baixo:
+     sai 30% menor que o autor — a mesma regra que a ficha do sistema já usa.
+     Em % do tamanho do pai, então continua valendo se a fonte do app mudar. */
+  .pcard .vs .reu{font-size:70%;font-weight:600}
+  .parte .nome.reu{font-size:70%}
   .pcard .tt{color:var(--muted);font-size:17px}
   .pcard .ult{font-size:17.5px;margin-top:7px;color:var(--ink)}
   .pcard .ult b{font-weight:600}
@@ -492,6 +497,25 @@ function _pLocalAtual(p){
 }
 function brHora(iso){ try{ var d=new Date(iso); return ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);}catch(e){return '';} }
 function brDinheiro(v){ if(v==null||v==='') return ''; try{ return Number(v).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});}catch(e){ return 'R$ '+v; } }
+/* Nome de parte com no máximo TRÊS nomes de verdade — "de", "do", "da", "dos",
+   "das" e "e" não contam, viajam junto com o nome que vem depois. É a mesma
+   regra da ficha do sistema (_nomeCurtoParte); nome inteiro de parte tomava
+   três linhas do card no celular. */
+var PART_PARTICULA=/^(de|do|da|dos|das|e|d[aeo]s?)$/i;
+function nomeCurto3(nome){
+  var toks=String(nome||'').trim().split(/\s+/).filter(Boolean);
+  if(!toks.length) return '';
+  var out=[], cheios=0;
+  for(var i=0;i<toks.length;i++){
+    var ehPart=PART_PARTICULA.test(toks[i]);
+    if(!ehPart&&cheios>=3) break;
+    out.push(toks[i]);
+    if(!ehPart) cheios++;
+  }
+  /* não termina em preposição solta ("JOSÉ CARLOS DE") */
+  while(out.length&&PART_PARTICULA.test(out[out.length-1])) out.pop();
+  return out.join(' ');
+}
 function limpaTitulo(t){ t=String(t||'').replace(/\(\d+\)/g,'').replace(/\s+/g,' ').trim(); if(!t||/^[\d.\-]+$/.test(t)) t='Ação judicial'; t=t.slice(0,90); return (t===t.toUpperCase())?(t.charAt(0)+t.slice(1).toLowerCase()):t; }
 function toast(msg){ var t=document.createElement('div'); t.className='toast'; t.textContent=msg; document.body.appendChild(t); setTimeout(function(){ t.remove(); }, 3200); }
 
@@ -770,7 +794,7 @@ function renderCards(){
       (p.nao_lidas?('<div class="badge">'+p.nao_lidas+'</div>'):'') +
       (p.audiencia_hoje?('<div style="background:#0F2A4A;color:#fff;border-radius:8px;padding:4px 10px;font-size:15.5px;font-weight:700;display:inline-block;margin-bottom:6px">📅 Audiência HOJE — toque para ver o link</div>'):'') +
       '<div class="num">Processo nº '+esc(p.numero||'—')+'</div>' +
-      '<div class="vs">'+escT(p.cliente||'Você')+' <span class="x">×</span> '+escT(p.oponente||'Parte contrária')+'</div>' +
+      '<div class="vs">'+escT(nomeCurto3(p.cliente)||'Você')+' <span class="x">×</span> <span class="reu">'+escT(nomeCurto3(p.oponente)||'Parte contrária')+'</span></div>' +
       '<div class="tt">'+escT(limpaTitulo(p.titulo))+'</div>' +
       (p.ultima?('<div class="ult"><b>Última movimentação'+(p.ultima.data?(' — '+brData(p.ultima.data)):'')+':</b> '+escT(p.ultima.texto)+'…</div>'):'') +
       (p.vinculado?('<div class="vinc"><b>Ação principal (nº '+esc(p.vinculado.numero)+')'+(p.vinculado.data?(' — '+brData(p.vinculado.data)):'')+':</b> '+escT(p.vinculado.texto)+'…</div>'):'') +
@@ -791,7 +815,7 @@ function abrirEscolhaChat(){
     d.onclick=(function(id){ return function(){ abrirProc(id,true); }; })(p.id);
     d.innerHTML =
       (p.nao_lidas?('<div class="badge">'+p.nao_lidas+'</div>'):'') +
-      '<div class="vs">'+esc(p.cliente||'Você')+' <span class="x">×</span> '+esc(p.oponente||'Parte contrária')+'</div>' +
+      '<div class="vs">'+esc(nomeCurto3(p.cliente)||'Você')+' <span class="x">×</span> <span class="reu">'+esc(nomeCurto3(p.oponente)||'Parte contrária')+'</span></div>' +
       '<div class="num">Processo nº '+esc(p.numero||'—')+'</div>' +
       (p.titulo?('<div class="tt">'+escT(limpaTitulo(p.titulo))+'</div>'):'');
     c.appendChild(d);
@@ -877,8 +901,9 @@ function renderDetalhes(){
 function renderPartes(){
   var html = '<div class="sec"><p class="lab">Partes do processo</p>';
   (ATUAL.partes||[]).forEach(function(pt){
+    var curto=nomeCurto3(pt.nome)||String(pt.nome||'—');
     html += '<div class="parte"><div class="papel">'+escT(pt.papel||'PARTE')+'</div>' +
-            '<div class="nome">'+escT((pt.nome||'—').toUpperCase())+(pt.voce?'<span class="voce">VOCÊ</span>':'')+'</div></div>';
+            '<div class="nome'+(pt.voce?'':' reu')+'">'+escT(curto.toUpperCase())+(pt.voce?'<span class="voce">VOCÊ</span>':'')+'</div></div>';
   });
   html += '</div><div class="sec" style="font-size:16px;color:var(--muted)">As partes são exibidas conforme o cadastro do processo no escritório.</div>';
   $('proc-corpo').innerHTML = html;
