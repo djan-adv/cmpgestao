@@ -23,7 +23,7 @@ import crypto from 'crypto'
 import fs from 'fs'
 import path from 'path'
 import { tipoRealDoArquivo, pdfDeTexto } from '../jusbr/lib.js'
-import { svc, confereSenha, hashSenha, sessao, tokenDo, digitos, processosPermitidos, FILTRO_HIST_CLIENTE, SESSAO_DIAS, membroDaEquipe, dadosDaCasa } from './lib.js'
+import { svc, confereSenha, hashSenha, sessao, tokenDo, digitos, processosPermitidos, FILTRO_HIST_CLIENTE, SESSAO_DIAS, membroDaEquipe, dadosDaCasa, ehMovimentacaoDeVerdade } from './lib.js'
 import { buscaDjenPorNome, docValido } from '../_lib/djen-nome.js'
 import { faseDoProcesso, faseParaCliente, corFase } from '../../../lib/fases.js'
 import { enviarEmailCore } from '../enviar-email/enviar.js'
@@ -192,7 +192,7 @@ async function vinculadosDoProcesso(sb, p) {
       numero: v.numero,
       titulo: v.assunto || v.classe || 'Ação judicial',
       foro: v.foro || v.orgao,
-      movimentacoes: ands || [],
+      movimentacoes: (ands || []).filter(ehMovimentacaoDeVerdade),
       // só os documentos oficiais (já públicos); as petições do vinculado são da
       // ficha de outro titular e não entram aqui
       documentos: docs.oficiais,
@@ -674,7 +674,8 @@ export async function POST(request) {
         distribuido_em: p.distribuido_em, valor_causa: p.valor_causa, ultima_movimentacao: p.ultima_movimentacao,
       },
       partes,
-      movimentacoes: ands || [],
+      // nome de arquivo anexado não é movimentação — ver ehMovimentacaoDeVerdade
+      movimentacoes: (ands || []).filter(ehMovimentacaoDeVerdade),
       documentos: docs,
       cartorio: cart,
       vinculados,

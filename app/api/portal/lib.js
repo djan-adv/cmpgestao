@@ -92,6 +92,25 @@ export const FONTES_OFICIAIS = ['djen', 'datajud', 'jusbr', 'protocolo']
 // chega a aparecer no app, mesmo sendo fonte='manual'.
 export const FILTRO_HIST_CLIENTE = `fonte.in.(${FONTES_OFICIAIS.join(',')}),visivel_cliente.eq.true`
 
+/* Nem tudo que está na tabela de andamentos É uma movimentação. A captura do
+   diário guarda também o NOME dos arquivos anexados ("Procuracao - Fulano.pdf",
+   "jf011780335471410472041795899384.pdf") — no app do cliente isso virava uma
+   linha do histórico com um traço no lugar da data e um nome de arquivo no
+   lugar do teor. Duas marcas denunciam esse tipo de linha:
+     • não tem DATA (movimentação de processo sempre tem);
+     • o texto inteiro é um nome de arquivo, sem frase nenhuma.
+   Fora do app nada muda: o escritório continua vendo tudo. */
+const RE_SO_ARQUIVO = /^[^\n]{1,160}\.(pdf|docx?|xlsx?|jpe?g|png|gif|html?|zip|rar|rtf|odt|mp4|mp3|txt)$/i
+
+export function ehMovimentacaoDeVerdade(a) {
+  if (!a) return false
+  const texto = String(a.texto || '').trim()
+  if (!texto) return false
+  if (!a.data) return false
+  if (RE_SO_ARQUIVO.test(texto)) return false
+  return true
+}
+
 /* ---------- quais processos um acesso enxerga ----------
    Resolvido no banco (função portal_processos_ids): grants explícitos +
    processos do contato vinculado + processos cujo cliente_nome bate com o nome do

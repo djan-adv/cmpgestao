@@ -1090,12 +1090,15 @@ function renderMovs(){
   var ms = ATUAL.movimentacoes||[];
   var html = '<div class="sec"><p class="lab">Histórico do processo (termos oficiais)</p>';
   if(!ms.length) html += '<div style="color:var(--muted);font-size:18px">Ainda não há movimentações registradas aqui.</div>';
+  /* As TRÊS últimas já vêm abertas, com o teor inteiro: é o que o cliente quer
+     ler quando entra no app — e ficava escondido atrás de um "ver tudo". Da
+     quarta em diante segue recolhido, senão a página vira um paredão de texto. */
   ms.forEach(function(m,i){
     var t = String(m.texto||'');
-    var longa = t.length>240;
+    var recolhe = (i>=3) && t.length>240;
     html += '<div class="mov"><div class="dt">'+ (brData(m.data)||'—') +'</div>' +
-      '<div class="tx'+(longa?' corta':'')+'" id="mv'+i+'">'+escT(t)+'</div>' +
-      (longa?('<button class="mais" onclick="verMais('+i+',this)">ver tudo ▾</button>'):'') +
+      '<div class="tx'+(recolhe?' corta':'')+'" id="mv'+i+'">'+escT(t)+'</div>' +
+      (recolhe?('<button class="mais" onclick="verMais('+i+',this)">ver tudo ▾</button>'):'') +
       '</div>';
   });
   html += '<div style="font-size:15px;color:var(--muted);font-style:italic;margin-top:8px">Exibido como consta nos autos. Para entender qualquer andamento, pergunte no chat 💬.</div></div>';
