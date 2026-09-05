@@ -5,22 +5,46 @@
 self.addEventListener('install', () => { self.skipWaiting() })
 self.addEventListener('activate', (event) => { event.waitUntil(self.clients.claim()) })
 
+/* De quem é este endereço — para a notificação sair com a marca do escritório
+   DO CLIENTE. O aviso do chat aparecia na tela de bloqueio com o nome e o ícone
+   de quem vendeu o sistema, mesmo no app de outro escritório. */
+let _marca = null
+async function marcaDaCasa() {
+  if (_marca) return _marca
+  try {
+    const r = await fetch('/api/inquilino', { cache: 'no-store' })
+    const d = await r.json()
+    if (d && d.ok && d.conhecido) {
+      _marca = {
+        nome: (d.marca && d.marca.sistema) || d.nome || '',
+        icone: d.raiz === true ? '/icone-cmp-512.png' : ((d.marca && d.marca.logo) || '/api/portal/icone.svg'),
+      }
+      return _marca
+    }
+  } catch (e) {}
+  return { nome: '', icone: '/api/portal/icone.svg' }
+}
+
 self.addEventListener('push', (event) => {
   let dados = {}
   try { dados = event.data ? event.data.json() : {} } catch (e) {}
-  const titulo = dados.titulo || 'CMP Advogados'
-  const corpo = dados.corpo || 'Novidade no seu processo'
   const url = dados.url || '/portal.html'
-  event.waitUntil(
-    self.registration.showNotification(titulo, {
+  event.waitUntil((async () => {
+    const casa = await marcaDaCasa()
+    // o título vem pronto do servidor (já com o nome do escritório certo);
+    // o padrão é neutro, nunca o nome de uma banca
+    const titulo = dados.titulo || casa.nome || 'Seu processo'
+    const corpo = dados.corpo || 'Novidade no seu processo'
+    const icone = dados.icone || casa.icone
+    return self.registration.showNotification(titulo, {
       body: corpo,
-      icon: '/icone-cmp-512.png',
-      badge: '/icone-cmp-512.png',
+      icon: icone,
+      badge: icone,
       data: { url },
-      tag: 'cmp-portal',
+      tag: 'portal-cliente',
       renotify: true,
     })
-  )
+  })())
 })
 
 self.addEventListener('notificationclick', (event) => {

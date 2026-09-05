@@ -5,7 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <link rel="icon" type="image/png" sizes="64x64" href="/favicon-cmp.png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-<link rel="manifest" href="/manifest.json">
+<!-- manifesto POR ESCRITÓRIO: é ele que dá nome e ícone ao app instalado.
+     Fixo, o cliente do escritório cliente instalava um app com a marca de
+     outra banca. -->
+<link rel="manifest" href="/api/portal/manifest">
 <meta name="apple-mobile-web-app-title" content="Portal do cliente">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -275,8 +278,8 @@
     </div>
     <div class="rodape">
       <button class="rbtn claro" id="btn-instalar" onclick="instalar()">📲 Instalar o aplicativo</button>
-      <div class="t">Acompanhe o escritório:</div>
-      <div class="rlinha">
+      <div class="t so-da-casa">Acompanhe o escritório:</div>
+      <div class="rlinha so-da-casa">
         <a class="rig" href="https://instagram.com/cmpadvs" target="_blank" rel="noopener" title="Instagram do escritório" aria-label="Instagram @cmpadvs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="5.5"/><circle cx="12" cy="12" r="4.2"/><circle cx="17.6" cy="6.4" r="1.15" fill="currentColor" stroke="none"/></svg></a>
         <a class="rbtn dourado" href="/areas-atuacao.html" target="_blank">Áreas de atuação</a>
       </div>
@@ -317,8 +320,8 @@
       <div class="t hidden" style="margin-bottom:0" id="push-linha"><button class="rbtn claro" onclick="ativarAvisos()">🔔 Ativar avisos no celular</button></div>
       <div class="t hidden" id="linha-busca" style="margin-top:12px"><button class="rbtn claro" onclick="abrirBusca()">🔎 Pesquisar processos no meu nome</button></div>
       <div class="t" style="margin-top:12px"><button class="rbtn claro" onclick="abrirTrocaSenha()">🔑 Trocar minha senha</button></div>
-      <div class="t" style="margin-top:12px">Acompanhe o escritório:</div>
-      <div class="rlinha">
+      <div class="t so-da-casa" style="margin-top:12px">Acompanhe o escritório:</div>
+      <div class="rlinha so-da-casa">
         <a class="rig" href="https://instagram.com/cmpadvs" target="_blank" rel="noopener" title="Instagram do escritório" aria-label="Instagram @cmpadvs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="5.5"/><circle cx="12" cy="12" r="4.2"/><circle cx="17.6" cy="6.4" r="1.15" fill="currentColor" stroke="none"/></svg></a>
         <a class="rbtn dourado" href="/areas-atuacao.html" target="_blank">Áreas de atuação</a>
       </div>
@@ -464,6 +467,15 @@ var NOME_ESCRITORIO='Seu escritório';
       NOME_ESCRITORIO=(d.marca&&d.marca.sistema)||d.nome||NOME_ESCRITORIO;
       try{ document.title='Portal do cliente · '+NOME_ESCRITORIO; }catch(e){}
       if(d.raiz===true) return;   /* a casa mantém a marca dela */
+      /* Instagram e "Áreas de atuação" são da casa que opera o sistema — não
+         podem aparecer no app de um cliente de outro escritório. */
+      Array.prototype.forEach.call(document.querySelectorAll('.so-da-casa'),function(el){ el.classList.add('hidden'); });
+      /* ícone do atalho no iPhone: o logo do escritório, ou o desenho com as
+         iniciais dele — nunca o ícone de quem vendeu o sistema */
+      try{
+        var ap=document.querySelector('link[rel="apple-touch-icon"]');
+        if(ap) ap.href=(d.marca&&d.marca.logo)||('/api/portal/icone.svg?host='+encodeURIComponent(location.host));
+      }catch(e){}
       var lg=(d.marca&&d.marca.logo)||null;
       Array.prototype.forEach.call(document.querySelectorAll('.marca-logo,.marca-logo-branco'),function(img){
         if(lg){ img.src=lg; img.alt=NOME_ESCRITORIO; return; }
