@@ -131,6 +131,9 @@
   .rbtn{display:inline-block;background:var(--navy);color:#fff;text-decoration:none;
         padding:9px 16px;border-radius:22px;font-size:17.5px;font-weight:600;margin:3px 4px}
   .rbtn.dourado{background:var(--gold)}
+  /* botão de conversa: sempre no verde do recado, nunca no dourado da marca */
+  .rbtn.verde{background:#25D366}
+  .rbtn.verde:active{background:#1EA952}
   .rbtn.claro{background:#fff;color:var(--navy);border:1.5px solid var(--navy)}
   /* Instagram do escritório: só o ícone da rede, redondo e discreto */
   .rlinha{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;align-items:center}
@@ -730,7 +733,7 @@ function htmlAchados(d){
   return cab+corpo+'</div>'+rodape+
     '<div class="sec" style="text-align:center;background:#fffdf3;border-color:#eadfae">'+
     '<div style="font-size:17px">Quer que o escritório cuide de algum destes?</div>'+
-    '<button class="rbtn dourado" style="margin-top:8px" onclick="abrirEscolhaChat()">💬 Falar com o escritório</button></div>';
+    '<button class="rbtn verde" style="margin-top:8px" onclick="abrirEscolhaChat()">💬 Falar com o escritório</button></div>';
 }
 function htmlConvite(d){
   var preco=brDin(d.preco_mensal||BUSCA.preco);
@@ -1067,9 +1070,10 @@ function renderDetalhes(){
       '<div style="font-size:19px">Este processo acompanha a ação de nº <b>'+esc(v.numero)+'</b>'+(v.foro?(', em trâmite na '+escT(v.foro)):'')+'.</div>' +
       '<div style="font-size:16px;color:var(--muted);margin-top:5px">É nela que corre a discussão comum a todos os credores. As movimentações e os documentos dela aparecem nas abas <b>Movimentações</b> e <b>Documentos</b>, junto com os do seu processo.</div></div>';
   });
-  html += '<div class="sec" style="text-align:center;background:#fffdf3;border-color:#eadfae">' +
-    '<div style="font-size:18px">Dúvidas sobre este processo?</div>' +
-    '<button class="rbtn dourado" style="margin-top:8px" onclick="abrirChat()">💬 Falar com o escritório</button></div>';
+  /* Aqui existia um segundo "Falar com o escritório", dourado, no fim dos
+     detalhes. Dentro do processo ele aparecia junto com o botão verde que
+     flutua na tela — dois botões para a mesma conversa, um por cima do outro.
+     Ficou só o verde, que acompanha a rolagem e serve em qualquer aba. */
   $('proc-corpo').innerHTML = html;
 }
 function renderPartes(){
