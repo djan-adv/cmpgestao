@@ -23485,6 +23485,15 @@ async function rodarRobo(nome,btn){
   /* Aviso de novidade sai para a base inteira de uma vez — e e-mail enviado não
      volta. Antes de disparar, o próprio robô conta quantos vão receber e a
      pergunta traz o número; só depois envia. */
+  /* Convite em lote: cria LOGIN e manda SENHA. Confere quantos e pergunta antes. */
+  if(nome==='convidar_app'){
+    var pv=null;
+    try{ pv=await (await fetch('/api/cron/convidar-app')).json(); }catch(e){}
+    if(!pv||!pv.ok){ alert('Não consegui conferir quantos clientes seriam convidados. Tente de novo.'); return; }
+    if(!pv.a_convidar){ alert('Ninguém a convidar: todo cliente com processo ativo já tem acesso ao aplicativo.'); return; }
+    if(!confirm('Criar acesso ao aplicativo e enviar a senha para '+pv.a_convidar+' cliente(s)?\n\n'+
+                'Só entram clientes com processo EM ANDAMENTO que ainda não têm login. Cada um recebe um e-mail com o endereço, o login e a senha.')) return;
+  }
   if(nome==='avisar_novidades'){
     var prev=null;
     try{ prev=await (await fetch('/api/cron/avisar-novidades')).json(); }catch(e){}

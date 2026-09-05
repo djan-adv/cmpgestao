@@ -98,6 +98,9 @@ const JOBS = [
   // pelo botão "▶ rodar agora" — mandar e-mail para a base inteira é decisão de
   // quem assina o escritório, não de um relógio. Cada pessoa recebe uma vez só.
   { nome: 'avisar_novidades', rotulo: 'Clientes — avisar as novidades do aplicativo (só no botão)', url: '/api/cron/avisar-novidades?liberar=sim' },
+  // idem: sem horário. Cria o login e manda a senha para quem tem processo
+  // ativo e ainda não usa o aplicativo.
+  { nome: 'convidar_app', rotulo: 'Clientes — convidar quem ainda não tem o aplicativo (só no botão)', url: '/api/cron/convidar-app?liberar=sim' },
 ]
 
 function jobDevido(job, execRow, bt) {
