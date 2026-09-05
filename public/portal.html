@@ -22,10 +22,10 @@
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body{margin:0;padding:0}
   body{font-family:"Barlow",system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--ink);
-       font-size:15.5px;line-height:1.5;padding-bottom:env(safe-area-inset-bottom)}
+       font-size:20px;line-height:1.5;padding-bottom:env(safe-area-inset-bottom)}
   .hidden{display:none!important}
   button{font-family:inherit;cursor:pointer;border:none;background:none}
-  input,textarea{font-family:inherit;font-size:15px;width:100%;padding:11px 13px;border:1px solid var(--line);border-radius:9px;background:#fff;color:var(--ink)}
+  input,textarea{font-family:inherit;font-size:19.5px;width:100%;padding:11px 13px;border:1px solid var(--line);border-radius:9px;background:#fff;color:var(--ink)}
   input:focus,textarea:focus{outline:2px solid #b8c6da;border-color:transparent}
   a{color:var(--navy)}
 
@@ -33,10 +33,10 @@
   .topo{background:var(--navy);color:#fff;padding:calc(12px + env(safe-area-inset-top)) 14px 12px;
         display:flex;align-items:center;gap:8px;position:sticky;top:0;z-index:30;
         box-shadow:0 1px 6px rgba(20,30,45,.25)}
-  .topo .tit{flex:1;text-align:center;font-size:19px;font-weight:700;letter-spacing:.2px;
+  .topo .tit{flex:1;text-align:center;font-size:24.5px;font-weight:700;letter-spacing:.2px;
              white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .topo .ico{width:40px;height:40px;display:flex;align-items:center;justify-content:center;
-             color:#fff;font-size:20px;border-radius:50%;flex:none}
+  .topo .ico{width:48px;height:48px;display:flex;align-items:center;justify-content:center;
+             color:#fff;font-size:26px;border-radius:50%;flex:none}
   .topo .ico:active{background:rgba(255,255,255,.15)}
   .topo .ico.vazio{visibility:hidden}
   /* App instalado no celular: some o botão de sair. Num aplicativo o cliente não
@@ -47,17 +47,19 @@
 
   /* ---------- abas (modelo TJ) ---------- */
   .abas{display:flex;background:#f6f8fb;border-bottom:1px solid var(--line);position:sticky;
-        top:calc(64px + env(safe-area-inset-top));z-index:29;overflow-x:auto;scrollbar-width:none}
+        top:calc(72px + env(safe-area-inset-top));z-index:29;overflow-x:auto;scrollbar-width:none}
   .abas::-webkit-scrollbar{display:none}
-  /* as quatro abas precisam caber juntas na tela do celular, senão "Documentos"
-     fica cortado: sem largura mínima, folga pequena e fonte que encolhe no aperto */
-  .abas button{flex:1 1 auto;min-width:0;padding:13px 5px;font-size:14px;font-weight:600;
+  /* Com a letra 30% maior as quatro abas podem não caber juntas no celular.
+     flex:1 0 auto — cresce para preencher a linha quando sobra espaço, mas NÃO
+     encolhe abaixo do próprio texto: em vez de cortar "Documentos", a fileira
+     rola de lado (a faixa já tem overflow-x). */
+  .abas button{flex:1 0 auto;min-width:0;padding:13px 5px;font-size:18px;font-weight:600;
                color:var(--muted);border-bottom:3px solid transparent;white-space:nowrap;letter-spacing:-.15px}
   .abas button.on{color:var(--navy);border-bottom-color:var(--navy)}
-  .abas button .b{display:inline-block;min-width:16px;padding:0 4px;height:16px;line-height:16px;
-                  border-radius:8px;background:var(--gold);color:#fff;font-size:10.5px;font-weight:700;margin-left:3px}
-  @media (max-width:359px){ .abas button{font-size:12.5px;padding:12px 3px} }
-  @media (min-width:600px){ .abas button{font-size:15.5px;padding:13px 12px} }
+  .abas button .b{display:inline-block;min-width:21px;padding:0 5px;height:21px;line-height:21px;
+                  border-radius:8px;background:var(--gold);color:#fff;font-size:13.5px;font-weight:700;margin-left:3px}
+  @media (max-width:359px){ .abas button{font-size:16px;padding:12px 3px} }
+  @media (min-width:600px){ .abas button{font-size:20px;padding:13px 12px} }
 
   .wrap{max-width:760px;margin:0 auto;padding:14px 14px 40px}
 
@@ -65,48 +67,48 @@
   #login .loginbox{background:var(--panel);border:1px solid var(--line);border-radius:16px;
                    padding:30px 24px;max-width:420px;margin:7vh auto 0;text-align:center}
   #login img{width:230px;max-width:88%;margin:0 auto 6px;display:block}
-  #login .sub{font-size:13.5px;color:var(--muted);margin-bottom:16px}
-  #login label{font-size:12.5px;color:var(--muted);display:block;text-align:left;margin:12px 0 5px}
-  .btnp{background:var(--navy);color:#fff;border-radius:9px;padding:12px 18px;font-weight:700;font-size:15.5px;width:100%}
+  #login .sub{font-size:17.5px;color:var(--muted);margin-bottom:16px}
+  #login label{font-size:16px;color:var(--muted);display:block;text-align:left;margin:12px 0 5px}
+  .btnp{background:var(--navy);color:#fff;border-radius:9px;padding:12px 18px;font-weight:700;font-size:20px;width:100%}
   .btnp:active{background:var(--navy2)}
   .btnp[disabled]{opacity:.6}
   .errbox{background:#fdf0ef;border:1px solid #f2c9c5;color:var(--danger);border-radius:8px;
-          padding:9px 12px;font-size:13.5px;margin-top:12px;display:none;text-align:left}
-  .seg{font-size:11.5px;color:var(--muted);margin-top:14px;text-align:left;line-height:1.5}
+          padding:9px 12px;font-size:17.5px;margin-top:12px;display:none;text-align:left}
+  .seg{font-size:15px;color:var(--muted);margin-top:14px;text-align:left;line-height:1.5}
 
   /* ---------- cards de processos (home) ---------- */
   .ola{background:var(--navy);color:#fff;border-radius:14px;padding:15px 18px;margin-bottom:14px;
        display:flex;align-items:center;gap:13px}
   .ola img{width:56px;flex:none}
-  .ola h1{margin:0;font-size:17.5px}
-  .ola p{margin:3px 0 0;color:#c2cbd9;font-size:12.5px}
+  .ola h1{margin:0;font-size:23px}
+  .ola p{margin:3px 0 0;color:#c2cbd9;font-size:16px}
   .pcard{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:15px 16px;
          margin-bottom:12px;cursor:pointer;position:relative;transition:border-color .12s;
          box-shadow:0 1px 3px rgba(25,35,50,.05)}
   .pcard:active{border-color:var(--navy)}
-  .pcard .num{font-family:ui-monospace,Menlo,monospace;font-size:12px;color:var(--muted)}
-  .pcard .vs{font-weight:700;font-size:16px;margin:3px 0 1px}
+  .pcard .num{font-family:ui-monospace,Menlo,monospace;font-size:15.5px;color:var(--muted)}
+  .pcard .vs{font-weight:700;font-size:21px;margin:3px 0 1px}
   .pcard .vs .x{color:var(--muted);font-weight:400}
-  .pcard .tt{color:var(--muted);font-size:13px}
-  .pcard .ult{font-size:13.5px;margin-top:7px;color:var(--ink)}
+  .pcard .tt{color:var(--muted);font-size:17px}
+  .pcard .ult{font-size:17.5px;margin-top:7px;color:var(--ink)}
   .pcard .ult b{font-weight:600}
-  .pcard .vinc{font-size:13px;margin-top:6px;padding:6px 9px;background:#f4f9ff;
+  .pcard .vinc{font-size:17px;margin-top:6px;padding:6px 9px;background:#f4f9ff;
                border-left:3px solid var(--navy);border-radius:0 7px 7px 0;color:var(--ink)}
   .pcard .vinc b{font-weight:600;color:var(--navy)}
-  .chip{display:inline-block;font-size:11.5px;padding:2.5px 10px;border-radius:20px;
+  .chip{display:inline-block;font-size:15px;padding:2.5px 10px;border-radius:20px;
         background:var(--chipbg);color:var(--navy);font-weight:700;margin-top:8px}
   .chip.enc{background:#f3e9e8;color:var(--danger)}
   .pcard .badge{position:absolute;top:12px;right:12px;background:var(--gold);color:#fff;
-                min-width:22px;height:22px;line-height:22px;border-radius:11px;text-align:center;
-                font-size:12.5px;font-weight:700;padding:0 6px}
+                min-width:28px;height:28px;line-height:28px;border-radius:14px;text-align:center;
+                font-size:16px;font-weight:700;padding:0 6px}
   .vazio{background:var(--panel);border:1px dashed #c9d2de;border-radius:14px;padding:26px 18px;
-         text-align:center;color:var(--muted);font-size:14px}
+         text-align:center;color:var(--muted);font-size:18px}
 
   /* ---------- rodapé (Instagram / áreas / instalar) ---------- */
   .rodape{margin-top:26px;text-align:center}
-  .rodape .t{font-size:12px;color:var(--muted);margin-bottom:9px}
+  .rodape .t{font-size:15.5px;color:var(--muted);margin-bottom:9px}
   .rbtn{display:inline-block;background:var(--navy);color:#fff;text-decoration:none;
-        padding:9px 16px;border-radius:22px;font-size:13.5px;font-weight:600;margin:3px 4px}
+        padding:9px 16px;border-radius:22px;font-size:17.5px;font-weight:600;margin:3px 4px}
   .rbtn.dourado{background:var(--gold)}
   .rbtn.claro{background:#fff;color:var(--navy);border:1.5px solid var(--navy)}
   /* Instagram do escritório: só o ícone da rede, redondo e discreto */
@@ -119,91 +121,91 @@
 
   /* ---------- ficha do processo ---------- */
   .sec{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:15px 16px;margin-bottom:12px}
-  .sec .lab{font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;font-weight:700;margin:0 0 9px}
+  .sec .lab{font-size:15px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;font-weight:700;margin:0 0 9px}
   .kv{padding:7px 0;border-bottom:1px solid #f0f3f7}
   .kv:last-child{border-bottom:none}
-  .kv .k{font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;font-weight:700}
-  .kv .v{font-size:15.5px;margin-top:1px;white-space:pre-line}
-  .kv .v.mono{font-family:ui-monospace,Menlo,monospace;font-size:13.5px}
+  .kv .k{font-size:15px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;font-weight:700}
+  .kv .v{font-size:20px;margin-top:1px;white-space:pre-line}
+  .kv .v.mono{font-family:ui-monospace,Menlo,monospace;font-size:17.5px}
 
   /* partes (modelo TJ: papel em cima, nome embaixo) */
   .parte{padding:13px 2px;border-bottom:1px solid #eef1f6}
   .parte:last-child{border-bottom:none}
-  .parte .papel{font-size:12.5px;color:#4a5568;font-weight:700;letter-spacing:.03em}
-  .parte .nome{font-size:17px;margin-top:2px;color:#3a4453}
-  .parte .voce{display:inline-block;background:var(--chipbg);color:var(--navy);font-size:10.5px;
+  .parte .papel{font-size:16px;color:#4a5568;font-weight:700;letter-spacing:.03em}
+  .parte .nome{font-size:22px;margin-top:2px;color:#3a4453}
+  .parte .voce{display:inline-block;background:var(--chipbg);color:var(--navy);font-size:13.5px;
                font-weight:700;border-radius:10px;padding:1px 8px;margin-left:7px;vertical-align:2px}
 
   /* movimentações (linha do tempo) */
   .mov{padding:11px 0 11px 18px;border-left:2px solid var(--line);position:relative}
   .mov::before{content:"";position:absolute;left:-6px;top:16px;width:10px;height:10px;border-radius:50%;background:var(--navy)}
   .mov:first-child::before{background:var(--gold)}
-  .mov .dt{font-size:12px;color:var(--muted);font-weight:600}
-  .mov .tx{font-size:14.5px;white-space:pre-line;word-break:break-word}
-  .mov .tx.corta{max-height:105px;overflow:hidden;position:relative}
-  .mov .mais{color:var(--navy);font-size:12.5px;font-weight:700;padding:2px 0}
+  .mov .dt{font-size:15.5px;color:var(--muted);font-weight:600}
+  .mov .tx{font-size:19px;white-space:pre-line;word-break:break-word}
+  .mov .tx.corta{max-height:135px;overflow:hidden;position:relative}
+  .mov .mais{color:var(--navy);font-size:16px;font-weight:700;padding:2px 0}
 
   /* documentos */
   .doc{display:flex;align-items:center;gap:11px;padding:11px 2px;border-bottom:1px solid #eef1f6;text-decoration:none;color:var(--ink)}
   .doc:last-child{border-bottom:none}
-  .doc .di{width:38px;height:38px;border-radius:9px;background:var(--chipbg);display:flex;align-items:center;justify-content:center;font-size:18px;flex:none}
+  .doc .di{width:46px;height:46px;border-radius:9px;background:var(--chipbg);display:flex;align-items:center;justify-content:center;font-size:23.5px;flex:none}
   .doc .dn{flex:1;min-width:0}
-  .doc .dn .n1{font-size:14.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
-  .doc .dn .n2{font-size:12px;color:var(--muted)}
-  .doc .abrir{color:var(--navy);font-size:13px;font-weight:700;flex:none}
+  .doc .dn .n1{font-size:19px;font-weight:600;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+  .doc .dn .n2{font-size:15.5px;color:var(--muted)}
+  .doc .abrir{color:var(--navy);font-size:17px;font-weight:700;flex:none}
 
   /* contato do cartório */
-  .cart a{display:block;text-decoration:none;padding:9px 0;border-bottom:1px solid #eef1f6;font-size:14.5px}
+  .cart a{display:block;text-decoration:none;padding:9px 0;border-bottom:1px solid #eef1f6;font-size:19px}
   .cart a:last-child{border-bottom:none}
-  .cart .rot{font-size:11px;color:var(--muted);text-transform:uppercase;font-weight:700;letter-spacing:.04em}
+  .cart .rot{font-size:14.5px;color:var(--muted);text-transform:uppercase;font-weight:700;letter-spacing:.04em}
 
   /* ---------- chat ---------- */
   /* pílula com TEXTO, não só ícone: o balão 💬 sozinho estava sendo confundido
      com botão de notificações — escrito "Falar com o escritório" não tem erro */
-  .fab{position:fixed;right:18px;bottom:calc(20px + env(safe-area-inset-bottom));height:54px;width:auto;
-       padding:0 20px;border-radius:28px;background:var(--gold);color:#fff;font-size:15px;font-weight:700;
+  .fab{position:fixed;right:18px;bottom:calc(20px + env(safe-area-inset-bottom));height:62px;width:auto;
+       padding:0 20px;border-radius:28px;background:var(--gold);color:#fff;font-size:19.5px;font-weight:700;
        display:flex;align-items:center;justify-content:center;gap:8px;border:0;font-family:inherit;cursor:pointer;
        box-shadow:0 4px 14px rgba(120,90,10,.4);z-index:40;white-space:nowrap}
-  .fab .fb{position:absolute;top:-3px;right:-3px;background:var(--danger);color:#fff;min-width:21px;height:21px;
-           line-height:21px;border-radius:11px;font-size:12px;font-weight:700;text-align:center;padding:0 5px}
+  .fab .fb{position:absolute;top:-3px;right:-3px;background:var(--danger);color:#fff;min-width:27px;height:27px;
+           line-height:27px;border-radius:14px;font-size:15.5px;font-weight:700;text-align:center;padding:0 5px}
   #chat{position:fixed;inset:0;background:var(--bg);z-index:60;display:flex;flex-direction:column}
   #chat .corpo{flex:1;overflow-y:auto;padding:14px 14px 8px;-webkit-overflow-scrolling:touch}
   .cmsg{margin-bottom:10px;display:flex}
-  .cmsg .bolha{max-width:82%;padding:9px 13px;border-radius:14px;font-size:14.8px;white-space:pre-line;word-break:break-word}
+  .cmsg .bolha{max-width:82%;padding:9px 13px;border-radius:14px;font-size:19px;white-space:pre-line;word-break:break-word}
   .cmsg.eu{justify-content:flex-end}
   .cmsg.eu .bolha{background:var(--navy);color:#fff;border-bottom-right-radius:4px}
   .cmsg.eles .bolha{background:#fff;border:1px solid var(--line);border-bottom-left-radius:4px}
-  .cmsg .quem{font-size:11px;color:var(--muted);margin-bottom:2px}
-  .cmsg .hora{font-size:10.5px;opacity:.65;margin-top:3px;text-align:right}
+  .cmsg .quem{font-size:14.5px;color:var(--muted);margin-bottom:2px}
+  .cmsg .hora{font-size:13.5px;opacity:.65;margin-top:3px;text-align:right}
   #chat .escrever{display:flex;gap:8px;padding:10px 12px calc(12px + env(safe-area-inset-bottom));
                   background:#f6f8fb;border-top:1px solid var(--line)}
-  #chat .escrever textarea{resize:none;height:46px;border-radius:23px;padding:12px 16px}
-  #chat .escrever .env{width:46px;height:46px;border-radius:50%;background:var(--navy);color:#fff;font-size:19px;flex:none}
-  #chat .escrever .clip{width:44px;height:46px;font-size:21px;flex:none;color:var(--muted)}
+  #chat .escrever textarea{resize:none;height:56px;border-radius:28px;padding:12px 16px}
+  #chat .escrever .env{width:56px;height:56px;border-radius:50%;background:var(--navy);color:#fff;font-size:24.5px;flex:none}
+  #chat .escrever .clip{width:52px;height:56px;font-size:27.5px;flex:none;color:var(--muted)}
   #chat .escrever .clip:active{color:var(--navy)}
-  #chat-anexo-barra{background:#eef4fb;border-top:1px solid var(--line);padding:8px 12px;font-size:13px;
+  #chat-anexo-barra{background:#eef4fb;border-top:1px solid var(--line);padding:8px 12px;font-size:17px;
                     display:flex;align-items:center;gap:8px}
-  #chat-anexo-barra .x{margin-left:auto;color:var(--danger);font-weight:700;font-size:16px;padding:0 6px}
+  #chat-anexo-barra .x{margin-left:auto;color:var(--danger);font-weight:700;font-size:21px;padding:0 6px}
   .cmsg .anx{display:flex;align-items:center;gap:8px;text-decoration:none;color:inherit;
              padding:7px 9px;border-radius:9px;background:rgba(255,255,255,.16);margin-top:2px}
   .cmsg.eles .anx{background:#eef2f7;color:var(--ink)}
-  .cmsg .anx .ai{font-size:20px;flex:none}
-  .cmsg .anx .an{font-size:13px;font-weight:600;word-break:break-word;line-height:1.25}
-  .cmsg .anx .at{font-size:11px;opacity:.75}
+  .cmsg .anx .ai{font-size:26px;flex:none}
+  .cmsg .anx .an{font-size:17px;font-weight:600;word-break:break-word;line-height:1.25}
+  .cmsg .anx .at{font-size:14.5px;opacity:.75}
   .cmsg .foto{max-width:100%;border-radius:9px;display:block;margin-top:2px}
-  .aviso-dia{ text-align:center;font-size:11.5px;color:var(--muted);margin:9px 0}
+  .aviso-dia{ text-align:center;font-size:15px;color:var(--muted);margin:9px 0}
 
   /* ---------- modal (instalar no iPhone etc.) ---------- */
   .veu{position:fixed;inset:0;background:rgba(20,28,40,.55);z-index:70;display:flex;align-items:flex-end;justify-content:center}
   .veu .cx{background:#fff;border-radius:18px 18px 0 0;max-width:520px;width:100%;padding:22px 20px calc(26px + env(safe-area-inset-bottom))}
-  .veu h3{margin:0 0 10px;font-size:17px;color:var(--navy)}
-  .veu ol{margin:8px 0 0;padding-left:22px;font-size:14.5px}
+  .veu h3{margin:0 0 10px;font-size:22px;color:var(--navy)}
+  .veu ol{margin:8px 0 0;padding-left:22px;font-size:19px}
   .veu ol li{margin-bottom:9px}
   .veu .fech{width:100%;margin-top:16px;background:var(--chipbg);color:var(--navy);font-weight:700;border-radius:10px;padding:12px}
-  .veu .icone-ios{display:inline-block;background:#eef2f7;border-radius:6px;padding:1px 7px;font-size:15px}
+  .veu .icone-ios{display:inline-block;background:#eef2f7;border-radius:6px;padding:1px 7px;font-size:19.5px}
 
   .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(92px + env(safe-area-inset-bottom));
-         background:#243040;color:#fff;padding:10px 18px;border-radius:22px;font-size:13.5px;z-index:80;
+         background:#243040;color:#fff;padding:10px 18px;border-radius:22px;font-size:17.5px;z-index:80;
          box-shadow:0 4px 12px rgba(0,0,0,.3);max-width:88%;text-align:center}
 </style>
 </head>
@@ -224,9 +226,9 @@
       <input id="l-senha" type="password" autocomplete="current-password" placeholder="Senha enviada por e-mail" onkeydown="if(event.key==='Enter')entrar()">
       <button class="btnp" id="btn-entrar" style="margin-top:16px" onclick="entrar()">Entrar</button>
       <div class="errbox" id="l-erro"></div>
-      <div id="l-okmsg" style="display:none;background:#e5f4ed;border:1px solid #bfe0cf;color:#0F6E56;border-radius:10px;padding:10px 12px;font-size:13px;margin-top:10px"></div>
-      <div style="text-align:center;margin-top:12px"><a onclick="mostrarEsqueci()" style="cursor:pointer;color:#274b7d;font-size:13.5px;font-weight:600;text-decoration:underline">Esqueci minha senha</a></div>
-      <div style="text-align:center;margin-top:6px"><a onclick="entrarSemSenha()" style="cursor:pointer;color:#5b6673;font-size:12.5px;text-decoration:underline">Ainda não tenho senha — sou atendimento novo</a></div>
+      <div id="l-okmsg" style="display:none;background:#e5f4ed;border:1px solid #bfe0cf;color:#0F6E56;border-radius:10px;padding:10px 12px;font-size:17px;margin-top:10px"></div>
+      <div style="text-align:center;margin-top:12px"><a onclick="mostrarEsqueci()" style="cursor:pointer;color:#274b7d;font-size:17.5px;font-weight:600;text-decoration:underline">Esqueci minha senha</a></div>
+      <div style="text-align:center;margin-top:6px"><a onclick="entrarSemSenha()" style="cursor:pointer;color:#5b6673;font-size:16px;text-decoration:underline">Ainda não tenho senha — sou atendimento novo</a></div>
       <div class="seg">Acesso pessoal enviado pelo escritório por e-mail. Você vê apenas os SEUS processos.
         Seus dados são tratados só para esta consulta (LGPD).</div>
     </div>
@@ -239,8 +241,8 @@
       <input id="e-email" type="email" inputmode="email" placeholder="seu@email.com" onkeydown="if(event.key==='Enter')enviarEsqueci()">
       <button class="btnp" id="btn-esqueci" style="margin-top:16px" onclick="enviarEsqueci()">Enviar link de redefinição</button>
       <div class="errbox" id="e-erro"></div>
-      <div id="e-ok" style="display:none;background:#e5f4ed;border:1px solid #bfe0cf;color:#0F6E56;border-radius:10px;padding:10px 12px;font-size:13px;margin-top:10px"></div>
-      <div style="text-align:center;margin-top:12px"><a onclick="voltarLogin()" style="cursor:pointer;color:#274b7d;font-size:13.5px;text-decoration:underline">← voltar ao login</a></div>
+      <div id="e-ok" style="display:none;background:#e5f4ed;border:1px solid #bfe0cf;color:#0F6E56;border-radius:10px;padding:10px 12px;font-size:17px;margin-top:10px"></div>
+      <div style="text-align:center;margin-top:12px"><a onclick="voltarLogin()" style="cursor:pointer;color:#274b7d;font-size:17.5px;text-decoration:underline">← voltar ao login</a></div>
       <div class="seg">Enviamos um link para o e-mail cadastrado no escritório. Ele vale por 1 hora e só funciona uma vez.</div>
     </div>
 
@@ -270,9 +272,9 @@
 <!-- convite de avisos, na primeira entrada -->
 <div id="modal-avisos" class="hidden" style="position:fixed;inset:0;background:rgba(20,26,36,.55);z-index:200;display:flex;align-items:center;justify-content:center;padding:20px">
   <div style="background:#fff;border-radius:16px;max-width:380px;padding:24px;text-align:center;font-family:inherit">
-    <div style="font-size:38px">🔔</div>
+    <div style="font-size:49.5px">🔔</div>
     <h3 style="margin:8px 0 6px">Ativar avisos do processo</h3>
-    <p style="color:#5b6572;font-size:13.5px;line-height:1.55;margin:0 0 18px">Avise quando o escritório mandar mensagem, quando houver audiência marcada e quando faltar pouco para ela. Sem isso, você só sabe abrindo o app.</p>
+    <p style="color:#5b6572;font-size:17.5px;line-height:1.55;margin:0 0 18px">Avise quando o escritório mandar mensagem, quando houver audiência marcada e quando faltar pouco para ela. Sem isso, você só sabe abrindo o app.</p>
     <button class="rbtn dourado" style="width:100%;margin-bottom:8px" onclick="ativarAvisosDoConvite()">🔔 Ativar avisos</button>
     <button class="rbtn claro" style="width:100%" onclick="fecharConviteAvisos()">Agora não</button>
   </div>
@@ -291,13 +293,14 @@
       <div><h1 id="h-nome">Olá</h1><p>Toque num processo para ver movimentações, documentos e falar com o escritório.</p></div>
     </div>
     <div id="push-banner" class="hidden" style="background:#fdf3e7;border:1px solid #e8d9b0;border-radius:12px;padding:12px 14px;margin-bottom:12px;display:flex;align-items:center;gap:10px;justify-content:space-between;flex-wrap:wrap">
-      <span style="font-size:13px;color:#8a6d1a"><b>🔔 Ative os avisos</b><br>Sem isso você não é avisado de mensagem nova nem de audiência.</span>
+      <span style="font-size:17px;color:#8a6d1a"><b>🔔 Ative os avisos</b><br>Sem isso você não é avisado de mensagem nova nem de audiência.</span>
       <button class="rbtn dourado" style="white-space:nowrap" onclick="ativarAvisos()">Ativar agora</button>
     </div>
     <div id="cards"></div>
     <div class="rodape">
       <button class="rbtn claro" id="btn-instalar2" style="display:none" onclick="instalar()">📲 Instalar o aplicativo</button>
       <div class="t hidden" style="margin-bottom:0" id="push-linha"><button class="rbtn claro" onclick="ativarAvisos()">🔔 Ativar avisos no celular</button></div>
+      <div class="t" style="margin-top:12px"><button class="rbtn claro" onclick="abrirTrocaSenha()">🔑 Trocar minha senha</button></div>
       <div class="t" style="margin-top:12px">Acompanhe o escritório:</div>
       <div class="rlinha">
         <a class="rig" href="https://instagram.com/cmpadvs" target="_blank" rel="noopener" title="Instagram do escritório" aria-label="Instagram @cmpadvs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="5.5"/><circle cx="12" cy="12" r="4.2"/><circle cx="17.6" cy="6.4" r="1.15" fill="currentColor" stroke="none"/></svg></a>
@@ -320,7 +323,7 @@
     <button class="ico vazio">⏻</button>
   </div>
   <div class="wrap">
-    <p style="font-size:13.5px;margin:0 2px 12px;color:var(--ink)">Sobre qual processo você quer falar?</p>
+    <p style="font-size:17.5px;margin:0 2px 12px;color:var(--ink)">Sobre qual processo você quer falar?</p>
     <div id="escolha-lista"></div>
   </div>
 </section>
@@ -374,6 +377,31 @@
   </div>
 </div>
 
+<!-- ==================== TROCAR SENHA (dentro do app) ====================
+     Formulário de verdade, com os três campos que o cofre de senhas do celular
+     espera (conta + senha atual + senha nova): é assim que o iPhone e o Android
+     oferecem ATUALIZAR a senha guardada. Sem isto, o aparelho continuava
+     devolvendo no login a primeira senha, a que o escritório mandou por e-mail. -->
+<div class="veu hidden" id="veu-senha">
+  <div class="cx">
+    <h3>Trocar minha senha</h3>
+    <form id="form-senha" onsubmit="event.preventDefault(); salvarTrocaSenha(); return false">
+      <label for="s-conta" style="font-size:16px;color:var(--muted);display:block;margin:10px 0 5px">Sua conta</label>
+      <input id="s-conta" type="email" autocomplete="username" readonly style="background:#f4f6fa;color:var(--muted)">
+      <label for="s-atual" style="font-size:16px;color:var(--muted);display:block;margin:12px 0 5px">Senha atual</label>
+      <input id="s-atual" type="password" autocomplete="current-password" placeholder="a senha que você usa hoje">
+      <label for="s-nova" style="font-size:16px;color:var(--muted);display:block;margin:12px 0 5px">Nova senha <span style="font-weight:400">(mínimo 6 caracteres)</span></label>
+      <input id="s-nova" type="password" autocomplete="new-password" placeholder="nova senha">
+      <label for="s-nova2" style="font-size:16px;color:var(--muted);display:block;margin:12px 0 5px">Repita a nova senha</label>
+      <input id="s-nova2" type="password" autocomplete="new-password" placeholder="repita a nova senha">
+      <button class="btnp" id="btn-trocasenha" type="submit" style="margin-top:16px">Salvar nova senha</button>
+    </form>
+    <div class="errbox" id="s-erro"></div>
+    <button class="fech" onclick="fecharTrocaSenha()">Cancelar</button>
+    <div class="seg">Os outros aparelhos conectados são desconectados; este continua aberto.</div>
+  </div>
+</div>
+
 <script>
 /* =====================================================================
    Portal do Cliente — modelo do app do TJ-PB, falando só com /api/portal
@@ -396,7 +424,7 @@ var NOME_ESCRITORIO='Seu escritório';
         /* sem logo cadastrado, o nome escrito — nunca a marca de outro escritório */
         var t=document.createElement('div');
         t.textContent=NOME_ESCRITORIO;
-        t.style.cssText='font-weight:800;font-size:17px;color:'+(img.className.indexOf('branco')>-1?'#fff':'#2E3A4B');
+        t.style.cssText='font-weight:800;font-size:22px;color:'+(img.className.indexOf('branco')>-1?'#fff':'#2E3A4B');
         img.parentNode.replaceChild(t,img);
       });
     }).catch(function(){});
@@ -521,6 +549,61 @@ function api(acao, dados){
     return r.json().then(function(d){ d.__status=r.status; return d; });
   });
 }
+/* Senha recusada no login quase sempre é o cofre do celular devolvendo a
+   PRIMEIRA senha, a que o escritório enviou por e-mail e que já foi trocada.
+   Dizer só "senha incorreta" deixa a pessoa tentando de novo a mesma; aqui o
+   caminho de saída vem junto, com o botão que abre a redefinição. */
+function erroDeSenha(err,d){
+  var msg=(d&&d.erro)||'Não foi possível entrar agora. Tente de novo.';
+  err.innerHTML='';
+  var p=document.createElement('div'); p.textContent=msg; err.appendChild(p);
+  if(/senha/i.test(msg)){
+    var q=document.createElement('div');
+    q.style.cssText='margin-top:7px;font-weight:400';
+    q.textContent='Se o celular preencheu sozinho, pode ser a senha antiga guardada nele.';
+    err.appendChild(q);
+    var bt=document.createElement('button');
+    bt.className='btnp'; bt.style.cssText='margin-top:9px;font-size:16px;padding:9px 14px';
+    bt.textContent='Criar uma senha nova';
+    bt.onclick=function(){ mostrarEsqueci(); };
+    err.appendChild(bt);
+  }
+  err.style.display='block';
+}
+
+/* ---------- trocar senha dentro do app ---------- */
+function abrirTrocaSenha(){
+  var e=$('s-erro'); if(e){ e.style.display='none'; e.textContent=''; }
+  ['s-atual','s-nova','s-nova2'].forEach(function(id){ var c=$(id); if(c) c.value=''; });
+  var conta=$('s-conta');
+  if(conta){ try{ conta.value=localStorage.getItem('cmp_portal_email')||''; }catch(x){ conta.value=''; } }
+  var v=$('veu-senha'); if(v) v.classList.remove('hidden');
+  setTimeout(function(){ var a=$('s-atual'); if(a) a.focus(); },80);
+}
+function fecharTrocaSenha(){ var v=$('veu-senha'); if(v) v.classList.add('hidden'); }
+function salvarTrocaSenha(){
+  var atual=(($('s-atual')||{}).value||''), n1=(($('s-nova')||{}).value||''), n2=(($('s-nova2')||{}).value||'');
+  var err=$('s-erro'), b=$('btn-trocasenha');
+  err.style.display='none';
+  if(n1.length<6){ err.textContent='A nova senha precisa ter pelo menos 6 caracteres.'; err.style.display='block'; return; }
+  if(n1!==n2){ err.textContent='As duas senhas novas não conferem — digite igual nas duas caixas.'; err.style.display='block'; return; }
+  b.disabled=true; b.textContent='Salvando…';
+  api('trocar_senha',{senha_atual:atual,senha:n1}).then(function(d){
+    b.disabled=false; b.textContent='Salvar nova senha';
+    if(!d||!d.ok){
+      if(caiuSessao(d)) return;
+      err.textContent=(d&&d.erro)||'Não consegui trocar a senha agora. Tente de novo.'; err.style.display='block'; return;
+    }
+    /* deixa o navegador/cofre perceber a troca e oferecer a atualização da senha
+       guardada — por isso o formulário some só depois do envio dar certo */
+    try{ if(d.email) localStorage.setItem('cmp_portal_email',d.email); }catch(x){}
+    fecharTrocaSenha();
+    toast('Senha trocada. Se o celular oferecer, aceite atualizar a senha guardada.');
+  }).catch(function(){
+    b.disabled=false; b.textContent='Salvar nova senha';
+    err.textContent='Falha de conexão. Verifique a internet e tente de novo.'; err.style.display='block';
+  });
+}
 function caiuSessao(d){
   if(d && d.__status===401 && TOKEN){ deslogarLocal(); toast('Sua sessão expirou. Entre de novo.'); return true; }
   return false;
@@ -544,7 +627,7 @@ function entrar(){
   .then(function(r){return r.json();})
   .then(function(d){
     b.disabled=false; b.textContent='Entrar';
-    if(!d || !d.ok){ err.textContent=(d&&d.erro)||'Não foi possível entrar agora. Tente de novo.'; err.style.display='block'; return; }
+    if(!d || !d.ok){ erroDeSenha(err,d); return; }
     TOKEN=d.token; NOME=d.nome||'';
     localStorage.setItem('cmp_portal_token',TOKEN);
     localStorage.setItem('cmp_portal_nome',NOME);
@@ -568,7 +651,7 @@ function entrarSemSenha(){
   .then(function(r){return r.json();})
   .then(function(d){
     b.disabled=false; b.textContent='Entrar';
-    if(!d || !d.ok){ err.textContent=(d&&d.erro)||'Não foi possível entrar agora. Tente de novo.'; err.style.display='block'; return; }
+    if(!d || !d.ok){ erroDeSenha(err,d); return; }
     TOKEN=d.token; NOME=d.nome||'';
     localStorage.setItem('cmp_portal_token',TOKEN);
     localStorage.setItem('cmp_portal_nome',NOME);
@@ -676,7 +759,7 @@ function renderCards(){
   })();
   if(PROCESSOS.length>1){
     var h=document.createElement('div');
-    h.style.cssText='font-size:13.5px;margin:0 2px 10px;color:var(--ink)';
+    h.style.cssText='font-size:17.5px;margin:0 2px 10px;color:var(--ink)';
     h.innerHTML='Você tem <b>'+PROCESSOS.length+' processos</b>:';
     c.appendChild(h);
   }
@@ -685,7 +768,7 @@ function renderCards(){
     var enc = /encerrad/i.test(p.status||'');
     d.innerHTML =
       (p.nao_lidas?('<div class="badge">'+p.nao_lidas+'</div>'):'') +
-      (p.audiencia_hoje?('<div style="background:#0F2A4A;color:#fff;border-radius:8px;padding:4px 10px;font-size:12px;font-weight:700;display:inline-block;margin-bottom:6px">📅 Audiência HOJE — toque para ver o link</div>'):'') +
+      (p.audiencia_hoje?('<div style="background:#0F2A4A;color:#fff;border-radius:8px;padding:4px 10px;font-size:15.5px;font-weight:700;display:inline-block;margin-bottom:6px">📅 Audiência HOJE — toque para ver o link</div>'):'') +
       '<div class="num">Processo nº '+esc(p.numero||'—')+'</div>' +
       '<div class="vs">'+escT(p.cliente||'Você')+' <span class="x">×</span> '+escT(p.oponente||'Parte contrária')+'</div>' +
       '<div class="tt">'+escT(limpaTitulo(p.titulo))+'</div>' +
@@ -748,11 +831,11 @@ function renderDetalhes(){
   var ah=ATUAL.audiencia_hoje;
   if(ah){
     html += '<div class="sec" style="background:#0F2A4A;border-color:#0F2A4A;color:#fff;text-align:center">' +
-      '<div style="font-size:15px;font-weight:700">📅 Sua audiência é HOJE'+(ah.hora?(', às '+esc(ah.hora)):'')+'</div>' +
-      '<div style="font-size:12.5px;margin-top:4px;opacity:.85">Tenha documento com foto em mãos e procure um lugar silencioso.</div>' +
-      (ah.link?('<a href="'+esc(ah.link)+'" target="_blank" rel="noopener" style="display:inline-block;margin-top:10px;background:#25D366;color:#fff;font-weight:700;border-radius:24px;padding:10px 22px;text-decoration:none;font-size:15px">🎥 Entrar na sala da audiência</a>' +
-        '<div style="font-size:11px;margin-top:6px;opacity:.75">Entre alguns minutos antes do horário marcado.</div>')
-        :('<div style="font-size:12.5px;margin-top:8px;opacity:.85">Se for por videoconferência, o link chega pelo chat ou pelo aviso no celular.</div>')) +
+      '<div style="font-size:19.5px;font-weight:700">📅 Sua audiência é HOJE'+(ah.hora?(', às '+esc(ah.hora)):'')+'</div>' +
+      '<div style="font-size:16px;margin-top:4px;opacity:.85">Tenha documento com foto em mãos e procure um lugar silencioso.</div>' +
+      (ah.link?('<a href="'+esc(ah.link)+'" target="_blank" rel="noopener" style="display:inline-block;margin-top:10px;background:#25D366;color:#fff;font-weight:700;border-radius:24px;padding:10px 22px;text-decoration:none;font-size:19.5px">🎥 Entrar na sala da audiência</a>' +
+        '<div style="font-size:14.5px;margin-top:6px;opacity:.75">Entre alguns minutos antes do horário marcado.</div>')
+        :('<div style="font-size:16px;margin-top:8px;opacity:.85">Se for por videoconferência, o link chega pelo chat ou pelo aviso no celular.</div>')) +
     '</div>';
   }
   html +=
@@ -772,22 +855,22 @@ function renderDetalhes(){
     '</div>';
   if(c){
     html += '<div class="sec cart"><p class="lab">Contato do cartório da Vara</p>' +
-      '<div style="font-size:15px;font-weight:600;margin-bottom:6px">'+escT(c.orgao||'')+(c.comarca?(' — '+escT(c.comarca)):'')+'</div>' +
+      '<div style="font-size:19.5px;font-weight:600;margin-bottom:6px">'+escT(c.orgao||'')+(c.comarca?(' — '+escT(c.comarca)):'')+'</div>' +
       (c.email?('<a href="mailto:'+esc(c.email)+'"><span class="rot">E-mail</span><br>✉️ '+esc(c.email)+'</a>'):'') +
       (c.telefones?('<a href="tel:'+esc(String(c.telefones).replace(/[^\d+;,]/g,'').split(/[;,]/)[0])+'"><span class="rot">Telefone</span><br>📞 '+esc(c.telefones)+'</a>'):'') +
       (c.whatsapp?('<a href="https://wa.me/55'+esc(String(c.whatsapp).replace(/\D/g,'').replace(/^55/,''))+'" target="_blank" rel="noopener"><span class="rot">WhatsApp / Balcão</span><br>💬 '+esc(c.whatsapp)+'</a>'):'') +
       (c.balcao_link?('<a href="'+esc(c.balcao_link)+'" target="_blank" rel="noopener"><span class="rot">Balcão virtual</span><br>🖥️ Atendimento on-line da Vara</a>'):'') +
-      '<div style="font-size:11.5px;color:var(--muted);margin-top:8px;font-style:italic">O cartório atende sobre andamentos do processo. Sobre a condução do caso, fale com o escritório pelo chat 💬.</div>' +
+      '<div style="font-size:15px;color:var(--muted);margin-top:8px;font-style:italic">O cartório atende sobre andamentos do processo. Sobre a condução do caso, fale com o escritório pelo chat 💬.</div>' +
     '</div>';
   }
   (ATUAL.vinculados||[]).forEach(function(v){
     html += '<div class="sec" style="background:#f8fbff;border-color:#cfe0f2">' +
       '<p class="lab" style="color:var(--navy)">Ação principal</p>' +
-      '<div style="font-size:14.5px">Este processo acompanha a ação de nº <b>'+esc(v.numero)+'</b>'+(v.foro?(', em trâmite na '+escT(v.foro)):'')+'.</div>' +
-      '<div style="font-size:12.5px;color:var(--muted);margin-top:5px">É nela que corre a discussão comum a todos os credores. As movimentações e os documentos dela aparecem nas abas <b>Movimentações</b> e <b>Documentos</b>, junto com os do seu processo.</div></div>';
+      '<div style="font-size:19px">Este processo acompanha a ação de nº <b>'+esc(v.numero)+'</b>'+(v.foro?(', em trâmite na '+escT(v.foro)):'')+'.</div>' +
+      '<div style="font-size:16px;color:var(--muted);margin-top:5px">É nela que corre a discussão comum a todos os credores. As movimentações e os documentos dela aparecem nas abas <b>Movimentações</b> e <b>Documentos</b>, junto com os do seu processo.</div></div>';
   });
   html += '<div class="sec" style="text-align:center;background:#fffdf3;border-color:#eadfae">' +
-    '<div style="font-size:14px">Dúvidas sobre este processo?</div>' +
+    '<div style="font-size:18px">Dúvidas sobre este processo?</div>' +
     '<button class="rbtn dourado" style="margin-top:8px" onclick="abrirChat()">💬 Falar com o escritório</button></div>';
   $('proc-corpo').innerHTML = html;
 }
@@ -797,13 +880,13 @@ function renderPartes(){
     html += '<div class="parte"><div class="papel">'+escT(pt.papel||'PARTE')+'</div>' +
             '<div class="nome">'+escT((pt.nome||'—').toUpperCase())+(pt.voce?'<span class="voce">VOCÊ</span>':'')+'</div></div>';
   });
-  html += '</div><div class="sec" style="font-size:12.5px;color:var(--muted)">As partes são exibidas conforme o cadastro do processo no escritório.</div>';
+  html += '</div><div class="sec" style="font-size:16px;color:var(--muted)">As partes são exibidas conforme o cadastro do processo no escritório.</div>';
   $('proc-corpo').innerHTML = html;
 }
 function renderMovs(){
   var ms = ATUAL.movimentacoes||[];
   var html = '<div class="sec"><p class="lab">Histórico do processo (termos oficiais)</p>';
-  if(!ms.length) html += '<div style="color:var(--muted);font-size:14px">Ainda não há movimentações registradas aqui.</div>';
+  if(!ms.length) html += '<div style="color:var(--muted);font-size:18px">Ainda não há movimentações registradas aqui.</div>';
   ms.forEach(function(m,i){
     var t = String(m.texto||'');
     var longa = t.length>240;
@@ -812,15 +895,15 @@ function renderMovs(){
       (longa?('<button class="mais" onclick="verMais('+i+',this)">ver tudo ▾</button>'):'') +
       '</div>';
   });
-  html += '<div style="font-size:11.5px;color:var(--muted);font-style:italic;margin-top:8px">Exibido como consta nos autos. Para entender qualquer andamento, pergunte no chat 💬.</div></div>';
+  html += '<div style="font-size:15px;color:var(--muted);font-style:italic;margin-top:8px">Exibido como consta nos autos. Para entender qualquer andamento, pergunte no chat 💬.</div></div>';
   // movimentações da ação principal (processo vinculado) — é onde o caso anda
   // quando o processo do cliente está suspenso esperando essa decisão
   (ATUAL.vinculados||[]).forEach(function(v){
     html += '<div class="sec" style="background:#f8fbff;border-color:#cfe0f2">' +
       '<p class="lab" style="color:var(--navy)">Ação principal — processo nº '+esc(v.numero)+'</p>' +
-      '<div style="font-size:13px;color:var(--muted);margin-bottom:8px">'+escT(limpaTitulo(v.titulo))+(v.foro?(' · '+escT(v.foro)):'')+
+      '<div style="font-size:17px;color:var(--muted);margin-bottom:8px">'+escT(limpaTitulo(v.titulo))+(v.foro?(' · '+escT(v.foro)):'')+
       '<br>Seu processo acompanha esta ação. As movimentações abaixo são dela.</div>';
-    if(!(v.movimentacoes||[]).length) html += '<div style="color:var(--muted);font-size:13.5px">Sem movimentações registradas ainda.</div>';
+    if(!(v.movimentacoes||[]).length) html += '<div style="color:var(--muted);font-size:17.5px">Sem movimentações registradas ainda.</div>';
     (v.movimentacoes||[]).slice(0,40).forEach(function(m,i){
       var t=String(m.texto||''), longa=t.length>240;
       html += '<div class="mov"><div class="dt">'+(brData(m.data)||'—')+'</div>' +
@@ -874,10 +957,10 @@ function abrirDoc(url,nome){
   var ov=document.createElement('div'); ov.id='doc-viewer';
   ov.style.cssText='position:fixed;inset:0;background:#3c4757;z-index:999;display:flex;flex-direction:column';
   ov.innerHTML='<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;padding-top:calc(10px + env(safe-area-inset-top));color:#fff;background:#0F2A4A">'+
-    '<div style="flex:1;font-size:13.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(nome||'Documento')+'</div>'+
-    '<a href="'+esc(url)+'&dl=1" style="color:#fff;font-size:12.5px;text-decoration:underline;white-space:nowrap">baixar</a>'+
-    '<button onclick="fecharDoc()" style="background:#fff;color:#0F2A4A;border:0;border-radius:18px;padding:7px 16px;font-weight:700;font-size:13px;cursor:pointer">✕ Fechar</button></div>'+
-    '<div id="doc-corpo" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:env(safe-area-inset-bottom)"><div style="color:#fff;text-align:center;padding:34px 16px;font-size:14px">Carregando o documento…</div></div>';
+    '<div style="flex:1;font-size:17.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(nome||'Documento')+'</div>'+
+    '<a href="'+esc(url)+'&dl=1" style="color:#fff;font-size:16px;text-decoration:underline;white-space:nowrap">baixar</a>'+
+    '<button onclick="fecharDoc()" style="background:#fff;color:#0F2A4A;border:0;border-radius:18px;padding:7px 16px;font-weight:700;font-size:17px;cursor:pointer">✕ Fechar</button></div>'+
+    '<div id="doc-corpo" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:env(safe-area-inset-bottom)"><div style="color:#fff;text-align:center;padding:34px 16px;font-size:18px">Carregando o documento…</div></div>';
   document.body.appendChild(ov);
   var cont=document.getElementById('doc-corpo');
   _pdfNoVisor(url,cont).then(function(foiPdf){
@@ -896,12 +979,12 @@ function renderDocs(){
       (sub?('<div class="n2">'+escT(sub)+'</div>'):'')+'</div><div class="abrir">abrir ›</div></a>';
   }
   var html = '<div class="sec"><p class="lab">Documentos oficiais do processo</p>';
-  if(!d.oficiais.length) html += '<div style="color:var(--muted);font-size:13.5px">Assim que houver peça nos autos (petição inicial, contestação, réplica, despacho, decisão, sentença ou acordo), ela aparece aqui.</div>';
+  if(!d.oficiais.length) html += '<div style="color:var(--muted);font-size:17.5px">Assim que houver peça nos autos (petição inicial, contestação, réplica, despacho, decisão, sentença ou acordo), ela aparece aqui.</div>';
   d.oficiais.forEach(function(x){
     html += linha('⚖️', x.nome||x.tipo||'Documento', (x.tipo?x.tipo+' · ':'')+(x.data?brData(x.data):''), '/api/portal?doc=jusbr:'+x.id+'&t='+TOKEN);
   });
   html += '</div><div class="sec"><p class="lab">Petições do escritório (protocoladas)</p>';
-  if(!d.peticoes.length) html += '<div style="color:var(--muted);font-size:13.5px">Quando o escritório protocolar uma petição neste processo, ela aparece aqui.</div>';
+  if(!d.peticoes.length) html += '<div style="color:var(--muted);font-size:17.5px">Quando o escritório protocolar uma petição neste processo, ela aparece aqui.</div>';
   d.peticoes.forEach(function(x){
     if(x.tem_arquivo) html += linha('📄', x.titulo, 'Protocolada em '+brData(x.data), '/api/portal?doc=peticao:'+x.id+'&t='+TOKEN);
     if(x.tem_comprovante) html += linha('🧾', 'Comprovante — '+x.titulo, brData(x.data), '/api/portal?doc=comprovante:'+x.id+'&t='+TOKEN);
@@ -925,7 +1008,7 @@ function renderDocs(){
     });
     html += '</div>';
   });
-  html += '<div class="sec" style="font-size:12.5px;color:var(--muted)">Documentos oficiais já públicos (despachos, decisões, sentenças, acordos) e as petições protocoladas pelo escritório. Toque para abrir o PDF.</div>';
+  html += '<div class="sec" style="font-size:16px;color:var(--muted)">Documentos oficiais já públicos (despachos, decisões, sentenças, acordos) e as petições protocoladas pelo escritório. Toque para abrir o PDF.</div>';
   $('proc-corpo').innerHTML = html;
 }
 
@@ -1058,7 +1141,7 @@ function pintarBarraAnexo(){
   var b=$('chat-anexo-barra');
   if(!ANEXO){ b.classList.add('hidden'); b.innerHTML=''; return; }
   b.classList.remove('hidden');
-  b.innerHTML='<span style="font-size:18px">'+iconeArquivo(ANEXO.tipo,ANEXO.nome)+'</span>'+
+  b.innerHTML='<span style="font-size:23.5px">'+iconeArquivo(ANEXO.tipo,ANEXO.nome)+'</span>'+
     '<span style="flex:1;min-width:0;word-break:break-word">'+esc(ANEXO.nome)+'</span>'+
     '<button class="x" onclick="tirarAnexo()" aria-label="Remover anexo">✕</button>';
 }
@@ -1139,8 +1222,8 @@ function _bloqueiaDesktop(){
   var ov=document.createElement('div');
   ov.style.cssText='position:fixed;inset:0;background:var(--bg);z-index:99999;display:flex;align-items:center;justify-content:center;padding:24px';
   ov.innerHTML='<div class="loginbox" style="margin:0">'
-    +'<div style="font-size:44px">📱</div>'
-    +'<h2 style="color:var(--navy);margin:10px 0 4px;font-size:19px">Abra pelo celular</h2>'
+    +'<div style="font-size:57px">📱</div>'
+    +'<h2 style="color:var(--navy);margin:10px 0 4px;font-size:24.5px">Abra pelo celular</h2>'
     +'<div class="sub">O portal do cliente foi feito para o celular — é por lá que chegam os avisos do processo. Pelo computador o acesso fica bloqueado.</div>'
     +'<button class="btnp" style="margin-top:6px" onclick="(function(b){ if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(location.href).then(function(){ b.textContent=\'✓ link copiado — abra no celular\'; }); } else { window.prompt(\'Copie o link:\', location.href); } })(this)">Copiar o link deste portal</button>'
     +'<div class="seg">Perdeu o link ou a senha? Fale com o escritório — reenviamos pelo WhatsApp.</div>'

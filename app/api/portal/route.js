@@ -408,6 +408,38 @@ export async function POST(request) {
     return Response.json({ ok: true })
   }
 
+  /* ---------- trocar a senha DE DENTRO do app (já logado) ----------
+     Faltava o caminho mais simples: quem está usando o app não tinha como
+     trocar a senha sem pedir link por e-mail. E, pior, o cofre de senhas do
+     celular guardava a senha ANTIGA (a primeira, enviada pelo escritório) e a
+     oferecia de volta no login, que recusava. Trocando aqui, dentro de um
+     formulário com senha atual + senha nova, o próprio iPhone/Android se
+     oferece para ATUALIZAR a senha guardada. */
+  if (acao === 'trocar_senha') {
+    const atual = String(body.senha_atual || '')
+    const nova = String(body.senha || '')
+    if (nova.length < 6) return Response.json({ erro: 'A nova senha precisa ter pelo menos 6 caracteres.' }, { status: 400 })
+    // acesso provisório (entrou sem senha, pelo atendimento novo) define a primeira
+    if (acesso.senha_hash) {
+      if (!confereSenha(atual, acesso.senha_hash)) {
+        // 403, e não 401: o app trata 401 como "sessão expirou" e derrubaria a
+        // pessoa por ter errado a senha atual
+        return Response.json({ erro: 'A senha atual não confere. Se você não lembra, use "Esqueci minha senha" na tela de entrada.' }, { status: 403 })
+      }
+      if (confereSenha(nova, acesso.senha_hash)) {
+        return Response.json({ erro: 'A nova senha é igual à atual. Escolha outra.' }, { status: 400 })
+      }
+    }
+    const up = await sb.from('portal_acessos')
+      .update({ senha_hash: hashSenha(nova), senha_enviada_em: new Date().toISOString(), provisorio: false })
+      .eq('id', acesso.id)
+    if (up.error) return Response.json({ erro: 'Não consegui salvar a nova senha. Tente de novo.' }, { status: 500 })
+    // derruba as OUTRAS sessões; esta continua, senão trocar a senha derrubaria
+    // a pessoa do próprio app no exato momento em que ela arrumou o acesso
+    await sb.from('portal_sessoes').delete().eq('acesso_id', acesso.id).neq('token', tokenDo(request))
+    return Response.json({ ok: true, email: acesso.email })
+  }
+
   if (acao === 'meus') {
     const todosIds = await processosPermitidos(sb, acesso)
     if (!todosIds.length) return Response.json({ ok: true, nome: acesso.nome || '', processos: [] })
