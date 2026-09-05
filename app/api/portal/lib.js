@@ -54,6 +54,27 @@ export async function sessao(sb, token) {
   try { await sb.from('portal_sessoes').update({ ultimo_uso_em: agora.toISOString(), expira_em: novoFim }).eq('token', token) } catch (e) {}
   return a
 }
+/* ---------- o e-mail é de alguém da EQUIPE deste escritório? ----------
+   Devolve o nome da pessoa (ou o e-mail) quando for; null quando não.
+
+   O app do cliente é pessoal e a tela toda fala com o titular ("Olá, Fulano!",
+   "seus processos"). Com o e-mail de um advogado virando login de cliente, ele
+   entra no app como se fosse o cliente do cadastro — e foi o que aconteceu: a
+   varredura de convites achou o e-mail do próprio escritório no cadastro de um
+   contato e criou o acesso sozinha. Quem conferir isso é sempre esta função;
+   quem cria acesso (botão, varredura, primeiro acesso sem senha) pergunta aqui
+   antes. */
+export async function membroDaEquipe(sb, escritorioId, email) {
+  const alvo = String(email || '').trim().toLowerCase()
+  if (!alvo || !escritorioId) return null
+  try {
+    const { data } = await sb.from('usuarios').select('nome,email')
+      .eq('escritorio_id', escritorioId).ilike('email', alvo).limit(1)
+    const u = (data || [])[0]
+    return u ? (u.nome || u.email) : null
+  } catch (e) { return null }
+}
+
 export function tokenDo(request) {
   return (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '').trim()
 }

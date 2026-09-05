@@ -26174,7 +26174,7 @@ function exportarTempoProcessoCSV(){
       appCliRenderLista(procId);
     });
   };
-  window.appCliConceder=function(procId, canal, confirmarTitular){
+  window.appCliConceder=function(procId, canal, confirmarTitular, confirmarEquipe){
     canal=canal||'email';
     var n=document.getElementById('appcli-nome'), e=document.getElementById('appcli-email'),
         z=document.getElementById('appcli-zap'), av=document.getElementById('appcli-avis');
@@ -26184,13 +26184,22 @@ function exportarTempoProcessoCSV(){
     if(!nome||nome.length<3){ if(av) av.textContent='Informe o nome.'; return; }
     if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ if(av) av.textContent='Informe o e-mail do cliente — ele é o login do app, mesmo enviando por WhatsApp.'; return; }
     if(bt){ bt.disabled=true; bt.textContent=(canal==='whatsapp')?'Criando…':'Enviando…'; }
-    admin({acao:'conceder',processo_id:procId,nome:nome,email:email,canal:canal,whatsapp:zap,confirmar_titular:!!confirmarTitular}).then(function(d){
+    admin({acao:'conceder',processo_id:procId,nome:nome,email:email,canal:canal,whatsapp:zap,confirmar_titular:!!confirmarTitular,confirmar_equipe:!!confirmarEquipe}).then(function(d){
       if(bt){ bt.disabled=false; bt.innerHTML=rotulo; }
+      /* e-mail de alguém da equipe: quase sempre é engano de cadastro (foi assim
+         que o e-mail do escritório virou login de cliente, com o nome do cliente
+         na tela). Vale para testar o app — mas dizendo que é isso mesmo. */
+      if(d&&d.precisa_confirmar&&d.motivo==='equipe'){
+        if(confirm('Este e-mail é de alguém da equipe ('+d.equipe_nome+').\n\nO app do cliente é pessoal: quem entrar com ele vai ver a tela como se fosse o cliente. Criar assim mesmo? (serve para testar o aplicativo)')){
+          appCliConceder(procId, canal, confirmarTitular, true);
+        } else if(av){ av.textContent='Cancelado — confira o e-mail digitado.'; }
+        return;
+      }
       if(d&&d.precisa_confirmar){
         // e-mail já pertence a outro cadastro — só reenvia com confirmar_titular se o
         // próprio escritório disser que é a mesma pessoa (trava contra vazamento entre clientes)
         if(confirm('Este e-mail já está cadastrado para "'+d.titular_existente+'".\n\nÉ a mesma pessoa? Clique OK só se tiver certeza — do contrário o processo pode ficar visível para outro cliente.')){
-          appCliConceder(procId, canal, true);
+          appCliConceder(procId, canal, true, confirmarEquipe);
         } else if(av){ av.textContent='Cancelado — confira o e-mail digitado.'; }
         return;
       }

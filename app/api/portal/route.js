@@ -23,7 +23,7 @@ import crypto from 'crypto'
 import fs from 'fs'
 import path from 'path'
 import { tipoRealDoArquivo, pdfDeTexto } from '../jusbr/lib.js'
-import { svc, confereSenha, hashSenha, sessao, tokenDo, digitos, processosPermitidos, FILTRO_HIST_CLIENTE, SESSAO_DIAS } from './lib.js'
+import { svc, confereSenha, hashSenha, sessao, tokenDo, digitos, processosPermitidos, FILTRO_HIST_CLIENTE, SESSAO_DIAS, membroDaEquipe } from './lib.js'
 import { enviarEmailCore } from '../enviar-email/enviar.js'
 import { URL_PORTAL, urlPortalDoEscritorio, nomeDoEscritorio } from './convite-lib.js'
 import { PASTA_APP_CLIENTE, RE_OFICIAL } from '../../../lib/appCliente.js'
@@ -345,6 +345,12 @@ export async function POST(request) {
         if (!caso) {
           marcaTentativa(ip + '|' + email)
           return Response.json({ erro: 'Não encontramos nenhum atendimento em andamento com este e-mail. Fale com o escritório.' }, { status: 404 })
+        }
+        // e-mail da equipe não vira acesso de cliente sozinho: quem trabalha no
+        // escritório entra pelo sistema, e o app abriria com o nome do cliente
+        if (await membroDaEquipe(sb, caso.escritorio_id, email)) {
+          marcaTentativa(ip + '|' + email)
+          return Response.json({ erro: 'Este e-mail é de uso interno do escritório — entre pelo sistema, não pelo aplicativo do cliente.' }, { status: 403 })
         }
         const ins = await sb.from('portal_acessos').insert({
           escritorio_id: caso.escritorio_id, nome: caso.cliente_nome || '', email, ativo: true, provisorio: true,

@@ -17,7 +17,7 @@ import { createClient } from '@supabase/supabase-js'
 import { nomeDoEscritorio } from '../convite-lib.js'
 import webpush from 'web-push'
 import { URL_PUBLICA } from '../../enviar-email/enviar.js'
-import { svc, hashSenha, gerarSenha, digitos, emailCredenciais, dadosDaCasa } from '../lib.js'
+import { svc, hashSenha, gerarSenha, digitos, emailCredenciais, dadosDaCasa, membroDaEquipe } from '../lib.js'
 import { DEMO_EMAILS } from '../../../../lib/demo.js'
 
 export const dynamic = 'force-dynamic'
@@ -292,6 +292,20 @@ export async function POST(request) {
     const nome = String(body.nome || '').replace(/\s+/g, ' ').trim()
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return Response.json({ erro: 'E-mail inválido.' }, { status: 400 })
     if (!nome || nome.length < 3) return Response.json({ erro: 'Informe o nome do cliente.' }, { status: 400 })
+
+    // E-mail da própria equipe virando login de cliente é quase sempre engano
+    // de cadastro: quem entrar com ele vê a tela como se fosse o cliente
+    // ("Olá, Fulano!"). Não é proibido — serve para testar o app —, mas passa a
+    // exigir que o escritório diga que é isso mesmo.
+    if (!body.confirmar_equipe) {
+      const daEquipe = await membroDaEquipe(sb, quem.escritorio_id, email)
+      if (daEquipe) {
+        return Response.json({
+          erro: 'Este e-mail é de alguém da equipe (' + daEquipe + '). O app do cliente é pessoal: quem entrar com ele vai ver a tela como se fosse o cliente.',
+          precisa_confirmar: true, motivo: 'equipe', equipe_nome: daEquipe,
+        }, { status: 409 })
+      }
+    }
 
     // Vincula ao contato do escritório procurando pelo nome de QUEM VAI RECEBER o
     // acesso — nunca pelo nome do cliente do processo. Num processo com dois autores

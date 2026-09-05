@@ -80,11 +80,22 @@ export async function GET(request) {
     .select('id,nome,email,escritorio_id').eq('tipo', 'cliente')
   if (e1) return Response.json({ erro: e1.message }, { status: 500 })
 
+  // E-mails da EQUIPE (de qualquer escritório) nunca viram login de cliente.
+  // Foi assim que o e-mail do próprio dono, cadastrado no contato de um cliente,
+  // virou um acesso ao app com o NOME do cliente: ele entrava e via a tela como
+  // se fosse outra pessoa. Robô não pergunta — então aqui só pula.
+  const { data: equipe } = await sb.from('usuarios').select('email,escritorio_id')
+  const daEquipe = new Set((equipe || [])
+    .filter(u => u && u.email)
+    .map(u => String(u.escritorio_id) + '|' + String(u.email).trim().toLowerCase()))
+
   const porEmail = new Map()
+  let pulados_equipe = 0
   for (const c of (contatosCliente || [])) {
     const mail = String(c.email || '').trim().toLowerCase()
     if (!mail || !emailValido(mail)) continue
     if (/^teste/i.test(String(c.nome || '').trim())) continue   // blindagem extra: nunca convida cadastro de teste
+    if (daEquipe.has(String(c.escritorio_id) + '|' + mail)) { pulados_equipe++; continue }
     const chave = String(c.escritorio_id) + '|' + mail
     if (!porEmail.has(chave)) porEmail.set(chave, c)   // primeiro contato encontrado com este e-mail
   }
@@ -98,7 +109,7 @@ export async function GET(request) {
   const total_pendente = pendentes.length
 
   if (somenteContagem) {
-    return Response.json({ ok: true, total_alvo, total_pendente, ja_processados: total_alvo - total_pendente })
+    return Response.json({ ok: true, total_alvo, total_pendente, ja_processados: total_alvo - total_pendente, pulados_equipe })
   }
 
   const lote = pendentes.slice(0, limite)
@@ -166,6 +177,7 @@ export async function GET(request) {
   }
 
   rel.total_alvo = total_alvo
+  rel.pulados_equipe = pulados_equipe
   rel.restantes = total_pendente - lote.length
   return Response.json(rel)
 }
