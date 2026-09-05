@@ -249,6 +249,8 @@
            de outro escritório, logo na primeira tela -->
       <img class="marca-logo" src="/logo_cmp_full.png" alt="">
       <div class="sub">Portal do cliente — acompanhe seus processos</div>
+      <!-- quem chega por indicação de um cliente (?ind=1) -->
+      <div id="veio-indicado" class="hidden" style="background:#e5f4ed;border:1px solid #bfe0cf;color:#0F6E56;border-radius:10px;padding:10px 12px;font-size:16px;margin-bottom:12px;text-align:left"></div>
       <label for="l-email">E-mail</label>
       <input id="l-email" type="email" autocomplete="username" inputmode="email" placeholder="seu@email.com">
       <label for="l-senha">Senha</label>
@@ -329,6 +331,7 @@
     <div class="rodape">
       <button class="rbtn claro" id="btn-instalar2" style="display:none" onclick="instalar()">📲 Instalar o aplicativo</button>
       <div class="t hidden" style="margin-bottom:0" id="push-linha"><button class="rbtn claro" onclick="ativarAvisos()">🔔 Ativar avisos no celular</button></div>
+      <div class="t" style="margin-top:12px"><button class="rbtn verde" onclick="compartilharApp()">📣 Indicar o escritório</button></div>
       <div class="t hidden" id="linha-busca" style="margin-top:12px"><button class="rbtn claro" onclick="abrirBusca()">🔎 Pesquisar processos no meu nome</button></div>
       <div class="t" style="margin-top:12px"><button class="rbtn claro" onclick="abrirTrocaSenha()">🔑 Trocar minha senha</button></div>
       <div class="t so-da-casa" style="margin-top:12px">Acompanhe o escritório:</div>
@@ -674,6 +677,40 @@ function erroDeSenha(err,d){
     err.appendChild(bt);
   }
   err.style.display='block';
+}
+
+/* ---------- indicar o escritório (o cliente divulga o app) ----------
+   Vai o endereço do PRÓPRIO escritório (location.origin), então no app de um
+   escritório cliente o convite é dele, não de quem vendeu o sistema. O ?ind=1
+   marca que a visita veio de indicação de cliente.
+   Sem a janela de compartilhar do celular (navegador antigo, computador), o
+   texto vai para a área de transferência — e, se nem isso der, abre o WhatsApp
+   com a mensagem pronta. Nunca deixa o cliente sem caminho. */
+function textoIndicacao(){
+  var casa = NOME_ESCRITORIO && NOME_ESCRITORIO!=='Seu escritório' ? NOME_ESCRITORIO : 'meu escritório';
+  return 'Acompanho meus processos pelo aplicativo do '+casa+': movimentações, documentos e conversa direta com o escritório, no celular.';
+}
+function linkIndicacao(){ return location.origin + '/portal.html?ind=1'; }
+function compartilharApp(){
+  var texto = textoIndicacao(), url = linkIndicacao();
+  if(navigator.share){
+    navigator.share({ title: NOME_ESCRITORIO, text: texto, url: url })
+      .then(function(){ toast('Obrigado por indicar!'); })
+      .catch(function(){ /* a pessoa fechou a janela: não é erro */ });
+    return;
+  }
+  var completo = texto + '\n' + url;
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(completo).then(function(){
+      toast('Mensagem copiada — é só colar no WhatsApp.');
+    }).catch(function(){ abrirWhatsIndicacao(completo); });
+    return;
+  }
+  abrirWhatsIndicacao(completo);
+}
+function abrirWhatsIndicacao(msg){
+  try{ window.open('https://wa.me/?text='+encodeURIComponent(msg), '_blank', 'noopener'); }
+  catch(e){ alert(msg); }
 }
 
 /* ---------- pesquisar processos no nome do cliente ----------
@@ -1444,6 +1481,17 @@ function _bloqueiaDesktop(){
   if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('/portal-sw.js',{scope:'/portal.html'}); }catch(e){} }
   if(ehIos() && !emApp()) mostrarBotaoInstalar();   // iPhone: sempre com passo a passo
   if(emApp()) document.body.classList.add('instalado');   // app instalado: sem botão de sair
+  /* chegou pela indicação de um cliente: diz onde ele está, sem prometer nada
+     que a tela não cumpre — quem não é cliente ainda não tem login */
+  try{
+    if(new URLSearchParams(location.search).get('ind')){
+      var vi=$('veio-indicado');
+      if(vi){
+        vi.textContent='Você chegou pela indicação de um cliente. Este é o aplicativo onde os clientes deste escritório acompanham seus processos — se você já é cliente, entre com seu e-mail e senha.';
+        vi.classList.remove('hidden');
+      }
+    }
+  }catch(e){}
   if(TOKEN){ entrarNaHome(); }
   else{
     mostra('login');
