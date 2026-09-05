@@ -147,8 +147,14 @@ export async function POST(request) {
     const nome = String(body.nome || '').trim().slice(0, 200) || null
     const email = String(body.email || '').trim().slice(0, 200) || null
     const origem = String(body.origem_url || '').slice(0, 500)
+    /* De onde a pessoa veio muda o ATENDIMENTO, não só a estatística: quem
+       chega pelo aplicativo (um cliente passou o link adiante) NÃO tem processo
+       aqui — quem for atender precisa saber disso antes de abrir a boca, senão
+       procura um processo que não existe. Por isso o canal é outro. */
+    const doApp = /[?&]de=app\b/.test(origem)
     const ins = await sb.from('crm_leads').insert({
-      escritorio_id: ESCRITORIO_CMP, nome, email, canal: 'Chat do site', estagio: 'novo',
+      escritorio_id: ESCRITORIO_CMP, nome, email,
+      canal: doApp ? 'App — pessoa sem processo' : 'Chat do site', estagio: 'novo',
       prioridade: 'media', proc_ref: ref, data: agora.toISOString().slice(0, 10),
       obs: origem ? ('Origem: ' + origem) : null,
       capturado_em: agora.toISOString(), ultima_atividade: agora.toISOString(), ordem: Date.now(),
