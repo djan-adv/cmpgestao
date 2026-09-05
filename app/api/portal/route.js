@@ -25,6 +25,7 @@ import path from 'path'
 import { tipoRealDoArquivo, pdfDeTexto } from '../jusbr/lib.js'
 import { svc, confereSenha, hashSenha, sessao, tokenDo, digitos, processosPermitidos, FILTRO_HIST_CLIENTE, SESSAO_DIAS, membroDaEquipe, dadosDaCasa } from './lib.js'
 import { buscaDjenPorNome, docValido } from '../_lib/djen-nome.js'
+import { faseDoProcesso, faseParaCliente, corFase } from '../../../lib/fases.js'
 import { enviarEmailCore } from '../enviar-email/enviar.js'
 import { URL_PORTAL, urlPortalDoEscritorio, nomeDoEscritorio } from './convite-lib.js'
 import { PASTA_APP_CLIENTE, RE_OFICIAL } from '../../../lib/appCliente.js'
@@ -587,10 +588,28 @@ export async function POST(request) {
         .eq('escritorio_id', acesso.escritorio_id).eq('data', hojeBR).limit(300)
       ;(evs || []).forEach(e => { if (e.processo_numero && (e.tipo === 'az' || /audi[êe]ncia/i.test(e.titulo || ''))) audHoje.add(String(e.processo_numero).replace(/\D/g, '')) })
     } catch (e) {}
+    /* Em que pé está cada processo. A fase travada pelo escritório vence; sem
+       ela, o palpite lê os andamentos recentes — a mesma regra da tela do
+       escritório (lib/fases.js). Antes o app mostrava no selo o código cru da
+       fase ("exec") quando havia fase travada, e o status do tribunal quando
+       não havia: o cliente não lia nem uma coisa nem outra. */
+    const { data: histCurto } = await sb.from('andamentos')
+      .select('processo_id,data,texto').in('processo_id', ids).or(FILTRO_HIST_CLIENTE)
+      .order('data', { ascending: false }).limit(1200)
+    const recentes = {}
+    for (const h of (histCurto || [])) {
+      const arr = recentes[h.processo_id] || (recentes[h.processo_id] = [])
+      if (arr.length < 6) arr.push({ texto: h.texto })
+    }
+    const faseDe = (p) => faseDoProcesso({
+      fase: p.fase, classe: p.classe, tipo: p.assunto, status: p.status, hist_full: recentes[p.id] || [],
+    })
+
     const lista = (procs || []).map(p => ({
       id: p.id, numero: p.numero,
       titulo: p.assunto || p.classe || 'Ação judicial',
       classe: p.classe, foro: p.foro || p.orgao, fase: p.fase, status: p.status || 'ativo',
+      fase_rotulo: faseParaCliente(faseDe(p)), fase_cor: corFase(faseDe(p)),
       cliente: p.cliente_nome, oponente: p.oponente,
       ultima: ultima[p.id] ? { data: ultima[p.id].data, texto: String(ultima[p.id].texto || '').slice(0, 220) } : null,
       vinculado: vincDoProc[p.id] || null,
@@ -638,12 +657,18 @@ export async function POST(request) {
         audienciaHoje = { data: ev.data, hora: (ev.hora && ev.hora !== 'Dia todo') ? String(ev.hora).slice(0, 5) : null, link }
       }
     } catch (e) {}
+    /* a ficha já tem os andamentos carregados: a fase sai deles, sem consulta nova */
+    const faseFicha = faseDoProcesso({
+      fase: p.fase, classe: p.classe, tipo: p.assunto, status: p.status,
+      hist_full: (ands || []).slice(0, 6).map(a => ({ texto: a.texto })),
+    })
     return Response.json({
       ok: true,
       audiencia_hoje: audienciaHoje,
       dados: {
         id: p.id, numero: p.numero, classe: p.classe, assunto: p.assunto,
         foro: p.foro, orgao: p.orgao, fase: p.fase, status: p.status || 'ativo',
+        fase_rotulo: faseParaCliente(faseFicha), fase_cor: corFase(faseFicha),
         orgao_atual: p.orgao_atual, grau_atual: p.grau_atual,
         tramitacoes: Array.isArray(p.tramitacoes) ? p.tramitacoes : [],
         distribuido_em: p.distribuido_em, valor_causa: p.valor_causa, ultima_movimentacao: p.ultima_movimentacao,

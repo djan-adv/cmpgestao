@@ -522,6 +522,17 @@ function decEnt(s){
 }
 /* escape para texto que vem do tribunal: decodifica a entidade e escapa depois */
 function escT(s){ return esc(decEnt(s)); }
+/* Em que pé está o processo, na cor da fase. O rótulo vem pronto do servidor
+   (lib/fases.js), escrito para o cliente: "Julgado", "Em recurso", "Alvará —
+   valores a levantar". Antes o selo trazia o status cru do tribunal ("Ativo 1º
+   Grau") ou, pior, o código interno da fase ("exec"). */
+function chipFase(p,enc){
+  if(enc) return '<span class="chip enc">Encerrado</span>';
+  var rot=(p&&p.fase_rotulo)||'', cor=(p&&p.fase_cor)||'';
+  if(!rot) return '<span class="chip">'+esc(p&&p.status||'Em andamento')+'</span>';
+  var est=cor?(' style="background:'+esc(cor)+';color:#fff"'):'';
+  return '<span class="chip"'+est+'>'+esc(rot)+'</span>';
+}
 /* o DJEN devolve o número só com dígitos; na tela vai com a máscara do CNJ */
 function mascaraCNJ(d){
   var n=String(d||'').replace(/\D/g,'');
@@ -951,7 +962,7 @@ function renderCards(){
       '<div class="tt">'+escT(limpaTitulo(p.titulo))+'</div>' +
       (p.ultima?('<div class="ult"><b>Última movimentação'+(p.ultima.data?(' — '+brData(p.ultima.data)):'')+':</b> '+escT(p.ultima.texto)+'…</div>'):'') +
       (p.vinculado?('<div class="vinc"><b>Ação principal (nº '+esc(p.vinculado.numero)+')'+(p.vinculado.data?(' — '+brData(p.vinculado.data)):'')+':</b> '+escT(p.vinculado.texto)+'…</div>'):'') +
-      '<div><span class="chip'+(enc?' enc':'')+'">'+esc(enc?'Encerrado':(p.fase||p.status||'Em andamento'))+'</span></div>';
+      '<div>'+chipFase(p,enc)+'</div>';
     c.appendChild(d);
   });
 }
@@ -1018,6 +1029,8 @@ function renderDetalhes(){
   html +=
     '<div class="sec"><p class="lab">Dados do processo</p>' +
       '<div class="kv"><div class="k">Número</div><div class="v mono">'+esc(p.numero||'—')+'</div></div>' +
+      /* em que pé está: a pergunta que o cliente faz ao telefone */
+      (p.fase_rotulo?('<div class="kv"><div class="k">Em que pé está</div><div class="v">'+chipFase(p,false)+'</div></div>'):'') +
       (p.classe?('<div class="kv"><div class="k">Classe</div><div class="v">'+escT(p.classe)+'</div></div>'):'') +
       (p.assunto?('<div class="kv"><div class="k">Assunto</div><div class="v">'+escT(p.assunto)+'</div></div>'):'') +
       ((p.foro||p.orgao)?('<div class="kv"><div class="k">Vara de origem</div><div class="v">'+escT(p.foro||p.orgao)+'</div></div>'):'') +
