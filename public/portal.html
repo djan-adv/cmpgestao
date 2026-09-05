@@ -65,6 +65,9 @@
   @media (min-width:600px){ .abas button{font-size:20px;padding:13px 12px} }
 
   .wrap{max-width:760px;margin:0 auto;padding:14px 14px 40px}
+  /* nas telas que têm o botão flutuante, o fim da página sobe: sem isto, a
+     última linha do rodapé fica escondida atrás dele */
+  #home .wrap, #proc .wrap{padding-bottom:calc(86px + env(safe-area-inset-bottom))}
 
   /* ---------- login ---------- */
   #login .loginbox{background:var(--panel);border:1px solid var(--line);border-radius:16px;
@@ -180,12 +183,17 @@
   /* ---------- chat ---------- */
   /* pílula com TEXTO, não só ícone: o balão 💬 sozinho estava sendo confundido
      com botão de notificações — escrito "Falar com o escritório" não tem erro */
-  .fab{position:fixed;right:18px;bottom:calc(20px + env(safe-area-inset-bottom));height:62px;width:auto;
-       padding:0 20px;border-radius:28px;background:var(--gold);color:#fff;font-size:19.5px;font-weight:700;
-       display:flex;align-items:center;justify-content:center;gap:8px;border:0;font-family:inherit;cursor:pointer;
-       box-shadow:0 4px 14px rgba(120,90,10,.4);z-index:40;white-space:nowrap}
-  .fab .fb{position:absolute;top:-3px;right:-3px;background:var(--danger);color:#fff;min-width:27px;height:27px;
-           line-height:27px;border-radius:14px;font-size:15.5px;font-weight:700;text-align:center;padding:0 5px}
+  /* Botão de falar com o escritório: fica flutuando por cima da tela, então
+     precisa ser pequeno o bastante para não tapar o rodapé — antes cobria o
+     "Áreas de atuação". Verde de recado (o mesmo do WhatsApp), porque é o que
+     todo mundo já reconhece como "conversa", e não dourado de marca. */
+  .fab{position:fixed;right:14px;bottom:calc(16px + env(safe-area-inset-bottom));height:46px;width:auto;
+       padding:0 16px;border-radius:23px;background:#25D366;color:#fff;font-size:16px;font-weight:700;
+       display:flex;align-items:center;justify-content:center;gap:7px;border:0;font-family:inherit;cursor:pointer;
+       box-shadow:0 3px 10px rgba(18,122,83,.35);z-index:40;white-space:nowrap}
+  .fab:active{background:#1EA952}
+  .fab .fb{position:absolute;top:-4px;right:-4px;background:var(--danger);color:#fff;min-width:22px;height:22px;
+           line-height:22px;border-radius:11px;font-size:13px;font-weight:700;text-align:center;padding:0 4px}
   #chat{position:fixed;inset:0;background:var(--bg);z-index:60;display:flex;flex-direction:column}
   #chat .corpo{flex:1;overflow-y:auto;padding:14px 14px 8px;-webkit-overflow-scrolling:touch}
   .cmsg{margin-bottom:10px;display:flex}
