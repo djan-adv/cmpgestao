@@ -86,7 +86,12 @@
          margin-bottom:12px;cursor:pointer;position:relative;transition:border-color .12s;
          box-shadow:0 1px 3px rgba(25,35,50,.05)}
   .pcard:active{border-color:var(--navy)}
-  .pcard .num{font-family:ui-monospace,Menlo,monospace;font-size:15.5px;color:var(--muted)}
+  /* Só o número, sem a palavra "Processo": com o rótulo, o número do CNJ
+     (25 caracteres) quebrava em duas linhas no celular. Uma linha só —
+     nowrap para não quebrar, e no aparelho estreito o número encolhe em vez
+     de virar duas linhas. */
+  .pcard .num{font-family:ui-monospace,Menlo,monospace;font-size:15.5px;color:var(--muted);white-space:nowrap}
+  @media (max-width:359px){ .pcard .num{font-size:14px} }
   .pcard .vs{font-weight:700;font-size:21px;margin:3px 0 1px}
   .pcard .vs .x{color:var(--muted);font-weight:400}
   /* O réu costuma vir em lista (litisconsórcio) e empurrava o card para baixo:
@@ -793,7 +798,7 @@ function renderCards(){
     d.innerHTML =
       (p.nao_lidas?('<div class="badge">'+p.nao_lidas+'</div>'):'') +
       (p.audiencia_hoje?('<div style="background:#0F2A4A;color:#fff;border-radius:8px;padding:4px 10px;font-size:15.5px;font-weight:700;display:inline-block;margin-bottom:6px">📅 Audiência HOJE — toque para ver o link</div>'):'') +
-      '<div class="num">Processo nº '+esc(p.numero||'—')+'</div>' +
+      '<div class="num">'+esc(p.numero||'—')+'</div>' +
       '<div class="vs">'+escT(nomeCurto3(p.cliente)||'Você')+' <span class="x">×</span> <span class="reu">'+escT(nomeCurto3(p.oponente)||'Parte contrária')+'</span></div>' +
       '<div class="tt">'+escT(limpaTitulo(p.titulo))+'</div>' +
       (p.ultima?('<div class="ult"><b>Última movimentação'+(p.ultima.data?(' — '+brData(p.ultima.data)):'')+':</b> '+escT(p.ultima.texto)+'…</div>'):'') +
@@ -816,7 +821,7 @@ function abrirEscolhaChat(){
     d.innerHTML =
       (p.nao_lidas?('<div class="badge">'+p.nao_lidas+'</div>'):'') +
       '<div class="vs">'+esc(nomeCurto3(p.cliente)||'Você')+' <span class="x">×</span> <span class="reu">'+esc(nomeCurto3(p.oponente)||'Parte contrária')+'</span></div>' +
-      '<div class="num">Processo nº '+esc(p.numero||'—')+'</div>' +
+      '<div class="num">'+esc(p.numero||'—')+'</div>' +
       (p.titulo?('<div class="tt">'+escT(limpaTitulo(p.titulo))+'</div>'):'');
     c.appendChild(d);
   });
