@@ -17,7 +17,7 @@ async function marcaDaCasa() {
     if (d && d.ok && d.conhecido) {
       _marca = {
         nome: (d.marca && d.marca.sistema) || d.nome || '',
-        icone: d.raiz === true ? '/icone-cmp-512.png' : ((d.marca && d.marca.logo) || '/api/portal/icone.svg'),
+        icone: d.raiz === true ? '/icone-cmp-512.png?v=2' : ((d.marca && d.marca.logo) || '/api/portal/icone.svg'),
       }
       return _marca
     }

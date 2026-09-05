@@ -7,6 +7,9 @@
 
 export const COR_PADRAO = '#2E3A4B'
 
+/* sobe quando a arte do ícone muda — ver ops/gerar-icones.py */
+export const VERSAO_ICONE = '?v=2'
+
 export function hostLimpo(h) {
   return String(h || '').trim().toLowerCase()
     .replace(/^https?:\/\//, '').replace(/\/.*$/, '').replace(/:\d+$/, '')
@@ -20,12 +23,28 @@ export function corDaCasa(esc) {
   return (esc && esc.marca && esc.marca.cor) || COR_PADRAO
 }
 
+/* palavras que não dizem quem é o escritório */
+const FACHADA = /^(de|do|da|dos|das|e|advogados?|advocacia|sociedade|associados?|portal|escrit[óo]rio)$/i
+function palavrasDoNome(nome) {
+  return String(nome || '').trim().split(/\s+/).filter(p => p.length > 2 && !FACHADA.test(p))
+}
+
 /** iniciais para o ícone desenhado — ignora partículas e palavras de fachada */
 export function iniciais(nome) {
-  const partes = String(nome || '').trim().split(/\s+/)
-    .filter(p => p.length > 2 && !/^(de|do|da|dos|das|e|advogados?|advocacia|sociedade|associados?|portal)$/i.test(p))
-  const letras = partes.slice(0, 2).map(p => p[0]).join('')
+  const letras = palavrasDoNome(nome).slice(0, 2).map(p => p[0]).join('')
   return (letras || String(nome || 'A').trim()[0] || 'A').toUpperCase()
+}
+
+/** O nome curto que fica ESCRITO EMBAIXO DO ÍCONE, no celular. Cabe pouca coisa
+    ali — cortar o nome no 12º caractere produzia coisas como "Crispim Mend".
+    Nome curto sai inteiro; nome de banca sai pelas iniciais (CMP). */
+export function nomeCurto(nome) {
+  const limpo = String(nome || '').trim()
+  if (limpo.length <= 12) return limpo || 'Portal'
+  const partes = palavrasDoNome(limpo)
+  if (partes.length >= 3) return partes.slice(0, 3).map(p => p[0]).join('').toUpperCase()
+  if (partes[0] && partes[0].length <= 12) return partes[0]
+  return (partes.map(p => p[0]).join('') || limpo.slice(0, 12)).toUpperCase()
 }
 
 function escapaXml(s) {
@@ -44,10 +63,12 @@ export function svgIcone(nome, cor) {
 /** os ícones do manifesto: da casa, o dela; do escritório cliente, o logo dele
     (ou o desenho com as iniciais) — nunca o de outro escritório */
 export function iconesDe(esc, host) {
+  // ?v= porque navegador e celular guardam ícone por muito tempo: trocar a arte
+  // sem trocar o endereço deixava todo mundo com o desenho velho
   if (esc && esc.raiz === true) {
     return [
-      { src: '/icone-cmp-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
-      { src: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png', purpose: 'any' },
+      { src: '/icone-cmp-512.png' + VERSAO_ICONE, sizes: '512x512', type: 'image/png', purpose: 'any' },
+      { src: '/apple-touch-icon.png' + VERSAO_ICONE, sizes: '180x180', type: 'image/png', purpose: 'any' },
     ]
   }
   const logo = esc && esc.marca && esc.marca.logo
@@ -61,7 +82,7 @@ export function manifestoDe(esc, host) {
   const cor = corDaCasa(esc)
   return {
     name: nome + ' — Portal do Cliente',
-    short_name: nome.length > 12 ? nome.slice(0, 12).trim() : nome,
+    short_name: nomeCurto(nome),
     description: 'Acompanhe seus processos com ' + nome + '.',
     id: '/portal.html',
     start_url: '/portal.html?fonte=pwa',
