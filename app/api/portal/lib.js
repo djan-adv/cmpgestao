@@ -35,6 +35,13 @@ export function gerarSenha() {
 }
 
 /* ---------- sessão do cliente (Bearer token do portal) ---------- */
+// Quanto tempo a sessão dura SEM USO. Antes o prazo era contado do login: quem
+// instalou o app e continuou usando era deslogado no 60º dia do mesmo jeito, e
+// aí precisava lembrar a senha — que o escritório havia mandado meses antes.
+// Agora o relógio reinicia a cada uso: quem abre o app de vez em quando não sai
+// nunca; quem abandonou por 60 dias cai, que é o que protege o aparelho perdido.
+export const SESSAO_DIAS = 60
+
 export async function sessao(sb, token) {
   if (!/^[0-9a-f]{48}$/.test(String(token || ''))) return null
   const { data: s } = await sb.from('portal_sessoes').select('token,acesso_id,expira_em').eq('token', token).maybeSingle()
@@ -42,7 +49,9 @@ export async function sessao(sb, token) {
   if (new Date(s.expira_em) < new Date()) { try { await sb.from('portal_sessoes').delete().eq('token', token) } catch (e) {} ; return null }
   const { data: a } = await sb.from('portal_acessos').select('*').eq('id', s.acesso_id).maybeSingle()
   if (!a || !a.ativo || a.bloqueado_em) return null
-  try { await sb.from('portal_sessoes').update({ ultimo_uso_em: new Date().toISOString() }).eq('token', token) } catch (e) {}
+  const agora = new Date()
+  const novoFim = new Date(agora.getTime() + SESSAO_DIAS * 86400000).toISOString()
+  try { await sb.from('portal_sessoes').update({ ultimo_uso_em: agora.toISOString(), expira_em: novoFim }).eq('token', token) } catch (e) {}
   return a
 }
 export function tokenDo(request) {

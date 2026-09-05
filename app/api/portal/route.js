@@ -23,7 +23,7 @@ import crypto from 'crypto'
 import fs from 'fs'
 import path from 'path'
 import { tipoRealDoArquivo, pdfDeTexto } from '../jusbr/lib.js'
-import { svc, confereSenha, hashSenha, sessao, tokenDo, digitos, processosPermitidos, FILTRO_HIST_CLIENTE } from './lib.js'
+import { svc, confereSenha, hashSenha, sessao, tokenDo, digitos, processosPermitidos, FILTRO_HIST_CLIENTE, SESSAO_DIAS } from './lib.js'
 import { enviarEmailCore } from '../enviar-email/enviar.js'
 import { URL_PORTAL, urlPortalDoEscritorio, nomeDoEscritorio } from './convite-lib.js'
 import { PASTA_APP_CLIENTE, RE_OFICIAL } from '../../../lib/appCliente.js'
@@ -39,7 +39,6 @@ const MIMES = {
   csv: 'text/csv; charset=utf-8', html: 'text/html; charset=utf-8', txt: 'text/plain; charset=utf-8',
 }
 const MAX_APARELHOS = 4         // o 5º aparelho diferente bloqueia o acesso
-const SESSAO_DIAS = 60
 const MAX_TEXTO_CHAT = 4000
 const MAX_ANEXO = 15 * 1024 * 1024   // mesmo teto do chat da equipe
 

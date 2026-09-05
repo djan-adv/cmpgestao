@@ -39,6 +39,11 @@
              color:#fff;font-size:20px;border-radius:50%;flex:none}
   .topo .ico:active{background:rgba(255,255,255,.15)}
   .topo .ico.vazio{visibility:hidden}
+  /* App instalado no celular: some o botão de sair. Num aplicativo o cliente não
+     "sai" — sair só criava o problema de ter de lembrar a senha para voltar.
+     No navegador (aparelho que pode ser de outra pessoa) o botão continua.
+     visibility, e não display, para o título seguir centralizado. */
+  body.instalado .topo .ico.sair{visibility:hidden;pointer-events:none}
 
   /* ---------- abas (modelo TJ) ---------- */
   .abas{display:flex;background:#f6f8fb;border-bottom:1px solid var(--line);position:sticky;
@@ -279,7 +284,7 @@
     <button class="ico vazio">‹</button>
     <div class="tit">Meus processos</div>
     <button class="ico" onclick="location.reload()" title="Atualizar — recarrega os processos e o acesso" aria-label="Atualizar">↻</button>
-    <button class="ico" onclick="sair()" title="Sair" aria-label="Sair">⏻</button>
+    <button class="ico sair" onclick="sair()" title="Sair" aria-label="Sair">⏻</button>
   </div>
   <div class="wrap">
     <div class="ola"><img class="marca-logo-branco" src="/logo_cmp_white.png" alt="">
@@ -325,7 +330,7 @@
   <div class="topo">
     <button class="ico" onclick="voltarHome()" aria-label="Voltar">‹</button>
     <div class="tit">Processo</div>
-    <button class="ico" onclick="sair()" title="Sair" aria-label="Sair">⏻</button>
+    <button class="ico sair" onclick="sair()" title="Sair" aria-label="Sair">⏻</button>
   </div>
   <div class="abas" id="abas">
     <button data-aba="detalhes" class="on" onclick="aba('detalhes')">Detalhes</button>
@@ -543,6 +548,7 @@ function entrar(){
     TOKEN=d.token; NOME=d.nome||'';
     localStorage.setItem('cmp_portal_token',TOKEN);
     localStorage.setItem('cmp_portal_nome',NOME);
+    try{ localStorage.setItem('cmp_portal_email',email); }catch(e){}
     $('l-senha').value='';
     entrarNaHome();
   })
@@ -566,6 +572,7 @@ function entrarSemSenha(){
     TOKEN=d.token; NOME=d.nome||'';
     localStorage.setItem('cmp_portal_token',TOKEN);
     localStorage.setItem('cmp_portal_nome',NOME);
+    try{ localStorage.setItem('cmp_portal_email',email); }catch(e){}
     entrarNaHome();
   })
   .catch(function(){ b.disabled=false; b.textContent='Entrar'; err.textContent='Falha de conexão. Verifique a internet e tente de novo.'; err.style.display='block'; });
@@ -576,6 +583,10 @@ function deslogarLocal(){
   pararTimers(); mostra('login');
 }
 function sair(){
+  /* Sair é fácil; voltar não é — a senha veio por e-mail do escritório e o
+     cliente raramente a tem à mão. Por isso pergunta antes (o botão fica ao
+     lado do "atualizar", e o toque errado acontece). */
+  if(!confirm('Sair do aplicativo?\n\nPara entrar de novo você vai precisar do e-mail e da senha que o escritório enviou.')) return;
   if(TOKEN) api('sair').catch(function(){});
   deslogarLocal();
 }
@@ -1143,7 +1154,16 @@ function _bloqueiaDesktop(){
   // NUNCA substituir o service worker do chat da equipe (escopo /) no mesmo navegador
   if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('/portal-sw.js',{scope:'/portal.html'}); }catch(e){} }
   if(ehIos() && !emApp()) mostrarBotaoInstalar();   // iPhone: sempre com passo a passo
-  if(TOKEN){ entrarNaHome(); } else { mostra('login'); if(RESET_TOKEN) _trocaBox('box-novasenha'); }
+  if(emApp()) document.body.classList.add('instalado');   // app instalado: sem botão de sair
+  if(TOKEN){ entrarNaHome(); }
+  else{
+    mostra('login');
+    /* Voltar a entrar já é difícil (a senha veio por e-mail há meses); ao menos
+       o e-mail o aparelho lembra — assim o gerenciador de senhas do celular
+       reconhece o campo e oferece a senha guardada. */
+    try{ var _em=localStorage.getItem('cmp_portal_email')||''; if(_em && $('l-email') && !$('l-email').value) $('l-email').value=_em; }catch(e){}
+    if(RESET_TOKEN) _trocaBox('box-novasenha');
+  }
 })();
 </script>
 </body>
