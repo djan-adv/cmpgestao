@@ -23482,6 +23482,17 @@ async function baixarDossie(caminho,btn){
   if(btn){ btn.disabled=false; btn.textContent=_t||'⬇ baixar dossiê'; }
 }
 async function rodarRobo(nome,btn){
+  /* Aviso de novidade sai para a base inteira de uma vez — e e-mail enviado não
+     volta. Antes de disparar, o próprio robô conta quantos vão receber e a
+     pergunta traz o número; só depois envia. */
+  if(nome==='avisar_novidades'){
+    var prev=null;
+    try{ prev=await (await fetch('/api/cron/avisar-novidades')).json(); }catch(e){}
+    if(!prev||!prev.ok){ alert('Não consegui conferir quantos clientes receberiam. Tente de novo.'); return; }
+    if(!prev.a_enviar){ alert('Ninguém a avisar: os '+(prev.usam_o_app||0)+' clientes que usam o app já receberam.'); return; }
+    if(!confirm('Enviar o aviso das novidades para '+prev.a_enviar+' cliente(s) que já usam o aplicativo?\n\n'+
+                'Sai e-mail para cada um (e aviso no celular de quem ligou as notificações). Quem já recebeu não recebe de novo.')) return;
+  }
   if(btn){ btn.disabled=true; btn.textContent='rodando…'; }
   try{
     var r=await fetch('/api/cron/tick?rodar='+encodeURIComponent(nome)); var j=await r.json();

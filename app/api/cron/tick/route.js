@@ -93,6 +93,11 @@ const JOBS = [
   // sem apagar nada, mantendo a captura do diário durante a carência. Roda uma
   // vez por dia, de manhã — aviso de fim de teste às 3 da madrugada não é aviso.
   { nome: 'testes_30_dias', rotulo: 'Teste de 30 dias — avisar e encerrar', url: '/api/cron/testes', diario_hora: 9 },
+  // SEM horário de propósito: sem cada_min/diario_hora/semanal_dias, jobDevido()
+  // devolve false para sempre e este nunca dispara sozinho. Fica no painel só
+  // pelo botão "▶ rodar agora" — mandar e-mail para a base inteira é decisão de
+  // quem assina o escritório, não de um relógio. Cada pessoa recebe uma vez só.
+  { nome: 'avisar_novidades', rotulo: 'Clientes — avisar as novidades do aplicativo (só no botão)', url: '/api/cron/avisar-novidades?liberar=sim' },
 ]
 
 function jobDevido(job, execRow, bt) {
@@ -136,7 +141,10 @@ export async function GET(request) {
       const e = mapa[j.nome] || {}
       return {
         nome: j.nome, rotulo: j.rotulo,
-        agenda: j.cada_min ? ('a cada ' + j.cada_min + ' min') : (j.diario_hora != null ? ('diário ' + j.diario_hora + 'h') : ('dias ' + (j.semanal_dias || []).join(',') + ' às ' + (j.hora || 0) + 'h')),
+        agenda: j.cada_min ? ('a cada ' + j.cada_min + ' min')
+          : (j.diario_hora != null ? ('diário ' + j.diario_hora + 'h')
+            : (j.semanal_dias ? ('dias ' + j.semanal_dias.join(',') + ' às ' + (j.hora || 0) + 'h')
+              : 'só quando você clicar')),
         ultima_exec: e.ultima_exec || null, ultimo_ok: e.ultimo_ok, ultimo_resultado: e.ultimo_resultado || null,
         devido_agora: jobDevido(j, e, bt),
       }
